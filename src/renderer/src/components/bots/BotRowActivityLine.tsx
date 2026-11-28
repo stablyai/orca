@@ -193,7 +193,14 @@ export function BotRowLineView({
         </span>
       ) : (
         // No title: the row's hover card shows the whole line.
-        <span className={cn('min-w-0 flex-1 truncate', unread && 'text-foreground')}>
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate',
+            !disconnected && line?.kind === 'needYouElsewhere'
+              ? 'font-medium text-agent-question-text'
+              : unread && 'text-foreground'
+          )}
+        >
           <BotRowLineText
             line={line}
             limit={limit}
