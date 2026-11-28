@@ -1,10 +1,10 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { useManagedClaudeSignIn } from './native-chat-managed-claude-sign-in'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
-import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
@@ -128,42 +128,6 @@ export function nativeChatSetupAction(
     return { ...openAgentSettingsAction(setup?.host, t), primary: true }
   }
   return undefined
-}
-
-/** Offer selected-account sign-in until successful, then report signed in until the failure or failure-row count changes. */
-function useManagedClaudeSignIn(
-  accountId: string | null,
-  failure: unknown,
-  failureRows: number
-): NativeChatSignIn | null {
-  const [signingIn, setSigningIn] = useState(false)
-  // Why a ref: the notice and a transcript row both sign in, and state lags a double press.
-  const signingInRef = useRef(false)
-  const [signedInFor, setSignedInFor] = useState<{ failure: unknown; rows: number } | null>(null)
-  const signIn = useCallback(() => {
-    if (!accountId || signingInRef.current) {
-      return
-    }
-    signingInRef.current = true
-    setSigningIn(true)
-    void signInToClaudeAccount(accountId)
-      .then((signedIn) => {
-        if (signedIn) {
-          setSignedInFor({ failure, rows: failureRows })
-        }
-      })
-      .finally(() => {
-        signingInRef.current = false
-        setSigningIn(false)
-      })
-  }, [accountId, failure, failureRows])
-  const signedInSinceFailure =
-    signedInFor !== null && signedInFor.failure === failure && signedInFor.rows === failureRows
-  // Why memoized: rows read it through context, and a chat re-renders on every streamed token.
-  return useMemo(
-    () => (accountId ? { signingIn, signedIn: signedInSinceFailure, signIn } : null),
-    [accountId, signedInSinceFailure, signingIn, signIn]
-  )
 }
 
 type NativeChatHostSetupInput = {

@@ -3,6 +3,7 @@ import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../../../shared/worktree/types'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { ownRetainedString } from '../../../../shared/text/own-retained-string'
+import { isSafeRefName, parsePackedRefsContent } from './packed-refs-parser'
 import {
   FULL_HEAD_IDENTITY_SCOPE,
   headIdentityEntryKey,
@@ -59,33 +60,11 @@ async function readTrimmedFile(path: string): Promise<string | null | Unreadable
 }
 
 async function readPackedRefs(commonDirPath: string): Promise<Map<string, string> | Unreadable> {
-  const refs = new Map<string, string>()
   const content = await readTrimmedFile(join(commonDirPath, 'packed-refs'))
   if (content === UNREADABLE) {
     return UNREADABLE
   }
-  if (content === null) {
-    return refs
-  }
-  for (const line of content.split('\n')) {
-    if (!line || line.startsWith('#') || line.startsWith('^')) {
-      continue
-    }
-    const separator = line.indexOf(' ')
-    if (separator <= 0) {
-      continue
-    }
-    refs.set(line.slice(separator + 1).trim(), line.slice(0, separator))
-  }
-  return refs
-}
-
-// Repo-authored ref names must reject Windows separators/drive syntax before joining filesystem paths.
-function isSafeRefName(ref: string): boolean {
-  if (ref.length === 0 || ref.includes('\\') || ref.includes(':')) {
-    return false
-  }
-  return !ref.split('/').some((part) => part === '..' || part === '')
+  return content === null ? new Map() : parsePackedRefsContent(content)
 }
 
 // Only SHA-1/SHA-256 object IDs may leave this reader, bounding malformed-repo output.

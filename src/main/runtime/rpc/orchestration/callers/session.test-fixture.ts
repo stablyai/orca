@@ -121,7 +121,9 @@ export function createSessionCallerHarness(
   hostRef.current = {
     publishBackgroundTasks: () => {},
     ...mailSource,
+    reads: { childLaunchPermissionMode: () => undefined },
     deps: {
+      adapter: {},
       store: {
         getRecord: (sessionId: string) => records.get(sessionId) ?? null,
         getConversation: (id: string) => {

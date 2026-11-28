@@ -1,10 +1,10 @@
 import {
   clipboardFormatSnapshot,
-  readClipboardHtml,
   writeClipboardBuffer,
   writeClipboardPng
 } from './clipboard-formats'
 import { app, clipboard, ipcMain, nativeImage } from 'electron'
+import type { IpcHandleRegistrar } from '../../ipc/lazy-ipc-handle-group'
 import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
@@ -12,14 +12,19 @@ import { PATH_ACCESS_DENIED_MESSAGE } from '../../ipc/filesystem/access/filesyst
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import {
   assertTrustedClipboardSender,
-  assertTrustedClipboardTextSender
+  assertTrustedClipboardTextSender,
+  isTrustedClipboardSender
 } from './clipboard-ipc-sender-trust'
+import { readClipboardPasteContent } from './clipboard-paste-content'
+import type {
+  ClipboardPasteContent,
+  ReadClipboardPasteContentOptions
+} from '../../../shared/clipboard/clipboard-paste-content'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
   type ReadClipboardTextOptions
 } from '../../../shared/clipboard/clipboard-text'
-import { clipboardHtmlMayHaveLinks } from '../../../shared/clipboard/clipboard-link-html'
 import {
   saveClipboardImageBufferAsTempFile,
   type SaveClipboardImageAsTempFileArgs
@@ -44,7 +49,6 @@ import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upl
 import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-attachments/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
-import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { readClipboardPlainText } from './clipboard-plain-text-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
@@ -108,28 +112,30 @@ async function saveClipboardImageBufferForTarget(
 export function registerClipboardHandlers(
   /** Resolves a local path the core allows the window to read; throws when denied. */
   authorizeLocalPath: (path: string) => Promise<string>,
-  handlerOptions: ClipboardHandlerOptions = {}
+  handlerOptions: ClipboardHandlerOptions = {},
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
-  ipcMain.removeHandler('clipboard:readText')
-  ipcMain.removeHandler('clipboard:readSelectionText')
-  ipcMain.removeHandler('clipboard:readLinkHtml')
-  ipcMain.removeHandler('clipboard:writeText')
-  ipcMain.removeHandler('clipboard:writeTerminalText')
-  ipcMain.removeHandler('clipboard:writeSecretText')
-  ipcMain.removeHandler('clipboard:writeSelectionText')
-  ipcMain.removeHandler('clipboard:writeImage')
-  ipcMain.removeHandler('clipboard:writeFile')
-  ipcMain.removeHandler('clipboard:saveImageAsTempFile')
-  ipcMain.removeHandler('clipboard:savePastedTextAsFile')
-  ipcMain.removeHandler('clipboard:readImageThumbnail')
-  ipcMain.removeHandler('clipboard:hasImage')
-  ipcMain.removeHandler('clipboard:readFilePaths')
-  ipcMain.removeHandler('clipboard:restoreNativeChatPastes')
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('clipboard:readText')
+    ipcMain.removeHandler('clipboard:readPasteContent')
+    ipcMain.removeHandler('clipboard:readSelectionText')
+    ipcMain.removeHandler('clipboard:writeText')
+    ipcMain.removeHandler('clipboard:writeTerminalText')
+    ipcMain.removeHandler('clipboard:writeSecretText')
+    ipcMain.removeHandler('clipboard:writeSelectionText')
+    ipcMain.removeHandler('clipboard:writeImage')
+    ipcMain.removeHandler('clipboard:writeFile')
+    ipcMain.removeHandler('clipboard:saveImageAsTempFile')
+    ipcMain.removeHandler('clipboard:savePastedTextAsFile')
+    ipcMain.removeHandler('clipboard:readImageThumbnail')
+    ipcMain.removeHandler('clipboard:hasImage')
+    ipcMain.removeHandler('clipboard:restoreNativeChatPastes')
 
-  void cleanupExpiredRemoteClipboardFiles()
-  scheduleLegacyRemoteClipboardFileCleanup()
+    void cleanupExpiredRemoteClipboardFiles()
+    scheduleLegacyRemoteClipboardFileCleanup()
+  }
 
-  ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
+  ipc.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
     return assertClipboardTextWithinLimitWithYield(
       await readClipboardPlainText({
@@ -139,28 +145,26 @@ export function registerClipboardHandlers(
       options
     )
   })
-  // Rich-text copies keep their links only in the HTML flavor; skip shipping HTML that has none.
-  ipcMain.handle('clipboard:readLinkHtml', async (event): Promise<string> => {
-    assertTrustedClipboardSender(event)
-    const html = await readClipboardHtml()
-    return clipboardHtmlMayHaveLinks(html) ? html : ''
-  })
-  ipcMain.handle(
-    'clipboard:readSelectionText',
-    async (event, options?: ReadClipboardTextOptions) => {
-      assertTrustedClipboardSender(event)
-      return assertClipboardTextWithinLimitWithYield(
-        process.platform === 'linux' ? await clipboard.selection.readText() : '',
-        options
-      )
+  ipc.handle(
+    'clipboard:readPasteContent',
+    async (event, options?: ReadClipboardPasteContentOptions): Promise<ClipboardPasteContent> => {
+      assertTrustedClipboardTextSender(event)
+      return readClipboardPasteContent(options, !isTrustedClipboardSender(event))
     }
   )
-  ipcMain.handle('clipboard:restoreNativeChatPastes', (event, paths: unknown) => {
+  ipc.handle('clipboard:readSelectionText', async (event, options?: ReadClipboardTextOptions) => {
+    assertTrustedClipboardSender(event)
+    return assertClipboardTextWithinLimitWithYield(
+      process.platform === 'linux' ? await clipboard.selection.readText() : '',
+      options
+    )
+  })
+  ipc.handle('clipboard:restoreNativeChatPastes', (event, paths: unknown) => {
     assertTrustedClipboardSender(event)
     return restoreNativeChatPastes(paths)
   })
   // Preview in memory so the composer responds before the slower save completes.
-  ipcMain.handle(
+  ipc.handle(
     'clipboard:readImageThumbnail',
     async (event): Promise<ClipboardImageThumbnail | null> => {
       assertTrustedClipboardSender(event)
@@ -174,17 +178,12 @@ export function registerClipboardHandlers(
       }
     }
   )
-  ipcMain.handle('clipboard:hasImage', async (event): Promise<boolean> => {
+  ipc.handle('clipboard:hasImage', async (event): Promise<boolean> => {
     assertTrustedClipboardSender(event)
     return (await readClipboardImageSource(clipboardFormatSnapshot())) !== null
   })
-  // File-manager copies include text labels that paste must not type.
-  ipcMain.handle('clipboard:readFilePaths', async (event): Promise<string[]> => {
-    assertTrustedClipboardSender(event)
-    return readClipboardCopiedFilePaths(clipboardFormatSnapshot())
-  })
   // Give image-aware terminal tools a saved image path, or null when no image exists.
-  ipcMain.handle(
+  ipc.handle(
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
@@ -206,12 +205,12 @@ export function registerClipboardHandlers(
       return png ? saveClipboardImageBufferForTarget(png, args, handlerOptions) : null
     }
   )
-  ipcMain.handle('clipboard:savePastedTextAsFile', (event, args: SavePastedTextAsFileArgs) => {
+  ipc.handle('clipboard:savePastedTextAsFile', (event, args: SavePastedTextAsFileArgs) => {
     assertTrustedClipboardSender(event)
     return savePastedTextAsFile(args, handlerOptions.localChatAttachmentStore)
   })
   // Publish OS file references for Finder/Explorer paste.
-  ipcMain.handle(
+  ipc.handle(
     'clipboard:writeFile',
     (event, args: unknown): ClipboardFileResult | Promise<ClipboardFileResult> => {
       assertTrustedClipboardSender(event)
@@ -250,7 +249,7 @@ export function registerClipboardHandlers(
       })
     }
   )
-  ipcMain.handle('clipboard:writeText', async (event, text: string) => {
+  ipc.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
     try {
       await publishClipboardText(text, 'ordinary')
@@ -261,24 +260,24 @@ export function registerClipboardHandlers(
       throw error
     }
   })
-  ipcMain.handle('clipboard:writeSecretText', async (event, text: string) => {
+  ipc.handle('clipboard:writeSecretText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
     await publishClipboardText(text, 'ordinary')
     clearSecretFromClipboard(text)
     return { clearsLater: true }
   })
-  ipcMain.handle('clipboard:writeTerminalText', async (event, text: string) => {
+  ipc.handle('clipboard:writeTerminalText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
     return publishClipboardText(text)
   })
-  ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
+  ipc.handle('clipboard:writeSelectionText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
     const safeText = await assertClipboardTextWriteWithinLimitWithYield(text)
     if (process.platform === 'linux') {
       await clipboard.selection.writeText(safeText)
     }
   })
-  ipcMain.handle('clipboard:writeImage', (event, dataUrl: string) => {
+  ipc.handle('clipboard:writeImage', (event, dataUrl: string) => {
     assertTrustedClipboardSender(event)
     // Validate PNG data URIs in main too; renderer checks cannot constrain direct IPC.
     // Why: reject every refusal so callers never report a copy that left the clipboard unchanged.

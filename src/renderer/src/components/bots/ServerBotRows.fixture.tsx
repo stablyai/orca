@@ -6,7 +6,6 @@ import { useBots } from '@/lib/bot-catalog'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import WorktreeCard from '@/components/sidebar/workspace-card/surface/WorktreeCard'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { mascotAvatar, type BotMascotId } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
@@ -20,6 +19,7 @@ import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation
 import { BotRow } from './BotRow'
 import { BOT_WORKSPACE_LINE_INDENT } from './BotSidebarEntry'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // The PR 2 mock's list: two bots here, two on m4 air, one on linux 1, in the owner's order.
 const now = Date.now()
@@ -77,7 +77,7 @@ function chat(
   fields: Partial<AgentStatusEntry> & Pick<AgentStatusEntry, 'state' | 'updatedAt'>
 ): AgentStatusEntry {
   return {
-    paneKey: structuredAgentSessionStatusPaneKey(`chat-${owner.id}`),
+    paneKey: chatPaneKey(`chat-${owner.id}`),
     worktreeId: folderWorkspaceKey(owner.folderWorkspaceId),
     agentType: owner.agent,
     prompt: '',
@@ -220,7 +220,7 @@ const WORKERS: Record<string, Line[]> = {
 const workerAgents: AgentStatusEntry[] = Object.values(WORKERS)
   .flat()
   .map((line) => ({
-    paneKey: structuredAgentSessionStatusPaneKey(`worker-${line.id}`),
+    paneKey: chatPaneKey(`worker-${line.id}`),
     worktreeId: line.id,
     agentType: line.agent,
     state: line.state,

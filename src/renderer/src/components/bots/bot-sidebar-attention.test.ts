@@ -1,7 +1,7 @@
 // The keyed attention reader (STA-18283) must always agree with reading every watched workspace.
 import { expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeBrowserTab } from '@/store/slices/browser/browser-tab.test-fixture'
 import {
@@ -85,7 +85,7 @@ it('agrees with a full read after every kind of write', () => {
   })
   expect(expectFullRead()).toContain('wt-0')
   useAppStore.setState({
-    structuredChatSleptAtByPaneKey: { [structuredAgentSessionPaneKey('chat', 'session')]: 1 }
+    structuredChatSleptAtByPaneKey: { [chatPaneKey('session')]: 1 }
   })
   expect(expectFullRead()).not.toContain('wt-0')
 

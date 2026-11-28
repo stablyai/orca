@@ -251,7 +251,8 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     setWorkspaceBranchNameOverride(undefined)
     setShowWorkspaceBaseBranchPicker(false)
   }, [])
-  return Object.assign(model, {
+  return {
+    ...model,
     getWorkspaceTargetRepo,
     workspaceCreateTargetRepo,
     workspaceCreateTargetConnectionId,
@@ -271,7 +272,7 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     handleWorkspaceNameDraftChange,
     selectWorkspaceBaseBranch,
     clearWorkspaceBaseBranch
-  })
+  }
 }
 
 export type WorkspaceCreateProjectionModel = ReturnType<

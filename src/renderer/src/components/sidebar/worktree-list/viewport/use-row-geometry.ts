@@ -4,13 +4,123 @@ import type { RenderRow } from '../listing/render-row'
 import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { WorktreeListVirtualizer } from './use-virtualizer'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { getWorktreeDragUnitGroups } from '../drag/worktree-drag-units'
+import { getWorktreeDragUnitGroups, type WorktreeDragUnitGroup } from '../drag/worktree-drag-units'
 import { getWorktreeDragIndexes } from '../drag/groups'
 import type { WorktreeSidebarDragRect } from '../drag/worktree-sidebar-drag-autoscroll'
 import {
   isReorderInsideFolderBounds,
   type WorktreeReorderDropPoint
 } from '../drag/worktree-lineage-drag-drop'
+
+type DragUnitRowRange = {
+  group: string
+  identity: string
+  groupIndex: number
+  first: number
+  last: number
+  trailing: number
+  next: number | undefined
+}
+
+type DragUnitRowRanges = {
+  byRow: Map<number, DragUnitRowRange>
+  byGroup: Map<string, Map<string, DragUnitRowRange>>
+}
+
+const dragUnitGroupsCache = new WeakMap<readonly RenderRow[], WorktreeDragUnitGroup[]>()
+const dragRangesCache = new WeakMap<
+  readonly RenderRow[],
+  WeakMap<LineageRowProjection, DragUnitRowRanges>
+>()
+
+function getCachedWorktreeDragUnitGroups(rows: readonly RenderRow[]): WorktreeDragUnitGroup[] {
+  let cached = dragUnitGroupsCache.get(rows)
+  if (!cached) {
+    cached = getWorktreeDragUnitGroups(rows)
+    dragUnitGroupsCache.set(rows, cached)
+  }
+  return cached
+}
+
+function computeDragRanges(
+  rows: readonly RenderRow[],
+  projection: LineageRowProjection,
+  indexes: ReturnType<typeof getWorktreeDragIndexes>,
+  units: readonly WorktreeDragUnitGroup[]
+): DragUnitRowRanges {
+  const rowByGroupIdentity = new Map<string, Map<string, number>>()
+  rows.forEach((row, index) => {
+    if (row.type !== 'item') {
+      return
+    }
+    const group = indexes.groupKeyByRowKey.get(row.rowKey)
+    if (!group) {
+      return
+    }
+    let members = rowByGroupIdentity.get(group)
+    if (!members) {
+      rowByGroupIdentity.set(group, (members = new Map()))
+    }
+    members.set(getWorktreeHostIdentity(row.worktree), index)
+  })
+  const byRow = new Map<number, DragUnitRowRange>()
+  const byGroup = new Map<string, Map<string, DragUnitRowRange>>()
+  for (const group of units) {
+    const members = rowByGroupIdentity.get(group.key)
+    const ranges = new Map<string, DragUnitRowRange>()
+    group.units.forEach((unit, groupIndex) => {
+      const first = members?.get(unit.worktreeId)
+      const last = members?.get(unit.worktreeIds.at(-1)!)
+      if (first === undefined || last === undefined) {
+        return
+      }
+      let trailing = 0
+      let parent = projection.frames[first].parent
+      while (parent !== null) {
+        if (projection.frames[parent].end === last) {
+          trailing += 7
+        }
+        parent = projection.frames[parent].parent
+      }
+      const range: DragUnitRowRange = {
+        group: group.key,
+        identity: unit.worktreeId,
+        groupIndex,
+        first,
+        last,
+        trailing,
+        next: members?.get(group.units[groupIndex + 1]?.worktreeId ?? '')
+      }
+      ranges.set(unit.worktreeId, range)
+      for (const identity of unit.worktreeIds) {
+        const index = members?.get(identity)
+        if (index !== undefined) {
+          byRow.set(index, range)
+        }
+      }
+    })
+    byGroup.set(group.key, ranges)
+  }
+  return { byRow, byGroup }
+}
+
+function getCachedDragRanges(
+  rows: readonly RenderRow[],
+  projection: LineageRowProjection,
+  indexes: ReturnType<typeof getWorktreeDragIndexes>
+): DragUnitRowRanges {
+  let byProjection = dragRangesCache.get(rows)
+  if (!byProjection) {
+    byProjection = new WeakMap()
+    dragRangesCache.set(rows, byProjection)
+  }
+  let cached = byProjection.get(projection)
+  if (!cached) {
+    cached = computeDragRanges(rows, projection, indexes, getCachedWorktreeDragUnitGroups(rows))
+    byProjection.set(projection, cached)
+  }
+  return cached
+}
 
 export type WorktreeRowGeometry = ReturnType<typeof useWorktreeRowGeometry>
 
@@ -21,78 +131,16 @@ export function useWorktreeRowGeometry(args: {
   scrollRef: React.RefObject<HTMLDivElement | null>
 }) {
   const { rows, projection, virtualization, scrollRef } = args
-  const units = useMemo(() => getWorktreeDragUnitGroups(rows), [rows])
   const indexes = useMemo(() => getWorktreeDragIndexes(rows), [rows])
-  const ranges = useMemo(() => {
-    const rowByGroupIdentity = new Map<string, Map<string, number>>()
-    rows.forEach((row, index) => {
-      if (row.type !== 'item') {
-        return
-      }
-      const group = indexes.groupKeyByRowKey.get(row.rowKey)
-      if (!group) {
-        return
-      }
-      let members = rowByGroupIdentity.get(group)
-      if (!members) {
-        rowByGroupIdentity.set(group, (members = new Map()))
-      }
-      members.set(getWorktreeHostIdentity(row.worktree), index)
-    })
-    const byRow = new Map<
-      number,
-      {
-        group: string
-        identity: string
-        groupIndex: number
-        first: number
-        last: number
-        trailing: number
-        next: number | undefined
-      }
-    >()
-    const byGroup = new Map<string, Map<string, NonNullable<ReturnType<typeof byRow.get>>>>()
-    for (const group of units) {
-      const members = rowByGroupIdentity.get(group.key)
-      const ranges = new Map<string, NonNullable<ReturnType<typeof byRow.get>>>()
-      group.units.forEach((unit, groupIndex) => {
-        const first = members?.get(unit.worktreeId)
-        const last = members?.get(unit.worktreeIds.at(-1)!)
-        if (first === undefined || last === undefined) {
-          return
-        }
-        let trailing = 0
-        let parent = projection.frames[first].parent
-        while (parent !== null) {
-          if (projection.frames[parent].end === last) {
-            trailing += 7
-          }
-          parent = projection.frames[parent].parent
-        }
-        const range = {
-          group: group.key,
-          identity: unit.worktreeId,
-          groupIndex,
-          first,
-          last,
-          trailing,
-          next: members?.get(group.units[groupIndex + 1]?.worktreeId ?? '')
-        }
-        ranges.set(unit.worktreeId, range)
-        for (const identity of unit.worktreeIds) {
-          const index = members?.get(identity)
-          if (index !== undefined) {
-            byRow.set(index, range)
-          }
-        }
-      })
-      byGroup.set(group.key, ranges)
-    }
-    return { byRow, byGroup }
-  }, [indexes, projection, rows, units])
+  const getUnits = useCallback(() => getCachedWorktreeDragUnitGroups(rows), [rows])
+  const getRanges = useCallback(
+    () => getCachedDragRanges(rows, projection, indexes),
+    [indexes, projection, rows]
+  )
   const getRects = useCallback(
     (group: string, retained: readonly string[] = []): WorktreeSidebarDragRect[] => {
-      const selected = new Map<string, NonNullable<ReturnType<typeof ranges.byRow.get>>>()
+      const ranges = getCachedDragRanges(rows, projection, indexes)
+      const selected = new Map<string, DragUnitRowRange>()
       for (const item of virtualization.virtualizer.getVirtualItems()) {
         const range = ranges.byRow.get(item.index)
         if (range?.group === group) {
@@ -134,7 +182,7 @@ export function useWorktreeRowGeometry(args: {
         })
         .sort((a, b) => a.top - b.top)
     },
-    [projection, ranges, virtualization.virtualizer]
+    [indexes, projection, rows, virtualization.virtualizer]
   )
   const keepsFolderParent = useCallback(
     (identity: string, point: WorktreeReorderDropPoint | undefined, contentRect?: DOMRect) => {
@@ -201,5 +249,5 @@ export function useWorktreeRowGeometry(args: {
     },
     [keepsFolderParent, scrollRef]
   )
-  return { units, indexes, ranges, getRects, keepsFolderParent, captureFolderRetention }
+  return { getUnits, getRanges, indexes, getRects, keepsFolderParent, captureFolderRetention }
 }

@@ -147,20 +147,27 @@ describe('local base ref refresh toast', () => {
     expect(shownTitles()).toEqual([REFRESH_TITLE])
   })
 
-  it('adds history only per shown notice, never per result', () => {
-    const before = toast.getHistory().length
+  it('keeps one history entry per target across repeated results and close cycles', () => {
+    const ownEntries = (): number =>
+      toast
+        .getHistory()
+        .filter((entry) => String(entry.id).startsWith('local-base-ref-refresh-failed:')).length
     for (let i = 0; i < 50; i++) {
       act(() => show(i % 2 ? SHALLOW : REFRESH))
     }
     settle()
-    expect(toast.getHistory().length - before).toBe(1)
+    expect(ownEntries()).toBe(1)
     for (let i = 0; i < 20; i++) {
       act(() => fireEvent.click(screen.getAllByRole('button', { name: /^Close/ })[0]))
       act(() => show(i % 2 ? REFRESH : SHALLOW))
       settle()
     }
-    expect(toast.getHistory().length - before).toBe(21)
+    expect(ownEntries()).toBe(1)
     expect(shownTitles()).toEqual([REFRESH_TITLE])
+    act(() => fireEvent.click(screen.getAllByRole('button', { name: /^Close/ })[0]))
+    settle()
+    expect(ownEntries()).toBe(0)
+    expect(shownTitles()).toEqual([])
   })
 
   it('re-renders the latest result when an older card reports a resize late', () => {

@@ -1,12 +1,8 @@
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { createDnrRequestState } from '../declarative-net-request/request-state'
-import { DnrEngine } from '../declarative-net-request/engine'
 import type { DnrHostAccess } from '../declarative-net-request/matching/extension-matcher'
-import {
-  compareActions,
-  type DnrRequestAction
-} from '../declarative-net-request/matching/ruleset-matcher'
+import type { DnrRequestAction } from '../declarative-net-request/matching/ruleset-matcher'
 import {
   DNR_REQUEST_METHODS,
   DNR_RESOURCE_TYPES
@@ -45,11 +41,11 @@ function matchedRule(action: DnrRequestAction): { ruleId: number; rulesetId: str
  * testMatchOutcome: this extension's rules alone against a made-up request, combined across the
  * two stages as Chrome does. Indexes are shared, so the throwaway engine only adds lookup tables.
  */
-export function testDnrMatchOutcome(
+export async function testDnrMatchOutcome(
   rules: DnrExtensionRules,
   request: z.infer<typeof testMatchRequestSchema>,
   hostAccess: (extensionId: string) => DnrHostAccess
-): { matchedRules: { ruleId: number; rulesetId: string }[] } {
+): Promise<{ matchedRules: { ruleId: number; rulesetId: string }[] }> {
   const url = parseUrl(request.url, DNR_ERRORS.invalidTestUrl)
   const initiator =
     request.initiator === undefined
@@ -62,6 +58,10 @@ export function testDnrMatchOutcome(
     request.topUrl === undefined
       ? null
       : parseUrl(request.topUrl, DNR_ERRORS.invalidTestTopUrl).origin
+  const [{ DnrEngine }, { compareActions }] = await Promise.all([
+    import('../declarative-net-request/engine'),
+    import('../declarative-net-request/matching/ruleset-matcher')
+  ])
   const engine = new DnrEngine()
   const extensionId = rules.extension.id
   engine.setExtension(extensionId, { installTime: 0 })
@@ -91,12 +91,16 @@ export function testDnrMatchOutcome(
     state,
     options
   ).actions
-  const outcome = combineStages(before, after)
+  const outcome = combineStages(before, after, compareActions)
   return { matchedRules: outcome.map(matchedRule) }
 }
 
 /** The outcome of both stages, in TestMatchOutcomeFunction's order of checks. */
-function combineStages(before: DnrRequestAction[], after: DnrRequestAction[]): DnrRequestAction[] {
+function combineStages(
+  before: DnrRequestAction[],
+  after: DnrRequestAction[],
+  compareActions: (left: DnrRequestAction, right: DnrRequestAction) => number
+): DnrRequestAction[] {
   const allowPriority = after[0] && isAllow(after[0]) ? after[0].indexPriority : 0
   const kept = before.filter((action) => action.indexPriority >= allowPriority)
   if (kept.length === 0 || isIntercepted(after)) {

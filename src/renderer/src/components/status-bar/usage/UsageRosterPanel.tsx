@@ -200,7 +200,9 @@ export function UsageRow({
         {!hasUsage ? (
           <>
             {/* Why wrap: the chip shows only an alert, so this row is where the message is read. */}
-            <span className="min-w-0 text-[11px] text-muted-foreground">{state.statusLabel}</span>
+            <span className="min-w-0 text-[11px] break-words text-muted-foreground">
+              {state.statusLabel}
+            </span>
             {showSignInAction ? (
               <span className="ml-auto shrink-0 rounded-md border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground">
                 {t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
@@ -218,7 +220,9 @@ export function UsageRow({
         )}
       </div>
       {state.detail ? (
-        <span className="pl-[30px] text-[11px] text-muted-foreground">{state.detail}</span>
+        <span className="pl-[30px] text-[11px] break-words text-muted-foreground">
+          {state.detail}
+        </span>
       ) : null}
       {showDetails ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">

@@ -108,7 +108,16 @@ export const GitCommitCompare = lazyZodSchema(() =>
 
 export const GitSequencer = lazyZodSchema(() =>
   WorktreeSelector.extend({
-    operation: z.enum(['cherry-pick', 'revert'])
+    operation: z.enum(['cherry-pick', 'revert']),
+    // Abort refuses unless the paused run is still the one Source Control showed.
+    expectedRunIdentity: z.string().min(1).optional()
+  })
+)
+
+export const GitAbortOperation = lazyZodSchema(() =>
+  WorktreeSelector.extend({
+    // Abort refuses unless the paused run is still the one Source Control showed.
+    expectedRunIdentity: z.string().min(1).optional()
   })
 )
 

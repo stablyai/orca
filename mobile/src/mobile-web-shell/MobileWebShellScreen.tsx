@@ -26,6 +26,7 @@ import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
 import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
+import { keepPairConfirmServerName } from '../pairing/pair-confirm-server-name'
 import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
 import { useShellDuoSideRelease, useShellPageBack } from './routing/use-shell-page-back'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
@@ -307,7 +308,7 @@ export function MobileWebShellScreen({
         documentFailed: () => reportShellFailure('document-load-failed')
       })
     },
-    onNavigate: openPageRoute,
+    onNavigate: (href, replace) => openPageRoute(keepPairConfirmServerName(href), replace),
     serveNativeVerb,
     onExternalLink: openUrlForPage,
     // Reuse the app’s platform haptics mapping; device failures are already swallowed there.
@@ -437,10 +438,7 @@ export function MobileWebShellScreen({
 }
 
 const stylesSheet = themedStyleSheet((colors) => ({
-  shellRoot: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
+  shellRoot: { flex: 1, backgroundColor: colors.bgBase },
   shellView: { flex: 1 },
   unpaintedOverlay: { opacity: 0 }
 }))

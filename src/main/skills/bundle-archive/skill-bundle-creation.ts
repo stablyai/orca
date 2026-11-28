@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { cp, mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -27,6 +27,7 @@ import {
 } from '../package-archive/skill-package-identity'
 import { writeSkillTarGzip, type SkillTarWriteEntry } from '../package-archive/skill-package-tar'
 import { startSkillPhaseOperation } from '../observability/skill-operation-observability'
+import { copyPath } from '../../../shared/copy-path'
 
 export type SkillBundleSource = {
   id?: string
@@ -83,7 +84,7 @@ async function stageSkill(input: {
   const sourceDirectory = await realpath(input.source.sourceDirectory).catch(
     () => input.source.sourceDirectory
   )
-  await cp(sourceDirectory, stagedDirectory, {
+  await copyPath(sourceDirectory, stagedDirectory, {
     recursive: true,
     verbatimSymlinks: true,
     force: false,

@@ -107,7 +107,7 @@ function decideBeforeRequest(
   runtime: DnrSessionRuntime,
   details: Electron.OnBeforeRequestListenerDetails
 ): Electron.CallbackResponse | null {
-  if (!runtime.evaluatesRequests && !runtime.evaluatesResponses) {
+  if ((!runtime.evaluatesRequests && !runtime.evaluatesResponses) || !runtime.engine) {
     return null
   }
   const info = requestInfo(runtime, details)
@@ -205,7 +205,7 @@ function decideHeadersReceived(
   noteNavigation(runtime, details, info, responseHeaders)
   const state = stored ?? createDnrRequestState()
   discardUnauthorizedActions(runtime, state, info)
-  if (runtime.evaluatesResponseConditions) {
+  if (runtime.evaluatesResponseConditions && runtime.engine) {
     const evaluation = runtime.engine.evaluateHeadersReceived(
       info,
       responseHeaders,

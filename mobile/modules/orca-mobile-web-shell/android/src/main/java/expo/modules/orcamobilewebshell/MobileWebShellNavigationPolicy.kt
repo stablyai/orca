@@ -23,7 +23,7 @@ internal sealed interface MobileWebShellNavigationVerdict {
   data class CancelAndOffer(val url: String) : MobileWebShellNavigationVerdict
 }
 
-/** Cap native-to-JS URL traffic; TypeScript’s readBridgeExternalLinkUrl owns scheme filtering and its smaller 2048-character limit. */
+/** Cap native-to-JS URL traffic, the tighter bound for cancelled navigations; TypeScript’s readBridgeExternalLinkUrl owns scheme filtering. */
 internal const val MOBILE_WEB_SHELL_MAX_DROPPED_NAVIGATION_URL_CHARS = 4096
 
 /** The URL a dropped navigation may be offered under, or null when nothing crosses. */
