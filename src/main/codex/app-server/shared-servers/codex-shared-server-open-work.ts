@@ -6,6 +6,11 @@ import {
 } from '../../../daemon/provider-relay/provider-relay-work-markers'
 import { CODEX_RELAY_WORK_MARKERS } from '../codex-app-server-relay'
 import type { CodexSharedServerTurns } from './codex-shared-server-turns'
+import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
+import { SOFT_READ_TIMEOUT_MS } from '../../structured/threads/codex-kept-loaded-threads'
+import { seedRunningCodexTurns } from './codex-shared-server-writer-stop'
+import type { CodexSharedServerRecovery } from './codex-shared-server-recovery'
+import type { CodexSharedServerLease } from './codex-shared-server-lease'
 
 type OpenWork = Record<string, string[][]>
 
@@ -106,4 +111,36 @@ export class CodexSharedServerOpenWork {
       byThread.delete(thread)
     }
   }
+}
+
+/**
+ * The open work to hand a server off with. A reattached server ran turns no notification here
+ * named (started before this attach), so each thread its chats hold, open or not, is read first:
+ * a hand-off never calls a running turn idle. Null (unknown) when one couldn't be ruled out.
+ */
+export async function codexSharedHandOffWork(
+  server: {
+    physicalConnection: CodexAppServerConnection | null
+    recovery: CodexSharedServerRecovery
+    leases: ReadonlySet<CodexSharedServerLease>
+    turns: CodexSharedServerTurns
+  },
+  work: CodexSharedServerOpenWork,
+  limited: (connection: CodexAppServerConnection) => Pick<CodexAppServerConnection, 'request'>
+): Promise<OpenWork | null> {
+  const connection = server.physicalConnection
+  if (connection?.relay?.reattached) {
+    const held = server.recovery.kept().groups.flatMap(({ threads }) => threads)
+    const leased = [...server.leases].flatMap((lease) => [...lease.threads])
+    const seeded = await seedRunningCodexTurns(
+      limited(connection),
+      [...leased, ...held.map(([threadId]) => threadId)],
+      server.turns,
+      SOFT_READ_TIMEOUT_MS
+    ).catch(() => false)
+    if (!seeded) {
+      return null
+    }
+  }
+  return work.snapshot(server.turns)
 }

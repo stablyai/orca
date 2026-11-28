@@ -68,6 +68,19 @@ export class CodexKeptServers {
     }
   }
 
+  /** Whether the chat still has a part on this relay's server here: a lease, held threads, or a
+   *  delete's stop under way. True when no server here is on the relay (only its daemon knows). */
+  holds(sessionId: string, relayId: string): boolean {
+    const server = this.byRelay.get(relayId)
+    return (
+      !server ||
+      server.exited ||
+      this.stopping.has(sessionId) ||
+      server.recovery.expected(sessionId) !== null ||
+      [...server.leases].some((lease) => lease.sessionId === sessionId)
+    )
+  }
+
   /** The kept server this chat's run is on, attached once for all its chats; null for a new run. */
   async serverFor(
     sessionId: string,

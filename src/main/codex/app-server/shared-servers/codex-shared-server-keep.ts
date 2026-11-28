@@ -26,7 +26,7 @@ import type { CodexRecoveredGroup } from './codex-shared-recovery-group'
 import type { CodexSharedServerRouter } from './codex-shared-server-router'
 import type { CodexSharedRelayAcks } from './codex-shared-server-relay'
 import type { CodexSharedServerTurns } from './codex-shared-server-turns'
-import { CodexSharedServerOpenWork } from './codex-shared-server-open-work'
+import { CodexSharedServerOpenWork, codexSharedHandOffWork } from './codex-shared-server-open-work'
 import type { CodexSharedServerHandedBack } from './codex-shared-server-handback'
 
 type Work = Record<string, string[][]>
@@ -202,9 +202,11 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
       // Every chat's work, held chats' too, as the server saw it end: a turn a handed-off chat
       // reported running that completed since isn't brought back. A chat that couldn't say
       // leaves it unknown.
-      const open = this.quitOpen === null ? null : this.work.snapshot(this.server.turns)
+      const chatKey = this.server.relayed?.chatKey ?? ''
       trackProviderRelayQuitWork(
-        detachProviderRelayForQuit(this.server.relayed?.chatKey ?? '', open)
+        codexSharedHandOffWork(this.server, this.work, (c) => this.limited(c)).then((open) =>
+          detachProviderRelayForQuit(chatKey, this.quitOpen === null ? null : open)
+        )
       )
     } else {
       trackProviderRelayQuitWork(this.server.stop())
@@ -219,8 +221,9 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   async handToDaemon(): Promise<CodexSharedServerHandedBack | null> {
     this.toDaemon = true
     const { server } = this
+    const open = await codexSharedHandOffWork(server, this.work, (c) => this.limited(c))
     const handed = await detachProviderRelayToDaemon(server.relayed?.chatKey ?? '', () =>
-      this.work.snapshot(server.turns)
+      open === null ? null : this.work.snapshot(server.turns)
     )
     this.toDaemon = handed
     // Read once it reads nothing more, so every claim and cut up to the detach is in it.
@@ -272,11 +275,10 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
         break
       }
       const result = await this.endThreads(threads, workload)
-      if (!result.interrupted) {
+      // Commands not proven gone may outlive the chat on a server others keep: the delete waits.
+      if (!result.interrupted || !result.workloadGone) {
         return false
       }
-      // As a chat's own close does: commands not proven gone are reaped with the server.
-      this.server.draining ||= !result.workloadGone
       threads.forEach((threadId) => ended.add(threadId))
     }
     recovery.drop(recovery.release(sessionId))
@@ -310,8 +312,12 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
         }
         if (source.parentThreadId) {
           this.server.router.ownerFound(root, source.parentThreadId)
-        } else {
-          await this.letGo(this.server.recovery.take(root))
+          return
+        }
+        // Held until its turns are interrupted: a delete still sees it as unresolved till then.
+        const ended = await this.endThreads(this.server.recovery.familyOf(root), null)
+        if (ended.interrupted) {
+          this.server.recovery.drop(this.server.recovery.take(root))
         }
       }
     )

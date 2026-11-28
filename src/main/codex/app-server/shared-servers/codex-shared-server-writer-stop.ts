@@ -10,15 +10,15 @@ const TURN_STOP_PROOF_MS = 10_000
 
 type Reads = Pick<CodexAppServerConnection, 'request'>
 
-/** A restored chat's turns may have started before this app attached, so no notification named
- *  them: each thread with none known is read. False when a read failed (its stop is unproven). */
-async function seedRecoveredTurns(
+/** Turns that started before this app attached are in no notification it read: each thread with
+ *  none known is read, and a running one noted. False when a read failed (its state is unknown). */
+export async function seedRunningCodexTurns(
   reads: Reads,
-  lease: CodexSharedServerLease,
+  threads: Iterable<string>,
   turns: CodexSharedServerTurns,
   timeoutMs: number
 ): Promise<boolean> {
-  const unknown = [...lease.threads].filter((threadId) => turns.runningOn(threadId) === undefined)
+  const unknown = [...threads].filter((threadId) => turns.runningOn(threadId) === undefined)
   const settled = await mapSettledWithConcurrency(unknown, 4, async (threadId) => {
     const page = readRecord(
       await reads.request(
@@ -47,7 +47,8 @@ export async function stopCodexLeaseWriter(
 ): Promise<boolean> {
   const options = { timeoutMs: requestTimeoutMs }
   const seeded =
-    lease.restored === null || (await seedRecoveredTurns(reads, lease, turns, requestTimeoutMs))
+    lease.restored === null ||
+    (await seedRunningCodexTurns(reads, lease.threads, turns, requestTimeoutMs))
   // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
   await turns.waitUntil(
     () => lease.pendingOpens.size === 0 && !turns.anyStartPending([...lease.threads]),

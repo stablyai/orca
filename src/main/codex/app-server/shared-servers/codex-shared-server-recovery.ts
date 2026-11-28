@@ -91,6 +91,11 @@ export class CodexSharedServerRecovery {
     return [...(this.bySession.get(sessionId)?.threads.keys() ?? [])]
   }
 
+  /** The family held with this thread, left in place. */
+  familyOf(threadId: string): string[] {
+    return [...(this.groupOf.get(threadId)?.threads.keys() ?? [])]
+  }
+
   /** A chat whose record names this server: its thread is held for it until it claims it. */
   expect(chat: CodexRecoveredChat): void {
     const existing = this.groupOf.get(chat.threadId)

@@ -14,6 +14,9 @@ export type SharedProviderRelayStop = 'stopped' | 'unreachable' | 'helpers'
 export type SharedProviderRelayAgent = {
   dropped: Dropped
   stop?: (record: AgentSessionRecord) => Promise<SharedProviderRelayStop>
+  /** Whether the chat still has a part (a lease, held threads, a stop under way) on this relay,
+   *  which this app holds attached; false once its part ended though others keep the agent. */
+  holds?: (chatKey: string, relayId: string) => boolean
 }
 
 /** Integrations whose one agent serves many chats: a chat's drop never closes it, its owner does. */
@@ -45,6 +48,13 @@ export function noteSharedProviderRelayAttached(relayId: string, attachedHere: b
   } else {
     sharedAttachedHere.delete(relayId)
   }
+}
+
+/** A chat whose part of a shared agent this app holds attached has ended, though the agent runs on
+ *  for other chats: its run is over. */
+export function sharedProviderRelayPartEnded(chatKey: string, info: ProviderRelayInfo): boolean {
+  const agent = info.agent === null ? undefined : sharedAgents.get(info.agent)
+  return sharedAttachedHere.has(info.relayId) && agent?.holds?.(chatKey, info.relayId) === false
 }
 
 /** Attached, but not by this app's own shared agent (whose chats still claim their parts). */

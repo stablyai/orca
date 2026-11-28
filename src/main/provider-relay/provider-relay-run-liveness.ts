@@ -19,7 +19,10 @@ import {
   placeKeptProviderRelay,
   providerRelayMayKeep
 } from './provider-relay-launch-inventory'
-import { providerRelayAttachedByOther } from './provider-relay-shared-agents'
+import {
+  providerRelayAttachedByOther,
+  sharedProviderRelayPartEnded
+} from './provider-relay-shared-agents'
 import { providerRelayRoute } from './provider-relay-route'
 import { watchProviderRelayClient } from './provider-relay-instance-signals'
 import { agentProvenGone, provenGone } from './provider-relay-exit-probes'
@@ -95,7 +98,11 @@ async function decide(
     : null
   if (client && listing) {
     const info = listing.get(placement.relayId)
-    if (info && keptProviderRelayOutstanding(info)) {
+    if (
+      info &&
+      keptProviderRelayOutstanding(info) &&
+      !sharedProviderRelayPartEnded(record.sessionId, info)
+    ) {
       if (!providerRelayAttachedByOther(info) && ask !== null) {
         await placeKeptProviderRelay(
           record.sessionId,
