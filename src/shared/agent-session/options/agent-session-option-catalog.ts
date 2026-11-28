@@ -8,6 +8,7 @@ import {
 } from './catalog-providers/agent-session-option-catalog-claude-codex'
 import { CURSOR_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-cursor'
 import { GROK_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-grok'
+import { KIRO_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-kiro'
 import { MUSE_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-muse'
 import { OMP_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-omp'
 import { PI_LAUNCH_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-pi'
@@ -26,6 +27,7 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   codex: CODEX_SESSION_OPTION_CATALOG,
   cursor: CURSOR_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
+  kiro: KIRO_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
   omp: OMP_SESSION_OPTION_CATALOG
 }
