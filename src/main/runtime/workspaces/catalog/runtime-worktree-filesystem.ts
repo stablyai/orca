@@ -43,15 +43,16 @@ function runtimeFolderWorkspaceRows(
   const expectedHostId = getRepoExecutionHostId(repo)
   // A project a WSL move is taking still lists, without stamping identities it lacks.
   const canWrite = stamp && !isWslMoveRepoBlocked(repo)
-  const ids = Object.keys(allMeta).filter(
-    (worktreeId) =>
+  const ids: string[] = [rootId]
+  for (const worktreeId in allMeta) {
+    if (
+      worktreeId !== rootId &&
+      Object.hasOwn(allMeta, worktreeId) &&
       isRuntimeFolderWorkspaceIdForRepo(repo, worktreeId) &&
       (repoOwnerCount === 1 || allMeta[worktreeId]?.hostId === expectedHostId)
-  )
-  if (!ids.includes(rootId)) {
-    ids.unshift(rootId)
-  } else {
-    ids.sort((left, right) => (left === rootId ? -1 : right === rootId ? 1 : 0))
+    ) {
+      ids.push(worktreeId)
+    }
   }
   return ids.map((worktreeId) => {
     const existing = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
