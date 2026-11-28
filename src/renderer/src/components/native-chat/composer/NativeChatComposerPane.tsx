@@ -54,6 +54,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onStop,
       escapeStops = true,
       onOptimisticSend,
+      enqueueTerminalMessage,
       optimisticSendOutcome,
       onOptimisticSendCanceled,
       onSlashCommand,
@@ -258,6 +259,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       launchDraftResolved: launchSeed?.launchDraftResolved === true,
       classifySend,
       onOptimisticSend,
+      enqueueTerminalMessage,
       optimisticSendOutcome,
       terminalTabId
     })

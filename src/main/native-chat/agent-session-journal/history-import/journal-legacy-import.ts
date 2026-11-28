@@ -108,7 +108,7 @@ export async function prepareLegacyTranscriptImport(input: {
   }
   const transcriptAgent =
     input.agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(input.agent)
-  if (!transcriptAgent) {
+  if (!transcriptAgent || transcriptAgent === 'hermes') {
     return { ok: false, error: `Unsupported agent for journal import: ${input.agent}` }
   }
   if (transcriptAgent === 'opencode') {

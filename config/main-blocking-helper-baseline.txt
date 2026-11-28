@@ -799,6 +799,7 @@
 3 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-dispatch.ts
 1 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/native-chat/transcript-filesystem/wsl-transcript-fs-access.ts
+1 src/main/native-chat/transcript-hermes.ts # why: one-shot Hermes home lookup when a local transcript path is resolved
 2 src/main/native-chat/transcript-history/codex/codex-rollout-history-source.ts
 3 src/main/native-chat/transcript-history/opencode/transcript-opencode-database.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode.ts

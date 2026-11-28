@@ -28,6 +28,10 @@ import type {
 } from './session-scanner-opencode-sqlite-worker-protocol'
 
 import { withFullFirstUserPromptCapture } from '../../../prompts/session-scanner-first-user-prompt-capture'
+import {
+  readHermesTranscriptPage,
+  readHermesTranscriptSignal
+} from '../../../../native-chat/transcript-hermes-sqlite'
 
 export async function handleOpenCodeSqliteRequest(
   request: OpenCodeSqliteWorkerRequest
@@ -47,10 +51,21 @@ export async function handleOpenCodeSqliteRequest(
       return { id: request.id, ok: true, value: { exists: hasHermesSession(request) } }
     }
     if (request.kind === 'native-page' || request.kind === 'native-signal') {
+      if (request.agent === 'hermes') {
+        const value =
+          request.kind === 'native-signal'
+            ? readHermesTranscriptSignal(request.dbPath, request.sessionId)
+            : readHermesTranscriptPage({ ...request, limit: request.limit ?? 50 })
+        return { id: request.id, ok: true, value }
+      }
       const value =
         request.kind === 'native-signal'
           ? readOpenCodeTranscriptSignal(request.dbPath, request.sessionId, request.agent)
-          : readOpenCodeTranscriptPage({ ...request, limit: request.limit ?? 50 })
+          : readOpenCodeTranscriptPage({
+              ...request,
+              agent: request.agent === 'zcode' ? 'zcode' : undefined,
+              limit: request.limit ?? 50
+            })
       return { id: request.id, ok: true, value }
     }
     if (request.kind === 'list') {

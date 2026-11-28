@@ -18,6 +18,8 @@ import { useMobileNativeChatPromptController } from './input/prompts/use-mobile-
 import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 import { mobileNativeChatScopeKey } from './conversation/mobile-native-chat-scope-key'
 import { useMobileNativeChatCiResultLines } from './preferences/use-mobile-native-chat-ci-result-lines'
+import { mobileStructuredChatPanelFields } from './mobile-structured-chat-panel-fields'
+import { terminalQueueFields, useMobileTerminalChatQueue } from './use-mobile-terminal-chat-queue'
 
 export function useMobileNativeChatController(args: {
   itemLink?: Parameters<typeof useMobileNativeChatSessionLane>[0]['itemLink']
@@ -31,6 +33,7 @@ export function useMobileNativeChatController(args: {
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  hostCapabilities?: readonly string[] | null
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
@@ -156,8 +159,14 @@ export function useMobileNativeChatController(args: {
     onSendResolved
   })
 
+  const terminalQueue = useMobileTerminalChatQueue({
+    ...args,
+    appendText: appendComposerText,
+    enabled: !activeChatStructured && activeChatAgent === 'hermes' && inputSendable
+  })
   const terminalTurn = useMobileNativeChatTerminalTurn({
     status: nativeChatStatus,
+    terminalActivity: terminalQueue.activity,
     resolution: activeChatResolution,
     session: activeChatStructured ? null : nativeChatSession,
     latestPendingId: chatPending.at(-1)?.id ?? null,
@@ -288,31 +297,23 @@ export function useMobileNativeChatController(args: {
     nativeChatActionablePromptIds: structuredNativeChat.actionablePromptIds,
     nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : terminalTurn.isWorking,
-    nativeChatSendFollowUp: activeChatStructured ? structuredNativeChat.sendFollowUp : null,
+    ...terminalQueueFields({
+      structured: activeChatStructured,
+      queue: terminalQueue,
+      structuredFollowUp: structuredNativeChat.sendFollowUp,
+      bind: [captureSendOrigin, clearDraftForSend, handleNativeChatSendWithOutcome],
+      structuredSend,
+      plain: { send: handleNativeChatSend, sendWithOutcome: handleNativeChatSendWithOutcome }
+    }),
     nativeChatStreamingText: terminalTurn.streamingText,
     ...prompts,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : terminalTurn.stop,
-    nativeChatQueued: structuredNativeChat.queued,
-    nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
-    nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
-    nativeChatInterruptedContinue: activeChatStructured
-      ? structuredNativeChat.interruptedContinue
-      : null,
-    nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
-    nativeChatMcpPanel: activeChatStructured ? structuredNativeChat.mcpPanel : null,
-    nativeChatAccountUsage: activeChatStructured ? structuredNativeChat.accountUsage : null,
-    nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
+    nativeChatQueued: terminalQueue.enabled ? terminalQueue.controls : structuredNativeChat.queued,
+    ...mobileStructuredChatPanelFields(activeChatStructured, structuredNativeChat),
     ...workspaceCatalog,
-    handleNativeChatSend: activeChatStructured ? structuredSend.send : handleNativeChatSend,
-    handleNativeChatSendWithOutcome: activeChatStructured
-      ? structuredSend.sendWithOutcome
-      : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,
     ...nativeChatLane.controllerFields,
-    nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages,
-    nativeChatForkSupport: activeChatStructured ? structuredNativeChat.forkSupport : undefined,
-    nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null,
     nativeChatUnresolvedFailureRows: structuredNativeChat.unresolvedFailureRows
   }
 }

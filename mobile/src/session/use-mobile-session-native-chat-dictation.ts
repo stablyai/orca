@@ -58,6 +58,7 @@ export function useMobileSessionNativeChatDictation(
     itemLink,
     client,
     pairedHostClient,
+    hostCapabilities: scope.hostCapabilities,
     hostId,
     worktreeId,
     activeSessionTab,

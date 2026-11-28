@@ -75,6 +75,8 @@ export type NativeChatComposerProps = {
   escapeStops?: boolean
   /** Render an optimistic echo until the real transcript turn lands. */
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
+  /** Queue a Hermes terminal follow-up instead of writing the PTY while the turn is in flight. */
+  enqueueTerminalMessage?: (text: string) => Promise<boolean>
   /** Settle an optimistic echo whose write was refused or never acknowledged. */
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   /** Remove an optimistic echo when its delayed submit is canceled. */

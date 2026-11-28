@@ -15,7 +15,10 @@ import {
 } from './messages/actions/use-native-chat-reveal-latest'
 import { useNativeChatLaunchPromptDeliveryNotice } from './session/terminal/delivery/use-native-chat-launch-prompt-delivery-notice'
 import { NativeChatComposer } from './composer/NativeChatComposer'
+import { NativeChatQueuedMessageList } from './queue/NativeChatQueuedMessageList'
 import { useNativeChatCanSend } from './host-access/use-native-chat-can-send'
+import { useNativeChatTerminalQueue } from './use-native-chat-terminal-queue'
+import { useNativeChatWorkingSuppression } from './use-native-chat-working-suppression'
 import { NativeChatInteractiveCard } from './prompts/NativeChatInteractiveCard'
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
 import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat/native-chat-agent-support'
@@ -23,7 +26,6 @@ import { useNativeChatTerminalPromptCard } from './prompts/use-native-chat-inter
 import { NativeChatPromptStrip } from './prompts/NativeChatPromptCollapse'
 import { NativeChatEmptyState } from './host-access/NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './session/terminal/send/use-native-chat-interactive-send'
-import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/transcript/streaming/native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/transcript/turns/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './conversation/turns/use-native-chat-terminal-turn-timing'
 import { shouldPruneLaunchPrompt } from './session/terminal/delivery/native-chat-pending'
@@ -83,8 +85,6 @@ export function NativeChatResolvedView({
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
   // Adopt the TUI’s unsent launch context into the GUI composer.
   const launchDraftSignal = useNativeChatLaunchDraftSignal({ terminalTabId, agent, session })
-  // Use the live session’s reconciled lifecycle for every working-state consumer.
-  const liveWorking = session.status === 'working'
   // Preview the in-progress hook reply before its completed transcript turn arrives.
   const hookPreview = useAgentStatus(paneKey)?.lastAssistantMessage
   // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
@@ -92,16 +92,27 @@ export function NativeChatResolvedView({
   // A coalesced interrupt/restart can stay working; the newer epoch must still clear Stop suppression.
   const workingEpoch = useAgentStatus(paneKey)?.stateStartedAt ?? null
   const turnEpoch = useAgentStatus(paneKey)?.turnStartedAt ?? null
-  const sendWorkingEpoch =
-    (session.hookWorking ?? liveWorking) || session.hookAwaitingInput ? turnEpoch : undefined
   const canSend = useNativeChatCanSend(targetPtyId)
   // Share verified composer delivery with prompt answers and ESC-based Stop.
   const send = useNativeChatInteractiveSend(paneKey, targetPtyId, agent)
   const { messageListRef, revealLatest } = useNativeChatRevealLatest()
   const interactiveSend = useNativeChatInteractiveSendReveal(send, targetPtyId, revealLatest)
-  const [workingInterrupted, setWorkingInterrupted] = useState(false)
-  const previousWorkingEpochRef = useRef<number | null>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
+  const terminalQueue = useNativeChatTerminalQueue({
+    paneKey,
+    ptyId: targetPtyId,
+    environmentId: runtimeEnvironmentId,
+    composerRef,
+    enabled: agent === 'hermes' && isVisible && canSend
+  })
+  // Hermes activity wins when the host queue is live; otherwise the transcript status stands.
+  const liveWorking = terminalQueue.working ?? session.status === 'working'
+  const sendWorkingEpoch =
+    (session.hookWorking ?? liveWorking) || session.hookAwaitingInput ? turnEpoch : undefined
+  const [workingInterrupted, setWorkingInterrupted] = useNativeChatWorkingSuppression(
+    liveWorking,
+    workingEpoch
+  )
   // Keep Paste targeted while the question card replaces the composer.
   const questionAnswerInputRef = useRef<HTMLTextAreaElement>(null)
   const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
@@ -217,28 +228,10 @@ export function NativeChatResolvedView({
   const viewState = selectNativeChatViewState(sessionWithPending)
 
   const isConversation = viewState.kind === 'ready'
-  useEffect(() => {
-    if (
-      shouldClearNativeChatWorkingSuppression({
-        working: liveWorking,
-        interrupted: workingInterrupted,
-        workingEpoch,
-        previousWorkingEpoch: previousWorkingEpochRef.current
-      })
-    ) {
-      setWorkingInterrupted(false)
-    }
-    if (liveWorking && workingEpoch != null) {
-      previousWorkingEpochRef.current = workingEpoch
-    }
-    if (!liveWorking) {
-      previousWorkingEpochRef.current = null
-    }
-  }, [liveWorking, workingInterrupted, workingEpoch])
   const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
     isConversation,
     working: liveWorking,
-    hookAwaitingInput: session.hookAwaitingInput === true,
+    hookAwaitingInput: terminalQueue.awaitingInput ?? session.hookAwaitingInput === true,
     interrupted: workingInterrupted,
     hasPromptCard: promptCard !== null
   })
@@ -250,7 +243,7 @@ export function NativeChatResolvedView({
     // Stop can outlive its delayed-write handle; clear cached echoes explicitly to prevent ghost prompts.
     clear()
     interactiveSend.cancel()
-  }, [interactiveSend, clear])
+  }, [interactiveSend, clear, setWorkingInterrupted])
   const onSplit = useMemo<NativeChatSurfaceArgs['onSplit']>(
     () =>
       contextMenuActions
@@ -338,6 +331,13 @@ export function NativeChatResolvedView({
         {collapsedCard ? (
           <NativeChatPromptStrip card={collapsedCard} onExpand={promptCardPresentation.expand} />
         ) : null}
+        <NativeChatQueuedMessageList
+          controller={terminalQueue.controller}
+          chatWorktreeId={null}
+          focusComposer={() => {
+            composerRef.current?.focus()
+          }}
+        />
         {/* Honor mobile PTY ownership; retain the hidden composer’s state but detach its ref from typing, paste and focus routes. */}
         <div hidden={shownPromptCard !== null} className="contents">
           <NativeChatComposer
@@ -351,6 +351,7 @@ export function NativeChatResolvedView({
             isWorking={isWorking}
             onStop={stopAgent}
             onOptimisticSend={onOptimisticSend}
+            enqueueTerminalMessage={terminalQueue.available ? terminalQueue.enqueue : undefined}
             onOptimisticSendCanceled={delivery.cancel}
             optimisticSendOutcome={delivery}
             onSlashCommand={onSlashCommand}

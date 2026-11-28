@@ -5,6 +5,7 @@ import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provide
 import { ptyOwnership } from '../provider/ownership-state'
 import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
 import { isHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
+
 import { hideRuntimeOwnedRendererDelivery } from './spawn-hidden-delivery'
 import { seedAttachedRuntimeTerminal } from './seed-attached-runtime-terminal'
 import { rendererSerializerReadiness } from '../pane/serializer-state'

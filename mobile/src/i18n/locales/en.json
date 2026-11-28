@@ -2667,7 +2667,9 @@
       "emptyTitle": "Start a chat with {{agent}}",
       "errorTitle": "Could not load conversation",
       "errorMessage": "The conversation couldn’t be read. The terminal view still works.",
-      "defaultAgentLabel": "the agent"
+      "defaultAgentLabel": "the agent",
+      "hermesStartingTitle": "Connecting to Hermes…",
+      "hermesStartingSubtitle": "The conversation will appear when Hermes is ready."
     },
     "nativeChatToggleAction": {
       "switchToTerminalView": "Switch to terminal",
