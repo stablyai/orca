@@ -54,18 +54,16 @@ export function buildWorkspaceRowComparator<Row>(
   const byLabel = (a: Row, b: Row): number =>
     compareText(read.label(a), read.label(b)) ||
     compareCodePoints(read.identity(a), read.identity(b))
-  return (a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return byLabel(a, b)
-      case 'smart':
-        return read.compareSmart(a, b) || byLabel(a, b)
-      case 'recent':
-        return read.recentActivity(b) - read.recentActivity(a) || byLabel(a, b)
-      case 'repo':
-        return compareText(read.repoLabel(a), read.repoLabel(b)) || byLabel(a, b)
-      case 'manual':
-        return compareManualRank(read.manualRank(a), read.manualRank(b)) || byLabel(a, b)
-    }
+  switch (sortBy) {
+    case 'name':
+      return byLabel
+    case 'smart':
+      return (a, b) => read.compareSmart(a, b) || byLabel(a, b)
+    case 'recent':
+      return (a, b) => read.recentActivity(b) - read.recentActivity(a) || byLabel(a, b)
+    case 'repo':
+      return (a, b) => compareText(read.repoLabel(a), read.repoLabel(b)) || byLabel(a, b)
+    case 'manual':
+      return (a, b) => compareManualRank(read.manualRank(a), read.manualRank(b)) || byLabel(a, b)
   }
 }

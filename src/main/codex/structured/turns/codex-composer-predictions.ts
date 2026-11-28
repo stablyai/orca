@@ -4,14 +4,13 @@ import {
   readCodexTurnStatus
 } from '../../app-server/codex-structured-thread-facts'
 import { readRecord } from '../../app-server/codex-item-field-readers'
+import { readPromptSuggestionText } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-prompt-suggestion-text'
 import type {
   CodexSession,
   CodexStructuredSessionAdapterDeps
 } from '../session-lifecycle/codex-structured-session-state'
 
 const NO_PREDICTION = 'NO_PREDICTION'
-// A guess is a short sentence; a longer one is not worth a frame to every reader.
-const MAX_PREDICTION_LENGTH = 1000
 // Codex bounds a sample at 30 s itself; this only covers a reply that never comes.
 const SAMPLE_TIMEOUT_MS = 45_000
 
@@ -34,16 +33,11 @@ type NotificationEvent = {
 
 function readSampleText(result: unknown): { id: string; text: string } | null {
   const { responseId, text } = readRecord(result)
-  const trimmed = typeof text === 'string' ? text.trim() : ''
-  if (
-    typeof responseId !== 'string' ||
-    !trimmed ||
-    trimmed === NO_PREDICTION ||
-    trimmed.length > MAX_PREDICTION_LENGTH
-  ) {
+  const suggestion = readPromptSuggestionText(text)
+  if (typeof responseId !== 'string' || !suggestion || suggestion === NO_PREDICTION) {
     return null
   }
-  return { id: responseId, text: trimmed }
+  return { id: responseId, text: suggestion }
 }
 
 /** Asks Codex for its guess at the user's next prompt after each finished turn a reader shows. */

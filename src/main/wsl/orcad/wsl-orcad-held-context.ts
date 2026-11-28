@@ -12,14 +12,24 @@ import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import { refuseMissingWslDistro, WslDistroVersion1Error } from '../discovery/wsl-distro-unsupported'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadConnectStateReader } from './wsl-orcad-connect-state-snapshot'
+import type { WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
+import { pinnedWslHostLinuxUser } from './wsl-orcad-host-user'
+import {
+  readWslAccountFacts,
+  WSL_ACCOUNT_FACTS_COMMAND,
+  WslHostAccountChangedError,
+  noteWslOtherAccountServer,
+  readWslDefaultUserBesidePin,
+  type WslAccountFacts
+} from './wsl-orcad-account-facts'
 
 const KERNEL_MARKER = '__ORCA_WSL_KERNEL__ '
 const HOME_MARKER = '__ORCA_WSL_HOME__ '
 const LIBC_MARKER = '__ORCA_WSL_LIBC__'
 // The libc probe goes last: its output may span lines, so it takes everything after its marker.
-export const WSL_HOST_FACTS_COMMAND = `printf '${KERNEL_MARKER}%s\\n${HOME_MARKER}%s\\n' "$(uname -r)" "$HOME"; ${UNAME_PLATFORM_PROBE_COMMAND}; printf '\\n%s\\n' '${LIBC_MARKER}'; ${LINUX_LIBC_FIRST_PROBE}`
+export const WSL_HOST_FACTS_COMMAND = `printf '${KERNEL_MARKER}%s\\n${HOME_MARKER}%s\\n' "$(uname -r)" "$HOME"; ${WSL_ACCOUNT_FACTS_COMMAND}; ${UNAME_PLATFORM_PROBE_COMMAND}; printf '\\n%s\\n' '${LIBC_MARKER}'; ${LINUX_LIBC_FIRST_PROBE}`
 
-type WslHostFacts = {
+type WslHostFacts = WslAccountFacts & {
   kernel: string
   loginHome?: string
   platform?: RemoteHostPlatform
@@ -32,9 +42,21 @@ type WslHostFacts = {
  */
 export function readWslHostFacts(output: string): WslHostFacts | null {
   const lines = output.split('\n')
-  const [kernelLine = '', homeLine = '', gap, platformLine = '', libcGap, libcMarker, ...libc] =
-    lines
+  const [
+    kernelLine = '',
+    homeLine = '',
+    userLine = '',
+    keyLine = '',
+    peerLine = '',
+    gap,
+    platformLine = '',
+    libcGap,
+    libcMarker,
+    ...libc
+  ] = lines
+  const accounts = readWslAccountFacts(userLine, keyLine, peerLine)
   if (
+    !accounts ||
     !kernelLine.startsWith(KERNEL_MARKER) ||
     !homeLine.startsWith(HOME_MARKER) ||
     gap !== '' ||
@@ -46,6 +68,7 @@ export function readWslHostFacts(output: string): WslHostFacts | null {
   }
   const loginHome = homeLine.slice(HOME_MARKER.length)
   return {
+    ...accounts,
     kernel: kernelLine.slice(KERNEL_MARKER.length).trim(),
     ...(loginHome.trim() ? { loginHome } : {}),
     ...withPlatform(remoteHostPlatformFromUnameProbe(`\n${platformLine}`)),
@@ -55,6 +78,23 @@ export function readWslHostFacts(output: string): WslHostFacts | null {
 
 function withPlatform(platform: RemoteHostPlatform | null): { platform?: RemoteHostPlatform } {
   return platform ? { platform } : {}
+}
+
+/** Refuses an unpinned host's unpaired account (#49180); true is only a hint the pinned account's key changed. */
+export function refuseUnpairedHostAccount(
+  distro: string,
+  facts: WslAccountFacts,
+  pairedKey: string | undefined
+): boolean {
+  if (!facts.account || !pairedKey || facts.ownKey === pairedKey) {
+    return false
+  }
+  const pinned = pinnedWslHostLinuxUser(distro)
+  if (!pinned) {
+    throw new WslHostAccountChangedError(distro, facts.account)
+  }
+  // A missing key may be mid-write, and another account's key says nothing of the pinned one's.
+  return Boolean(facts.ownKey) && facts.account.name === pinned
 }
 
 /** WSL 1 runs no Linux kernel, so the pinned Node and its pty cannot run there. */
@@ -72,10 +112,10 @@ export async function holdWslDistroWithContext(
   target: WslOrcadHostTarget,
   conn: OrcadHostTransport,
   holder: WslDistroHolder,
-  signal: AbortSignal | undefined
+  { signal, pairedOffer }: Pick<WslOrcadDeployOptions, 'signal' | 'pairedOffer'>
 ) {
   // One exec for the kernel, the login home and the platform the context would probe one by one.
-  const facts = readWslHostFacts(
+  const facts: WslHostFacts = readWslHostFacts(
     await execCommand(conn, WSL_HOST_FACTS_COMMAND, { signal }).catch(refuseMissingWslDistro(name))
   ) ??
     // Unrecognized output proves nothing: read the kernel alone, as before, and let the context probe.
@@ -83,6 +123,10 @@ export async function holdWslDistroWithContext(
   if (isWsl1KernelRelease(facts.kernel)) {
     throw new WslDistroVersion1Error(name)
   }
+  if (facts.otherServerAccount) {
+    noteWslOtherAccountServer(name, facts.otherServerAccount)
+  }
+  const pairedKeyChanged = refuseUnpairedHostAccount(name, facts, pairedOffer?.publicKeyB64)
   // Once the hold fails, stop the probes: after dispose they fall back to fresh wsl.exe execs,
   // which would boot a distro that just went away (E9).
   const probes = new AbortController()
@@ -93,7 +137,7 @@ export async function holdWslDistroWithContext(
   signal?.addEventListener('abort', stopProbes, { once: true })
   const connectState = createWslOrcadConnectStateReader()
   try {
-    const [held, context] = await Promise.all([
+    const [held, context, defaultLinuxUser] = await Promise.all([
       holder.ensureHeld(name).catch((error: unknown) => {
         probes.abort(error)
         throw error
@@ -103,9 +147,17 @@ export async function holdWslDistroWithContext(
         readActivationRecord: connectState.readActivationRecord,
         // Only with a proven platform: the libc answer belongs to the same host shape.
         ...(facts.platform ? { firstLibcProbeOutput: facts.firstLibcProbeOutput } : {})
-      })
+      }),
+      readWslDefaultUserBesidePin(target, probes.signal)
     ])
-    return { held, context, connectState: connectState.snapshot() }
+    const linuxUser = facts.account?.name ?? null
+    const launchIdentity = {
+      holder: held.outcome,
+      linuxUser,
+      defaultLinuxUser,
+      ...(pairedKeyChanged ? { pairedKeyChanged: true as const } : {})
+    }
+    return { context, connectState: connectState.snapshot(), launchIdentity }
   } catch (error) {
     probes.abort(error)
     throw error

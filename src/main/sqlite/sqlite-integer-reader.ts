@@ -6,7 +6,10 @@ export class SqliteIntegerReader {
 
   row(row: SqliteRow): SqliteRow {
     if (!this.readBigInts) {
-      for (const key of Object.keys(row)) {
+      for (const key in row) {
+        if (!Object.hasOwn(row, key)) {
+          continue
+        }
         const value = row[key]
         if (typeof value === 'bigint') {
           row[key] = this.integer(value)

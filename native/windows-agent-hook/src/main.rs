@@ -216,13 +216,15 @@ fn arm(stream: &TcpStream, deadline: Instant) -> bool {
         && stream.set_write_timeout(Some(remaining)).is_ok()
 }
 
-/// `name=value` with the value percent-encoded exactly as curl's `--data-urlencode` does.
+/// `name=value` using `application/x-www-form-urlencoded` (`+` for space, matching `URLSearchParams`).
 fn append_form_field(body: &mut Vec<u8>, name: &str, value: &[u8]) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     body.extend_from_slice(name.as_bytes());
     body.push(b'=');
     for &byte in value {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+        if byte == b' ' {
+            body.push(b'+');
+        } else if byte.is_ascii_alphanumeric() || matches!(byte, b'*' | b'-' | b'.' | b'_' | b'~') {
             body.push(byte);
         } else {
             body.extend_from_slice(&[
@@ -231,5 +233,28 @@ fn append_form_field(body: &mut Vec<u8>, name: &str, value: &[u8]) {
                 HEX[usize::from(byte & 15)],
             ]);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{append_form_field, REQUEST_BYTE_LIMIT};
+
+    #[test]
+    fn encodes_spaces_as_plus_and_percent_encodes_plus() {
+        let mut body = Vec::new();
+        append_form_field(&mut body, "payload", b"{\"a\": \"hello world + *\"}");
+        assert_eq!(
+            String::from_utf8(body).unwrap(),
+            "payload=%7B%22a%22%3A+%22hello+world+%2B+*%22%7D"
+        );
+    }
+
+    #[test]
+    fn spaced_large_payload_stays_within_request_limit() {
+        let payload = "a ".repeat(400_000);
+        let mut body = Vec::new();
+        append_form_field(&mut body, "payload", payload.as_bytes());
+        assert!(body.len() <= REQUEST_BYTE_LIMIT);
     }
 }

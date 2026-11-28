@@ -35,6 +35,20 @@ export const WslHostPendingStopSchema = lazyZodSchema(() =>
 
 export type WslHostPendingStop = z.infer<typeof WslHostPendingStopSchema>
 
+// Never a leading `-`, so wsl.exe can't read it as a flag.
+export const WslLinuxUserNameSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .max(64)
+    .regex(/^[A-Za-z0-9_][A-Za-z0-9_.-]*\$?$/)
+)
+
+/** A launch-reported account name, or undefined when it isn't one a record can pin. */
+export function pinnableWslLinuxUser(name: string | null | undefined): string | undefined {
+  const parsed = WslLinuxUserNameSchema.safeParse(name)
+  return parsed.success ? parsed.data : undefined
+}
+
 export const WslHostDeploymentRecordSchema = lazyZodSchema(() =>
   OrcadWslDeploymentLinkSchema.extend({
     environmentId: z.string().min(1),
@@ -46,6 +60,8 @@ export const WslHostDeploymentRecordSchema = lazyZodSchema(() =>
     pairingPublicKeyB64: z.string().min(1).optional(),
     /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
     previousPairingPublicKeyB64: z.string().min(1).optional(),
+    /** orcad's pinned Linux account (`wsl -u`); older records are pinned on their next verified connect. */
+    linuxUser: WslLinuxUserNameSchema.optional(),
     pendingStop: WslHostPendingStopSchema.optional()
   })
 )

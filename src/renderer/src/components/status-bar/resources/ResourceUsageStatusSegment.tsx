@@ -68,6 +68,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
     sessionsOnlyError,
     resourceManagerTooltipLines,
     resourceManagerAriaLabel,
+    appMemoryLabel,
     toggleRepo,
     toggleWorktree,
     navigateToWorktree,
@@ -102,7 +103,8 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
           commitToneClass,
           triggerSessionCount,
           orphanCount,
-          resourceManagerTooltipLines
+          resourceManagerTooltipLines,
+          appMemoryLabel
         },
         t
       )}

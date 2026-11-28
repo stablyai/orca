@@ -12,6 +12,8 @@ import type {
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWithAttachWindow {
+  protected abstract hasTerminalStatusListeners(): boolean
+
   syncRendererAgentStatus(windowId: number, batch: RendererStatusPublication): RendererStatusAck {
     if (windowId !== this.authoritativeWindowId || this.rendererGeneration !== batch.epoch) {
       return { accepted: false, reason: 'superseded' }
@@ -20,9 +22,15 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
       return { accepted: false, reason: 'not-ready' }
     }
     const { worktrees, ...ack } = rendererStatusReplica(this).apply(batch)
+    // Terminal status: with only chat-scoped listeners, owe the bump and build no frame.
+    const listened = this.hasTerminalStatusListeners()
     for (const worktreeId of worktrees) {
       const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
       if (!snapshot) {
+        continue
+      }
+      if (!listened) {
+        this.mobileSessionTabsByWorktree.oweUnpublishedVersion(worktreeId)
         continue
       }
       // Status changes invalidate only this phone frame; graph hydration and activity stay idle.

@@ -4,7 +4,7 @@ import type { ResourceSessionBindingInputs } from '../workspace-attribution/reso
 type TabsByWorktree = ResourceSessionBindingInputs['tabsByWorktree']
 
 /** Preserve the PTY topology across terminal title publications. Read live labels at the mounted row. */
-export function createResourcePtyTabBindingSelector(): (tabs: TabsByWorktree) => TabsByWorktree {
+export function createPtyTabBindingSelector(): (tabs: TabsByWorktree) => TabsByWorktree {
   let observed: TabsByWorktree | undefined
   let stable: TabsByWorktree
   return (tabs) => {
@@ -42,7 +42,7 @@ export function createResourcePtyTabBindingSelector(): (tabs: TabsByWorktree) =>
 }
 
 /** Session bindings that read workspace tabs from the PTY-stable selector above. */
-export function withResourcePtyTabBindings(
+export function withPtyTabBindings(
   tabsByWorktree: TabsByWorktree,
   bindings: Omit<ResourceSessionBindingInputs, 'tabsByWorktree'>
 ): ResourceSessionBindingInputs {

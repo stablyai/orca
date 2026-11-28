@@ -174,9 +174,6 @@
       "dictationOffFooter": "Talk instead of typing in chats and terminals.",
       "swipeToDelete": "Swipe a downloaded model left to delete it."
     },
-    "agents": {
-      "permissionOwnAll": "Agents' own settings"
-    },
     "voiceTranscribeOn": {
       "heading": "Transcribe on",
       "automatic": "Automatic",
@@ -297,7 +294,8 @@
       "connecting": "Connecting…",
       "backToHome": "Back to home",
       "pairThisComputer": "Pair with this computer?",
-      "onlyYourOwn": "Only pair with a computer you trust."
+      "onlyYourOwn": "Only pair with a computer you trust.",
+      "pairNamedServer": "Pair with {{server}}?"
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
@@ -993,6 +991,13 @@
     },
     "identity": {
       "hostNotFound": "Host not found"
+    },
+    "serverOwnPairing": {
+      "updateDesktop": "Update Orca on {{desktop}} to keep {{server}} reachable.",
+      "failed": "Could not reach {{server}}. Try again while {{desktop}} is awake.",
+      "thisServer": "this server",
+      "keepReachable": "Keep {{server}} reachable",
+      "evenWhenAsleep": "Even when {{desktop}} sleeps"
     }
   },
   "webShell": {
@@ -1678,7 +1683,9 @@
         "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
-        "permissionFullAccessDescription": "Never asks before edits or commands"
+        "permissionFullAccessDescription": "Never asks before edits or commands",
+        "permissionAgentSettings": "{{agent}} settings",
+        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -2212,7 +2219,8 @@
       "emptyState": "No files found",
       "loading": "Loading files…",
       "searching": "Searching…",
-      "searchPlaceholder": "Search files"
+      "searchPlaceholder": "Search files",
+      "inFiles": "In files"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -2248,7 +2256,19 @@
       "discardMessage": "Unsaved edits will be lost.",
       "discardMessageSaving": "The save in progress may not finish. Unsaved edits will be lost.",
       "discard": "Discard",
-      "stay": "Stay"
+      "stay": "Stay",
+      "saveFile": "Save file",
+      "editFile": "Edit file",
+      "changedOnComputer": "Changed on {{computer}}",
+      "changedSinceOpened": "Changed since you opened it",
+      "deletedOnComputer": "Deleted on {{computer}}",
+      "deletedSinceOpened": "Deleted since you opened it",
+      "reloadConfirmTitle": "Discard your changes and load the latest?",
+      "reload": "Reload",
+      "overwrite": "Overwrite",
+      "notUtf8": "This file isn't UTF-8 text, so it can't be saved here",
+      "cannotOverwrite": "The file on disk can't be edited here anymore",
+      "tooLargeToSave": "Too large to save from your phone"
     },
     "filePreviewSourceText": {
       "previewLabel": "File preview",
@@ -2273,6 +2293,7 @@
       "openFolder": "Open folder {{name}}",
       "fileUnavailable": "{{name}} unavailable on mobile",
       "previewFile": "Preview file {{name}}",
+      "openAtLine": "Open {{name}} at line {{line}}",
       "showMore": "Show {{rows}} more",
       "loadedOfTotal": "{{loaded}} of {{total}}",
       "ignored": "Ignored by .gitignore"
@@ -2660,7 +2681,7 @@
       "goal": "Set a goal"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Resume in New CLI"
+      "continueInTerminal": "Continue in terminal"
     },
     "nativeChatRenderData": {
       "notFoundTitle": "Can't find this conversation yet",
@@ -3270,6 +3291,18 @@
       "needsYou": "Needs you",
       "files": "Files",
       "otherWorkspaces": "Other workspaces"
+    },
+    "terminalChatContinuation": {
+      "busy": "Another chat or terminal is opening. Wait, then try again.",
+      "continueInChat": "Continue in chat",
+      "failed": "Couldn't continue in chat. {{detail}}",
+      "failedAfterClose": "Couldn't continue in chat. {{detail}} The conversation is in Agent History.",
+      "otherJob": "{{process}} is running in this terminal. Quit it, then continue in chat.",
+      "terminalChanged": "This terminal changed while Orca checked it. Try again.",
+      "tryAgain": "Try again.",
+      "unavailable": "{{agent}} chats aren't available on this computer.",
+      "uncheckable": "Orca couldn't check what's running in this terminal. Try again.",
+      "unconfirmed": "Orca couldn't confirm the chat opened. Check your tabs before trying again."
     }
   },
   "chat": {
@@ -3852,7 +3885,11 @@
         "tools_one": "{{count}} tool",
         "tools_other": "{{count}} tools",
         "disabled": "Disabled",
-        "notStarted": "Not started"
+        "notStarted": "Not started",
+        "commandNotFound": "Command not found",
+        "unreachable": "Can’t reach {{host}}",
+        "orcaRemoved": "Removed: restarts on next message",
+        "orcaChanged": "Changed: restarts on next message"
       },
       "title": "MCP servers",
       "notRunning": "MCP servers connect when you send your next message.",
@@ -3878,7 +3915,8 @@
         "failed": "{{count}} failed"
       },
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here.",
-      "manage": "Manage MCP servers"
+      "manage": "Manage MCP servers",
+      "stillFailing": "Still failing after reconnecting."
     },
     "selectionQuote": {
       "action": "Quote",
@@ -4636,6 +4674,9 @@
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
+      "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
+      "antigravityInvalidResult": "Antigravity returned an invalid result.",
+      "antigravityNoFinalResult": "Antigravity returned no final result.",
       "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
       "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
       "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
@@ -5678,7 +5719,6 @@
       "suggestThree": "{{a}}, {{b}} & {{c}}",
       "suggestMore": "{{a}}, {{b}} & {{count}} more",
       "pickOne": "Pick a bot",
-      "needsTwoBots": "Needs 2 bots on {{host}}",
       "items": {
         "emptyTitle": "No items from this group yet",
         "needsYouCount_one": "{{count}} needs you",
@@ -6932,6 +6972,7 @@
       "signIn": {
         "action": "Sign in",
         "step1Detail": "Sign in to {{app}} and allow access.",
+        "step1Copy": "Copy the link below and open it in your browser.",
         "step2": "Copy the address",
         "step2Detail": "The last page won’t load. That’s expected. Copy its address.",
         "step3": "Paste it here",
@@ -6942,7 +6983,11 @@
         "finish": "Finish",
         "open": "Open sign-in page",
         "notThisSignIn": "That address isn’t from this sign-in. Paste the address you landed on.",
-        "pasteLanded": "After you sign in, paste the address you landed on."
+        "pasteLanded": "After you sign in, paste the address you landed on.",
+        "copyLink": "Copy link",
+        "copyFailed": "Couldn’t copy the link.",
+        "pasteInBrowser": "Paste it into your browser to sign in.",
+        "copyThenPaste": "Copy the link, sign in from your browser, then paste the address you landed on."
       },
       "updateHost": "Update Orca on {{host}} to sign in to apps",
       "none": "None",
@@ -8529,6 +8574,7 @@
     "workspacesCount": "{{count}} workspaces",
     "workspacesAllButCount": "All but {{count}}",
     "headerMissing": "Fill in {{header}} to add this server.",
-    "servers": "Servers"
+    "servers": "Servers",
+    "unreadable": "Saved sign-in or key can’t be opened. Sign in again."
   }
 }

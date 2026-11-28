@@ -4,15 +4,13 @@ import type { GlobalSettings } from '../../../shared/settings/global-settings-ty
 import type { Project } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { getRepoKind } from '../../../shared/repository/repo-kind'
-import { splitWorktreeId } from '../../../shared/worktree/id'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeIdFromHostIdentity,
-  isWorktreeHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
+import { WORKTREE_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { fingerprintString } from '../../../shared/text/string-fingerprint'
+
+const LOCAL_HOST_IDENTITY_PREFIX = `${LOCAL_EXECUTION_HOST_ID}|`
 
 type CapturedLocalRepoIdentity = Readonly<
   Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> & {
@@ -84,7 +82,8 @@ function captureRow(
 
 export function indexMetadataAliasesForWorktreeIds(
   state: PersistedState,
-  worktreeIds: ReadonlySet<string>
+  worktreeIds: ReadonlySet<string>,
+  repoPrefix?: string
 ): Map<string, MetadataAliasEntry[]> {
   const indexed = new Map<string, MetadataAliasEntry[]>()
   const aliases = state.worktreeIdentityAliases
@@ -95,8 +94,16 @@ export function indexMetadataAliasesForWorktreeIds(
     if (!Object.hasOwn(aliases, alias)) {
       continue
     }
+    const directMatch =
+      (repoPrefix === undefined || alias.startsWith(repoPrefix)) && worktreeIds.has(alias)
+    const separator = alias.indexOf('|')
+    const hasSuffixCandidate =
+      separator !== -1 && (repoPrefix === undefined || alias.startsWith(repoPrefix, separator + 1))
+    if (!directMatch && !hasSuffixCandidate) {
+      continue
+    }
     const identityKeys = aliases[alias]!
-    if (worktreeIds.has(alias)) {
+    if (directMatch) {
       const entries = indexed.get(alias)
       if (entries) {
         entries.push([alias, identityKeys])
@@ -104,8 +111,7 @@ export function indexMetadataAliasesForWorktreeIds(
         indexed.set(alias, [[alias, identityKeys]])
       }
     }
-    const separator = alias.indexOf('|')
-    if (separator !== -1) {
+    if (hasSuffixCandidate) {
       const suffix = alias.slice(separator + 1)
       if (suffix !== alias && worktreeIds.has(suffix)) {
         const entries = indexed.get(suffix)
@@ -124,39 +130,43 @@ export function captureNativeLocalWorktreeMetadataScanExpectation(
   state: PersistedState,
   repo: Repo
 ): NativeLocalWorktreeMetadataScanExpectation {
-  const matchingRepos = state.repos.filter((entry) => entry.id === repo.id)
-  const expectedRepo = matchingRepos.length === 1 ? matchingRepos[0] : undefined
-  const expectedProject = state.projects.find((project) => project.sourceRepoIds.includes(repo.id))
-  const candidateIds = new Set<string>()
-  const worktreeMeta = state.worktreeMeta
-  for (const worktreeId in worktreeMeta) {
-    if (!Object.hasOwn(worktreeMeta, worktreeId)) {
-      continue
-    }
-    const meta = worktreeMeta[worktreeId]!
-    if (
-      splitWorktreeId(worktreeId)?.repoId === repo.id &&
-      (!meta.hostId || meta.hostId === LOCAL_EXECUTION_HOST_ID)
-    ) {
-      candidateIds.add(worktreeId)
+  let expectedRepo: Repo | undefined
+  for (const entry of state.repos) {
+    if (entry.id === repo.id) {
+      if (expectedRepo !== undefined) {
+        expectedRepo = undefined
+        break
+      }
+      expectedRepo = entry
     }
   }
-  const aliases = state.worktreeIdentityAliases
-  if (aliases) {
-    for (const alias in aliases) {
-      if (!Object.hasOwn(aliases, alias) || !isWorktreeHostIdentity(alias)) {
+  const expectedProject = state.projects.find((project) => project.sourceRepoIds.includes(repo.id))
+  const candidateIds = new Set<string>()
+  const canMatchRepoId = !repo.id.includes(WORKTREE_ID_SEPARATOR)
+  const repoPrefix = canMatchRepoId ? `${repo.id}${WORKTREE_ID_SEPARATOR}` : undefined
+  if (repoPrefix !== undefined) {
+    const worktreeMeta = state.worktreeMeta
+    for (const worktreeId in worktreeMeta) {
+      if (!Object.hasOwn(worktreeMeta, worktreeId) || !worktreeId.startsWith(repoPrefix)) {
         continue
       }
-      const worktreeId = getWorktreeIdFromHostIdentity(alias)
-      if (
-        alias === composeWorktreeHostIdentity(LOCAL_EXECUTION_HOST_ID, worktreeId) &&
-        splitWorktreeId(worktreeId)?.repoId === repo.id
-      ) {
+      const meta = worktreeMeta[worktreeId]!
+      if (!meta.hostId || meta.hostId === LOCAL_EXECUTION_HOST_ID) {
         candidateIds.add(worktreeId)
       }
     }
+    const aliases = state.worktreeIdentityAliases
+    if (aliases) {
+      const localRepoPrefix = `${LOCAL_HOST_IDENTITY_PREFIX}${repoPrefix}`
+      for (const alias in aliases) {
+        if (!Object.hasOwn(aliases, alias) || !alias.startsWith(localRepoPrefix)) {
+          continue
+        }
+        candidateIds.add(alias.slice(LOCAL_HOST_IDENTITY_PREFIX.length))
+      }
+    }
   }
-  const aliasesByWorktreeId = indexMetadataAliasesForWorktreeIds(state, candidateIds)
+  const aliasesByWorktreeId = indexMetadataAliasesForWorktreeIds(state, candidateIds, repoPrefix)
   return {
     repo: {
       id: repo.id,

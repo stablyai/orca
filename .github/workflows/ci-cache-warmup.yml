@@ -70,14 +70,9 @@ jobs:
   warm:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     concurrency:
-      group: ci-cache-warmup-linux-x64-${{ matrix.runner }}-${{ github.event.pull_request.number || github.ref }}
+      group: ci-cache-warmup-linux-x64-ubuntu-24.04-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    # Blacksmith and GitHub-hosted jobs restore from separate cache stores; warm both.
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [blacksmith-4vcpu-ubuntu-2404, ubuntu-24.04]
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -93,7 +88,7 @@ jobs:
           node-version: '24'
           cache-electron-package: 'true'
           # No hosted job restores the root store, so keep it out of GitHub's cache quota.
-          cache-pnpm-store: ${{ startsWith(matrix.runner, 'blacksmith-') }}
+          cache-pnpm-store: 'false'
           cache-pnpm-store-lookup-only: 'true'
 
       - uses: ./.github/actions/prepare-headless-compiler

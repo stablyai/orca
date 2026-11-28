@@ -57,10 +57,11 @@ export function arrangeNewTabMenuItems<T extends NewTabMenuArrangeable>(
   items: readonly T[],
   layout: NewTabMenuLayout | undefined
 ): { visible: T[]; hidden: T[] } {
-  if (!layout) {
+  const normalized = normalizeNewTabMenuLayout(layout)
+  if (!normalized) {
     return { visible: [...items], hidden: [] }
   }
-  const savedIndex = new Map(layout.order.map((id, index) => [id, index]))
+  const savedIndex = new Map(normalized.order.map((id, index) => [id, index]))
   const arranged = items
     .filter((item) => savedIndex.has(item.id))
     .sort((left, right) => (savedIndex.get(left.id) ?? 0) - (savedIndex.get(right.id) ?? 0))
@@ -72,7 +73,7 @@ export function arrangeNewTabMenuItems<T extends NewTabMenuArrangeable>(
     const at = predecessor ? arranged.indexOf(predecessor) + 1 : 0
     arranged.splice(at, 0, item)
   })
-  const hidden = new Set(layout.hidden)
+  const hidden = new Set(normalized.hidden)
   return {
     visible: arranged.filter((item) => item.locked || !hidden.has(item.id)),
     hidden: arranged.filter((item) => !item.locked && hidden.has(item.id))
@@ -88,9 +89,10 @@ export function buildNewTabMenuLayout(
   hiddenIds: readonly string[],
   previous: NewTabMenuLayout | undefined
 ): NewTabMenuLayout {
+  const normalizedPrevious = normalizeNewTabMenuLayout(previous)
   const arranged = new Set([...visibleIds, ...hiddenIds])
   const order = [...visibleIds, ...hiddenIds]
-  const previousOrder = previous?.order ?? []
+  const previousOrder = normalizedPrevious?.order ?? []
   previousOrder.forEach((id, index) => {
     if (arranged.has(id)) {
       return
@@ -99,7 +101,7 @@ export function buildNewTabMenuLayout(
     const anchor = previousOrder.slice(0, index).findLast((other) => order.includes(other))
     order.splice(anchor === undefined ? 0 : order.indexOf(anchor) + 1, 0, id)
   })
-  const unavailableHidden = (previous?.hidden ?? []).filter((id) => !arranged.has(id))
+  const unavailableHidden = (normalizedPrevious?.hidden ?? []).filter((id) => !arranged.has(id))
   return {
     order: normalizeIds(order),
     hidden: normalizeIds([...hiddenIds, ...unavailableHidden])
@@ -112,6 +114,7 @@ export function withNewTabMenuItemHidden(
   id: string,
   hidden: boolean
 ): NewTabMenuLayout {
-  const others = (layout?.hidden ?? []).filter((other) => other !== id)
-  return { order: layout?.order ?? [], hidden: hidden ? [id, ...others] : others }
+  const normalized = normalizeNewTabMenuLayout(layout)
+  const others = (normalized?.hidden ?? []).filter((other) => other !== id)
+  return { order: normalized?.order ?? [], hidden: hidden ? [id, ...others] : others }
 }

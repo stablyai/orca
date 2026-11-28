@@ -2,7 +2,10 @@ export { workerDockSession } from './worker-dock-source'
 import { workerDockSession } from './worker-dock-source'
 export { acknowledgeWorkerDock } from './worker-dock-acknowledgment'
 import { readWorkerDockSnapshot } from './worker-dock-read-snapshot'
-import { workerLaunchModel } from '../workers/launch/worker-launch-observation'
+import {
+  workerLaunchModel,
+  workerStartOptionsAgentValue
+} from '../workers/launch/worker-launch-observation'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { OrchestrationDb } from '../db/orchestration-db'
@@ -55,9 +58,9 @@ function epoch(value: unknown): number | null {
 }
 const Launch = lazyZodSchema(() =>
   z.object({
-    name: z.string().optional(),
+    name: z.string().nullable().optional(),
     launch: z.unknown().optional(),
-    agent: z.string().optional()
+    agent: z.string().nullable().optional()
   })
 )
 function launchOptions(value: unknown): z.infer<typeof Launch> {
@@ -175,12 +178,14 @@ export function readWorkerDock(
         throw new Error('Worker dock snapshot changed inside its read transaction.')
       }
       const launch = launchOptions(row.start_options)
+      const agent = workerStartOptionsAgentValue(launch)
       const active = row.state === 'starting' || row.state === 'ready'
       return WorkerDockEntry.parse({
         ...identity,
         source,
-        name: row.display_name ?? launch.name ?? launch.agent ?? 'Worker',
+        name: row.display_name ?? launch.name ?? agent ?? 'Worker',
         title: row.title,
+        ...(agent ? { agent } : {}),
         model: workerLaunchModel(launch.launch),
         changedAt: identity.changedAt,
         startedAt: epoch(row.created_at),

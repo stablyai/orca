@@ -25,8 +25,8 @@ import {
 } from './bot-link-copy'
 import { openMobileStructuredSession } from '../session/native-chat/agent-session/open-mobile-structured-session'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { resolveBotLink } from '../../../src/shared/bots/bot-link-resolution'
+import { chatPaneKey } from '../../../src/shared/agent-session/view/chat-pane-address'
 
 export function BotSessionLinkResolver({
   link,
@@ -188,7 +188,7 @@ export function BotSessionLinkResolver({
               hostId: computer.pairedHostId,
               executionHost: computer.executionHost,
               worktreeId: opened.target.worktreeId,
-              paneKey: structuredAgentSessionPaneKey(opened.tab.id, sessionId),
+              paneKey: chatPaneKey(sessionId),
               ...(itemId ? { botItem: JSON.stringify({ sessionId, itemId }) } : {})
             })
           } else {

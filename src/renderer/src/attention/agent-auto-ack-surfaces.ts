@@ -1,14 +1,16 @@
 import type { useAppStore } from '@/store'
+import { CHAT_PANE_ADDRESS_PREFIX } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentAttentionSurface } from '@/attention/agent-attention-contract'
 import {
   computeAgentAcknowledgementTargets,
-  readAgentAttentionTurnStartedAt,
+  readManualUnreadProtectionTurn,
   resolveViewedUnreadSubjectKey,
   type AgentAttentionTurnRecords
 } from '@/attention/agent-attention-acknowledgement'
 import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
 import { createStructuredAttentionSurface } from '@/components/native-chat/session/attention/structured-attention-surface'
 import type { AutoAckTabTarget } from './agent-auto-ack-targets'
+import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 import {
   emitAgentSubjectReads,
   type AgentSubjectRead
@@ -42,20 +44,18 @@ export function acknowledgeViewedAutoAckTarget(
   const records = readAgentAttentionTurnRecords(state)
   const groupId = target.tabId
   const subjectKey = surfaceForAutoAckTarget(state, target).resolveViewedSubjectKey(groupId)
-  const toAck = computeAgentAcknowledgementTargets(records, subjectKey).filter(
-    (key) =>
-      state.manuallyUnreadTurnsByPaneKey[key] !== readAgentAttentionTurnStartedAt(records, key)
-  )
+  const turn = subjectKey === null ? null : readManualUnreadProtectionTurn(records, subjectKey)
+  const protectedTurn =
+    subjectKey !== null &&
+    (turn !== null || subjectKey.startsWith(CHAT_PANE_ADDRESS_PREFIX)) &&
+    readWebChatMark(state, 'manuallyUnreadTurnsByPaneKey', subjectKey, turn ?? undefined) !==
+      undefined
+  const toAck = protectedTurn ? [] : computeAgentAcknowledgementTargets(records, subjectKey)
   const viewedUnreadSubjectKey = resolveViewedUnreadSubjectKey(
     state.unreadAgentCompletionPanes,
     subjectKey
   )
-  const readViewed =
-    options?.readViewed &&
-    subjectKey !== null &&
-    (state.manuallyUnreadTurnsByPaneKey[subjectKey] === undefined ||
-      state.manuallyUnreadTurnsByPaneKey[subjectKey] !==
-        readAgentAttentionTurnStartedAt(records, subjectKey))
+  const readViewed = options?.readViewed && subjectKey !== null && !protectedTurn
   if (toAck.length === 0 && !viewedUnreadSubjectKey && !readViewed) {
     return
   }

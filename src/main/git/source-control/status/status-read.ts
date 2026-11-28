@@ -23,6 +23,10 @@ import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from '../git-read-cache-invalidation'
 import { readRebaseIndexObservation } from '../mutations/rebase-index-observation'
 import { detectConflictOperation } from '../mutations/git-conflict-operation'
+import {
+  readOperationRunIdentity,
+  readStableRunIdentity
+} from '../mutations/operation-run-identity'
 import { parseUnmergedEntry } from '../../../../shared/git/status/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from '../upstream/effective-upstream-status-cache'
 import {
@@ -131,10 +135,21 @@ async function runGetStatus(
 
   // Inside the shared lease, so callers arriving during the wait join this read.
   await waitForIndexLockRelease(worktreePath, options)
-  const conflictPromise = detectConflictOperation(worktreePath, options)
-  const statusReadPromise = readStatusPorcelain(worktreePath, options, limit)
-  const conflictOperation = await conflictPromise
-  const { parser, stoppedEarly, error: statusError } = await statusReadPromise
+  const conflictOperation = await detectConflictOperation(worktreePath, options)
+  // The paused run's identity is read before the porcelain snapshot starts and again after it ends
+  // (below); equal readings bracket the snapshot, so its view and identity belong to one run,
+  // unless two runs read identically (a best-effort identity; see readOperationRunIdentity).
+  // Costs the probe's few stats ahead of the porcelain read instead of beside it.
+  const identityBeforeSnapshot = await readOperationRunIdentity(
+    worktreePath,
+    conflictOperation,
+    options
+  ).catch(() => null)
+  const {
+    parser,
+    stoppedEarly,
+    error: statusError
+  } = await readStatusPorcelain(worktreePath, options, limit)
   let didHitLimit = false
   if (statusError === undefined) {
     didHitLimit = stoppedEarly
@@ -233,6 +248,10 @@ async function runGetStatus(
     throw error
   }
 
+  // A different reading now means the run changed while the snapshot was taken.
+  const operationRunIdentity = await readStableRunIdentity(identityBeforeSnapshot, () =>
+    readOperationRunIdentity(worktreePath, conflictOperation, options)
+  )
   const indexObservation =
     statusSucceeded && conflictOperation === 'rebase'
       ? await readRebaseIndexObservation(worktreePath, options)
@@ -241,6 +260,8 @@ async function runGetStatus(
     entries,
     conflictOperation,
     ...(indexObservation ? { rebaseIndexObservation: indexObservation } : {}),
+    // Null, not absent, when unreadable: absence means an older host that never reads it.
+    ...(conflictOperation !== 'unknown' ? { operationRunIdentity } : {}),
     head,
     branch,
     ...(readError !== undefined ? { readError } : {}),

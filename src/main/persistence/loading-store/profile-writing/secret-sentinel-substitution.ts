@@ -23,6 +23,87 @@ const textOutput: SecretSubstitutionOutput<string> = {
   concat: (chunks) => chunks.join('')
 }
 
+export type TextSecretSentinelSubstituter = {
+  apply: (
+    serialized: string,
+    hashPrefix?: string,
+    hashSuffix?: string
+  ) => { payload: string; stateHash: string }
+}
+
+/** Precompile sentinel patterns once across multi-domain profile writes. */
+export function createTextSecretSentinelSubstituter(
+  substitutions: readonly SecretSentinelSubstitution[]
+): TextSecretSentinelSubstituter {
+  if (substitutions.length === 0) {
+    return {
+      apply(serialized, hashPrefix = '', hashSuffix = '') {
+        const hash = createHash('sha1')
+        if (hashPrefix) {
+          hash.update(hashPrefix)
+        }
+        hash.update(serialized)
+        if (hashSuffix) {
+          hash.update(hashSuffix)
+        }
+        return { payload: serialized, stateHash: hash.digest('hex') }
+      }
+    }
+  }
+  const replacementBySentinel = new Map<string, { blob: string; hashValue: string }>()
+  const alternatives: string[] = []
+  for (const { sentinel, blob, hashValue } of substitutions) {
+    const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
+    if (replacementBySentinel.has(escapedSentinel)) {
+      continue
+    }
+    alternatives.push(escapeRegex(escapedSentinel))
+    replacementBySentinel.set(escapedSentinel, {
+      blob: JSON.stringify(blob).slice(1, -1),
+      hashValue: JSON.stringify(hashValue).slice(1, -1)
+    })
+  }
+  const pattern = new RegExp(alternatives.join('|'), 'g')
+  return {
+    apply(serialized, hashPrefix = '', hashSuffix = '') {
+      const hash = createHash('sha1')
+      if (hashPrefix) {
+        hash.update(hashPrefix)
+      }
+      pattern.lastIndex = 0
+      let match = pattern.exec(serialized)
+      if (match === null) {
+        hash.update(serialized)
+        if (hashSuffix) {
+          hash.update(hashSuffix)
+        }
+        return { payload: serialized, stateHash: hash.digest('hex') }
+      }
+      const chunks: string[] = []
+      let cursor = 0
+      do {
+        const replacement = replacementBySentinel.get(match[0])
+        if (replacement === undefined) {
+          throw new Error('Secret substitution matched an unregistered sentinel')
+        }
+        const literal = serialized.slice(cursor, match.index)
+        chunks.push(literal, replacement.blob)
+        hash.update(literal)
+        hash.update(replacement.hashValue)
+        cursor = match.index + match[0].length
+        match = pattern.exec(serialized)
+      } while (match !== null)
+      const tail = serialized.slice(cursor)
+      chunks.push(tail)
+      hash.update(tail)
+      if (hashSuffix) {
+        hash.update(hashSuffix)
+      }
+      return { payload: chunks.join(''), stateHash: hash.digest('hex') }
+    }
+  }
+}
+
 /** Build ciphertext payload and stable guard hash together without per-secret full-state copies. */
 export function applySecretSentinelSubstitutions(
   serialized: string,

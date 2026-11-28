@@ -3,7 +3,6 @@ import type {
   RemoteTrackingBase
 } from '../repositories/runtime-remote-fetch-controller'
 import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-refs/base-ref-drift-types'
-import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import {
@@ -82,6 +81,7 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
     behind: number
     recentSubjects: string[]
   } | null> {
+    const { probeRuntimeWorktreeDrift } = await import('./metadata/runtime-worktree-drift-probe')
     return probeRuntimeWorktreeDrift({
       selector: worktreeSelector,
       store: this.store ? this.requireStore() : null,

@@ -35,11 +35,10 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 
 import { useResourceViewVisible } from './use-resource-view-visible'
 import { useResourcePtyActions } from './pty/use-resource-pty-actions'
-import {
-  createResourcePtyTabBindingSelector,
-  withResourcePtyTabBindings
-} from './pty/resource-pty-tab-bindings'
+import { createPtyTabBindingSelector, withPtyTabBindings } from './pty/resource-pty-tab-bindings'
 import { useResourceMemorySnapshot } from './use-resource-memory-snapshot'
+import { useStatusBarAppMemory } from './use-status-bar-app-memory'
+import { isStatusBarMemoryShown } from '../../../../../shared/diagnostics/status-bar-memory-settings'
 import { trackResourceManagerOpen } from './resource-manager-open-request'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -76,6 +75,10 @@ export function useResourceUsageStatusController() {
   const ptyViewActive = windowVisible && open && selectedTab === 'ptys'
   const viewActive = resourceViewActive || ptyViewActive
   const fetchSnapshot = useResourceMemorySnapshot(resourceViewActive)
+  const showStatusBarMemory = useAppStore(
+    (s) => s.settings != null && isStatusBarMemoryShown(s.settings)
+  )
+  const appMemoryBytes = useStatusBarAppMemory(showStatusBarMemory)
   const localPtyInventory = useResourceSessionInventory(workspaceSessionReady, ptyViewActive, true)
   const ptyActions = useResourcePtyActions(localPtyInventory)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
@@ -115,7 +118,7 @@ export function useResourceUsageStatusController() {
     [gitWorktrees, folders]
   )
   const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, viewActive))
-  const [selectPtyTabBindings] = useState(createResourcePtyTabBindingSelector)
+  const [selectPtyTabBindings] = useState(createPtyTabBindingSelector)
   const ptyTabsByWorktree = useAppStore((s) =>
     selectPtyTabBindings(getResourceUsageTabsByWorktree(s, ptyViewActive))
   )
@@ -174,7 +177,7 @@ export function useResourceUsageStatusController() {
   )
   const ptySessionBindings = useMemo(
     () =>
-      withResourcePtyTabBindings(ptyTabsByWorktree, {
+      withPtyTabBindings(ptyTabsByWorktree, {
         ptyIdsByTabId,
         terminalLayoutsByTabId,
         workspaceSessionReady
@@ -248,7 +251,8 @@ export function useResourceUsageStatusController() {
     sessionsRereading,
     memorySnapshotError,
     snapshot,
-    spaceScanReady
+    spaceScanReady,
+    appMemoryBytes
   })
   const actions = useResourceUsageActions({
     setCollapsedRepos,

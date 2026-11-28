@@ -92,6 +92,10 @@ function label(fact: Facts, t: Translate): string {
 const FACE_CLASS_NAME =
   'pointer-events-auto absolute top-1 size-5 shrink-0 cursor-pointer rounded-full ring-2 outline-none focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid'
 
+// The gap sits inside the face so the ring adds only 1.5px per side: neighbors 4px apart stay 1px clear.
+const ATTENTION_RING_CLASS_NAME =
+  'ring-0 after:pointer-events-none after:absolute after:inset-0 after:rounded-full after:shadow-[inset_0_0_0_1px_var(--gap),0_0_0_1.5px_var(--color-status-warning-text)]'
+
 export function BotCollapsedPreview({
   facts,
   onOpenBot,
@@ -264,9 +268,16 @@ export function BotCollapsedPreview({
                           aria-current={isCurrent || undefined}
                           className={cn(
                             FACE_CLASS_NAME,
-                            isCurrent
-                              ? 'ring-sidebar-foreground'
-                              : 'ring-sidebar hover:ring-sidebar-ring'
+                            signal === 'attention'
+                              ? cn(
+                                  ATTENTION_RING_CLASS_NAME,
+                                  isCurrent
+                                    ? 'after:[--gap:var(--color-sidebar-foreground)]'
+                                    : 'after:[--gap:var(--color-worktree-sidebar)]'
+                                )
+                              : isCurrent
+                                ? 'ring-sidebar-foreground'
+                                : 'ring-sidebar hover:ring-sidebar-ring'
                           )}
                           style={{ left: botPreviewFaceStart(index) }}
                           onFocus={(event) => {

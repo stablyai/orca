@@ -33,6 +33,7 @@ export type QuickLaunchAgentMenuItemsProps = {
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Default launch telemetry to tab_bar_quick_launch. */
   launchSource?: LaunchSource
+  canSendPrompt?: () => boolean
   /** Called after a prompt is queued into the agent, or immediately for argv prompt launches. */
   onPromptDelivered?: () => void
   /** Given the launch's own delivery result while the prompt is still on its way. */
@@ -52,6 +53,7 @@ export function useTabAgentMenuLaunch({
   prompt,
   promptDelivery,
   launchSource,
+  canSendPrompt,
   onPromptDelivered,
   onPromptHandedOff,
   disabled,
@@ -72,6 +74,9 @@ export function useTabAgentMenuLaunch({
             worktreeId
           }))
       ) {
+        return false
+      }
+      if (canSendPrompt && !canSendPrompt()) {
         return false
       }
       const { agent } = row
@@ -147,6 +152,7 @@ export function useTabAgentMenuLaunch({
       prompt,
       promptDelivery,
       launchSource,
+      canSendPrompt,
       onPromptDelivered,
       onPromptHandedOff,
       disabled,

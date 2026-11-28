@@ -1,7 +1,10 @@
 import { defineMethod } from '../../core'
 import { readCallerStoreInstallationId } from '../../../hosts/platform-probe/host-descriptor'
 import { getCanonicalUserDataPath } from '../../../../persistence/loading-store/user-data-path'
-import { resolveWorktreeCatalogSnapshot } from '../../workspace-client-views/worktree-catalog-snapshot'
+import {
+  resolveWorktreeCatalogSnapshot,
+  WorktreeCatalogRowHashes
+} from '../../workspace-client-views/worktree-catalog-snapshot'
 import { coarsenWorktreePsActivity } from '../../workspace-client-views/worktree-ps-coarse-activity'
 import { markWorktreePsOtherClientRows } from '../../workspace-client-views/worktree-ps-other-client-marks'
 import { supportsWorktreeVisibilitySourceDefaults } from '../../workspace-client-views/worktree-visibility-client-capability'
@@ -15,6 +18,8 @@ import {
   WorktreeListParams,
   WorktreePsParams
 } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
+
+const worktreePsRowHashes = new WorktreeCatalogRowHashes()
 
 export const WORKTREE_CATALOG_METHODS = [
   defineMethod({
@@ -40,6 +45,8 @@ export const WORKTREE_CATALOG_METHODS = [
       )
       // Why: legacy callers keep exact activity; only snapshot pollers are coarsened.
       if (params.afterSnapshotId === undefined && params.acceptRowDelta !== true) {
+        // One-shot reads (CLI) backfill uncached linked PRs for the next read; snapshot pollers don't.
+        void context.runtime.hostPRCache?.backfill().catch(() => undefined)
         // A reader of several hosts joins their cross-machine parents by it (`worktree ps --since`).
         // The id only decorates rows; a host that can't read it still lists them.
         const installationId = await Promise.resolve()
@@ -53,7 +60,11 @@ export const WORKTREE_CATALOG_METHODS = [
         return installationId ? { ...result, installationId } : result
       }
       // Why: pollers get activity at poll-friendly granularity so the id survives terminal output.
-      return resolveWorktreeCatalogSnapshot(coarsenWorktreePsActivity(result), params)
+      return resolveWorktreeCatalogSnapshot(
+        coarsenWorktreePsActivity(result),
+        params,
+        worktreePsRowHashes
+      )
     }
   }),
   defineMethod({

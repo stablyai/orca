@@ -9,6 +9,7 @@ import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hove
 import type { WorktreeCardDetailsHoverProps } from '../metadata/worktree-card-meta-types'
 import { preloadCommentMarkdown } from '../../../comment-markdown/comment-markdown-lazy'
 import { useActivityThreadHoverCardIntent } from '@/components/activity/thread-preview/activity-thread-hover-card-intent'
+import { WorktreeCardReferencePeekContext } from './worktree-card-reference-peek-context'
 import type * as WorktreeCardHoverContentModule from './WorktreeCardHoverContent'
 
 const loadWorktreeCardHoverContent = (): Promise<typeof WorktreeCardHoverContentModule> =>
@@ -58,7 +59,13 @@ export function WorktreeCardDetailsHover({
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
   const detailsHoverControl = hoverControl ?? internalHoverControl
-  const { hoverOpen, contextMenuOpen, handleHoverOpenChange } = detailsHoverControl
+  const {
+    hoverOpen,
+    contextMenuOpen,
+    handleHoverOpenChange,
+    referencePeekOpen,
+    handleReferencePeekOpenChange
+  } = detailsHoverControl
   const [workspaceTitleEditing, setWorkspaceTitleEditing] = React.useState(false)
   const pendingWorkspaceTitleCloseRef = React.useRef(false)
   const handleWorkspaceTitleEditingChange = React.useCallback(
@@ -87,7 +94,8 @@ export function WorktreeCardDetailsHover({
   const hoverIntent = useActivityThreadHoverCardIntent({
     open: hoverOpen || workspaceTitleEditing,
     onOpenChange: handleEffectiveHoverOpenChange,
-    openDelay
+    openDelay,
+    enabled: !referencePeekOpen
   })
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
   const attachments = getWorkspaceAttachments(workspace ?? {})
@@ -124,19 +132,21 @@ export function WorktreeCardDetailsHover({
       openDelay={0}
       closeDelay={closeDelay}
     >
-      <HoverCardTrigger
-        asChild
-        {...hoverIntent.triggerHandlers}
-        onPointerEnter={(event) => {
-          hoverIntent.triggerHandlers.onPointerEnter(event)
-          void loadWorktreeCardHoverContent().catch(() => {})
-          if (hasComment(comment)) {
-            preloadCommentMarkdown()
-          }
-        }}
-      >
-        {children}
-      </HoverCardTrigger>
+      <WorktreeCardReferencePeekContext value={handleReferencePeekOpenChange}>
+        <HoverCardTrigger
+          asChild
+          {...hoverIntent.triggerHandlers}
+          onPointerEnter={(event) => {
+            hoverIntent.triggerHandlers.onPointerEnter(event)
+            void loadWorktreeCardHoverContent().catch(() => {})
+            if (hasComment(comment)) {
+              preloadCommentMarkdown()
+            }
+          }}
+        >
+          {children}
+        </HoverCardTrigger>
+      </WorktreeCardReferencePeekContext>
       {hasOpenedHover ? (
         <React.Suspense fallback={null}>
           <LazyWorktreeCardHoverContent

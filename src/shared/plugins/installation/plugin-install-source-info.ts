@@ -1,4 +1,4 @@
-import { pluginRepositoryOrigin } from '../catalog/plugin-repository-link'
+import { pluginInstallTrustee, pluginRepositoryOrigin } from '../catalog/plugin-repository-link'
 import { gitUrlPluginPublisher } from './plugin-publisher-derivation'
 
 /** Where a CLI install comes from, as Orca read it; shown so a person can judge the author. */
@@ -55,8 +55,14 @@ export function localInstallSourceInfo(path: string, publisher: string): PluginI
 
 /** Who the reader must trust, matching the app's "Make sure you trust …" dialog. */
 function trustee(source: PluginInstallSourceInfo): string {
-  const owner = source.url ? pluginRepositoryOrigin(source.url)?.owner : null
-  return owner ?? source.publisher ?? source.repository ?? source.url ?? 'its author'
+  const named = source.url
+    ? pluginInstallTrustee({
+        url: source.url,
+        publisher: source.publisher,
+        catalogUrl: source.catalog?.url ?? null
+      })
+    : source.publisher
+  return named ?? source.repository ?? source.url ?? 'its author'
 }
 
 /** Lines naming the source; non-official ones add the same warning the install dialog gives. */

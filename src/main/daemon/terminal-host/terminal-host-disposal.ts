@@ -19,6 +19,26 @@ type TerminalHostDisposalOptions = {
   killedTombstones: { clear: () => void }
 }
 
+/** Shares one shutdown between callers; a failed one stays retryable so native owners can be released later. */
+export function createRetryableTerminalHostDisposal(
+  options: () => TerminalHostDisposalOptions
+): () => Promise<void> {
+  let pending: Promise<void> | null = null
+  return () => {
+    if (pending) {
+      return pending
+    }
+    const disposal = disposeTerminalHostSessions(options())
+    pending = disposal
+    void disposal.catch(() => {
+      if (pending === disposal) {
+        pending = null
+      }
+    })
+    return disposal
+  }
+}
+
 export async function disposeTerminalHostSessions({
   pendingCreations,
   sessionTeardown,

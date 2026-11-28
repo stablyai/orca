@@ -81,7 +81,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       acquisitions: this.acquisitions,
       ...(deps.onEvent ? { onEvent: deps.onEvent } : {}),
       ...(deps.logger ? { logger: deps.logger } : {}),
-      forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null)
+      forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null),
+      forgetMcpSignIn: (sessionId) => this.manageMcp.forget(sessionId)
     })
   }
 

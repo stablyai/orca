@@ -41,9 +41,17 @@ function startOptions(json: string): Record<string, unknown> {
   }
 }
 
-export function workerStartOptionsAgent(json: string): string | null {
-  const options = startOptions(json)
+export function workerStartOptionsAgentValue(value: unknown): string | null {
+  const parsed = object.safeParse(value)
+  if (!parsed.success) {
+    return null
+  }
+  const options = parsed.data
   return workerLaunchAgent(options.launch) || (isTuiAgent(options.agent) ? options.agent : null)
+}
+
+export function workerStartOptionsAgent(json: string): string | null {
+  return workerStartOptionsAgentValue(startOptions(json))
 }
 
 /** Enrich the existing launch concept without rewriting the person's selector or preferences. */

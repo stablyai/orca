@@ -97,6 +97,14 @@ export async function runClaudePastedCodeLogin(
       }
     })
   } catch (error) {
+    if (!prompted) {
+      // What Claude printed shows why no link matched; queries carry the PKCE state, so drop them.
+      const printed = stripAnsiEscapeSequences(scanned).replace(/(https:\/\/[^\s?]+)\?\S*/g, '$1?…')
+      console.warn(
+        '[claude-accounts] Claude sign-in ended before a link Orca recognizes:',
+        printed.slice(-600).trim()
+      )
+    }
     // Translate CLI exits after code submission; retain timeout, denial, and cancellation errors.
     const exited = error instanceof Error && /^Claude command (failed|exited)/.test(error.message)
     throw codeSent && exited && !controller.signal.aborted

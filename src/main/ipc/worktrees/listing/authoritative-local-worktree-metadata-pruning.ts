@@ -76,17 +76,26 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
   isCallerCurrent = () => true,
   signal
 }: AuthoritativeLocalMetadataPruneArgs): Promise<AuthoritativeLocalMetadataPruneResult> {
-  const capturedCandidateIds = scan.metadata.map(({ worktreeId }) => worktreeId)
   const result = (
     removedWorktreeIds: readonly string[],
     scanGenerationCurrent: boolean
   ): AuthoritativeLocalMetadataPruneResult => {
-    const removedIds = new Set(removedWorktreeIds)
+    const preservedMetadataCandidateIds = new Set<string>()
+    if (removedWorktreeIds.length === 0) {
+      for (const { worktreeId } of scan.metadata) {
+        preservedMetadataCandidateIds.add(worktreeId)
+      }
+    } else {
+      const removedIds = new Set(removedWorktreeIds)
+      for (const { worktreeId } of scan.metadata) {
+        if (!removedIds.has(worktreeId)) {
+          preservedMetadataCandidateIds.add(worktreeId)
+        }
+      }
+    }
     return {
       removedWorktreeIds,
-      preservedMetadataCandidateIds: new Set(
-        capturedCandidateIds.filter((worktreeId) => !removedIds.has(worktreeId))
-      ),
+      preservedMetadataCandidateIds,
       scanGenerationCurrent
     }
   }
@@ -110,11 +119,36 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
     return result([], generationCurrent())
   }
 
-  const livePathKeys = new Set([
-    // Retain the configured main path even if Git canonicalized its symlink.
-    worktreeRetentionPathComparisonKey(repo.path, platform),
-    ...gitWorktrees.map((worktree) => worktreeRetentionPathComparisonKey(worktree.path, platform))
-  ])
+  // Advisory eligibility shrinks stat fan-out; deletion still rechecks authoritatively (#17775).
+  const removableCandidates =
+    store.selectProbeableLocalWorktreeMetadataCandidates?.(scan) ?? scan.metadata
+  // Saved session state of a deleted worktree outlives its metadata; probe those owners too.
+  const rawSessionCandidates =
+    store.selectRemovableLocalWorktreeSessionOwnersForRepo?.(repo.id) ?? []
+  if (removableCandidates.length === 0 && rawSessionCandidates.length === 0) {
+    return result([], generationCurrent())
+  }
+
+  const liveRawPaths = new Set<string>([repo.path])
+  for (const worktree of gitWorktrees) {
+    liveRawPaths.add(worktree.path)
+  }
+  let livePathKeys: Set<string> | undefined
+  const isLivePath = (pathValue: string): boolean => {
+    if (liveRawPaths.has(pathValue)) {
+      return true
+    }
+    if (!livePathKeys) {
+      livePathKeys = new Set<string>([
+        // Retain the configured main path even if Git canonicalized its symlink.
+        worktreeRetentionPathComparisonKey(repo.path, platform)
+      ])
+      for (const worktree of gitWorktrees) {
+        livePathKeys.add(worktreeRetentionPathComparisonKey(worktree.path, platform))
+      }
+    }
+    return livePathKeys.has(worktreeRetentionPathComparisonKey(pathValue, platform))
+  }
   const isProbeable = (worktreeId: string): string | null => {
     const parsed = splitWorktreeId(worktreeId)
     const nativeAbsolute = parsed
@@ -127,35 +161,38 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
       !nativeAbsolute ||
       isWslUncPath(parsed.worktreePath) ||
       worktreeId.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR) ||
-      livePathKeys.has(worktreeRetentionPathComparisonKey(parsed.worktreePath, platform))
+      isLivePath(parsed.worktreePath)
     ) {
       return null
     }
     return parsed.worktreePath
   }
-  // Advisory eligibility shrinks stat fan-out; deletion still rechecks authoritatively (#17775).
-  const removableCandidates =
-    store.selectProbeableLocalWorktreeMetadataCandidates?.(scan) ?? scan.metadata
-  const probeCandidates = removableCandidates.flatMap((metadata) => {
+  const probeCandidates: { metadata: (typeof removableCandidates)[number]; pathValue: string }[] =
+    []
+  for (const metadata of removableCandidates) {
     const pathValue = isProbeable(metadata.worktreeId)
-    return pathValue ? [{ metadata, pathValue }] : []
-  })
-  // Saved session state of a deleted worktree outlives its metadata; probe those owners too.
-  const sessionCandidates = (
-    store.selectRemovableLocalWorktreeSessionOwnersForRepo?.(repo.id) ?? []
-  ).flatMap((worktreeId) => {
+    if (pathValue) {
+      probeCandidates.push({ metadata, pathValue })
+    }
+  }
+  const sessionCandidates: { worktreeId: string; pathValue: string }[] = []
+  for (const worktreeId of rawSessionCandidates) {
     const pathValue = isProbeable(worktreeId)
-    return pathValue ? [{ worktreeId, pathValue }] : []
-  })
-  const presenceByPath = await pathsExistOrAreUnverifiable(
-    [
-      ...new Set([
-        ...probeCandidates.map(({ pathValue }) => pathValue),
-        ...sessionCandidates.map(({ pathValue }) => pathValue)
-      ])
-    ],
-    { signal }
-  )
+    if (pathValue) {
+      sessionCandidates.push({ worktreeId, pathValue })
+    }
+  }
+  if (probeCandidates.length === 0 && sessionCandidates.length === 0) {
+    return result([], generationCurrent())
+  }
+  const probePaths = new Set<string>()
+  for (const { pathValue } of probeCandidates) {
+    probePaths.add(pathValue)
+  }
+  for (const { pathValue } of sessionCandidates) {
+    probePaths.add(pathValue)
+  }
+  const presenceByPath = await pathsExistOrAreUnverifiable([...probePaths], { signal })
   if (!generationCurrent() || !isCallerCurrent()) {
     return result([], generationCurrent())
   }

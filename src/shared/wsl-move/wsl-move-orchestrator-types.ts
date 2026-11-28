@@ -57,6 +57,8 @@ export type WslMoveOrchestratorState =
       until?: number
       /** For `declined`: which choice of the user's declined it. */
       cause?: WslMoveOrchestratorDeclineCause
+      /** Held because Orca set aside an unreadable record that may have held the user's decline. */
+      stateLost?: true
     }
   /**
    * `nextCheckAt` / `waits` while a newer preview waits on this move to finish settling:

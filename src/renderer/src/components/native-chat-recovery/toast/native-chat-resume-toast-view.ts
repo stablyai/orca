@@ -86,7 +86,8 @@ export function resumeToastView(
           : failure || status || phase === 'finished'
             ? 'needs-you'
             : 'stopped'
-    return failure ? { candidate, state, failure } : { candidate, state }
+    // A failure record describes the last attempt; once a chat is resuming or resumed it is stale.
+    return failure && state === 'needs-you' ? { candidate, state, failure } : { candidate, state }
   })
   if (refused.size > 0) {
     const shown = new Set(rows.map((row) => row.candidate.sessionId))
@@ -95,6 +96,14 @@ export function resumeToastView(
         shown.add(candidate.sessionId)
         rows.push({ candidate, state: 'needs-you', openOnly: true })
       }
+    }
+  }
+  // A retry replaced the run; what earlier runs resumed is still part of the report.
+  const reported = new Set(rows.map((row) => row.candidate.sessionId))
+  for (const candidate of run?.resumedBefore ?? []) {
+    if (!reported.has(candidate.sessionId)) {
+      reported.add(candidate.sessionId)
+      rows.push({ candidate, state: 'resumed' })
     }
   }
   rows.sort((a, b) => ORDER[a.state] - ORDER[b.state])
