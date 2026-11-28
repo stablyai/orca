@@ -30,6 +30,10 @@ import {
 import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 import { getManagedCommand, getManagedScript, getPosixManagedCommand } from './hook-script'
+import {
+  refreshWindowsCursorWrapperScripts,
+  writeWindowsCursorWrapperScripts
+} from './windows-hook-files'
 
 function getConfigPath(): string {
   return join(homedir(), '.cursor', 'hooks.json')
@@ -45,12 +49,22 @@ function getManagedScriptPath(): string {
 
 type ManagedEntryScan = { events: CursorEvent[]; outdated: boolean }
 
+// Windows registers one wrapper per event, so ownership has to match every name this build writes.
+function createCursorManagedCommandMatcher(): (command: string | undefined) => boolean {
+  const fileNames =
+    process.platform === 'win32'
+      ? CURSOR_EVENTS.map((event) => `cursor-${event}.cmd`)
+      : ['cursor-hook.sh']
+  const matchers = fileNames.map((fileName) => createManagedCommandMatcher(fileName))
+  return (command) => matchers.some((matcher) => matcher(command))
+}
+
 // Events whose Orca entries differ from the single entry this build writes; retired events always count.
 async function scanManagedEntries(
   configPath: string,
   scriptPath: string
 ): Promise<ManagedEntryScan> {
-  const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+  const isManagedCommand = createCursorManagedCommandMatcher()
   const scan: ManagedEntryScan = { events: [], outdated: false }
   // A missing or unreadable file has no Orca entries to repair.
   const raw = await readFile(configPath, 'utf8').catch(() => null)
@@ -81,6 +95,7 @@ async function scanManagedEntries(
 export class CursorHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+    await refreshWindowsCursorWrapperScripts(getManagedScriptPath())
     // Cursor desktop runs these entries without the CLI that gates install(); update only what Orca already owns.
     const scan = await scanManagedEntries(getConfigPath(), getManagedScriptPath())
     if (scan.outdated) {
@@ -104,6 +119,7 @@ export class CursorHookService {
 
     const missing: string[] = []
     let presentCount = 0
+    const isManagedCommand = createCursorManagedCommandMatcher()
     for (const eventName of CURSOR_EVENTS) {
       const command = getManagedCommand(scriptPath, eventName)
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
@@ -111,7 +127,9 @@ export class CursorHookService {
       const hasCommand = definitions.some(
         (definition) =>
           definition.command === command ||
-          (definition.hooks ?? []).some((hook) => hook.command === command)
+          (definition.hooks ?? []).some((hook) => hook.command === command) ||
+          // A moved user-data path changes the registered path, not Orca's ownership.
+          hookDefinitionHasManagedCommand(definition, isManagedCommand)
       )
       if (hasCommand) {
         presentCount += 1
@@ -156,7 +174,7 @@ export class CursorHookService {
     const managedEvents = new Set<string>(CURSOR_EVENTS)
 
     // Match filenames to catch older builds and moved user-data paths.
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+    const isManagedCommand = createCursorManagedCommandMatcher()
 
     // Remove managed hooks from retired events so upgrades stop invoking them.
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
@@ -201,6 +219,7 @@ export class CursorHookService {
       nextConfig.version = 1
     }
     writeManagedScript(scriptPath, getManagedScript())
+    writeWindowsCursorWrapperScripts()
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
@@ -276,7 +295,7 @@ export class CursorHookService {
     }
 
     const nextHooks = { ...config.hooks }
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+    const isManagedCommand = createCursorManagedCommandMatcher()
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (!Array.isArray(definitions)) {
         continue
