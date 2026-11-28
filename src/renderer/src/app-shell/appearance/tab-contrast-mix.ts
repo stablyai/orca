@@ -191,11 +191,11 @@ export function tabContrastTokens(
       ? `color-mix(in srgb, black ${UNFOCUSED_TAB_LABEL_DARKEN}%, var(--muted-foreground))`
       : 'var(--muted-foreground)'
   }
-  const activeFill = effective('--tab-active')
+  const activeFill = base === 'dark' ? fill : effective('--tab-active')
   if (!tokens[UNFOCUSED_ACTIVE_TAB_TOKEN] && strip && activeFill) {
     overrides[UNFOCUSED_ACTIVE_TAB_TOKEN] = unfocusedActiveLabel(
       effective('--tab-active-foreground') ?? strip.foreground,
-      painted(over(activeFill, strip.bar)),
+      base === 'dark' ? activeFill : painted(over(activeFill, strip.bar)),
       strip.page
     )
   }

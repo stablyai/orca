@@ -145,7 +145,7 @@ export default function TabGroupPanel({
             : null
       }
       groupId={groupId}
-      isFocused={isFocused}
+      isFocused={hasSplitGroups && isFocused}
       onCloseSplitPane={hasSplitGroups ? commands.closeGroup : undefined}
       worktreeId={worktreeId}
       expandedPaneByTabId={model.expandedPaneByTabId}
