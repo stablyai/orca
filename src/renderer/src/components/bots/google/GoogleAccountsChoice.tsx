@@ -116,7 +116,11 @@ export function useGoogleAccountChoice(
         ).then(
           () => {
             // A kept choice now stands on what this save wrote, so a retried Add isn't refused as stale.
-            setPicked((current) => current && { ...current, basedOn: next })
+            setPicked((current) => ({
+              chosen: current?.chosen ?? chosen,
+              basedOn: next,
+              shown: current?.shown ?? shownNow
+            }))
             return true
           },
           async (error: unknown) => {
