@@ -1,3 +1,4 @@
+import { tabListOfPty } from '../../session-tabs/person/person-workspace-target'
 import { RuntimeTerminalWorkerModelWait } from './terminal-worker-model-wait'
 
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
@@ -159,8 +160,10 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
       const recorded = closedPane ?? this.paneOfPty(pty)
       const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
       if (pty && recorded.tabId && parsedPaneKey) {
-        exactSurfaceByKey.set(`${pty.worktreeId}\0${recorded.tabId}\0${parsedPaneKey.leafId}`, {
-          worktreeId: pty.worktreeId,
+        // The tab list its pane is in: a teammate's own workspace for theirs.
+        const list = tabListOfPty(pty)
+        exactSurfaceByKey.set(`${list}\0${recorded.tabId}\0${parsedPaneKey.leafId}`, {
+          worktreeId: list,
           parentTabId: recorded.tabId,
           leafId: parsedPaneKey.leafId
         })
@@ -255,15 +258,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
         this.resolvePtyExitWaiters(pty, ptyId)
         this.pruneDisconnectedPtyTranscript(pty)
       }
-      if (pty?.holder) {
-        // A teammate's terminal is in their own list alone, so its exit leaves that list (a sleep's
-        // too) and no host list; a recoverable loss keeps it there for the reconnect.
-        if (!preservesAbnormalSshSurface && options.hostLost !== true) {
-          this.forgetPersonSurface(
-            (surface) => surface.kind === 'terminal' && surface.ptyId === ptyId
-          )
-        }
-      } else if (
+      if (
         preservesIntentionallyStoppedSurface ||
         preservesAbnormalSshSurface ||
         options.hostLost === true

@@ -1,5 +1,6 @@
 // Restore terminal-less saved panes for pending-row activation and workspace wakes; main-owned layouts also handle triggers outside desktop restore.
 
+import { holderOfTabList } from '../../session-tabs/person/person-workspace-target'
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
 import type {
   MobileTerminalCommand,
@@ -225,9 +226,11 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     if (resumeStartup === undefined && tab.launchAgent) {
       let workspace
       try {
-        workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`, undefined, {
-          wslUserAct: wslUserAct === true
-        })
+        workspace = await this.resolveTerminalWorkspaceLaunchScope(
+          `id:${holderOfTabList(worktreeId).home}`,
+          undefined,
+          { wslUserAct: wslUserAct === true }
+        )
         agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
           agent: tab.launchAgent
         })

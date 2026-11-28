@@ -1,10 +1,10 @@
+import { tabListOfPty, windowOwns } from '../../session-tabs/person/person-workspace-target'
 import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { RuntimeWorkspaceArchive } from '../../workspaces/archive/runtime-workspace-archive'
-import { tabListOfPty, windowOwns } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {

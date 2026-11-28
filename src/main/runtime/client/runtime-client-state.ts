@@ -1,3 +1,6 @@
+import type { RuntimeBrowserClientPage } from '../browser/client-pages/runtime-browser-client-page'
+import { TEAMMATE_HOMES_SESSION_PARTITION } from '../../../shared/workspace-session/teammate-homes-session-partition'
+import { holderOfTabList, tabListOfPty } from '../session-tabs/person/person-workspace-target'
 import { OrcaRuntimeWithStateFields } from '../construction/runtime-construction'
 import {
   persistClientHostedBrowserPages,
@@ -89,32 +92,55 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
         }
       })
       for (const page of registry.everyPage()) {
-        this.persistedClientHostedBrowserWorktreeIds.add(page.workspaceId)
+        this.persistedClientHostedBrowserWorktreeIds.add(
+          tabListOfPty({ worktreeId: page.workspaceId, holder: page.holder })
+        )
       }
     } catch (error) {
       console.warn('[browser-host-lease] client page rehydration failed:', error)
     }
   }
 
-  /** Skip session reads for workspaces without client pages on this hot terminal/editor-change seam. */
+  /** Skip session reads for workspaces without client pages on this hot terminal/editor-change seam.
+   *  A Home saves its teammates' own workspaces' pages too, each in their partition. */
   protected persistClientHostedBrowserPagesForWorktree(worktreeId: string): void {
     const registry = getRuntimeBrowserPageRegistry(this)
-    const hasPages = registry.everyPage(worktreeId).length > 0
-    if (!hasPages && !this.persistedClientHostedBrowserWorktreeIds.has(worktreeId)) {
+    const lists = new Set([worktreeId])
+    for (const id of [
+      ...this.persistedClientHostedBrowserWorktreeIds,
+      ...registry
+        .everyPage(worktreeId)
+        .map((page) => tabListOfPty({ worktreeId: page.workspaceId, holder: page.holder }))
+    ]) {
+      if (holderOfTabList(id).home === worktreeId) {
+        lists.add(id)
+      }
+    }
+    for (const list of lists) {
+      this.persistClientHostedBrowserPagesOfList(list, registry.pagesOfList(list))
+    }
+  }
+
+  private persistClientHostedBrowserPagesOfList(
+    list: string,
+    pages: readonly RuntimeBrowserClientPage[]
+  ): void {
+    const hasPages = pages.length > 0
+    if (!hasPages && !this.persistedClientHostedBrowserWorktreeIds.has(list)) {
       return
     }
     if (hasPages) {
-      this.persistedClientHostedBrowserWorktreeIds.add(worktreeId)
+      this.persistedClientHostedBrowserWorktreeIds.add(list)
     } else {
-      this.persistedClientHostedBrowserWorktreeIds.delete(worktreeId)
+      this.persistedClientHostedBrowserWorktreeIds.delete(list)
     }
     persistClientHostedBrowserPages(
       {
         getWorkspaceSession: (id) => this.getWorkspaceSessionForWorktree(id),
         setWorkspaceSession: (id, session) => this.setWorkspaceSessionForWorktree(id, session)
       },
-      registry,
-      worktreeId
+      pages,
+      list
     )
   }
 
@@ -123,7 +149,8 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     for (const repo of this.store?.getRepos?.() ?? []) {
       hostIds.add(getRepoExecutionHostId(repo))
     }
-    return [...hostIds].flatMap((hostId) => {
+    // The teammates' partition saves their own workspaces' pages.
+    return [...hostIds, TEAMMATE_HOMES_SESSION_PARTITION].flatMap((hostId) => {
       const session = this.store?.getWorkspaceSession?.(hostId)
       return session ? [session] : []
     })

@@ -29,8 +29,7 @@ import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/
 import { makeTestBot } from '../bot.test-fixture'
 import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
-import { personWorkspaceKey } from '../../../shared/workspace/identity/person-workspace-key'
-import { TEAMMATE_HOMES_SESSION_PARTITION } from '../../../shared/workspace-session/teammate-homes-session-partition'
+import { teammateOwnWorkspaceReads } from './teammate-own-workspace-reads.test-support'
 
 export { B, C }
 
@@ -166,10 +165,18 @@ export async function rig(
     deviceId: string,
     method: string,
     params: unknown,
-    clientKind?: 'runtime' | 'mobile'
+    clientKind?: 'runtime' | 'mobile',
+    /** As an orchestration CLI's envelope carries it. */
+    orchestrationContractVersion?: number
   ) =>
     dispatcher.dispatch(
-      { id: `${method}-${randomUUID()}`, authToken: '', method, params },
+      {
+        id: `${method}-${randomUUID()}`,
+        authToken: '',
+        method,
+        params,
+        ...(orchestrationContractVersion ? { orchestrationContractVersion } : {})
+      },
       context(deviceId, clientKind)
     )
   const call = async (
@@ -263,31 +270,10 @@ export async function rig(
     })
     return sessionId
   }
-  /** A teammate's own workspace in the Home, as the host holds it. */
-  const listOf = (teammate: { botId: string; accountId: string } = TEAMMATE) =>
-    personWorkspaceKey({ folderWorkspaceId: homeFolder, ...teammate })
   return {
     ...opened,
     home,
-    listOf,
-    /** The chats in a teammate's own workspace, live, and its active tab. */
-    mine: (teammate?: { botId: string; accountId: string }) => {
-      const snapshot = opened.runtime['mobileSessionTabsByWorktree'].get(listOf(teammate))
-      return {
-        chats: (snapshot?.tabs ?? []).flatMap((tab) =>
-          tab.type === 'agent-session' ? [tab.sessionId] : []
-        ),
-        activeTabId: snapshot?.activeTabId ?? null,
-        snapshotVersion: snapshot?.snapshotVersion ?? 0
-      }
-    },
-    /** The chats a teammate's own workspace saves, in the teammates' partition. */
-    mineSaved: (teammate?: { botId: string; accountId: string }) =>
-      (
-        opened.profile.getWorkspaceSession(TEAMMATE_HOMES_SESSION_PARTITION).unifiedTabs?.[
-          listOf(teammate)
-        ] ?? []
-      ).flatMap((tab) => (tab.contentType === 'agent-session' ? [tab.entityId] : [])),
+    ...teammateOwnWorkspaceReads(opened, homeFolder, TEAMMATE),
     /** A teammate's close of their chat's tab, at the runtime's close entry (`session.tabs.close`
      *  past its read of the caller's list). */
     closeMine: (sessionId: string, options: { expectedTerminalHandle?: string } = {}) =>

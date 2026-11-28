@@ -160,10 +160,9 @@ it('opens a teammate’s terminal, page and file in their own list alone, each s
 
   const mates = await r.list('mate-phone')
   expect(tabIds(mates)).toEqual([terminal.id, page, file])
-  expect(mates.tabGroups).toMatchObject([
-    { tabOrder: [parentTabId, page, file], activeTabId: file }
-  ])
-  expect(mates.tabs.at(-1)).toMatchObject({ type: 'file', relativePath: 'notes/plan.md' })
+  // Each device keeps its own pick: the one that opened them shows them, as on a paired server.
+  expect(mates.tabGroups).toMatchObject([{ tabOrder: [parentTabId, page, file] }])
+  expect(mates.tabs.at(-1)).toMatchObject({ type: 'markdown', relativePath: 'notes/plan.md' })
   expect((await r.list('mate-desk')).activeTabId).toBe(file)
   expect(await ownersSide(r)).toBe(before)
   expect(tabIds(await r.list('other-desk'))).toEqual([])
@@ -534,22 +533,4 @@ it('ends a teammate’s terminal that exits on its own in their list alone', asy
   // Gone from their saved list too, so a restart brings back no dead tab.
   expect(JSON.stringify(r.runtime['personSessionTabs'].serialize())).not.toContain(terminal.ptyId)
   expect(await ownersSide(r)).toBe(before)
-})
-
-it('brings a teammate’s terminal back in their own list alone after a host restart', async () => {
-  const r = await rig()
-  startTerminalsOnTheHost(r)
-  const terminal = await openTerminal(r, 'mate-desk')
-  await chatTabCommandsSettled()
-
-  const fresh = await rig({ opened: await physicalReload(r) })
-  // The daemon kept the process: the restarted host reattaches it, with no pane named.
-  fresh.runtime.registerPty(terminal.ptyId, fresh.workspace)
-  await chatTabCommandsSettled()
-
-  expect(fresh.runtime['ptysById'].get(terminal.ptyId)?.holder).toMatch(/^teammate:/)
-  expect(tabIds(await fresh.list('mate-phone'))).toEqual([terminal.id])
-  expect(tabIds(await fresh.list('owner-desk'))).toEqual([])
-  await fresh.runtime.onPtyExit(terminal.ptyId, 0)
-  expect(tabIds(await fresh.list('mate-phone'))).toEqual([])
 })

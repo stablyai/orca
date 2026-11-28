@@ -280,7 +280,8 @@ function workerSurfaceFactory(
         agent,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         taskId: args.taskId,
-        effects: args.effects
+        effects: args.effects,
+        ...(args.params.from ? { askerHandle: args.params.from } : {})
       })
       onTerminalCreation(terminal)
       return {

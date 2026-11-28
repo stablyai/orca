@@ -85,7 +85,11 @@ export const SESSION_TAB_MUTATION_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: MoveTab,
-    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+    handler: async (
+      params,
+      { runtime, pairedDeviceId, clientCapabilities, clientKind, callerScope }
+    ) => {
+      const list = await runtime.tabListSelectorOf(params.worktree, callerScope)
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
       if (clientKind) {
         const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
@@ -96,20 +100,20 @@ export const SESSION_TAB_MUTATION_METHODS = [
       }
       const base = { tabId: translated.tabId, targetGroupId: translated.targetGroupId }
       if (translated.kind === 'reorder') {
-        return runtime.moveMobileSessionTab(params.worktree, {
+        return runtime.moveMobileSessionTab(list, {
           ...base,
           kind: 'reorder',
           tabOrder: translated.tabOrder
         })
       }
       if (translated.kind === 'split') {
-        return runtime.moveMobileSessionTab(params.worktree, {
+        return runtime.moveMobileSessionTab(list, {
           ...base,
           kind: 'split',
           splitDirection: translated.splitDirection
         })
       }
-      return runtime.moveMobileSessionTab(params.worktree, {
+      return runtime.moveMobileSessionTab(list, {
         ...base,
         kind: 'move-to-group',
         index: translated.index
@@ -121,7 +125,11 @@ export const SESSION_TAB_MUTATION_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: UpdatePaneLayout,
-    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+    handler: async (
+      params,
+      { runtime, pairedDeviceId, clientCapabilities, clientKind, callerScope }
+    ) => {
+      const list = () => runtime.tabListSelectorOf(params.worktree, callerScope)
       await assertVisibleMutationTab(
         runtime,
         params.worktree,
@@ -130,7 +138,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
         clientKind,
         clientCapabilities
       )
-      return runtime.updateMobileSessionPaneLayout(params.worktree, {
+      return runtime.updateMobileSessionPaneLayout(await list(), {
         tabId: params.tabId,
         root: params.root,
         expandedLeafId: params.expandedLeafId ?? null,
@@ -145,7 +153,11 @@ export const SESSION_TAB_MUTATION_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: MovePaneToNewTab,
-    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+    handler: async (
+      params,
+      { runtime, pairedDeviceId, clientCapabilities, clientKind, callerScope }
+    ) => {
+      const list = () => runtime.tabListSelectorOf(params.worktree, callerScope)
       await assertVisibleMutationTab(
         runtime,
         params.worktree,
@@ -155,7 +167,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
         clientCapabilities
       )
       return runtime.moveMobileSessionLeafToNewTab(
-        params.worktree,
+        await list(),
         {
           sourceTabId: params.sourceTabId,
           targetTabId: params.targetTabId,
@@ -177,7 +189,11 @@ export const SESSION_TAB_MUTATION_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: SetTabProps,
-    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+    handler: async (
+      params,
+      { runtime, pairedDeviceId, clientCapabilities, clientKind, callerScope }
+    ) => {
+      const list = () => runtime.tabListSelectorOf(params.worktree, callerScope)
       await assertVisibleMutationTab(
         runtime,
         params.worktree,
@@ -186,7 +202,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
         clientKind,
         clientCapabilities
       )
-      return runtime.setMobileSessionTabProps(params.worktree, {
+      return runtime.setMobileSessionTabProps(await list(), {
         tabId: params.tabId,
         ...(params.color !== undefined ? { color: params.color } : {}),
         ...(params.isPinned !== undefined ? { isPinned: params.isPinned } : {}),

@@ -1,5 +1,4 @@
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
-import { isTeammateTabList } from '../../../bots/team-share/teammate-rules'
 import { findAddressedSessionTab } from '../../session-tabs/layout/addressed-session-tab'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
@@ -54,11 +53,6 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
-    const owner = this.homeTabListOf(options.person, worktreeId)
-    if (isTeammateTabList(owner)) {
-      // Closed already, or now: a teammate's own list is theirs alone to close from.
-      return this.personChatTabs.closeTeammateTab(owner, worktreeId, tabId, options)
-    }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
     if (graphFence !== undefined) {
@@ -274,8 +268,9 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         ? getRuntimeBrowserPageRegistry(this).getPage(tab.browserPageId)
         : undefined
       if (clientPage) {
+        // The workspace the page runs in: a teammate's page is in the Home their own list shows.
         await this.browserTabClose({
-          worktree: `id:${worktreeId}`,
+          worktree: `id:${clientPage.workspaceId}`,
           page: clientPage.browserPageId
         })
       } else if (this.isOffscreenMobileSessionBrowserTab(snapshot, tab)) {

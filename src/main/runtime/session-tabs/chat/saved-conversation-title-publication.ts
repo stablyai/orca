@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithTeammateHomeTabMove } from '../person/teammate-home-tab-move-on-start'
+import { OrcaRuntimeWithTeammateWorkspaceFrame } from '../person/teammate-workspace-frame'
 import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { StructuredConversationLabelChanges } from './structured-conversation-label-changes'
 import { retitleStructuredConversationTabs } from './structured-conversation-tab-title'
@@ -9,7 +9,7 @@ import { structuredChatDisplayName } from '../../../../shared/agent-session/view
 import { agentSessionRecordShownNameIn } from '../../agent-session/records/agent-session-record-shown-name'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
-export abstract class OrcaRuntimeWithSavedConversationTitlePublication extends OrcaRuntimeWithTeammateHomeTabMove {
+export abstract class OrcaRuntimeWithSavedConversationTitlePublication extends OrcaRuntimeWithTeammateWorkspaceFrame {
   private labelChangesTracker?: StructuredConversationLabelChanges
   private titleRoutesDirty = false
   private titleWorktrees?: WeakRef<object>
@@ -22,7 +22,7 @@ export abstract class OrcaRuntimeWithSavedConversationTitlePublication extends O
     ))
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithTeammateHomeTabMove>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithTeammateWorkspaceFrame>) {
     super(...args)
     const worktrees = ORCA_LAYOUT_OWNER_IS_MAIN ? this.resolvedWorktrees.peek()?.worktrees : null
     if (worktrees) {

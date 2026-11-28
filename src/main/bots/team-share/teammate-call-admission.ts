@@ -5,7 +5,7 @@
 // keep the share guard every teammate has, so the tier only ever adds to what a teammate may do.
 import type { RpcContext, RpcMethod, RpcStreamingMethod } from '../../runtime/rpc/core'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
-import { teammateMethodClass, writesHostTabList } from './teammate-rules'
+import { teammateMethodClass, writesHostTabList, writesNamedTabList } from './teammate-rules'
 import {
   admitBotShareCall,
   type BotShareRefusal
@@ -35,23 +35,24 @@ function namedWorktree(params: unknown): { worktree: string } | 'new' | 'none' {
   return worktree !== undefined ? { worktree } : named?.target ? 'new' : 'none'
 }
 
-/** Rule 4: in their own Home a teammate's list is their own (their terminals, pages and files open
- *  there through it), so nothing they call opens, moves or reshapes a tab of the host's list there;
- *  and a teammate never opens one in whatever workspace the host's window shows, so a call naming none
- *  is refused. */
+/** Rule 4: in their own Home a teammate's tab writes land in their own workspace; the host's list
+ *  methods still refuse it there. Rule 3: a teammate never opens a tab in whatever workspace the host's
+ *  window shows, so a tab-list write naming none is refused. */
 async function writesHostTabsInOwnHome(
   context: RpcContext,
   scope: BotShareCallerScope,
   methodName: string,
   params: unknown
 ): Promise<boolean> {
-  if (!writesHostTabList(methodName)) {
+  if (!writesNamedTabList(methodName)) {
     return false
   }
   const named = namedWorktree(params)
   return (
     named === 'none' ||
-    (named !== 'new' && (await context.runtime.namesTeammateHome(named.worktree, scope)))
+    (writesHostTabList(methodName) &&
+      named !== 'new' &&
+      (await context.runtime.namesTeammateHome(named.worktree, scope)))
   )
 }
 

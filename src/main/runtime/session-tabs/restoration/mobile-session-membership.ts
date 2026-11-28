@@ -1,3 +1,4 @@
+import { tabListOfPty } from '../person/person-workspace-target'
 import type { MobileSessionTabSubscription } from '../../construction/runtime-identity-state'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../publication/session-tabs-change-publication'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as SessionTabsProjection } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
@@ -75,11 +76,7 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
    *  host's bumps snapshotVersion before emitting (coalesced and owed until a client frame unless
    *  immediate), and clients discard re-emits at the same version. */
   touchSessionTabList(list: TabListRef, options: { immediate?: boolean } = {}): void {
-    if (list.holder) {
-      this.schedulePersonListRedraw(list.holder, list.workspaceId)
-      return
-    }
-    const worktreeId = list.workspaceId
+    const worktreeId = tabListOfPty({ worktreeId: list.workspaceId, holder: list.holder })
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
       return
@@ -238,7 +235,7 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     const pane = parsePaneKey(recorded.paneKey ?? '')
     return Boolean(
       pty?.connected &&
-      pty.worktreeId === worktreeId &&
+      tabListOfPty(pty) === worktreeId &&
       recorded.tabId === parentTabId &&
       pane?.leafId === leafId
     )

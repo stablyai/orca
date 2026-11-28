@@ -3,6 +3,7 @@ import {
   type MobileTerminalCreateOptions,
   type OwnedMobileTerminalCreateOptions
 } from './mobile-terminal-create'
+import { windowOwns } from '../../session-tabs/person/person-workspace-target'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
@@ -22,7 +23,6 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import { resolveSessionTabRow } from '../../../../shared/workspace-layout/old-client/old-client-session-tab-rows'
-import { windowOwns } from '../../session-tabs/person/person-workspace-target'
 
 function resolveSavedChatForkAnchor(
   session: WorkspaceSessionState | null,
@@ -56,11 +56,13 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
   protected async createMobileChatForkTerminal(args: {
     workspace: TerminalWorkspaceLaunchScope
     worktreeId: string
+    /** The tab list the fork joins; a teammate's own is headless, as on a paired server. */
+    list: string
     opts: MobileTerminalCreateOptions
     afterTabId?: string
     graphEpoch: number
   }): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    const { workspace, worktreeId, opts, afterTabId, graphEpoch } = args
+    const { workspace, worktreeId, list, opts, afterTabId, graphEpoch } = args
     const sourceId = opts.sourceChatFork?.sessionId
     const mutationId = opts.clientMutationId
     if (
@@ -84,7 +86,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         if (
           !isStructuredChatCliForkSourceCurrent(sourceId, worktreeId) ||
           !this.mobileSessionTabsByWorktree
-            .get(worktreeId)
+            .get(list)
             ?.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === sourceId)
         ) {
           throw new Error('chat_fork_source_unavailable')
@@ -106,14 +108,14 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
           }),
           opts.terminalImageViewerSupported
         )
-        const windowId = windowOwns(worktreeId) ? this.getAvailableAuthoritativeWindowId() : null
+        const windowId = windowOwns(list) ? this.getAvailableAuthoritativeWindowId() : null
         const placement = resolveSavedChatForkAnchor(
-          this.getWorkspaceSessionForWorktree(worktreeId),
-          worktreeId,
+          this.getWorkspaceSessionForWorktree(list),
+          list,
           afterTabId
         )
         const phoneAnchor = this.mobileSessionTabsByWorktree
-          .get(worktreeId)
+          .get(list)
           ?.tabs.some((tab) => tab.id === afterTabId)
           ? afterTabId
           : undefined
@@ -154,7 +156,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
       windowId !== null ? (desktop.holdRendererPublication?.(windowId) ?? (() => {})) : () => {}
     try {
       const created = await this.createRuntimeOwnedMobileSessionTerminal(
-        worktreeId,
+        list,
         opts.activate !== false,
         phoneAnchor,
         {

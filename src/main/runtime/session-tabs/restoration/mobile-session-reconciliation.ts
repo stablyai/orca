@@ -1,3 +1,5 @@
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { withOwnSurfacesOnly } from '../person/teammate-workspace-surfaces'
 import { reconcileChatTabIdentities } from '../chat/agent-session-tab-identity'
 import { botHomeSessionId, placeBotHomeInSnapshot } from '../chat/bot-home-snapshot'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -55,7 +57,14 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       }
       snapshot = merged
     }
-    snapshot = preserveTerminalRetirementProofs(this.withoutPersonSurfaces(snapshot), existing)
+    // Rule 4: a list shows only its own terminals and pages, whichever projection made it.
+    const pages = getRuntimeBrowserPageRegistry(this)
+    snapshot = withOwnSurfacesOnly(
+      snapshot,
+      (ptyId) => this.ptysById.get(ptyId),
+      (pageId) => pages.getPage(pageId)
+    )
+    snapshot = preserveTerminalRetirementProofs(snapshot, existing)
     const stamped = stampMobileSnapshotVersion(snapshot, existing)
     this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
     return stamped

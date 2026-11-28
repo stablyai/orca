@@ -68,8 +68,12 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   launchPreferences?: AgentLaunchPreferences
   taskId: string
   effects: WorkerEffect[]
+  /** The terminal that asked for this worker. */
+  askerHandle?: string
 }): Promise<RuntimeTerminalCreate> {
+  const holder = args.runtime.terminalHolderIn(args.askerHandle, args.worktreeId)
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
+    ...(holder ? { holder } : {}),
     // Resolve ids through agent config; cursor alone opens the desktop app, its CLI is cursor-agent.
     startupAgent: args.agent,
     launchSource: 'orchestration',

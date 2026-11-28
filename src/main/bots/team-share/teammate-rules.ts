@@ -26,9 +26,10 @@
 //     list or window reads it (the host's snapshot store, pane admission, orphan adoption, restored
 //     placement, exit retirement, the page selection). Every reader that lists or acts on a
 //     workspace's terminals or pages for someone takes that list (`ptyInList`, `pagesOf`); only work
-//     on the workspace itself reads them all. Other `homeTabs.hostList` methods (incl. stopping,
-//     closing or sleeping all of a workspace's terminals) are refused at admission when they name
-//     the teammate's Home.
+//     on the workspace itself reads them all. A `homeTabs.ownWorkspace` write there lands in the
+//     teammate's own workspace (`person:`, `resolveTabListTarget`); other `homeTabs.hostList` methods
+//     (incl. stopping, closing or sleeping all of a workspace's terminals) are refused at admission
+//     when they name the teammate's Home.
 //     Reads and streams use the device's list (`tabOwnerOf`), or the list a read names
 //     (`viewedTabListOf`): anyone may watch anyone's list in the Home; watching writes nothing, and
 //     closing a tab there names that list's person. The census test checks every write's person source.
@@ -83,6 +84,10 @@ export type HostWindowCondition = keyof typeof classes.hostWindow.conditional
 export type HostWindowCaller = {
   pairedDeviceId?: string
   pageDeviceOf: (browserPageId: string) => string | undefined
+  /** The caller's own tab list (theirs in their agent's Home), and the list a terminal handle's PTY
+   *  is stamped with (`holder`). */
+  teammate?: TabTeammate
+  terminalHolderOf?: (handle: string) => TeammateTabListKey | undefined
 }
 
 // Each field on its own: a method whose key of the same name has another shape (agent.launch's
@@ -94,6 +99,7 @@ const HostWindowParams = lazyZodSchema(() =>
     runHooks: z.boolean().optional().catch(undefined),
     focus: z.boolean().optional().catch(undefined),
     page: z.string().optional().catch(undefined),
+    terminal: z.string().optional().catch(undefined),
     placement: z.looseObject({ kind: z.string() }).optional().catch(undefined)
   })
 )
@@ -118,7 +124,14 @@ export const HOST_WINDOW_CONDITIONS: Record<
   callerNavigation: (params) => params.navigation === 'caller',
   clientPlacement: (params) => params.placement?.kind === 'client',
   ownClientPage,
-  unfocusedOwnClientPage: (params, caller) => params.focus !== true && ownClientPage(params, caller)
+  unfocusedOwnClientPage: (params, caller) =>
+    params.focus !== true && ownClientPage(params, caller),
+  // A terminal of the caller's own workspace has no window: its split stays there. Anyone else's
+  // (a worker workspace's, the owner's) is in the host's window.
+  ownWorkspaceTerminal: (params, caller) =>
+    params.terminal !== undefined &&
+    caller.teammate !== undefined &&
+    caller.terminalHolderOf?.(params.terminal) === teammateTabListKey(caller.teammate)
 }
 
 const HOST_WINDOW_REFUSED = new Set(classes.hostWindow.refused)
@@ -227,10 +240,17 @@ export function homeTabListOf(
 }
 
 const HOME_TAB_HOST_LIST: ReadonlySet<string> = new Set(classes.homeTabs.hostList)
+const HOME_TAB_OWN_WORKSPACE: ReadonlySet<string> = new Set(classes.homeTabs.ownWorkspace)
 
 /** Rule 4: a call that writes the host's tab list of a workspace, refused in a teammate's own Home. */
 export function writesHostTabList(methodName: string): boolean {
   return HOME_TAB_HOST_LIST.has(methodName)
+}
+
+/** Rule 3: a call that writes the tab list of the workspace it names (in a teammate's own Home, their
+ *  own workspace's); naming none, the host's window would pick one, so a teammate's is refused. */
+export function writesNamedTabList(methodName: string): boolean {
+  return HOME_TAB_HOST_LIST.has(methodName) || HOME_TAB_OWN_WORKSPACE.has(methodName)
 }
 
 /** A tab list read names: `'owner'` or a teammate by account. Absent, the caller's own (`tabOwnerOf`). */

@@ -17,8 +17,8 @@ import {
 } from './mobile-terminal-shell-refusal'
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
 import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
-import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
 import { windowOwns } from '../../session-tabs/person/person-workspace-target'
+import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
 
 export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
   protected abstract resolveMobileSessionTerminalCommand(
@@ -78,12 +78,11 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       wslUserAct: true
     })
     const worktreeId = workspace.id
+    // The tab list it joins: a teammate's own workspace in their agent's Home, else the one it runs in.
+    const list = opts.tabList ?? worktreeId
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     assertMobileTerminalShellSupported(this.store, workspace, opts.shellOverride, cwd)
-    // The host's list, which a teammate's own terminal never joins.
-    if (!opts.personList) {
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    }
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(list)
     // Older mobile clients optimistically append; match until they advertise grouped placement.
     const requestedAfterTabId = opts.afterTabId
     const afterTabId =
@@ -91,20 +90,17 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         ? undefined
         : requestedAfterTabId
     if (opts.sourceChatFork) {
-      // A fork terminal opens beside its chat in the host's list; a teammate's own list is not it.
-      if (opts.personList) {
-        throw new Error('chat_fork_source_unavailable')
-      }
       return this.createMobileChatForkTerminal({
         workspace,
         worktreeId,
+        list,
         opts,
         afterTabId,
         graphEpoch
       })
     }
     const afterDesktopTabId = anchorTabOfCreate(
-      this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
+      this.mobileSessionTabsByWorktree.get(list)?.tabs,
       requestedAfterTabId,
       afterTabId !== undefined
     )
@@ -116,15 +112,12 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
     }
-    if (opts.personList) {
-      return await this.createPersonTerminal(opts.personList, workspace, cwd, startupCommand, opts)
-    }
     if (opts.clientMutationId && startupCommand.command && startupCommand.launchAgent === 'qoder') {
       const clientIdentity = opts.clientNavigationId ?? 'local'
       const seed = `${clientIdentity}\0${worktreeId}\0${opts.clientMutationId}`
       // A command-bearing retry must reconcile the owning PTY before delivering the resume again.
       return await this.createRuntimeOwnedMobileSessionTerminal(
-        worktreeId,
+        list,
         opts.activate !== false,
         afterTabId,
         {
@@ -145,10 +138,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }
       )
     }
-    const windowId = windowOwns(worktreeId) ? this.getAvailableAuthoritativeWindowId() : null
+    const windowId = windowOwns(list) ? this.getAvailableAuthoritativeWindowId() : null
     if (windowId === null) {
       return await this.createRuntimeOwnedMobileSessionTerminal(
-        worktreeId,
+        list,
         opts.activate !== false,
         afterTabId,
         {
@@ -164,7 +157,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
-            () => this.mainLayoutTabOfRow(worktreeId, requestedAfterTabId),
+            () => this.mainLayoutTabOfRow(list, requestedAfterTabId),
             afterDesktopTabId
           ),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,

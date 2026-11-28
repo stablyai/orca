@@ -1,3 +1,5 @@
+import { tabListOfPty } from '../../session-tabs/person/person-workspace-target'
+import { heldTerminalCreate } from '../../session-tabs/person/teammate-workspace-surfaces'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import {
   recordTerminalLaunchMetadata,
@@ -34,7 +36,6 @@ import {
 import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch/agent-launch-token'
 import { seedPtyLaunchTitle } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../recovery/migrated-pane-restore-cwd'
-import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/delivery/pty-first-size'
 import * as dependenciesOwner1 from '../../../../shared/workspace-layout/stable-pane-id'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
@@ -62,22 +63,16 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         throw new Error('runtime_unavailable')
       }
       const workspace = await this.resolveTerminalCreateLaunchScope(selector, opts, ...evidence)
-      const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const launchOpts = heldTerminalCreate(
+        workspace,
+        await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      )
+      // The tab list it joins: a teammate's own workspace for theirs, else the one it runs in.
+      const list = tabListOfPty({ worktreeId: workspace.id, holder: launchOpts.holder })
+      const releaseHeld = this.heldTerminals.hold(launchOpts.sessionId, launchOpts.holder)
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
-      const session = this.getWorkspaceSessionForWorktree(workspace.id)
-      // The window's latest published active group is where its reveal places the tab.
-      const groupId =
-        launchOpts.targetGroupId ??
-        this.mobileSessionTabsByWorktree.get(workspace.id)?.activeGroupId ??
-        session?.activeGroupIdByWorktree?.[workspace.id]
-      // Unshown workspaces have no measured group; a single group can use the common workspace geometry.
-      const singleGroup =
-        (session?.tabGroups?.[workspace.id]?.length ?? 0) <= 1
-          ? this.singleGroupWorkspaceGridSize
-          : undefined
-      const group = groupId ? this.terminalGroupGridSizes?.[groupId] : undefined
-      const initialSize = resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup })
+      const initialSize = this.terminalCreateFirstSize(list, opts, launchOpts.targetGroupId)
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = allocateTerminalPaneIdentity(launchOpts)
@@ -255,7 +250,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
         if (pty && !launch.adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
-          this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
+          this.publishPtyBackedMobileSessionTerminal(list, pty, {
             tabId,
             leafId,
             title: launch.effectiveTitle ?? null,
@@ -266,7 +261,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           })
         }
         const reveal = revealCreatedTerminal({
-          notifier: this.windowNotifierFor(pty ?? workspace.id),
+          notifier: this.windowNotifierFor(list),
           workspace,
           ptyId: result.id,
           handle,
@@ -301,6 +296,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ...(warning ? { warning } : {})
         }
       } finally {
+        releaseHeld()
         teamAllocation.release()
         releaseStablePaneCreate()
       }

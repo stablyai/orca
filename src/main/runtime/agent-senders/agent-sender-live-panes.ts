@@ -1,3 +1,4 @@
+import { tabListOfPty } from '../session-tabs/person/person-workspace-target'
 import { createHash } from 'node:crypto'
 import { isStructuredWorkerHandle } from '../../../shared/orchestration/workers/structured-worker-handle'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
@@ -13,6 +14,9 @@ import type { AgentSenderHandleReads } from './runtime-agent-sender-associations
 export type AgentSenderPane = {
   paneKey: string
   worktreeId: string
+  /** The tab list whose frames carry its row when it is not `worktreeId`: a teammate's own
+   *  workspace for their terminal (`tabListOfPty`). */
+  tabList?: string
   handle: string
   processIncarnation: string | null
   hostScope?: string | null
@@ -66,6 +70,7 @@ export function readLiveAgentSenderPanes(
     panes.set(paneKey, {
       paneKey,
       worktreeId,
+      ...(pty?.holder ? { tabList: tabListOfPty(pty) } : {}),
       handle,
       processIncarnation,
       hostScope,

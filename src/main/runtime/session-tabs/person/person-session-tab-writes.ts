@@ -8,7 +8,6 @@ import type {
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   homeTabListOf,
-  isTeammateTabList,
   teammateTabListKey,
   type TabListRef,
   type TabPerson,
@@ -31,9 +30,9 @@ import { randomUUID } from 'node:crypto'
 import type { RuntimeEdgeCommandSurface } from '../../construction/runtime-edge-command-controller'
 import { personTabId, type PersonSurface } from './person-tab-list-snapshot'
 import { createMobileSessionTabsNotifyCoalescer } from '../../session-lifecycle/publication/mobile-session-tabs-notify-coalescer'
-import { isSafeMobileRelativePath } from '../../files/mobile-file-kind'
-import { joinWorktreeRelativePath } from '../../files/paths/runtime-relative-paths'
 import { OrcaRuntimeWithPersonSessionTabs, type OwnList } from './person-session-tab-publication'
+import { holderOfTabList, personTabListOf, tabListOfPty } from './person-workspace-target'
+import type { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh as ActivationMethods } from '../../session-lifecycle/projection/perform-mobile-session-pty-records-refresh'
 
 /** A chat tab write: the publication, and the person it is for. */
 export type PersonChatTabPublication = StructuredSessionTabPublicationInput & { person: TabPerson }
@@ -53,6 +52,10 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     changes: readonly ChatTabChange[]
   ): Promise<void>
   protected abstract emitMobileSessionTabsSnapshot(snapshot: RuntimeMobileSessionTabsSnapshot): void
+
+  abstract activateMobileSessionTab(
+    ...args: Parameters<ActivationMethods['activateMobileSessionTab']>
+  ): ReturnType<ActivationMethods['activateMobileSessionTab']>
 
   declare readonly browserTabCreate: RuntimeEdgeCommandSurface['browserTabCreate']
   declare readonly browserTabClose: RuntimeEdgeCommandSurface['browserTabClose']
@@ -74,12 +77,13 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
   })
 
   /** A browser tab create, for the person who opens it: a teammate's in their agent's Home is stamped
-   *  into their own list before its page exists, so no host list ever shows it. */
+   *  as their own workspace's as its page is published, so no host list ever shows it. */
   async createSessionBrowserTab(
     params: Parameters<RuntimeEdgeCommandSurface['browserTabCreate']>[0],
     caller: Parameters<RuntimeEdgeCommandSurface['browserTabCreate']>[1],
-    { person }: { person: TabPerson }
+    options: { person: TabPerson }
   ): Promise<{ browserPageId: string }> {
+    const { person } = options
     const worktreeId =
       person === 'owner' || !params.worktree
         ? null
@@ -88,62 +92,25 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
             (workspace) => workspace.id,
             () => null
           )))
-    const list = worktreeId ? this.homeTabListOf(person, worktreeId) : 'host'
-    if (!worktreeId || !isTeammateTabList(list)) {
+    const list = worktreeId ? this.personTabListOf(person, worktreeId) : null
+    const { holder } = holderOfTabList(list ?? '')
+    if (!list || !holder) {
       return this.browserTabCreate(params, caller)
     }
-    const surface = { kind: 'browser' as const, browserPageId: params.page ?? randomUUID() }
-    const activate = params.activate !== false
-    // Held before its page is published, so the page's record takes the stamp (`holder`).
-    this.personSessionTabs.openSurface(list, worktreeId, surface, activate)
-    try {
-      const created = await this.browserTabCreate(
-        { ...params, page: surface.browserPageId },
-        caller
-      )
-      this.showPersonSurface(list, worktreeId, surface, {
-        activate,
-        clientNavigationId: caller?.pairedDeviceId
+    const browserPageId = params.page ?? randomUUID()
+    const created = await this.heldTerminals.whileStarting(browserPageId, holder, () =>
+      this.browserTabCreate({ ...params, page: browserPageId }, caller)
+    )
+    if (params.activate !== false) {
+      // Their device shows what it opened; no other list's pick moves.
+      await this.activateMobileSessionTab(`id:${worktreeId}`, browserPageId, undefined, {
+        person: options.person,
+        navigation: 'caller',
+        clientNavigationId: caller?.pairedDeviceId,
+        notifyClients: true
       })
-      return created
-    } catch (error) {
-      this.dropPersonTab(list, worktreeId, personTabId(surface))
-      throw error
     }
-  }
-
-  /** A teammate opens a file in their agent's Home: a tab of their own list, read from disk wherever
-   *  it shows, so it is the same file for everyone; unsaved edits stay on the computer making them. */
-  async openPersonFile(
-    worktreeSelector: string,
-    file: { relativePath: string; mode: 'edit' | 'diff'; staged?: boolean; oldPath?: string },
-    caller: { person: TabPerson; clientNavigationId?: string; activate?: boolean }
-  ): Promise<RuntimeMobileSessionTabsResult> {
-    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
-    const list = this.homeTabListOf(caller.person, worktree.id)
-    if (!isTeammateTabList(list)) {
-      // Everyone else opens files in the host's window (`files.open`).
-      throw new Error('file_tab_needs_own_list')
-    }
-    for (const path of [file.relativePath, file.oldPath]) {
-      if (path !== undefined && !isSafeMobileRelativePath(path)) {
-        throw new Error('invalid_relative_path')
-      }
-    }
-    const surface: PersonSurface = {
-      kind: 'file',
-      relativePath: file.relativePath,
-      filePath: joinWorktreeRelativePath(worktree.path, file.relativePath),
-      mode: file.mode,
-      ...(file.mode === 'diff' ? { diffSource: file.staged ? 'staged' : 'unstaged' } : {}),
-      ...(file.mode === 'diff' && file.oldPath ? { oldPath: file.oldPath } : {})
-    }
-    const activate = caller.activate !== false
-    this.personSessionTabs.openSurface(list, worktree.id, surface, activate)
-    return this.showPersonSurface(list, worktree.id, surface, {
-      activate,
-      clientNavigationId: caller.clientNavigationId
-    })
+    return created
   }
 
   /** A tab a teammate just opened in their list: their devices redraw, and the device that opened it
@@ -177,6 +144,11 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     return of === 'owner'
       ? 'owner'
       : teammateTabListKey({ botId: bot!.id, accountId: of.accountId })
+  }
+
+  /** The workspace a person's tab write lands in (`personTabListOf`). */
+  protected personTabListOf(person: TabPerson, worktreeId: string): string {
+    return personTabListOf(this.store?.getBots?.() ?? [], worktreeId, person)
   }
 
   /** The list a person's write lands in, in this workspace. */
@@ -214,12 +186,9 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
    *  only the list that holds the page hears. A teammate's page redraws and saves their own list (so
    *  it survives a restart); a host page notifies the host's list, which saves it. */
   notifyBrowserPageList(page: TabListRef): void {
-    if (!page.holder) {
-      this.notifyMobileSessionTabsChanged(page.workspaceId)
-      return
-    }
-    this.persistClientHostedBrowserPagesForWorktree(page.workspaceId)
-    this.schedulePersonListRedraw(page.holder, page.workspaceId)
+    this.notifyMobileSessionTabsChanged(
+      tabListOfPty({ worktreeId: page.workspaceId, holder: page.holder })
+    )
   }
 
   /** The chat tab write (reveal, create, Fork, publish) for the person it names: true when that is a

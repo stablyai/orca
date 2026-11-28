@@ -139,7 +139,9 @@ export function agentLaunchSurfaceFactory(
         // The user closed its tab while it waited: nothing is spawned, and that is the answer.
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
       }
+      const holder = await context.runtime.tabListHolderOf(`id:${worktreeId}`, context.callerScope)
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
+        ...(holder ? { holder } : {}),
         // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
         wslUserAct: true,
         // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).

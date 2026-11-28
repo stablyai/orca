@@ -1,3 +1,4 @@
+import { tabListOfPty, windowOwns } from '../person/person-workspace-target'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from '../publication/session-tabs-change-publication'
 import { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs } from './mobile-session-preservation'
 import type {
@@ -16,7 +17,6 @@ import type {
   ClientHostedBrowserRow,
   ClientHostedBrowserRowsEvent
 } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
-import { windowOwns } from '../person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   protected abstract getListedBrowserTabsByPageId(
@@ -242,18 +242,21 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
         ...this.persistedClientHostedBrowserWorktreeIds,
         ...getRuntimeBrowserPageRegistry(this)
           .everyPage()
-          .map((page) => page.workspaceId)
+          .map((page) => tabListOfPty({ worktreeId: page.workspaceId, holder: page.holder }))
       ])) {
         this.persistClientHostedBrowserPagesForWorktree(id)
       }
       this.notifyMobileSessionTabSnapshots()
       return
     }
-    // Derive host rows from the page registry's single announcement for every mutation, including quit/recovery.
-    this.clientHostedBrowserRows.publish(worktreeId)
+    // Derive host rows from the page registry's single announcement for every mutation, including
+    // quit/recovery; a teammate's own workspace has no host rows (no window shows it).
+    if (windowOwns(worktreeId)) {
+      this.clientHostedBrowserRows.publish(worktreeId)
+    }
     this.persistClientHostedBrowserPagesForWorktree(worktreeId)
     const hasClientBrowserPages =
-      getRuntimeBrowserPageRegistry(this).pagesOf('host', worktreeId).length > 0
+      getRuntimeBrowserPageRegistry(this).pagesOfList(worktreeId).length > 0
     if (this.offscreenBrowserBackend || hasClientBrowserPages) {
       const reconciled = this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
         worktreeId,
