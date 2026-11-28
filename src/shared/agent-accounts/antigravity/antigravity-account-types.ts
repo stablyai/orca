@@ -67,6 +67,8 @@ export type AntigravityChatSignInState = {
   /** The initiating action; absent on older hosts and other clients' flows. */
   intent?: AntigravityChatSignInIntent
   url?: string
+  /** agy opened the browser with this link itself; opening it too would show the page twice. */
+  openedByAgy?: boolean
   error?: string
 }
 

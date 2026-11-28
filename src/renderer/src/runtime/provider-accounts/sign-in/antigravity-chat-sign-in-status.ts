@@ -123,11 +123,26 @@ function note(local: Local, patch: Partial<Notes>): void {
 
 const message = (cause: unknown): string => (cause instanceof Error ? cause.message : '')
 
+/** Whether this client should open a shown flow's link: only the flow it started, and only when
+ *  agy didn't open the browser itself, which a local host does. */
+export function opensAntigravityChatSignInLink(
+  shown: AntigravityChatSignInState,
+  opens: string | null
+): boolean {
+  return (
+    opens !== null &&
+    shown.flowId === opens &&
+    shown.phase === 'waiting' &&
+    Boolean(shown.url) &&
+    shown.openedByAgy !== true
+  )
+}
+
 /** Opens the link of a flow this client started, once, when the host first shows it. */
 function openStartedLinks(): void {
   for (const local of locals.values()) {
     const flow = flowOf(local.owner)
-    if (local.opens && flow?.flowId === local.opens && flow.phase === 'waiting' && flow.url) {
+    if (flow && opensAntigravityChatSignInLink(flow, local.opens) && flow.url) {
       const { flowId } = flow
       local.opens = null
       void window.api.shell.openUrl(flow.url).catch(() => {
@@ -135,6 +150,9 @@ function openStartedLinks(): void {
           note(local, { openFailed: true })
         }
       })
+    } else if (flow?.flowId === local.opens && flow.phase === 'waiting') {
+      // The host's own browser launch, or a link it didn't print: nothing left for this client.
+      local.opens = null
     }
   }
 }

@@ -8,6 +8,7 @@ import { spawnProcess } from '@orca/process-host'
 import type * as accountTypes from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { antigravityChatSignIn } from './antigravity-chat-account'
 import { agyLoginFailure } from './antigravity-sign-in-failure'
+import { forcesAntigravityFileStore } from './native-file-credentials'
 import { agyLoginAnswer, agyLoginLink } from './antigravity-sign-in-url'
 
 // Google's sign-in page stays usable about this long.
@@ -23,6 +24,8 @@ type Flow = {
   ended: AbortController
   done: Promise<void>
   link?: string
+  /** agy asked the person for a link to open themselves: this host can't open one. */
+  agyLeavesBrowserTo?: boolean
   agy?: ChildProcessWithoutNullStreams
   answered?: boolean
 }
@@ -133,6 +136,7 @@ async function logIn(current: Flow, host: AntigravityChatSignInHost): Promise<st
   const { signal } = current.ended
   const { command, env } = await host.agy(signal)
   signal.throwIfAborted()
+  current.agyLeavesBrowserTo = forcesAntigravityFileStore(env)
   const agy = spawnProcess({ program: command, args: ['acp', '--login'], env, stdio: 'pipe' })
   current.agy = agy
   let tail = ''
@@ -180,7 +184,13 @@ function receiveLine(current: Flow, line: string): void {
     return
   }
   current.link = link
-  publish(current, { phase: 'waiting', url: link })
+  // The same condition agy weighs to skip opening a browser: a remote or WSL session leaves the
+  // link to us. A local host's agy opened it already, and opening it again would show the page twice.
+  publish(current, {
+    phase: 'waiting',
+    url: link,
+    openedByAgy: current.agyLeavesBrowserTo !== true
+  })
 }
 
 function ownFlow(owner: string, flowId: string): Flow {
