@@ -4,7 +4,8 @@ import { structuredAgentSessionHostKey } from '../../../runtime/native-chat/host
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
 import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/questions/native-chat-ask-dismiss-key'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useNativeChatViewState } from '../pane/ownership/native-chat-view-memory'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -26,7 +27,12 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
-type PromptAnswerOperation = NativeChatAnswerOperation & { promptKey: string }
+export type PromptAnswerOperation = NativeChatAnswerOperation & { promptKey: string }
+
+/** The answer still being sent, kept with the chat tab: a chat released mid-send returns still holding it. */
+export function useAsyncQuestionAnswerOperation(sourceScope: string) {
+  return useNativeChatViewState<PromptAnswerOperation | null>(`async-answer:${sourceScope}`, null)
+}
 
 /** Async questions leave the composer usable; the next ordinary send answers them, and Skip hides
  *  them on every device where the host saves it, else on this screen only. */
@@ -54,7 +60,7 @@ export function NativeChatStructuredAsyncQuestion({
   queuedCards?: readonly Pick<QueuedMessageCard, 'text'>[]
   submissions?: readonly AgentJournalSubmission[]
 }): React.JSX.Element | null {
-  const [operation, setOperation] = useState<PromptAnswerOperation | null>(null)
+  const [operation, setOperation] = useAsyncQuestionAnswerOperation(sourceScope)
   const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
   const { prompt, dismiss, ownerKey, answerPending } = useNativeChatAsyncQuestions({
     paneKey,
