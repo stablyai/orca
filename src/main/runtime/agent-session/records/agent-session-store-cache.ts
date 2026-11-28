@@ -41,6 +41,7 @@ export function applyAgentSessionStoreCacheRows(
   }
   if (writes.sessionTabs !== null) {
     const prior = draft.sessionTabs
+    delete draft.unrecordedSessionTabs
     draft.sessionTabs = writes.sessionTabs.recorded
       ? agentSessionTabTableFromStored(
           writes.sessionTabs.tabs.map(({ tabId, sessionId }) => [tabId, sessionId]),
@@ -135,6 +136,7 @@ export function adoptAgentSessionStoreCachePatch(
   }
   if (writes.sessionTabs !== null) {
     published.sessionTabs = next.sessionTabs
+    delete published.unrecordedSessionTabs
   }
   if (writes.retiredClaimKeys !== null) {
     published.retiredClaimKeys = next.retiredClaimKeys

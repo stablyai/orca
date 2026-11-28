@@ -6,6 +6,8 @@ export const JOURNAL_DB_SCHEMA_VERSION = 4
 // Versions 1–2 existed only in unreleased builds.
 export const JOURNAL_DB_OLDEST_RELEASED_VERSION = 3
 
+export const JOURNAL_V3_HISTORY_TABLES = ['journal_rows', 'journal_sessions'] as const
+
 export function createJournalTablesSql(): string {
   return `
 CREATE TABLE IF NOT EXISTS journal_rows (

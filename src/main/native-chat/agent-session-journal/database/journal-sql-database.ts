@@ -21,6 +21,7 @@ import type { JournalSqlStoredRecords } from '../journal-sql-database-read'
 
 /** The runtime owns workers, never a writable connection or a retained chat projection. */
 type JournalSqlDatabaseOptions = {
+  hostId?: string
   readerPath?: string
   onMaintenanceError: (error: unknown, sessionId?: string) => void
   /** Each periodic maintenance pass, for owners that recover their own work on it. */
@@ -74,7 +75,7 @@ export class JournalSqlDatabase {
     options: JournalSqlDatabaseOptions & { writerPath?: string }
   ): Promise<JournalSqlDatabase> {
     const filename = journalDomainDatabasePath(stateDirectory)
-    const writer = new JournalSqlOwner(filename, stateDirectory, options.writerPath)
+    const writer = new JournalSqlOwner(filename, stateDirectory, options.writerPath, options.hostId)
     try {
       return new JournalSqlDatabase(writer, stateDirectory, await writer.opened(), options)
     } catch (error) {
@@ -175,10 +176,13 @@ export class JournalSqlDatabase {
   }
 
   private restoreRecordTabs(stored: JournalSqlStoredRecords): AgentSessionStoreState {
-    const { backgroundSessions, sessionTabs, ...records } = stored
+    const { backgroundSessions, sessionTabs, unrecordedSessionTabs, ...records } = stored
     return {
       ...records,
-      sessionTabs: sessionTabs && agentSessionTabTableFromStored(sessionTabs, backgroundSessions)
+      sessionTabs: sessionTabs && agentSessionTabTableFromStored(sessionTabs, backgroundSessions),
+      ...(unrecordedSessionTabs
+        ? { unrecordedSessionTabs: agentSessionTabTableFromStored(unrecordedSessionTabs, null) }
+        : {})
     }
   }
 

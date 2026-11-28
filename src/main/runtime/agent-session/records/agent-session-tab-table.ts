@@ -170,10 +170,13 @@ export function effectiveAgentSessionTabs(
   if (state.sessionTabs) {
     return state.sessionTabs
   }
-  const tabs = new AgentSessionTabTable()
+  const tabs = state.unrecordedSessionTabs?.clone() ?? new AgentSessionTabTable()
   for (const id of legacyIds) {
     if (id !== ownShow && hasAgentSessionConversation(state, id)) {
-      tabs.show(id)
+      const tabId = structuredAgentSessionTabId(id)
+      if (state.unrecordedSessionTabs?.sessionIdFor(tabId) === undefined) {
+        tabs.show(id, tabId)
+      }
     }
   }
   return tabs
@@ -194,8 +197,8 @@ export function initializeAgentSessionTabs(
 }
 
 export function listVisibleAgentSessionIds(state: AgentSessionStoreState): string[] {
-  return (state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
-    hasAgentSessionConversation(state, sessionId)
+  return ((state.sessionTabs ?? state.unrecordedSessionTabs)?.sessionIds() ?? []).filter(
+    (sessionId) => hasAgentSessionConversation(state, sessionId)
   )
 }
 
@@ -276,12 +279,27 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
   listVisibleSessionIds = (): string[] =>
     this.transactions.state.sessionTabs
       ? listVisibleAgentSessionIds(this.transactions.state)
-      : this.transactions.legacySessionTabIds.filter((id) => this.isSessionTabVisible(id))
+      : [
+          ...listVisibleAgentSessionIds(this.transactions.state),
+          ...this.transactions.legacySessionTabIds.filter(
+            (id) =>
+              this.transactions.state.unrecordedSessionTabs?.tabIdFor(id) === undefined &&
+              this.isSessionTabVisible(id)
+          )
+        ]
 
-  isSessionTabVisible = (id: string): boolean =>
-    (this.transactions.state.sessionTabs
-      ? this.transactions.state.sessionTabs.tabIdFor(id) !== undefined
-      : this.legacyTabIds.has(id)) && hasAgentSessionConversation(this.transactions.state, id)
+  isSessionTabVisible = (id: string): boolean => {
+    const { state } = this.transactions
+    const pending = state.unrecordedSessionTabs
+    return (
+      (state.sessionTabs
+        ? state.sessionTabs.tabIdFor(id) !== undefined
+        : pending?.tabIdFor(id) !== undefined ||
+          (this.legacyTabIds.has(id) &&
+            pending?.sessionIdFor(structuredAgentSessionTabId(id)) === undefined)) &&
+      hasAgentSessionConversation(state, id)
+    )
+  }
 
   isSessionTabRetired = (id: string): boolean =>
     this.transactions.state.sessionTabs !== null && !this.isSessionTabVisible(id)
@@ -297,7 +315,9 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
     agentSessionVisibleTabIndex(this.transactions.state)
 
   getSessionTabId = (sessionId: string): string | null =>
-    this.transactions.state.sessionTabs?.tabIdFor(sessionId) ?? null
+    (
+      this.transactions.state.sessionTabs ?? this.transactions.state.unrecordedSessionTabs
+    )?.tabIdFor(sessionId) ?? null
 
   /** A live chat with no tab, which no person closed. */
   isSessionInBackground = (id: string): boolean =>

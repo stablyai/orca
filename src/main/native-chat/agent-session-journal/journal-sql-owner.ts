@@ -58,11 +58,12 @@ export class JournalSqlOwner {
     workerPath = resolveWorkerThreadEntryPath(
       currentWorkerEntryLayout(__dirname),
       'journal-sql-worker-entry.js'
-    )
+    ),
+    hostId?: string
   ) {
     this.worker = spawnWorkerThread(workerPath, {
       name: 'orca-journal-sql-writer',
-      workerData: { filename, stateDirectory },
+      workerData: { filename, stateDirectory, hostId },
       execArgv: []
     })
     this.worker.on('message', (response: JournalSqlResponse) => this.receive(response))

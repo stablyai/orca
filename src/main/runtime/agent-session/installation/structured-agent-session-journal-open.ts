@@ -27,6 +27,7 @@ function logOpenFailureOnce(logger: StructuredAgentSessionLogger, error: unknown
 export async function openStructuredAgentSessionSqlJournalDatabase(
   args: {
     stateDirectory: string
+    hostId: string
     logger: StructuredAgentSessionLogger
     closeFailedOpen?: (database: JournalSqlDatabase) => Promise<void>
   } & Pick<
@@ -37,6 +38,7 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
   let journalDatabase: JournalSqlDatabase | undefined
   try {
     journalDatabase = await JournalSqlDatabase.open(args.stateDirectory, {
+      hostId: args.hostId,
       writerPath: args.writerPath,
       readerPath: args.readerPath,
       onMaintenanceTick: args.onMaintenanceTick,

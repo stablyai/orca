@@ -72,7 +72,10 @@ async function open(): Promise<void> {
   try {
     mkdirSync(dirname(workerData.filename), { recursive: true })
     if (workerData.filename === journalDomainDatabasePath(stateDirectory)) {
-      await initializeJournalDomainDatabase(stateDirectory)
+      await initializeJournalDomainDatabase(
+        stateDirectory,
+        typeof workerData.hostId === 'string' ? workerData.hostId : undefined
+      )
     }
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db

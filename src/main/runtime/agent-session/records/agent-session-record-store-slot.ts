@@ -7,6 +7,7 @@ import {
   journalDomainDatabasePath
 } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/database/journal-database'
+import { hasJournalLegacyRecordFile } from '../../../native-chat/agent-session-journal/database/journal-legacy-record-paths'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { readDeletedChats } from './agent-session-record-forgets'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
@@ -201,7 +202,10 @@ export function hasPersistedStructuredAgentSessionStore(
     return false
   }
   try {
-    return journalDatabaseHoldsAgentSessions(databasePath)
+    return journalDatabaseHoldsAgentSessions(
+      databasePath,
+      databasePath === currentPath ? undefined : () => hasJournalLegacyRecordFile(stateDirectory)
+    )
   } catch {
     // A database that cannot be read cannot say it is empty.
     return true

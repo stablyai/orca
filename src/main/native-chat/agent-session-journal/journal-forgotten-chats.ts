@@ -4,7 +4,7 @@ import type Database from '../../sqlite/sync-database'
 
 // Written with the record's deletion, so a crash before every page ran still finishes the rows.
 // The chat's `journal.legacy-revision:` key stays, so the older journal never brings it back.
-const FORGOTTEN_CHAT_KEY = 'journal.forgotten-chat:'
+export const FORGOTTEN_CHAT_KEY = 'journal.forgotten-chat:'
 
 /**
  * True while the journal shows the chat in use: a fork holds it, input waits or is queued, or the

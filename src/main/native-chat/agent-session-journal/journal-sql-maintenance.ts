@@ -39,8 +39,7 @@ import {
 } from './journal-domain-import-discard'
 import { discardForgottenJournalChatPage } from './journal-forgotten-chats'
 import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
-import { storedAgentSessionBackground } from '../../runtime/agent-session/records/agent-session-tab-table'
-import type { JournalSqlStoredRecords } from './journal-sql-database-read'
+import { storeJournalSqlRecords, type JournalSqlStoredRecords } from './journal-sql-database-read'
 import { settleJournalLegacyCompare } from './database/journal-legacy-compare'
 import { recordJournalLegacyCopyFailure } from './database/journal-legacy-copies'
 import {
@@ -183,14 +182,9 @@ export function applyJournalSqlMaintenance(
     case 'wsl-workspace-rekey':
       return rekeyWslDriveUncChats(db, operation.worktreeIds)
     case 'records-install': {
-      const records = installAgentSessionStoreRows(db)
       return {
         kind: 'records',
-        records: {
-          ...records,
-          sessionTabs: records.sessionTabs?.entries() ?? null,
-          backgroundSessions: storedAgentSessionBackground(records.sessionTabs)
-        }
+        records: storeJournalSqlRecords(installAgentSessionStoreRows(db))
       }
     }
     case 'fork-source-hold':

@@ -7,7 +7,8 @@ import {
   createAgentSessionRecordTablesSql,
   createJournalTablesSql,
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
-  JOURNAL_DB_SCHEMA_VERSION
+  JOURNAL_DB_SCHEMA_VERSION,
+  JOURNAL_V3_HISTORY_TABLES
 } from './journal-database-schema'
 import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
@@ -29,12 +30,29 @@ export function journalPragmaNumber(db: Database.Database, name: string): number
   return Number(db.pragma(name, { simple: true }) ?? 0)
 }
 
-export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean {
+export function isJournalV3RecordFileSource(
+  db: Database.Database,
+  tables?: ReadonlySet<unknown>
+): boolean {
+  return (
+    journalPragmaNumber(db, 'main.user_version') === 3 &&
+    JOURNAL_V3_HISTORY_TABLES.every((table) =>
+      tables
+        ? tables.has(table)
+        : !!db.prepare("SELECT 1 FROM main.sqlite_schema WHERE type='table' AND name=?").get(table)
+    )
+  )
+}
+
+export function journalDatabaseHoldsAgentSessions(
+  dbPath: string,
+  hasLegacyRecordFile?: () => boolean
+): boolean {
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
   try {
     const tables = new Set(
       db
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .prepare("SELECT name FROM main.sqlite_schema WHERE type = 'table'")
         .all()
         .map(({ name }) => name)
     )
@@ -44,7 +62,10 @@ export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean {
           tables.has(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined
       ) ||
       // Deleted chats whose rows are still being removed: opening the store finishes them.
-      (tables.has('agent_session_store_meta') && readForgottenJournalChats(db, null).length > 0)
+      (tables.has('agent_session_store_meta') && readForgottenJournalChats(db, null).length > 0) ||
+      (hasLegacyRecordFile !== undefined &&
+        isJournalV3RecordFileSource(db, tables) &&
+        hasLegacyRecordFile())
     )
   } finally {
     db.close()

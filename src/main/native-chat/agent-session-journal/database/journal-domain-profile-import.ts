@@ -12,7 +12,8 @@ import { AgentSessionJournalError } from '../writing/journal-write-guards'
 /** Only profile rows are copied; each chat's original transcript stays at its source. */
 export function importJournalDomainProfile(
   source: Database.Database,
-  destination: Database.Database
+  destination: Database.Database,
+  { restoreRecordFile = false }: { restoreRecordFile?: boolean } = {}
 ): void {
   const version = journalPragmaNumber(source, 'user_version')
   if (version > JOURNAL_DB_SCHEMA_VERSION) {
@@ -38,14 +39,16 @@ export function importJournalDomainProfile(
     destination.pragma('foreign_keys = ON')
   }
   // The baseline later launches compare with, so only chats an older Orca writes move.
-  runJournalTransaction(destination, () => {
-    for (const { session_id: id } of source
-      .prepare('SELECT session_id FROM agent_session_records')
-      .all()) {
-      const revision = journalLegacyChatRevision(source, String(id)) ?? 'null'
-      recordJournalLegacyChatRevision(destination, String(id), revision)
-    }
-  })
+  if (!restoreRecordFile) {
+    runJournalTransaction(destination, () => {
+      for (const { session_id: id } of source
+        .prepare('SELECT session_id FROM agent_session_records')
+        .all()) {
+        const revision = journalLegacyChatRevision(source, String(id)) ?? 'null'
+        recordJournalLegacyChatRevision(destination, String(id), revision)
+      }
+    })
+  }
   if (source.prepare("SELECT 1 FROM sqlite_schema WHERE name='sqlite_sequence'").get()) {
     const highWater = source
       .prepare("SELECT seq FROM main.sqlite_sequence WHERE name='pr_check_events'")

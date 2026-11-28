@@ -15,22 +15,37 @@ import {
   journalDomainDatabasePath,
   journalRunningOrcaVersion
 } from './journal-host-database'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { tryFoldJournalTextTails } from '../journal-text-tail'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
   migrateJournalDomainSchema
 } from './journal-domain-migrations'
 import { importJournalDomainProfile } from './journal-domain-profile-import'
-import { openJournalLegacySource } from './journal-legacy-source'
+import { openJournalLegacySourceChecked } from './journal-legacy-source'
 import {
   JOURNAL_LEGACY_REVISIONS_KEPT,
   reconcileJournalLegacySource
 } from './journal-legacy-reconcile'
-import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
+import {
+  JOURNAL_LEGACY_SOURCE_RECEIPT,
+  sameJournalLegacySource
+} from './journal-legacy-source-receipt'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
+import {
+  assertJournalLegacyRecordFilesStable,
+  readJournalLegacyRecordSnapshot,
+  type JournalLegacyRecordSnapshot
+} from './journal-legacy-record-file'
+import { importJournalLegacyRecordSnapshot } from './journal-legacy-record-import'
+
+const LEGACY_RECORD_FILE_MAX_BYTES = 24 * 1024 * 1024
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
-export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
+export async function initializeJournalDomainDatabase(
+  stateDirectory: string,
+  hostId: string = LOCAL_EXECUTION_HOST_ID
+): Promise<string> {
   const destination = journalDomainDatabasePath(stateDirectory)
   mkdirSync(stateDirectory, { recursive: true })
   try {
@@ -48,11 +63,33 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     const { db } = openJournalDomainDatabase(filename)
     const sourcePath = journalDatabasePath(stateDirectory)
     const sourceReceipt = captureJournalLegacySourceReceipt(sourcePath)
+    const savedReceipt = JSON.stringify(sourceReceipt)
+    let recordFiles: JournalLegacyRecordSnapshot['files'] | undefined
+    const assertStable = (): void => {
+      if (!recordFiles) {
+        return
+      }
+      if (!sameJournalLegacySource(savedReceipt, captureJournalLegacySourceReceipt(sourcePath))) {
+        throw new Error('the original chat journal changed during initialization')
+      }
+      assertJournalLegacyRecordFilesStable(recordFiles)
+    }
     try {
       if (existsSync(sourcePath)) {
-        const source = openJournalLegacySource(sourcePath)
+        const { source, recordFileSource } = openJournalLegacySourceChecked(sourcePath, {
+          inspectRecordFileSource: true
+        })
         try {
-          importJournalDomainProfile(source, db)
+          importJournalDomainProfile(source, db, { restoreRecordFile: recordFileSource })
+          if (recordFileSource) {
+            const recordSnapshot = await readJournalLegacyRecordSnapshot(
+              stateDirectory,
+              LEGACY_RECORD_FILE_MAX_BYTES
+            )
+            recordFiles = recordSnapshot.files
+            assertStable()
+            importJournalLegacyRecordSnapshot(source, db, recordSnapshot, hostId)
+          }
         } finally {
           source.close()
         }
@@ -60,10 +97,11 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
       const meta = db.prepare(
         'INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)'
       )
-      meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(sourceReceipt))
+      meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, savedReceipt)
       meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
       // An unknown version is no later than any, and waits for a launch that knows its own.
       meta.run(JOURNAL_LEGACY_CONVERTED_BY, journalRunningOrcaVersion() ?? 'unknown')
+      assertStable()
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
         throw new Error('chat initialization could not fold its private WAL')
@@ -73,6 +111,7 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     }
     try {
       // Publish complete metadata without replacing another initializer's result.
+      assertStable()
       linkSync(filename, destination)
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) {

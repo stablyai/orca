@@ -2,6 +2,7 @@
 // never lists, resumes or adopts its agent conversations again. The transcripts stay the CLI's own.
 import type Database from '../../sqlite/sync-database'
 import type { DeletedChat } from '../chat-deletion/deleted-chats'
+import { JournalDamageError } from './replay/journal-open-failure'
 
 const DELETED_CHAT_KEY = 'chat.deleted:'
 
@@ -37,7 +38,7 @@ function isDeletedChat(value: unknown): value is DeletedChat {
 }
 
 /** Every tombstone; an unreadable row is skipped, never guessed at. */
-export function readDeletedChats(db: Database.Database): DeletedChat[] {
+export function readDeletedChats(db: Database.Database, strict = false): DeletedChat[] {
   // A read-only open of a newer build's database may lack the table; it then holds no tombstones.
   if (
     !db
@@ -47,14 +48,20 @@ export function readDeletedChats(db: Database.Database): DeletedChat[] {
     return []
   }
   return db
-    .prepare('SELECT value FROM agent_session_store_meta WHERE key>=?1 AND key<?2')
+    .prepare('SELECT key,value FROM agent_session_store_meta WHERE key>=?1 AND key<?2')
     .all(DELETED_CHAT_KEY, `${DELETED_CHAT_KEY.slice(0, -1)};`)
     .flatMap((row) => {
       try {
         const value: unknown = JSON.parse(String(row.value))
-        return isDeletedChat(value) ? [value] : []
+        if (isDeletedChat(value) && (!strict || row.key === `${DELETED_CHAT_KEY}${value.chatId}`)) {
+          return [value]
+        }
       } catch {
-        return []
+        // The strict first-open importer must know it cannot establish deletion authority.
       }
+      if (strict) {
+        throw new JournalDamageError('the original chat store has an unreadable deletion')
+      }
+      return []
     })
 }
