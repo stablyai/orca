@@ -29242,7 +29242,6 @@
       "ask": {
         "notSentYet": "pas encore envoyée",
         "recommended": "Recommandé",
-        "typeAnswer": "Saisissez votre réponse",
         "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
         "replacedByNewer": "Remplacée par une question plus récente",
         "skipped": "Ignorées",

@@ -28458,7 +28458,6 @@
       "ask": {
         "notSentYet": "尚未傳送",
         "recommended": "建議",
-        "typeAnswer": "輸入你的回答",
         "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
         "replacedByNewer": "已由較新的問題取代",
         "skipped": "已略過",
