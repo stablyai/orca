@@ -51,10 +51,11 @@ export function coalesce<T>(
 }
 
 export function normalizeConcreteWorkspaceId(workspaceId: unknown): LinearConcreteWorkspaceId {
-  if (typeof workspaceId !== 'string' || !workspaceId.trim() || workspaceId === 'all') {
+  const normalized = typeof workspaceId === 'string' ? workspaceId.trim() : ''
+  if (!normalized || normalized === 'all') {
     throw new Error('Concrete Linear workspace ID is required')
   }
-  return workspaceId.trim()
+  return normalized
 }
 
 export function workspaceError(
