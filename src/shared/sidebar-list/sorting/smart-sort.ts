@@ -7,6 +7,7 @@ import { tabHasLivePty } from '../../workspace-layout/terminal-surfaces/tab-has-
 import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 import {
   buildWorkspaceRowComparator,
+  compareRecentActivityWithCreateGrace,
   recentActivityWithCreateGrace,
   type WorkspaceSortBy as SortBy
 } from '../../workspace-view/workspace-row-sort'
@@ -21,7 +22,7 @@ import {
 import { EMPTY_ATTENTION_MAP, buildSparseAttentionByWorktree } from './smart-attention-scan'
 import { smartSortPhase } from './smart-sort-phase'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../feed/sidebar-inputs-switch'
-import { compareSmartStamps, recentStamp } from './stamp-order'
+import { compareRecentStamps, compareSmartStamps, recentStamp } from './stamp-order'
 
 /** Recent-sort rank: `lastActivityAt`, floored at `createdAt + CREATE_GRACE_MS` while that window is open. */
 export function effectiveRecentActivity(worktree: Worktree, now: number): number {
@@ -114,6 +115,7 @@ function buildStampComparator(
   return buildWorkspaceRowComparator<Worktree>(sortBy, {
     ...worktreeSortReads(repoMap, labels),
     recentActivity: recentStamp,
+    compareRecent: compareRecentStamps,
     compareSmart: compareSmartStamps
   })
 }
@@ -142,6 +144,14 @@ export function buildWorktreeComparator(
   return buildWorkspaceRowComparator<Worktree>(sortBy, {
     ...worktreeSortReads(repoMap, labels),
     recentActivity: (worktree) => effectiveRecentActivity(worktree, now),
+    compareRecent: (a, b) =>
+      compareRecentActivityWithCreateGrace(
+        a.lastActivityAt,
+        a.createdAt,
+        b.lastActivityAt,
+        b.createdAt,
+        now
+      ),
     compareSmart: (a, b) => {
       const aw = attentionByWorktree.get(a.id) ?? IDLE
       const bw = attentionByWorktree.get(b.id) ?? IDLE
@@ -157,9 +167,13 @@ export function buildWorktreeComparator(
         return 1
       }
       // Idle falls back to recency/create grace before labels.
-      const aRec = effectiveRecentActivity(a, now)
-      const bRec = effectiveRecentActivity(b, now)
-      return aRec > bRec ? -1 : aRec < bRec ? 1 : 0
+      return compareRecentActivityWithCreateGrace(
+        a.lastActivityAt,
+        a.createdAt,
+        b.lastActivityAt,
+        b.createdAt,
+        now
+      )
     }
   })
 }
