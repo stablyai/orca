@@ -26,6 +26,19 @@ export class DaemonRouterRetiredExitDelivery {
     return this.lingering.has(adapter)
   }
 
+  adapters(): DaemonPtyAdapter[] {
+    return Array.from(this.lingering.keys())
+  }
+
+  /** Carried over from the router a restart replaced, already unrouted. */
+  adopt(adapter: DaemonPtyAdapter): void {
+    if (!adapter.hasWatchedSessions()) {
+      this.options.release(adapter)
+      return
+    }
+    this.wait(adapter)
+  }
+
   /** The generation retired, or one of its owed exits arrived. */
   settle(adapter: DaemonPtyAdapter): void {
     if (!adapter.hasWatchedSessions()) {
@@ -35,16 +48,24 @@ export class DaemonRouterRetiredExitDelivery {
     if (this.lingering.has(adapter) || !this.options.unroute(adapter)) {
       return
     }
+    this.wait(adapter)
+  }
+
+  /** `carried`: a restart hands these to the next router, which releases them. */
+  dispose(carried: boolean): void {
+    for (const [adapter, timer] of this.lingering) {
+      clearTimeout(timer)
+      if (!carried) {
+        this.options.release(adapter)
+      }
+    }
+    this.lingering.clear()
+  }
+
+  private wait(adapter: DaemonPtyAdapter): void {
     const timer = setTimeout(() => this.finish(adapter), this.options.maxMs ?? EXIT_DELIVERY_MAX_MS)
     timer.unref?.()
     this.lingering.set(adapter, timer)
-  }
-
-  dispose(): void {
-    // Deleting the entry being visited is safe while iterating a Map.
-    for (const adapter of this.lingering.keys()) {
-      this.finish(adapter)
-    }
   }
 
   private finish(adapter: DaemonPtyAdapter): void {

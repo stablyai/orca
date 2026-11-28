@@ -533,6 +533,52 @@ describe('the transitional recheck timer', () => {
     expect(released).toEqual([])
   })
 
+  it('hands a generation still delivering its exits to the router a restart builds', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, inventory, state } = stubs()
+    Object.assign(state, { watched: true, admissionClosed: true })
+    inventory.liveRelays = 0
+    const before = track(preRpc, current)
+    before.retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(1_000)
+    const carried = before.retirement.retiringAdapters()
+    expect(carried).toEqual([preRpc])
+    before.retirement.dispose(true)
+    expect(before.released).toEqual([])
+
+    const after = track(preRpc, current)
+    after.legacy.splice(0)
+    after.retirement.adoptRetiring(preRpc)
+    state.watched = false
+    after.retirement.noteActivity(preRpc)
+    expect(after.released).toEqual([preRpc])
+  })
+
+  it('asks a fenced generation again once the reattaches in flight settle', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, state } = stubs()
+    state.admissionClosed = true
+    const decide = vi.mocked(preRpc.requestIdleRetirement)
+    decide.mockImplementation(async () => {
+      state.admissionClosed = false
+      return { state: 'busy', liveSessions: 1 }
+    })
+    const { retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(0)
+    decide.mockClear()
+    state.admissionClosed = true
+    const releaseOther = await retirement.admitReattach()
+    const refused = new Error('Terminal daemon is decommissioning')
+    const settled = retirement.settleHeldRetirements(refused, 1, preRpc)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(decide).not.toHaveBeenCalled()
+    releaseOther()
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(settled).resolves.toBe(true)
+    expect(decide).toHaveBeenCalledTimes(1)
+  })
+
   it('stops rechecking a fenced generation after the cap, and asks it again when it refuses a spawn', async () => {
     vi.useFakeTimers()
     const { current, preRpc, state } = stubs()

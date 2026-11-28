@@ -218,10 +218,19 @@ export class DaemonRouterLegacyIdleRetirement {
     }
   }
 
-  dispose(): void {
+  /** Retired generations still delivering exits they owe; a restart carries them to the next router. */
+  retiringAdapters(): DaemonPtyAdapter[] {
+    return this.exitDelivery.adapters()
+  }
+
+  adoptRetiring(adapter: DaemonPtyAdapter): void {
+    this.exitDelivery.adopt(adapter)
+  }
+
+  dispose(carried = false): void {
     this.disposed = true
     this.preRpc.dispose()
-    this.exitDelivery.dispose()
+    this.exitDelivery.dispose(carried)
     for (const timer of this.askTimers.values()) {
       clearTimeout(timer)
     }

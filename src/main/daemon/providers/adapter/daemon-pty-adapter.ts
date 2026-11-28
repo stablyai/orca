@@ -262,9 +262,15 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
     wslDistro: string,
     exitAt: number
   ): Promise<void> {
-    const verdict = await classifyWslBridgeExit(wslDistro, exitAt, this.readRunningWslDistros, () =>
-      this.wslBridgeBootIdentity.rebootedSinceSpawn(sessionId, wslDistro)
-    ).finally(() => this.exitsClassifying--)
+    let verdict: Awaited<ReturnType<typeof classifyWslBridgeExit>>
+    try {
+      verdict = await classifyWslBridgeExit(wslDistro, exitAt, this.readRunningWslDistros, () =>
+        this.wslBridgeBootIdentity.rebootedSinceSpawn(sessionId, wslDistro)
+      )
+    } finally {
+      // In the same turn as the emit below, so no check sees it neither classifying nor exited.
+      this.exitsClassifying--
+    }
     // Lost, or booted again since the spawn, keeps the tab; an unanswered check reads as an exit.
     // The code shows a verify run which codes a terminate yields.
     const probeMs = Math.round(performance.now() - exitAt)

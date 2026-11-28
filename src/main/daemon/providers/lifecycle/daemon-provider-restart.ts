@@ -21,6 +21,7 @@ import {
   disposeProviderSubscriptionsOnly,
   getCurrentDaemonAdapter,
   getLegacyDaemonAdapters,
+  getRetiringDaemonAdapters,
   type DaemonProvider
 } from './daemon-provider-routing'
 import { getDaemonProvider, getDaemonSpawner, replaceDaemonProvider } from './daemon-provider-state'
@@ -92,6 +93,7 @@ async function runRestartDaemon(
   const legacyAdapters = getLegacyDaemonAdapters(currentAdapter).filter(
     (legacy) => !legacy.hasRetiredForIdle()
   )
+  const retiring = getRetiringDaemonAdapters(currentAdapter)
 
   // Fan out exits before teardown: daemon shutdown does not deliver session exits to the renderer.
   const fallbackKilledCount =
@@ -164,10 +166,11 @@ async function runRestartDaemon(
 
     // Preserve legacy adapter instances and newer-protocol holds on the new router.
     newProvider =
-      legacyAdapters.length > 0 || isHoldingForNewerProtocolDaemon()
+      legacyAdapters.length > 0 || retiring.length > 0 || isHoldingForNewerProtocolDaemon()
         ? new DaemonPtyRouter({
             current: newCurrent,
-            legacy: legacyAdapters
+            legacy: legacyAdapters,
+            retiring
           })
         : newCurrent
     if (newProvider instanceof DaemonPtyRouter) {

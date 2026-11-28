@@ -91,7 +91,11 @@ export class DaemonRouterPreRpcRetirement {
       this.rechecks.delete(adapter)
       await this.check(adapter)
     }
-    if (!this.decisions.has(adapter) && this.waitingForQuiet.has(adapter)) {
+    // Deferred behind other reattaches, or behind a check already running.
+    if (
+      !this.decisions.has(adapter) &&
+      (this.waitingForQuiet.has(adapter) || this.checking.has(adapter))
+    ) {
       await this.decisionStart(adapter)
     }
     await this.decisions.get(adapter)

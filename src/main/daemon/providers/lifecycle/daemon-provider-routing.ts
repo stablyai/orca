@@ -19,6 +19,11 @@ export function getLegacyDaemonAdapters(provider: IPtyProvider): DaemonPtyAdapte
   return []
 }
 
+/** Retired older generations still delivering exits they owe. */
+export function getRetiringDaemonAdapters(provider: IPtyProvider): DaemonPtyAdapter[] {
+  return provider instanceof DaemonPtyRouter ? provider.getRetiringAdapters() : []
+}
+
 export function disposeProviderSubscriptionsOnly(provider: DaemonProvider): void {
   if (provider instanceof DaemonPtyRouter) {
     provider.disposeRouterOnly()
