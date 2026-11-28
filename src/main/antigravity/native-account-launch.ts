@@ -1,40 +1,14 @@
 import { credentialFileExists } from '../credentials/credential-file-io'
-import { resolve } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
-import { isAntigravityFileStorageHostAsync } from './native-file-credentials'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { getAntigravityAccountService, getAntigravityAccountVaultPath } from './native-account-host'
 import { AntigravityLaunchRestoreError } from './native-account-login-view'
 import { AGY_HOST_SELECTION, type AgyPreparedLogin } from './agy-account-selection'
-
-/** A launch reads agy's login from another home or credential store than the host's own. */
-export class AgyForeignCredentialAuthority extends Error {
-  constructor() {
-    super(
-      'This agy launch uses a different credential authority from the selected Antigravity account.'
-    )
-    this.name = 'AgyForeignCredentialAuthority'
-  }
-}
-
-/** Throws `AgyForeignCredentialAuthority` unless a launch with `env` reads the host's own agy login,
- *  the one saved accounts swap. */
-async function assertHostCredentialAuthority(
-  env: NodeJS.ProcessEnv,
-  envToDelete: readonly string[] = []
-): Promise<void> {
-  const home =
-    process.platform === 'win32' ? (env.USERPROFILE ?? env.HOME) : (env.HOME ?? env.USERPROFILE)
-  if (
-    envToDelete.some((key) => ['HOME', 'USERPROFILE'].includes(key)) ||
-    (home && resolve(home) !== resolve(getAppEnvironment().getPath('home'))) ||
-    (await isAntigravityFileStorageHostAsync(env)) !==
-      (await isAntigravityFileStorageHostAsync(process.env))
-  ) {
-    throw new AgyForeignCredentialAuthority()
-  }
-}
+import {
+  AgyForeignCredentialAuthority,
+  agyLaunchIsForeign,
+  assertHostCredentialAuthority
+} from './agy-launch-credential-authority'
 
 /** The selected account ('' when none) agy's login was found or put on; undefined when this launch
  *  doesn't select one, null when `quiet` left the login unread. */
@@ -73,7 +47,7 @@ export async function prepareAntigravityAccountForLaunch(args: {
   for (const key of args.envToDelete ?? []) {
     delete env[key]
   }
-  await assertHostCredentialAuthority(env, args.envToDelete)
+  await assertHostCredentialAuthority(env, { envToDelete: args.envToDelete ?? [] })
   return (await getAntigravityAccountService({ runtime: 'host' })).prepareForLaunch({
     mayPrompt: args.mayPrompt ?? true,
     quiet: args.quiet === true
@@ -115,14 +89,10 @@ export function agyLoginAfterFailure(
 }
 
 /** Windows puts no account back at launch, but reading its login there raises no dialog. */
-async function windowsLaunchLogin(
-  selected: string,
-  env: Readonly<Record<string, string>>
-): Promise<AgyPreparedLogin> {
+async function windowsLaunchLogin(selected: string): Promise<AgyPreparedLogin> {
   if (!selected) {
     return { key: selected, target: selected }
   }
-  await assertHostCredentialAuthority({ ...process.env, ...env })
   const holder = await getAntigravityAccountService({ runtime: 'host' })
     .then((service) => service.readLoginHolder())
     .catch(() => null)
@@ -140,11 +110,15 @@ async function windowsLaunchLogin(
 export async function restoreSelectedAntigravityAccount(
   env: Readonly<Record<string, string>>
 ): Promise<AgyPreparedLogin | { foreign: true }> {
+  // Decided first: whether saved accounts name this launch's login at all.
+  if (await agyLaunchIsForeign({ ...process.env, ...env })) {
+    return { foreign: true }
+  }
   const selected = await AGY_HOST_SELECTION.atLaunch()
   let login: AgyPreparedLogin | { foreign: true }
   try {
     if (process.platform === 'win32') {
-      login = await windowsLaunchLogin(selected, env)
+      login = await windowsLaunchLogin(selected)
     } else {
       const found = await prepareAntigravityAccountForLaunch({
         launchAgent: 'antigravity',

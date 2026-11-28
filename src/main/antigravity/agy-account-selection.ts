@@ -109,9 +109,12 @@ export class AgyAccountSelection {
   /** A chat's agy spawned on `key`; one whose preparation failed says so in that chat. */
   readonly spawned = (
     process: Process,
-    chat: { sessionId: string; key: string; prepared?: AgyPreparedLogin }
+    chat: { sessionId: string; key?: string; prepared?: AgyPreparedLogin }
   ): void => {
-    if (this.processes.has(process)) {
+    // One on a login no saved account names (another home or store, a key) writes none of theirs back.
+    if (chat.key === undefined) {
+      this.processes.delete(process)
+    } else if (this.processes.has(process)) {
       this.processes.set(process, chat.key)
     }
     const { prepared } = chat

@@ -1,7 +1,8 @@
 import { expect, it, vi } from 'vitest'
 import { AntigravityLaunchRestoreError } from './native-account-login-view'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
-import { AgyForeignCredentialAuthority, agyLoginAfterFailure } from './native-account-launch'
+import { agyLoginAfterFailure } from './native-account-launch'
+import { AgyForeignCredentialAuthority } from './agy-launch-credential-authority'
 
 // Two saved accounts, `a` selected, and an agy still running on `b` wrote b's login back. agy's
 // login reads here without a dialog only through `read` (Linux keyring, Windows).

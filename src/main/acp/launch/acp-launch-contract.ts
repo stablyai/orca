@@ -41,10 +41,11 @@ export type AcpLaunchAccount = {
   target(): string | null
   /** False for a launch that signs in some other way (a key, gcloud), which no saved account names. */
   usedBy?(launch: { antigravityChatAuth?: AntigravityChatAuthConfig }): boolean
-  /** A chat's process spawned on `key`; `prepared` when its preparation said so. */
+  /** A chat's process spawned on `key` (none: on a login no saved account names); `prepared` when
+   *  its preparation said so. */
   spawned?(
     process: { onExit(listener: () => void): void },
-    chat: { sessionId: string; key: string; prepared?: AcpPreparedLogin }
+    chat: { sessionId: string; key?: string; prepared?: AcpPreparedLogin }
   ): void
 }
 

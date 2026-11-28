@@ -66,13 +66,11 @@ export async function startAcpStructuredSession(
         })
         children.starts.track(attempt, connection)
         deps.spec.launchGate?.retain(connection)
-        if (accountKey !== undefined) {
-          account?.spawned?.(connection, {
-            sessionId,
-            key: accountKey,
-            ...(login ? { prepared: login } : {})
-          })
-        }
+        account?.spawned?.(connection, {
+          sessionId,
+          ...(accountKey === undefined ? {} : { key: accountKey }),
+          ...(login ? { prepared: login } : {})
+        })
       },
       onExit: (session) => {
         if (session && children.sessions.get(sessionId) === session) {
