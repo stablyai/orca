@@ -26867,6 +26867,8 @@
       "tabNewBrowserSplitRight": "New browser tab in right split",
       "eca3c9fdd7": "Select tab 1–9",
       "53ae577e44": "Go forward in browser",
+      "editorNavigateBack": "Go Back in Editor",
+      "editorNavigateForward": "Go Forward in Editor",
       "324e886c0f": "Go to previous change",
       "196b416429": "Toggle sidebar",
       "82c1bf448c": "Toggle agent dashboard",

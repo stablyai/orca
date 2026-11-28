@@ -11,6 +11,7 @@ import {
 import { createMarkdownDocLinkDecorationController } from '../markdown-source-tools/monaco/monaco-markdown-doc-link-decorations'
 import { ensureMarkdownDocCompletionProvider } from '../markdown-source-tools/monaco/monaco-markdown-doc-completions'
 import { clampMonacoAutoHeight } from './monaco-auto-height'
+import { installMonacoLocationHistory } from './monaco-location-history'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { matchesPendingEditorFocusRequest } from '../commands/pending-editor-focus-request'
 import { installMonacoEditorInputBindings } from './monaco-editor-input-bindings'
@@ -193,6 +194,16 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         scrollThrottleTimerRef,
         setEditorCursorLine: passiveMirror ? ignoreCursorLine : setEditorCursorLine
       })
+
+      if (!passiveMirror && !autoHeight && worktreeId && viewStateId) {
+        installMonacoLocationHistory(
+          editorInstance,
+          monaco.editor.CursorChangeReason.Explicit,
+          worktreeId,
+          viewStateId,
+          () => fileIdRef.current
+        )
+      }
 
       const gutterMouseDownSub = editorInstance.onMouseDown((e) => {
         if (
