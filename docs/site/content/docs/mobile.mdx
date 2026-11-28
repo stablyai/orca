@@ -44,6 +44,8 @@ The mobile app is intentionally not a full editor — it's a remote control for 
 
 Closing the desktop app drops a direct/LAN session until you reopen it. Relay-backed pairing follows the desktop Relay connection — reopen desktop if the host goes offline.
 
+To reach your desktop over the internet using a server you control, see [Self-host a mobile relay](/docs/mobile-public-relay).
+
 Current desktop UI pairing offers expire after 10 minutes for mobile and one hour for runtime clients. A paired device's authorization persists beyond the offer's expiry until revoked. Headless offers and older versions can have different lifetimes; do not assume every code is single-use or expires automatically. Regenerate an unused code if it may have been exposed.
 
 ### Access and trust
@@ -99,7 +101,7 @@ From the mobile home screen, open **Create Workspace** / **New Workspace** and c
 On the hosts list, tap the host card's **⋯** button (or long-press the card) and choose **Edit host**.
 
 - **Name** — display name on this phone only.
-- **Address** — IP, `host:port`, or `ws://` / `wss://`. Missing port keeps the current port (or defaults to `6768`). Address edits only change where this phone connects; they do **not** re-pair. Use this when the same desktop is reachable at a different path (for example home LAN vs Tailscale).
+- **Address** — IP, `host:port`, or a `ws://` or `wss://` URL. An explicit `wss://` URL defaults to port `443`. A bare hostname keeps the current scheme and port when available. Use this when the same desktop is reachable at a different path, such as home LAN, Tailscale, or a self-hosted relay.
 
 Saving an address change reconnects to the new endpoint. Pairing token stays the same.
 
