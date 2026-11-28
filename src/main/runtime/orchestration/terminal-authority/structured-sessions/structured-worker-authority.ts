@@ -34,6 +34,7 @@ import {
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
 } from './structured-worker-identity'
+import { sessionIdFromStructuredWorkerIncarnation } from './structured-worker-incarnation'
 
 /** A worker this runtime holds, with the session running it now (a `/clear` may have moved it). */
 export type StructuredWorkerAuthority = {
@@ -261,6 +262,27 @@ export function observeStructuredWorker(
   return 'running' in located
     ? observeStructuredSession(located.running.sessionId)
     : { status: 'unverifiable', reason: located.reason }
+}
+
+/** The store forgets a session only at rest and after its /clear successor, so a root gone from a
+ *  loaded, writable store proves its lineage ended. A read-only or absent store proves nothing. */
+export function structuredWorkerSessionForgotten(processIncarnation: string | null): boolean {
+  const sessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
+  try {
+    const host = getStructuredAgentSessionHost()
+    const store = host?.deps.store
+    return (
+      !!sessionId &&
+      !!host &&
+      !!store &&
+      !store.readOnly &&
+      store.getRecord(sessionId) === null &&
+      !store.isSessionUnreadable(sessionId) &&
+      !host.hasSession(sessionId)
+    )
+  } catch {
+    return false
+  }
 }
 
 /** One session's own liveness, for callers that act on that session rather than on a worker. */

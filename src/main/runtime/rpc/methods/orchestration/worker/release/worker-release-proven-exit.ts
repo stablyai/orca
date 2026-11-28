@@ -7,11 +7,20 @@ import {
 import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import {
   deriveWorkerOutputReferenceFromSavedState,
-  releaseCommitFieldsForCapturedArchive
+  releaseCommitFieldsForCapturedArchive,
+  type WorkerOutputArchiveCapture
 } from '../../../../../orchestration/workers/archives/worker-output-archive'
+import { structuredWorkerSessionForgotten } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 import { receiptForUnchangedRelease } from './worker-terminal-resource-presentation'
+
+// Its journal went with the session, so there is no history left to point a reader at.
+const FORGOTTEN_SESSION_OUTPUT: WorkerOutputArchiveCapture = {
+  kind: 'terminal_tail',
+  status: 'unavailable',
+  content: { version: 3, fallbackReason: 'transcript_missing' }
+}
 
 /** Exit-led release: the exact process is proven gone, so settle whatever the request state, keeping its output findable. */
 export async function settleProvenExitedWorkerTerminal(args: {
@@ -22,10 +31,13 @@ export async function settleProvenExitedWorkerTerminal(args: {
 }): Promise<WorkerTerminalResourceRow | null> {
   const { runtime, db, dispatchId, resource } = args
   const processIncarnation = resource.process_incarnation
+  // A former owner's lookup describes custody; it never authorizes releasing the current owner's row.
+  if (resource.owner_dispatch_id !== dispatchId || !processIncarnation) {
+    return null
+  }
+  const forgotten = structuredWorkerSessionForgotten(processIncarnation)
   if (
-    // A former owner's lookup describes custody; it never authorizes releasing the current owner's row.
-    resource.owner_dispatch_id !== dispatchId ||
-    !processIncarnation ||
+    !forgotten &&
     (await runtime.inspectTerminalProcessIncarnationLiveness(
       processIncarnation,
       resource.host_scope
@@ -42,7 +54,9 @@ export async function settleProvenExitedWorkerTerminal(args: {
     // The saved session may have moved during the proof; read it from the row being settled.
     output: (current) =>
       releaseCommitFieldsForCapturedArchive(
-        deriveWorkerOutputReferenceFromSavedState({ resource: current, structuredWorker })
+        forgotten
+          ? FORGOTTEN_SESSION_OUTPUT
+          : deriveWorkerOutputReferenceFromSavedState({ resource: current, structuredWorker })
       )
   })
   if (settled.disposition !== 'released') {
