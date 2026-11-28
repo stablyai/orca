@@ -10,10 +10,7 @@ import { getLogicalRepoOrderRankById } from '../sections/project-section-order'
 import type { ProjectSectionModel } from '../sections/project-section-grouping'
 import type { Repo } from '../../repository/repo-types'
 import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
-import {
-  filterFolderWorkspacesFromOtherDevices,
-  isWorkspaceOwnedBySomeoneElse
-} from '../../workspace-view/workspace-creator-visibility'
+import { isWorkspaceOwnedBySomeoneElse } from '../../workspace-view/workspace-creator-visibility'
 import type { WorkspaceRowFilters } from '../../workspace-view/workspace-row-filters'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { hiddenProjectRowFacts, indexHiddenProjects } from '../../project/catalog/hidden-projects'
@@ -30,8 +27,8 @@ import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
 import type { WorktreeLineage } from '../../worktree/lineage-types'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import { getEmptyProjectPlaceholderRepoIds } from '../catalog/empty-project-placeholder-repos'
+import { filterFolderWorkspacesForSidebar } from '../folders/folder-workspace-project-visibility'
 import {
-  filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
@@ -180,18 +177,15 @@ export function planSidebarFeedRows(
     view.workspaceHostScope
   )
   const visibleRepos = filterReposForVisibleHosts(repos, visibleHostIdSet, defaultHostId)
-  const hostVisibleFolderWorkspaces = filterFolderWorkspacesForVisibleHosts(
+  const visibleFolderWorkspaces = filterFolderWorkspacesForSidebar(
     withoutBotListedFolderWorkspaces(folderWorkspaces, extras.botListedWorktreeIdentities),
     projectGroups,
     visibleHostIdSet,
-    defaultHostId
+    defaultHostId,
+    pairedDeviceIdsByEnvironment,
+    repos,
+    view.filters
   )
-  const visibleFolderWorkspaces = view.filters.hideWorkspacesFromOtherDevices
-    ? filterFolderWorkspacesFromOtherDevices(
-        hostVisibleFolderWorkspaces,
-        pairedDeviceIdsByEnvironment
-      )
-    : hostVisibleFolderWorkspaces
   const visibleProjectGroups = filterProjectGroupsForVisibleHosts(
     projectGroups,
     visibleHostIdSet,

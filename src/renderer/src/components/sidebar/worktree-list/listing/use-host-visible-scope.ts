@@ -7,13 +7,13 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import type { SidebarWorktreeFilters } from './use-filters'
-import { filterFolderWorkspacesFromOtherDevices } from '../../../../../../shared/workspace-view/workspace-creator-visibility'
+import type { filterFolderWorkspacesFromOtherDevices } from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import { withoutBotListedFolderWorkspaces } from '../../../../../../shared/sidebar-list/selection/visible-worktrees'
 import {
-  filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
+import { filterFolderWorkspacesForSidebar } from '../../../../../../shared/sidebar-list/folders/folder-workspace-project-visibility'
 
 // Apply host/device scope consistently to repos, project groups and folder workspaces.
 export function useSidebarHostVisibleScope(args: {
@@ -27,8 +27,7 @@ export function useSidebarHostVisibleScope(args: {
   botListedWorktreeIdentities?: ReadonlySet<string>
 }) {
   const { filterState, defaultHostId, repos, projectGroups, folderWorkspaces } = args
-  const { visibleWorkspaceHostIds, workspaceHostScope, hideWorkspacesFromOtherDevices } =
-    filterState
+  const { visibleWorkspaceHostIds, workspaceHostScope } = filterState
   const visibleHostIdSet = useMemo(
     () => getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
     [visibleWorkspaceHostIds, workspaceHostScope]
@@ -47,29 +46,28 @@ export function useSidebarHostVisibleScope(args: {
     () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
     [defaultHostId, projectGroups, visibleHostIdSet]
   )
-  const visibleFolderWorkspacesForRows = useMemo(() => {
-    const hostVisibleWorkspaces = filterFolderWorkspacesForVisibleHosts(
-      withoutBotListedFolderWorkspaces(folderWorkspaces, args.botListedWorktreeIdentities),
+  const visibleFolderWorkspacesForRows = useMemo(
+    () =>
+      filterFolderWorkspacesForSidebar(
+        withoutBotListedFolderWorkspaces(folderWorkspaces, args.botListedWorktreeIdentities),
+        projectGroups,
+        visibleHostIdSet,
+        defaultHostId,
+        args.pairedDeviceIdsByEnvironment,
+        repos,
+        filterState
+      ),
+    [
+      args.botListedWorktreeIdentities,
+      args.pairedDeviceIdsByEnvironment,
+      defaultHostId,
+      folderWorkspaces,
+      filterState,
       projectGroups,
-      visibleHostIdSet,
-      defaultHostId
-    )
-    if (!hideWorkspacesFromOtherDevices) {
-      return hostVisibleWorkspaces
-    }
-    return filterFolderWorkspacesFromOtherDevices(
-      hostVisibleWorkspaces,
-      args.pairedDeviceIdsByEnvironment
-    )
-  }, [
-    args.botListedWorktreeIdentities,
-    args.pairedDeviceIdsByEnvironment,
-    defaultHostId,
-    folderWorkspaces,
-    hideWorkspacesFromOtherDevices,
-    projectGroups,
-    visibleHostIdSet
-  ])
+      repos,
+      visibleHostIdSet
+    ]
+  )
 
   return { visibleReposForRows, visibleProjectGroupsForRows, visibleFolderWorkspacesForRows }
 }
