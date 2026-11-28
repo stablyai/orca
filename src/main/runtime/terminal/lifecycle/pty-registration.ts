@@ -22,6 +22,7 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../share
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { mainTerminalRegistered } from '../surface/main-terminal-surfaces'
 import { assertPaneBoundAtRegistration, isRuntimeHostedWorkspace } from './bind-first-registration'
+import { bindAgyTerminalAuthority } from '../../../antigravity/agy-terminal-authority'
 
 export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLaunchNote {
   protected abstract ensurePtyBackedMobileSurfaceForRendererTab(
@@ -131,6 +132,9 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
         : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
+    if (paneKey) {
+      bindAgyTerminalAuthority(paneKey, ptyId)
+    }
     // Bind-first applies to main-owned layouts; paired-server workspaces and storeless test runtimes have no local binding to assert (L80).
     if (
       ORCA_LAYOUT_OWNER_IS_MAIN &&

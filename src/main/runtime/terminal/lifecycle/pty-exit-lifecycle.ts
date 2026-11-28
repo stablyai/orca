@@ -18,6 +18,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { forgetAgyTerminalAuthority } from '../../../antigravity/agy-terminal-authority'
 
 export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerModelWait {
   protected abstract pruneDisconnectedPtyRecords(): void
@@ -77,6 +78,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
       pty?.connectionId != null &&
       exitCode < 0 &&
       options.hostExitConfirmed !== true
+    forgetAgyTerminalAuthority(ptyId)
     // Why: collect before retirePtyAgentLaunchAuthority, which deletes the restored-authority
     // receipt a receipt-only pane's key comes from.
     const exitPaneKeys = this.collectAgentStatusPaneKeysForPty(ptyId)
