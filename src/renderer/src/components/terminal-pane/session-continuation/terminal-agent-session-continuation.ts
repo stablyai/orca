@@ -1,0 +1,94 @@
+import { toast } from 'sonner'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import {
+  buildAgentSessionContinuationPrompt,
+  resolveAgentSessionContinuationTranscriptPath,
+  type AgentSessionContinuationRequest
+} from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import { readTerminalContextText } from '@/lib/agent-session/context/terminal-context-text'
+import { useAppStore } from '@/store/index'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { translate } from '@/i18n/i18n'
+
+type PrepareAgentSessionContinuationFromPaneArgs = {
+  pane: ManagedPane
+  tabId: string
+  worktreeId: string
+  groupId: string | null
+  workspacePath: string
+  initialCwd: string
+}
+
+export function canContinueAgentSessionInNewSession(
+  sourceAgent: string | null | undefined
+): boolean {
+  return isTuiAgent(sourceAgent)
+}
+
+function resolveSourceAgent(args: {
+  tabId: string
+  worktreeId: string
+  pane: ManagedPane
+}): TuiAgent | null {
+  const state = useAppStore.getState()
+  const paneAgent = state.agentStatusByPaneKey.get(
+    makePaneKey(args.tabId, args.pane.leafId)
+  )?.agentType
+  if (isTuiAgent(paneAgent)) {
+    return paneAgent
+  }
+  const tabAgent = state.tabsByWorktree[args.worktreeId]?.find(
+    (tab) => tab.id === args.tabId
+  )?.launchAgent
+  return isTuiAgent(tabAgent) ? tabAgent : null
+}
+
+export function prepareAgentSessionContinuationFromPane({
+  pane,
+  tabId,
+  worktreeId,
+  groupId,
+  workspacePath,
+  initialCwd
+}: PrepareAgentSessionContinuationFromPaneArgs): AgentSessionContinuationRequest | null {
+  const state = useAppStore.getState()
+  const paneKey = makePaneKey(tabId, pane.leafId)
+  const status = state.agentStatusByPaneKey.get(paneKey)
+  const sourceAgent = resolveSourceAgent({ pane, tabId, worktreeId })
+  const transcriptPath = resolveAgentSessionContinuationTranscriptPath({
+    sourceAgent,
+    transcriptPath: status?.providerSession?.transcriptPath
+  })
+  const capturedText = transcriptPath ? '' : readTerminalContextText(pane.terminal)
+  const source = {
+    // Why: prefer the same-host transcript so opening the dialog does not read large scrollback.
+    capturedText,
+    sourceAgent,
+    sourceLabel: paneKey,
+    sourceWorkingDirectory: initialCwd || workspacePath,
+    transcriptPath,
+    lastPrompt: status?.prompt,
+    lastAssistantMessage: status?.lastAssistantMessage
+  }
+  if (!buildAgentSessionContinuationPrompt(source, 'focused')) {
+    toast.error(
+      translate(
+        'components.agentSessionContinuation.noContext',
+        'No session context is available to continue in a new session.'
+      )
+    )
+    pane.terminal.focus()
+    return null
+  }
+
+  return {
+    source,
+    worktreeId,
+    groupId,
+    workspacePath,
+    initialCwd: initialCwd || workspacePath,
+    launchSource: 'terminal_context_menu'
+  }
+}

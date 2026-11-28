@@ -1,4 +1,4 @@
-import type { ZcodeSetupInvocation } from '../../../../preload/api/preflight-api'
+import type { ZcodeSetupInvocation } from '../../../../preload/api/preflight/preflight-api'
 import {
   buildShellCommandFromArgv,
   commandSeparator,
@@ -6,7 +6,7 @@ import {
   resolveStartupShell,
   type AgentStartupShell
 } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
+import { resolveWindowsShellStartupFamily } from '../../../../shared/shell/launch/windows-terminal-shell'
 
 function shellFamily(effectiveShell: string | undefined): AgentStartupShell {
   return effectiveShell

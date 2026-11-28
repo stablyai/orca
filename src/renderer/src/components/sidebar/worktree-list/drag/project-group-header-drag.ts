@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
+import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import {
   computeProjectGroupHeaderDropPreview,
@@ -17,6 +22,8 @@ import { createProjectGroupHeaderDragSession } from './project-group-header-drag
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
+import { shiftHeaderDrop } from './project-group-header-drag-preview'
+import { useHeaderDragBodyCursor } from './header-drag-body-cursor'
 
 // Virtualized rows can unmount during drag; pointer events and cached model indices keep drops stable.
 
@@ -24,7 +31,10 @@ export function useProjectGroupHeaderDrag({
   sidebarProjectGroupHeaderIdsByBucket,
   projectGroupById,
   onCommitProjectGroupTabOrder,
-  getScrollContainer
+  rootProjectHeaderKeys,
+  onCommitRootProjectOrder,
+  getScrollContainer,
+  floatingPreview = false
 }: UseProjectGroupHeaderDragArgs): ProjectGroupHeaderDragController {
   const [state, setState] = useState<ProjectGroupDragState>(INITIAL_PROJECT_GROUP_DRAG_STATE)
   const [sessionArmed, setSessionArmed] = useState(false)
@@ -36,6 +46,10 @@ export function useProjectGroupHeaderDrag({
   projectGroupByIdRef.current = projectGroupById
   const onCommitProjectGroupTabOrderRef = useRef(onCommitProjectGroupTabOrder)
   onCommitProjectGroupTabOrderRef.current = onCommitProjectGroupTabOrder
+  const rootDragRef = useRef({ rootProjectHeaderKeys, onCommitRootProjectOrder })
+  useLayoutEffect(() => {
+    rootDragRef.current = { rootProjectHeaderKeys, onCommitRootProjectOrder }
+  }, [rootProjectHeaderKeys, onCommitRootProjectOrder])
   const getContainerRef = useRef(getScrollContainer)
   getContainerRef.current = getScrollContainer
   const autoscrollLastFrameTimeRef = useRef<number | null>(null)
@@ -50,7 +64,16 @@ export function useProjectGroupHeaderDrag({
     if (!container || !session) {
       return []
     }
-    const rects = measureProjectGroupHeaderDragRects(container, session.bucketKey)
+    const rects = session.rootProjectHeaderKeys
+      ? measureRootProjectHeaderDragRects(
+          container,
+          session.rootProjectHeaderKeys,
+          session.rootProjectHeaderHostId
+        ).map((rect) => ({
+          ...rect,
+          groupId: rect.key
+        }))
+      : measureProjectGroupHeaderDragRects(container, session.bucketKey)
     session.headerRects = rects
     return rects
   }, [])
@@ -78,8 +101,9 @@ export function useProjectGroupHeaderDrag({
   const applyDrop = useCallback(
     (groupId: string, drop: { dropIndex: number; dropIndicatorY: number } | null) => {
       latestDropIndexRef.current = drop?.dropIndex ?? null
+      const session = dragSessionRef.current
       const nextState: ProjectGroupDragState = drop
-        ? { draggingGroupId: groupId, ...drop }
+        ? { draggingGroupId: groupId, ...shiftHeaderDrop(floatingPreview, session, drop) }
         : { draggingGroupId: groupId, dropIndex: null, dropIndicatorY: null }
       setState((prev) =>
         prev.draggingGroupId === nextState.draggingGroupId &&
@@ -89,7 +113,7 @@ export function useProjectGroupHeaderDrag({
           : nextState
       )
     },
-    []
+    [floatingPreview]
   )
 
   const cancelAutoscroll = useCallback(() => {
@@ -131,6 +155,7 @@ export function useProjectGroupHeaderDrag({
       commitProjectGroupHeaderDragDrop({
         session,
         sidebarDropIndex,
+        onCommitRootProjectOrder: rootDragRef.current.onCommitRootProjectOrder,
         projectGroupById: projectGroupByIdRef.current,
         onCommitProjectGroupTabOrder: onCommitProjectGroupTabOrderRef.current
       })
@@ -139,7 +164,7 @@ export function useProjectGroupHeaderDrag({
   )
 
   const runAutoscrollFrame = useCallback(
-    (frameTime: number) => {
+    function runFrame(frameTime: number) {
       autoscrollFrameIdRef.current = null
       const session = dragSessionRef.current
       const container = getContainerRef.current()
@@ -150,22 +175,25 @@ export function useProjectGroupHeaderDrag({
 
       const previousFrameTime = autoscrollLastFrameTimeRef.current ?? frameTime
       autoscrollLastFrameTimeRef.current = frameTime
+      const containerRect = container.getBoundingClientRect()
       const autoscroll = getWorktreeSidebarDragAutoscroll({
-        point: { clientX: 0, clientY: session.latestPointerY },
-        containerRect: container.getBoundingClientRect(),
+        point: { clientX: containerRect.left, clientY: session.latestPointerY },
+        containerRect,
         scrollTop: container.scrollTop,
         scrollHeight: container.scrollHeight,
         clientHeight: container.clientHeight,
         elapsedMs: frameTime - previousFrameTime
       })
       if (autoscroll) {
+        supersedeVirtualizedScrollAnchorRestore(container, autoscroll.scrollTop)
         container.scrollTop = autoscroll.scrollTop
+        requestVirtualizedScrollAnchorRecord(container)
         refreshHeaderRects()
       }
 
       applyDrop(session.groupId, computeDrop(session.latestPointerY))
 
-      autoscrollFrameIdRef.current = window.requestAnimationFrame(runAutoscrollFrame)
+      autoscrollFrameIdRef.current = window.requestAnimationFrame(runFrame)
     },
     [applyDrop, cancelAutoscroll, computeDrop, refreshHeaderRects]
   )
@@ -263,26 +291,14 @@ export function useProjectGroupHeaderDrag({
     sessionArmed
   ])
 
-  useEffect(() => {
-    if (state.draggingGroupId === null) {
-      return
-    }
-    const body = document.body
-    const prevCursor = body.style.cursor
-    const prevUserSelect = body.style.userSelect
-    body.style.cursor = 'grabbing'
-    body.style.userSelect = 'none'
-    return () => {
-      body.style.cursor = prevCursor
-      body.style.userSelect = prevUserSelect
-    }
-  }, [state.draggingGroupId])
+  useHeaderDragBodyCursor(state.draggingGroupId !== null)
 
   const onHandlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLElement>, groupId: string) => {
       const session = createProjectGroupHeaderDragSession({
         event,
         groupId,
+        rootProjectHeaderKeys: rootDragRef.current.rootProjectHeaderKeys,
         projectGroupById: projectGroupByIdRef.current,
         sidebarProjectGroupHeaderIdsByBucket: sidebarProjectGroupHeaderIdsByBucketRef.current,
         getScrollContainer: getContainerRef.current

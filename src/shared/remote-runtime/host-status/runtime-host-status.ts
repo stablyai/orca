@@ -1,11 +1,14 @@
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../control/remote-runtime-shared-control-types'
-import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../runtime-session-contracts'
+import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 
 export const RUNTIME_HOST_STATUS_CHANNEL = 'runtimeEnvironments:statusChanged'
 
-/** Why a host refused this client: its pairing was revoked, or the versions cannot talk. */
-export type RuntimeHostBlockedReason = 'access-revoked' | 'incompatible'
+/** Why a host refused this client: its pairing was revoked, its host now runs another server, or the versions cannot talk. */
+export type RuntimeHostBlockedReason = 'access-revoked' | 'server-replaced' | 'incompatible'
+
+/** Status code for a managed host whose own Orca server is no longer the paired one. */
+export const RUNTIME_SERVER_REPLACED_STATUS_CODE = 'orcad_server_replaced'
 
 /** Local client state; never exchanged with the paired host. */
 export type RuntimeHostStatusSnapshot = {
@@ -92,6 +95,9 @@ export function runtimeHostStatusBlockedReason(
 ): RuntimeHostBlockedReason | null {
   if (ACCESS_REVOKED_CODES.includes(response.error.code)) {
     return 'access-revoked'
+  }
+  if (response.error.code === RUNTIME_SERVER_REPLACED_STATUS_CODE) {
+    return 'server-replaced'
   }
   return [
     'invalid_argument',

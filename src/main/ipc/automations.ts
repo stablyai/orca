@@ -1,25 +1,21 @@
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import type { AutomationService } from '../automations/service'
-import type {
-  AutomationDispatchResult,
-  AutomationPrecheckResult,
-  AutomationRun
-} from '../../shared/automations-types'
-import { createScopedExternalAutomations } from '../automations/external-manager'
+import type { AutomationService } from '../automations/automation-service'
+import { createScopedExternalAutomations } from '../automations/external-managers/scoped-external-automations'
 import {
   ExternalAutomationManagerCache,
   type ExternalAutomationManagerCacheEntry
-} from '../automations/external-automation-manager-cache'
-import { ExternalAutomationProbeScheduler } from '../automations/external-automation-probe-scheduler'
-import { ownerKey } from '../../shared/automation-owner-key'
-import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
+} from '../automations/external-managers/external-automation-manager-cache'
+import { ExternalAutomationProbeScheduler } from '../automations/external-managers/external-automation-probe-scheduler'
+import { ownerKey } from '../../shared/automations/ownership/automation-owner-key'
+import type { AutomationOwnerRef } from '../../shared/automations/ownership/automation-owner-ref'
 import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
-} from '../../shared/external-automation-scope'
+} from '../../shared/automations/external/external-automation-scope'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 
 /** Refuse uncaptured owners instead of using the active host; malformed input remains a plain Error, not an ownership conflict. */
 function requireCapturedOwner<T extends { owner?: AutomationOwnerRef | null }>(
@@ -50,7 +46,11 @@ function underOrcaPriority<T>(scheduler: ExternalAutomationProbeScheduler, run: 
   }
 }
 
-export function registerAutomationHandlers(store: Store, service: AutomationService): void {
+export function registerAutomationHandlers(
+  store: Store,
+  service: AutomationService,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   // Cache TTL and probe concurrency need registration-long state, not per-request instances.
   const probeScheduler = new ExternalAutomationProbeScheduler()
   const managerCache = new ExternalAutomationManagerCache()
@@ -63,7 +63,7 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   // Runtime RPC CRUD takes the service-installed priority lease.
   service.externalProbePriority = (run) => underOrcaPriority(probeScheduler, run)
   // Guard derives one host and manager ID from the captured owner.
-  ipcMain.handle(
+  ipc.handle(
     'automations:listExternalManagerForOwner',
     (
       _event,
@@ -71,32 +71,19 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
     ): Promise<ExternalAutomationManagerCacheEntry> =>
       scopedExternal.listManager(requireCapturedOwner(request))
   )
-  ipcMain.handle(
+  ipc.handle(
     'automations:runExternalActionForOwner',
     (_event, request: ScopedExternalManagerActionRequest): Promise<void> =>
       scopedExternal.runAction(requireCapturedOwner(request))
   )
   // Cancel scopes no longer viewed; an empty retained set cancels all.
-  ipcMain.handle(
+  ipc.handle(
     'automations:retainExternalScopes',
     (_event, request?: { owners?: readonly AutomationOwnerRef[] } | null): void => {
       probeScheduler.retainScopes((request?.owners ?? []).map(ownerKey))
     }
   )
-  ipcMain.handle(
-    'automations:runPrecheck',
-    (
-      _event,
-      args: { automationId: string; runId: string }
-    ): Promise<AutomationPrecheckResult | null> =>
-      service.runPrecheck(args.automationId, args.runId)
-  )
-  ipcMain.handle(
-    'automations:markDispatchResult',
-    (_event, result: AutomationDispatchResult): Promise<AutomationRun> =>
-      service.markDispatchResult(result)
-  )
-  ipcMain.handle(
+  ipc.handle(
     'automations:snapshotWorkspaceName',
     (_event, args: { workspaceId: string; hostId?: string; displayName: string }): number => {
       const host = parseExecutionHostId(args.hostId)
@@ -109,7 +96,4 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
         : 0
     }
   )
-  ipcMain.handle('automations:rendererReady', (): void => {
-    service.setRendererReady()
-  })
 }

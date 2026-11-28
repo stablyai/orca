@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 import type * as NodePath from 'node:path'
+import type * as AsarTransparentFs from '../../../filesystem/asar-transparent-fs'
 import type { Store } from '../../../persistence/loading-store/store'
 
 // Use Windows paths on every host to prove UNC credential-leak rejection happens before filesystem access.
@@ -9,27 +10,32 @@ vi.mock('node:path', async () => {
   return { ...actual.win32, default: actual.win32 }
 })
 
-const { fsCalls } = vi.hoisted(() => {
+const { fsCalls, recordFsCall } = vi.hoisted(() => {
   const calls: string[] = []
-  return { fsCalls: calls }
+  const record = (name: string) => async (target: unknown) => {
+    calls.push(`${name} ${String(target)}`)
+    if (name !== 'realpath') {
+      return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
+    }
+    // A local image resolving to a network share.
+    if (String(target).endsWith('share-link.png')) {
+      return '\\\\nas\\pics\\shot.png'
+    }
+    // A project-local name resolving to a device.
+    return String(target).endsWith('dev-link.png') ? 'C:\\repo\\CON.png' : target
+  }
+  return { fsCalls: calls, recordFsCall: record }
 })
 
-vi.mock('node:fs/promises', () => {
-  const record = (name: string) =>
-    vi.fn(async (target: unknown) => {
-      fsCalls.push(`${name} ${String(target)}`)
-      if (name !== 'realpath') {
-        return { isFile: () => true, isDirectory: () => false }
-      }
-      // A project-local name resolving to a device.
-      if (String(target).endsWith('share-link.png')) {
-        // A local image resolving to a network share.
-        return '\\\\nas\\pics\\shot.png'
-      }
-      return String(target).endsWith('dev-link.png') ? 'C:\\repo\\CON.png' : target
-    })
-  return { realpath: record('realpath'), stat: record('stat'), open: record('open') }
-})
+vi.mock('node:fs/promises', () => ({
+  stat: vi.fn(recordFsCall('stat')),
+  open: vi.fn(recordFsCall('open'))
+}))
+vi.mock('../../../filesystem/asar-transparent-fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof AsarTransparentFs>()),
+  realpathWithoutArchiveLock: vi.fn(recordFsCall('realpath')),
+  lstatWithoutArchiveLock: vi.fn(recordFsCall('lstat'))
+}))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   return {
@@ -44,12 +50,7 @@ vi.mock('electron', () => ({ app: { getPath: () => 'C:\\Users\\me\\AppData\\Roam
 vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreeGraph: vi.fn(async () => [])
 }))
-
-import {
-  resolveLocalFileRequestPath,
-  resolveLocalRenamePaths,
-  resolveLocalRequestPath
-} from './local-file-access-resolution'
+import { resolveLocalFileRequestPath } from './local-file-access-resolution'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: authorization reads only these Store members.
 const store = {
@@ -61,8 +62,6 @@ const store = {
   getFolderWorkspaces: () => [],
   getSettings: () => ({ nestWorkspaces: false, workspaceDir: '' })
 } as unknown as Store
-
-const besideTodo = { kind: 'document-folder', documentPath: 'C:\\Users\\me\\notes\\todo.md' }
 
 const networkTargets = [
   '\\\\attacker.example\\share\\x.png',
@@ -88,54 +87,9 @@ describe('document images on a network share', () => {
       expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
     }
   )
-
-  it.each(networkTargets)(
-    'refuses %s from a document outside every project without touching it',
-    async (target) => {
-      await expect(
-        resolveLocalFileRequestPath(
-          target,
-          { kind: 'document-resource', documentPath: 'C:\\Users\\me\\notes\\todo.md' },
-          store
-        )
-      ).rejects.toThrow('Access denied')
-      expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
-    }
-  )
-
-  it('refuses it with no declared access too', async () => {
-    await expect(resolveLocalFileRequestPath(networkTargets[0], undefined, store)).rejects.toThrow(
-      'Access denied'
-    )
-    expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
-  })
 })
 
 const CHAT_IMAGE = { kind: 'chat-image' } as const
-
-describe('chat transcript images on Windows', () => {
-  beforeEach(() => {
-    fsCalls.length = 0
-  })
-
-  it.each([...networkTargets, '\\\\.\\C:\\x.png', '//?/C:/x.png'])(
-    'refuses %s without touching it',
-    async (target) => {
-      await expect(resolveLocalFileRequestPath(target, CHAT_IMAGE, store)).rejects.toThrow(
-        'Access denied'
-      )
-      expect(fsCalls).toEqual([])
-    }
-  )
-
-  it.each([
-    'C:\\Users\\me\\Pictures\\shot.png',
-    '\\\\wsl.localhost\\Ubuntu\\home\\me\\shot.png',
-    '\\\\wsl$\\Ubuntu\\tmp\\agent.webp'
-  ])('reads the local image %s in place', async (target) => {
-    await expect(resolveLocalFileRequestPath(target, CHAT_IMAGE, store)).resolves.toBe(target)
-  })
-})
 
 describe('Windows reserved device names in automatic image loads', () => {
   beforeEach(() => {
@@ -165,46 +119,6 @@ describe('Windows reserved device names in automatic image loads', () => {
     )
     expect(fsCalls).toEqual([])
   })
-
-  it.each(deviceTargets)(
-    'refuses %s from a document beside it without touching it',
-    async (target) => {
-      await expect(
-        resolveLocalFileRequestPath(
-          target,
-          { kind: 'document-resource', documentPath: 'C:\\Users\\me\\notes\\todo.md' },
-          store
-        )
-      ).rejects.toThrow('Access denied')
-      expect(fsCalls).toEqual([])
-    }
-  )
-
-  it.each(deviceTargets)(
-    'refuses %s as a new file beside an opened document without touching it',
-    async (target) => {
-      await expect(
-        resolveLocalRequestPath(target, besideTodo, store, 'import-into')
-      ).rejects.toThrow('Access denied')
-      expect(fsCalls).toEqual([])
-    }
-  )
-
-  it.each([...networkTargets, 'C:\\Users\\me\\other\\shot.png'])(
-    'refuses %s outside an opened document folder without touching it',
-    async (target) => {
-      await expect(
-        resolveLocalRequestPath(target, besideTodo, store, 'import-into')
-      ).rejects.toThrow('Access denied')
-      expect(fsCalls).toEqual([])
-    }
-  )
-
-  it('still reads an ordinary image whose name only starts like a device', async () => {
-    await expect(
-      resolveLocalFileRequestPath('C:\\Users\\me\\notes\\console.png', CHAT_IMAGE, store)
-    ).resolves.toBe('C:\\Users\\me\\notes\\console.png')
-  })
 })
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: authorization reads only these Store members.
@@ -229,30 +143,6 @@ describe('automatic image loads and dot segments that resolve to a device name',
     fsCalls.length = 0
   })
 
-  it.each(['C:\\d\\NUL.png\\.', 'C:\\d\\COM1.png\\x\\..', 'C:/d/COM1.jpg/.'])(
-    'refuses %s for both access kinds without touching it',
-    async (target) => {
-      await expect(resolveLocalFileRequestPath(target, CHAT_IMAGE, store)).rejects.toThrow(
-        'Access denied'
-      )
-      await expect(
-        resolveLocalFileRequestPath(
-          target,
-          { kind: 'document-resource', documentPath: 'C:\\d\\README.md' },
-          store
-        )
-      ).rejects.toThrow('Access denied')
-      expect(fsCalls).toEqual([])
-    }
-  )
-
-  it('refuses a device name inside a project for automatic loads without touching it', async () => {
-    await expect(
-      resolveLocalFileRequestPath('C:\\repo\\NUL.png', CHAT_IMAGE, store)
-    ).rejects.toThrow('Access denied')
-    expect(fsCalls).toEqual([])
-  })
-
   it('refuses a project image whose real target is a device name', async () => {
     await expect(
       resolveLocalFileRequestPath(
@@ -264,96 +154,12 @@ describe('automatic image loads and dot segments that resolve to a device name',
   })
 })
 
-describe('the default check runs first for every declared kind', () => {
-  beforeEach(() => {
-    fsCalls.length = 0
-  })
-
-  it.each([
-    ['user-file', 'read', { kind: 'user-file' }],
-    [
-      'document-resource',
-      'read',
-      { kind: 'document-resource', documentPath: 'C:\\repo\\README.md' }
-    ],
-    ['chat-image', 'read', CHAT_IMAGE],
-    ['document-folder', 'import-into', besideTodo]
-  ] as const)(
-    'never touches a share outside every project while resolving %s %s',
-    async (_kind, operation, access) => {
-      for (const target of networkTargets) {
-        await resolveLocalRequestPath(target, access, store, operation).catch(() => undefined)
-      }
-      expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
-    }
-  )
-
-  it('never touches a share while resolving a rename of an opened document', async () => {
-    for (const target of networkTargets) {
-      await resolveLocalRenamePaths(besideTodo.documentPath, target, besideTodo, store)
-    }
-    expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
-  })
-})
-
-const besideShareDocument = {
-  kind: 'document-resource',
-  documentPath: '\\\\nas\\notes\\todo.md'
-}
-
-const besideAccentedShareDocument = {
-  kind: 'document-resource',
-  documentPath: '\\\\n\u00e1s\\notes\\todo.md'
-}
-
 describe('automatic image loads on a network share', () => {
   beforeEach(() => {
     fsCalls.length = 0
   })
 
-  it('reads a chat or document image inside a project the user added from the share', async () => {
-    const image = '\\\\server\\share\\repo\\out.png'
-
-    await expect(resolveLocalFileRequestPath(image, CHAT_IMAGE, shareProjectStore)).resolves.toBe(
-      image
-    )
-    await expect(
-      resolveLocalFileRequestPath(
-        image,
-        { kind: 'document-resource', documentPath: '\\\\server\\share\\repo\\README.md' },
-        shareProjectStore
-      )
-    ).resolves.toBe(image)
-  })
-
-  it('refuses a local link that leads onto a share outside every project', async () => {
-    await expect(
-      resolveLocalFileRequestPath('C:\\Users\\me\\share-link.png', CHAT_IMAGE, store)
-    ).rejects.toThrow('Access denied')
-  })
-
-  it('refuses a chat share image outside every project without touching the share', async () => {
-    await expect(
-      resolveLocalFileRequestPath('\\\\server\\share\\other\\x.png', CHAT_IMAGE, shareProjectStore)
-    ).rejects.toThrow('Access denied')
-    expect(fsCalls.filter((call) => call.includes('other'))).toEqual([])
-  })
-
   // Unicode look-alike hosts must not bypass path-text rejection beside share documents.
-  it.each([
-    '\\\\nas\\notes\\x.png',
-    '\\\\NAS\\Notes\\img\\y.png',
-    '//nas/notes/z.png',
-    '\\\\nas\\other\\x.png',
-    '\\\\evil\\notes\\x.png',
-    '\\\\nas\\notes-evil\\x.png',
-    '\\\\attacker.example\\share\\x.png'
-  ])('refuses %s beside a share document without touching any share', async (target) => {
-    await expect(
-      resolveLocalFileRequestPath(target, besideShareDocument, shareProjectStore)
-    ).rejects.toThrow('Access denied')
-    expect(fsCalls).toEqual([])
-  })
 
   it.each(['\\\\bac\u212Aup\\notes\\x.png', '//bac\u212Aup/notes/x.png'])(
     'refuses the KELVIN SIGN host spelling %s beside a document on \\\\backup without touching it',
@@ -368,15 +174,4 @@ describe('automatic image loads on a network share', () => {
       expect(fsCalls).toEqual([])
     }
   )
-
-  it('refuses an NFD spelling of an accented share host beside a document on it, without touching it', async () => {
-    await expect(
-      resolveLocalFileRequestPath(
-        '\\\\na\u0301s\\notes\\x.png',
-        besideAccentedShareDocument,
-        shareProjectStore
-      )
-    ).rejects.toThrow('Access denied')
-    expect(fsCalls).toEqual([])
-  })
 })

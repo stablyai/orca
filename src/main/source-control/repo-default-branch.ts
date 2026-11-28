@@ -4,8 +4,8 @@ import {
   type GitExec
 } from '../../shared/git/refs/git-default-base-ref'
 
-import { gitExecFileAsync } from '../git/runner'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
+import { getRepoExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostedReviewRepoScope, scopeGeneration } from './hosted-review-scope-generations'
 import type { HostedReviewLocalGitOptions } from './hosted-review-git-options'
 
@@ -180,9 +180,4 @@ export async function shouldHideNonOpenReviewOnDefaultBranch(input: {
     input.localGitOptions
   )
   return defaultBranchName !== null && input.branchName === defaultBranchName
-}
-
-export function __resetRepoDefaultBranchCacheForTests(): void {
-  repoDefaultBranchCache.clear()
-  repoDefaultBranchInFlight.clear()
 }

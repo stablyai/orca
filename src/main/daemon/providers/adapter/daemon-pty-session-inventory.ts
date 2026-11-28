@@ -1,21 +1,25 @@
+import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { basename } from 'node:path'
 import { existsSync } from 'node:fs'
 import {
   isAgentSessionOwnerBinding,
   type AgentSessionOwnerBinding
-} from '../../../../shared/agent-session/agent-session-host-authority'
-import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../../../shared/claimed-agent-pty-owner'
-import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-pty-owner-snapshot'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
+import { cloneAgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner-snapshot'
 import { recordAuthenticatedInventory } from '../../observability/daemon-audit-classifier'
 import { isMissingWindowsNamedPipeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
 import { remainingDaemonRequestTimeoutMs } from '../../launch/daemon-request-deadline'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
+import {
+  countLiveDaemonSessions,
+  type ListSessionsResult
+} from '../../protocol/daemon-rpc-contract'
 import type { SessionInfo } from '../../protocol/daemon-session-info'
-import { PtyProcessListAdmission } from '../../../providers/pty-process-list-admission'
-import type { PtyProcessInfo } from '../../../providers/pty-provider-contract'
+import { PtyProcessListAdmission } from '../../../providers/pty/process-list-admission'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
   async listProcesses(opts?: {
@@ -56,7 +60,8 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
                 ...(session.pid ? { rootProcessId: session.pid } : {}),
                 // Spawn cwd remains authoritative until the daemon reports live cwd.
                 cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
-                title: 'shell',
+                // The listing carries no title; attach seeds the live one from the daemon snapshot.
+                title: '',
                 ...(session.foregroundProcess
                   ? { foregroundProcess: session.foregroundProcess }
                   : {}),
@@ -119,14 +124,23 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
 
   // Manage Sessions needs details omitted from the generic listProcesses contract.
   async listSessions(): Promise<SessionInfo[]> {
+    return (await this.listSessionsAndRelays()).sessions
+  }
+
+  /** Live sessions plus the chat relays a restart would also end (zero on daemons before them). */
+  async listSessionsAndRelays(): Promise<{ sessions: SessionInfo[]; liveRelays: number }> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions
+    const sessions = result.sessions
       .filter((s) => s.isAlive)
       .map((session) => ({
         ...session,
         ...this.validatedAgentSessionOwners(session.agentSessionOwners)
       }))
+    return {
+      sessions,
+      liveRelays: countLiveDaemonSessions({ sessions: [], liveRelays: result.liveRelays })
+    }
   }
 
   getActiveSessionIds(): string[] {
@@ -134,7 +148,10 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   }
 
   // Daemon shutdown suppresses exit fanout; notify panes before teardown so they stop writing to dead PTYs.
-  fanoutSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
+  fanoutSyntheticExits(
+    code: number,
+    exit: { replacedByRestart?: true; cause?: TerminalExitCause } = {}
+  ): void {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
     this.ptyInventory.reset()

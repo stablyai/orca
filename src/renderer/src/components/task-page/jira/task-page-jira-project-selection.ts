@@ -12,9 +12,10 @@ const JIRA_PROJECT_LABEL_OPTIONS: Intl.CollatorOptions = {
 
 // Why: resolve the UI-language collator once per sort, not on every comparison.
 export function jiraProjectDisplayLabelComparator(
-  includeSiteName: boolean
+  includeSiteName: boolean,
+  intlLocale?: string
 ): (a: JiraProject, b: JiraProject) => number {
-  const collator = uiCollator(JIRA_PROJECT_LABEL_OPTIONS)
+  const collator = uiCollator(JIRA_PROJECT_LABEL_OPTIONS, intlLocale)
   return (a, b) => {
     const siteComparison = includeSiteName
       ? collator.compare(a.siteName ?? '', b.siteName ?? '')

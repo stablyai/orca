@@ -1,32 +1,32 @@
 import { useCallback, useRef, useState } from 'react'
-import { Text } from 'react-native'
+import { View } from 'react-native'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
-import { MobileStateView } from '../components/MobileStateView'
-import { voiceSettingsStyles as styles } from './voice-settings-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { MobileStateView } from '../components/feedback/MobileStateView'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
+import { PickerModal } from '../components/sheets/PickerModal'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { ListRow } from '../components/list/ListGroup'
-import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
-import { VoiceModelList } from '../components/VoiceModelList'
+import { VoiceModelList } from '../dictation/setup/VoiceModelList'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
 import {
   isModelInFlight,
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
-import { MobileSwitch } from '../components/MobileSwitch'
+import { MobileSwitch } from '../components/controls/MobileSwitch'
+import {
+  dictationShortcutMode,
+  dictationShortcutModeSettings
+} from '../../../src/shared/speech/dictation/dictation-shortcut-mode'
 import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
+import { VoiceTranscribeOnSection } from './voice-transcribe-on-section'
+import { dictationModes, isDictationShortcutMode } from './voice-dictation-modes'
 
 const POLL_INTERVAL_MS = 1500
-
-function dictationModes(t: Translate) {
-  return [
-    { value: 'toggle', label: t('settings.voiceSettingsScreen.toggleMode', 'Toggle') },
-    { value: 'hold', label: t('settings.voiceSettingsScreen.holdMode', 'Hold') }
-  ] as const
-}
 
 type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
 type VoiceSettingsError =
@@ -60,17 +60,20 @@ function voiceSettingsErrorMessage(t: Translate, error: VoiceSettingsError | nul
 
 export default function VoiceSettingsScreen({
   operations,
+  hostName,
   connecting = false,
   focused,
   onBack
 }: {
   operations: VoiceSettingsOperations | null
+  /** The computer whose dictation this edits; shown so it's never changed silently. */
+  hostName?: string
   /** A paired desktop is still dialing, so the screen is loading rather than unpaired. */
   connecting?: boolean
   focused: boolean
   onBack: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(true)
@@ -82,6 +85,7 @@ export default function VoiceSettingsScreen({
   const pendingChanges = useRef(0)
   const rereadWhenSettled = useRef(false)
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
+  const [modePickerOpen, setModePickerOpen] = useState(false)
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
     if (!operations) {
       return false
@@ -153,13 +157,16 @@ export default function VoiceSettingsScreen({
         return
       }
       setError(null)
-      const { enabled, dictationMode } = params
+      const { enabled, dictationMode, dictationHoldToRecord } = params
       setSetup((prev) =>
         prev
           ? {
               ...prev,
               ...(enabled === undefined ? {} : { enabled }),
-              ...(dictationMode === undefined ? {} : { dictationMode })
+              ...(dictationMode === undefined ? {} : { dictationMode }),
+              ...(dictationHoldToRecord === undefined || prev.dictationHoldToRecord === undefined
+                ? {}
+                : { dictationHoldToRecord })
             }
           : prev
       )
@@ -242,6 +249,7 @@ export default function VoiceSettingsScreen({
   )
 
   const enabled = setup?.enabled ?? false
+  const offersAuto = setup?.dictationHoldToRecord !== undefined
   const selectedModel = setup?.models.find((m) => m.id === setup.selectedModelId)
   const selectedModelLabel =
     selectedModel?.label ?? t('settings.voiceSettingsScreen.noneSelected', 'None selected')
@@ -251,27 +259,56 @@ export default function VoiceSettingsScreen({
   const showLoading = operations ? loading && setup === null : connecting
   const footerError = errorMessage ?? loadErrorMessage
 
+  const modes = dictationModes(t, offersAuto)
+  const mode = setup ? (offersAuto ? dictationShortcutMode(setup) : setup.dictationMode) : undefined
+  const dictationTitle = t('settings.voiceSettingsScreen.dictation', 'Dictation')
+
   return (
     <SettingsScreen
       title={t('settings.voiceSettingsScreen.title', 'Voice')}
       onBack={onBack}
       fillContent={showLoading}
       overlays={
-        <BottomDrawer visible={modelDrawerOpen} onClose={() => setModelDrawerOpen(false)}>
-          <Text style={styles.drawerTitle}>
-            {t('settings.voiceSettingsScreen.speechModel', 'Speech Model')}
-          </Text>
-          {setup ? (
-            <VoiceModelList
-              setup={setup}
-              disabled={false}
-              busyAction={busyAction}
-              onUseModel={(m) => void handleUseModel(m)}
-              onDownload={(m) => void handleDownload(m)}
-              onDelete={(m) => void handleDelete(m)}
+        <>
+          <PickerModal
+            visible={modePickerOpen}
+            title={t('settings.voiceSettingsScreen.mode', 'Mode')}
+            subtitle={hostName}
+            options={modes}
+            selected={mode ?? ''}
+            onSelect={(next) => {
+              if (isDictationShortcutMode(next)) {
+                void configure(dictationShortcutModeSettings(next))
+              }
+            }}
+            onClose={() => setModePickerOpen(false)}
+          />
+          <BottomDrawer visible={modelDrawerOpen} onClose={() => setModelDrawerOpen(false)}>
+            <SheetHeader
+              title={t('settings.voiceSettingsScreen.model', 'Model')}
+              subtitle={hostName}
+              onClose={() => setModelDrawerOpen(false)}
             />
-          ) : null}
-        </BottomDrawer>
+            {setup ? (
+              <View style={styles.models}>
+                <VoiceModelList
+                  setup={setup}
+                  disabled={false}
+                  busyAction={busyAction}
+                  onUseModel={(m) => void handleUseModel(m)}
+                  onDownload={(m) => void handleDownload(m)}
+                  onDelete={(m) => void handleDelete(m)}
+                />
+                <SettingsNote>
+                  {t(
+                    'settings.voiceSettingsScreen.swipeToDelete',
+                    'Swipe a downloaded model left to delete it.'
+                  )}
+                </SettingsNote>
+              </View>
+            ) : null}
+          </BottomDrawer>
+        </>
       }
     >
       {showLoading ? (
@@ -295,64 +332,67 @@ export default function VoiceSettingsScreen({
         <>
           <SettingsSection
             first
-            title={t('settings.voiceSettingsScreen.dictationHeading', 'DICTATION')}
-            // The segmented control leaves the mode row no room for two lines of explanation.
-            footer={t(
-              'settings.voiceSettingsScreen.dictationModeDescription',
-              'Toggle: press once to start, again to stop. Hold: dictate while held.'
-            )}
+            footer={
+              enabled
+                ? undefined
+                : t(
+                    'settings.voiceSettingsScreen.dictationOffFooter',
+                    'Talk instead of typing in chats and terminals.'
+                  )
+            }
           >
             <ListRow
               key="enabled"
-              title={t('settings.voiceSettingsScreen.enableDictation', 'Enable Voice Dictation')}
-              subtitle={t(
-                'settings.voiceSettingsScreen.dictationDescription',
-                'Dictate text into any focused pane on your desktop.'
-              )}
+              title={dictationTitle}
+              subtitle={
+                hostName
+                  ? t('settings.voiceSettingsScreen.runsOn', 'Runs on {{name}}', {
+                      name: hostName
+                    })
+                  : undefined
+              }
               accessory={
                 <MobileSwitch
                   testID="voice-enabled"
-                  accessibilityLabel={t(
-                    'settings.voiceSettingsScreen.enableDictation',
-                    'Enable Voice Dictation'
-                  )}
+                  accessibilityLabel={dictationTitle}
                   value={enabled}
                   onValueChange={(enabled) => void configure({ enabled })}
                 />
               }
             />
-            <ListRow
-              key="mode"
-              title={t('settings.voiceSettingsScreen.dictationMode', 'Dictation Mode')}
-              disabled={!enabled}
-              accessory={
-                <MobileSegmentedControl
-                  segments={dictationModes(t)}
-                  selected={setup.dictationMode}
-                  onSelect={(dictationMode) => void configure({ dictationMode })}
-                  testIDPrefix="voice-mode-"
-                  disabled={!enabled}
-                />
-              }
-            />
           </SettingsSection>
 
-          <SettingsSection
-            title={t('settings.voiceSettingsScreen.speechModelHeading', 'SPEECH MODEL')}
-            footer={footerError ? <SettingsNote error>{footerError}</SettingsNote> : undefined}
-          >
-            <ListRow
-              key="model"
-              title={t('settings.voiceSettingsScreen.speechModel', 'Speech Model')}
-              subtitle={selectedModelLabel}
-              navigates
-              disabled={!enabled}
-              testID="voice-model-picker"
-              onPress={() => setModelDrawerOpen(true)}
-            />
-          </SettingsSection>
+          {enabled ? (
+            <SettingsSection
+              footer={footerError ? <SettingsNote error>{footerError}</SettingsNote> : undefined}
+            >
+              <ListRow
+                key="mode"
+                title={t('settings.voiceSettingsScreen.mode', 'Mode')}
+                value={modes.find((option) => option.value === mode)?.label}
+                navigates
+                testID="voice-mode"
+                onPress={() => setModePickerOpen(true)}
+              />
+              <ListRow
+                key="model"
+                title={t('settings.voiceSettingsScreen.model', 'Model')}
+                value={selectedModelLabel}
+                navigates
+                testID="voice-model-picker"
+                onPress={() => setModelDrawerOpen(true)}
+              />
+            </SettingsSection>
+          ) : footerError ? (
+            <SettingsNote error>{footerError}</SettingsNote>
+          ) : null}
         </>
       )}
+      <VoiceTranscribeOnSection />
     </SettingsScreen>
   )
 }
+
+const stylesSheet = themedStyleSheet(() => ({
+  models: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }
+}))

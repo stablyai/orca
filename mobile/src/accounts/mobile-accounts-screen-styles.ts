@@ -1,8 +1,8 @@
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -14,10 +14,6 @@ export const styles = themedStyleSheet(() => ({
   // On a screen, not a sheet: one step above the page, as the other screen groups are.
   group: {
     backgroundColor: colors.bgPanel
-  },
-  errorText: {
-    fontSize: typography.metaSize,
-    color: colors.statusRed
   },
   footerHint: {
     flexDirection: 'row',

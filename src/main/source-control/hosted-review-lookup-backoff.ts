@@ -48,8 +48,3 @@ export function dropFailuresWithPrefix(prefix: string): void {
     }
   }
 }
-
-/** @internal - exposed for tests only */
-export function __resetHostedReviewLookupBackoffForTests(): void {
-  failureBackoff.clear()
-}

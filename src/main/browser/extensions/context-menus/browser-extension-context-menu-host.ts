@@ -4,8 +4,8 @@ import type {
   BrowserExtensionContextMenuGroup,
   BrowserExtensionContextMenuPayload
 } from '../../../../shared/browser/extensions/browser-extension-context-menu-types'
-import { chromeFrameId } from '../api/web-navigation'
-import { noteBrowserExtensionUserGesture } from '../api/permissions'
+import { chromeFrameId } from '../tabs-and-windows/browser-extension-frame-projection'
+import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import {
   emitBrowserExtensionEvent,
   getBrowserExtensionProfileIdForSession
@@ -18,10 +18,16 @@ import {
   ACTION_MENU_CONTEXTS,
   arrangeExtensionContextMenuGroup,
   buildContextMenuOnClickData,
-  contextMenuTargetFromParams,
+  contextMenuTargetForChecks,
+  redactContextMenuTarget,
   visibleContextMenuTree,
   type ContextMenuTarget
 } from './browser-extension-context-menu-target'
+import {
+  captureContextMenuSource,
+  resolveContextMenuCheckTarget,
+  type ContextMenuSource
+} from './browser-extension-context-menu-source'
 import { grantBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
 import { getBrowserExtensionDocumentId } from '../tabs-and-windows/browser-extension-document-ids'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
@@ -32,6 +38,7 @@ import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {
   describeBrowserExtensionTab,
   resolveBrowserExtensionTab
+  // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 } from '../tabs-and-windows/browser-extension-tab-model'
 
 /** What a click needs, kept in main so the renderer only names a token and an item key. */
@@ -42,6 +49,7 @@ type MenuSnapshot = {
   /** The tab's top document when the menu opened; a click after it navigates does nothing. */
   documentId: string | null
   target: ContextMenuTarget
+  source?: ContextMenuSource
   frameId: number
   editable: boolean
   mediaType?: string
@@ -87,7 +95,7 @@ function forgetSnapshot(token: string): void {
 
 function topDocumentId(tabId: number | null): string | null {
   const contents = tabId === null ? null : resolveBrowserExtensionTab(tabId)?.contents
-  return contents ? getBrowserExtensionDocumentId(contents.mainFrame.frameTreeNodeId) : null
+  return contents ? getBrowserExtensionDocumentId(contents.mainFrame) : null
 }
 
 function extensionDisplayName(extension: Electron.Extension): string {
@@ -132,7 +140,11 @@ export function buildBrowserExtensionPageContextMenu(
     return null
   }
   const frame = params.frame && !params.frame.isDestroyed() ? params.frame : null
-  const target = contextMenuTargetFromParams(params, guest.getURL(), Boolean(frame?.parent))
+  const source = captureContextMenuSource(guest, frame)
+  if (!source) {
+    return null
+  }
+  const target = contextMenuTargetForChecks(params, guest.getURL(), Boolean(frame?.parent))
   const groups = groupsFor(session, profileId, target)
   if (groups.length === 0) {
     return null
@@ -146,7 +158,8 @@ export function buildBrowserExtensionPageContextMenu(
     profileId,
     tabId,
     documentId: topDocumentId(tabId),
-    target,
+    target: redactContextMenuTarget(target),
+    source,
     frameId: frame ? chromeFrameId(frame) : 0,
     editable: params.isEditable,
     mediaType: params.mediaType,
@@ -161,6 +174,12 @@ function runClick(snapshot: MenuSnapshot, extensionId: string, key: string): boo
   if (topDocumentId(snapshot.tabId) !== snapshot.documentId) {
     return false
   }
+  const checkTarget = snapshot.source
+    ? resolveContextMenuCheckTarget(snapshot.source, snapshot.session, snapshot.target)
+    : snapshot.target
+  if (!checkTarget) {
+    return false
+  }
   const extension = snapshot.session.extensions.getExtension(extensionId)
   if (!extension || !extensionHasPermission(extension, 'contextMenus', snapshot.session)) {
     return false
@@ -173,9 +192,7 @@ function runClick(snapshot: MenuSnapshot, extensionId: string, key: string): boo
     !item ||
     !item.enabled ||
     item.type === 'separator' ||
-    !visibleContextMenuTree(items, snapshot.target, item.parentId).some(
-      (entry) => entry.key === key
-    )
+    !visibleContextMenuTree(items, checkTarget, item.parentId).some((entry) => entry.key === key)
   ) {
     return false
   }
@@ -225,11 +242,6 @@ export function runBrowserExtensionContextMenuClick(
   return runClick(snapshot, click.extensionId, click.key)
 }
 
-function actionTarget(tabId: number | null): ContextMenuTarget {
-  const contents = tabId === null ? null : resolveBrowserExtensionTab(tabId)?.contents
-  return { contexts: new Set(ACTION_MENU_CONTEXTS), pageUrl: contents?.getURL() ?? '' }
-}
-
 /**
  * For the toolbar button's own menu (Wave 2B): this extension's 'action' context items, or null.
  * Pass the returned token with an item key to runBrowserExtensionContextMenuClick.
@@ -244,7 +256,12 @@ export function buildBrowserExtensionActionContextMenu(
   if (!session || !extension || !extensionHasPermission(extension, 'contextMenus', session)) {
     return null
   }
-  const target = actionTarget(tabId)
+  const contents = tabId === null ? null : resolveBrowserExtensionTab(tabId)?.contents
+  const target = { contexts: new Set(ACTION_MENU_CONTEXTS), pageUrl: contents?.getURL() ?? '' }
+  const source = contents ? captureContextMenuSource(contents) : undefined
+  if (contents && !source) {
+    return null
+  }
   // Why no wrapping submenu: the toolbar menu already belongs to this one extension.
   const items = visibleContextMenuTree(
     getBrowserExtensionProfileStateStore().read(browserProfileId, extensionId).contextMenus,
@@ -262,7 +279,8 @@ export function buildBrowserExtensionActionContextMenu(
     profileId: browserProfileId,
     tabId,
     documentId: topDocumentId(tabId),
-    target,
+    target: redactContextMenuTarget(target),
+    ...(source ? { source } : {}),
     frameId: 0,
     editable: false,
     createdAt: now

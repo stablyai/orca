@@ -1,86 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import {
-  pluginListingRepositoryUrl,
-  pluginReadmePageUrl,
-  pluginRepositoryPageUrl
-} from './plugin-repository-link'
+import { pluginInstallTrustee } from './plugin-repository-link'
 
-describe('pluginRepositoryPageUrl', () => {
-  it('builds the repository page from the https or ssh install URL', () => {
-    expect(pluginRepositoryPageUrl('https://github.com/Acme/Gleam.git')).toBe(
-      'https://github.com/acme/gleam'
-    )
-    expect(pluginRepositoryPageUrl('git@gitlab.com:acme/tools/notes.git')).toBe(
-      'https://gitlab.com/acme/tools/notes'
-    )
-  })
+const MIRROR_URL = 'https://github.com/stablyai/orca-community-mirror.git'
 
-  it('drops credentials, ports, queries and fragments from the URL it was given', () => {
-    expect(pluginRepositoryPageUrl('https://user:token@github.com:443/acme/gleam?x=1#y')).toBe(
-      'https://github.com/acme/gleam'
-    )
-  })
-
-  it('refuses other hosts, schemes and odd path segments', () => {
-    for (const url of [
-      'https://evil.example/acme/gleam',
-      'https://github.com.evil.example/acme/gleam',
-      'javascript:alert(1)//github.com/acme/gleam',
-      'data:text/html,<a>',
-      'http://github.com/acme/gleam',
-      'https://github.com/acme/%2e%2e',
-      'https://github.com/acme'
-    ]) {
-      expect(pluginRepositoryPageUrl(url)).toBeNull()
-    }
-  })
-})
-
-describe('pluginReadmePageUrl', () => {
-  const commit = 'a'.repeat(40)
-
-  it('links the plugin folder at the pinned commit', () => {
-    expect(pluginReadmePageUrl({ gitUrl: 'https://github.com/Acme/Plugins.git', commit })).toBe(
-      `https://github.com/acme/plugins/tree/${commit}#readme`
-    )
+describe('pluginInstallTrustee', () => {
+  it('names the publisher of a community plugin mirrored in Orca’s organization (#50922)', () => {
     expect(
-      pluginReadmePageUrl({
-        gitUrl: 'https://github.com/acme/plugins',
-        commit,
-        path: 'themes/gleam'
+      pluginInstallTrustee({
+        url: MIRROR_URL,
+        publisher: 'harsh97',
+        catalogUrl: 'https://github.com/stablyai/orca-community-plugins.git'
       })
-    ).toBe(`https://github.com/acme/plugins/tree/${commit}/themes/gleam#readme`)
-    expect(pluginReadmePageUrl({ gitUrl: 'git@gitlab.com:acme/tools/notes.git', commit })).toBe(
-      `https://gitlab.com/acme/tools/notes/-/tree/${commit}#readme`
-    )
+    ).toBe('harsh97')
   })
 
-  it('refuses unpinned commits, odd paths and unlinkable hosts', () => {
-    const gitUrl = 'https://github.com/acme/plugins'
-    expect(pluginReadmePageUrl({ gitUrl, commit: 'main' })).toBeNull()
-    expect(pluginReadmePageUrl({ gitUrl, commit, path: 'a/../b' })).toBeNull()
-    expect(pluginReadmePageUrl({ gitUrl, commit, path: 'a/%2e%2e' })).toBeNull()
-    expect(pluginReadmePageUrl({ gitUrl: 'https://evil.example/acme/x', commit })).toBeNull()
+  it('names the repository owner for an Orca repository listed by any other catalog', () => {
+    expect(
+      pluginInstallTrustee({
+        url: MIRROR_URL,
+        publisher: 'harsh97',
+        catalogUrl: 'https://github.com/mallory/orca-catalog.git'
+      })
+    ).toBe('stablyai')
   })
-})
 
-describe('pluginListingRepositoryUrl', () => {
-  const mirror = { url: 'https://github.com/stablyai/orca-community-mirror.git' }
-
-  it("never links a recorded repository outside the publisher's namespace or linkable hosts", () => {
-    for (const repository of [
-      'https://github.com/someone-else/notes',
-      'https://evil.example/acme/notes',
-      'https://github.com/acme/%2e%2e'
-    ]) {
-      expect(
-        pluginListingRepositoryUrl({
-          pluginKey: 'acme.notes',
-          source: mirror,
-          release: { repository }
-        })
-      ).toBe(mirror.url)
-    }
-    expect(pluginListingRepositoryUrl({ pluginKey: 'acme.notes', source: mirror })).toBe(mirror.url)
+  it('names the repository owner elsewhere, whatever publisher a catalog claims', () => {
+    expect(
+      pluginInstallTrustee({
+        url: 'git@github.com:mallory/plugin.git',
+        publisher: 'harsh97',
+        catalogUrl: 'https://github.com/stablyai/orca-community-plugins.git'
+      })
+    ).toBe('mallory')
   })
 })

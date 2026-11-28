@@ -4,35 +4,63 @@ import { ipcMain, type WebContents } from 'electron'
 import {
   PLAIN_SSH_TERMINAL_CHANNELS,
   type PlainSshTerminalEvent
-} from '../../../shared/plain-ssh-terminal'
-import { isSshHostMoveBlocked } from '../../../shared/ssh-host-move-blocked'
-import { mayUserSshConfigClaimAlias } from '../../ssh/config/ssh-config-alias-claim'
-import { getSshHostServerStatus } from '../../ssh/ssh-host-server-status'
-import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
-import { findSystemSsh } from '../../ssh/system-transport/system-ssh-binary'
-import { ensureNodePtySpawnHelperExecutable } from '../../providers/local-pty/local-pty-executable-spawn'
-import {
-  ackPlainSshTerminal,
-  closePlainSshTerminal,
-  closePlainSshTerminalsOwnedBy,
-  openPlainSshTerminal,
-  resizePlainSshTerminal,
-  writePlainSshTerminal,
-  type PlainSshTerminalDeps
-} from '../../ssh/plain-ssh-terminal/plain-ssh-terminal-sessions'
+} from '../../../shared/terminal/runtime/plain-ssh-terminal'
+import type { PlainSshTerminalDeps } from '../../ssh/plain-ssh-terminal/plain-ssh-terminal-sessions'
+import type * as PlainSshTerminalSessions from '../../ssh/plain-ssh-terminal/plain-ssh-terminal-sessions'
 
-const deps: PlainSshTerminalDeps = {
-  getTarget: (targetId) => getSshTargetRegistryStore()?.getTarget(targetId),
-  isMoveBlocked: (targetId) => isSshHostMoveBlocked(getSshHostServerStatus(targetId)),
-  findSsh: findSystemSsh,
-  mayConfigClaimAlias: mayUserSshConfigClaimAlias,
-  loadPtySpawn: async () => {
-    // Packaged macOS updates can lose the node-pty spawn-helper executable bit.
-    ensureNodePtySpawnHelperExecutable()
-    return (await import('node-pty')).spawn
-  },
-  homeDir: homedir,
-  platform: process.platform
+type PlainSshTerminalRuntime = {
+  sessions: typeof PlainSshTerminalSessions
+  deps: PlainSshTerminalDeps
+}
+
+let loadedRuntime: PlainSshTerminalRuntime | null = null
+let runtimeLoadPromise: Promise<PlainSshTerminalRuntime> | null = null
+
+function loadPlainSshTerminalRuntime(): Promise<PlainSshTerminalRuntime> {
+  if (loadedRuntime) {
+    return Promise.resolve(loadedRuntime)
+  }
+  runtimeLoadPromise ??= Promise.all([
+    import('../../ssh/plain-ssh-terminal/plain-ssh-terminal-sessions'),
+    import('../../../shared/remote-runtime/ssh/ssh-host-move-blocked'),
+    import('../../ssh/config/ssh-config-alias-claim'),
+    import('../../ssh/host-server/ssh-host-server-status'),
+    import('../../ssh/targets/ssh-target-registry'),
+    import('../../ssh/system-transport/system-ssh-binary'),
+    import('../../providers/local-pty/local-pty-executable-spawn')
+  ])
+    .then(
+      ([
+        sessions,
+        { isSshHostMoveBlocked },
+        { mayUserSshConfigClaimAlias },
+        { getSshHostServerStatus },
+        { getSshTargetRegistryStore },
+        { findSystemSsh },
+        { ensureNodePtySpawnHelperExecutable }
+      ]) => {
+        const deps: PlainSshTerminalDeps = {
+          getTarget: (targetId) => getSshTargetRegistryStore()?.getTarget(targetId),
+          isMoveBlocked: (targetId) => isSshHostMoveBlocked(getSshHostServerStatus(targetId)),
+          findSsh: findSystemSsh,
+          mayConfigClaimAlias: mayUserSshConfigClaimAlias,
+          loadPtySpawn: async () => {
+            // Packaged macOS updates can lose the node-pty spawn-helper executable bit.
+            ensureNodePtySpawnHelperExecutable()
+            return (await import('node-pty')).spawn
+          },
+          homeDir: homedir,
+          platform: process.platform
+        }
+        loadedRuntime = { sessions, deps }
+        return loadedRuntime
+      }
+    )
+    .catch((error: unknown) => {
+      runtimeLoadPromise = null
+      throw error
+    })
+  return runtimeLoadPromise
 }
 
 const watchedOwners = new Set<number>()
@@ -44,7 +72,9 @@ function endSessionsWithOwner(sender: WebContents): void {
   }
   watchedOwners.add(sender.id)
   const owner = sender.id
-  const end = (): void => closePlainSshTerminalsOwnedBy(owner)
+  const end = (): void => {
+    loadedRuntime?.sessions.closePlainSshTerminalsOwnedBy(owner)
+  }
   sender.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) {
       end()
@@ -57,7 +87,9 @@ function endSessionsWithOwner(sender: WebContents): void {
   })
 }
 
-export function registerPlainSshTerminalHandlers(): void {
+export function registerPlainSshTerminalHandlers(
+  handle: typeof ipcMain.handle = ipcMain.handle.bind(ipcMain)
+): void {
   const { open, write, resize, close, ack, event } = PLAIN_SSH_TERMINAL_CHANNELS
   ipcMain.removeHandler(open)
   ipcMain.removeAllListeners(write)
@@ -65,34 +97,40 @@ export function registerPlainSshTerminalHandlers(): void {
   ipcMain.removeAllListeners(close)
   ipcMain.removeAllListeners(ack)
 
-  ipcMain.handle(
-    open,
-    async (ipcEvent, args: { targetId?: unknown; cols?: unknown; rows?: unknown }) => {
-      const sender = ipcEvent.sender
-      endSessionsWithOwner(sender)
-      return openPlainSshTerminal(
-        deps,
-        { targetId: args?.targetId, cols: args?.cols, rows: args?.rows, owner: sender.id },
-        (payload: PlainSshTerminalEvent) => {
-          if (sender.isDestroyed()) {
-            return false
-          }
-          sender.send(event, payload)
-          return true
-        }
-      )
+  handle(open, async (ipcEvent, args: { targetId?: unknown; cols?: unknown; rows?: unknown }) => {
+    const sender = ipcEvent.sender
+    const { sessions, deps } = await loadPlainSshTerminalRuntime()
+    if (sender.isDestroyed()) {
+      return null
     }
-  )
+    endSessionsWithOwner(sender)
+    return sessions.openPlainSshTerminal(
+      deps,
+      { targetId: args?.targetId, cols: args?.cols, rows: args?.rows, owner: sender.id },
+      (payload: PlainSshTerminalEvent) => {
+        if (sender.isDestroyed()) {
+          return false
+        }
+        sender.send(event, payload)
+        return true
+      }
+    )
+  })
   ipcMain.on(write, (ipcEvent, args: { sessionId?: unknown; data?: unknown }) => {
-    writePlainSshTerminal(args?.sessionId, ipcEvent.sender.id, args?.data)
+    loadedRuntime?.sessions.writePlainSshTerminal(args?.sessionId, ipcEvent.sender.id, args?.data)
   })
   ipcMain.on(resize, (ipcEvent, args: { sessionId?: unknown; cols?: unknown; rows?: unknown }) => {
-    resizePlainSshTerminal(args?.sessionId, ipcEvent.sender.id, args?.cols, args?.rows)
+    loadedRuntime?.sessions.resizePlainSshTerminal(
+      args?.sessionId,
+      ipcEvent.sender.id,
+      args?.cols,
+      args?.rows
+    )
   })
   ipcMain.on(close, (ipcEvent, args: { sessionId?: unknown }) => {
-    closePlainSshTerminal(args?.sessionId, ipcEvent.sender.id)
+    loadedRuntime?.sessions.closePlainSshTerminal(args?.sessionId, ipcEvent.sender.id)
   })
   ipcMain.on(ack, (ipcEvent, args: { sessionId?: unknown; chars?: unknown }) => {
-    ackPlainSshTerminal(args?.sessionId, ipcEvent.sender.id, args?.chars)
+    loadedRuntime?.sessions.ackPlainSshTerminal(args?.sessionId, ipcEvent.sender.id, args?.chars)
   })
 }

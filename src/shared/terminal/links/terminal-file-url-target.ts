@@ -10,9 +10,12 @@ export type TerminalFileUrlTargetOptions = {
   allowUncHost?: boolean
 }
 
-function parseFileUrlLineHash(hash: string): { line: number; column: number | null } | null {
+type LineHashLocation = { line: number; column: number | null }
+
+function parseFileUrlLineHash(hash: string): LineHashLocation | null {
   const trimmed = hash.startsWith('#') ? hash.slice(1) : hash
-  const match = /^L(\d+)(?:C(\d+))?$/i.exec(trimmed)
+  // Why: a `#L11-L13` or `#L11-13` range opens at its first line.
+  const match = /^L(\d+)(?:C(\d+))?(?:-L?\d+(?:C\d+)?)?$/i.exec(trimmed)
   if (!match) {
     return null
   }
@@ -22,13 +25,24 @@ function parseFileUrlLineHash(hash: string): { line: number; column: number | nu
   }
 }
 
-function parseFilePathTrailingLineTarget(filePath: string): TerminalFileUrlTarget | null {
-  const match = /^(.*?)(?::(\d+))(?::(\d+))?$/.exec(filePath)
-  if (!match || !match[1] || match[1].endsWith('/') || match[1].endsWith('\\')) {
+/** Splits a trailing `#L<line>` fragment off a plain path; other `#` stay filename characters. */
+export function splitPathLineHash(
+  pathText: string
+): ({ pathText: string } & LineHashLocation) | null {
+  const hashIndex = pathText.lastIndexOf('#')
+  const location = hashIndex > 0 ? parseFileUrlLineHash(pathText.slice(hashIndex)) : null
+  return location ? { pathText: pathText.slice(0, hashIndex), ...location } : null
+}
+
+function parseUrlPathLineSuffix(
+  pathname: string
+): ({ suffixLength: number } & LineHashLocation) | null {
+  const match = /^.+?(:(\d+)(?::(\d+))?)$/.exec(pathname)
+  if (!match) {
     return null
   }
   return {
-    filePath: match[1],
+    suffixLength: match[1].length,
     line: Number(match[2]),
     column: match[3] ? Number(match[3]) : null
   }
@@ -52,5 +66,13 @@ export function resolveTerminalFileUrlTarget(
     return { filePath, line: hashTarget.line, column: hashTarget.column }
   }
 
-  return parseFilePathTrailingLineTarget(filePath) ?? { filePath, line: null, column: null }
+  // Encoded colons belong to the filename; only a literal URL suffix denotes a location.
+  const suffix = parseUrlPathLineSuffix(parsed.pathname)
+  if (suffix) {
+    const targetPath = filePath.slice(0, -suffix.suffixLength)
+    if (!targetPath.endsWith('/') && !targetPath.endsWith('\\')) {
+      return { filePath: targetPath, line: suffix.line, column: suffix.column }
+    }
+  }
+  return { filePath, line: null, column: null }
 }

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import type { PullRequestGenerationRecords } from '@/store/slices/pull-request-generation'
+import type { PullRequestGenerationRecords } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import type { PullRequestGenerationOutcome } from './create-pull-request-dialog-field-model'
 
 function isRequestRunning(

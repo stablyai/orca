@@ -1,8 +1,12 @@
-import { existsSync } from 'node:fs'
+import { noteEnvironmentStoreWrite } from './runtime-environment-store-write-generation'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { writeSecureJsonFileWithinLimit } from '../../bounded-secure-json-file'
-import { readNodeFileSyncWithinLimit } from '../../node-bounded-file-reader'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
+import {
+  readEnvironmentRegistryFile,
+  invalidateEnvironmentStoreObservation
+} from './runtime-environment-store-observation'
 import { warnUnreadableEnvironmentState } from './runtime-environment-store-records'
 import {
   getPreferredLoopbackRuntimePort,
@@ -10,46 +14,67 @@ import {
   KnownRuntimeEnvironmentSchema,
   type KnownRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
-import { hardenExistingSecureFile } from '../../secure-file'
 import { OrcadWslDeploymentLinkSchema } from '../host-catalog/wsl-host-deployment-link'
 
 // Isolate WSL records so older builds cannot reject the entire pairing store.
 const WSL_HOST_DEPLOYMENTS_FILE = 'orca-wsl-host-deployments.json'
-const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
+export const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
 
 /** A managed orcad in a WSL distro. The environment's name is its label; runtime state lives elsewhere. */
 /** A Remove that could not prove the host's server stopped (E11); the host stays until one does. */
-export const WslHostPendingStopSchema = z.object({
-  since: z.number().finite(),
-  reason: z.string().max(4_096),
-  /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; older builds drop it and show `reason`. */
-  reasonCode: z.string().max(128).optional(),
-  reasonParams: z.record(z.string(), z.union([z.string().max(4_096), z.number()])).optional(),
-  verdict: z.enum(['live', 'unverifiable'])
-})
+export const WslHostPendingStopSchema = lazyZodSchema(() =>
+  z.object({
+    since: z.number().finite(),
+    reason: z.string().max(4_096),
+    /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; older builds drop it and show `reason`. */
+    reasonCode: z.string().max(128).optional(),
+    reasonParams: z.record(z.string(), z.union([z.string().max(4_096), z.number()])).optional(),
+    verdict: z.enum(['live', 'unverifiable'])
+  })
+)
 
 export type WslHostPendingStop = z.infer<typeof WslHostPendingStopSchema>
 
-export const WslHostDeploymentRecordSchema = OrcadWslDeploymentLinkSchema.extend({
-  environmentId: z.string().min(1),
-  createdAt: z.number().finite(),
-  /**
-   * The paired orcad's host key, so a stale record cannot claim a server re-paired under the same
-   * id and bridge port. Optional: records written before it are bound by port only until refreshed.
-   */
-  pairingPublicKeyB64: z.string().min(1).optional(),
-  /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
-  previousPairingPublicKeyB64: z.string().min(1).optional(),
-  pendingStop: WslHostPendingStopSchema.optional()
-})
+// Never a leading `-`, so wsl.exe can't read it as a flag.
+export const WslLinuxUserNameSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .max(64)
+    .regex(/^[A-Za-z0-9_][A-Za-z0-9_.-]*\$?$/)
+)
+
+/** A launch-reported account name, or undefined when it isn't one a record can pin. */
+export function pinnableWslLinuxUser(name: string | null | undefined): string | undefined {
+  const parsed = WslLinuxUserNameSchema.safeParse(name)
+  return parsed.success ? parsed.data : undefined
+}
+
+export const WslHostDeploymentRecordSchema = lazyZodSchema(() =>
+  OrcadWslDeploymentLinkSchema.extend({
+    environmentId: z.string().min(1),
+    createdAt: z.number().finite(),
+    /**
+     * The paired orcad's host key, so a stale record cannot claim a server re-paired under the same
+     * id and bridge port. Optional: records written before it are bound by port only until refreshed.
+     */
+    pairingPublicKeyB64: z.string().min(1).optional(),
+    /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
+    previousPairingPublicKeyB64: z.string().min(1).optional(),
+    /** orcad's pinned Linux account (`wsl -u`); older records are pinned on their next verified connect. */
+    linuxUser: WslLinuxUserNameSchema.optional(),
+    pendingStop: WslHostPendingStopSchema.optional()
+  })
+)
 
 export type WslHostDeploymentRecord = z.infer<typeof WslHostDeploymentRecordSchema>
 
 // Records stay opaque so one bad or newer-kind record cannot hide the rest.
-const EnvelopeSchema = z.object({
-  version: z.literal(1),
-  deployments: z.array(z.unknown())
-})
+const EnvelopeSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    deployments: z.array(z.unknown())
+  })
+)
 
 type StoredRecord = {
   environmentId: string | undefined
@@ -91,19 +116,23 @@ function recordEnvironmentId(raw: unknown): string | undefined {
 
 function readStoredRecords(userDataPath: string): StoredRecord[] {
   const path = getWslHostDeploymentStorePath(userDataPath)
-  if (!existsSync(path)) {
-    return []
+  let text: string
+  try {
+    const read = readEnvironmentRegistryFile(path, MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES)
+    if (!read) {
+      return []
+    }
+    text = read.buffer.toString('utf8')
+  } catch {
+    throw new WslHostDeploymentStoreInvalidError(path)
   }
+  return parseStoredRecordsText(path, text)
+}
+
+function parseStoredRecordsText(path: string, text: string): StoredRecord[] {
   let raws: unknown[]
   try {
-    hardenExistingSecureFile(path)
-    raws = EnvelopeSchema.parse(
-      JSON.parse(
-        readNodeFileSyncWithinLimit(path, MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES).buffer.toString(
-          'utf8'
-        )
-      )
-    ).deployments
+    raws = EnvelopeSchema.parse(JSON.parse(text)).deployments
   } catch {
     throw new WslHostDeploymentStoreInvalidError(path)
   }
@@ -131,8 +160,17 @@ function readStoredRecords(userDataPath: string): StoredRecord[] {
 
 /** Throws WslHostDeploymentStoreInvalidError when the file itself is unreadable. */
 export function readWslHostDeployments(userDataPath: string): WslHostDeployments {
+  return deploymentsFromRecords(readStoredRecords(userDataPath))
+}
+
+/** Parses bytes already read from `path`; throws WslHostDeploymentStoreInvalidError like a failed read. */
+export function parseWslHostDeploymentsText(path: string, text: string): WslHostDeployments {
+  return deploymentsFromRecords(parseStoredRecordsText(path, text))
+}
+
+function deploymentsFromRecords(records: StoredRecord[]): WslHostDeployments {
   const result: WslHostDeployments = { deployments: [], unreadableEnvironmentIds: new Set() }
-  for (const record of readStoredRecords(userDataPath)) {
+  for (const record of records) {
     if (record.deployment) {
       result.deployments.push(record.deployment)
     } else if (record.environmentId !== undefined) {
@@ -163,11 +201,12 @@ export function writeWslHostDeployment(
   if (next && !records.some((record) => record.environmentId === environmentId)) {
     raws.push(next)
   }
+  invalidateEnvironmentStoreObservation(getWslHostDeploymentStorePath(userDataPath))
   writeSecureJsonFileWithinLimit(
     path,
     { version: 1, deployments: raws },
     MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES,
-    { durable: true }
+    { durable: true, onPublished: noteEnvironmentStoreWrite }
   )
 }
 

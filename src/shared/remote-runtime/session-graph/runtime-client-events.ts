@@ -1,0 +1,150 @@
+import type { BotChangeScope } from '../../bots/bot-change-scope'
+import type { NotificationAttentionAcknowledgement } from '../../notifications/notification-settings-types'
+import type { CreateWorktreeResult } from '../../worktree/create-types'
+import type {
+  WorktreeDefaultTabsLaunch,
+  WorktreeSetupLaunch,
+  WorktreeStartupLaunch
+} from '../../worktree/creation/launch-types'
+import type { SshConnectionState } from '../ssh/ssh-types'
+import type { TerminalSideEffectBatch } from '../../terminal/output/terminal-side-effect-facts'
+import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-session-contracts'
+import type { RuntimeNavigationTarget } from './runtime-navigation'
+import type { WorktreeSortOrderUpdate } from '../../worktree/metadata/sort-order-update'
+import type { WorkspaceMetadataSet } from '../../worktree/metadata/workspace-metadata-set'
+import type { SidebarInputsChangedEvent } from '../../sidebar-list/feed/sidebar-inputs-feed-contract'
+import type { BrowserClientHostRequestEvent } from '../../browser/client-hosting/browser-client-host-request-protocol'
+import type { WorkspaceCleanupRunFinishedEvent } from '../../workspace-cleanup/workspace-cleanup-run'
+
+export type RuntimeClientEvent =
+  | {
+      type: 'notificationAttentionAcknowledged'
+      acknowledgement: NotificationAttentionAcknowledgement
+    }
+  | { type: 'reposChanged' }
+  | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
+  | { type: 'nativeChatCiResultLinesChanged'; ciResultLines: boolean }
+  /** The Workspace options UI state changed; a mirroring phone re-reads it. */
+  | { type: 'workspaceViewChanged' }
+  // Index, HEAD or refs moved in a watched local repo; without `worktreeIds` any of its checkouts may have changed.
+  | { type: 'gitStatusChanged'; repoId: string; worktreeIds?: string[] }
+  /** Top-level settings whose values changed; a phone re-reads only the settings it shows. */
+  | { type: 'settingsChanged'; keys: string[] }
+  /** The desktop Agents list's verdicts changed; worktree.ps carries them. */
+  | { type: 'agentListChanged' }
+  | {
+      type: 'worktreesChanged'
+      repoId: string
+      sortOrderOnly?: boolean
+      // Why: lets a client patch an order save in place instead of refetching the repo (#27268).
+      sortOrders?: WorktreeSortOrderUpdate[]
+    }
+  /** An agent row changed (coalesced, no ids); phones re-read worktree.ps. Sent only while the sidebar feed is off. */
+  | { type: 'worktreeRowsChanged' }
+  // Why: addressed workspace metadata; old clients drop the unknown type and see it on their next listing.
+  | ({ type: 'workspaceMetadataSet' } & WorkspaceMetadataSet)
+  /** What mobileRelay.hosts.list answers changed; phones re-read it instead of polling. */
+  | { type: 'relayHostsChanged' }
+  /** An update of the user's own agent CLI on this host finished; clients check again. */
+  | { type: 'agentCliUpdateFinished'; agent: string }
+  /** A relayed server's agent rows changed (coalesced); phones re-read mobileRelay.hosts.worktrees. */
+  | { type: 'relayHostRowsChanged'; hostId: `runtime:${string}` }
+  /** A desktop PR refresh found this checkout's PR (or its absence) changed; phones re-read it. */
+  | { type: 'pullRequestChanged'; worktreeId: string; repoId: string; branch: string }
+  | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
+  | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
+  /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */
+  | SidebarInputsChangedEvent
+  // Paired clients lack ssh:state-changed IPC; publish host SSH transitions so their reconnect overlays update (STA-1468).
+  | { type: 'sshStateChanged'; targetId: string; state: SshConnectionState }
+  | {
+      type: 'worktreeTerminalSleepState'
+      worktreeId: string
+      generation: number
+      phase: 'started' | 'committed' | 'cancelled' | 'woken'
+      ptyIds: string[]
+      terminalHandles: string[]
+    }
+  // Only the owning automation authority can announce definition/run/usage writes.
+  | {
+      type: 'automationsChanged'
+      selector?: { kind: 'self' } | { kind: 'ssh'; targetId: string } | { kind: 'orphan' }
+      reason?: 'definition' | 'run' | 'usage'
+    }
+  // Why: browser profiles live on the host; old clients drop the unknown type and refetch on their old triggers.
+  | { type: 'browserProfilesChanged' }
+  /** A bot, its automations or its Activity's work changed; readers re-read. Old clients drop it, and
+   *  ignore the scope: which bots (all when absent) and which kinds of change (any when absent); an
+   *  `items` notice also carries every bot's Needs you count. */
+  | ({ type: 'botsChanged' } & BotChangeScope)
+  /** A worker this chat session started appeared or changed state; that chat's worker list re-reads. Old clients drop it. */
+  | { type: 'orchestrationSessionWorkersChanged'; sessionId: string }
+  /** Any Dispatch was written, by a chat or a terminal; desktops re-read this host's worker lineage. Old clients drop it. */
+  | { type: 'agentOrchestrationChanged' }
+  /** A paired computer handed back replies to this host's agents' asks; their cards re-read. Old clients drop it. */
+  | { type: 'peerMailReturned' }
+  /** This host's MCP server list changed; clients showing it re-read. Old clients drop it. */
+  | { type: 'mcpServersChanged' }
+  // Old clients drop the unknown type; the report RPC has the same run.
+  | WorkspaceCleanupRunFinishedEvent
+  | {
+      type: 'linearLinkedIssueUpdated'
+      worktreeId: string
+      identifier: string
+      workspaceId: string
+    }
+  | {
+      type: 'activateWorktree'
+      repoId: string
+      worktreeId: string
+      setup?: WorktreeSetupLaunch
+      startup?: WorktreeStartupLaunch
+      defaultTabs?: WorktreeDefaultTabsLaunch
+      providesInitialSurface?: boolean
+      /** Absent on older hosts; clients must not infer navigation intent from a broadcast. */
+      navigation?: RuntimeNavigationTarget
+    }
+
+export type RuntimeClientEventStreamMessage =
+  | ({ type: 'ready'; subscriptionId: string } & {
+      snapshot?: {
+        nativeChatQueueFollowUps?: boolean
+        nativeChatCiResultLines?: boolean
+        repos?: unknown[]
+        sshStates?: { targetId: string; state: SshConnectionState }[]
+      }
+    })
+  | RuntimeClientEvent
+  // Addressed to this subscriber only, never broadcast.
+  | BrowserClientHostRequestEvent
+  | { type: 'end' }
+
+export type RuntimeActivateWorktreeEvent = Extract<RuntimeClientEvent, { type: 'activateWorktree' }>
+
+export type AutomationsChangedEvent = Extract<RuntimeClientEvent, { type: 'automationsChanged' }>
+
+/** Publisher payload; `selector` scoping is added by a later host-scope step. */
+export type AutomationsChangedPayload = Omit<AutomationsChangedEvent, 'type'>
+
+export type PublishAutomationsChanged = (payload: AutomationsChangedPayload) => void
+
+export function toRuntimeActivateWorktreeEvent(
+  repoId: string,
+  worktreeId: string,
+  setup?: CreateWorktreeResult['setup'],
+  startup?: WorktreeStartupLaunch,
+  defaultTabs?: CreateWorktreeResult['defaultTabs'],
+  navigation?: RuntimeNavigationTarget,
+  providesInitialSurface?: boolean
+): RuntimeActivateWorktreeEvent {
+  return {
+    type: 'activateWorktree',
+    repoId,
+    worktreeId,
+    ...(navigation ? { navigation } : {}),
+    ...(setup ? { setup } : {}),
+    ...(startup ? { startup } : {}),
+    ...(defaultTabs ? { defaultTabs } : {}),
+    ...(providesInitialSurface ? { providesInitialSurface } : {})
+  }
+}

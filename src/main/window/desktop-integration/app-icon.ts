@@ -7,22 +7,33 @@ import { dirname, resolve } from 'node:path'
 import { app, BrowserWindow, nativeImage } from 'electron'
 import classicIcon from '../../../../resources/icon.png?asset'
 import classicDevIcon from '../../../../resources/icon-dev.png?asset'
+import classicDevMacIcon from '../../../../resources/icon-dev-mac.png?asset'
 import watercolorIcon from '../../../../resources/app-icons/orca-watercolor.png?asset'
-import watercolorMacDockIcon from '../../../../resources/app-icons/orca-watercolor.png?asset&asarUnpack'
+import watercolorMacIcon from '../../../../resources/app-icons/orca-watercolor-mac.png?asset'
+import watercolorMacDockIcon from '../../../../resources/app-icons/orca-watercolor-mac.png?asset&asarUnpack'
 import blueIcon from '../../../../resources/app-icons/orca-blue.png?asset'
 import blueMacDockIcon from '../../../../resources/app-icons/orca-blue.png?asset&asarUnpack'
-import { normalizeAppIconId, type AppIconId } from '../../../shared/app-icon'
+import {
+  CUSTOM_APP_ICON_ID,
+  normalizeAppIconId,
+  type BuiltInAppIconId
+} from '../../../shared/app-lifecycle/identity/app-icon'
+import { getCustomAppIconPath, getCustomAppIconRevision, hasCustomAppIcon } from './custom-app-icon'
+import { fitAppIconToPlatformShape } from './platform-app-icon-shape'
 
+const isMac = process.platform === 'darwin'
+
+// The -mac variants sit in Apple's 824/1024 icon tile; Windows and Linux keep their larger tiles (#5357).
 const APP_ICON_PATHS = {
-  classic: !app.isPackaged ? classicDevIcon : classicIcon,
-  watercolor: watercolorIcon,
+  classic: app.isPackaged ? classicIcon : isMac ? classicDevMacIcon : classicDevIcon,
+  watercolor: isMac ? watercolorMacIcon : watercolorIcon,
   blue: blueIcon
-} satisfies Record<AppIconId, string>
+} satisfies Record<BuiltInAppIconId, string>
 
 const MAC_DOCK_ICON_PATHS = {
   watercolor: watercolorMacDockIcon,
   blue: blueMacDockIcon
-} satisfies Record<Exclude<AppIconId, 'classic'>, string>
+} satisfies Record<Exclude<BuiltInAppIconId, 'classic'>, string>
 
 type ExecFile = (
   file: string,
@@ -73,11 +84,29 @@ let macDockIconPersistenceGeneration = 0
 let macDockIconPersistenceQueue = Promise.resolve()
 
 export function getAppIconPath(value: unknown): string {
-  return APP_ICON_PATHS[normalizeAppIconId(value)]
+  const iconId = normalizeAppIconId(value)
+  if (iconId === CUSTOM_APP_ICON_ID) {
+    // A missing import (removed file, copied settings) falls back instead of showing a blank tile.
+    return hasCustomAppIcon() ? getCustomAppIconPath() : APP_ICON_PATHS.classic
+  }
+  return APP_ICON_PATHS[iconId]
 }
 
+let customAppIconImageCache: { revision: number; image: Electron.NativeImage } | null = null
+
 export function createAppIconImage(value: unknown): Electron.NativeImage {
-  return nativeImage.createFromPath(getAppIconPath(value))
+  const iconPath = getAppIconPath(value)
+  // Built-in assets already follow each platform's icon shape; only imported art needs fitting.
+  if (iconPath !== getCustomAppIconPath()) {
+    return nativeImage.createFromPath(iconPath)
+  }
+  const revision = getCustomAppIconRevision()
+  if (customAppIconImageCache?.revision !== revision) {
+    // Shaping is a full-size pixel pass, so run it once per imported file.
+    const image = fitAppIconToPlatformShape(nativeImage.createFromPath(iconPath))
+    customAppIconImageCache = { revision, image }
+  }
+  return customAppIconImageCache.image
 }
 
 function getMacAppBundlePath(): string | undefined {
@@ -281,6 +310,11 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
       if (cleared && generation === macDockIconPersistenceGeneration) {
         app.dock?.setIcon(nativeImage.createEmpty())
       }
+      return
+    }
+    if (iconId === CUSTOM_APP_ICON_ID) {
+      // Imported icons never touch the signed bundle; only clear what an earlier built-in choice wrote.
+      await clearMacCustomIconMetadata(execFile, appBundlePath)
       return
     }
     // Finder metadata supplies the stopped app’s Dock icon; Electron only changes the live tile.

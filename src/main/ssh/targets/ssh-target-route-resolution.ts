@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConfigHost } from '../config/ssh-config-parser'
 import {
   resolveWithSshG,
@@ -8,7 +8,7 @@ import {
   type SshResolvedConfig
 } from '../config/ssh-g-config-resolution'
 import { resolveEffectiveSshEndpoint } from '../connection/ssh-connect-config'
-import { resolveEffectiveProxy } from '../ssh-proxy-command'
+import { resolveEffectiveProxy } from '../system-transport/ssh-proxy-command'
 import { sshRouteKey, type SshRoute } from './ssh-target-identity'
 import { mayUserSshConfigClaimAlias } from '../config/ssh-config-alias-claim'
 import {

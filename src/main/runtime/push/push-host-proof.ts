@@ -6,7 +6,7 @@ import {
   openHostChallengeEnvelope,
   parseHostChallengeTranscript,
   readTranscriptUint64
-} from '../host-challenge-envelope'
+} from '../hosts/identity/host-challenge-envelope'
 
 const PUSH_HOST_PROOF_TRANSCRIPT_DOMAIN = 'orca-push-host-proof/v1'
 const PUSH_HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'orca-push-host-challenge/v1'
@@ -30,7 +30,11 @@ export type PushHostProofContext = {
   now?: () => number
   /** Reports the failing check by name only; never receives field values. */
   onInvalid?: (reason: string) => void
+  /** Called when only the freshness checks failed: local time minus the gateway's issuedAt. */
+  onClockSkew?: (skewMs: number) => void
 }
+
+const CLOCK_CHECKS = new Set(['issuedAt-not-future', 'not-expired'])
 
 function validateTranscript(
   transcript: Uint8Array,
@@ -72,6 +76,10 @@ function validateTranscript(
   const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
   if (failed.length > 0) {
     context.onInvalid?.(`transcript:${failed.join('+')}`)
+    // Every other check passed, so issuedAt is the gateway's own time and the gap is this host's clock.
+    if (issuedAt !== null && failed.every((name) => CLOCK_CHECKS.has(name))) {
+      context.onClockSkew?.(now - issuedAt)
+    }
     return false
   }
   return true

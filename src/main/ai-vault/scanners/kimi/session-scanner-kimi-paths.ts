@@ -1,14 +1,18 @@
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
-import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../../shared/file-access/absolute-dir-override'
 import {
   openTranscriptReadStream,
   wslGatedStat
-} from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString } from '../../session-scanner-values'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { KimiSessionIndexCache } from './session-scanner-kimi-index-cache'
 
 export function resolveKimiSessionsDir(override?: string): string {
@@ -52,6 +56,21 @@ export function kimiPrimaryAgentWirePath(
   return join(dirname(statePath), 'agents', primaryId, 'wire.jsonl')
 }
 
+/** The session folder a wire transcript belongs to: `<session dir>/agents/<agent>/wire.jsonl`. */
+export function kimiSessionDirFromWirePath(wirePath: string): string {
+  return dirname(dirname(dirname(wirePath)))
+}
+
+/** The folder Kimi's session index records for the session a wire transcript belongs to: the
+ *  folder Session History lists it under. */
+export async function readKimiWireSessionWorkDir(wirePath: string): Promise<string | null> {
+  const sessionDir = kimiSessionDirFromWirePath(wirePath)
+  const workDirs = await readKimiWorkDirBySessionId(
+    kimiSessionIndexPathFromStatePath(join(sessionDir, 'state.json'))
+  )
+  return workDirs.get(basename(sessionDir)) ?? null
+}
+
 // Share parsed indexes by path and file identity; one home can hold many sessions.
 const workDirCacheByIndexPath = new KimiSessionIndexCache()
 
@@ -59,37 +78,40 @@ export function clearKimiSessionIndexCache(): void {
   workDirCacheByIndexPath.clear()
 }
 
-export function hasKimiSessionIndexCacheEntryForTests(indexPath: string): boolean {
-  return workDirCacheByIndexPath.has(indexPath)
-}
-
-export async function readKimiWorkDirBySessionId(indexPath: string): Promise<Map<string, string>> {
+export async function readKimiWorkDirBySessionId(
+  indexPath: string,
+  signal?: AbortSignal
+): Promise<Map<string, string>> {
   const generation = workDirCacheByIndexPath.beginRead()
   let identity: Awaited<ReturnType<typeof wslGatedStat>>
   try {
-    identity = await wslGatedStat(indexPath, 'scan')
+    identity = await waitForAiVaultScan(wslGatedStat(indexPath, 'scan', signal), signal)
   } catch {
+    throwIfAiVaultScanCancelled(signal)
     // Failed index stats leave sessions listed without cwd; discard cached enrichment for retry.
     workDirCacheByIndexPath.delete(indexPath, generation)
     return new Map()
   }
 
-  return workDirCacheByIndexPath.get(
-    indexPath,
-    {
-      changeTimeMs: identity.ctimeMs,
-      mtimeMs: identity.mtimeMs,
-      sizeBytes: identity.size
-    },
-    generation,
-    () =>
-      parseKimiSessionIndex(indexPath).then(({ map, refused }) => {
-        // Evict inside the shared loader so every concurrent caller retries refused reads without a signature change.
-        if (refused) {
-          workDirCacheByIndexPath.delete(indexPath, generation)
-        }
-        return map
-      })
+  return waitForAiVaultScan(
+    workDirCacheByIndexPath.get(
+      indexPath,
+      {
+        changeTimeMs: identity.ctimeMs,
+        mtimeMs: identity.mtimeMs,
+        sizeBytes: identity.size
+      },
+      generation,
+      () =>
+        parseKimiSessionIndex(indexPath).then(({ map, refused }) => {
+          // Evict inside the shared loader so every concurrent caller retries refused reads without a signature change.
+          if (refused) {
+            workDirCacheByIndexPath.delete(indexPath, generation)
+          }
+          return map
+        })
+    ),
+    signal
   )
 }
 

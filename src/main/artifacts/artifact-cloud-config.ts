@@ -1,10 +1,10 @@
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 
 const PRODUCTION_ARTIFACTS_API_URL = 'https://share.onorca.dev'
 
 function isPackaged(): boolean {
   try {
-    return app?.isPackaged === true
+    return getAppEnvironment().isPackaged()
   } catch {
     return false
   }
@@ -18,12 +18,14 @@ export function resolveArtifactCloudApiUrl(
   const candidate = override?.trim() || env.ORCA_ARTIFACTS_API_URL?.trim()
   const url = new URL(candidate || PRODUCTION_ARTIFACTS_API_URL)
   const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
-  const firstParty = url.hostname === 'onorca.dev' || url.hostname.endsWith('.onorca.dev')
+  const firstParty = ['onorca.dev', 'orca.dev'].some(
+    (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`)
+  )
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback && !packaged)) {
     throw new Error('Artifact API URLs must use HTTPS; local development may use loopback HTTP.')
   }
   if (!firstParty && !loopback) {
-    throw new Error('Artifact API URLs must use an onorca.dev or loopback host.')
+    throw new Error('Artifact API URLs must use an onorca.dev, orca.dev, or loopback host.')
   }
   if (url.username || url.password || url.search || url.hash || url.pathname !== '/') {
     throw new Error('Artifact API URL must be an origin without credentials, paths, or parameters.')

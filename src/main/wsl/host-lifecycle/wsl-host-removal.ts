@@ -1,31 +1,44 @@
-/**
- * Removing a WSL host (E11). Only a proven stop drops its records; anything else keeps the host
- * listed with a pending stop, so the next Remove retries it and Connect or Add can keep the host.
- * Dropping it would strand a still-running server that blocks the next add's activation.
- */
-import { errorMessage } from '../../../shared/error-message'
-import { wslHostServerStopReason } from '../../../shared/wsl-host-failure-copy'
+/** Removing a WSL host (E11): a proven stop drops it, else it stays pending; a repeat Remove of an unreachable server drops it anyway (#49180). */
+import { errorMessage } from '../../../shared/errors/error-message'
+import { wslHostServerStopReason } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import {
   removeWslHostEnvironment,
   setWslHostPendingStop
 } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
-import type { WslHostAddResult, WslHostServerStop } from '../../../shared/wsl-host-types'
+import type {
+  WslHostAddResult,
+  WslHostServerStop
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { admitWslHostDistro, wslHostRemovalPendingMessage } from './wsl-host-add-admission'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import { noteWslHostUserAction } from './wsl-host-user-actions'
 import { forgetWslHostKeptForPeers, recordWslHostKeptForPeers } from './wsl-host-kept-for-peers'
+import { stopAsHostAccount } from './wsl-host-account-migration'
+import { isWslHostKeyChangedRefusal } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 export type WslHostRemoval = { serverStop: WslHostServerStop; removed: boolean }
+
+const FORGOTTEN: WslHostServerStop = {
+  stopped: false,
+  verdict: 'unverifiable',
+  reason: 'Orca didn’t contact the distro, so its server may still be running there.',
+  forgotten: true
+}
 
 export async function removeWslHostServer(
   userDataPath: string,
   connector: WslHostConnector | null,
-  record: WslHostDeploymentRecord
+  record: WslHostDeploymentRecord,
+  /** Drop the host without contacting its distro (the CLI's forget). */
+  forget = false
 ): Promise<WslHostRemoval> {
-  let serverStop: WslHostServerStop = { stopped: true }
-  if (connector) {
+  let serverStop: WslHostServerStop = forget ? FORGOTTEN : { stopped: true }
+  if (forget && connector) {
+    await connector.disconnect(record.distro)
+    await connector.releaseHolder(record.distro)
+  } else if (connector) {
     // A distro that is no longer registered (by GUID or name) runs nothing of this host.
     const current = await connector
       .resolveDistroName(record.distro, record.distroId)
@@ -33,28 +46,38 @@ export async function removeWslHostServer(
     if (current !== false) {
       // Under its current name: a renamed distro never reads as running under the old one.
       // Never boots: a stopped distro is itself a proven stop.
-      serverStop = await connector
-        .stopServer(current ?? record.distro, record.environmentId)
-        .catch((error: unknown): WslHostServerStop => ({
-          stopped: false,
-          verdict: 'unverifiable',
-          reason: errorMessage(error)
-        }))
+      const name = current ?? record.distro
+      const stop = () => connector.stopServer(name, record.environmentId)
+      serverStop = await stopAsHostAccount(userDataPath, record, name, stop).catch(
+        (error: unknown): WslHostServerStop =>
+          // The pinned account's server holds another key, so the paired one no longer runs: one Remove.
+          isWslHostKeyChangedRefusal(error)
+            ? {
+                stopped: false,
+                verdict: 'unverifiable',
+                ...wslHostServerStopReason('serverIdentityReset'),
+                forgotten: true
+              }
+            : { stopped: false, verdict: 'unverifiable', reason: errorMessage(error) }
+      )
     }
     await connector.disconnect(record.distro)
     // Without its holder the distro stops once nothing started in it (a peer's orcad, user jobs) runs.
     await connector.releaseHolder(record.distro)
   }
   serverStop = noteServerKeptForPeers(userDataPath, record.environmentId, serverStop)
-  if (serverStop.stopped) {
-    removeWslHostEnvironment(userDataPath, record.environmentId)
+  if (!serverStop.stopped && (forget || (record.pendingStop && mayForgetOnRetry(serverStop)))) {
+    serverStop = { ...serverStop, forgotten: true }
+  }
+  if (serverStop.stopped || serverStop.forgotten) {
+    await removeWslHostEnvironment(userDataPath, record.environmentId)
     // Every Remove (sidebar or Settings) is the user's: the move orchestrator never removes a
-    // host. Only on the proven stop, and before the service's cleanup await can fail.
+    // host. Only once the host is dropped, and before the service's cleanup await can fail.
     noteWslHostUserAction({ kind: 'removed', distro: record.distro })
     return { serverStop, removed: true }
   }
   const { reason, reasonCode, reasonParams } = serverStop
-  setWslHostPendingStop(userDataPath, record.environmentId, {
+  await setWslHostPendingStop(userDataPath, record.environmentId, {
     since: Date.now(),
     reason,
     ...(reasonCode ? { reasonCode } : {}),
@@ -62,6 +85,11 @@ export async function removeWslHostServer(
     verdict: serverStop.verdict ?? 'unverifiable'
   })
   return { serverStop: { ...serverStop, kept: true }, removed: false }
+}
+
+/** A repeated Remove drops the host only when Orca couldn't reach it, never past proven live work. */
+function mayForgetOnRetry(serverStop: Extract<WslHostServerStop, { stopped: false }>): boolean {
+  return serverStop.verdict !== 'live' && serverStop.reasonCode !== 'removalUnrecorded'
 }
 
 /** R39: undo of a move onto this host must not read a server kept for another Orca as stopped. */
@@ -117,16 +145,16 @@ export async function readdPendingWslHost(
 }
 
 /** A pending host connects only for the user's own Connect or Add, which withdraws its Remove. */
-export function admitConnectToPendingHost(
+export async function admitConnectToPendingHost(
   userDataPath: string,
   record: WslHostDeploymentRecord,
   withdraw: boolean
-): void {
+): Promise<void> {
   if (!record.pendingStop) {
     return
   }
   if (!withdraw) {
     throw new Error(wslHostRemovalPendingMessage(record.distro))
   }
-  setWslHostPendingStop(userDataPath, record.environmentId, null)
+  await setWslHostPendingStop(userDataPath, record.environmentId, null)
 }

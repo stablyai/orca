@@ -1,9 +1,10 @@
+import { getAgentSettingsRowId } from './agent-settings-navigation'
 import {
   getClaudeSubagentNavigationTitle,
   getClaudeSubagentNavigationDescription,
   getClaudeSubagentNavigationSearchKeywords
 } from './behavior/claude-subagent-navigation-copy'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
   getAgentAwakeDescription,
   getAgentAwakeSearchKeywords,
@@ -35,6 +36,7 @@ import {
   getCodexHistorySharingSearchKeywords,
   getCodexHistorySharingTitle
 } from './behavior/codex-history-sharing-copy'
+import { getDeleteAgentHistorySearchEntry } from './behavior/delete-agent-history-search'
 import { translate } from '@/i18n/i18n'
 import {
   searchKeywords,
@@ -88,6 +90,7 @@ function expandAgentSearchText(value: string): string[] {
 
 type AgentsPaneSearchOptions = {
   includeAgentAwake?: boolean
+  includeDeleteAgentHistory?: boolean
   /** Chat UI's per-agent Chat | CLI choice, shown in the Installed list. */
   includeAgentChatChoice?: boolean
   includeAgentRuntime?: boolean
@@ -96,11 +99,14 @@ type AgentsPaneSearchOptions = {
 }
 
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
+const DELETE_AGENT_HISTORY_SEARCH_ENTRY_ID = 'delete-agent-history'
 const AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID = 'agent-chat-choice'
 /** The Installed list, where each chat agent's row holds its Chat | CLI choice. */
 export const AGENTS_INSTALLED_SECTION_ID = 'agents-installed'
+
 /** The top Chat or Terminal tiles that set this computer's default. */
 export const AGENT_DEFAULT_SURFACE_SECTION_ID = 'agents-default-surface'
+export const AGENT_PERMISSIONS_SECTION_ID = 'agents-permissions'
 const AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID = 'agent-workspace-trust'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 const CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID = 'codex-terminal-server-isolation'
@@ -114,8 +120,14 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     ),
     keywords: buildAgentSettingsKeywords()
   },
+  ...getAgentCatalog().map((agent) => ({
+    title: agent.label,
+    description: agent.cmd,
+    targetSectionId: getAgentSettingsRowId(agent.id),
+    keywords: [agent.id, agent.cmd, ...(agent.searchAliases ?? [])]
+  })),
   {
-    title: translate('auto.components.settings.agents.search.agentRuntime', 'Agent Runtime'),
+    title: translate('auto.components.settings.agents.search.1523c4190f', 'Agent runtime'),
     id: AGENT_RUNTIME_SEARCH_ENTRY_ID,
     description: translate(
       'auto.components.settings.agents.search.agentRuntimeDescription',
@@ -194,6 +206,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     description: getCodexHistorySharingDescription(),
     keywords: getCodexHistorySharingSearchKeywords()
   },
+  { ...getDeleteAgentHistorySearchEntry(), id: DELETE_AGENT_HISTORY_SEARCH_ENTRY_ID },
   {
     title: getCodexTerminalServerIsolationTitle(),
     id: CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID,
@@ -212,10 +225,8 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentAwakeSearchKeywords()
   },
   {
-    title: translate(
-      'auto.components.settings.agents.search.agentPermissions',
-      'Agent Permissions'
-    ),
+    targetSectionId: AGENT_PERMISSIONS_SECTION_ID,
+    title: translate('auto.components.settings.agents.search.788559d398', 'Agent permissions'),
     description: translate(
       'settings.agents.permissionsSearchDescription',
       'Choose Approve for me, Full access, or each agent’s own permission settings.'
@@ -243,6 +254,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
 
 export function getAgentsPaneSearchEntries({
   includeAgentAwake = true,
+  includeDeleteAgentHistory = true,
   includeAgentChatChoice = false,
   includeAgentRuntime = true,
   includeAgentWorkspaceTrust = true,
@@ -251,6 +263,9 @@ export function getAgentsPaneSearchEntries({
   const hiddenIds = new Set<string>()
   if (!includeAgentAwake) {
     hiddenIds.add(AGENT_AWAKE_SEARCH_ENTRY_ID)
+  }
+  if (!includeDeleteAgentHistory) {
+    hiddenIds.add(DELETE_AGENT_HISTORY_SEARCH_ENTRY_ID)
   }
   if (!includeAgentChatChoice) {
     hiddenIds.add(AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID)

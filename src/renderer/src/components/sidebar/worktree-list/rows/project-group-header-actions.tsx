@@ -1,26 +1,29 @@
-import React from 'react'
-import { Ellipsis, Plus, RefreshCw } from 'lucide-react'
+import React, { useState } from 'react'
+import { Ellipsis, Plus } from 'lucide-react'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { getFolderWorkspacePathStatusDescription } from '@/lib/folder-workspace-path-status'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { getFolderWorkspacePathStatusDescription } from '@/lib/workspace/paths/folder-workspace-path-status'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getFolderProjectGroupRefreshHandler } from './project-group-folder-refresh'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import {
   handleRepoHeaderActionPointerDown,
-  stopRepoHeaderKeyboardToggle,
-  stopRepoHeaderMenuEvent
+  stopRepoHeaderKeyboardToggle
 } from './header-event-guards'
+
+const LazyProjectGroupHeaderMenuContent = lazyWithRetry(
+  () =>
+    import('./ProjectGroupHeaderMenuContent').then((module) => ({
+      default: module.ProjectGroupHeaderMenuContent
+    })),
+  { reloadKey: 'project-group-header-menu-content' }
+)
 
 export function ProjectGroupHeaderMenu({
   groupId,
@@ -40,9 +43,11 @@ export function ProjectGroupHeaderMenu({
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
 }): React.JSX.Element {
-  const onRefresh = getFolderProjectGroupRefreshHandler(projectGroup, onRefreshProjectGroup)
+  const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const hasOpened = useLatchedOpen(open)
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -50,7 +55,7 @@ export function ProjectGroupHeaderMenu({
           size="icon-xs"
           className={REPO_HEADER_ACTION_BUTTON_CLASS}
           data-repo-header-action=""
-          aria-label={translate(
+          aria-label={t(
             'auto.components.sidebar.WorktreeList.79465e9034',
             'Group actions for {{value0}}',
             { value0: label }
@@ -62,34 +67,19 @@ export function ProjectGroupHeaderMenu({
           <Ellipsis className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        side="bottom"
-        sideOffset={6}
-        // Why: Radix portals keep React bubbling through the project header; block menu events from arming row drag/collapse.
-        onPointerDown={stopRepoHeaderMenuEvent}
-        onMouseDown={stopRepoHeaderMenuEvent}
-        onPointerUp={stopRepoHeaderMenuEvent}
-        onMouseUp={stopRepoHeaderMenuEvent}
-        onClick={stopRepoHeaderMenuEvent}
-        onKeyDown={stopRepoHeaderMenuEvent}
-      >
-        {onRefresh ? (
-          <DropdownMenuItem onSelect={onRefresh}>
-            <RefreshCw className="size-3.5" />
-            {translate(
-              'auto.components.sidebar.WorktreeList.refreshProjectGroup',
-              'Refresh projects'
-            )}
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
-          {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
-          {translate('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
+      {hasOpened ? (
+        <React.Suspense fallback={null}>
+          <LazyProjectGroupHeaderMenuContent
+            groupId={groupId}
+            hostId={hostId}
+            label={label}
+            projectGroup={projectGroup}
+            onRefreshProjectGroup={onRefreshProjectGroup}
+            onRename={onRename}
+            onDelete={onDelete}
+          />
+        </React.Suspense>
+      ) : null}
     </DropdownMenu>
   )
 }
@@ -107,7 +97,8 @@ export function ProjectGroupCreateWorkspaceButton({
   disabled: boolean
   onCreate: (projectGroup: ProjectGroup) => void
 }): React.JSX.Element {
-  const createLabel = translate(
+  const t = useTranslate()
+  const createLabel = t(
     'auto.components.sidebar.WorktreeList.bd37a57ac8',
     'Create workspace for {{value0}}',
     { value0: label }
@@ -143,7 +134,7 @@ export function ProjectGroupCreateWorkspaceButton({
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
         {pathStatus?.exists === false
-          ? getFolderWorkspacePathStatusDescription(pathStatus)
+          ? getFolderWorkspacePathStatusDescription(pathStatus, t)
           : createLabel}
       </TooltipContent>
     </Tooltip>

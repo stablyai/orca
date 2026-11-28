@@ -1,53 +1,36 @@
-import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import { readFetchResponseTextWithinLimit } from '../../../shared/fetch-response-body'
-import { readNodeFileSyncWithinLimit } from '../../../shared/node-bounded-file-reader'
-import { getVersionChannel, MAIN_RELEASE_REPO } from '../../../shared/release-channel'
-import { isWslHostsInternalGateOpen } from '../../../shared/wsl-host-internal-gate'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { isWslHostsInternalGateOpen } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import {
   parseWslHostsPolicy,
   WSL_HOSTS_POLICY_MAX_BYTES,
   type WslHostsPolicy
-} from '../../../shared/wsl-hosts-policy'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
 import { getMainHttpClient } from '../../network/http-client'
+import {
+  readCachedReleaseAssetPolicy,
+  releaseAssetPolicyCacheFileName,
+  releaseAssetPolicyChannelForAppVersion,
+  ReleaseAssetPolicyLiveUpdater,
+  type ReleaseAssetPolicyChannel,
+  type ReleaseAssetPolicyLiveUpdateDeps,
+  type ReleaseAssetPolicySpec
+} from '../../remote-policies/release-asset-policy-live-update'
 import { noteWslHostsLivePolicyBlock } from './wsl-host-gate'
-import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'
 
-const REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000
-const FETCH_TIMEOUT_MS = 30_000
+export type WslHostsPolicyChannel = ReleaseAssetPolicyChannel
 
-export type WslHostsPolicyChannel = 'next' | 'stable'
-
-export function wslHostsPolicyChannelForAppVersion(
-  appVersion: string
-): WslHostsPolicyChannel | null {
-  const channel = getVersionChannel(appVersion)
-  if (!channel) {
-    return null
-  }
-  return channel === 'stable' ? 'stable' : 'next'
+const WSL_HOSTS_POLICY: ReleaseAssetPolicySpec<WslHostsPolicy> = {
+  name: 'wsl-hosts-policy',
+  releaseTag: (channel) => `wsl-hosts-policy-${channel}`,
+  assetName: 'wsl-hosts-policy.json',
+  maxBytes: WSL_HOSTS_POLICY_MAX_BYTES,
+  parse: parseWslHostsPolicy
 }
 
-// A fixed release-asset URL: no API rate limit, and stable can be switched apart from prereleases.
-export function wslHostsPolicyDownloadUrl(channel: WslHostsPolicyChannel): string {
-  return `https://github.com/${MAIN_RELEASE_REPO}/releases/download/wsl-hosts-policy-${channel}/wsl-hosts-policy.json`
-}
+export const wslHostsPolicyChannelForAppVersion = releaseAssetPolicyChannelForAppVersion
 
-// Shared userData must not apply a prerelease-only switch to stable builds.
 export function wslHostsPolicyCacheFileName(channel: WslHostsPolicyChannel): string {
-  return `wsl-hosts-policy-${channel}.json`
-}
-
-function warn(message: string): void {
-  console.warn(`[wsl-hosts-policy] ${message}`)
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function isMissingFile(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+  return releaseAssetPolicyCacheFileName(WSL_HOSTS_POLICY, channel)
 }
 
 /** The last policy a download cached, read synchronously so the startup gate can use it. */
@@ -55,36 +38,13 @@ export function readCachedWslHostsPolicy(
   userDataPath: string,
   appVersion: string
 ): WslHostsPolicy | null {
-  const channel = wslHostsPolicyChannelForAppVersion(appVersion)
-  if (!channel) {
-    return null
-  }
-  try {
-    const { buffer } = readNodeFileSyncWithinLimit(
-      join(userDataPath, wslHostsPolicyCacheFileName(channel)),
-      WSL_HOSTS_POLICY_MAX_BYTES,
-      { regularFileOnly: true }
-    )
-    const parsed = parseWslHostsPolicy(buffer.toString('utf8'))
-    if (!parsed.ok) {
-      warn(`cached policy ignored: ${parsed.error}`)
-      return null
-    }
-    return parsed.policy
-  } catch (error) {
-    if (!isMissingFile(error)) {
-      warn(`cached policy unreadable: ${describeError(error)}`)
-    }
-    return null
-  }
+  return readCachedReleaseAssetPolicy(WSL_HOSTS_POLICY, userDataPath, appVersion)
 }
 
-export type WslHostsPolicyLiveUpdateDeps = {
-  userDataPath: string
-  appVersion: string
-  /** Unpackaged dev and test runs never download. */
-  isPackaged: boolean
-  fetch: (url: string, init?: RequestInit) => Promise<Response>
+export type WslHostsPolicyLiveUpdateDeps = Omit<
+  ReleaseAssetPolicyLiveUpdateDeps<WslHostsPolicy>,
+  'onFetched'
+> & {
   /** The newest known policy blocks; new work stops this run, the rest waits for the next launch. */
   onBlock?: () => void
 }
@@ -93,88 +53,16 @@ export type WslHostsPolicyLiveUpdateDeps = {
  * Keeps the cached policy current; it applies on the next launch, never mid-run, so a flip cannot
  * pull a running host or an in-flight move out from under the user. Failures keep the cache.
  */
-export class WslHostsPolicyLiveUpdater {
-  private channel: WslHostsPolicyChannel | null = null
-  private timer: ReturnType<typeof setInterval> | null = null
-
-  constructor(private readonly deps: WslHostsPolicyLiveUpdateDeps) {}
-
-  async start(): Promise<void> {
-    this.stop()
-    if (!this.deps.isPackaged) {
-      return
-    }
-    this.channel = wslHostsPolicyChannelForAppVersion(this.deps.appVersion)
-    if (!this.channel) {
-      return
-    }
-    this.timer = setInterval(() => void this.refresh(), REFRESH_INTERVAL_MS)
-    this.timer.unref?.()
-    await this.refresh()
-  }
-
-  stop(): void {
-    this.channel = null
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
-  }
-
-  async refresh(): Promise<void> {
-    const channel = this.channel
-    if (!channel) {
-      return
-    }
-    const text = await this.fetchText(channel)
-    if (this.channel !== channel || text === null) {
-      return
-    }
-    const parsed = parseWslHostsPolicy(text)
-    if (!parsed.ok) {
-      warn(`download rejected: ${parsed.error}`)
-      return
-    }
-    const cached = readCachedWslHostsPolicy(this.deps.userDataPath, this.deps.appVersion)
-    // A stale mirror or replayed file must never undo a newer switch.
-    const stale = cached !== null && parsed.policy.revision <= cached.revision
-    // Before the write, so a block applies this run even if caching it fails.
-    if ((stale ? cached : parsed.policy).wslHosts === 'block') {
-      this.deps.onBlock?.()
-    }
-    if (stale) {
-      return
-    }
-    try {
-      // The validated text, not the parsed object: parsing strips fields this build doesn't know,
-      // and an equal revision never rewrites the cache, so a newer build would never see them.
-      await writePluginFileAtomically(
-        join(this.deps.userDataPath, wslHostsPolicyCacheFileName(channel)),
-        text
-      )
-    } catch (error) {
-      warn(`downloaded policy not cached: ${describeError(error)}`)
-    }
-  }
-
-  private async fetchText(channel: WslHostsPolicyChannel): Promise<string | null> {
-    try {
-      const response = await this.deps.fetch(wslHostsPolicyDownloadUrl(channel), {
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
-      })
-      if (!response.ok) {
-        await response.body?.cancel().catch(() => undefined)
-        // Unpublished (404) is the normal state: nothing is switched off.
-        if (response.status !== 404) {
-          warn(`download failed: HTTP ${response.status}`)
+export class WslHostsPolicyLiveUpdater extends ReleaseAssetPolicyLiveUpdater<WslHostsPolicy> {
+  constructor({ onBlock, ...deps }: WslHostsPolicyLiveUpdateDeps) {
+    super(WSL_HOSTS_POLICY, {
+      ...deps,
+      onFetched: (policy) => {
+        if (policy.wslHosts === 'block') {
+          onBlock?.()
         }
-        return null
       }
-      return await readFetchResponseTextWithinLimit(response, WSL_HOSTS_POLICY_MAX_BYTES)
-    } catch (error) {
-      warn(`download failed: ${describeError(error)}`)
-      return null
-    }
+    })
   }
 }
 

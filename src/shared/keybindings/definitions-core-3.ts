@@ -94,6 +94,15 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Alt+Z'])
   },
   {
+    id: 'editor.toggleChangesView',
+    title: 'Toggle Changes View',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'changes', 'diff', 'diff viewer', 'uncommitted', 'edit'],
+    // Why: unbound by default so it never collides with existing chords; users opt in via Settings.
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'editor.copyContext',
     title: 'Copy Context',
     group: 'Editors',
@@ -203,11 +212,38 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     allowBareKeybindings: true
   },
   {
+    id: 'fileExplorer.toggleDotfiles',
+    title: 'Toggle dotfiles',
+    group: 'File Explorer',
+    scope: 'fileExplorer',
+    searchKeywords: [
+      'shortcut',
+      'file explorer',
+      'dotfiles',
+      'hidden',
+      'hidden files',
+      'show',
+      'hide',
+      'toggle',
+      'dot'
+    ],
+    // Why: matches macOS Finder (⌘⇧.); Linux Ctrl+H collides with browser.showHistory, and Windows Explorer has no built-in shortcut.
+    defaultBindings: platformBindings(['Mod+Shift+Period'])
+  },
+  {
     id: 'settings.search',
     title: 'Search Settings',
     group: 'Settings',
     scope: 'settings',
     searchKeywords: ['shortcut', 'settings', 'search', 'find'],
+    defaultBindings: platformBindings(['Mod+F'])
+  },
+  {
+    id: 'page.search',
+    title: 'Search this page',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'search', 'find', 'filter', 'tasks', 'skills', 'automations'],
     defaultBindings: platformBindings(['Mod+F'])
   },
   {
@@ -260,7 +296,7 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     group: 'Terminal Panes',
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'clear'],
-    defaultBindings: platformBindings(['Mod+K'])
+    defaultBindings: platformBindings([])
   },
   {
     id: 'terminal.focusNextPane',
@@ -269,37 +305,5 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'focus', 'next'],
     defaultBindings: platformBindings(['Mod+BracketRight'])
-  },
-  {
-    id: 'terminal.focusPreviousPane',
-    title: 'Focus previous pane',
-    group: 'Terminal Panes',
-    scope: 'terminal',
-    searchKeywords: ['shortcut', 'pane', 'focus', 'previous'],
-    defaultBindings: platformBindings(['Mod+BracketLeft'])
-  },
-  {
-    id: 'terminal.equalizePaneSizes',
-    title: 'Equalize pane sizes',
-    group: 'Terminal Panes',
-    scope: 'terminal',
-    searchKeywords: ['shortcut', 'pane', 'split', 'equalize', 'resize', 'balance', 'size'],
-    defaultBindings: platformBindings([])
-  },
-  {
-    id: 'terminal.expandPane',
-    title: 'Expand / collapse pane',
-    group: 'Terminal Panes',
-    scope: 'terminal',
-    searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
-    defaultBindings: platformBindings(['Mod+Shift+Enter'])
-  },
-  {
-    id: 'terminal.setTitle',
-    title: 'Set Title…',
-    group: 'Terminal Panes',
-    scope: 'terminal',
-    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
-    defaultBindings: platformBindings([])
   }
 ]

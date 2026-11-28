@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useEffectEvent, useRef } from 'react'
 import { formatKeybinding } from '../../../../../shared/keybindings/formatting'
 import { isDoubleTapBinding } from '../../../../../shared/keybindings/normalization'
 import type { KeybindingActionId, KeybindingInput } from '../../../../../shared/keybindings/types'
@@ -6,11 +6,11 @@ import {
   ModifierDoubleTapDetector,
   modifierFromKeyEvent,
   toModifierDoubleTapEvent
-} from '../../../../../shared/modifier-double-tap-detector'
-import { cn } from '../../../lib/utils'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+} from '../../../../../shared/keybindings/modifier-double-tap-detector'
+import { cn } from '../../../lib/class-names'
+import { ShortcutKeyCombo } from '../../ui/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ShortcutRecorderButtonProps = {
   actionId: KeybindingActionId
@@ -23,6 +23,8 @@ type ShortcutRecorderButtonProps = {
   bindingCount: number
   recording: boolean
   isAppendSlot?: boolean
+  /** Menu-row sizing: plain-text keys instead of key caps. */
+  compact?: boolean
   onStartRecording: (actionId: KeybindingActionId, index: number) => void
   onCancelRecording: () => void
   onCapture: (actionId: KeybindingActionId, input: KeybindingInput) => void
@@ -48,11 +50,13 @@ export function ShortcutRecorderButton({
   bindingCount,
   recording,
   isAppendSlot = false,
+  compact = false,
   onStartRecording,
   onCancelRecording,
   onCapture,
   onClearError
 }: ShortcutRecorderButtonProps): React.JSX.Element {
+  const t = useTranslate()
   const recordButtonRef = useRef<HTMLButtonElement | null>(null)
   const doubleTapDetectorRef = useRef<ModifierDoubleTapDetector | null>(null)
   if (!doubleTapDetectorRef.current) {
@@ -67,6 +71,24 @@ export function ShortcutRecorderButton({
       doubleTapDetectorRef.current?.reset()
     }
     // ShortcutsPane owns the global recorder-focus flag across rows.
+  }, [recording])
+
+  // Leave the row error in place so it can still be read or copied; Esc or the next recording clears it.
+  const cancelIfClickedAway = useEffectEvent((): void => {
+    if (document.activeElement !== recordButtonRef.current) {
+      onCancelRecording()
+    }
+  })
+
+  // Keys only reach a focused recorder, so a click elsewhere would strand it recording. Cancel on
+  // click, not blur: window switches keep recording, and the row only collapses after the click
+  // has landed. Capture phase runs before the clicked control's own handler.
+  useEffect(() => {
+    if (!recording) {
+      return
+    }
+    window.addEventListener('click', cancelIfClickedAway, true)
+    return () => window.removeEventListener('click', cancelIfClickedAway, true)
   }, [recording])
 
   const handleRecordKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
@@ -144,37 +166,34 @@ export function ShortcutRecorderButton({
   }
 
   const recorderLabel = recording
-    ? translate(
+    ? t(
         'auto.components.settings.ShortcutRecorderButton.1a13bb054d',
         'Press shortcut keys for {{value0}}. Escape cancels.',
         { value0: title }
       )
     : isAppendSlot || binding === null
-      ? translate(
+      ? t(
           'auto.components.settings.ShortcutRecorderButton.3732775d74',
           'Add shortcut for {{value0}}',
           { value0: title }
         )
       : bindingCount <= 1
-        ? translate(
+        ? t(
             'auto.components.settings.ShortcutRecorderButton.88764af2c1',
             'Change shortcut for {{value0}}',
             { value0: title }
           )
-        : translate(
+        : t(
             'auto.components.settings.ShortcutRecorderButton.30feb099d6',
             'Change shortcut {{value0}} of {{value1}} for {{value2}}',
             { value0: String(bindingIndex + 1), value1: String(bindingCount), value2: title }
           )
 
   const tooltipLabel = recording
-    ? translate(
-        'auto.components.settings.ShortcutRecorderButton.5d982a2a1f',
-        'Listening for shortcut'
-      )
+    ? t('auto.components.settings.ShortcutRecorderButton.5d982a2a1f', 'Listening for shortcut')
     : isAppendSlot || binding === null
-      ? translate('auto.components.settings.ShortcutRecorderButton.152e0bcd64', 'Add shortcut')
-      : translate('auto.components.settings.ShortcutRecorderButton.5bd56445da', 'Change shortcut')
+      ? t('auto.components.settings.ShortcutRecorderButton.152e0bcd64', 'Add shortcut')
+      : t('auto.components.settings.ShortcutRecorderButton.5bd56445da', 'Change shortcut')
 
   const keys = binding === null ? [] : formatKeybinding(binding, platform)
 
@@ -196,19 +215,35 @@ export function ShortcutRecorderButton({
           onKeyDown={handleRecordKeyDown}
           onKeyUp={handleRecordKeyUp}
           className={cn(
-            'flex min-h-7 min-w-[5.5rem] max-w-[14rem] items-center justify-end gap-1.5 overflow-hidden rounded-md border px-2 py-1 text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
-            recording
-              ? 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
-              : 'border-transparent hover:border-border/70 hover:bg-background'
+            'flex items-center justify-end overflow-hidden rounded-md border text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            compact
+              ? 'h-5 min-w-9 shrink-0 px-1.5 text-2xs text-muted-foreground'
+              : 'min-h-7 min-w-[5.5rem] max-w-[14rem] gap-1.5 px-2 py-1',
+            recording && 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30',
+            !recording &&
+              !compact &&
+              'border-transparent hover:border-border/70 hover:bg-background',
+            !recording &&
+              compact &&
+              'border-border/80 hover:border-muted-foreground/60 hover:text-foreground focus-visible:text-foreground',
+            !recording && compact && binding === null && 'border-dashed border-border'
           )}
         >
           {recording || binding === null ? (
-            <span className="px-1 text-muted-foreground">
-              {translate(
-                'auto.components.settings.ShortcutRecorderButton.f5ed5dcbf6',
-                'Press keys…'
-              )}
+            <span className={compact ? 'whitespace-nowrap' : 'px-1 text-muted-foreground'}>
+              {recording || !compact
+                ? t('auto.components.settings.ShortcutRecorderButton.f5ed5dcbf6', 'Press keys…')
+                : t('auto.components.settings.ShortcutRecorderButton.152e0bcd64', 'Add shortcut')}
             </span>
+          ) : compact ? (
+            // Menu-row size: same key combo, drawn as inline glyphs instead of key caps.
+            <ShortcutKeyCombo
+              keys={keys}
+              doubleTap={isDoubleTapBinding(binding)}
+              className="gap-0 whitespace-nowrap"
+              keyCapClassName="min-w-0 border-0 bg-transparent p-0 text-2xs font-medium text-current shadow-none"
+              separatorClassName="text-2xs"
+            />
           ) : (
             <span className="flex flex-wrap items-center justify-end gap-1.5 overflow-hidden">
               <ShortcutKeyCombo

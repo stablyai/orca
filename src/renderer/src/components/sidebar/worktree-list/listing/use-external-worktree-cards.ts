@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getImportedWorktreesKeepHiddenError,
   keepImportedWorktreesHiddenCard,
@@ -9,13 +9,23 @@ import {
   type ImportedWorktreeCardActionState
 } from './imported-worktrees-card-actions'
 import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
-import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/external-worktree-inbox'
+import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
 import {
   suppressNewExternalWorktreeInbox,
   type NewExternalWorktreesInboxActionState
 } from './new-external-worktrees-inbox-actions'
 import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  indexHiddenProjects,
+  withoutHiddenFilterRepoIds
+} from '../../../../../../shared/project/catalog/hidden-projects'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
+
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+const EMPTY_IMPORTED_ACTION_STATE = new Map<string, ImportedWorktreeCardActionState>()
+const EMPTY_INBOX_ACTION_STATE = new Map<string, NewExternalWorktreesInboxActionState>()
+const EMPTY_FORCE_VISIBLE_REPO_IDS = new Set<string>()
 
 export function useSidebarExternalWorktreeCards(args: {
   repos: readonly Repo[]
@@ -23,27 +33,46 @@ export function useSidebarExternalWorktreeCards(args: {
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo']
   filterRepoIds: readonly string[]
 }) {
-  const { repos, visibleReposForRows, detectedWorktreesByRepo, filterRepoIds } = args
-  const updateRepo = useAppStore((s) => s.updateRepo)
-  const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const { repos, visibleReposForRows, detectedWorktreesByRepo } = args
+  // A filter naming only hidden projects selects nothing listed, so notices ignore it as rows do.
+  const filterRepoIds = useMemo(
+    () =>
+      args.filterRepoIds.length === 0
+        ? args.filterRepoIds
+        : withoutHiddenFilterRepoIds(
+            args.filterRepoIds,
+            indexHiddenProjects(repos, LOCAL_EXECUTION_HOST_ID)
+          ),
+    [args.filterRepoIds, repos]
+  )
+  const { updateRepo, fetchWorktrees } = getAppStoreState()
   const settings = useAppStore((s) => s.settings)
   const visibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const [importedWorktreeCardActionState, setImportedWorktreeCardActionState] = useState<
     Map<string, ImportedWorktreeCardActionState>
-  >(new Map())
-  const [newExternalWorktreeInboxActionState, setNewExternalWorktreeInboxActionState] = useState<
-    Map<string, NewExternalWorktreesInboxActionState>
-  >(new Map())
+  >(EMPTY_IMPORTED_ACTION_STATE)
+  const [newExternalWorktreeInboxActionState, setNewExternalWorktreeInboxActionState] =
+    useState<Map<string, NewExternalWorktreesInboxActionState>>(EMPTY_INBOX_ACTION_STATE)
   const [suppressExternalWorktreeInboxRepoId, setSuppressExternalWorktreeInboxRepoId] = useState<
     string | null
   >(null)
 
   const importedWorktreesByRepo = useMemo(() => {
-    const forceVisibleRepoIds = new Set(
-      [...importedWorktreeCardActionState.entries()]
-        .filter(([, state]) => state.forceVisible)
-        .map(([repoId]) => repoId)
-    )
+    let forceVisibleRepoIds = EMPTY_FORCE_VISIBLE_REPO_IDS
+    if (importedWorktreeCardActionState.size > 0) {
+      let nextSet: Set<string> | undefined
+      for (const [repoId, state] of importedWorktreeCardActionState) {
+        if (state.forceVisible) {
+          if (!nextSet) {
+            nextSet = new Set()
+          }
+          nextSet.add(repoId)
+        }
+      }
+      if (nextSet) {
+        forceVisibleRepoIds = nextSet
+      }
+    }
     return buildImportedWorktreesCardCandidates({
       repos: visibleReposForRows,
       detectedWorktreesByRepo,

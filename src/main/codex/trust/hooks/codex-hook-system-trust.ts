@@ -1,4 +1,4 @@
-import type { HookDefinition } from '../../../agent-hooks/installer-utils'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHookTrustEntries,
   type CodexEventLabel,
@@ -14,7 +14,7 @@ import {
 } from '../identity/codex-trust-identity'
 import {
   createCodexHookTrustEntry,
-  getCodexHookTrustSignature
+  getCodexUserHookMirrorSignature
 } from '../../hooks/definitions/codex-hook-identity'
 import { getSystemCodexConfigTomlPath } from '../../hooks/definitions/codex-hook-definition'
 
@@ -63,7 +63,7 @@ export function getTrustedSystemUserHookSignatures(
         if (!state) {
           return
         }
-        const signature = getCodexHookTrustSignature(entry)
+        const signature = getCodexUserHookMirrorSignature(entry)
         // Deduplication must keep a hook enabled if any copy is enabled.
         if (state.enabled || !signatures.has(signature)) {
           signatures.set(signature, state)

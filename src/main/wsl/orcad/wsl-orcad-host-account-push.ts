@@ -1,8 +1,8 @@
 /** Push selected distro account homes on connect/selection changes so host-initiated CLI, automation, chat and text-generation launches use the same account. */
-import type { HostAccountLaunchEnv } from '../../../shared/host-account-launch-env'
-import { HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { HostAccountLaunchEnv } from '../../../shared/agent-launch/startup/host-account-launch-env'
+import { HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   distroTarget,
   getWslOrcadAccountEnvDependencies,
@@ -10,7 +10,11 @@ import {
   type WslOrcadAccountEnvDependencies
 } from './wsl-orcad-account-env'
 import type { WslOrcadHostCapabilityVerdict } from './wsl-orcad-host-environments'
-import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
+import {
+  createWslOrcadHostPushQueue,
+  pushToWslOrcadHostWithRetry,
+  WSL_HOST_PUSH_RETRY_DELAYS_MS
+} from './wsl-orcad-host-push-retry'
 
 export type WslOrcadHostAccountPush = {
   environmentId: string
@@ -66,47 +70,25 @@ async function pushOnce(
   }
 }
 
-const pending = new Map<string, Promise<void>>()
-const generations = new Map<string, number>()
-/** A failed push is retried, since the host otherwise keeps the old account until it reconnects. */
-const RETRY_DELAYS_MS = [5_000, 30_000, 120_000] as const
+const queue = createWslOrcadHostPushQueue()
 
 /** Serialized per host, so an older selection can never land after a newer one. */
 export function pushWslOrcadHostAccountEnv(
   push: WslOrcadHostAccountPush,
   dependencies: WslOrcadAccountEnvDependencies | null = getWslOrcadAccountEnvDependencies(),
-  retryDelaysMs: readonly number[] = RETRY_DELAYS_MS
+  retryDelaysMs: readonly number[] = WSL_HOST_PUSH_RETRY_DELAYS_MS
 ): Promise<void> {
   if (!dependencies) {
     return Promise.resolve()
   }
-  const generation = (generations.get(push.environmentId) ?? 0) + 1
-  generations.set(push.environmentId, generation)
-  return enqueue(push, dependencies, retryDelaysMs, generation, 0)
-}
-
-function enqueue(
-  push: WslOrcadHostAccountPush,
-  dependencies: WslOrcadAccountEnvDependencies,
-  retryDelaysMs: readonly number[],
-  generation: number,
-  attempt: number
-): Promise<void> {
-  return runKeyedSerializedOperation(pending, push.environmentId, () =>
-    pushOnce(push, dependencies)
-  ).catch((error: unknown) => {
-    // Retain the last host account on failure; clearing it would launch under another account.
-    console.warn(`[wsl-hosts] Could not give ${push.distro} its selected accounts:`, error)
-    const delay = retryDelaysMs[attempt]
-    if (delay === undefined) {
-      return
-    }
-    const timer = setTimeout(() => {
-      // A newer push already carries the current selection.
-      if (generations.get(push.environmentId) === generation) {
-        void enqueue(push, dependencies, retryDelaysMs, generation, attempt + 1)
-      }
-    }, delay)
-    timer.unref?.()
-  })
+  return pushToWslOrcadHostWithRetry(
+    queue,
+    push.environmentId,
+    () => pushOnce(push, dependencies),
+    (error) => {
+      // Retain the last host account on failure; clearing it would launch under another account.
+      console.warn(`[wsl-hosts] Could not give ${push.distro} its selected accounts:`, error)
+    },
+    retryDelaysMs
+  )
 }

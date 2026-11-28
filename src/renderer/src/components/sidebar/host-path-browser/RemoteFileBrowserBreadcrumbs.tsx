@@ -1,8 +1,8 @@
-import React, { useCallback } from 'react'
+import React from 'react'
 import { ChevronRight, ArrowUp, Home } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { driveBreadcrumbPath, splitBrowsePath } from './remote-file-browser-drive-paths'
-import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 
 type RemoteFileBrowserBreadcrumbsProps = {
   resolvedPath: string
@@ -22,13 +22,10 @@ export function RemoteFileBrowserBreadcrumbs({
   // Retain drive separator shape when reconstructing breadcrumb paths.
   const browseParts = splitBrowsePath(resolvedPath, pathFlavor)
   const pathSegments = browseParts.segments
-  const breadcrumbPathTo = useCallback(
-    (segmentIndex: number): string =>
-      browseParts.kind === 'drive'
-        ? driveBreadcrumbPath(browseParts.driveRoot, browseParts.segments, segmentIndex)
-        : `/${browseParts.segments.slice(0, segmentIndex + 1).join('/')}`,
-    [browseParts]
-  )
+  const breadcrumbPathTo = (segmentIndex: number): string =>
+    browseParts.kind === 'drive'
+      ? driveBreadcrumbPath(browseParts.driveRoot, browseParts.segments, segmentIndex)
+      : `/${browseParts.segments.slice(0, segmentIndex + 1).join('/')}`
 
   return (
     <div className="flex items-center gap-0.5 min-h-[28px] overflow-x-auto scrollbar-none">

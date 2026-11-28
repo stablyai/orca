@@ -1,36 +1,38 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   markLiveCodexSessionsForRestart,
   resolveCodexRestartPromptAccountLabel
-} from '@/lib/codex-session-restart'
+} from '@/lib/agent-session/accounts/codex/codex-session-restart'
 import {
   getProviderAccountActiveIdForView,
-  getProviderAccountRuntime
+  getProviderAccountRuntime,
+  type ProviderAccountRuntimeView
 } from '../../provider-accounts/provider-account-visibility'
 import type {
-  ClaudeAccountAction,
+  ProviderAccountAction,
   ClaudeAccountActionRunner,
-  CodexAccountAction,
-  CodexAccountActionRunner,
-  LocalAccountRuntime
+  CodexAccountActionRunner
 } from './accounts-pane-types'
+import type { LocalAccountRuntime } from '../../../lib/provider-accounts/account-runtime-label'
 import {
   getClaudeAccountErrorDescription,
   getCodexAccountErrorDescription,
   isClaudeAccountCancellation,
   isCodexAccountCancellation
-} from './accounts-pane-action-errors'
-import { getClaudeAccountLabel } from '@/lib/claude-account-label'
-import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
+} from '../../../lib/provider-accounts/provider-account-action-errors'
+import { getClaudeAccountLabel } from '@/lib/provider-accounts/claude-account-label'
+import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/provider-accounts/claude-account-switch-sessions'
+import { createAccountRenameRunner, type AccountRenameContext } from './account-rename-runner'
+import { PartialAccountUpdateError, toRuntimeList } from './accounts-pane-partial-update'
 
 type CodexActionContext = {
   settings: GlobalSettings
@@ -41,7 +43,7 @@ type CodexActionContext = {
   codexAccounts: CodexRateLimitAccountsState
   setCodexAccounts: Dispatch<SetStateAction<CodexRateLimitAccountsState>>
   setCodexAccountsLoaded: Dispatch<SetStateAction<boolean>>
-  setCodexAction: Dispatch<SetStateAction<CodexAccountAction>>
+  setCodexAction: Dispatch<SetStateAction<ProviderAccountAction>>
   fetchSettings: () => Promise<void>
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
   /** False once the pane shows a different account owner than this action targeted. */
@@ -75,15 +77,16 @@ export function createCodexAccountActionRunner(
     }
   }
 
-  // Remote Windows combines host/WSL rows; compare the selected row’s runtime slot, not the forced host view.
-  return async (action, operation, actionRuntime = accountRuntime): Promise<void> => {
-    const previousActiveAccountId = getProviderAccountActiveIdForView(codexAccounts, actionRuntime)
-    setCodexAction(action)
-    try {
-      const next = await operation()
-      await syncCodexAccounts(next)
-      recordFeatureInteraction('codex-account-switching')
-      const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
+  const applyCodexResult = async (
+    action: ProviderAccountAction,
+    next: CodexRateLimitAccountsState,
+    runtimes: readonly ProviderAccountRuntimeView[]
+  ): Promise<void> => {
+    await syncCodexAccounts(next)
+    recordFeatureInteraction('codex-account-switching')
+    const changed = runtimes.flatMap((runtime) => {
+      const previousActiveAccountId = getProviderAccountActiveIdForView(codexAccounts, runtime)
+      const nextActiveAccountId = getProviderAccountActiveIdForView(next, runtime)
       const shouldPromptRestart =
         action === 'adding' ||
         (action.startsWith('select:') && previousActiveAccountId !== nextActiveAccountId) ||
@@ -91,36 +94,56 @@ export function createCodexAccountActionRunner(
           nextActiveAccountId !== null &&
           action === `reauth:${nextActiveAccountId}`) ||
         (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
-      if (shouldPromptRestart) {
-        // Find the newly created account’s concrete distro from the roster diff; the row may say WSL default and active-ID lookup becomes ambiguous across distro slots.
-        const newAccounts =
-          action === 'adding'
-            ? next.accounts.filter(
-                (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
-              )
-            : []
-        // Require exactly one addition; unloaded prior rosters make all accounts look new, so retain the existing row fallback when ambiguous.
-        const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
-        void markLiveCodexSessionsForRestart({
-          previousAccountLabel: resolveCodexRestartPromptAccountLabel(
-            codexAccounts.accounts,
-            previousActiveAccountId
-          ),
-          nextAccountLabel: resolveCodexRestartPromptAccountLabel(
-            next.accounts,
-            nextActiveAccountId
-          ),
-          // Emails can repeat; use IDs to detect returning to the launch account.
-          previousAccountId: previousActiveAccountId ?? null,
-          nextAccountId: nextActiveAccountId ?? null,
-          // Only this runtime slot changed; other lanes retain their launch accounts.
-          owner: accountOwner,
-          target: addedAccount ? getProviderAccountRuntime(addedAccount) : actionRuntime,
-          // Clearing distro-less WSL resets every distro slot.
-          clearsEveryWslDistro: action === 'select:system'
-        })
+      return shouldPromptRestart ? [{ runtime, previousActiveAccountId, nextActiveAccountId }] : []
+    })
+    // One prompt per action: several lanes share one owner's panes, so per-lane calls would rescan and overwrite.
+    const shown = changed.at(-1)
+    if (!shown) {
+      return
+    }
+    const { runtime, previousActiveAccountId, nextActiveAccountId } = shown
+    // Find the newly created account’s concrete distro from the roster diff; the row may say WSL default and active-ID lookup becomes ambiguous across distro slots.
+    const newAccounts =
+      action === 'adding'
+        ? next.accounts.filter(
+            (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
+          )
+        : []
+    // Require exactly one addition; unloaded prior rosters make all accounts look new, so retain the existing row fallback when ambiguous.
+    const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
+    // Lanes leaving different accounts share one prompt, so name each and claim no single launch ID.
+    const previousIds = Array.from(new Set(changed.map((lane) => lane.previousActiveAccountId)))
+    const mixedPrevious = previousIds.length > 1
+    void markLiveCodexSessionsForRestart({
+      previousAccountLabel: Array.from(
+        new Set(
+          previousIds.map((id) => resolveCodexRestartPromptAccountLabel(codexAccounts.accounts, id))
+        )
+      ).join(', '),
+      nextAccountLabel: resolveCodexRestartPromptAccountLabel(next.accounts, nextActiveAccountId),
+      // Emails can repeat; use IDs to detect returning to the launch account.
+      ...(mixedPrevious ? {} : { previousAccountId: previousActiveAccountId ?? null }),
+      nextAccountId: nextActiveAccountId ?? null,
+      // Only this runtime slot changed; other lanes retain their launch accounts.
+      owner: accountOwner,
+      target: addedAccount ? getProviderAccountRuntime(addedAccount) : runtime,
+      // Clearing distro-less WSL resets every distro slot.
+      clearsEveryWslDistro: action === 'select:system'
+    })
+  }
+
+  // Remote Windows combines host/WSL rows; compare the selected row’s runtime slot, not the forced host view.
+  return async (action, operation, actionRuntime = accountRuntime): Promise<void> => {
+    setCodexAction(action)
+    try {
+      await applyCodexResult(action, await operation(), toRuntimeList(actionRuntime))
+    } catch (failure) {
+      // Lanes that applied before a later one failed still need their roster and restart prompts.
+      if (failure instanceof PartialAccountUpdateError) {
+        // The original failure still gets its toast if applying the partial result fails too.
+        await applyCodexResult(action, failure.applied, failure.appliedLanes).catch(() => {})
       }
-    } catch (error) {
+      const error = failure instanceof PartialAccountUpdateError ? failure.cause : failure
       // Explicit cancellation and superseding logins are user actions, not failures.
       if (isCodexAccountCancellation(error)) {
         return
@@ -147,7 +170,7 @@ type ClaudeActionContext = {
   isRemoteAccountScope: boolean
   claudeAccounts: ClaudeRateLimitAccountsState
   setClaudeAccounts: Dispatch<SetStateAction<ClaudeRateLimitAccountsState>>
-  setClaudeAction: Dispatch<SetStateAction<ClaudeAccountAction>>
+  setClaudeAction: Dispatch<SetStateAction<ProviderAccountAction>>
   fetchSettings: () => Promise<void>
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
   /** False once the pane shows a different account owner than this action targeted. */
@@ -181,7 +204,7 @@ export function createClaudeAccountActionRunner(
     const previousActiveAccountId = getProviderAccountActiveIdForView(claudeAccounts, actionRuntime)
     setClaudeAction(action)
     try {
-      const next = await operation()
+      const { runningSessions, ...next } = await operation()
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
@@ -206,14 +229,16 @@ export function createClaudeAccountActionRunner(
           }
         )
       }
-      if (switched) {
+      // A server's report counts even when this view already showed the account it switched to.
+      if (switched || runningSessions) {
         void handleRunningClaudeSessionsAfterSwitch({
           owner: accountOwner,
           target: actionRuntime,
           before: { state: claudeAccounts, accountId: previousActiveAccountId },
-          after: { state: next, accountId: nextActiveAccountId }
+          after: { state: next, accountId: nextActiveAccountId },
+          ...(runningSessions ? { hostMove: runningSessions } : {})
         }).then((outcome) => {
-          if (outcome === 'show-confirmation') {
+          if (outcome === 'show-confirmation' && switched) {
             showUpdatedToast()
           }
         })
@@ -236,5 +261,19 @@ export function createClaudeAccountActionRunner(
     } finally {
       setClaudeAction('idle')
     }
+  }
+}
+
+export function createAccountsPaneRunners(
+  context: CodexActionContext & ClaudeActionContext & AccountRenameContext
+): {
+  runCodexAccountAction: CodexAccountActionRunner
+  runClaudeAccountAction: ClaudeAccountActionRunner
+  renameAccount: ReturnType<typeof createAccountRenameRunner>
+} {
+  return {
+    runCodexAccountAction: createCodexAccountActionRunner(context),
+    runClaudeAccountAction: createClaudeAccountActionRunner(context),
+    renameAccount: createAccountRenameRunner(context)
   }
 }

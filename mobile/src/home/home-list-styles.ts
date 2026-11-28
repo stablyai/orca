@@ -1,17 +1,15 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 // Text starts after the status column, so separators inset to it.
 const STATUS_COLUMN_WIDTH = 24
 const ROW_LEADING_PADDING = spacing.lg
-const TILE_SIZE = 30
-const TILE_GAP = 11
-const TILE_DOT_SIZE = 10
-const TILE_DOT_RING = 2
+/** Where a row's text starts: separators and nested rows line up with it. */
+export const HOME_ROW_TEXT_INSET = ROW_LEADING_PADDING + STATUS_COLUMN_WIDTH
 
 /** Home's grouped lists: one inset group per section, a status column, a title and a wrapping detail line. */
-export const homeListStyles = themedStyleSheet(() => ({
+export const homeListStylesSheet = themedStyleSheet((colors) => ({
   sectionHeadingRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -21,8 +19,12 @@ export const homeListStyles = themedStyleSheet(() => ({
     marginTop: 20,
     marginBottom: 7
   },
-  sectionHeading: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  sectionHeading: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  sectionCount: { fontWeight: '500', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   sectionAside: { fontSize: 14, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  sectionAsideRow: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sectionLink: { color: colors.accentBlue, fontWeight: '500' },
+  linkPressed: { opacity: 0.5 },
   firstSectionHeading: { marginTop: spacing.xs },
   // Matches a heading's top gap for a group that has none.
   headinglessGroup: { marginTop: 20 },
@@ -33,38 +35,20 @@ export const homeListStyles = themedStyleSheet(() => ({
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: ROW_LEADING_PADDING + STATUS_COLUMN_WIDTH
+    marginLeft: HOME_ROW_TEXT_INSET
   },
   fullSeparator: { marginLeft: ROW_LEADING_PADDING },
-  tileSeparator: { marginLeft: ROW_LEADING_PADDING + TILE_SIZE + TILE_GAP },
   status: {
     width: STATUS_COLUMN_WIDTH,
     height: 20,
     marginTop: 9,
     justifyContent: 'center'
   },
-  // A machine tile in place of the status column, top-aligned with the title like it.
-  tile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
-    marginTop: 9,
-    marginRight: TILE_GAP,
-    borderRadius: radii.tile,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  // The connection dot on the tile's corner, ringed in the group's colour.
-  tileDot: {
-    position: 'absolute',
-    right: -3 - TILE_DOT_RING,
-    bottom: -3 - TILE_DOT_RING,
-    width: TILE_DOT_SIZE + TILE_DOT_RING * 2,
-    height: TILE_DOT_SIZE + TILE_DOT_RING * 2,
-    borderRadius: radii.pill,
-    borderWidth: TILE_DOT_RING,
-    borderColor: colors.bgPanel
-  },
+  // A computer's connection, centred in the status column like an agent's state.
+  statusDot: { width: 8, height: 8, borderRadius: radii.pill },
+  // A row with only a title still makes a 44 pt target.
+  singleLineText: { paddingVertical: 12 },
+  singleLineStatus: { marginTop: 12 },
   text: { flex: 1, minWidth: 0, paddingVertical: 9 },
   title: { fontSize: 16, lineHeight: 20, color: colors.textPrimary },
   subtitle: { fontSize: 14, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
@@ -86,6 +70,9 @@ export const homeListStyles = themedStyleSheet(() => ({
     paddingHorizontal: ROW_LEADING_PADDING
   },
   actionLabel: { fontSize: 16, color: colors.accentBlue },
+  // An action under status-column rows: its glyph in the column, its label at the rows' text.
+  columnActionRow: { gap: 0 },
+  actionColumn: { width: STATUS_COLUMN_WIDTH },
   // A desktop's needs-you count, in the Feed badge's amber.
   countPill: {
     minWidth: 20,

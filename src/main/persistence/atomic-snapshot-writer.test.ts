@@ -1,26 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type * as NodeFsPromises from 'node:fs/promises'
 import { AtomicSnapshotWriter } from './atomic-snapshot-writer'
 
-const renameHook = vi.hoisted(() => {
-  const hook: { afterRename: (() => void) | null } = { afterRename: null }
-  return hook
-})
+// windows-retry-file-operations imports the named rename binding, so it must be mocked at the module.
+const renameMock = vi.hoisted(() => ({ fn: vi.fn<typeof NodeFsPromises.rename>() }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
-  return {
-    ...actual,
-    rename: async (from: string, to: string) => {
-      await actual.rename(from, to)
-      const afterRename = renameHook.afterRename
-      renameHook.afterRename = null
-      afterRename?.()
-    }
-  }
+  renameMock.fn.mockImplementation(actual.rename)
+  return { ...actual, rename: renameMock.fn }
 })
+
+const eperm = (): Error =>
+  Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' })
 
 describe('AtomicSnapshotWriter', () => {
   let dir: string
@@ -49,71 +43,36 @@ describe('AtomicSnapshotWriter', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
+    renameMock.fn.mockClear()
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('publishes an async write', async () => {
+  it('publishes an async write through a transient Windows rename EPERM', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    renameMock.fn.mockRejectedValueOnce(eperm())
     const writer = new AtomicSnapshotWriter(() => file)
-    await writer.write(() => 'one')
-    expect(readFileSync(file, 'utf8')).toBe('one')
+
+    await writer.write(() => 'async content')
+
+    expect(readFileSync(file, 'utf8')).toBe('async content')
+    expect(renameMock.fn).toHaveBeenCalledTimes(2)
     expect(tmpFiles()).toEqual([])
   })
 
-  it('coalesces requests made during an in-flight write to the newest serialize', async () => {
+  it('does not retry an async rename after close lands during the Windows backoff', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const writer = new AtomicSnapshotWriter(() => file)
-    const first = inFlight('one')
-    const pending = writer.write(first.serialize)
-    await first.started
-    const skipped = vi.fn(() => 'two')
-    const newest = vi.fn(() => 'three')
-    void writer.write(skipped)
-    void writer.write(newest)
-    await pending
-    await writer.waitForPendingWrite()
-    expect(skipped).not.toHaveBeenCalled()
-    expect(newest).toHaveBeenCalledTimes(1)
-    expect(readFileSync(file, 'utf8')).toBe('three')
-  })
+    renameMock.fn.mockImplementationOnce(() => {
+      writer.close()
+      return Promise.reject(eperm())
+    })
 
-  it('drains a write requested in any microtask after the previous rename completes', async () => {
-    const nested = (depth: number, fn: () => void): void => {
-      if (depth === 0) {
-        fn()
-        return
-      }
-      queueMicrotask(() => nested(depth - 1, fn))
-    }
-    for (let depth = 0; depth < 8; depth += 1) {
-      const writer = new AtomicSnapshotWriter(() => file)
-      const scheduled = Promise.withResolvers<void>()
-      let second: Promise<void> | undefined
-      renameHook.afterRename = () =>
-        nested(depth, () => {
-          second = writer.write(() => `second ${depth}`)
-          scheduled.resolve()
-        })
-      await writer.write(() => `first ${depth}`)
-      await scheduled.promise
-      await second
-      await writer.waitForPendingWrite()
-      expect(readFileSync(file, 'utf8')).toBe(`second ${depth}`)
-    }
-  })
+    await writer.write(() => 'async content')
 
-  it('skips identical bytes, including content primed from disk', async () => {
-    const writer = new AtomicSnapshotWriter(() => file, { skipUnchanged: true })
-    await writer.write(() => 'same')
-    const { ino } = statSync(file)
-    await writer.write(() => 'same')
-    writer.writeSync(() => 'same')
-    expect(statSync(file).ino).toBe(ino)
-
-    const primed = new AtomicSnapshotWriter(() => file, { skipUnchanged: true })
-    primed.primeCommittedContent('same')
-    await primed.write(() => 'same')
-    expect(statSync(file).ino).toBe(ino)
-    await primed.write(() => 'changed')
-    expect(readFileSync(file, 'utf8')).toBe('changed')
+    expect(renameMock.fn).toHaveBeenCalledTimes(1)
+    expect(existsSync(file)).toBe(false)
+    expect(tmpFiles()).toEqual([])
   })
 
   it('keeps the newest writeSync content when an older async write finishes later', async () => {

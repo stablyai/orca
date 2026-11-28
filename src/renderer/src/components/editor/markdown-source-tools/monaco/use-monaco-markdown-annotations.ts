@@ -13,13 +13,17 @@ import {
   type SetStateAction
 } from 'react'
 import type { editor } from 'monaco-editor'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import type { WorkspaceResource } from '@/lib/workspace-copy-owner'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
+import type { WorkspaceResource } from '@/lib/workspace/ownership/workspace-copy-owner'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { isMarkdownComment } from '@/lib/diff-comment-compat'
-import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
+import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
+import {
+  formatMarkdownReviewNotes,
+  getMarkdownReviewHighlightedText,
+  type MarkdownReviewNote
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import {
   getDiffCommentPopoverLeft,
@@ -60,6 +64,7 @@ export function useMonacoMarkdownAnnotations(params: {
   noteSource: WorkspaceResource
   markdownAnnotationsEnabled: boolean
 }): MonacoMarkdownAnnotations {
+  const t = useTranslate()
   const {
     mountedEditor,
     editorContainerRef,
@@ -133,7 +138,10 @@ export function useMonacoMarkdownAnnotations(params: {
         top,
         left: mountedEditor
           ? (getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current) ?? undefined)
-          : undefined
+          : undefined,
+        // Snapshot at open so edits above the composer or later can't re-point the note's excerpt.
+        selectedText:
+          getMarkdownReviewHighlightedText(content, { lineNumber, startLine }) || undefined
       })
     },
     onDeleteComment: (id) => {
@@ -220,9 +228,7 @@ export function useMonacoMarkdownAnnotations(params: {
       setCommentPopover(null)
     } else {
       // The draft stays open for retry.
-      toast.error(
-        translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
-      )
+      toast.error(t('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment'))
     }
   }
 

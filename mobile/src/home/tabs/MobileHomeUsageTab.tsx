@@ -1,39 +1,43 @@
 import { Gauge, RefreshCw } from 'lucide-react-native'
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import Animated, {
   FadeIn,
   useAnimatedStyle,
   useSharedValue,
   withTiming
 } from 'react-native-reanimated'
+import { formatUsageBarValue, usageBarFill } from '../../accounts/usage/UsageBar'
+import { useUsagePercentageDisplay } from '../../accounts/usage/usage-percentage-display-preference'
 import {
   getUsageBarState,
   getWindowResetLabel,
-  usageBarFill,
-  type AccountsSnapshot,
   type ProviderKey
-} from '../../components/AccountUsage'
-import { ClaudeIcon, OpenAIIcon } from '../../components/AgentIcons'
+} from '../../accounts/usage/usage-selectors'
+import type { AccountsSnapshot } from '../../accounts/accounts-snapshot'
+import { ClaudeIcon, OpenAIIcon } from '../../components/icons/AgentIcons'
 import { useNow } from '../../hooks/use-now'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import type { HomeStatsSummary } from '../../stats/home-stats-total'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useHostClient } from '../../transport/host-client-hooks'
-import type { ConnectionState, HostProfile } from '../../transport/types'
-import { useHostDisplay } from '../../transport/use-host-display'
-import { formatTimeAgo } from '../../worktree/agent-row-display'
-import { homeListStyles } from '../home-list-styles'
+import { spacing } from '../../theme/mobile-theme'
+import { useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { useHostClient } from '../../transport/connection/host-client-hooks'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { HostProfile } from '../../host-catalog/host-profile'
+import { useHostDisplay } from '../../host-descriptors/use-host-display'
+import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
+import { homeListStylesSheet } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import { MobileHomeStats } from '../MobileHomeStats'
 import { HOME_EASE_OUT } from './home-tabs'
 import { selectHomeUsageSections, type HomeUsageCard } from './home-usage-cards'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
+import { mobileHomeUsageStylesSheet } from './mobile-home-usage-styles'
+import { getManagedAccountPrimaryLabel } from '../../../../src/shared/agent-accounts/managed-account-display-names'
 
 const PROVIDER_TITLES: Record<ProviderKey, string> = { claude: 'Claude Code', codex: 'Codex' }
 
@@ -47,8 +51,8 @@ export function MobileHomeUsageTab(props: {
   bottomInset: number
   onOpenAccounts: (hostId: string) => void
 }) {
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { host, pick } = useHomeTabHost(props.hosts, props.connectedHosts)
   const { client } = useHostClient(host?.id)
@@ -114,7 +118,7 @@ export function MobileHomeUsageTab(props: {
           />
         ) : (
           <UsageEmpty
-            message={t('home.usage.pairDesktop', 'Pair a desktop to see agent account usage.')}
+            message={t('home.usage.pairComputer', 'Pair a computer to see agent account usage.')}
           />
         )}
       </ScrollView>
@@ -129,8 +133,10 @@ function HostUsage(props: {
   first: boolean
   onOpenAccounts: (hostId: string) => void
 }) {
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const homeListStyles = useThemedStyles(homeListStylesSheet)
   const reducedMotion = useReducedMotionEnabled() === true
   const desktop = useHostDisplay(props.host).title
   // Why: the reset countdowns and "Updated" note only flip on minute boundaries.
@@ -158,7 +164,10 @@ function HostUsage(props: {
   if (sections.length === 0) {
     return (
       <UsageEmpty
-        message={t('home.usage.addAccounts', 'Add accounts from desktop Settings → Accounts.')}
+        message={t(
+          'home.usage.addAccountsOnComputer',
+          'Add accounts in Orca on your computer, in Settings → Accounts.'
+        )}
       />
     )
   }
@@ -178,7 +187,7 @@ function HostUsage(props: {
                 : now - section.updatedAt < 60_000
                   ? t('home.usage.updatedJustNow', 'Updated just now')
                   : t('home.usage.updatedAgo', 'Updated {{time}} ago', {
-                      time: formatTimeAgo(section.updatedAt, now)
+                      time: formatTimeAgo(section.updatedAt, now, t)
                     })
             }
           />
@@ -209,15 +218,22 @@ function UsageCard(props: {
   reducedMotion: boolean
   onPress: () => void
 }) {
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const [pressed, setPressed] = useState(false)
   const { card } = props
-  const title = card.email ?? t('accounts.screen.default', 'System default')
+  const title =
+    card.email == null
+      ? t('accounts.screen.default', 'System default')
+      : getManagedAccountPrimaryLabel({ email: card.email, displayName: card.displayName })
+  // A named card keeps its email on the second line, as desktop rows do.
   const subtitle =
     card.email == null
       ? t('accounts.screen.agentLogin', "Use the agent's own login")
-      : card.subtitle
+      : title === card.email
+        ? card.subtitle
+        : [card.email, card.subtitle].filter(Boolean).join(' · ')
   const windows: { key: 'session' | 'weekly'; label: string }[] = [
     { key: 'session', label: t('accounts.screen.sessionWindow', '5h') },
     { key: 'weekly', label: t('accounts.screen.weeklyWindow', '7d') }
@@ -228,7 +244,7 @@ function UsageCard(props: {
       accessibilityLabel={[title, subtitle, card.active ? t('home.usage.active', 'Active') : null]
         .filter(Boolean)
         .join(', ')}
-      accessibilityHint={t('home.usage.openAccountsHint', 'Opens this desktop’s accounts')}
+      accessibilityHint={t('home.usage.openComputerAccountsHint', 'Opens this computer’s accounts')}
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
       onPress={props.onPress}
@@ -293,21 +309,24 @@ function UsageMeter(props: {
   now: number
   reducedMotion: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
+  const colors = useMobileColors()
+  const t = useMobileTranslation()
   const usageWindow = props.card.limits?.[props.windowKey] ?? null
   const bar = getUsageBarState(props.card.limits, usageWindow, props.card.fetching)
-  const { used, color } = usageBarFill(bar.usedPercent, bar.unavailable)
+  const display = useUsagePercentageDisplay()
+  const { shown, color } = usageBarFill(bar.usedPercent, bar.unavailable, display, colors)
   const reset = getWindowResetLabel(usageWindow, props.now)
-  const width = useSharedValue(props.reducedMotion ? (used ?? 0) : 0)
+  const width = useSharedValue(props.reducedMotion ? (shown ?? 0) : 0)
 
   useEffect(() => {
     width.value = props.reducedMotion
-      ? (used ?? 0)
-      : withTiming(used ?? 0, { duration: 450, easing: HOME_EASE_OUT })
-  }, [props.reducedMotion, used, width])
+      ? (shown ?? 0)
+      : withTiming(shown ?? 0, { duration: 450, easing: HOME_EASE_OUT })
+  }, [props.reducedMotion, shown, width])
 
   const fillStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }))
-  const value = bar.unavailable || used == null ? '—' : `${used}%`
+  const value = formatUsageBarValue(bar.unavailable ? null : shown, display, t)
 
   return (
     <>
@@ -336,8 +355,9 @@ function UsageMeter(props: {
 }
 
 function UsageEmpty(props: { message: string }) {
+  const styles = useThemedStyles(mobileHomeUsageStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   return (
     <View style={styles.empty}>
       <Gauge size={28} color={colors.textMuted} />
@@ -348,72 +368,3 @@ function UsageEmpty(props: { message: string }) {
     </View>
   )
 }
-
-const TILE_SIZE = 28
-const METER_LABEL_WIDTH = 26
-const METER_GAP = 10
-
-const styles = themedStyleSheet(() => ({
-  screen: { flex: 1 },
-  content: { paddingHorizontal: spacing.lg },
-  loading: { alignItems: 'center', paddingVertical: 60 },
-  card: { paddingVertical: 14, paddingHorizontal: spacing.lg, backgroundColor: colors.bgPanel },
-  cardSeparated: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-  cardPressed: { backgroundColor: colors.bgRaised },
-  head: { flexDirection: 'row', alignItems: 'center', gap: METER_GAP, marginBottom: 4 },
-  tile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
-    borderRadius: radii.tile,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  headText: { flex: 1, minWidth: 0 },
-  cardTitle: { fontSize: 16, lineHeight: 22, color: colors.textPrimary },
-  cardSubtitle: { fontSize: 13, lineHeight: 17, color: colors.textSecondary, marginTop: 1 },
-  badge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.pill,
-    backgroundColor: colors.skillTokenSurface
-  },
-  badgeText: { fontSize: 12, color: colors.accentBlue },
-  meter: { flexDirection: 'row', alignItems: 'center', gap: METER_GAP, marginTop: 6 },
-  meterLabel: { width: METER_LABEL_WIDTH, fontSize: 13, color: colors.textSecondary },
-  track: {
-    flex: 1,
-    height: 6,
-    borderRadius: radii.pill,
-    backgroundColor: colors.translucentFill,
-    overflow: 'hidden'
-  },
-  fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: radii.pill },
-  meterValue: {
-    width: 40,
-    fontSize: 13,
-    color: colors.textPrimary,
-    textAlign: 'right',
-    fontVariant: ['tabular-nums']
-  },
-  reset: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
-    marginLeft: METER_LABEL_WIDTH + METER_GAP
-  },
-  empty: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: 28,
-    marginTop: 32
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs
-  },
-  emptyBody: { fontSize: 15, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' }
-}))

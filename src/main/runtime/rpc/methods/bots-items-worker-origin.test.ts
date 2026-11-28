@@ -1,0 +1,66 @@
+import { describe, expect, it, vi } from 'vitest'
+import { BotItemsStore } from '../../../bots/bot-items-store'
+import { checkedWorkerOrigin } from './bots-items-worker-origin'
+
+vi.mock('./bots-items-caller', () => ({
+  itemsWriter: (sessionId: string) => ({ bot: { id: sessionId } })
+}))
+
+describe('worker-start --item', () => {
+  it('starts a worker on another agent’s open item, never on a closed one', async () => {
+    const store = BotItemsStore.open(':memory:')
+    const actor = { kind: 'bot', botId: 'owner', chatId: 'owner-chat' } as const
+    const add = (title: string) =>
+      store.add(
+        {
+          ownerBotId: 'owner',
+          chatId: 'owner-chat',
+          source: { kind: 'home', title: null },
+          title,
+          status: 'working',
+          links: []
+        },
+        actor
+      ).uid
+    const open = add('Open')
+    const closed = add('Closed')
+    store.close(closed, 'done', undefined, actor)
+    const remote = {
+      byNumber: async (n: number) => store.byNumber(n),
+      get: async (uid: string) => store.get(uid),
+      links: async (uid: string) => store.links(uid)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only these fields of the context.
+    const context = {
+      orchestrationCaller: { sessionId: 'helper' },
+      runtime: {
+        bots: { assertEnabled: () => {} },
+        // ctx_second follows up ctx_first.
+        getOrchestrationDb: () => ({
+          getDispatchContextById: (id: string) => ({
+            follow_up_of_dispatch_id: id === 'ctx_second' ? 'ctx_first' : null
+          })
+        }),
+        botItems: { store: () => remote, owningChat: () => ({ title: null }) }
+      }
+    } as unknown as Parameters<typeof checkedWorkerOrigin>[1]
+    await expect(checkedWorkerOrigin('bot-item:1', context)).resolves.toMatchObject({
+      origin: `bot-item:${open}`
+    })
+    await expect(checkedWorkerOrigin('bot-item:2', context)).rejects.toThrow(/is done/)
+    // A full item refuses before the worker starts, as `item link` does.
+    const refs = Array.from({ length: 999 }, (_, i) => ({ kind: 'url', ref: `u:${i}` }) as const)
+    store.link(open, [...refs, { kind: 'dispatch', ref: 'ctx_first' }], actor)
+    await expect(checkedWorkerOrigin('bot-item:1', context)).rejects.toThrow(
+      'An item takes up to 1000 links.'
+    )
+    // A follow-up of a worker the item links adds no link, so a full item still takes it.
+    await expect(checkedWorkerOrigin('bot-item:1', context, 'ctx_second')).resolves.toMatchObject({
+      origin: `bot-item:${open}`
+    })
+    await expect(checkedWorkerOrigin('bot-item:1', context, 'ctx_other')).rejects.toThrow(
+      'An item takes up to 1000 links.'
+    )
+    store.dispose()
+  })
+})

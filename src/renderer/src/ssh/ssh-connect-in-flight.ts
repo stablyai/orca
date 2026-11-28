@@ -67,9 +67,3 @@ export function useSshConnectInFlight(targetId: string): boolean {
   const getSnapshot = useCallback(() => inFlightLockIds.has(targetId), [targetId])
   return useSyncExternalStore(subscribeSshConnectInFlight, getSnapshot, getSnapshot)
 }
-
-/** Reset module registry between tests; old pending requests release only their cleared acquisition, never the next case’s lock. */
-export function resetSshConnectInFlightForTests(): void {
-  inFlightLockIds.clear()
-  emit()
-}

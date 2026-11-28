@@ -1,7 +1,12 @@
-import { classifyPRRefreshError } from '../../pr-refresh-error-classification'
-import { ghExecFileAsync } from '../../gh-utils'
-import type { OwnerRepo, ghRepoExecOptions } from '../../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
+import { classifyPRRefreshError } from '../../pull-requests/refresh/pr-refresh-error-classification'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import type {
+  GitHubRepositoryIdentity as OwnerRepo,
+  GitHubRepositoryIdentity as GitHubApiRepository
+} from '../../../../shared/github/repositories/repository-identity'
+import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+
 import {
   isNoPullRequestError,
   isNotFoundGhError,
@@ -17,10 +22,13 @@ import {
 } from './pull-request-lookup-data'
 import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
 import { isGitObjectId, isUsableRestStackMetadata } from './rest-stack-metadata-validation'
-import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { revalidateGitHubRestJson } from '../../api/github-rest-revalidation'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
-import { readPullRequestSidebarQuery } from './pull-request-sidebar-query'
+import {
+  readSharedPullRequestSidebarQuery,
+  type PRProviderReadOptions
+} from './shared-pr-provider-reads'
 export async function getRestPRByNumber(
   ownerRepo: GitHubApiRepository,
   number: number,
@@ -60,14 +68,25 @@ export async function getPRByNumber(
   ghOptions: ReturnType<typeof ghRepoExecOptions>,
   executionScope: string,
   knownPullRequestData?: PullRequestLookupData | null,
-  options: { includeStackSummary?: boolean } = {}
+  options: { includeStackSummary?: boolean } & PRProviderReadOptions = {}
 ): Promise<PullRequestLookupData | null> {
+  const reads = {
+    checkPageLimit: options.checkPageLimit,
+    userRefresh: options.userRefresh,
+    batchSidebar: options.batchSidebar
+  }
   try {
-    let sidebarData: Awaited<ReturnType<typeof readPullRequestSidebarQuery>>
+    let sidebarData: Awaited<ReturnType<typeof readSharedPullRequestSidebarQuery>>
     try {
       sidebarData =
         options.includeStackSummary || knownPullRequestData !== undefined
-          ? await readPullRequestSidebarQuery(ownerRepo, number, ghOptions)
+          ? await readSharedPullRequestSidebarQuery(
+              ownerRepo,
+              number,
+              ghOptions,
+              executionScope,
+              reads
+            )
           : undefined
     } catch (error) {
       if (
@@ -104,18 +123,19 @@ export async function getPRByNumber(
         known.stack.baseRefName === stack.baseRefName
           ? { ...known.stack, ...stack }
           : stack
-      const hydrated = await hydratePullRequestLookupData(
+      return await hydratePullRequestLookupData(
         ownerRepo,
         {
           ...prData,
+          ...(compatibleStack ? { stack: compatibleStack } : {}),
           ...(sameIdentity && known.headDefaultBranchName
             ? { headDefaultBranchName: known.headDefaultBranchName }
             : {})
         },
         ghOptions,
-        executionScope
+        executionScope,
+        reads
       )
-      return { ...hydrated, ...(compatibleStack ? { stack: compatibleStack } : {}) }
     }
     noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
     const { stdout } = await ghExecFileAsync(
@@ -131,7 +151,7 @@ export async function getPRByNumber(
       { ...ghOptions, ...githubHostExecOptions(ownerRepo) }
     )
     const exactData = JSON.parse(stdout) as PullRequestLookupData
-    return hydratePullRequestLookupData(
+    return await hydratePullRequestLookupData(
       ownerRepo,
       {
         ...knownPullRequestData,
@@ -140,7 +160,8 @@ export async function getPRByNumber(
         ...(knownPullRequestData?.stack ? { stack: knownPullRequestData.stack } : {})
       },
       ghOptions,
-      executionScope
+      executionScope,
+      reads
     )
   } catch (err) {
     // Missing links return to branch discovery; other failures get one cheaper REST recovery lookup.
@@ -153,11 +174,12 @@ export async function getPRByNumber(
           ? await getRestPRByNumber(ownerRepo, number, ghOptions)
           : knownPullRequestData
       return restData
-        ? hydratePullRequestLookupData(
+        ? await hydratePullRequestLookupData(
             ownerRepo,
             { ...restData, checksUnavailable: true },
             ghOptions,
-            executionScope
+            executionScope,
+            reads
           )
         : null
     } catch (restErr) {
@@ -178,6 +200,7 @@ export async function lookupPRByNumber(args: {
   ghOptions: ReturnType<typeof ghRepoExecOptions>
   executionScope: string
   policy?: PullRequestLookupPolicy
+  reads?: PRProviderReadOptions
 }): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
   for (const candidate of args.candidates) {
     if (args.policy?.isRejected(candidate, args.number)) {
@@ -190,7 +213,7 @@ export async function lookupPRByNumber(args: {
         args.ghOptions,
         args.executionScope,
         undefined,
-        { includeStackSummary: true }
+        { includeStackSummary: true, ...args.reads }
       )
       if (!linkedData || (args.policy && !(await args.policy.accepts(linkedData, candidate)))) {
         continue
@@ -221,7 +244,8 @@ export async function lookupPRByNumber(args: {
           repository,
           { ...parsedData, checksUnavailable: true },
           args.ghOptions,
-          args.executionScope
+          args.executionScope,
+          args.reads
         )
       : {
           ...normalizePullRequestLookupData(parsedData),

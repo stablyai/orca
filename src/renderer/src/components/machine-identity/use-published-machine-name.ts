@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { normalizeMachineName } from '../../../../shared/machine-name'
+import { useAppStore } from '@/store'
+import { normalizeMachineName } from '../../../../shared/remote-runtime/host-metadata/machine-name'
 
 /** Saved overrides already reached main; query runtime only for the detected name to avoid stale echoes. */
 export function usePublishedMachineName(savedOverride: string): string | null {
@@ -31,4 +32,9 @@ export function usePublishedMachineName(savedOverride: string): string | null {
   }, [override])
 
   return override || detectedName
+}
+
+/** This computer's name as other computers see it: the Settings rename, else the detected one. */
+export function useThisComputerName(): string | null {
+  return usePublishedMachineName(useAppStore((s) => s.settings?.machineName ?? ''))
 }

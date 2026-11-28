@@ -1,20 +1,24 @@
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
-import { translate } from '@/i18n/i18n'
-import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
-import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  createOsFileDropSequence,
+  useOsFileDropOwner
+} from '@/lib/files/drop/use-os-file-drop-owner'
+import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import {
   describeSharedDropFailureReason,
   describeSharedDropSkipReason
-} from '@/lib/drop-skip-reason-copy'
+} from '@/lib/files/drop/drop-skip-reason-copy'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import {
   captureFileExplorerOperationGuard,
   type FileExplorerOperationGuard
 } from '../navigation/file-explorer-operation-owner'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export const FILE_EXPLORER_DROP_DIR_ATTRIBUTE = 'data-file-explorer-drop-dir'
 
@@ -52,6 +56,7 @@ export function useFileExplorerImport({
   setSelectedPath,
   operationOwner
 }: UseFileExplorerImportParams): (root: HTMLElement | null) => void {
+  const t = useTranslate()
   const rootRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
   // Read committed scope after import so speculative navigation cannot select into the wrong workspace.
@@ -93,75 +98,82 @@ export function useFileExplorerImport({
         clearNativeDragState()
         return
       }
-      try {
-        if ('error' in destination) {
-          throw destination.error
-        }
-        const { destinationDir, guard } = destination
-        guard.assertCurrent()
-        const { results } = await importExternalPathsToRuntime(
-          {
-            target: guard.route.target,
-            worktreeId: destination.worktreeId,
-            worktreePath: destination.worktreePath,
-            connectionId: guard.route.connectionId,
-            expectedExecutionHostId: guard.route.expectedExecutionHostId,
-            expectedSshTargetId: guard.route.expectedSshTargetId,
-            expectedSshConnectionGeneration: guard.route.expectedSshConnectionGeneration
-          },
-          prepared.paths,
-          destinationDir,
-          { assertCurrent: guard.assertCurrent }
-        )
-
-        await refreshDir(destinationDir)
-
-        // Select the first import without full reveal; watcher refreshes could otherwise move the viewport away from the drop.
-        const imported = results.filter((r) => r.status === 'imported')
-        const skipped = results.filter((r) => r.status === 'skipped')
-        const failed = results.filter((r) => r.status === 'failed')
-
-        const shown = shownRef.current
-        if (
-          imported.length > 0 &&
-          shown.worktreeId === destination.worktreeId &&
-          getRelativePathInsideRoot(imported[0].destPath, shown.displayRootPath) !== null
-        ) {
-          setSelectedPath(imported[0].destPath)
-        }
-
-        if (failed.length > 0) {
-          toast.error(
-            translate(
-              'auto.components.right.sidebar.useFileExplorerImport.importFailedCount',
-              'Failed to import {{count}} files.',
-              { count: failed.length, defaultValue_one: 'Failed to import {{count}} file.' }
-            ),
-            { description: describeSharedDropFailureReason(failed) }
-          )
-        } else if (skipped.length > 0 && imported.length === 0) {
-          toast.error(
-            translate(
-              'auto.components.right.sidebar.useFileExplorerImport.importSkippedCount',
-              'Skipped {{count}} files.',
-              { count: skipped.length, defaultValue_one: 'Skipped {{count}} file.' }
-            ),
-            { description: describeSharedDropSkipReason(skipped) }
-          )
-        }
-      } catch (err) {
-        toast.error(
-          extractIpcErrorMessage(
-            err,
-            translate(
-              'auto.components.right.sidebar.useFileExplorerImport.importFailed',
-              'Failed to import files.'
+      await runWithFinally(
+        async () => {
+          const reportImportError = (err: unknown): void => {
+            toast.error(
+              extractIpcErrorMessage(
+                err,
+                t(
+                  'auto.components.right.sidebar.useFileExplorerImport.importFailed',
+                  'Failed to import files.'
+                )
+              )
             )
-          )
-        )
-      } finally {
-        clearNativeDragState()
-      }
+          }
+          if ('error' in destination) {
+            reportImportError(destination.error)
+            return
+          }
+          try {
+            const { destinationDir, guard } = destination
+            guard.assertCurrent()
+            const { results } = await importExternalPathsToRuntime(
+              {
+                target: guard.route.target,
+                worktreeId: destination.worktreeId,
+                worktreePath: destination.worktreePath,
+                connectionId: guard.route.connectionId,
+                expectedExecutionHostId: guard.route.expectedExecutionHostId,
+                expectedSshTargetId: guard.route.expectedSshTargetId,
+                expectedSshConnectionGeneration: guard.route.expectedSshConnectionGeneration
+              },
+              prepared.paths,
+              destinationDir,
+              { assertCurrent: guard.assertCurrent }
+            )
+
+            await refreshDir(destinationDir)
+
+            // Select the first import without full reveal; watcher refreshes could otherwise move the viewport away from the drop.
+            const imported = results.filter((r) => r.status === 'imported')
+            const skipped = results.filter((r) => r.status === 'skipped')
+            const failed = results.filter((r) => r.status === 'failed')
+
+            const shown = shownRef.current
+            if (
+              imported.length > 0 &&
+              shown.worktreeId === destination.worktreeId &&
+              getRelativePathInsideRoot(imported[0].destPath, shown.displayRootPath) !== null
+            ) {
+              setSelectedPath(imported[0].destPath)
+            }
+
+            if (failed.length > 0) {
+              toast.error(
+                t(
+                  'auto.components.right.sidebar.useFileExplorerImport.importFailedCount',
+                  'Failed to import {{count}} files.',
+                  { count: failed.length, defaultValue_one: 'Failed to import {{count}} file.' }
+                ),
+                { description: describeSharedDropFailureReason(failed) }
+              )
+            } else if (skipped.length > 0 && imported.length === 0) {
+              toast.error(
+                t(
+                  'auto.components.right.sidebar.useFileExplorerImport.importSkippedCount',
+                  'Skipped {{count}} files.',
+                  { count: skipped.length, defaultValue_one: 'Skipped {{count}} file.' }
+                ),
+                { description: describeSharedDropSkipReason(skipped) }
+              )
+            }
+          } catch (err) {
+            reportImportError(err)
+          }
+        },
+        () => clearNativeDragState()
+      )
     }
   })
 }

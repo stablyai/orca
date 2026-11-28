@@ -1,11 +1,14 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { RpcRequest } from '../rpc/core'
 import { browserScreencastSubscriptionPageId } from '../browser/screencast/browser-screencast-subscription-id'
 
-const BrowserCallParams = z.looseObject({
-  page: z.string().optional(),
-  subscriptionId: z.string().optional()
-})
+const BrowserCallParams = lazyZodSchema(() =>
+  z.looseObject({
+    page: z.string().optional(),
+    subscriptionId: z.string().optional()
+  })
+)
 
 /** Rewrite calls for locally rendered client-placed pages; their server cannot screencast them. */
 export function localHostedBrowserPageRequest(
@@ -24,7 +27,8 @@ export function localHostedBrowserPageRequest(
   // Server workspace selectors cannot resolve here; page ids are stable.
   const { worktree: _serverSelector, ...params } = parsed.data
   const page =
-    request.method === 'browser.screencast.unsubscribe'
+    request.method === 'browser.screencast.unsubscribe' ||
+    request.method === 'browser.screencast.ack'
       ? browserScreencastSubscriptionPageId(params.subscriptionId ?? '')
       : params.page || null
   if (page === null || !hostsBrowserPage(environmentId, page)) {

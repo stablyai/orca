@@ -1,5 +1,5 @@
 import { Ellipsis, FolderCog, Globe } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
   DropdownMenu,
@@ -22,7 +22,8 @@ export function PluginSettingsMenu({
   open,
   onOpenChange,
   onSources,
-  onDevelopment
+  onDevelopment,
+  railPage = false
 }: {
   featureEnabled: boolean
   suggestionsEnabled: boolean
@@ -33,19 +34,26 @@ export function PluginSettingsMenu({
   onOpenChange: (open: boolean) => void
   onSources: () => void
   onDevelopment: () => void
+  /** Rail page header sizing: a ghost icon like the other pages' "…". */
+  railPage?: boolean
 }): React.JSX.Element {
-  const label = translate('auto.components.settings.PluginSettingsMenu.label', 'Plugin settings')
+  const t = useTranslate()
+  const label = t('auto.components.settings.PluginSettingsMenu.label', 'Plugin settings')
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon-sm" aria-label={label}>
-              <Ellipsis />
+            <Button
+              variant={railPage ? 'ghost' : 'outline'}
+              size={railPage ? 'icon-toolbar' : 'icon-sm'}
+              aria-label={label}
+            >
+              <Ellipsis className={railPage ? 'size-4' : undefined} />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
+        <TooltipContent side={railPage ? 'bottom' : 'top'} sideOffset={railPage ? 6 : 4}>
           {label}
         </TooltipContent>
       </Tooltip>
@@ -55,7 +63,7 @@ export function PluginSettingsMenu({
           onCheckedChange={onToggleSuggestions}
           onSelect={(event) => event.preventDefault()}
         >
-          {translate(
+          {t(
             'auto.components.settings.PluginsSettingsSection.fileTypeSuggestionsLabel',
             'Suggest plugins for unknown files'
           )}
@@ -69,13 +77,13 @@ export function PluginSettingsMenu({
         >
           <span className="min-w-0">
             <span className="block">
-              {translate(
+              {t(
                 'auto.components.settings.PluginSettingsMenu.autoUpdateLabel',
                 'Update plugins automatically'
               )}
             </span>
             <span className="block text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.PluginSettingsMenu.autoUpdateHint',
                 'Asks again only for new access'
               )}
@@ -85,14 +93,11 @@ export function PluginSettingsMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!featureEnabled} onSelect={onSources}>
           <Globe />
-          {translate('auto.components.settings.PluginAddMenu.sources', 'Catalog sources…')}
+          {t('auto.components.settings.PluginAddMenu.sources', 'Catalog sources…')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onDevelopment}>
           <FolderCog />
-          {translate(
-            'auto.components.settings.PluginSettingsMenu.development',
-            'Development folders…'
-          )}
+          {t('auto.components.settings.PluginSettingsMenu.development', 'Development folders…')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -108,7 +113,7 @@ export function PluginsHeaderActions({
 }): React.JSX.Element {
   return (
     <div className="flex items-center gap-1.5">
-      <PluginAddMenu disabled={!menu.featureEnabled} onChoose={onAdd} />
+      <PluginAddMenu disabled={!menu.featureEnabled} onChoose={onAdd} railPage={menu.railPage} />
       <PluginSettingsMenu {...menu} />
     </div>
   )

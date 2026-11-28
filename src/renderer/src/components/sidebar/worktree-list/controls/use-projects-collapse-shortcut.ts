@@ -1,21 +1,25 @@
 import { useEffect } from 'react'
-import { useAppStore } from '@/store'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import { textFieldClaimsActionKey } from '@/lib/file-search-shortcut-policy'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
-import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
+import { useAppStore } from '@/store/index'
+import { selectRailPageHidesWorkspaceList } from '@/components/app-rail/app-rail-layout'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-policy'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../../../../shared/modifier-double-tap-detector'
+} from '../../../../../../shared/keybindings/modifier-double-tap-detector'
 
 const ACTION_ID = 'sidebar.projects.toggleCollapse'
 
 function canToggleProjects(): boolean {
+  const state = useAppStore.getState()
   return (
-    useAppStore.getState().activeModal === 'none' &&
+    state.activeModal === 'none' &&
+    // Why: a rail page hides the list (still mounted); folding it there would change a preference the user cannot see.
+    !selectRailPageHidesWorkspaceList(state) &&
     !hasVisibleOverlay({ ignoreMatches: '[data-contextual-tour-panel="projects-collapse-all"]' }) &&
     !document.querySelector('[data-shortcut-recorder-active]')
   )

@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   isTerminalLeafId,
   makePaneKey
@@ -10,18 +11,22 @@ export type FocusedAgentRowHighlightState = Pick<
   | 'activeWorktreeId'
   | 'activeTabType'
   | 'activeTabId'
+  | 'getActiveTab'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
   | 'agentStatusByPaneKey'
-  | 'retainedAgentsByPaneKey'
   | 'migrationUnsupportedByPtyId'
 >
 
-export function getFocusedAgentPaneKeyForWorktree(
+function getActivePaneKeyForWorktree(
   state: FocusedAgentRowHighlightState,
   worktreeId: string
 ): string | null {
-  if (state.activeWorktreeId !== worktreeId || state.activeTabType !== 'terminal') {
+  if (state.activeTabType === 'agent-session') {
+    const activeTab = state.getActiveTab(worktreeId)
+    return activeTab?.contentType === 'agent-session' ? chatPaneKey(activeTab.entityId) : null
+  }
+  if (state.activeTabType !== 'terminal') {
     return null
   }
 
@@ -42,13 +47,24 @@ export function getFocusedAgentPaneKeyForWorktree(
     return null
   }
 
-  const activePaneKey = makePaneKey(activeTabId, activeLeafId)
-  // Stale agents remain visible, so their focused rows must still highlight.
-  if (state.agentStatusByPaneKey[activePaneKey]) {
-    return activePaneKey
+  return makePaneKey(activeTabId, activeLeafId)
+}
+
+export function getFocusedAgentPaneKeyForWorktree(
+  state: FocusedAgentRowHighlightState,
+  worktreeId: string
+): string | null {
+  if (state.activeWorktreeId !== worktreeId) {
+    return null
   }
 
-  if (state.retainedAgentsByPaneKey[activePaneKey]?.worktreeId === worktreeId) {
+  const activePaneKey = getActivePaneKeyForWorktree(state, worktreeId)
+  if (!activePaneKey) {
+    return null
+  }
+
+  // Stale agents remain visible, so their focused rows must still highlight.
+  if (state.agentStatusByPaneKey.get(activePaneKey)) {
     return activePaneKey
   }
 

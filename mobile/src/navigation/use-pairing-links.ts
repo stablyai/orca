@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import { useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
-import { extractPairingCodeFromUrl } from '../transport/pairing'
+import { extractPairingCodeFromUrl } from '../pairing/pairing'
 import { consumeInitialLaunchIntent } from './initial-launch-intent'
+import { parseBotLinkTarget } from '../bots/bot-link-target'
+import { publishBotLink } from '../bots/pending-bot-link'
 
 export function usePairingLinks(): void {
   const router = useRouter()
@@ -16,6 +18,13 @@ export function usePairingLinks(): void {
       if (code) {
         // Replace the camera's unmatched pair route so Back cannot reveal the router error.
         router.replace({ pathname: '/pair-confirm', params: { code } })
+        return
+      }
+      const botLink = parseBotLinkTarget(url)
+      if (botLink) {
+        // Leave the unmatched orca://bot route for Home; the bot opens from there once a host claims it.
+        router.dismissTo('/')
+        publishBotLink(botLink)
       }
     }
 

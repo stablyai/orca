@@ -1,10 +1,12 @@
-import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
-import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
-import type { DeviceEntry } from './device-entry'
-import { parseMobilePushRegistration } from '../../../../../shared/mobile-push-contract'
+import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
+import type { DeviceEntry, DeviceOrcaAccount } from './device-entry'
+import { parseMobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
 import { isDevicePublicKeyB64 } from '../../../../../shared/remote-runtime/pairing/device-key-proof'
-import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from '../../rpc-method-permission'
+import { isExchangeDeviceToken } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-contract'
+import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import { isRecord } from '../../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
+import { NETWORK_SOURCE_CLASSES } from '../../transports/websocket/source-admission/network-source-class'
 
 const GRANTABLE: ReadonlySet<string> = new Set(RUNTIME_DEVICE_GRANTS)
 
@@ -46,6 +48,24 @@ function isTimestamp(value: unknown): value is number {
 }
 
 /** Null for a row without a usable identity; the caller must treat the registry as doubtful. */
+function validOrcaAccount(value: unknown): DeviceOrcaAccount | undefined {
+  return typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'name' in value &&
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    typeof value.name === 'string'
+    ? {
+        id: value.id,
+        name: value.name,
+        ...('computer' in value && typeof value.computer === 'string' && value.computer
+          ? { computer: value.computer }
+          : {})
+      }
+    : undefined
+}
+
 export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
   if (
     !isRecord(device) ||
@@ -64,6 +84,7 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     token: typeof device.token === 'string' ? device.token : undefined,
     pairedAt: device.pairedAt,
     lastSeenAt: device.lastSeenAt,
+    lastSourceClass: NETWORK_SOURCE_CLASSES.find((value) => value === device.lastSourceClass),
     // Legacy registries held phones only; missing scope must not grant CLI powers.
     scope: device.scope === 'runtime' ? 'runtime' : 'mobile',
     grants: validGrants(device.grants, device.scope === 'runtime' ? 'runtime' : 'mobile'),
@@ -75,6 +96,7 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
     // Bad push metadata must not fail registry load and strand all devices.
     pushRegistration: parseMobilePushRegistration(device.pushRegistration),
     parentDeviceId: typeof device.parentDeviceId === 'string' ? device.parentDeviceId : undefined,
+    orcaAccount: validOrcaAccount(device.orcaAccount),
     phoneKey: typeof device.phoneKey === 'string' ? device.phoneKey : undefined,
     credentialRevision:
       typeof device.credentialRevision === 'number' &&
@@ -86,6 +108,16 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
       typeof device.callerFingerprint === 'string' && device.callerFingerprint.length > 0
         ? device.callerFingerprint
         : undefined,
+    // Unreadable expiry fails open to today's never-expiring offer.
+    offerExpiresAt: isTimestamp(device.offerExpiresAt) ? device.offerExpiresAt : undefined,
+    ticket: device.ticket === true ? true : undefined,
+    exchangeToken: isExchangeDeviceToken(device.exchangeToken) ? device.exchangeToken : undefined,
+    ticketFirstSeenAt: isTimestamp(device.ticketFirstSeenAt) ? device.ticketFirstSeenAt : undefined,
+    servesSessionBrowsers: device.servesSessionBrowsers === true ? true : undefined,
+    createdByDeviceId:
+      typeof device.createdByDeviceId === 'string' ? device.createdByDeviceId : undefined,
+    originClientInstanceId:
+      typeof device.originClientInstanceId === 'string' ? device.originClientInstanceId : undefined,
     ...validDeviceKeyFields(device)
   }
 }

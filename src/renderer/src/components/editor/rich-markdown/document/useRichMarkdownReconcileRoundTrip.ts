@@ -2,7 +2,7 @@ import { useRef, type MutableRefObject } from 'react'
 import { serializeRichMarkdownForReconcile } from './rich-markdown-reconcile-serializer'
 import { createRichMarkdownImageResolverContext } from '../images/rich-markdown-image-context'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
-import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useFileOwnerRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 
 type ReconcileRoundTripParams = {
   htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext

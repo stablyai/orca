@@ -1,7 +1,10 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { compareAppVersions, isValidAppVersion } from '../../../shared/app-version'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
 import { isSafePluginGitRef } from '../../../shared/plugins/installation/plugin-git-install-input'
 import { isAllowedPluginGitUrl } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import {
@@ -14,6 +17,7 @@ import type {
   PluginGitSourceResolution
 } from '../../../shared/plugins/installation/plugin-git-resolution'
 import { runPluginGit } from './plugin-git-repository'
+import { PLUGIN_GIT_LS_REMOTE_TEMP_PREFIX } from './plugin-git-temp-sweep'
 
 const SHA1_COMMIT_PATTERN = /^[0-9a-f]{40}$/
 
@@ -87,7 +91,7 @@ export async function resolvePluginGitSource(input: {
   if (SHA1_COMMIT_PATTERN.test(ref)) {
     return { ok: true, url: input.url, kind: 'commit', ref, commit: ref }
   }
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'orca-plugin-ls-remote-'))
+  const temporaryRoot = await mkdtemp(join(tmpdir(), PLUGIN_GIT_LS_REMOTE_TEMP_PREFIX))
   // Why the same -c policy as the download: ls-remote also follows insteadOf rewrites.
   const listRemote = (args: string[]): Promise<string> =>
     runPluginGit([...pluginGitConfigArgs(join(temporaryRoot, 'no-hooks')), ...args], temporaryRoot)

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
-import { resolveWorktreeModelDiscoveryRuntime } from '../../../native-chat/native-chat-session-option-discovery'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
+import { resolveWorktreeModelDiscoveryRuntime } from '../../../native-chat/session/options/catalog/native-chat-session-option-discovery'
 import { getCommitMessageAgentCapability } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
@@ -30,6 +30,8 @@ function discoveryContext(hostKey: string, repoId: string | undefined): RuntimeG
   return worktree ? resolveWorktreeModelDiscoveryRuntime(state, worktree.id) : null
 }
 
+const LISTING_RENEW_MS = 60 * 60 * 1000
+
 function listTextModels(
   agent: TuiAgent,
   hostKey: string,
@@ -42,13 +44,17 @@ function listTextModels(
       if (!result.success || !result.models.length || !settings) {
         return
       }
-      const saved = getDiscoveredModels(
-        normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi),
-        settings.commitMessageAi,
-        hostKey,
-        agent
+      const source = normalizeSourceControlAiSettings(
+        settings.sourceControlAi,
+        settings.commitMessageAi
       )
-      if (JSON.stringify(saved) === JSON.stringify(savedDiscoveredModels(result.models))) {
+      const saved = getDiscoveredModels(source, settings.commitMessageAi, hostKey, agent)
+      const listedAt = source.discoveredAtByAgentByHost?.[hostKey]?.[agent] ?? 0
+      // An unchanged list still renews its listing time, at most hourly, so it keeps bounding generation.
+      if (
+        JSON.stringify(saved) === JSON.stringify(savedDiscoveredModels(result.models)) &&
+        Date.now() - listedAt < LISTING_RENEW_MS
+      ) {
         return
       }
       return writeSourceControlAiSettings((current) =>

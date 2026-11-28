@@ -2,7 +2,7 @@ import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/cat
 import {
   assertAutomationOwnerFence,
   type AutomationOwnerPrecondition
-} from '../../../shared/automation-owner-precondition'
+} from '../../../shared/automations/ownership/automation-owner-precondition'
 import { automationProjectionContext } from './automation-owner-projection'
 import type { AutomationDefinitionOperations } from './automation-definition-operations'
 

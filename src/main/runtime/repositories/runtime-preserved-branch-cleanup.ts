@@ -8,15 +8,13 @@ import {
   getRepoRoutingConnectionId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { forceDeleteLocalBranch } from '../../git/worktrees/removal/worktree-branch-removal'
+} from '../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../ipc/worktree-remote'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import type { RuntimeStore } from '../runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { resolveWorktreeRemovalRepoOwner } from '../../workspaces/removal/worktree-removal-repo-owner'
 import { parseExactWorktreeIdSelector } from '../workspaces/catalog/runtime-worktree-selection'
 
@@ -134,6 +132,11 @@ export class RuntimePreservedBranchCleanup {
       throw new SshHostNotServedError(sshTargetId)
     }
     const options = getLocalProjectWorktreeGitOptions(store, repo)
+    const [{ forceDeleteLocalBranch }, { cleanupUnusedWorktreePushTargetRemote }] =
+      await Promise.all([
+        import('../../git/worktrees/removal/worktree-branch-removal'),
+        import('../../ipc/worktrees/worktree-remote')
+      ])
     await (Object.keys(options).length > 0
       ? forceDeleteLocalBranch(
           repo.path,

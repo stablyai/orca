@@ -19,7 +19,6 @@ const AGENT_HOOK_SOURCES = [
   'qoder-cn',
   'qwen-code',
   'codebuddy',
-  'gemini',
   'antigravity',
   'amp',
   'opencode',
@@ -77,6 +76,8 @@ export type AgentHookRelayEnvelope = {
   providerPromptId?: string
   /** The row belongs to an observed Grok prompt boundary whose opaque id may be absent. */
   grokPromptBoundary?: true
+  /** A new Claude prompt_id opened a turn on this event, ahead of the turn's prompt event. */
+  opensTurn?: true
   /** Active Claude compact generation, keyed by provider prompt identity. */
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */

@@ -1,4 +1,4 @@
-import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
+import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import { parseAgentHookEndpointFile } from '../../../shared/agent-hook-listener/transport/agent-hook-endpoint-file'
 
 export const CLAUDE_AGENT_VIEW_MOD_SOURCE = String.raw`
@@ -10,6 +10,11 @@ let paneKey
 let endedSessionId
 let observedView
 let viewRevision = 0
+let retryDelay = 0
+let timerToken = 0
+let attemptedAt = 0
+let announcing
+let announceAgain = false
 
   async function post($, action, data = {}, session = identity) {
     if (!session) return {}
@@ -23,21 +28,55 @@ let viewRevision = 0
         token = file.token
       } catch {}
     }
-    if (!token || !/^[0-9]+$/.test(String(port)) || Number(port) < 1 || Number(port) > 65535) return {}
+    if (!token || !/^[0-9]+$/.test(String(port)) || Number(port) < 1 || Number(port) > 65535) return undefined
     const response = await $.http.fetch('http://127.0.0.1:' + port + ${JSON.stringify(CLAUDE_AGENT_VIEW_PATH)}, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-orca-agent-hook-token': token },
       body: JSON.stringify({ ...session, action, ...data })
     })
-    if (!response.ok || !response.text) return {}
+    // 204 (Orca not current) is not delivered.
+    if (!response.ok || !response.text) return undefined
     try {
       const data = JSON.parse(response.text)
       return data && typeof data === 'object' && !Array.isArray(data) ? data : {}
     } catch { return {} }
   }
 
-  async function announce($) {
+  // One live timer: a newer schedule (or a durable reply) voids the earlier one.
+  function schedule($, delay) {
+    const token = ++timerToken
     try {
+      $.clock.after(delay, () => token === timerToken ? announce($) : undefined)
+    } catch {}
+  }
+
+  // Undelivered (Orca restarting, quit or unreachable): back off 1 s doubling to 60 s, so a
+  // returning Orca hears a missed view change within a minute.
+  function retry($) {
+    retryDelay = Math.min(retryDelay ? retryDelay * 2 : 1000, 60000)
+    schedule($, retryDelay)
+  }
+
+  // One registration in flight. A trigger during it (a view change it may have missed) queues one
+  // follow-up, so concurrent turns coalesce but no change is lost.
+  function announce($) {
+    if (announcing) {
+      announceAgain = true
+      return announcing
+    }
+    announcing = announceNow($).finally(() => {
+      announcing = undefined
+      if (announceAgain) {
+        announceAgain = false
+        void announce($)
+      }
+    })
+    return announcing
+  }
+
+  async function announceNow($) {
+    try {
+      attemptedAt = await $.clock.now()
       if (!paneKey || !configDir) return {}
       const sessionId = await $.session.id()
       if (sessionId === endedSessionId) return {}
@@ -45,14 +84,37 @@ let viewRevision = 0
         identity = { paneKey, sessionId, instanceId: String(await $.clock.now()) + '-' + String(Math.random()) }
       }
       const session = identity
-      const keybindings = await $.fs.read(configDir + '/keybindings.json')
+      // Unreadable (gone or mid-edit) registers no binding; Orca reads the file itself on a click.
+      let keybindings = ''
+      try { keybindings = await $.fs.read(configDir + '/keybindings.json') } catch {}
       if (identity !== session || endedSessionId === sessionId) return {}
-      return await post($, 'register', {
-        keybindings,
-        ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
-      }, session)
+      let result
+      try {
+        result = await post($, 'register', {
+          keybindings,
+          configDir,
+          ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
+        }, session)
+      } catch {}
+      if (!result) {
+        await retry($)
+        return {}
+      }
+      // Delivered but not taken ({}: Orca not ready for this pane yet, an older Orca without a
+      // binding, a relay that could not forward): keep the 5 s check-in.
+      if (!result.registered && !result.unbound) {
+        retryDelay = 0
+        schedule($, 5000)
+        return {}
+      }
+      retryDelay = 0
+      // An older Orca forgets a pane after 15 s of quiet; keep its 5 s heartbeat.
+      if (!result.durable) schedule($, 5000)
+      else timerToken++
+      // A /clear during the post: announce the session that replaced this one.
+      if (identity && identity !== session) void announce($)
+      return result
     } catch {
-      try { await post($, 'end') } catch {}
       return {}
     }
   }
@@ -67,7 +129,12 @@ export function register(on) {
       if (observedView?.sessionId !== sessionId || observedView.view.agentId !== agentId) {
         observedView = { sessionId, view: { ...(agentId ? { agentId } : {}), revision: ++viewRevision } }
         if (identity?.sessionId === sessionId) {
-          void post($, 'observe', { view: observedView.view }).catch(() => {})
+          void post($, 'observe', { view: observedView.view }).then(
+            (reply) => { if (!reply?.observed) void announce($) },
+            () => { void announce($) }
+          )
+        } else {
+          void announce($) // a /clear or resume started a session this mod has not announced
         }
       }
     }
@@ -84,15 +151,29 @@ export function register(on) {
     endedSessionId = undefined
     await $.command.register({ name: 'orca-agent-view', description: 'Open the agent selected in Orca', immediate: true })
     void announce($)
-    $.clock.every(5000, () => announce($))
     return result
   })
+
+  // Re-announces after Orca dropped the pane (or missed a post); at most one post per 30 s of turns.
+  try {
+    on('turn.start', async ($, event, next) => {
+      const result = await next(event)
+      try {
+        if (paneKey && (!identity || (await $.clock.now()) - attemptedAt >= 30000)) void announce($)
+      } catch {}
+      return result
+    })
+  } catch {}
 
   on('command.run', { command: 'orca-agent-view' }, async ($) => {
     try {
       const session = identity
       if (!session || session.sessionId !== await $.session.id()) return {}
       const request = await post($, 'take', {}, session)
+      if (!request || request.unknown) {
+        void announce($)
+        return {}
+      }
       if (!request.requestId || request.expiresAt < await $.clock.now()) return {}
       if (identity !== session || session.sessionId !== await $.session.id()) return {}
       let deny
@@ -112,6 +193,8 @@ export function register(on) {
     endedSessionId = event.sessionId
     identity = undefined
     if (event.reason !== 'clear' && event.reason !== 'resume') paneKey = undefined
+    // This mod's session.start does not run again for /clear or resume; announce the next session.
+    else schedule($, 1000)
     return result
   })
 }

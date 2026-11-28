@@ -13,7 +13,8 @@ export async function initializeCodexAppServerConnection(
         experimentalApi: true,
         requestAttestation: false,
         mcpServerOpenaiFormElicitation: false,
-        extensions: {}
+        // Lets a user thread in Full Access show an MCP server's form instead of Codex declining it.
+        extensions: { 'openai/standard-form-input': {} }
       }
     },
     { timeoutMs }

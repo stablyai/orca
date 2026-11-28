@@ -1,0 +1,118 @@
+import { FileCode2, Monitor, ZoomIn } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTranslate } from '@/i18n/use-translate'
+import { browserPageZoomLevelToPercent } from '../../../../../../shared/browser/site-settings/browser-page-zoom'
+import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { getBrowserViewportPreset } from '../../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
+import { publishBrowserPageSiteDisplay } from '../../host-guest/viewport/browser-page-zoom'
+import { useBrowserPageSiteDisplay } from '../toolbar/use-browser-page-site-display'
+import type { BrowserPageSiteDisplaySource } from '../toolbar/browser-page-site-display-source'
+
+function AddressChip({
+  label,
+  tooltip,
+  onClick,
+  children
+}: {
+  label: string
+  tooltip: string
+  onClick: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          aria-label={`${tooltip} (${label})`}
+          onClick={onClick}
+        >
+          {children}
+          {label}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** Zoom and viewport show only when they differ from the default; a click puts them back. */
+export function BrowserPageStateChips({
+  browserPageId,
+  siteDisplaySource,
+  url,
+  viewportPresetId,
+  onApplyViewportPreset,
+  isActive
+}: {
+  browserPageId: string
+  /** Null where the page's host can't report its site zoom. */
+  siteDisplaySource: BrowserPageSiteDisplaySource | null
+  url: string
+  viewportPresetId: BrowserViewportPresetId | null
+  onApplyViewportPreset: (nextId: BrowserViewportPresetId | null) => void
+  isActive: boolean
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const display = useBrowserPageSiteDisplay(browserPageId, siteDisplaySource, url, isActive)
+  const preset = getBrowserViewportPreset(viewportPresetId)
+  const showZoom = Boolean(display?.site && display.siteHasZoom)
+  if (!showZoom && !preset) {
+    return null
+  }
+  return (
+    <>
+      {showZoom && display && siteDisplaySource ? (
+        <AddressChip
+          label={`${browserPageZoomLevelToPercent(display.zoomLevel)}%`}
+          tooltip={t('browser.toolbar.resetZoom', 'Reset zoom')}
+          onClick={() =>
+            void siteDisplaySource
+              .zoom('reset')
+              .then((next) => publishBrowserPageSiteDisplay({ browserPageId, display: next }))
+              .catch(() => undefined)
+          }
+        >
+          <ZoomIn className="size-3.5" />
+        </AddressChip>
+      ) : null}
+      {preset ? (
+        <AddressChip
+          label={`${preset.width} × ${preset.height}`}
+          tooltip={t('browser.toolbar.resetViewport', 'Reset viewport size')}
+          onClick={() => onApplyViewportPreset(null)}
+        >
+          <Monitor className="size-3.5" />
+        </AddressChip>
+      ) : null}
+    </>
+  )
+}
+
+export function BrowserOpenSourceFileButton({ onOpen }: { onOpen: () => void }): React.JSX.Element {
+  const t = useTranslate()
+  const label = t('auto.components.editor.HtmlDocPreview.openSourceControl', 'Open source file')
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="muted-field-icon"
+          aria-label={label}
+          onClick={onOpen}
+        >
+          <FileCode2 className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}

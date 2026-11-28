@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { Crosshair } from 'lucide-react'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
   type ScrollToCurrentWorkspaceRevealRequestDetail
-} from '@/lib/scroll-to-current-workspace-status'
+} from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { hasRenderedSidebarRowKey } from '../listing/rendered-row-keys'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
+import { readSidebarRevealTarget } from '../../sidebar-reveal-target-state'
+import { runWithFinally } from '@/lib/run-with-finally'
+
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 
 function workspacePassesFilters(
   worktree: Worktree,
@@ -30,7 +35,7 @@ function workspacePassesFilters(
 // Adjust grouping and filters before scheduling the requested workspace’s viewport reveal.
 export function useSidebarRevealRequests(args: {
   groupBy: WorktreeGroupBy
-  renderedSidebarRowKeys: ReadonlySet<string>
+  sectionRows: readonly HostSectionRow[]
   visibleWorktrees: readonly Worktree[]
   visibleFolderWorkspaces: readonly FolderWorkspace[]
   currentSidebarWorktreeId: string | null
@@ -43,7 +48,7 @@ export function useSidebarRevealRequests(args: {
 }): void {
   const {
     groupBy,
-    renderedSidebarRowKeys,
+    sectionRows,
     visibleWorktrees,
     visibleFolderWorkspaces,
     currentSidebarWorktreeId,
@@ -54,10 +59,8 @@ export function useSidebarRevealRequests(args: {
     hasFilters,
     revealWorkspaceFilters
   } = args
-  const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const { setGroupBy, revealSidebarRow, revealWorktreeInSidebar } = getAppStoreState()
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
-  const revealSidebarRow = useAppStore((s) => s.revealSidebarRow)
-  const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
   const confirm = useConfirmationDialog()
   const confirmationPending = useRef(false)
   const latestArgs = useRef(args)
@@ -81,7 +84,7 @@ export function useSidebarRevealRequests(args: {
       setGroupBy('repo')
       return
     }
-    if (!renderedSidebarRowKeys.has(rowKey) && hasFilters) {
+    if (hasFilters && !hasRenderedSidebarRowKey(sectionRows, rowKey)) {
       const target = getKnownSidebarWorktreeById(
         rowKey,
         worktreeMap,
@@ -99,7 +102,7 @@ export function useSidebarRevealRequests(args: {
     currentSidebarExecutionHostId,
     folderWorkspaces,
     pendingRevealSidebarRow,
-    renderedSidebarRowKeys,
+    sectionRows,
     setGroupBy,
     worktreeMap,
     worktrees,
@@ -126,6 +129,11 @@ export function useSidebarRevealRequests(args: {
       if (!currentSidebarWorktreeId) {
         return
       }
+      // Bots rows, and what no section lists, are not this list's to reveal: no filter
+      // dialog, no filter or group change, no pending reveal that could never land.
+      if (readSidebarRevealTarget().section !== 'projects') {
+        return
+      }
       const activeWorktree = getKnownSidebarWorktreeById(
         currentSidebarWorktreeId,
         worktreeMap,
@@ -145,23 +153,22 @@ export function useSidebarRevealRequests(args: {
           return
         }
         confirmationPending.current = true
-        let confirmed: boolean
-        try {
-          confirmed = await confirm({
-            icon: Crosshair,
-            initialFocus: 'confirm',
-            cancelVariant: 'ghost',
-            title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
-            description: translate(
-              'sidebar.revealFiltered.description',
-              'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
-            ),
-            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust filters and reveal'),
-            cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
-          })
-        } finally {
-          confirmationPending.current = false
-        }
+        const confirmed = await runWithFinally(
+          () =>
+            confirm({
+              initialFocus: 'confirm',
+              title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
+              description: translate(
+                'sidebar.revealFiltered.description',
+                'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
+              ),
+              confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust & reveal'),
+              cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
+            }),
+          () => {
+            confirmationPending.current = false
+          }
+        )
         const latest = latestArgs.current
         // A workspace switch while the dialog is open must not clear filters for a stale target.
         if (

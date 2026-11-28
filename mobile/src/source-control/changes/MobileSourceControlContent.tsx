@@ -1,0 +1,202 @@
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ActivityIndicator, Animated, Easing, ScrollView, Text, View } from 'react-native'
+import { spacing } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
+import { SHEET_CURVE } from '../../components/motion/sheet-motion-values'
+import { MobileSourceControlChangesHeader } from './MobileSourceControlChangesHeader'
+import { MobileCommitFailurePanel } from '../commits/MobileCommitFailurePanel'
+import { MobileSourceControlFileList } from './MobileSourceControlFileList'
+import type { MobileSourceControlState } from '../use-mobile-source-control-state'
+import { stylesSheet } from '../mobile-source-control-styles'
+import { hubStylesSheet } from '../panel/mobile-source-control-hub-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
+
+const CLEAN_FADE_MS = 240
+const REDUCED_CLEAN_FADE_MS = 150
+
+// The clean state settles in when a commit empties the list; on load it is simply there.
+function CleanStateFade({ animate, children }: { animate: boolean; children: ReactNode }) {
+  const styles = useThemedStyles(stylesSheet)
+  const reducedMotion = useReducedMotionEnabled() === true
+  const shown = useRef(new Animated.Value(animate ? 0 : 1)).current
+  useEffect(() => {
+    if (!animate) {
+      return
+    }
+    Animated.timing(shown, {
+      toValue: 1,
+      duration: reducedMotion ? REDUCED_CLEAN_FADE_MS : CLEAN_FADE_MS,
+      easing: Easing.bezier(...SHEET_CURVE),
+      useNativeDriver: true
+    }).start()
+  }, [animate, reducedMotion, shown])
+  const scale = reducedMotion
+    ? 1
+    : shown.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] })
+  return (
+    <Animated.View style={[styles.state, { opacity: shown, transform: [{ scale }] }]}>
+      {children}
+    </Animated.View>
+  )
+}
+
+type Props = {
+  state: Omit<MobileSourceControlState, 'primaryActionArgs'>
+  stageAllInBar: boolean
+  /** Clears the next-step bar the panel floats over the list. */
+  bottomInset: number
+  onOpenCommits: () => void
+}
+
+export function MobileSourceControlContent({
+  state,
+  stageAllInBar,
+  bottomInset,
+  onOpenCommits
+}: Props) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const hubStyles = useThemedStyles(hubStylesSheet)
+  const t = useMobileTranslation()
+  const { busyAction, hasVisibleChanges } = state
+  // Commit runners keep busyAction set ('commit…') until the refreshed status has landed.
+  const [listShown, setListShown] = useState(hasVisibleChanges)
+  const [cleanedByCommit, setCleanedByCommit] = useState(false)
+  if (listShown !== hasVisibleChanges) {
+    setListShown(hasVisibleChanges)
+    setCleanedByCommit(!hasVisibleChanges && busyAction?.startsWith('commit') === true)
+  }
+  // Pick only what the list reads, so commit-message keystrokes never re-render its rows.
+  const {
+    connState,
+    status,
+    branchLabel,
+    branchCompareResult,
+    actionError,
+    commitFailureRecovery,
+    commitFailureRecoveryAction,
+    openBranchPicker,
+    sections,
+    shouldShowBranchCompareSection,
+    branchEntries,
+    branchCompareState,
+    stageablePaths,
+    unstageablePaths,
+    stageAll,
+    unstageAll,
+    openDiffForFile,
+    resolveConflict,
+    runGitAction,
+    setDiscardTarget
+  } = state
+  const header = useMemo(
+    () => (
+      <MobileSourceControlChangesHeader
+        state={{
+          status,
+          branchLabel,
+          branchCompareResult,
+          busyAction,
+          openBranchPicker
+        }}
+        onOpenCommits={onOpenCommits}
+      />
+    ),
+    [branchCompareResult, branchLabel, busyAction, onOpenCommits, openBranchPicker, status]
+  )
+  const list = useMemo(
+    () => (
+      <MobileSourceControlFileList
+        state={{
+          sections,
+          status,
+          shouldShowBranchCompareSection,
+          branchEntries,
+          branchCompareState,
+          branchCompareResult,
+          stageablePaths,
+          unstageablePaths,
+          stageAll,
+          unstageAll,
+          busyAction,
+          openDiffForFile,
+          resolveConflict,
+          runGitAction,
+          setDiscardTarget
+        }}
+        header={header}
+        bottomInset={bottomInset + spacing.lg}
+        stageAllInBar={stageAllInBar}
+      />
+    ),
+    [
+      bottomInset,
+      branchCompareResult,
+      branchCompareState,
+      branchEntries,
+      busyAction,
+      header,
+      openDiffForFile,
+      stageAllInBar,
+      resolveConflict,
+      runGitAction,
+      sections,
+      setDiscardTarget,
+      shouldShowBranchCompareSection,
+      stageAll,
+      stageablePaths,
+      status,
+      unstageAll,
+      unstageablePaths
+    ]
+  )
+  // Outside the list, so a failure stays in view however far the rows are scrolled.
+  const feedback =
+    connState !== 'connected' || commitFailureRecovery || actionError ? (
+      <View style={hubStyles.changesControls}>
+        {connState !== 'connected' ? (
+          // Retained rows look actionable offline; say so in one quiet line above them.
+          <View style={styles.feedbackLine}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+            <Text style={styles.feedbackText}>
+              {t('sourceControl.content.reconnectingToComputer', 'Reconnecting…')}
+            </Text>
+          </View>
+        ) : null}
+        {commitFailureRecovery ? (
+          <MobileCommitFailurePanel
+            failure={commitFailureRecovery}
+            action={commitFailureRecoveryAction}
+          />
+        ) : actionError ? (
+          // Whole but bounded: a git error's useful part ("hint: …") is usually its last lines.
+          <ScrollView style={styles.feedbackScroll} nestedScrollEnabled>
+            <Text style={[styles.feedbackText, styles.feedbackError]} selectable>
+              {actionError}
+            </Text>
+          </ScrollView>
+        ) : null}
+      </View>
+    ) : null
+  if (!hasVisibleChanges) {
+    return (
+      <View style={hubStyles.tabBody}>
+        {feedback}
+        <View style={hubStyles.changesControls}>{header}</View>
+        <CleanStateFade animate={cleanedByCommit}>
+          <Text style={styles.stateTitle}>
+            {t('sourceControl.content.noChanges', 'No changes')}
+          </Text>
+        </CleanStateFade>
+      </View>
+    )
+  }
+  return (
+    <View style={hubStyles.tabBody}>
+      {feedback}
+      {list}
+    </View>
+  )
+}

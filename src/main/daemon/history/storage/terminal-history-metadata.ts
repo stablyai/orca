@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, promises as fsPromises, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getHistorySessionDirName } from './history-paths'
 import { isValidTerminalHistorySize } from '../restoration/terminal-history-dimensions'
@@ -18,6 +18,8 @@ export type SessionMeta = {
   exitCode: number | null
   /** Absent from an older daemon's sessions (daemon-history-replay-pty.ts). */
   resizeModel?: string
+  /** Latest probed process cwd since the last checkpoint, for shells without OSC 7. */
+  lastProbedCwd?: string
 }
 
 export type SessionMetaRead =
@@ -92,6 +94,33 @@ export function updateTerminalHistoryMeta(dir: string, updates: Partial<SessionM
   writeTerminalHistoryMeta(dir, meta)
 }
 
+export async function updateTerminalHistoryProbedCwd(
+  dir: string,
+  cwd: string | null
+): Promise<void> {
+  const metaPath = join(dir, 'meta.json')
+  let meta: SessionMeta
+  try {
+    meta = JSON.parse(await fsPromises.readFile(metaPath, 'utf-8'))
+  } catch {
+    return
+  }
+  if (cwd === null) {
+    if (meta.lastProbedCwd === undefined) {
+      return
+    }
+    const { lastProbedCwd: _previous, ...rest } = meta
+    await fsPromises.writeFile(metaPath, JSON.stringify(rest, null, 2), { mode: PRIVATE_FILE_MODE })
+    return
+  }
+  if (meta.lastProbedCwd === cwd) {
+    return
+  }
+  await fsPromises.writeFile(metaPath, JSON.stringify({ ...meta, lastProbedCwd: cwd }, null, 2), {
+    mode: PRIVATE_FILE_MODE
+  })
+}
+
 function isSessionMeta(value: unknown): value is SessionMeta {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
@@ -103,6 +132,7 @@ function isSessionMeta(value: unknown): value is SessionMeta {
     isValidTerminalHistorySize(meta.cols, meta.rows) &&
     (meta.endedAt === null || typeof meta.endedAt === 'string') &&
     (meta.exitCode === null || typeof meta.exitCode === 'number') &&
-    (meta.resizeModel === undefined || typeof meta.resizeModel === 'string')
+    (meta.resizeModel === undefined || typeof meta.resizeModel === 'string') &&
+    (meta.lastProbedCwd === undefined || typeof meta.lastProbedCwd === 'string')
   )
 }

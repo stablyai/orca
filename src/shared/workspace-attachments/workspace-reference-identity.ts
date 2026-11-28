@@ -1,7 +1,8 @@
 import { parseJiraIssueUrl, JIRA_ISSUE_KEY_PATTERN } from '../jira/jira-issue-url'
 import { parseLinearIssueInput, parseLinearIssueUrlIntent } from '../linear/links'
-import { getTaskSourceCacheScope } from '../task-source-context'
+import { getTaskSourceCacheScope } from '../work-items/task-source-context'
 import type { WorkspaceAttachment } from '../worktree/types'
+import { getPublicForgeProviderForHost } from '../git/remotes/public-forge-host'
 
 export type WorkspaceReferenceQuery =
   | { kind: 'url'; identity: string }
@@ -9,13 +10,22 @@ export type WorkspaceReferenceQuery =
   | { kind: 'issue-url'; route: string }
   | { kind: 'issue-key'; identifier: string }
 
-const HOST_PROVIDERS: Readonly<Record<string, WorkspaceAttachment['provider']>> = {
-  'github.com': 'github',
-  'gitlab.com': 'gitlab',
-  'linear.app': 'linear',
-  'codeberg.org': 'gitea',
-  'bitbucket.org': 'bitbucket',
-  'dev.azure.com': 'azure-devops'
+// Keep existing saved-reference URL normalization separate from remote-host ownership.
+const PUBLIC_REFERENCE_HOSTS = new Set([
+  'github.com',
+  'gitlab.com',
+  'codeberg.org',
+  'bitbucket.org',
+  'dev.azure.com'
+])
+
+function referenceHostProvider(host: string): WorkspaceAttachment['provider'] | undefined {
+  if (host === 'linear.app') {
+    return 'linear'
+  }
+  return PUBLIC_REFERENCE_HOSTS.has(host)
+    ? (getPublicForgeProviderForHost(host) ?? undefined)
+    : undefined
 }
 
 const CASE_INSENSITIVE_PATH_PROVIDERS: ReadonlySet<WorkspaceAttachment['provider']> = new Set([
@@ -37,7 +47,7 @@ function referenceUrl(input: string): URL {
   url.search = ''
   url.hash = ''
   url.pathname = url.pathname.replace(/\/+$/, '')
-  if (url.hostname.startsWith('www.') && HOST_PROVIDERS[url.hostname.slice(4)]) {
+  if (url.hostname.startsWith('www.') && referenceHostProvider(url.hostname.slice(4))) {
     url.hostname = url.hostname.slice(4)
   }
   return url
@@ -63,7 +73,7 @@ export function parseWorkspaceReferenceUrl(
   providerHint?: WorkspaceAttachment['provider']
 ): WorkspaceAttachment {
   const url = referenceUrl(input)
-  const knownProvider = HOST_PROVIDERS[url.hostname]
+  const knownProvider = referenceHostProvider(url.hostname)
   const item = parseReferenceRoute(url, knownProvider ?? providerHint)
   if (
     (knownProvider && item.provider !== knownProvider) ||
@@ -107,12 +117,15 @@ function parseReferenceRoute(
       url: url.href
     }
   }
-  const gitlab = /^(\/.+)\/-\/(merge_requests|issues)\/(\d+)(?:\/.*)?$/.exec(url.pathname)
+  // /-/work_items/N is GitLab's newer route for issues.
+  const gitlab = /^(\/.+)\/-\/(merge_requests|issues|work_items)\/(\d+)(?:\/.*)?$/.exec(
+    url.pathname
+  )
   if (gitlab && url.hostname !== 'github.com' && url.hostname !== 'linear.app') {
     return numberedReference(
       url,
       'gitlab',
-      gitlab[2] === 'issues' ? 'issue' : 'mr',
+      gitlab[2] === 'merge_requests' ? 'mr' : 'issue',
       `${gitlab[1]}/-/${gitlab[2]}`,
       gitlab[3]
     )
@@ -212,7 +225,12 @@ export function getProvenWorkspaceReferenceIdentity(item: WorkspaceAttachment): 
         const path = CASE_INSENSITIVE_PATH_PROVIDERS.has(parsed.provider)
           ? url.pathname.toLowerCase()
           : url.pathname
-        return JSON.stringify([parsed.provider, parsed.type, url.host, path])
+        // GitLab serves one issue at both /-/issues/N and /-/work_items/N.
+        const canonicalPath =
+          parsed.provider === 'gitlab'
+            ? path.replace(/\/-\/work_items\/(\d+)$/, '/-/issues/$1')
+            : path
+        return JSON.stringify([parsed.provider, parsed.type, url.host, canonicalPath])
       }
     } catch {
       // Legacy links without a provable source remain removable by their opaque key.

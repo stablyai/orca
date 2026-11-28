@@ -1,3 +1,4 @@
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import { join, resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { lstat, readdir } from '../../../filesystem/asar-transparent-fs'
@@ -6,8 +7,10 @@ import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
 import {
   assertWorktreeUnlockedForRemoval,
+  differentCheckoutAtPathError,
   unregisteredFolderRefusal
-} from '../../../../shared/worktree/removal'
+} from '../../../../shared/worktree/removal/removal'
+import { readCheckoutMarkerState } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canSafelyRemoveOrphanedWorktreeDirectory,
@@ -15,7 +18,7 @@ import {
   isDangerousWorktreeRemovalPath,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from '../../../workspaces/removal/worktree-removal-safety'
-import { readTranslatedWorktreeGraph } from '../catalog/worktree-list-reader'
+import { listWorktreeGraphSharedStrict } from '../catalog/worktree-scan-cache'
 import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
 import { getErrorCode, type RemoveWorktreeOptions } from '../worktree-operation-options'
 
@@ -48,10 +51,55 @@ export async function removeWindowsCheckout(
   force: boolean,
   options: RemoveWorktreeOptions
 ): Promise<void> {
+  let pinnedMarker = options.expectedMarker
+  let forbidMarker = options.forbidAnyMarker ?? false
   await removeHostCheckout(
     root,
-    (checkClean) => authorizeWindowsCheckout(repo, root, force, options, false, checkClean),
-    options.checkoutDeleteSignal
+    async (checkClean) => {
+      if (pinnedMarker === undefined && !forbidMarker) {
+        const initial = await readCheckoutMarkerState(root, options)
+        if (initial.kind === 'file') {
+          pinnedMarker = initial.identity
+        } else if (initial.kind === 'other') {
+          throw differentCheckoutAtPathError(root)
+        }
+      }
+      return authorizeWindowsCheckout(
+        repo,
+        root,
+        force,
+        {
+          ...options,
+          ...(pinnedMarker !== undefined ? { expectedMarker: pinnedMarker } : {}),
+          ...(forbidMarker ? { forbidAnyMarker: true } : {})
+        },
+        false,
+        checkClean
+      )
+    },
+    options.checkoutDeleteSignal,
+    async (): Promise<boolean> => {
+      if (forbidMarker) {
+        if (!(await nativeWindowsMarkerMissing(root, options))) {
+          throw differentCheckoutAtPathError(root)
+        }
+        return false
+      }
+      if (pinnedMarker !== undefined) {
+        const current = await readCheckoutMarkerState(root, options)
+        throwIfSignalAborted(options.checkoutDeleteSignal)
+        if (current.kind === 'absent') {
+          return false
+        }
+        if (current.kind !== 'file' || current.identity !== pinnedMarker) {
+          throw differentCheckoutAtPathError(root)
+        }
+        return true
+      }
+      const markerMissing = await nativeWindowsMarkerMissing(root, options)
+      throwIfSignalAborted(options.checkoutDeleteSignal)
+      return !markerMissing
+    }
   )
 }
 
@@ -83,7 +131,42 @@ export async function authorizeWindowsCheckout(
   beforeTeardown = false,
   checkClean = true
 ): Promise<boolean> {
-  const worktrees = await readTranslatedWorktreeGraph(repo, options)
+  const signal =
+    options.signal &&
+    options.checkoutDeleteSignal &&
+    options.signal !== options.checkoutDeleteSignal
+      ? AbortSignal.any([options.signal, options.checkoutDeleteSignal])
+      : (options.checkoutDeleteSignal ?? options.signal)
+  options = { ...options, signal, checkoutDeleteSignal: signal }
+  const checkStopped = () => throwIfSignalAborted(signal)
+  checkStopped()
+  try {
+    return await authorizeWindowsCheckoutReads(
+      repo,
+      root,
+      force,
+      options,
+      beforeTeardown,
+      checkClean
+    )
+  } catch (error) {
+    checkStopped()
+    throw error
+  }
+}
+
+async function authorizeWindowsCheckoutReads(
+  repo: string,
+  root: string,
+  force: boolean,
+  options: RemoveWorktreeOptions & Parameters<typeof assertWorktreeCleanForRemoval>[2],
+  beforeTeardown: boolean,
+  checkClean: boolean
+): Promise<boolean> {
+  const checkStopped = () => throwIfSignalAborted(options.signal)
+  checkStopped()
+  const worktrees = await listWorktreeGraphSharedStrict(repo, options)
+  checkStopped()
   const current = findRegisteredDeletableWorktree(repo, root, worktrees, CLIENT_REMOVAL_HOME)
   if (isDangerousWorktreeRemovalPath(root, repo, CLIENT_REMOVAL_HOME)) {
     throw new Error(`Refusing to delete protected worktree path: ${root}`)
@@ -107,7 +190,9 @@ export async function authorizeWindowsCheckout(
   let entry
   try {
     entry = await lstat(root)
+    checkStopped()
   } catch (error) {
+    checkStopped()
     if (getErrorCode(error) === 'ENOENT') {
       return false
     }
@@ -116,14 +201,51 @@ export async function authorizeWindowsCheckout(
   if (!entry.isDirectory() || entry.isSymbolicLink()) {
     throw new Error(`Refusing to delete unregistered worktree path: ${root}`)
   }
-  if (await nativeWindowsMarkerMissing(root, options)) {
+  const markerMissing = await nativeWindowsMarkerMissing(root, options)
+  checkStopped()
+  if (markerMissing) {
     // Reject only; an empty observation never authorizes recursive deletion after teardown.
-    if (beforeTeardown && (await readdir(root)).length > 0) {
-      throw unregisteredFolderRefusal(root)
+    if (beforeTeardown) {
+      const names = await readdir(root)
+      checkStopped()
+      if (names.length > 0) {
+        throw unregisteredFolderRefusal(root)
+      }
     }
     return false
   }
-  if (!(await canSafelyRemoveOrphanedWorktreeDirectory(root, repo, CLIENT_REMOVAL_HOME))) {
+  const verifyPinnedMarker = async (): Promise<boolean> => {
+    if (options.forbidAnyMarker) {
+      if (!(await nativeWindowsMarkerMissing(root, options))) {
+        throw differentCheckoutAtPathError(root)
+      }
+      return false
+    }
+    if (options.expectedMarker !== undefined) {
+      const markerState = await readCheckoutMarkerState(root, options)
+      checkStopped()
+      if (markerState.kind === 'absent') {
+        if (beforeTeardown) {
+          const names = await readdir(root)
+          checkStopped()
+          if (names.length > 0) {
+            throw unregisteredFolderRefusal(root)
+          }
+        }
+        return false
+      }
+      if (markerState.kind !== 'file' || markerState.identity !== options.expectedMarker) {
+        throw differentCheckoutAtPathError(root)
+      }
+    }
+    return true
+  }
+  if (!(await verifyPinnedMarker())) {
+    return false
+  }
+  const safe = await canSafelyRemoveOrphanedWorktreeDirectory(root, repo, CLIENT_REMOVAL_HOME)
+  checkStopped()
+  if (!safe) {
     throw new Error(`Refusing to delete unregistered worktree path: ${root}`)
   }
   if (!current && !force) {
@@ -137,17 +259,25 @@ export async function authorizeWindowsCheckout(
       .trim()
       .replace(/^gitdir:\s*/i, '')
   )
+  checkStopped()
   try {
     await lstat(join(admin, 'locked'))
+    checkStopped()
     throw new Error('Cannot remove a locked worktree. Unlock it before deleting.')
   } catch (error) {
+    checkStopped()
     if (getErrorCode(error) !== 'ENOENT') {
       throw error
     }
   }
   if (checkClean && !force) {
     await assertWorktreeCleanForRemoval(root, force, options, admin)
-    return authorizeWindowsCheckout(repo, root, force, options, beforeTeardown, false)
+    checkStopped()
+    return authorizeWindowsCheckoutReads(repo, root, force, options, beforeTeardown, false)
   }
+  if (!(await verifyPinnedMarker())) {
+    return false
+  }
+  checkStopped()
   return true
 }

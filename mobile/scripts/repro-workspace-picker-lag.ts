@@ -2,12 +2,10 @@
 import { performance } from 'node:perf_hooks'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../src/shared/workspace-view/workspace-row-filters'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
-import { areWorktreeListsEqual } from '../src/worktree/worktree-list-snapshot'
-import {
-  buildSections,
-  type FilterState,
-  type Worktree
-} from '../src/worktree/workspace-list-sections'
+import { areWorktreeListsEqual } from '../src/worktree/catalog/worktree-list-snapshot'
+import { translate } from '../src/i18n/mobile-i18n'
+import { buildSections } from '../src/worktree/workspace-list/workspace-list-sections'
+import type { FilterState, Worktree } from '../src/worktree/workspace-list/workspace-list-types'
 
 const repoCount = readScenarioNumber('MOCK_REPO_COUNT', 200)
 const worktreeCount = readScenarioNumber('MOCK_WORKTREE_COUNT', 5000)
@@ -42,7 +40,7 @@ async function measureTapDelay(label: string, work: () => void): Promise<number>
 }
 
 function rebuildSections(worktrees: readonly Worktree[]): void {
-  buildSections(worktrees as Worktree[], 'recent', filters, '', 'repo', pinnedIds)
+  buildSections(translate, worktrees as Worktree[], 'recent', filters, '', 'repo', pinnedIds)
 }
 
 async function main(): Promise<void> {

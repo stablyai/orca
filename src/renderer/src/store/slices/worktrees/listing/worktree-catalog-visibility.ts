@@ -1,10 +1,7 @@
-import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/structural-value-equality'
-import { catalogRowsEqual } from '../../worktree-catalog-reconciliation'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
+import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/collections/structural-value-equality'
+import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-
-export function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
-  return catalogRowsEqual(current, next)
-}
 
 /** True when the rows match in place except for `sortOrder`, which an order save rewrites. */
 export function worktreesDifferOnlyInSortOrder(
@@ -14,17 +11,27 @@ export function worktreesDifferOnlyInSortOrder(
   if (!current || current.length !== next.length) {
     return false
   }
-  return current.every((row, index) => {
+  for (let index = 0; index < current.length; index++) {
+    const row = current[index]
     const incoming = next[index]
-    return (
-      row === incoming ||
-      (row.id === incoming.id &&
-        structuralValuesEqualIgnoringUndefined(
-          { ...row, sortOrder: 0 },
-          { ...incoming, sortOrder: 0 }
-        ))
-    )
-  })
+    if (row === incoming) {
+      continue
+    }
+    if (row.id !== incoming.id) {
+      return false
+    }
+    const equalIgnoringSortOrder =
+      row.sortOrder === incoming.sortOrder
+        ? structuralValuesEqualIgnoringUndefined(row, incoming)
+        : structuralValuesEqualIgnoringUndefined(
+            { ...row, sortOrder: 0 },
+            { ...incoming, sortOrder: 0 }
+          )
+    if (!equalIgnoringSortOrder) {
+      return false
+    }
+  }
+  return true
 }
 
 export function areDetectedWorktreeResultsEqual(
@@ -53,5 +60,5 @@ export function toVisibleWorktree(
     visible: _visible,
     ...base
   } = worktree
-  return base
+  return { ...base, displayName: base.displayName || resolveWorktreeDisplayName(base) }
 }

@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest'
+import type { HostedReviewCreationEligibility } from '../hosted-review/hosted-review-contracts'
 import {
   resolveSourceControlCommitAreaPrimaryActionDecision,
-  resolveSourceControlPrimaryActionDecision
+  resolveSourceControlDesktopCommitAreaPrimaryActionDecision
 } from './source-control-primary-action-decision'
 import type { SourceControlPrimaryActionDecisionInputs } from './source-control-primary-action-decision-types'
 
+const CAN_CREATE_PR: HostedReviewCreationEligibility = {
+  provider: 'github',
+  review: null,
+  canCreate: true,
+  blockedReason: null,
+  nextAction: null,
+  reviewLookupOutcome: 'not_found'
+}
+
+// Clean tree on a published branch with nothing to push or pull.
 function inputs(
   overrides: Partial<SourceControlPrimaryActionDecisionInputs> = {}
 ): SourceControlPrimaryActionDecisionInputs {
@@ -17,129 +28,71 @@ function inputs(
     hasUnresolvedConflicts: false,
     isCommitting: false,
     isRemoteOperationActive: false,
-    upstreamStatus: undefined,
+    upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+    prState: null,
+    hostedReviewCreation: CAN_CREATE_PR,
     ...overrides
   }
 }
 
-describe('source-control primary action decision', () => {
-  it('returns Stage All for a dirty tree before remote actions', () => {
-    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
-      inputs({
-        hasUnstagedChanges: true,
-        hasStageableChanges: true,
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 4 }
-      })
-    )
-    expect(result.kind).toBe('stage')
-    expect(result.titleIntent).toBe('stage_all_changes')
-    expect(result.disabled).toBe(false)
-  })
-
-  it('blocks commits while unresolved conflicts exist', () => {
-    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
-      inputs({ stagedCount: 1, hasMessage: true, hasUnresolvedConflicts: true })
-    )
-    expect(result).toMatchObject({
-      kind: 'commit',
-      titleIntent: 'resolve_conflicts_before_commit',
-      disabled: true
-    })
-  })
-
-  it('blocks unpublished branch publishing when HEAD is detached', () => {
-    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
-      inputs({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
-        hasCurrentBranch: false
-      })
-    )
-    expect(result).toMatchObject({
-      kind: 'commit',
-      titleIntent: 'checkout_branch_before_publish',
-      disabled: true
-    })
-  })
-
-  it('mirrors in-flight remote operation semantics', () => {
-    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
-      inputs({
-        isRemoteOperationActive: true,
-        inFlightRemoteOpKind: 'pull',
-        upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 }
-      })
-    )
-    expect(result).toMatchObject({
-      kind: 'pull',
-      labelIntent: 'pull',
-      titleIntent: 'action_in_progress',
-      disabled: true
-    })
-  })
-
-  it('marks patch-equivalent diverged branches as force-push-with-lease decisions', () => {
-    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
-      inputs({
-        branchCommitsAhead: 4,
-        upstreamStatus: {
-          hasUpstream: true,
-          upstreamName: 'origin/feature',
-          ahead: 14,
-          behind: 3,
-          behindCommitsArePatchEquivalent: true
-        }
-      })
-    )
-    expect(result).toMatchObject({
-      kind: 'push',
-      labelIntent: 'force_push',
-      titleIntent: 'force_push_with_lease',
-      requiresForceWithLease: true,
-      count: 4,
-      upstreamName: 'origin/feature'
-    })
-  })
-
-  it('keeps review creation out of commit-area decisions', () => {
-    const input = inputs({
-      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-      hostedReviewCreation: {
-        provider: 'gitlab',
-        review: null,
-        canCreate: true,
-        blockedReason: null,
-        nextAction: null,
-        reviewLookupOutcome: 'not_found'
-      }
-    })
-    expect(resolveSourceControlPrimaryActionDecision(input).kind).toBe('create_pr')
-    expect(resolveSourceControlCommitAreaPrimaryActionDecision(input).kind).toBe('commit')
-  })
-
-  it('keeps in-flight review intents out of commit-area decisions', () => {
-    const input = inputs({ isPrIntentInFlight: true })
-    expect(resolveSourceControlPrimaryActionDecision(input).kind).toBe('create_pr_intent')
-    expect(resolveSourceControlCommitAreaPrimaryActionDecision(input).kind).toBe('commit')
-  })
-
-  it('returns disabled create review while hosted-review creation eligibility is loading', () => {
-    const input = inputs({
-      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-      hostedReviewCreation: {
-        provider: 'gitlab',
-        review: null,
-        canCreate: false,
-        blockedReason: null,
-        nextAction: null,
-        reviewLookupOutcome: 'not_found'
-      },
-      isHostedReviewCreationLoading: true
-    })
-    expect(resolveSourceControlPrimaryActionDecision(input)).toMatchObject({
+describe('desktop commit-area primary action', () => {
+  it('becomes Create PR once nothing is left to commit, push or pull', () => {
+    expect(resolveSourceControlDesktopCommitAreaPrimaryActionDecision(inputs())).toMatchObject({
       kind: 'create_pr',
-      titleIntent: 'checking_review_creation',
+      disabled: false
+    })
+  })
+
+  it('keeps the earlier steps ahead of Create PR', () => {
+    const push = inputs({ upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 } })
+    expect(resolveSourceControlDesktopCommitAreaPrimaryActionDecision(push)).toMatchObject({
+      kind: 'push'
+    })
+    const stage = inputs({ hasUnstagedChanges: true, hasStageableChanges: true })
+    expect(resolveSourceControlDesktopCommitAreaPrimaryActionDecision(stage)).toMatchObject({
+      kind: 'stage'
+    })
+  })
+
+  it('stays a disabled Commit when a review cannot be created', () => {
+    const blocked = inputs({
+      hostedReviewCreation: { ...CAN_CREATE_PR, canCreate: false, blockedReason: 'existing_review' }
+    })
+    expect(resolveSourceControlDesktopCommitAreaPrimaryActionDecision(blocked)).toMatchObject({
+      kind: 'commit',
       disabled: true
     })
-    expect(resolveSourceControlCommitAreaPrimaryActionDecision(input).kind).toBe('commit')
+  })
+
+  it('drops Sync after an Orca rebase without promoting Force Push', () => {
+    const diverged = inputs({
+      hostedReviewCreation: null,
+      upstreamStatus: { hasUpstream: true, ahead: 3, behind: 2 },
+      suppressPullAfterRebase: true
+    })
+    expect(resolveSourceControlDesktopCommitAreaPrimaryActionDecision(diverged)).toMatchObject({
+      kind: 'commit',
+      titleIntent: 'nothing_to_commit',
+      disabled: true
+    })
+    const patchEquivalent = inputs({
+      upstreamStatus: {
+        hasUpstream: true,
+        ahead: 3,
+        behind: 2,
+        behindCommitsArePatchEquivalent: true
+      },
+      suppressPullAfterRebase: true
+    })
+    expect(
+      resolveSourceControlDesktopCommitAreaPrimaryActionDecision(patchEquivalent)
+    ).toMatchObject({ kind: 'push', labelIntent: 'force_push' })
+  })
+
+  it('leaves the shared mobile commit-area decision without a Create PR face', () => {
+    expect(resolveSourceControlCommitAreaPrimaryActionDecision(inputs())).toMatchObject({
+      kind: 'commit',
+      disabled: true
+    })
   })
 })

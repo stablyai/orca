@@ -1,12 +1,16 @@
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import {
   codexApprovalItem,
   codexPromptIdentity,
   codexQuestionItems
 } from '../prompts/codex-structured-prompt-items'
 import '../prompts/codex-structured-prompt-replies'
-import { CODEX_USER_INPUT_METHOD } from '../prompts/codex-prompt-registry'
+import {
+  CODEX_MCP_ELICITATION_METHOD,
+  CODEX_USER_INPUT_METHOD
+} from '../prompts/codex-prompt-registry'
+import { codexMcpFormPresentation } from '../prompts/codex-mcp-form-elicitation'
 import type {
   CodexJournalTranslationAdmission,
   CodexJournalTranslatorDeps
@@ -22,8 +26,8 @@ import {
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
-import '../../../native-chat/agent-session-journal/journal-row-builders'
-import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+import '../../../native-chat/agent-session-journal/writing/journal-row-builders'
+import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 
 type CodexGroupedPendingJournalPrompt = CodexPendingJournalPrompt & { promptKey: string }
 
@@ -78,11 +82,15 @@ export class CodexJournalPrompts {
       threadId: event.threadId,
       promptKey: event.promptKey
     })
-    const body = codexApprovalItem({
-      method: event.method,
-      params: event.params,
-      detail: this.detailFor(event.threadId, event.codexItemId)
-    })
+    const form =
+      event.method === CODEX_MCP_ELICITATION_METHOD ? codexMcpFormPresentation(event.params) : null
+    const body =
+      form?.body ??
+      codexApprovalItem({
+        method: event.method,
+        params: event.params,
+        detail: this.detailFor(event.threadId, event.codexItemId)
+      })
     const admission = this.admit(event, turnId, [{ identity, body }])
     if (!admission.accepted) {
       return admission

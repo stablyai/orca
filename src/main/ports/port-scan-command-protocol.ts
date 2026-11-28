@@ -11,6 +11,8 @@ export type PortScanCommandRequest = {
   command: string
   args: string[]
   darwinOperation?: DarwinPortScanOperation
+  /** Linux only: list holders of these socket inodes from /proc instead of running command/args. */
+  linuxSocketInodes?: number[]
 }
 
 export type PortScanCommandResponse =

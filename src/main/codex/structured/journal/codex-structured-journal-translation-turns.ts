@@ -1,25 +1,28 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalAnsweredTurnIdentity,
+  type AgentJournalTurnJoin,
   type AgentJournalTurnItem,
   type AgentJournalTurnLifecycleState
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnOutcome } from '../../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { CODEX_USER_MESSAGE_ORDINAL } from './codex-turn-ordinals'
+import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { resolveAgentJournalTurnRowWrite } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionRevisionJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
-import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink-estimate'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { JournalTimelineView } from '../../../native-chat/agent-session-journal/writing/journal-timeline-view'
+import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
 /** Reserve for Codex's context report; the larger shared bound would overrun history restores. */
-const CODEX_TURN_ROW_KEPT_BYTES = 1_024
+export const CODEX_TURN_ROW_KEPT_BYTES = 1_024
 
 function codexTurnRowReservedBytes(
   identity: AgentJournalItemIdentity,
@@ -30,13 +33,15 @@ function codexTurnRowReservedBytes(
 
 /** Preserve fields this lifecycle writer does not own, including context usage. */
 export function reviseCodexTurnRow(
-  journal: StructuredAgentSessionRevisionJournal,
+  view: Pick<JournalTimelineView, 'itemBody'>,
   identity: AgentJournalItemIdentity,
   lifecycle: AgentJournalTurnItem
 ): AgentJournalTurnItem {
   const reservedBytes = codexTurnRowReservedBytes(identity, lifecycle)
+  // A named lifecycle revision reads only its own row.
+  const own = { itemBody: view.itemBody, newestTurn: () => null, contextWindowHeld: () => false }
   return (
-    resolveAgentJournalTurnRowWrite(journal, { identity }, { lifecycle }, reservedBytes)?.body ??
+    resolveAgentJournalTurnRowWrite(own, { identity }, { lifecycle }, reservedBytes)?.body ??
     lifecycle
   )
 }
@@ -51,6 +56,49 @@ export function codexTurnLifecycleIdentity(
     sessionId,
     recordId: `turn-lifecycle:${turnId}`
   }
+}
+
+/** How the provider took a send, read at its echo: a turn start Codex steered into a turn already
+ *  running, or one another send opened, joined that turn. Read before the send settles. */
+export function codexEchoVia(
+  echoes: Pick<CodexDispatchEchoes, 'sentVia' | 'echoedVia'>,
+  clientMessageId: string,
+  providerIdentity: AgentJournalItemIdentity
+): AgentJournalTurnJoin | null {
+  return providerIdentity.provider === 'codex'
+    ? echoes.echoedVia(clientMessageId, providerIdentity.threadId, providerIdentity.turnId)
+    : echoes.sentVia(clientMessageId)
+}
+
+/** The settled send a provider echo names, with how it was taken (`codexEchoVia`). */
+export function codexEchoedSend(
+  sessionId: string,
+  clientMessageId: string,
+  providerIdentity: AgentJournalItemIdentity,
+  echoes: Pick<CodexDispatchEchoes, 'sentVia' | 'echoedVia'>
+) {
+  const via = codexEchoVia(echoes, clientMessageId, providerIdentity)
+  return { sessionId, clientMessageId, ...codexAcceptedSend(sessionId, providerIdentity, via) }
+}
+
+/** A send written into a running turn joined the turn its echo names, which another send opened. */
+export function codexAcceptedSend(
+  sessionId: string,
+  providerIdentity: AgentJournalItemIdentity,
+  via: AgentJournalTurnJoin | null
+): {
+  providerIdentity: AgentJournalItemIdentity
+  answeredInTurn?: AgentJournalAnsweredTurnIdentity
+} {
+  return providerIdentity.provider === 'codex' && via === 'steer'
+    ? {
+        providerIdentity,
+        answeredInTurn: {
+          turn: codexTurnLifecycleIdentity(sessionId, providerIdentity.turnId),
+          via
+        }
+      }
+    : { providerIdentity }
 }
 
 export function codexTurnUserItemId(threadId: string, turnId: string): string {
@@ -99,6 +147,8 @@ export function publishCodexTurnLifecycle(input: {
   requestedAt?: number
   completedAt?: number
   durationMs?: number
+  /** A kept agent's replay: a start never reopens a turn the journal already holds ended. */
+  neverReopen?: true
 }): StructuredAgentSessionSinkAdmission {
   if (input.primaryThreadId !== input.threadId) {
     return ADMITTED
@@ -126,7 +176,14 @@ export function publishCodexTurnLifecycle(input: {
   if (input.sink.tryReviseResolvedItem) {
     admission = input.sink.tryReviseResolvedItem(
       codexTurnRowReservedBytes(identity, body),
-      (journal) => ({ identity, body: reviseCodexTurnRow(journal, identity, body) }),
+      {
+        kind: 'turn-row',
+        target: { identity },
+        write: {
+          lifecycle: body,
+          ...(input.neverReopen && input.state === 'running' ? { onlyWhileRunning: true } : {})
+        }
+      },
       appendOptions
     )
   } else if (input.sink.tryAppendItem) {

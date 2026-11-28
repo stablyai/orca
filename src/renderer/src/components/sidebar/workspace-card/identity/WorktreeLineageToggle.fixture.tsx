@@ -1,12 +1,13 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { useState } from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import WorktreeCard from '../surface/WorktreeCard'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const repo: Repo = {
   id: 'lineage-preview',
@@ -58,7 +59,7 @@ const tabs: Tab[] = children.slice(0, 3).map((child, index) => ({
   createdAt: Date.now()
 }))
 const entries: AgentStatusEntry[] = tabs.map((tab, index) => ({
-  paneKey: structuredAgentSessionPaneKey(tab.id, tab.entityId),
+  paneKey: chatPaneKey(tab.entityId),
   worktreeId: tab.worktreeId,
   agentType: 'codex',
   prompt: '',
@@ -111,7 +112,7 @@ const store = {
   repos: [repo],
   worktreesByRepo: { [repo.id]: [parent, ...children] },
   unifiedTabsByWorktree: Object.fromEntries(tabs.map((tab) => [tab.worktreeId, [tab]])),
-  agentStatusByPaneKey: Object.fromEntries(entries.map((entry) => [entry.paneKey, entry])),
+  agentStatusByPaneKey: acceptedAgentStatuses(entries.map((entry) => [entry.paneKey, entry])),
   agentStatusEpoch: 1,
   agentActivityDisplayMode: 'compact' as const
 }
@@ -146,9 +147,9 @@ export const manyNarrow = defineFixture({
     agentStatusEpoch: 2,
     worktreesByRepo: { [repo.id]: [parent, ...manyChildren] },
     unifiedTabsByWorktree: Object.fromEntries(manyTabs.map((tab) => [tab.worktreeId, [tab]])),
-    agentStatusByPaneKey: Object.fromEntries(
+    agentStatusByPaneKey: acceptedAgentStatuses(
       manyTabs.map((tab, index) => {
-        const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+        const paneKey = chatPaneKey(tab.entityId)
         return [
           paneKey,
           { ...entries[index % entries.length], paneKey, worktreeId: tab.worktreeId }
@@ -160,6 +161,11 @@ export const manyNarrow = defineFixture({
 })
 export const inactive = defineFixture({
   width: 288,
-  store: { ...store, agentStatusEpoch: 3, unifiedTabsByWorktree: {}, agentStatusByPaneKey: {} },
+  store: {
+    ...store,
+    agentStatusEpoch: 3,
+    unifiedTabsByWorktree: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({}))
+  },
   render: () => <Preview />
 })

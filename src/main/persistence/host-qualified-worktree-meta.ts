@@ -1,13 +1,17 @@
-import { getRepoRegistrationHostIds } from '../../shared/repo-host-identity'
+import {
+  createRepoRowExecutionHostLookup,
+  type RepoRowExecutionHostLookup
+} from '../../shared/execution-host/worktree-execution-host-resolution'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../shared/execution-host'
-import { isLocalOnlyWorktreeMetaId } from '../../shared/worktree/local-only-worktree-meta-ids'
-import type { Repo } from '../../shared/repo-types'
+} from '../../shared/execution-host/execution-host'
+import { isLocalOnlyWorktreeMetaId } from '../../shared/worktree/metadata/local-only-worktree-meta-ids'
+import type { Repo } from '../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
@@ -20,7 +24,10 @@ export type HostQualifiedWorktreeMetaStore = {
     worktreeId: string,
     executionHostId: ExecutionHostId
   ) => WorktreeMeta | undefined
-  getAllWorktreeMetaForHost?: (executionHostId: ExecutionHostId) => Record<string, WorktreeMeta>
+  getAllWorktreeMetaForHost?: (
+    executionHostId: ExecutionHostId,
+    repoId?: string
+  ) => Record<string, WorktreeMeta>
 }
 
 export function readAllWorktreeMetaForHost<
@@ -28,16 +35,29 @@ export function readAllWorktreeMetaForHost<
 >(
   store: {
     getAllWorktreeMeta: () => Record<string, TMeta>
-    getAllWorktreeMetaForHost?: (executionHostId: ExecutionHostId) => Record<string, TMeta>
+    getAllWorktreeMetaForHost?: (
+      executionHostId: ExecutionHostId,
+      repoId?: string
+    ) => Record<string, TMeta>
   },
-  executionHostId: ExecutionHostId
+  executionHostId: ExecutionHostId,
+  repoId?: string
 ): Record<string, TMeta> {
-  const qualified = store.getAllWorktreeMetaForHost?.(executionHostId)
+  const qualified = store.getAllWorktreeMetaForHost?.(executionHostId, repoId)
   if (qualified) {
     return qualified
   }
   const projected: Record<string, TMeta> = {}
-  for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
+  const allMeta = store.getAllWorktreeMeta()
+  const repoPrefix = repoId !== undefined ? `${repoId}${WORKTREE_ID_SEPARATOR}` : undefined
+  for (const worktreeId in allMeta) {
+    if (
+      !Object.hasOwn(allMeta, worktreeId) ||
+      (repoId !== undefined && !worktreeId.startsWith(repoPrefix!) && worktreeId !== repoId)
+    ) {
+      continue
+    }
+    const meta = allMeta[worktreeId]!
     if (!meta.hostId || meta.hostId === executionHostId) {
       projected[worktreeId] = meta
     }
@@ -56,9 +76,9 @@ export function readWorktreeMetaForHost(
 
 export function readAllWorktreeMetaForRepo(
   store: Pick<HostQualifiedWorktreeMetaStore, 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost'>,
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> & { id?: string }
 ): Record<string, WorktreeMeta> {
-  return readAllWorktreeMetaForHost(store, getRepoExecutionHostId(repo))
+  return readAllWorktreeMetaForHost(store, getRepoExecutionHostId(repo), repo.id)
 }
 
 export function readWorktreeMetaForRepo(
@@ -75,16 +95,18 @@ export function resolveWorktreeMetaOwner(
     getWorktreeMeta: (worktreeId: string) => { hostId?: ExecutionHostId } | undefined
     getRepos: () => readonly Repo[]
   },
-  worktreeId: string
+  worktreeId: string,
+  repoLookup?: RepoRowExecutionHostLookup<Repo>
 ): HostWorktreeTarget | undefined {
   // Local-only IDs have no backing repo from which to infer an owner.
   if (isLocalOnlyWorktreeMetaId(worktreeId)) {
     return hostWorktreeTarget({ id: worktreeId, hostId: LOCAL_EXECUTION_HOST_ID })
   }
+  const repos = repoLookup ?? createRepoRowExecutionHostLookup(store.getRepos())
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const owners = store.getRepos().filter((repo) => repo.id === repoId)
+  const owners = repos.rowsFor(repoId)
   // The first writer stamp cannot disambiguate same-id repos on multiple hosts.
-  if (getRepoRegistrationHostIds(owners, repoId).size > 1) {
+  if (repos.registrationHostsFor(repoId).size > 1) {
     return undefined
   }
   const stamped = store.getWorktreeMeta(worktreeId)?.hostId

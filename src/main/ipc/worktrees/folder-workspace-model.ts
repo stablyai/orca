@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { Repo } from '../../../shared/repo-types'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace/status/workspace-statuses'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoMainWorktreeId
@@ -25,7 +25,9 @@ export function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): bool
   const rootId = getFolderWorkspaceRootId(repo)
   return (
     worktreeId === rootId ||
-    worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
+    (worktreeId.length > rootId.length &&
+      worktreeId.startsWith(rootId) &&
+      worktreeId.startsWith(FOLDER_WORKSPACE_INSTANCE_SEPARATOR, rootId.length))
   )
 }
 

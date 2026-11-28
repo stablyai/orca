@@ -1,13 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { WORKTREE_ROW_LAYOUT } from '../components/worktree-list-row-layout'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-row-layout'
 import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
+export const hostScreenSecondaryStylesSheet = themedStyleSheet((colors) => ({
   list: {
     paddingBottom: spacing.lg
   },
@@ -42,6 +38,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     marginLeft: 6
   },
+  // Muted and plain, like the header's count: a fact about the section, not an action.
   sectionPendingSpinner: {
     marginLeft: spacing.sm
   },
@@ -49,17 +46,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
     marginLeft: WORKTREE_ROW_LAYOUT.textInset
-  },
-  filterModalSubtitle: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  optionPending: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm
   },
   optionSectionGap: {
     height: spacing.xs
@@ -72,12 +58,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   },
   optionSegmented: {
     marginBottom: spacing.md
-  },
-  // Over the sheet header's empty leading side, centred in its 52pt row.
-  optionPageBack: {
-    position: 'absolute',
-    top: 8,
-    left: spacing.xs
   },
   filterRepoDot: {
     width: 8,
@@ -97,6 +77,16 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     marginTop: spacing.xs,
     lineHeight: 20
+  },
+  // Desktop's amber loss line, as plain text: what deleting throws away.
+  confirmLoss: {
+    color: colors.statusAmber
+  },
+  confirmDetail: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    lineHeight: 16
   },
   confirmButtons: {
     flexDirection: 'row',

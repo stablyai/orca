@@ -1,6 +1,7 @@
 import { CODEX_PERMISSION_CONFIG_ROOTS } from '../../../../shared/agent-launch/permissions/agent-permission-args'
+import { parse as parseToml } from 'smol-toml'
 import { parseTomlKeyPath } from '../../configuration/toml/config-toml-key-path'
-import { StructuredAgentArgumentsError } from '../../../native-chat/structured-agent-arguments-error'
+import { StructuredAgentArgumentsError } from '../../../native-chat/agent-launch/structured-agent-arguments-error'
 
 const VALUE_OPTIONS = new Set([
   '-c',
@@ -106,4 +107,64 @@ export function codexStructuredLaunchArgs(tokens: readonly string[]): string[] {
     throw new StructuredAgentArgumentsError('Codex', token, 'unsupportedOption')
   }
   return args
+}
+
+/**
+ * The MCP server names the user's own `-c`/`--config` overrides set (`mcp_servers.<name>.…`, or a
+ * whole `mcp_servers={…}` table, which replaces the ones before it), applied in order as Codex
+ * does. Codex loads them beside config.toml, so a server from Orca of the same name would merge
+ * into one of them.
+ */
+export function codexArgsMcpServerNames(tokens: readonly string[]): string[] {
+  let names = new Set<string>()
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]!
+    if (token === '--') {
+      break
+    }
+    const option = optionName(token)
+    if (option !== '-c' && option !== '--config') {
+      continue
+    }
+    // Codex also takes `-c=key=value`.
+    const value = (inlineValue(token, option) ?? tokens[++index] ?? '').replace(/^=(?=.*=)/, '')
+    const set = configMcpServerNames(value)
+    if (set.table) {
+      names = new Set()
+    }
+    for (const name of set.names) {
+      names.add(name)
+    }
+  }
+  return [...names]
+}
+
+function configMcpServerNames(override: string): { names: string[]; table: boolean } {
+  // As Codex reads an override: the key before the first `=`, trimmed, split on `.` with no
+  // unquoting, so `"github"` names a server spelled with its quotes.
+  const equals = override.indexOf('=')
+  if (equals === -1) {
+    return { names: [], table: false }
+  }
+  const segments = override.slice(0, equals).trim().split('.')
+  if (segments[0] !== 'mcp_servers') {
+    return { names: [], table: false }
+  }
+  if (segments.length > 1) {
+    return { names: [segments[1]!], table: false }
+  }
+  // `mcp_servers={a={…}}`: the table's own keys name the servers, in place of any before it. Any
+  // other value (Codex keeps one that isn't TOML as a string) replaces them with none.
+  try {
+    const table = parseToml(`mcp_servers = ${override.slice(equals + 1).trim()}`).mcp_servers
+    return {
+      names:
+        typeof table === 'object' && table !== null && !Array.isArray(table)
+          ? Object.keys(table)
+          : [],
+      table: true
+    }
+  } catch {
+    return { names: [], table: true }
+  }
 }

@@ -1,10 +1,10 @@
-import { yieldToEventLoop } from '../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../shared/concurrency/event-loop-yield'
 import Database from '../sqlite/sync-database'
-import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
+import { createUsageEventAggregation } from '../usage/rollups/usage-event-aggregation'
 import {
   createUsageWorktreeResolver,
   type UsageWorktreeResolver
-} from '../usage/usage-worktree-resolver'
+} from '../usage/worktree-attribution/usage-worktree-resolver'
 import {
   compareOpenCodeClaimPriority,
   getProcessedDatabaseInfo,
@@ -53,7 +53,12 @@ const openCodeUsageAggregation = createUsageEventAggregation<
         (target.cacheWriteInputTokens ?? 0) + (source.cacheWriteInputTokens ?? 0)
     }
   },
-  cloneSessionForMerge: (session) => structuredClone(session)
+  cloneSessionForMerge: (session) => ({
+    ...session,
+    locationBreakdown: session.locationBreakdown.map((location) => ({ ...location })),
+    modelBreakdown: session.modelBreakdown.map((model) => ({ ...model })),
+    locationModelBreakdown: session.locationModelBreakdown.map((entry) => ({ ...entry }))
+  })
 })
 
 const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregates } =

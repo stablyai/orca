@@ -1,9 +1,11 @@
-import { z } from 'zod'
-import type { ExecutionHostHealth } from '../../execution-host-health'
+import * as z from 'zod'
+import type { ExecutionHostHealth } from '../../execution-host/execution-host-health'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 // Why: both are answered by the paired desktop itself; the phone lists servers the desktop shows.
 export const MOBILE_RELAY_HOSTS_LIST_METHOD = 'mobileRelay.hosts.list'
 export const MOBILE_RELAY_HOST_WORKTREES_METHOD = 'mobileRelay.hosts.worktrees'
+export const MOBILE_RELAY_HOSTS_UNWATCH_ROWS_METHOD = 'mobileRelay.hosts.unwatchRows'
 
 /** Whether the desktop can relay the phone to this server now; `update-needed` is the server's build. */
 export type MobileRelayHostRelay = 'ready' | 'update-needed' | 'unavailable'
@@ -19,24 +21,30 @@ export type MobileRelayHost = {
   unavailableOnDesktop?: true
   /** The server's store identity as the desktop verified it; cross-store records name it. */
   installationId?: string
+  /** The server publishes worktreeRowsChanged, so phones hear its row changes as relayHostRowsChanged. */
+  rowChanges?: true
 }
 
 export type MobileRelayHostsListResult = { hosts: MobileRelayHost[] }
 
 // Strict: phones send the snapshot fields only to desktops advertising MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY.
-export const MobileRelayHostWorktreesParamsSchema = z
-  .object({
-    hostId: z.string().min(1).max(1024),
-    afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
-    acceptRowDelta: z.literal(true).optional()
-  })
-  .strict()
+export const MobileRelayHostWorktreesParamsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      hostId: z.string().min(1).max(1024),
+      afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+      acceptRowDelta: z.literal(true).optional()
+    })
+    .strict()
+)
 
 /** One of a server's own `worktree.ps` rows (RuntimeWorktreePsSummary), carrying the server's host id. */
 export type MobileRelayServerWorktreeRow = Record<string, unknown> & {
   hostId: `runtime:${string}`
   /** The desktop calls this row another client's; the phone applies the shared filter value. */
   desktopOtherClient?: true
+  /** The workspace runs on an environment this desktop created from a recipe; deleting it can destroy that. */
+  recipeEnvironment?: { name: string; destroys: boolean }
 }
 
 /** The server's own `worktree.ps` rows as the desktop last fetched them, refreshed when the server answers. */

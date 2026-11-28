@@ -7,30 +7,41 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
-import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
+import { useTranslate } from '@/i18n/use-translate'
+import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import { useCrewMenuFocus } from './use-crew-menu-focus'
 
 export function CrewRowMenu({
   row,
   open,
   canMention,
-  mention
+  mention,
+  onOpenChange
 }: {
   row: OrchestrationCrewRow
   open: () => void
   canMention: boolean
   mention: () => void
+  /** Lets a row keep its hover actions shown while the menu is open. */
+  onOpenChange?: (open: boolean) => void
 }) {
+  const t = useTranslate()
   const menu = useCrewMenuFocus()
   return (
-    <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
+    <DropdownMenu
+      modal={false}
+      open={menu.open}
+      onOpenChange={(value) => {
+        menu.onOpenChange(value)
+        onOpenChange?.(value)
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           size="icon-xs"
           ref={menu.triggerRef}
-          aria-label={translate('components.orchestrationCrew.more', 'More for {{name}}', {
+          aria-label={t('components.orchestrationCrew.more', 'More for {{name}}', {
             name: row.label
           })}
         >
@@ -48,30 +59,26 @@ export function CrewRowMenu({
           // Let Radix dismiss the source before the composer claims focus.
           onSelect={() => queueMicrotask(mention)}
         >
-          {translate('components.orchestrationCrew.mentionInMessage', 'Mention in message')}
+          {t('components.orchestrationCrew.mentionInMessage', 'Mention in message')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={open}>
-          {translate('components.orchestrationCrew.openChat', 'Open its chat')}
+          {t('components.orchestrationCrew.openChat', 'Open its chat')}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!row.sendAddress}
           onSelect={() => {
             if (row.sendAddress) {
-              void window.api.ui
-                .writeTerminalClipboardText(row.sendAddress)
-                .then(() =>
-                  toast.success(
-                    translate(
-                      'components.orchestrationCrew.copiedAddress',
-                      "Copied {{name}}'s address",
-                      { name: row.label }
-                    )
-                  )
+              void window.api.ui.writeTerminalClipboardText(row.sendAddress).then(() =>
+                toast.success(
+                  t('components.orchestrationCrew.copiedAddress', "Copied {{name}}'s address", {
+                    name: row.label
+                  })
                 )
+              )
             }
           }}
         >
-          {translate('components.orchestrationCrew.copyAddress', 'Copy address')}
+          {t('components.orchestrationCrew.copyAddress', 'Copy address')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

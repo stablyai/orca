@@ -1,28 +1,36 @@
-import { defineMethod } from '../../../core'
+import { dropReaderlessRunQuestions } from '../../../../orchestration/db/questions/readerless-run-questions'
+import { deletedCoordinatorChat } from './deleted-coordinator-chat'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
-import { isGroupAddress } from '../../../../orchestration/groups'
-import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
-import { AskParams } from '../schemas'
+import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
+import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
+import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
+import { AskParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { rejectFederatedExplicitTarget } from '../routing'
-import { askRemoteRunHome } from './ask-remote'
+import { askRemoteRunHome } from '../../../../orchestration/legacy-remote/ask-remote'
 import {
   mailboxAddressOf,
   runCoordinatorKey
-} from '../../../../orchestration/orchestration-caller-identity'
-import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
-import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
+import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import {
   askedQuestionReceipt,
   waitForQuestionAnswer
-} from '../../../../orchestration/question-answer-delivery'
+} from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
 export const ORCHESTRATION_ASK_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.ask',
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: { to: 'party', resume: 'message', run: 'run' }
+    },
     permission: 'workspace',
     params: AskParams,
     handler: async (
@@ -47,7 +55,21 @@ export const ORCHESTRATION_ASK_METHODS = [
       const from = params.from ?? 'unknown'
       // Echo the clamped budget on every return so callers report time actually waited.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
-      const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
+      // A runtime restart can reissue a surviving worker PTY's handle; recover it by exact incarnation.
+      // A resumed question's server-owned Dispatch can select which of the handle's recorded histories
+      // to try, but recovery still proves that Dispatch's handle, pane, host, process and custody.
+      const reporter = resolveWorkerReporterIdentity(runtime, db, {
+        from,
+        authority: undefined,
+        hasSessionCaller: Boolean(orchestrationCaller),
+        evidence: orchestrationCompatibilityEvidence,
+        candidateDispatchId: params.resume ? db.getQuestion(params.resume)?.dispatch_id : undefined
+      })
+      const paneKey = reporter.paneKey ?? undefined
+      // A recovered asker's stale handle names no process, so each answer take re-proves the recovery.
+      const callerCurrent = reporter.recovered
+        ? () => reporter.processIncarnation() !== null
+        : undefined
       if (!orchestrationCaller) {
         assertLifecycleCallerIsNotAnotherParty(runtime, {
           from,
@@ -67,7 +89,9 @@ export const ORCHESTRATION_ASK_METHODS = [
           paneKey,
           dispatchId: remoteAttachment.dispatch_id,
           taskId: remoteAttachment.task_id,
-          workerState: remoteAttachment.state
+          workerState: remoteAttachment.state,
+          processIncarnation: reporter.processIncarnation,
+          callerCurrent
         })
       }
       const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
@@ -80,13 +104,14 @@ export const ORCHESTRATION_ASK_METHODS = [
             address: from,
             paneKey: paneKey ?? null,
             orcaSessionId: orchestrationCaller?.orcaSessionId ?? null,
-            processIncarnation: () => runtime.getTerminalProcessIncarnation(from) ?? undefined
+            // A restart-reissued reporter proves its process by the same recovered incarnation.
+            processIncarnation: () => reporter.processIncarnation() ?? undefined
           },
           { run: undefined, dispatchId: undefined, dispatch: undefined },
           'question'
         )
       if (!askingDispatch) {
-        refuseFinishedRemoteWorker(db, paneKey, undefined)
+        refuseFinishedRemoteWorker(db, { address: from, paneKey }, undefined)
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'
@@ -102,7 +127,7 @@ export const ORCHESTRATION_ASK_METHODS = [
             db.isDispatchProcessCurrent({
               dispatchId: workingDispatch.id,
               paneKey: paneKey ?? null,
-              processIncarnation: runtime.getTerminalProcessIncarnation(from)
+              processIncarnation: reporter.processIncarnation()
             })
         })
       }
@@ -159,6 +184,8 @@ export const ORCHESTRATION_ASK_METHODS = [
           to
         })
         question = created.question
+        // No one coordinates the Run, or its chat was deleted: its worker is told at once.
+        dropReaderlessRunQuestions(db, run.id, deletedCoordinatorChat(run))
         runtime.notifyMessageArrived(to, created.message.type)
       }
 
@@ -174,7 +201,8 @@ export const ORCHESTRATION_ASK_METHODS = [
         closedMessage: `Question ${questionId} closed because its Dispatch is inactive.`,
         timeoutMs,
         signal,
-        recordMutationReceipt
+        recordMutationReceipt,
+        callerCurrent
       })
     }
   })

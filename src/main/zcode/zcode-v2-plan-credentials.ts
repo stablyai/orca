@@ -2,8 +2,9 @@ import { createDecipheriv, createHash } from 'node:crypto'
 import { homedir, platform, userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
-import { ZCODE_PLAN_SITE_BASE_URLS } from '../../shared/zcode-plan-sites'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
+import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
+import { ZCODE_PLAN_SITE_BASE_URLS } from '../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import { readSupportedZcodeV2Selection } from './zcode-v2-personal-overlay'
 
 const MAX_V2_FILE_BYTES = 4 * 1024 * 1024
@@ -13,7 +14,7 @@ function readV2File(path: string): string {
   }).buffer.toString('utf8')
 }
 
-const credentialSchema = z.record(z.string(), z.string())
+const credentialSchema = lazyZodSchema(() => z.record(z.string(), z.string()))
 const sites = new Map([
   ['account:zai-individual-coding-plan', 'zai'],
   ['account:bigmodel-individual-coding-plan', 'bigmodel']

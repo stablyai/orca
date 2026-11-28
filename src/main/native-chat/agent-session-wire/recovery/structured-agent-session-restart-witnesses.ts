@@ -1,0 +1,193 @@
+// Capture live work immediately before Stop and retain only proven interruptions; persisted running rows prove nothing.
+
+import type {
+  StructuredAgentSessionRestartCut,
+  StructuredAgentSessionRestartResume
+} from './structured-agent-session-restart-resume-contract'
+import { restartActivityWaitsOnPerson } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type {
+  AgentSessionResumeMarker,
+  AgentSessionResumeTrigger
+} from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
+import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
+import { structuredAgentSessionWorkingAtStop } from '../termination/structured-agent-session-working-at-teardown'
+import { crashCutResumeMarker } from './structured-agent-session-crash-cut-marker'
+
+type WorkingAtStopInput = Parameters<typeof structuredAgentSessionWorkingAtStop>[0]
+
+export type StructuredAgentSessionRestartWitnesses = {
+  begin: (trigger: AgentSessionResumeTrigger) => void
+  beforeStop: (sessionId: string) => void
+  stopped: (sessionId: string) => void
+  record: () => Promise<void>
+  /** After a crash: open each chat the dead run held (which settles it) and record what it cut. */
+  recordCrashCuts: (
+    cuts: readonly { sessionId: string; crashedRuntime: string }[],
+    settledSince: number
+  ) => Promise<number>
+  /** Ends a launch's automatic turn; what still waits is left to a person from then on. */
+  passOverAutomatic: (recordedBy: number) => Promise<void>
+  cuts: Pick<StructuredAgentSessionRestartResume, 'offeredCuts' | 'cutOf'>
+  /** Explicit actions supersede unwritten witnesses only for readable agents in their audience. */
+  clear: (audience?: (agent: string) => boolean) => void
+}
+
+export function createStructuredAgentSessionRestartWitnesses(deps: {
+  sessions: ReadonlyMap<string, NonNullable<WorkingAtStopInput['session']>>
+  getRecord: (
+    sessionId: string
+  ) => Pick<
+    AgentSessionRecord,
+    'provider' | 'providerHandleChain' | 'providerContextBoundary'
+  > | null
+  childWork: WorkingAtStopInput['childWork']
+  childWorkOpen: WorkingAtStopInput['childWorkOpen']
+  capsule?: Pick<
+    AgentSessionRecoveryCapsule,
+    'record' | 'passOverAutomatic' | 'list' | 'listFailed'
+  >
+  /** Opening a chat whose run died settles it. */
+  open: (sessionId: string) => Promise<{ readable: boolean }>
+  teardownId: string
+  now: () => number
+  enqueue: <T>(operation: () => Promise<T>) => Promise<T>
+}): StructuredAgentSessionRestartWitnesses {
+  let trigger: AgentSessionResumeTrigger | null = null
+  const stopping = new Map<string, AgentSessionResumeMarker>()
+  const confirmed = new Map<string, AgentSessionResumeMarker>()
+  const clear = (audience?: (agent: string) => boolean): void => {
+    if (!audience) {
+      trigger = null
+      stopping.clear()
+      confirmed.clear()
+      return
+    }
+    for (const witnessed of [stopping, confirmed]) {
+      for (const sessionId of witnessed.keys()) {
+        const record = deps.getRecord(sessionId)
+        if (record && audience(record.provider)) {
+          witnessed.delete(sessionId)
+        }
+      }
+    }
+  }
+  const crashCutOf = async (
+    { sessionId, crashedRuntime }: { sessionId: string; crashedRuntime: string },
+    settledSince: number
+  ): Promise<AgentSessionResumeMarker | null> => {
+    const readable = (await deps.open(sessionId)).readable
+    const journal = deps.sessions.get(sessionId)?.journal
+    const record = deps.getRecord(sessionId)
+    if (!readable || !journal || !record) {
+      return null
+    }
+    return crashCutResumeMarker({
+      sessionId,
+      cut: await journal.reads.restartCut(),
+      record,
+      crashedRuntime,
+      settledSince
+    })
+  }
+  // Every chat's offered cut, from one read of the capsule.
+  const offeredCuts = async (): Promise<Map<string, StructuredAgentSessionRestartCut>> => {
+    const now = deps.now()
+    const cuts = new Map<string, StructuredAgentSessionRestartCut>()
+    for (const failure of (await deps.capsule?.listFailed(now)) ?? []) {
+      cuts.set(failure.marker.sessionId, {
+        ...restartCutOfMarker(failure.marker),
+        ...(failure.outcome === 'unconfirmed' ? { continuationUnconfirmed: true as const } : {})
+      })
+    }
+    for (const marker of (await deps.capsule?.list(now)) ?? []) {
+      cuts.set(marker.sessionId, restartCutOfMarker(marker))
+    }
+    return cuts
+  }
+  return {
+    begin: (next) => {
+      clear()
+      trigger = next
+    },
+    beforeStop: async (sessionId) => {
+      stopping.delete(sessionId)
+      if (trigger === null) {
+        return
+      }
+      const marker = await structuredAgentSessionWorkingAtStop({
+        sessionId,
+        session: deps.sessions.get(sessionId),
+        getRecord: deps.getRecord,
+        childWork: deps.childWork,
+        childWorkOpen: deps.childWorkOpen,
+        trigger,
+        teardownId: deps.teardownId,
+        now: deps.now()
+      })
+      if (marker) {
+        stopping.set(sessionId, marker)
+      }
+    },
+    stopped: (sessionId) => {
+      const marker = stopping.get(sessionId)
+      stopping.delete(sessionId)
+      if (marker) {
+        confirmed.set(sessionId, marker)
+      }
+    },
+    record: async () => {
+      await deps.enqueue(async () => {
+        await deps.capsule?.record([...confirmed.values()], deps.now())
+      })
+    },
+    recordCrashCuts: async (cuts, settledSince) => {
+      const markers: AgentSessionResumeMarker[] = []
+      for (const cut of cuts) {
+        // A chat that cannot be read keeps no offer; the startup Dispatch pass still reports its
+        // worker, since the crashed run held it.
+        const marker = await crashCutOf(cut, settledSince).catch(() => null)
+        if (marker) {
+          markers.push(marker)
+        }
+      }
+      // One write for every chat the crash cut.
+      if (markers.length > 0) {
+        await deps.enqueue(async () => deps.capsule?.record(markers, deps.now()))
+      }
+      return markers.length
+    },
+    cuts: {
+      offeredCuts,
+      cutOf: async (sessionId, offered) => {
+        const offer = (offered ?? (await offeredCuts())).get(sessionId)
+        if (offer) {
+          return offer
+        }
+        const journal = deps.sessions.get(sessionId)?.journal
+        const cut = journal ? await journal.reads.orcaStopCut() : null
+        const turn = cut && journal ? await journal.reads.item(cut.turnItemId) : null
+        const turnId = readAgentJournalTurn(turn?.body)?.turnId
+        return cut && turnId ? { cause: cut.cause, turnId } : null
+      }
+    },
+    passOverAutomatic: async (recordedBy) => {
+      await deps.enqueue(async () => deps.capsule?.passOverAutomatic(recordedBy, deps.now()))
+    },
+    clear
+  }
+}
+
+/** The cut an offer records: its turn, or a send that had not become one yet. */
+export function restartCutOfMarker(
+  marker: AgentSessionResumeMarker
+): StructuredAgentSessionRestartCut {
+  return {
+    cause: marker.trigger,
+    turnId: marker.work.id,
+    ...(restartActivityWaitsOnPerson(marker.activity) ? { waitingOnPerson: true as const } : {}),
+    ...(marker.activity?.state === 'done' ? { leadDone: true as const } : {}),
+    ...(marker.exitUnproven ? { exitUnproven: true as const } : {})
+  }
+}

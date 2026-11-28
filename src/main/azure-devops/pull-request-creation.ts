@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import { Buffer } from 'node:buffer'
 import type {
@@ -136,7 +136,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       reason: 'existing_review'
     }
   }
-  if (error instanceof HostedReviewApiRequestError && error.timedOut) {
+  if (error instanceof HostedReviewApiRequestError && error.unconfirmed) {
     return {
       ok: false,
       code: 'unknown_completion',

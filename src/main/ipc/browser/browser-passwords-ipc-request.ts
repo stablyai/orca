@@ -1,5 +1,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
-import { browserSessionRegistry } from '../../browser/sessions/browser-session-registry'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
+import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import type { BrowserPasswordStore } from '../../browser-passwords/browser-password-store'
 import { browserPasswordVaultFor } from '../../browser-passwords/browser-password-vault-access'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
@@ -33,8 +34,11 @@ export function readBrowserPasswordsVaultRequest(
 
 export function handleBrowserPasswordsChannel<T>(
   channel: string,
-  handler: (event: IpcMainInvokeEvent, raw: unknown) => T
+  handler: (event: IpcMainInvokeEvent, raw: unknown) => T,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
-  ipcMain.removeHandler(channel)
-  ipcMain.handle(channel, handler)
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler(channel)
+  }
+  ipc.handle(channel, handler)
 }

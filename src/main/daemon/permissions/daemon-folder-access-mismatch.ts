@@ -5,8 +5,8 @@ import { homedir } from 'node:os'
 import {
   classifyDaemonPtyCwd,
   type DaemonPtyCwdClass
-} from '../../../shared/daemon-adoption-telemetry'
-import type { EventProps } from '../../../shared/telemetry-events'
+} from '../../../shared/telemetry/daemon-adoption-telemetry'
+import type { EventProps } from '../../../shared/telemetry/telemetry-event-classification'
 import { track } from '../../telemetry/client'
 import {
   probeFolderAccessForFreshDaemon,
@@ -192,9 +192,4 @@ export function getDaemonFolderAccessMismatch(
     cwdClass: entry.cwdClass,
     freshDaemonAccess: entry.freshDaemonAccess
   }
-}
-
-export function resetDaemonFolderAccessMismatchForTests(): void {
-  stored = null
-  probeInFlight = null
 }

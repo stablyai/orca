@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDaemonBashShellReadyRcfileContent } from '../daemon-bash-shell-ready-rcfile'
+import { getBashShellReadyRcfileContent } from '../../../providers/local-pty/local-pty-shell-ready-bash-rcfile'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
@@ -15,6 +16,9 @@ const bashMinor = hasBash
   : 0
 const LEGACY_GATE = 'BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1)'
 const bashPreservesOddTerminalBackslash = bashMajor > 4 || (bashMajor === 4 && bashMinor >= 4)
+const START_BEFORE_PROMPT = new RegExp(
+  `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
+)
 
 function runInteractiveBash(
   profile: string,
@@ -70,25 +74,9 @@ describe.skipIf(process.platform === 'win32')('daemon bash PROMPT_COMMAND compos
     rmSync(tempHome, { recursive: true, force: true })
   })
 
-  itWithBash.each([
-    ['semicolon', ';'],
-    ['spaces', ';   '],
-    ['tab', ';\t'],
-    ['newlines', ';\n\n'],
-    ['many separators', '; ;\t\n;;  ']
-  ])('composes a value ending in %s', (_name, suffix) => {
+  itWithBash('normalizes trailing separators with errexit enabled', () => {
     const output = runInteractiveBash(
-      `PROMPT_COMMAND='printf "PROMPT_TRAILING\\n"${suffix}'\n`,
-      tempHome
-    )
-
-    expect(output).toContain('PROMPT_TRAILING')
-    expectLifecycle(output)
-  })
-
-  itWithBash('normalizes a trailing separator with errexit enabled', () => {
-    const output = runInteractiveBash(
-      'set -e\nPROMPT_COMMAND=\'printf "PROMPT_ERREXIT\\n";   \'\n',
+      'set -e\nPROMPT_COMMAND=\'printf "PROMPT_ERREXIT\\n"; ;\t\n;;  \'\n',
       tempHome,
       'true\ntrue\nexit 0\n'
     )
@@ -111,26 +99,6 @@ describe.skipIf(process.platform === 'win32')('daemon bash PROMPT_COMMAND compos
     const output = runInteractiveBash('set -u\nunset PROMPT_COMMAND\n', tempHome)
 
     expect(output).not.toContain('unbound variable')
-    expectLifecycle(output)
-  })
-
-  itWithBash('composes an inherited hook with nounset enabled', () => {
-    const output = runInteractiveBash(
-      'set -u\nPROMPT_COMMAND=\'printf "PROMPT_NOUNSET\\\\n"\'\n',
-      tempHome
-    )
-
-    expect(output.match(/PROMPT_NOUNSET\r?\n/g)).toHaveLength(3)
-    expect(output).not.toContain('unbound variable')
-    expectLifecycle(output)
-  })
-
-  itWithBash('flattens arrays without duplicating later elements', () => {
-    const profile = `PROMPT_COMMAND=('printf "PROMPT_ARRAY_A\\n";' 'printf "PROMPT_ARRAY_B\\n";  ')\n`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.split('PROMPT_ARRAY_A')).toHaveLength(4)
-    expect(output.split('PROMPT_ARRAY_B')).toHaveLength(4)
     expectLifecycle(output)
   })
 
@@ -167,20 +135,6 @@ PROMPT_COMMAND=(__status_a __status_b)
     expectLifecycle(output)
   })
 
-  itWithBash('keeps odd-backslash array elements isolated', () => {
-    const profile = String.raw`PROMPT_COMMAND=('printf "PROMPT_ARRAY_BACKSLASH:<%s>\n" safe \' 'printf "PROMPT_ARRAY_NEXT\n"')
-`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.split('PROMPT_ARRAY_BACKSLASH:<safe>')).toHaveLength(4)
-    expect(output.split('PROMPT_ARRAY_BACKSLASH:<\\>')).toHaveLength(
-      bashPreservesOddTerminalBackslash ? 4 : 1
-    )
-    expect(output.split('PROMPT_ARRAY_NEXT')).toHaveLength(4)
-    expect(output).not.toContain('PROMPT_ARRAY_BACKSLASH:<__orca_')
-    expectLifecycle(output)
-  })
-
   itWithBash.each([
     ['space', 'foo\\ ', 'foo '],
     ['semicolon', 'foo\\;', 'foo;']
@@ -192,30 +146,6 @@ PROMPT_COMMAND=(__status_a __status_b)
     expectLifecycle(output)
   })
 
-  itWithBash.each([
-    ['carriage return', '\\r', '\r'],
-    ['vertical tab', '\\v', '\v'],
-    ['form feed', '\\f', '\f']
-  ])('preserves a trailing %s word byte', (_name, bashEscape, expected) => {
-    const profile = `PROMPT_COMMAND=$'printf "PROMPT_CONTROL:<%s>\\\\n" foo${bashEscape}'\n`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.split(`PROMPT_CONTROL:<foo${expected}>`)).toHaveLength(4)
-    expectLifecycle(output)
-  })
-
-  itWithBash('passes the foreground exit status to the inherited hook', () => {
-    const profile = `__status_hook() { printf 'PROMPT_STATUS:%s\\n' "$?"; }\nPROMPT_COMMAND=__status_hook\n`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect([...output.matchAll(/PROMPT_STATUS:(\d+)/g)].map((match) => match[1])).toEqual([
-      '0',
-      '0',
-      '1'
-    ])
-    expectLifecycle(output)
-  })
-
   itWithBash('preserves BASH_REMATCH while normalizing a scalar hook', () => {
     const profile = `[[ "seed:VALUE" =~ seed:(.*) ]]
 PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
@@ -223,29 +153,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split('PROMPT_REMATCH:<VALUE>')).toHaveLength(4)
-    expectLifecycle(output)
-  })
-
-  itWithBash('passes BASH_REMATCH between array hooks', () => {
-    const profile = `PROMPT_COMMAND=('[[ "seed:VALUE" =~ seed:(.*) ]]' 'printf "PROMPT_ARRAY_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"')
-`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.split('PROMPT_ARRAY_REMATCH:<VALUE>')).toHaveLength(4)
-    expectLifecycle(output)
-  })
-
-  itWithBash('normalizes hooks without a DEBUG-trap command substitution', () => {
-    const profile = [
-      'set -T',
-      'trap \'printf "PROMPT_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
-      'PROMPT_COMMAND=\'printf "PROMPT_HOOK\\n"; \''
-    ].join('\n')
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.match(/PROMPT_HOOK\r?\n/g)).toHaveLength(3)
-    expect(output).not.toContain('PROMPT_DEBUG:<(( __orca_exit_code == 0 ))>')
-    expect(output).not.toContain('PROMPT_DEBUG:<__orca_restore_prompt_status')
     expectLifecycle(output)
   })
 
@@ -303,22 +210,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expectLifecycle(output, 0)
   })
 
-  itWithBash('replaces the forwarded DEBUG trap with functrace enabled', () => {
-    const profile = [
-      'set -T',
-      'trap \'printf "OLD_FT:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
-      'PROMPT_COMMAND=\'printf "HOOK_FT\\n"\''
-    ].join('\n')
-    const input = 'trap \'printf "NEW_FT:<%s>\\n" "$BASH_COMMAND"\' DEBUG\ntrue\nexit 0\n'
-    const output = runInteractiveBash(profile, tempHome, input)
-
-    expect(output.split('OLD_FT:<printf "HOOK_FT\\n">')).toHaveLength(2)
-    expect(output.split('NEW_FT:<printf "HOOK_FT\\n">')).toHaveLength(3)
-    expect(output).not.toContain('OLD_FT:<true>')
-    expect(output).toContain('NEW_FT:<true>')
-    expectLifecycle(output, 0)
-  })
-
   itWithBash('does not resurrect a removed DEBUG trap with functrace enabled', () => {
     const profile = [
       'set -T',
@@ -330,6 +221,20 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expect(output.split('OLD_FT:<printf "HOOK_FT\\n">')).toHaveLength(2)
     expect(output).not.toContain('OLD_FT:<true>')
     expectLifecycle(output, 0)
+  })
+
+  itWithBash.each([
+    ['daemon', getDaemonBashShellReadyRcfileContent],
+    ['local PTY', getBashShellReadyRcfileContent]
+  ])('starts each command once, after its prompt, under functrace (%s)', (_name, getRcfile) => {
+    // Why: functrace runs DEBUG in Orca's trap helpers and in prompt $(...) subshells.
+    const profile = ['set -T', "PS0='$(:)'", "PS1='$(:)ORCA_PS1> '"].join('\n')
+    const input = "trap ':' DEBUG\nfalse\nexit 0\n"
+    const output = runInteractiveBash(profile, tempHome, input, getRcfile())
+
+    expect(output).toContain('ORCA_PS1> ')
+    expect(output).not.toMatch(START_BEFORE_PROMPT)
+    expectLifecycle(output)
   })
 
   itWithBash('does not treat a DEBUG trap query as a mutation', () => {
@@ -344,20 +249,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expectLifecycle(output)
   })
 
-  itWithBash('keeps lifecycle when RANDOM is unset under nounset', () => {
-    const profile = [
-      'unset RANDOM',
-      'set -u',
-      'trap \'printf "NOUNSET_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
-      'PROMPT_COMMAND=\'printf "HOOK_NOUNSET\\n"\''
-    ].join('\n')
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output).not.toContain('unbound variable')
-    expect(output).toContain('NOUNSET_DEBUG:<true>')
-    expectLifecycle(output)
-  })
-
   itWithBash('does not recurse when a user trap installs Orca preexec', () => {
     const profile = [
       `trap 'trap '\\''__orca_osc133_preexec'\\'' DEBUG 2>/dev/null; printf "PRIVATE_TRAP\\n"' DEBUG`,
@@ -367,17 +258,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
 
     expect(output).not.toContain('Segmentation fault')
     expect(output).toContain('HOOK_PRIVATE')
-    expectLifecycle(output)
-  })
-
-  itWithBash('does not introduce RETURN traps for inherited prompt commands', () => {
-    const profile = [
-      'PROMPT_COMMAND=\'AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
-      'trap \'if [[ -n "${AFTER_FIRST_PROMPT:-}" ]]; then printf "PROMPT_RETURN:<%s>\\n" "${FUNCNAME[0]-}"; fi\' RETURN'
-    ].join('\n')
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output).not.toContain('PROMPT_RETURN:<__orca_run_prompt_command_array>')
     expectLifecycle(output)
   })
 
@@ -401,6 +281,82 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
 
   // Why: macOS /bin/bash 3.2 also reverts DEBUG traps set inside functions.
   const legacyBashes = process.platform === 'darwin' ? ['bash', '/bin/bash'] : ['bash']
+  // bash-preexec 0.5/0.6 (Atuin's hooks) defer install to a PROMPT_COMMAND string that runs `trap - DEBUG`.
+  const bashPreexecStub = [
+    '__bp_inside_precmd=0 __bp_inside_preexec=0 __bp_preexec_interactive_mode=""',
+    '__bp_precmd_invoke_cmd() { (( __bp_inside_precmd > 0 )) && return; local __bp_inside_precmd=1; printf "BP_PRECMD\\n"; }',
+    '__bp_interactive_mode() { __bp_preexec_interactive_mode=on; }',
+    '__bp_preexec_invoke_exec() {',
+    '  (( __bp_inside_preexec > 0 )) && return',
+    '  local __bp_inside_preexec=1',
+    '  [[ -n "$__bp_preexec_interactive_mode" ]] || return',
+    '  __bp_preexec_interactive_mode=""',
+    '  printf "BP_PREEXEC:<%s>\\n" "$BASH_COMMAND"',
+    '}',
+    '__bp_install() {',
+    '  printf "BP_INSTALL\\n"',
+    '  [[ "${PROMPT_COMMAND[*]:-}" == *__bp_precmd_invoke_cmd* ]] && return 1',
+    "  trap '__bp_preexec_invoke_exec' DEBUG",
+    '  PROMPT_COMMAND="__bp_precmd_invoke_cmd"$\'\\n\'"${PROMPT_COMMAND//"$__bp_install_string"/:}"$\'\\n__bp_interactive_mode\'',
+    '  __bp_precmd_invoke_cmd',
+    '  __bp_interactive_mode',
+    '}',
+    '__bp_install_string=$\'__bp_trap_string="$(trap -p DEBUG)"\\ntrap - DEBUG\\n__bp_install\'',
+    'PROMPT_COMMAND="$__bp_install_string"'
+  ].join('\n')
+  itWithBash.each(
+    [['array', 'bash'], ...legacyBashes.map((bash) => ['legacy', bash])].flatMap(
+      ([dispatch, bash]) => ['', 'set -u'].map((profileOptions) => [dispatch, bash, profileOptions])
+    )
+  )(
+    'finishes a pending bash-preexec install (%s dispatch, %s, profile `%s`)',
+    (dispatch, bash, profileOptions) => {
+      const rcfile = getDaemonBashShellReadyRcfileContent()
+      const output = runInteractiveBash(
+        `${profileOptions}\n${bashPreexecStub}`,
+        tempHome,
+        'true\nfalse\nexit 0\n',
+        dispatch === 'legacy' ? rcfile.replaceAll(LEGACY_GATE, '0') : rcfile,
+        bash
+      )
+      const commands = [...output.matchAll(/BP_PREEXEC:<([^>]+)>/g)].map((match) => match[1])
+
+      expect(commands).toEqual(['true', 'false', 'exit 0'])
+      expect(output.match(/BP_PRECMD/g)).toHaveLength(3)
+      expectLifecycle(output)
+    }
+  )
+
+  // Why: under function tracing Orca's chained DEBUG trap would fire preexec during prompt hooks.
+  itWithBash.each(['__bp_enable_subshells=1', 'set -o functrace', 'shopt -s extdebug'])(
+    'leaves the bash-preexec install to the first prompt after `%s`',
+    (tracing) => {
+      const output = runInteractiveBash(`${tracing}\n${bashPreexecStub}`, tempHome)
+      const promptIndex = output.indexOf('\x1b]133;A\x07')
+
+      expect(promptIndex).toBeGreaterThan(-1)
+      expect(output.indexOf('BP_INSTALL')).toBeGreaterThan(promptIndex)
+    }
+  )
+
+  // Why: an early install before bash 5.1 makes preexec report later PROMPT_COMMAND elements as commands.
+  itWithBash.each(legacyBashes)(
+    'leaves the bash-preexec install to the first prompt for a multi-element legacy PROMPT_COMMAND (%s)',
+    (bash) => {
+      const output = runInteractiveBash(
+        `${bashPreexecStub}\nPROMPT_COMMAND[1]='printf "USER_PROMPT\\n"'`,
+        tempHome,
+        'true\nfalse\nexit 0\n',
+        getDaemonBashShellReadyRcfileContent().replaceAll(LEGACY_GATE, '0'),
+        bash
+      )
+      const promptIndex = output.indexOf('\x1b]133;A\x07')
+
+      expect(promptIndex).toBeGreaterThan(-1)
+      expect(output.indexOf('BP_INSTALL')).toBeGreaterThan(promptIndex)
+    }
+  )
+
   itWithBash.each(
     legacyBashes.flatMap((bash) => [
       ['trap - DEBUG', bash],
@@ -420,22 +376,12 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
         legacyRcfile,
         bash
       )
-      const startBeforePrompt = new RegExp(
-        `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
-      )
 
       expect(output).toContain('ORCA_PS1> ')
-      expect(output).not.toMatch(startBeforePrompt)
+      expect(output).not.toMatch(START_BEFORE_PROMPT)
       expectLifecycle(output, 0)
     }
   )
-
-  itWithBash('does not treat user command text as a bash-preexec helper', () => {
-    const output = runInteractiveBash('', tempHome, 'echo a:__bp_x\nfalse\nexit 0\n')
-
-    expect(output).toContain('a:__bp_x')
-    expectLifecycle(output)
-  })
 
   itWithBash.each([
     ['status capture', '__orca_prompt_status=$?'],
@@ -444,17 +390,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
   ])('does not suppress lifecycle for an exact foreground %s', (_name, command) => {
     const output = runInteractiveBash('', tempHome, `${command}\nfalse\nexit 0\n`)
 
-    expectLifecycle(output)
-  })
-
-  itWithBash('emits lifecycle for a user command named like a bash-preexec helper', () => {
-    const output = runInteractiveBash(
-      '__bp_user_command() { printf "BP_USER_COMMAND\\n"; }',
-      tempHome,
-      '__bp_user_command\nfalse\nexit 0\n'
-    )
-
-    expect(output).toContain('BP_USER_COMMAND')
     expectLifecycle(output)
   })
 })

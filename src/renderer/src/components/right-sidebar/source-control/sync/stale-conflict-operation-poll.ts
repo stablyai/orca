@@ -1,14 +1,17 @@
 import { useEffect, useMemo } from 'react'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-status-client'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { getRuntimeGitConflictOperation } from '@/runtime/source-control/git/runtime-git-status-client'
 import {
   createCoalescedPollRunner,
   type SlowTaskBackoffOptions
-} from '../../../../lib/repository-refresh/coalesced-poll-runner'
-import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
+} from '../../../../lib/source-control/refresh/coalesced-poll-runner'
+import {
+  installWindowVisibilityInterval,
+  isWindowVisible
+} from '@/lib/window-activity/window-visibility-interval'
 import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'
 
 const CONFLICT_POLL_INTERVAL_MS = 3000
@@ -82,12 +85,11 @@ export function useStaleConflictOperationPolling(args: {
           if (!isConnectionReady(connectionId) || !target) {
             continue
           }
-          const op = await getRuntimeGitConflictOperation({
-            target,
-            worktreeId: id,
-            worktreePath: path,
-            connectionId
-          })
+          // A 3 s poll: no use of an idle WSL host (#46567).
+          const op = await getRuntimeGitConflictOperation(
+            { target, worktreeId: id, worktreePath: path, connectionId },
+            { background: true }
+          )
           if (!active) {
             return
           }
@@ -102,10 +104,11 @@ export function useStaleConflictOperationPolling(args: {
     const pollRunner = createCoalescedPollRunner(pollStale, {
       slowTaskBackoff
     })
-    // Refresh visible unfocused badges; visibility recovery uses the short-backoff lane.
+    // Keep visible unfocused badges fresh (slowed); visibility recovery uses the short-backoff lane.
     const stopVisiblePoll = installWindowVisibilityInterval({
       run: () => pollRunner.run(),
       runOnVisible: () => pollRunner.run({ changeSignal: true }),
+      slowWhileUnfocused: true,
       intervalMs: CONFLICT_POLL_INTERVAL_MS
     })
     return () => {

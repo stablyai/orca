@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { cp, mkdir, readdir, rename, stat } from 'node:fs/promises'
+import { mkdir, readdir, rename, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { copyPath } from '../../shared/copy-path'
 
 export type SpeechModelCacheDir = {
   modelsDir: string
@@ -59,7 +60,7 @@ export function getSpeechModelCacheDirCandidates(
     .filter((modelsDir) => !hasNonAsciiCharacters(modelsDir))
     .map((modelsDir) => ({ modelsDir, migrationSourceDir: requestedModelsDir }))
 
-  // sherpa-onnx 1.12.x needs ASCII Windows paths; retain the requested path if shared caches fail.
+  // Native speech libraries may open paths with ANSI Windows APIs; retain the requested path if shared caches fail.
   return [...candidates, { modelsDir: requestedModelsDir, migrationSourceDir: null }]
 }
 
@@ -79,7 +80,7 @@ async function copyMissingCacheEntry(sourcePath: string, targetPath: string): Pr
 
   // Atomic promotion prevents interrupted copies from passing existence-only validation.
   const tempPath = `${targetPath}.partial`
-  await cp(sourcePath, tempPath, { force: true })
+  await copyPath(sourcePath, tempPath, { force: true })
   await rename(tempPath, targetPath)
 }
 

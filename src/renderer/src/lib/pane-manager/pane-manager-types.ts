@@ -1,4 +1,4 @@
-import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
+import type { IDisposable, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { ImageAddon } from '@xterm/addon-image'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
@@ -7,14 +7,13 @@ import type { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { WebLinksAddon } from '@xterm/addon-web-links'
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
-import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
+import type { ScrollState } from './terminal-scroll/pane-scroll-snapshot'
+import type { TerminalWebglAutoDecision } from './terminal-rendering/terminal-webgl-auto-policy'
 
-export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
-
-export type PaneActivationOptions = { focus?: boolean }
+export type PaneActivationOptions = { focus?: boolean; interaction?: 'user' | 'hover' }
 
 /** One-shot spawn/adoption hints belong to creation, separate from persistent ManagedPane state. */
 export type PaneSpawnHints = {
@@ -28,6 +27,8 @@ export type PaneSpawnHints = {
 export type PaneSplitOptions = Omit<PaneSpawnHints, 'placement'> & {
   ratio?: number
   leafId?: string
+  /** False for a split the user did not ask for: the active pane and keyboard focus stay put. */
+  activate?: boolean
 }
 
 export type ClosedPaneInfo = {
@@ -61,7 +62,16 @@ export type PaneDropTaker = (
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
-  onActivePaneChange?: (pane: ManagedPane) => void
+  onActivePaneChange?: (
+    pane: ManagedPane,
+    interaction?: PaneActivationOptions['interaction']
+  ) => void
+  onPaneActivation?: (
+    leafId: TerminalLeafId,
+    interaction: PaneActivationOptions['interaction'],
+    changed: boolean
+  ) => void
+  withHoverFocus?: (focus: () => void) => void
   onLayoutChanged?: () => void
   // Temporarily bypass Electron webview pointers during pane drags or webviews steal the stream.
   onPaneDragActiveChange?: (active: boolean) => void
@@ -133,16 +143,6 @@ export type PaneRenderingDiagnostics = {
   hasWebgl: boolean
 }
 
-export type ScrollState = {
-  bufferType: 'normal' | 'alternate'
-  wasAtBottom: boolean
-  viewportY: number
-  baseY: number
-  firstVisibleLineMarker?: IMarker
-  firstVisibleLogicalLineMarker?: IMarker
-  firstVisibleLogicalCellOffset?: number
-}
-
 export type ManagedPaneInternal = {
   xtermContainer: HTMLElement
   linkTooltip: HTMLElement
@@ -160,8 +160,8 @@ export type ManagedPaneInternal = {
   // Complex-output diagnostics must not select renderers; automatic fallback is for platform/WebGL failures.
   hasComplexScriptOutput: boolean
   webglAddon: WebglAddon | null
-  // Ligatures are optional and toggleable; null means disabled.
-  ligaturesAddon: LigaturesAddon | null
+  // Ligatures are optional and lazy-loaded; null means disabled or not yet resolved.
+  ligaturesAddon: (LigaturesAddon & { clearCache?: () => void }) | null
   // Images are optional and lazy-loaded; null means disabled or not yet resolved.
   imageAddon: ImageAddon | null
   // Enabled but waiting for the lazy addon; onLoaded drains these panes.
@@ -179,7 +179,7 @@ export type ManagedPaneInternal = {
   panePointerDownHandler?: ((event: PointerEvent) => void) | null
   paneMouseEnterHandler?: ((event: MouseEvent) => void) | null
   paneDragCleanup?: (() => void) | null
-  compositionHandler: (() => void) | null
+  imeCandidateAnchorCleanup: (() => void) | null
   focusClassSyncCleanup?: (() => void) | null
   domBlockFillCleanup?: (() => void) | null
   terminalScrollIntentDisposable?: IDisposable | null

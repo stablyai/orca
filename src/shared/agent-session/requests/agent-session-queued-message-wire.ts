@@ -8,7 +8,7 @@ export const QUEUED_MESSAGE_PAUSED_SEND_FAILED = 'send_failed' as const
 
 export type AgentSessionQueuedMessagePausedReason = typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
 
-/** Stop/failure pause automatic sends until Resume or a new turn starts. Send-now delivers one card; others wait for that turn. /clear/reopen holds are unpublished because nothing runs then. Unknown reasons render a plain pause. */
+/** Stop/failure pause automatic sends until Resume or a new turn starts; other agents' mail still runs, except after a usage limit. Send-now delivers one card; others wait for that turn. /clear/reopen holds are unpublished because nothing runs then. Unknown reasons render a plain pause. */
 export type AgentSessionQueuePause = { reason: 'stopped' | 'failed' }
 
 /** What rides beside a frame's `queuedMessages`, published together with the list. */
@@ -47,6 +47,8 @@ export type AgentSessionQueuedMessage = {
   /** Only failed submissions return cards with reason/rejection; Stop/restart withdrawals wait again. Classify returnedRejection with returnedReason as the legacy fallback, exactly as submission rejection. */
   returnedReason?: string | null
   returnedRejection?: UnreadAgentSessionFailureFact
+  /** A person's message sent to steer the running turn; the host holds it only until the turn takes it in. */
+  steers?: true
 }
 
 /** Removal from the published list is the outcome; no reply body/text or re-ask after a lost answer. */

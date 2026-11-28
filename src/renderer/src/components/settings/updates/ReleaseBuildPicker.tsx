@@ -10,12 +10,16 @@ import {
   CommandList
 } from '../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { getIntlLocale } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { cn } from '@/lib/utils'
-import { parseDevBuildStamp, type ReleaseBuild } from '../../../../../shared/release-channel'
+import { cn } from '@/lib/class-names'
+import {
+  parseDevBuildStamp,
+  type ReleaseBuild
+} from '../../../../../shared/updater/release-channel'
 
-function formatBuildLabel(build: ReleaseBuild): string {
+function formatBuildLabel(build: ReleaseBuild, intlLocale: string = getIntlLocale()): string {
   if (build.name) {
     return build.name
   }
@@ -23,7 +27,7 @@ function formatBuildLabel(build: ReleaseBuild): string {
   if (!stamp) {
     return build.version
   }
-  return `${build.version.split('-')[0]} · ${stamp.toLocaleString(getIntlLocale(), {
+  return `${build.version.split('-')[0]} · ${stamp.toLocaleString(intlLocale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -44,13 +48,17 @@ export function ReleaseBuildPicker({
   disabled: boolean
   placeholder: string
 }): React.JSX.Element {
+  const t = useTranslate()
+  const buildLabel = t('auto.components.settings.ReleaseBuildPicker.build', 'Build')
+  const searchLabel = t('auto.components.settings.ReleaseBuildPicker.searchLabel', 'Search builds')
+  const intlLocale = useIntlLocale()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const languageRevision = useUiLanguageRevision()
   const entries = useMemo(
     () =>
       builds.map((build) => {
-        const label = formatBuildLabel(build)
+        const label = formatBuildLabel(build, intlLocale)
         return {
           tag: build.tag,
           label,
@@ -58,7 +66,7 @@ export function ReleaseBuildPicker({
         }
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- labels format dates in the UI language.
-    [builds, languageRevision]
+    [builds, languageRevision, intlLocale]
   )
   const terms = query.trim().toLowerCase().split(/\s+/)
   const filtered = entries.filter((entry) => terms.every((term) => entry.searchText.includes(term)))
@@ -78,7 +86,7 @@ export function ReleaseBuildPicker({
           variant="outline"
           size="sm"
           role="combobox"
-          aria-label={translate('auto.components.settings.ReleaseBuildPicker.build', 'Build')}
+          aria-label={buildLabel}
           aria-expanded={open && !disabled}
           disabled={disabled}
           className="min-w-0 flex-1 justify-between"
@@ -89,29 +97,23 @@ export function ReleaseBuildPicker({
           <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)]">
-        <Command
-          shouldFilter={false}
-          defaultValue={selectedTag ?? undefined}
-          label={translate(
-            'auto.components.settings.ReleaseBuildPicker.searchLabel',
-            'Search builds'
-          )}
-        >
+      <PopoverContent
+        align="start"
+        aria-label={searchLabel}
+        className="w-[var(--radix-popover-trigger-width)]"
+      >
+        <Command shouldFilter={false} defaultValue={selectedTag ?? undefined} label={searchLabel}>
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.settings.ReleaseBuildPicker.searchPlaceholder',
               'Search builds…'
             )}
           />
-          <CommandList className="max-h-64">
+          <CommandList label={buildLabel} className="max-h-64">
             <CommandEmpty>
-              {translate(
-                'auto.components.settings.ReleaseBuildPicker.noMatches',
-                'No matching builds.'
-              )}
+              {t('auto.components.settings.ReleaseBuildPicker.noMatches', 'No matching builds.')}
             </CommandEmpty>
             <CommandGroup>
               {filtered.map((entry) => (

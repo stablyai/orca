@@ -1,0 +1,33 @@
+import { collectSubtree, type ProcIndex, type ProcRow } from './process-index'
+import type { PtyRegistration } from './pty-registry'
+
+/** One root's live process subtree, minus processes an earlier root already claimed. */
+export function claimProcessTree(
+  index: ProcIndex,
+  rootPid: number,
+  claimed: Set<number>,
+  checkStartOrder = false
+): ProcRow[] {
+  const rows: ProcRow[] = []
+  for (const pid of collectSubtree(index, rootPid, claimed, checkStartOrder)) {
+    const row = index.byPid.get(pid)
+    if (!row || claimed.has(pid)) {
+      continue
+    }
+    claimed.add(pid)
+    rows.push(row)
+  }
+  return rows
+}
+
+/** Each local PTY's live process subtree; overlapping trees are attributed once, in registration order. */
+export function claimPtyProcessTrees(
+  index: ProcIndex,
+  ptys: readonly PtyRegistration[],
+  claimed = new Set<number>()
+): { pty: PtyRegistration; rows: ProcRow[] }[] {
+  return ptys.map((pty) => ({
+    pty,
+    rows: pty.pid != null ? claimProcessTree(index, pty.pid, claimed) : []
+  }))
+}

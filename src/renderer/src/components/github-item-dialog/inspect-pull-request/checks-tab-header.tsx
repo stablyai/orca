@@ -8,8 +8,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { PRChecksSummaryLineLoading } from '@/components/github/pr-check-tab-loading'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 export function ChecksTabActions({
   variant,
@@ -20,9 +22,11 @@ export function ChecksTabActions({
   canFixBrokenChecks,
   failedChecksLength,
   listLength,
+  holdRerunSlot = false,
   onRefresh,
   onRerun,
-  onFix
+  onFix,
+  t
 }: {
   variant: 'compact' | 'page'
   canUseChecksRepoContext: boolean
@@ -32,9 +36,13 @@ export function ChecksTabActions({
   canFixBrokenChecks: boolean
   failedChecksLength: number
   listLength: number
+  /** Cold read: keep the (disabled) Rerun button in place so the refresh button doesn't move. */
+  holdRerunSlot?: boolean
   onRefresh: () => void
   onRerun: (failedOnly: boolean) => void
   onFix: () => void
+  /** The caller's render translator; this runs as a plain function, not a component. */
+  t: Translate
 }): {
   refreshAction: React.JSX.Element
   fixBrokenChecksAction: React.JSX.Element | null
@@ -52,13 +60,13 @@ export function ChecksTabActions({
           className="size-7 shrink-0"
           disabled={!canUseChecksRepoContext || refreshing}
           onClick={() => void onRefresh()}
-          aria-label={translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
+          aria-label={t('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
         >
           <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
+        {t('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
       </TooltipContent>
     </Tooltip>
   )
@@ -80,12 +88,12 @@ export function ChecksTabActions({
               <Wrench className="size-3" />
             )}
             {variant === 'compact'
-              ? translate('auto.components.GitHubItemDialog.9157d48ddb', 'Fix checks')
-              : translate('auto.components.GitHubItemDialog.2511f44bb7', 'Fix broken checks')}
+              ? t('auto.components.GitHubItemDialog.9157d48ddb', 'Fix checks')
+              : t('auto.components.GitHubItemDialog.2511f44bb7', 'Fix broken checks')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate(
+          {t(
             'auto.components.GitHubItemDialog.f4b1292569',
             'Start the default AI agent on these checks'
           )}
@@ -93,7 +101,7 @@ export function ChecksTabActions({
       </Tooltip>
     ) : null
   const rerunAction =
-    listLength > 0 || rerunning ? (
+    listLength > 0 || rerunning || holdRerunSlot ? (
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
@@ -108,7 +116,7 @@ export function ChecksTabActions({
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {translate('auto.components.GitHubItemDialog.1b56e28faa', 'Rerun')}
+            {t('auto.components.GitHubItemDialog.1b56e28faa', 'Rerun')}
             <ChevronDown className="size-3 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -118,11 +126,11 @@ export function ChecksTabActions({
             onSelect={() => void onRerun(true)}
           >
             <RefreshCw className="size-4" />
-            {translate('checks.rerunUnsuccessful', 'Rerun unsuccessful')}
+            {t('checks.rerunUnsuccessful', 'Rerun unsuccessful')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={rerunning} onSelect={() => void onRerun(false)}>
             <RefreshCw className="size-4" />
-            {translate('auto.components.GitHubItemDialog.71c11aff84', 'Rerun all checks')}
+            {t('auto.components.GitHubItemDialog.71c11aff84', 'Rerun all checks')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -152,6 +160,7 @@ export function ChecksTabCompactHeader({
   summaryLabel,
   listLength,
   showSummary = false,
+  summaryLoading = false,
   refreshAction,
   rerunAction,
   secondaryActions
@@ -161,36 +170,41 @@ export function ChecksTabCompactHeader({
   counts: { failing: number; pending: number }
   summaryLabel: string
   showSummary?: boolean
+  /** Cold read: hold the summary line's slot with a bar so the header keeps its loaded height. */
+  summaryLoading?: boolean
   listLength: number
   refreshAction: React.JSX.Element
   rerunAction: React.JSX.Element | null
   secondaryActions: React.JSX.Element | null
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="border-b border-border/50 px-3 py-2">
       <div className="flex min-w-0 items-start gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
-          <SummaryIcon
-            className={cn(
-              'mt-0.5 size-3.5 shrink-0',
-              summaryColor,
-              counts.pending > 0 && counts.failing === 0 && 'animate-spin'
-            )}
-          />
+          {counts.pending > 0 && counts.failing === 0 ? (
+            <SpinnerFrame className="mt-0.5">
+              <SummaryIcon className={cn('block size-3.5', summaryColor)} />
+            </SpinnerFrame>
+          ) : (
+            <SummaryIcon className={cn('mt-0.5 size-3.5 shrink-0', summaryColor)} />
+          )}
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-medium leading-5 text-foreground">
-              {translate('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
+              {t('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
             </div>
-            {(listLength > 0 || showSummary) && (
+            {listLength > 0 || showSummary ? (
               <div className="truncate text-[11px] leading-4 text-muted-foreground">
                 {summaryLabel}
               </div>
-            )}
+            ) : summaryLoading ? (
+              <PRChecksSummaryLineLoading />
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {refreshAction}
-          {listLength > 0 && (
+          {(listLength > 0 || summaryLoading) && (
             <div className="[&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px]">
               {rerunAction}
             </div>

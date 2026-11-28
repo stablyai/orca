@@ -1,19 +1,20 @@
-import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp-config-inspection'
-import { translate } from '@/i18n/i18n'
+import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function McpMissingConfigList({
   missingConfigs
 }: {
   missingConfigs: LoadedMcpConfigInspection[]
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (missingConfigs.length === 0) {
     return null
   }
 
   return (
-    <div className="space-y-1.5 border-t border-border/50 px-3 py-2">
+    <div data-settings-row="" className="space-y-1.5 py-3">
       <p className="text-[11px] text-muted-foreground">
-        {translate('auto.components.settings.McpConfigSection.4d16a0d9ac', 'Checked')}
+        {t('auto.components.settings.McpConfigSection.4d16a0d9ac', 'Checked')}
       </p>
       <div className="flex flex-wrap gap-1.5">
         {missingConfigs.map((config) => (

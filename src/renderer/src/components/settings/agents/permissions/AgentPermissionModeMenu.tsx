@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import type { AgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {
   DropdownMenu,
@@ -28,7 +28,8 @@ export function AgentPermissionModeMenu({
   autoDisabled?: boolean
   onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
 }): React.JSX.Element {
-  const ownLabel = translate('settings.agents.permissionEachOwn', "Each agent's own settings")
+  const t = useTranslate()
+  const ownLabel = t('settings.agents.permissionEachOwn', "Each agent's own settings")
   const choice = mode === 'mixed' ? '' : agentPermissionModeChoice(mode)
   return (
     <DropdownMenu>
@@ -41,16 +42,18 @@ export function AgentPermissionModeMenu({
           className="min-w-0 max-w-full"
         >
           {choice === '' ? (
-            <span className="truncate">
-              {translate('settings.agents.permissionMixed', 'Mixed')}
-            </span>
+            <span className="truncate">{t('settings.agents.permissionMixed', 'Mixed')}</span>
           ) : (
             <AgentPermissionChoiceName choice={choice} ownLabel={ownLabel} truncate />
           )}
           <ChevronDown className="size-3 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" collisionPadding={8} className="w-72">
+      <DropdownMenuContent
+        align="start"
+        collisionPadding={8}
+        className="w-72 max-w-(--radix-dropdown-menu-content-available-width)"
+      >
         <DropdownMenuRadioGroup aria-label={label} value={choice}>
           {autoAvailable ? (
             <AgentPermissionChoiceItems

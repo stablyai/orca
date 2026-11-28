@@ -4,16 +4,33 @@ import type {
 } from '@/attention/agent-subject-read-actions'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { TaskProvider } from '../../../../../shared/task-providers'
+import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { LaunchSource } from '../../../../../shared/telemetry-events'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome/ui-chrome-types'
+import type {
+  AutomationListBotFilter,
+  AutomationRunPageOrigin,
+  AutomationsPageLocation,
+  AutomationsPageVisitMode
+} from './automations-page-location'
+
+/** Open an automation (runId null) or one of its runs once its host's list has loaded. */
+export type PendingAutomationRunNavigation = {
+  automationId: string
+  runId: string | null
+  hostId?: ExecutionHostId
+  /** With runId null: open the automation's run history instead of its detail. */
+  paneTab?: 'overview' | 'runs'
+  /** With a runId: where Escape returns; defaults to the automation detail. */
+  origin?: AutomationRunPageOrigin
+}
 
 export type PendingSidebarWorktreeReveal = {
   rowKey?: string
@@ -44,6 +61,7 @@ export type AgentSendPopoverTargetMode = {
   sendingPaneKey?: string
   error?: string
   onPromptDelivered?: () => void
+  canSendPrompt?: () => boolean
   /** Told the send's own result the moment the prompt is handed to an agent. */
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
@@ -56,6 +74,7 @@ export type OpenAgentSendPopoverTargetModeArgs = {
   label: string
   launchSource: LaunchSource
   onPromptDelivered?: () => void
+  canSendPrompt?: () => boolean
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
 }
 
@@ -121,8 +140,17 @@ export type UiViewHistory =
   | 'automations'
   | 'space'
   | 'skills'
+  | 'plugins'
   | 'artifacts'
   | 'mobile'
+
+export type DiffNotesSendMenuOpenRequest = {
+  worktreeId: string
+  fileId: string
+  tabId: string
+  nonce: number
+  issuedAt: number
+}
 
 export type UISliceCore = {
   sidebarOpen: boolean
@@ -135,10 +163,10 @@ export type UISliceCore = {
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
   sendPromptToSidebarAgentTarget: (paneKey: string) => Promise<boolean>
   /** Shortcut request for the active notes menu; issuedAt expires requests the menu never consumed. */
-  diffNotesSendMenuOpenRequest: { worktreeId: string; nonce: number; issuedAt: number } | null
-  /** Reveal Source Control and request its notes send menu open; returns false (no-op) when the active worktree has no unsent notes. */
+  diffNotesSendMenuOpenRequest: DiffNotesSendMenuOpenRequest | null
+  /** Open Changes and its notes menu only when the selected copy has a sendable note. */
   openDiffNotesSendMenuForActiveWorktree: () => boolean
-  consumeDiffNotesSendMenuOpenRequest: (worktreeId: string) => void
+  consumeDiffNotesSendMenuOpenRequest: (request: DiffNotesSendMenuOpenRequest) => boolean
   /** Persisted read timestamps by pane; absent ack or newer stateStartedAt makes the row unvisited. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   /** `explicit` only from a user action on the row (Mark read, a jump, a dashboard ack). */
@@ -162,6 +190,7 @@ export type UISliceCore = {
   previousViewBeforeSpace: Exclude<UiViewHistory, 'space'>
   previousViewBeforeSkills: Exclude<UiViewHistory, 'skills'>
   previousViewBeforeMobile: Exclude<UiViewHistory, 'mobile'>
+  previousViewBeforePlugins: Exclude<UiViewHistory, 'plugins'>
   previousViewBeforeArtifacts: Exclude<UiViewHistory, 'artifacts'>
   setActiveView: (view: UISliceCore['activeView']) => void
   taskPageData: TaskPageData
@@ -181,20 +210,34 @@ export type UISliceCore = {
   closeActivityPage: () => void
   selectedAutomationId: string | null
   setSelectedAutomationId: (id: string | null) => void
-  pendingAutomationRunNavigation: {
-    automationId: string
-    runId: string | null
-    hostId?: ExecutionHostId
-  } | null
-  setPendingAutomationRunNavigation: (
-    navigation: { automationId: string; runId: string | null; hostId?: ExecutionHostId } | null
-  ) => void
+  pendingAutomationRunNavigation: PendingAutomationRunNavigation | null
+  setPendingAutomationRunNavigation: (navigation: PendingAutomationRunNavigation | null) => void
+  /** A history replay's target sub-page; the Automations page applies it and clears it. */
+  automationsPageLocationRequest: AutomationsPageLocation | null
+  setAutomationsPageLocationRequest: (location: AutomationsPageLocation | null) => void
+  /** Record a settled Automations sub-page in back/forward history. */
+  /** Record a settled Automations sub-page in back/forward history. */
+  recordAutomationsPageVisit: (location: AutomationsPageLocation) => void
+  /** How the next recorded sub-page enters history; consumed by the next record. */
+  /** Set when the user opens Automations (sidebar, deep link, Back/Forward); the page then
+   *  focuses its title once. A page restored at launch or on reload leaves focus alone. */
+  automationsPageFocusTitleOnOpen: boolean
+  setAutomationsPageFocusTitleOnOpen: (value: boolean) => void
+  automationsPageNextVisitMode: AutomationsPageVisitMode
+  setAutomationsPageNextVisitMode: (mode: AutomationsPageVisitMode) => void
   openAutomationsPage: () => void
+  /** The bot filter the Automations list applies next; the page applies it and clears it, and any
+   *  other way of opening or leaving the page drops it. */
+  automationsPageBotFilterRequest: AutomationListBotFilter | null
+  setAutomationsPageBotFilterRequest: (bot: AutomationListBotFilter | null) => void
   closeAutomationsPage: () => void
   openSpacePage: () => void
   closeSpacePage: () => void
   openSkillsPage: () => void
   closeSkillsPage: () => void
+  /** The template Bot templates last showed; it reopens on it. Null shows the first. */
+  botTemplateSelected: string | null
+  selectBotTemplate: (templateId: string) => void
   pendingSkillShareId: string | null
   openSkillShare: (shareId: string) => void
   clearPendingSkillShare: () => void
@@ -206,6 +249,8 @@ export type UISliceCore = {
   closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
+  openPluginsPage: () => void
+  closePluginsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISliceCore['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null

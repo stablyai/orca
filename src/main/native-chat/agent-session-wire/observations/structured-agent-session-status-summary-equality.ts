@@ -1,0 +1,95 @@
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
+import { agentSessionBackgroundTasksEqual } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
+import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import { structuredAgentSessionAgentStatus } from '../../../../shared/agent-session/view/structured-agent-session-agent-status'
+import { structuredStatusChildrenEqual } from './structured-agent-session-status-child-work'
+import { agentSessionForkNamingEqual } from '../../../../shared/agent-session/conversation-naming/agent-session-fork-name'
+
+export function structuredStatusSummariesEqual(
+  a: AgentSessionStatusSummary,
+  b: AgentSessionStatusSummary
+): boolean {
+  return (
+    a.workspaceId === b.workspaceId &&
+    a.usageLimitContinue?.turnItemId === b.usageLimitContinue?.turnItemId &&
+    a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&
+    a.usageLimitContinue?.state === b.usageLimitContinue?.state &&
+    a.usageLimitContinue?.continueAt === b.usageLimitContinue?.continueAt &&
+    a.agent === b.agent &&
+    a.status === b.status &&
+    a.hostExecutionOwned === b.hostExecutionOwned &&
+    a.hostExecutionPhase === b.hostExecutionPhase &&
+    a.restartResume?.phase === b.restartResume?.phase &&
+    a.rewindBlockedReason === b.rewindBlockedReason &&
+    // State clocks affect ranking; undated idle/live-child rows also use publication time as evidence.
+    a.statusStartedAt === b.statusStartedAt &&
+    (a.status !== 'idle' ||
+      a.updatedAt === b.updatedAt ||
+      (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
+    a.latestPrompt === b.latestPrompt &&
+    a.model === b.model &&
+    a.fallbackModel === b.fallbackModel &&
+    a.permissionMode === b.permissionMode &&
+    a.launchPermissionMode === b.launchPermissionMode &&
+    a.runningPermissionMode === b.runningPermissionMode &&
+    a.runtimePermission?.fence === b.runtimePermission?.fence &&
+    a.runtimePermission?.mode === b.runtimePermission?.mode &&
+    (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&
+    a.effort === b.effort &&
+    a.fastMode === b.fastMode &&
+    a.serviceTier === b.serviceTier &&
+    a.interactionMode === b.interactionMode &&
+    a.toolName === b.toolName &&
+    a.toolInput === b.toolInput &&
+    a.lastAssistantMessage === b.lastAssistantMessage &&
+    a.launchDirectory === b.launchDirectory &&
+    a.hostProgram === b.hostProgram &&
+    a.ownLogin === b.ownLogin &&
+    a.conversationName === b.conversationName &&
+    a.conversationNameSource === b.conversationNameSource &&
+    agentSessionForkNamingEqual(a.forkedFrom, b.forkedFrom) &&
+    a.sleptAt === b.sleptAt &&
+    a.namingError?.message === b.namingError?.message &&
+    a.namingError?.failedAt === b.namingError?.failedAt &&
+    a.turnOutcome === b.turnOutcome &&
+    a.stopping === b.stopping &&
+    a.awaitsAnswer === b.awaitsAnswer &&
+    a.awaitsQuestion?.itemId === b.awaitsQuestion?.itemId &&
+    a.awaitsQuestion?.text === b.awaitsQuestion?.text &&
+    a.asyncQuestionsSkippedThrough === b.asyncQuestionsSkippedThrough &&
+    a.awaitsApproval?.tool === b.awaitsApproval?.tool &&
+    a.awaitsApproval?.input === b.awaitsApproval?.input &&
+    a.awaitsBlockingQuestion?.text === b.awaitsBlockingQuestion?.text &&
+    a.attentionAsksOnlyQuestions === b.attentionAsksOnlyQuestions &&
+    agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
+    structuredStatusChildrenEqual(a.children, b.children) &&
+    agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)
+  )
+}
+
+function isIdleHeldOpenByChildWork(summary: AgentSessionStatusSummary): boolean {
+  return (
+    summary.status === 'idle' &&
+    isAgentStatusHeldOpenByChildWork(
+      structuredAgentSessionAgentStatus({
+        status: summary.status,
+        childWork: summary.children ?? summary.backgroundTasks,
+        turnOutcome: summary.turnOutcome
+      })
+    )
+  )
+}
+
+export function permissionReportOnly(
+  previous: AgentSessionStatusSummary | undefined,
+  summary: AgentSessionStatusSummary
+): boolean {
+  return Boolean(
+    previous &&
+    structuredStatusSummariesEqual(
+      { ...previous, runtimePermission: summary.runtimePermission },
+      summary
+    )
+  )
+}

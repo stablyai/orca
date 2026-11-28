@@ -2,31 +2,26 @@ import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { FolderWorkspacePathStatusRequest } from '../../../shared/folder-workspaces/folder-workspace-path-status'
-import {
-  assertFolderWorkspacePathUsable,
-  getFolderWorkspacePathStatus,
-  getFolderWorkspacePathStatusForPath
-} from '../../project-groups/folder-workspace-path-status'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
   FolderWorkspaceCreateArgs,
   FolderWorkspacePathStatusArgs,
-  FolderWorkspaceSelectorArgs,
+  FolderWorkspaceDeleteArgs,
   FolderWorkspaceUpdateArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
-import { visibleFolderWorkspaces } from '../../ssh/orcad-retained-source'
-import { createFolderWorkspaceWithPluginHooks } from '../../plugins/hooks/workspace-create-plugin-hook'
+import { visibleFolderWorkspaces } from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import {
   isLocalWslMoveRow,
   shouldDropWslMoveProjectUpdate
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerFolderWorkspaceHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: Pick<OrcaRuntimeService, 'deleteFolderWorkspace'>
+  runtime: Pick<OrcaRuntimeService, 'deleteFolderWorkspace' | 'createFolderWorkspace'> &
+    Partial<Pick<OrcaRuntimeService, 'getExistingOrchestrationDb'>>
 ): void {
   ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => visibleFolderWorkspaces(store))
 
@@ -36,41 +31,23 @@ export function registerFolderWorkspaceHandlers(
       rawArgs,
       'invalid_folder_workspace_path_status_args'
     ) as FolderWorkspacePathStatusRequest
+    const { getFolderWorkspacePathStatus } =
+      await import('../../project-groups/folder-workspace-path-status')
     return getFolderWorkspacePathStatus(store, args)
   })
 
-  ipcMain.handle(
-    'folderWorkspaces:create',
-    async (_event, rawArgs: unknown): Promise<FolderWorkspace> => {
-      const args = parseProjectGroupIpcArgs(
-        FolderWorkspaceCreateArgs,
-        rawArgs,
-        'invalid_folder_workspace_create_args'
-      )
-      const projectGroups = store.getProjectGroups()
-      const group = projectGroups.find((entry) => entry.id === args.projectGroupId)
-      const folderPath =
-        typeof args.folderPath === 'string' && args.folderPath.trim().length > 0
-          ? args.folderPath
-          : group?.parentPath
-      if (!group || !folderPath) {
-        throw new Error('folder_workspace_project_group_not_found')
-      }
-      const status = await getFolderWorkspacePathStatusForPath({
-        folderPath,
-        projectGroupId: group.id,
-        connectionId: args.connectionId ?? group.connectionId ?? null,
-        projectGroups,
-        repos: store.getRepos()
-      })
-      assertFolderWorkspacePathUsable(status)
-      const workspace = await createFolderWorkspaceWithPluginHooks(args, (request) =>
-        store.createFolderWorkspace({ ...request, creatorProvenance: { kind: 'host' } })
-      )
-      notifyReposChanged(mainWindow)
-      return workspace
-    }
-  )
+  ipcMain.handle('folderWorkspaces:create', async (_event, rawArgs: unknown) => {
+    const args = parseProjectGroupIpcArgs(
+      FolderWorkspaceCreateArgs,
+      rawArgs,
+      'invalid_folder_workspace_create_args'
+    )
+    return runtime.createFolderWorkspace({
+      ...args,
+      rendererOwnsSetup: true,
+      creatorProvenance: { kind: 'host' }
+    })
+  })
 
   ipcMain.handle(
     'folderWorkspaces:update',
@@ -98,6 +75,8 @@ export function registerFolderWorkspaceHandlers(
           return null
         }
         const projectGroups = store.getProjectGroups()
+        const { assertFolderWorkspacePathUsable, getFolderWorkspacePathStatusForPath } =
+          await import('../../project-groups/folder-workspace-path-status')
         const status = await getFolderWorkspacePathStatusForPath({
           folderPath: args.updates.folderPath,
           projectGroupId: workspace.projectGroupId,
@@ -120,11 +99,13 @@ export function registerFolderWorkspaceHandlers(
 
   ipcMain.handle('folderWorkspaces:delete', async (_event, rawArgs: unknown): Promise<boolean> => {
     const args = parseProjectGroupIpcArgs(
-      FolderWorkspaceSelectorArgs,
+      FolderWorkspaceDeleteArgs,
       rawArgs,
       'invalid_folder_workspace_delete_args'
     )
     // Runtime owns teardown of PTYs, browsers and sessions, plus success notifications.
-    return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId)).deleted
+    const { assertNotBotGroupHomeFolderWorkspace } = await import('../../bots/bot-group-runtime')
+    assertNotBotGroupHomeFolderWorkspace(runtime, args.folderWorkspaceId)
+    return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId, args)).deleted
   })
 }

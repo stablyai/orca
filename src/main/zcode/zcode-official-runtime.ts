@@ -1,34 +1,27 @@
-// Finding the official ZCode desktop runtime, and reusing it as the CLI's Node runtime.
-//
-// The official CLI bundle (resources/glm/zcode.cjs) needs a Node 22+ runtime it cannot pick
-// itself; the system's Node may be any version. The official desktop binary solves that: it is an
-// Electron, and `ELECTRON_RUN_AS_NODE=1` turns it into exactly the Node the bundle was built for
-// — the reuse zcode-go makes with its own executable, mirrored here onto the official ZCode.exe.
-// Discovery: the sibling of the `zcode` a PATH entry resolves to (the Linux deb links
-// /usr/bin/zcode to it), else the conventional install roots. A standalone CLI has no such
-// sibling and launches as itself.
-
-import { existsSync as defaultExistsSync, realpathSync as defaultRealpathSync } from 'node:fs'
+import { access, realpath as defaultRealpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
 
 export type ZcodeOfficialRuntime = {
-  /** The official desktop executable, reused as the Node runtime via ELECTRON_RUN_AS_NODE. */
   electron: string
   bundle: string
-  /** The Desktop package keeps this outside the CLI bundle's standalone lookup layout. */
   builtinProviderConfig?: string
 }
 
 export type ZcodeOfficialRuntimeDeps = {
-  existsSync?: (path: string) => boolean
-  realpathSync?: (path: string) => string
+  exists?: (path: string) => Promise<boolean>
+  realpath?: (path: string) => Promise<string>
   platform?: NodeJS.Platform
   home?: string
   localAppData?: string
 }
 
-/** The desktop executable's name inside an install root, per platform. */
+const defaultExists = (path: string): Promise<boolean> =>
+  access(path).then(
+    () => true,
+    () => false
+  )
+
 function platformPath(platform: NodeJS.Platform): typeof posix {
   return platform === 'win32' ? win32 : posix
 }
@@ -52,18 +45,18 @@ function electronName(platform: NodeJS.Platform): string {
   }
 }
 
-function runtimeBeside(
-  existsSync: (path: string) => boolean,
+async function runtimeBeside(
+  exists: (path: string) => Promise<boolean>,
   binary: string,
   platform: NodeJS.Platform
-): ZcodeOfficialRuntime | null {
+): Promise<ZcodeOfficialRuntime | null> {
   const paths = platformPath(platform)
   const resourcesRoot =
     platform === 'darwin'
       ? paths.join(paths.dirname(paths.dirname(binary)), 'Resources')
       : paths.join(paths.dirname(binary), 'resources')
   const bundle = paths.join(resourcesRoot, 'glm', 'zcode.cjs')
-  if (!existsSync(bundle)) {
+  if (!(await exists(bundle))) {
     return null
   }
   const builtinProviderConfig = paths.join(
@@ -75,26 +68,24 @@ function runtimeBeside(
   return {
     electron: binary,
     bundle,
-    ...(existsSync(builtinProviderConfig) ? { builtinProviderConfig } : {})
+    ...((await exists(builtinProviderConfig)) ? { builtinProviderConfig } : {})
   }
 }
 
-/** The official runtime a `command` names, when that command is a desktop install's executable;
- *  null for a standalone CLI, which launches as itself. */
-export function resolveZcodeOfficialRuntime(
+/** The official runtime a command names, or null for a standalone CLI. */
+export async function resolveZcodeOfficialRuntime(
   command: string,
   deps: ZcodeOfficialRuntimeDeps = {}
-): ZcodeOfficialRuntime | null {
-  const existsSync = deps.existsSync ?? defaultExistsSync
-  const realpathSync = deps.realpathSync ?? defaultRealpathSync
+): Promise<ZcodeOfficialRuntime | null> {
+  const exists = deps.exists ?? defaultExists
+  const realpath = deps.realpath ?? defaultRealpath
   try {
-    return runtimeBeside(existsSync, realpathSync(command), deps.platform ?? process.platform)
+    return await runtimeBeside(exists, await realpath(command), deps.platform ?? process.platform)
   } catch {
     return null
   }
 }
 
-/** Where a desktop install's executable lives, by platform convention. */
 function conventionalElectrons(deps: ZcodeOfficialRuntimeDeps): string[] {
   const platform = deps.platform ?? process.platform
   const paths = platformPath(platform)
@@ -119,36 +110,33 @@ function conventionalElectrons(deps: ZcodeOfficialRuntimeDeps): string[] {
     case 'netbsd':
     case 'openbsd':
     case 'sunos':
-      // The deb/rpm target covers the Unix-likes.
       return [root(['/opt/ZCode'])]
   }
 }
 
-/** The first official runtime among `candidates` (paths that may be a desktop executable or its
- *  install root) and the conventional install roots; null when none is installed. */
-export function probeZcodeOfficialRuntimes(
+/** The first official runtime among the candidates and platform install roots. */
+export async function probeZcodeOfficialRuntimes(
   candidates: readonly string[],
   deps: ZcodeOfficialRuntimeDeps = {}
-): ZcodeOfficialRuntime | null {
-  const existsSync = deps.existsSync ?? defaultExistsSync
+): Promise<ZcodeOfficialRuntime | null> {
+  const exists = deps.exists ?? defaultExists
   const platform = deps.platform ?? process.platform
-  const lookBeside = (command: string): ZcodeOfficialRuntime | null => {
-    if (existsSync(command)) {
-      const beside = resolveZcodeOfficialRuntime(command, deps)
-      if (beside) {
-        return beside
-      }
-      // A candidate may name the install root rather than its executable.
-      const rootBinary = platformPath(platform).join(command, electronName(platform))
-      return existsSync(rootBinary) ? runtimeBeside(existsSync, rootBinary, platform) : null
+  const lookBeside = async (command: string): Promise<ZcodeOfficialRuntime | null> => {
+    if (!(await exists(command))) {
+      return null
     }
-    return null
+    const beside = await resolveZcodeOfficialRuntime(command, deps)
+    if (beside) {
+      return beside
+    }
+    const rootBinary = platformPath(platform).join(command, electronName(platform))
+    return (await exists(rootBinary)) ? runtimeBeside(exists, rootBinary, platform) : null
   }
   for (const command of [...candidates, ...conventionalElectrons(deps)]) {
     if (!command) {
       continue
     }
-    const runtime = lookBeside(command)
+    const runtime = await lookBeside(command)
     if (runtime) {
       return runtime
     }

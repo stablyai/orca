@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { View, Text, Pressable } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
-import { loadHosts } from '../src/transport/host-store'
-import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
-import { useRpcClientContext } from '../src/transport/client-context'
-import { useHostClient } from '../src/transport/host-client-hooks'
+import { loadHosts } from '../src/host-catalog/host-store'
+import { connectionLogStore } from '../src/diagnostics/connection/persisted-connection-log-store'
+import { useRpcClientContext } from '../src/transport/connection/client-context'
+import { useHostClient } from '../src/transport/connection/host-client-hooks'
 import {
   useConnectionPathStatus,
   useReconnectAttempt
-} from '../src/transport/client-context-connection-metrics'
-import { useHostStatusGates } from '../src/transport/host-status-gates'
+} from '../src/transport/connection/client-context-connection-metrics'
+import { useHostStatusGates } from '../src/transport/connection/host-status-gates'
 import { ConnectionDiagnosticsScreen } from '../src/diagnostics/connection-diagnostics-screen'
 import { createNativeDiagnosticsOperations } from '../src/diagnostics/native-diagnostics-operations'
 import {
@@ -18,11 +17,10 @@ import {
   resolveDiagnosticsHostId,
   type DiagnosticsHostSelection
 } from '../src/diagnostics/connection-diagnostics-screen-data'
-import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { recomputeOn } from '../src/hooks/recompute-on'
 import { NATIVE_APP_LOG_ID } from '../src/diagnostics/native-render-log'
-import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
-import { pressedStyle } from '../src/theme/mobile-theme'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
+import type { HostProfile } from '../src/host-catalog/host-profile'
 
 // Keep empty snapshot identity stable or useSyncExternalStore rerenders forever.
 const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
@@ -32,11 +30,10 @@ const getAppLog = () => connectionLogStore.get(NATIVE_APP_LOG_ID)
 
 // Acquire client here so opening logs during host failure starts dialing and live logging.
 export default function NativeConnectionLogRoute() {
-  useMobileColorScheme()
   const clientContext = useRpcClientContext()
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()
-  const routeKey = useMemo(() => ({}), [params.hostId])
+  const routeKey = useMemo(() => recomputeOn([params.hostId], () => ({})), [params.hostId])
   const [hosts, setHosts] = useState<HostProfile[]>([])
   const [manualSelection, setManualSelection] = useState<DiagnosticsHostSelection | null>(null)
 
@@ -106,31 +103,9 @@ export default function NativeConnectionLogRoute() {
       entries={entries}
       writeClipboard={(report) => Clipboard.setStringAsync(report)}
       onBack={() => router.back()}
-      hostPicker={
-        hosts.length > 1 ? (
-          <View style={styles.hostPicker}>
-            {hosts.map((host) => (
-              <Pressable
-                key={host.id}
-                style={({ pressed }) => [
-                  styles.hostChip,
-                  host.id === selectedId && styles.hostChipActive,
-                  pressed && pressedStyle
-                ]}
-                onPress={() =>
-                  setManualSelection({ hostId: host.id, requestedHostId: params.hostId, routeKey })
-                }
-              >
-                <Text
-                  style={[styles.hostChipText, host.id === selectedId && styles.hostChipTextActive]}
-                  numberOfLines={1}
-                >
-                  {host.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null
+      hosts={hosts}
+      onSelectHost={(hostId) =>
+        setManualSelection({ hostId, requestedHostId: params.hostId, routeKey })
       }
     />
   )

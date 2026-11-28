@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { basename } from '@/lib/path'
-import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
+import { bulkUnstageRuntimeGitPaths } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
@@ -13,13 +13,14 @@ import {
   type DiscardAllArea
 } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readGitCommandFailureMessage } from './git-command-failure-message'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
 import type { PendingDiscardConfirmation } from './discard-dialog'
 import type { SourceControlEntryGroups } from '../../../../../../shared/source-control/listing/source-control-section-order'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useSourceControlDiscardConfirmation({
   activeRepoTarget,
@@ -44,6 +45,7 @@ export function useSourceControlDiscardConfirmation({
   discardSingle: (path: string) => Promise<void>
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
+  const scope = useSourceControlScope()
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Reset during render so a worktree switch cannot paint its predecessor's confirmation.
   const [pendingDiscardWorktreeId, setPendingDiscardWorktreeId] = useState(activeWorktreeId)
@@ -87,80 +89,87 @@ export function useSourceControlDiscardConfirmation({
         return
       }
       setIsExecutingBulk(true)
-      try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-        // Aggregate per-file errors into one toast rather than spamming partial failures.
-        const errors: unknown[] = []
-        const result = await runDiscardAllForArea(area, paths, {
-          bulkUnstage: (filePaths) =>
-            bulkUnstageRuntimeGitPaths(
-              {
-                // Route unstaging through workspace ownership rather than focused runtime.
-                target: requireGitOwnerTarget(activeRepoTarget),
-                worktreeId: activeWorktreeId,
-                worktreePath,
-                connectionId
-              },
-              filePaths
-            ),
-          discardMany,
-          discardOne: discardSingle,
-          onError: (error) => {
-            errors.push(error)
-            console.error('[SourceControl] discard-all failure', error)
-          }
-        })
-        if (result.aborted) {
-          toast.error(
-            translate(
-              'auto.components.right.sidebar.SourceControl.a5e5a11090',
-              'Discard all failed — unable to unstage files before discard'
-            ),
-            { description: readIpcErrorMessage(errors[0]) }
-          )
-        } else if (result.failed.length > 0) {
-          // Limit bulk failures to the first error and sample paths so the toast stays readable.
-          const firstMsg = readIpcErrorMessage(errors[0])
-          const sample = result.failed.slice(0, 3).join(', ')
-          const hiddenCount = result.failed.length - 3
-          const samplePaths =
-            hiddenCount > 0
-              ? translate(
-                  'auto.components.right.sidebar.SourceControl.discardFailedSampleMore',
-                  '{{paths}}, +{{count}} more',
-                  {
-                    paths: sample,
-                    count: hiddenCount,
-                    defaultValue_one: '{{paths}}, +{{count}} more'
-                  }
-                )
-              : sample
-          toast.error(
-            translate(
-              'auto.components.right.sidebar.SourceControl.discardFailed',
-              'Failed to discard {{count}} files',
-              { count: result.failed.length, defaultValue_one: 'Failed to discard {{count}} file' }
-            ),
-            {
-              description: firstMsg
-                ? translate(
-                    'auto.components.right.sidebar.SourceControl.discardFailedWithSample',
-                    '{{error}} (e.g. {{paths}})',
-                    { error: firstMsg, paths: samplePaths }
-                  )
-                : samplePaths
+      await runWithFinally(
+        async () => {
+          const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
+          // Aggregate per-file errors into one toast rather than spamming partial failures.
+          const errors: unknown[] = []
+          const result = await runDiscardAllForArea(area, paths, {
+            bulkUnstage: (filePaths) =>
+              bulkUnstageRuntimeGitPaths(
+                {
+                  // Route unstaging through workspace ownership rather than focused runtime.
+                  target: requireGitOwnerTarget(activeRepoTarget),
+                  worktreeId: activeWorktreeId,
+                  worktreePath,
+                  connectionId
+                },
+                filePaths
+              ),
+            discardMany,
+            discardOne: discardSingle,
+            onError: (error) => {
+              errors.push(error)
+              console.error('[SourceControl] discard-all failure', error)
             }
-          )
+          })
+          if (result.aborted) {
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.SourceControl.a5e5a11090',
+                'Discard all failed — unable to unstage files before discard'
+              ),
+              { description: readGitCommandFailureMessage(errors[0]) }
+            )
+          } else if (result.failed.length > 0) {
+            // Limit bulk failures to the first error and sample paths so the toast stays readable.
+            const firstMsg = readGitCommandFailureMessage(errors[0])
+            const sample = result.failed.slice(0, 3).join(', ')
+            const hiddenCount = result.failed.length - 3
+            const samplePaths =
+              hiddenCount > 0
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.discardFailedSampleMore',
+                    '{{paths}}, +{{count}} more',
+                    {
+                      paths: sample,
+                      count: hiddenCount,
+                      defaultValue_one: '{{paths}}, +{{count}} more'
+                    }
+                  )
+                : sample
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.SourceControl.discardFailed',
+                'Failed to discard {{count}} files',
+                {
+                  count: result.failed.length,
+                  defaultValue_one: 'Failed to discard {{count}} file'
+                }
+              ),
+              {
+                description: firstMsg
+                  ? translate(
+                      'auto.components.right.sidebar.SourceControl.discardFailedWithSample',
+                      '{{error}} (e.g. {{paths}})',
+                      { error: firstMsg, paths: samplePaths }
+                    )
+                  : samplePaths
+              }
+            )
+          }
+          if (!result.aborted) {
+            await refreshActiveGitStatusAfterMutation()
+            clearSelection()
+          }
+        },
+        () => {
+          setIsExecutingBulk(false)
         }
-        if (!result.aborted) {
-          await refreshActiveGitStatusAfterMutation()
-          clearSelection()
-        }
-      } finally {
-        setIsExecutingBulk(false)
-      }
+      )
     },
     [
+      scope,
       activeRepoTarget,
       worktreePath,
       activeWorktreeId,

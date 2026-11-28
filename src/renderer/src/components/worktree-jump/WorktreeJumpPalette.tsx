@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { createWorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
+import { createWorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import { PALETTE_CLOSE_LINGER_MS } from './worktree-jump-palette-model'
 import { WorktreeJumpPaletteSurface } from './worktree-jump-palette-surface'
 import { useWorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
+import { useResultsReadyAfterOpeningPaint } from './state/use-results-ready-after-opening-paint'
 
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const visible = useAppStore((state) => state.activeModal === 'worktree-palette')
@@ -40,10 +41,19 @@ function WorktreeJumpPaletteContent({
   lingering: boolean
   createLookupGuard: ReturnType<typeof createWorktreePaletteRequestGuard>
 }): React.JSX.Element {
+  const { resultsReady, revealResultsNow } = useResultsReadyAfterOpeningPaint(visible)
   const controller = useWorktreeJumpPaletteController({
     visible,
     lingering,
+    resultsReady,
+    revealResultsNow,
     createLookupGuard
   })
-  return <WorktreeJumpPaletteSurface controller={controller} />
+  return (
+    <WorktreeJumpPaletteSurface
+      controller={controller}
+      resultsReady={resultsReady}
+      revealResultsNow={revealResultsNow}
+    />
+  )
 }

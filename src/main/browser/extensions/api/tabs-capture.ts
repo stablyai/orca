@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { browserManager } from '../../browser-manager'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { consumeBrowserExtensionCaptureQuota } from '../api-runtime/browser-extension-capture-quota'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import { isChromeWebStoreUrl } from '../../../../shared/browser/extensions/browser-extension-webstore'
@@ -17,15 +18,17 @@ import {
   WINDOW_ID_CURRENT,
   getBrowserExtensionWindow
 } from '../tabs-and-windows/browser-extension-window-model'
-import { browserExtensionHostPatternsInSession } from './permissions'
+import { browserExtensionHostPatternsInSession } from '../permissions/browser-extension-session-permissions'
 
 // Chrome's default JPEG quality for tabs.captureVisibleTab.
 const DEFAULT_JPEG_QUALITY = 90
 
-const imageDetailsSchema = z
-  .object({ format: z.enum(['jpeg', 'png']), quality: z.number().int().min(0).max(100) })
-  .partial()
-  .loose()
+const imageDetailsSchema = lazyZodSchema(() =>
+  z
+    .object({ format: z.enum(['jpeg', 'png']), quality: z.number().int().min(0).max(100) })
+    .partial()
+    .loose()
+)
 
 type ImageDetails = z.infer<typeof imageDetailsSchema>
 
@@ -100,10 +103,12 @@ async function captureVisibleTab(
 
 /** tabs.captureVisibleTab(windowId?, options?): the active tab of the window, as a data URL. */
 export const captureVisibleTabMethod = defineBrowserExtensionMethod(
-  z.tuple([
-    z.union([z.number().int(), imageDetailsSchema]).nullable().optional(),
-    imageDetailsSchema.nullable().optional()
-  ]),
+  lazyZodSchema(() =>
+    z.tuple([
+      z.union([z.number().int(), imageDetailsSchema]).nullable().optional(),
+      imageDetailsSchema.nullable().optional()
+    ])
+  ),
   (caller, first, second) =>
     typeof first === 'object' && first !== null
       ? captureVisibleTab(caller, null, first)

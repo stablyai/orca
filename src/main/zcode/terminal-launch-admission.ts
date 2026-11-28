@@ -1,4 +1,4 @@
-import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
+import type { StructuredAgentCommandSettings } from '../native-chat/agent-launch/structured-agent-command-resolution'
 import { readZCodeInteractiveCapability } from './interactive-capability'
 import { resolveZcodeCliInvocation, type ZcodeCliInvocation } from './zcode-cli-invocation'
 
@@ -12,11 +12,13 @@ export async function readZcodeTerminalLaunchAdmission(
     pathEnv?: string
   } = {}
 ): Promise<ZcodeTerminalLaunchAdmission> {
-  const invocation = resolveZcodeCliInvocation(options)
+  const invocation = await resolveZcodeCliInvocation(options)
   if (invocation.source === 'desktop-bundle') {
     return { status: 'desktop-only', invocation }
   }
-  const capability = await readZCodeInteractiveCapability(invocation)
+  const capability = await readZCodeInteractiveCapability(options.commandSettings, {
+    pathEnv: options.pathEnv
+  })
   return capability === 'interactive'
     ? { status: 'available', invocation }
     : { status: 'unverified', invocation }

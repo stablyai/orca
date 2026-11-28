@@ -2,14 +2,15 @@ import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/s
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 import { OrcaRuntimeWithCreateAgentSession } from '../../session-construction/agent-session/orca-runtime-create-agent-session'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../workspaces/creation/worktree-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
-import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
+import { ownerSurfacing } from './terminal-presentation'
 import {
   type ResolvedWorktree,
   inferWorktreeIdFromPtyId
@@ -20,7 +21,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { resolveWorktreeLaunchHost } from '../../workspaces/catalog/worktree-launch-host-repo'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
@@ -144,6 +145,8 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     if (adoptedHandle !== terminalHandle) {
       throw new Error('terminal_create_identity_conflict')
     }
+    // Same as inventory adoption: the stream carries this survivor's title and output.
+    this.mainDaemonAttachments.reconcile(session.id)
     return {
       handle: adoptedHandle,
       ptyId: session.id,
@@ -190,6 +193,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       suppressStartupUpdatePrompt?: boolean
       /** Run now is the user's act; a scheduled run is background and a stopped WSL distro holds it. */
       wslUserAct?: true
+      surfaceOwner?: false
     },
     resolvedTarget?: { worktree: ResolvedWorktree; repo: Repo; folderWorkspace?: FolderWorkspace }
   ): Promise<RuntimeTerminalCreate> {
@@ -218,7 +222,8 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
         startupPromptDelivery: 'auto-submit',
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
         title: opts.title,
-        ...(opts.wslUserAct ? { wslUserAct: true } : {})
+        ...(opts.wslUserAct ? { wslUserAct: true } : {}),
+        ...ownerSurfacing(opts.surfaceOwner !== false)
       },
       undefined,
       worktree,

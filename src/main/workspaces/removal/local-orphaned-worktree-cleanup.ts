@@ -1,34 +1,54 @@
+import { CheckoutIdentityRefusal } from '../../../shared/worktree/removal/removal'
 import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
+  toLocalWorktreeRuntimePaths
 } from './local-worktree-filesystem'
+import { proveOrphanedCheckoutGuard } from './worktree-removal-gitdir-identity'
+import { provesLocalOrphanedWorktree } from './local-orphaned-worktree-proof'
 import {
-  canSafelyRemoveOrphanedWorktreeDirectory,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from './worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 
 export async function cleanupLocalOrphanedWorktreeDirectory(
   repoPath: string,
   path: string,
   options: LocalWorktreeFilesystemOptions,
-  closeWatchers: (path: string) => Promise<void>
+  closeWatchers: (path: string) => Promise<void>,
+  signal?: AbortSignal,
+  markerOptions: { expectedMarker?: string; forbidAnyMarker?: boolean } = {}
 ): Promise<void> {
-  const access = getLocalWorktreePathAccess(options)
-  const runtimePath = toLocalWorktreeRuntimePath(path, options)
-  if (
-    await canSafelyRemoveOrphanedWorktreeDirectory(
-      runtimePath,
-      toLocalWorktreeRuntimePath(repoPath, options),
-      CLIENT_REMOVAL_HOME,
-      access
-    )
-  ) {
+  throwIfSignalAborted(signal)
+  const access = getLocalWorktreePathAccess(options, path)
+  const [runtimePath, runtimeRepoPath] = await toLocalWorktreeRuntimePaths(
+    [path, repoPath],
+    options,
+    signal
+  )
+  const guard = await proveOrphanedCheckoutGuard(
+    path,
+    options,
+    () =>
+      provesLocalOrphanedWorktree(path, repoPath, options, CLIENT_REMOVAL_HOME, [
+        runtimePath,
+        runtimeRepoPath
+      ]),
+    markerOptions
+  )
+  throwIfSignalAborted(signal)
+  if (guard) {
     await closeWatchers(path)
-    await removeLocalWorktreePath(path, options).catch(() => {})
+    throwIfSignalAborted(signal)
+    await removeLocalWorktreePath(path, options, signal, guard).catch((error: unknown) => {
+      throwIfSignalAborted(signal)
+      if (error instanceof CheckoutIdentityRefusal) {
+        throw error
+      }
+    })
   } else {
     console.warn(`[worktrees] Refusing recursive cleanup for unproven worktree directory: ${path}`)
   }

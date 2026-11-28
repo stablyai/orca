@@ -1,4 +1,4 @@
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 /** One RPC to the paired server; rejects with the server's error `code` on a refusal. */
 export type RemoteWorkspaceCall = (
@@ -113,7 +113,8 @@ async function waitForLegacySleepConvergence(
           worktree: worktreeSelector,
           limit: 10_000,
           requireFreshPtyLiveness: true,
-          includeVisualLayouts: false
+          includeVisualLayouts: false,
+          includePreview: false
         },
         listTimeoutMs
       )

@@ -8,7 +8,7 @@ import {
   readSavedCursorRegister,
   serializeWithAbsoluteCursor
 } from '../../../../shared/terminal/replay/terminal-serialize-absolute-cursor'
-import type { SerializeFuzzCase } from './serialize-grid-fuzz-stream'
+import type { SerializeFuzzCase } from './serialize-grid-replay-case'
 import {
   serializedNormalStart,
   variantOverlong,
@@ -207,21 +207,25 @@ function countClippedWideCells(terminal: Terminal): number {
   return count
 }
 
-/** Variant 0 is the production snapshot path; the others pin byte identity of the raw API. */
+/** Variant 0 is the production snapshot path; the others pin raw API bytes (differential only). */
 function serializeVariants(
   addon: SerializeAddon,
   source: Terminal,
   scrollback: number | undefined,
-  rangeRow: number
+  rangeRow: number,
+  byteIdentity: boolean
 ): string[] {
+  const cursor = readSavedCursorRegister(source)
+  const production = serializeWithAbsoluteCursor(addon, source, { scrollback }, cursor)
+  if (!byteIdentity) {
+    return [production]
+  }
+  const end = Math.min(rangeRow + 2, source.buffer.normal.length - 1)
+  const range = { start: rangeRow, end }
   return [
-    serializeWithAbsoluteCursor(addon, source, { scrollback }, readSavedCursorRegister(source)),
+    production,
     addon.serialize(),
-    addon.serialize({
-      range: { start: rangeRow, end: Math.min(rangeRow + 2, source.buffer.normal.length - 1) },
-      excludeAltBuffer: true,
-      excludeModes: true
-    })
+    addon.serialize({ range, excludeAltBuffer: true, excludeModes: true })
   ]
 }
 
@@ -273,7 +277,7 @@ export async function runSerializeFuzzCase(
       for (const { name, addon } of addons) {
         let outputs: string[]
         try {
-          outputs = serializeVariants(addon, source, step.scrollback, rangeRow)
+          outputs = serializeVariants(addon, source, step.scrollback, rangeRow, addons.length > 1)
         } catch (error) {
           result.outputs[name] = [`throw:${String(error)}`]
           result.gridDiff[name] = {
@@ -300,12 +304,12 @@ export async function runSerializeFuzzCase(
 export type Verdict = 'i1-bytes-differ' | 'regression' | 'fixed' | 'both-fail' | 'new-fail'
 
 /** Byte identity applies outside intentional overlong-line and trailing-background changes. */
-export function i1Applies(check: SerializeCheckResult): boolean[] {
+function i1Applies(check: SerializeCheckResult): boolean[] {
   return check.overlong.map((overlong, v) => !overlong && !check.trailingBackgroundRows[v])
 }
 
 /** Per variant: I1 applies, yet the bytes changed. */
-export function i1BytesDifferByVariant(check: SerializeCheckResult): boolean[] {
+function i1BytesDifferByVariant(check: SerializeCheckResult): boolean[] {
   return i1Applies(check).map(
     (applies, v) => applies && check.outputs.old![v] !== check.outputs.new![v]
   )

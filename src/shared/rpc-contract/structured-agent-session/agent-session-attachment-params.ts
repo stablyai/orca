@@ -1,0 +1,59 @@
+import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../file-content/file-range-read'
+import {
+  AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS,
+  AGENT_SESSION_ATTACHMENT_MAX_BYTES
+} from '../../agent-session/agent-session-attachments'
+import { isValidBase64 } from '../clipboard/clipboard-params'
+import { Identifier, SessionId } from './structured-agent-session-identifiers'
+
+const UploadId = lazyZodSchema(() => Identifier('Invalid upload id', 128))
+
+const attachmentUploadFile = () => ({
+  name: z.string().min(1).max(1024),
+  byteLength: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(AGENT_SESSION_ATTACHMENT_MAX_BYTES, 'Attachment is too large')
+})
+
+export const AttachmentUploadStartParams = lazyZodSchema(() =>
+  z.union([
+    z.strictObject({ sessionId: SessionId, ...attachmentUploadFile() }),
+    z.strictObject({ item: z.uuid(), ...attachmentUploadFile() })
+  ])
+)
+
+export const AttachmentUploadAppendParams = lazyZodSchema(() =>
+  z
+    .object({
+      uploadId: UploadId,
+      offset: z.number().int().nonnegative(),
+      contentBase64: z
+        .string()
+        .max(AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS, 'Attachment chunk is too large')
+        .refine(isValidBase64, 'Attachment chunk must be base64')
+    })
+    .strict()
+)
+
+export const AttachmentUploadIdParams = lazyZodSchema(() =>
+  z.object({ uploadId: UploadId }).strict()
+)
+
+export const AttachmentReadParams = lazyZodSchema(() =>
+  z.object({ path: z.string().min(1).max(4096) }).strict()
+)
+
+export const AttachmentTextReadParams = lazyZodSchema(() =>
+  AttachmentReadParams.extend({
+    offset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    length: z.number().int().positive().max(MAX_FILE_RANGE_READ_BYTES),
+    expectedSnapshot: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional()
+  }).strict()
+)

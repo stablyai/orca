@@ -1,9 +1,10 @@
-import type { DecisionGateRow, DispatchContextRow, GateStatus } from '../../types'
+import type { DecisionGateRow, DispatchContextRow, GateStatus } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+import { remoteHoldOnTask } from '../remote-owned/remote-placements'
 
 export function createGate(
   this: OrchestrationDb,
@@ -52,7 +53,7 @@ export function createGate(
         { taskId: gate.taskId, dispatchId: active?.id }
       )
     }
-    const activeWorker = this.db
+    const localWorker = this.db
       .prepare(
         `SELECT active.id
          FROM dispatch_contexts active
@@ -62,6 +63,11 @@ export function createGate(
          ORDER BY active.rowid DESC LIMIT 1`
       )
       .get(gate.taskId) as { id: string } | undefined
+    // A worker a paired server runs for the Task holds it exactly as a local one does.
+    const remote = remoteHoldOnTask(this, gate.taskId)
+    const activeWorker =
+      localWorker ??
+      (remote?.liveWorker ? { id: remote.dispatchId ?? '(a start on a paired server)' } : undefined)
     if (activeWorker) {
       throw new OrchestrationError(
         'task_not_startable',
@@ -100,26 +106,26 @@ export function resolveGate(
   gateId: string,
   resolution: string
 ): DecisionGateRow | undefined {
-  const gate = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
-    | DecisionGateRow
-    | undefined
-  if (!gate) {
-    return undefined
-  }
-
   this.db.exec('SAVEPOINT resolve_gate')
   try {
-    this.db
+    // First answer wins: only a pending gate is claimed, and replaying the stored answer is a no-op.
+    const claimed = this.db
       .prepare(
-        "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ?"
+        "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ? AND status = 'pending'"
       )
       .run(resolution, gateId)
-    this.updateTaskStatus(gate.task_id, 'ready')
-    const resolved = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
-      | DecisionGateRow
-      | undefined
+    const gate = this.getGate(gateId)
+    if (gate && claimed.changes === 1) {
+      this.updateTaskStatus(gate.task_id, 'ready')
+    } else if (gate && !(gate.status === 'resolved' && gate.resolution === resolution)) {
+      throw new OrchestrationError(
+        'answer_conflict',
+        `Gate ${gateId} is already ${gate.status}${gate.resolution ? ` with resolution: ${gate.resolution}` : ''}`,
+        { gateId, status: gate.status, resolution: gate.resolution }
+      )
+    }
     this.db.exec('RELEASE resolve_gate')
-    return resolved
+    return gate
   } catch (error) {
     this.db.exec('ROLLBACK TO resolve_gate')
     this.db.exec('RELEASE resolve_gate')

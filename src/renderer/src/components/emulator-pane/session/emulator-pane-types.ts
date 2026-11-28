@@ -1,0 +1,77 @@
+import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator/tabs/simulator-tab-label'
+import type { EmulatorSelectionRequired } from '../../../../../shared/emulator/emulator-opening-preferences'
+
+export type SimulatorDeviceRow = {
+  name: string
+  backend?: 'ios' | 'android'
+  udid: string
+  state: string
+  runtime?: string
+  isAvailable?: boolean
+  lastUsedAt?: string
+  availabilityError?: string
+  osVersion?: string
+  apiLevel?: string
+}
+
+export type EmulatorStreamInfo = {
+  deviceUdid?: string
+  device?: string
+  displayName?: string
+  streamUrl?: string
+  url?: string
+  wsUrl?: string
+  state?: string
+}
+
+export type EmulatorPaneSession = {
+  attached: boolean
+  info?: EmulatorStreamInfo
+}
+
+export type EmulatorPaneAttachResult = {
+  attached?: boolean
+  info?: EmulatorStreamInfo
+  selectionRequired?: EmulatorSelectionRequired
+}
+
+export type UseEmulatorPaneSessionArgs = {
+  worktreeId: string
+  tabId?: string
+  autoAttachOnMount: boolean
+}
+
+export function deviceLabel(
+  device: SimulatorDeviceRow | EmulatorStreamInfo | string | undefined
+): string {
+  if (!device) {
+    return SIMULATOR_DEFAULT_TAB_LABEL
+  }
+  if (typeof device === 'string') {
+    return device.length > 20 && device.includes('-') ? SIMULATOR_DEFAULT_TAB_LABEL : device
+  }
+  if ('displayName' in device && device.displayName) {
+    return device.displayName
+  }
+  if ('name' in device && device.name) {
+    return device.name
+  }
+  if ('device' in device && device.device && !device.device.includes('-')) {
+    return device.device
+  }
+  return SIMULATOR_DEFAULT_TAB_LABEL
+}
+
+export function simulatorPreviewStreamUrl(info?: EmulatorStreamInfo): string | undefined {
+  if (!info) {
+    return undefined
+  }
+  if (info.streamUrl) {
+    return info.streamUrl
+  }
+  if (info.url) {
+    const base = info.url.replace(/\/$/, '')
+    return `${base}/stream.mjpeg`
+  }
+  return undefined
+}

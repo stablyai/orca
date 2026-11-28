@@ -1,4 +1,5 @@
-import { acquiredAccountAcrossLease } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
+import type { AgentSessionRunPlacementLaunch } from '../../../../shared/agent-session/lifecycle/agent-session-run-placement'
+import { acquiredAccountAcrossLease } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 /** Pure transitions applied by the store in one durable transaction.
  * Writer admission requires reservation, observed process identity and provider-handle proof at one fence. */
 
@@ -7,14 +8,14 @@ import {
   adjudicateAgentSessionRestart,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
-} from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+} from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import {
   appendAgentSessionProviderHandleLink,
   type AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleBelongsTo } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/agent-session-next-fence'
-import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleBelongsTo } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-next-fence'
+import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
 import type {
   AgentSessionLease,
   AgentSessionProcessIdentity,
@@ -96,6 +97,8 @@ export type AgentSessionProcessIdentityCommit = {
   sessionId: string
   fence: number
   process: AgentSessionProcessIdentity
+  /** Absent: the run started in this app. */
+  placement?: AgentSessionRunPlacementLaunch
   now: number
 }
 
@@ -115,11 +118,18 @@ export function commitAgentSessionProcessIdentity(
       reason: 'spawnIdentityMismatch'
     })
   }
-  return withLease(record, {
-    ...record.lease,
-    ownerProcess: args.process,
-    lastRenewedAt: args.now
-  })
+  const launch = args.placement ?? { kind: 'direct' as const }
+  return {
+    ...withLease(record, {
+      ...record.lease,
+      ownerProcess: args.process,
+      lastRenewedAt: args.now
+    }),
+    lastRunPlacement:
+      launch.kind === 'relayed'
+        ? { ...launch, fence: args.fence, agent: args.process }
+        : { kind: 'direct', fence: args.fence }
+  }
 }
 
 /** Admit the proven owner; record a supplied provider link now or leave it unproven until the adapter reports one. */

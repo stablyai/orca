@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import {
   admitLegacyAgentStatus,
   clearLegacyAgentStatuses
@@ -7,11 +5,12 @@ import {
 import {
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots
-} from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
+import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS as HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
-import { LAST_STATUS_FILE_VERSION } from './server-constants'
+import { LAST_STATUS_FILE_VERSION, STATUS_FLUSH_BUSY_TIMEOUT_MS } from './server-constants'
+import type { SavedStatus } from './last-status-store'
 import type { EnrichedAgentHookEventPayload, LastStatusFile } from './server-types'
 import {
   authorityCommitmentsMatch,
@@ -20,11 +19,15 @@ import {
   sanitizeHydratedEntry,
   sanitizePersistedAuthorityCommitment
 } from './server-persistence-validation'
-import { AgentHookServerTabCleanup } from './server-tab-cleanup'
+import { AgentHookServerMarkedExitProof } from './server-marked-exit-proof'
 import { readPersistedAgentExits, recordAgentExit } from './agent-exit-evidence'
 
-export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup {
+export abstract class AgentHookServerHydration extends AgentHookServerMarkedExitProof {
+  /** The saved status could not be read, so a missing row proves nothing about a pane. */
+  protected statusHydrationFailed = false
+
   protected hydrateLastStatusFromDisk(): void {
+    this.statusHydrationFailed = false
     if (!this.lastStatusFilePath) {
       return
     }
@@ -33,26 +36,45 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
     clearLegacyAgentStatuses(this.state)
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
-    let raw: string
+    const store = this.getStatusStore()
+    let saved: SavedStatus | undefined
     try {
-      raw = readFileSync(this.lastStatusFilePath, 'utf8')
+      saved = store?.read(STATUS_FLUSH_BUSY_TIMEOUT_MS)
     } catch (err) {
-      // Why: missing file is normal (first launch); other errors degrade to empty hydration + one warn.
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.warn('[agent-hooks] failed to read last-status file:', err)
+      // Status is a restart cache; an unreadable store degrades to empty hydration + one warn.
+      // The store then stays read-only for this session, so rows it never read survive.
+      console.warn('[agent-hooks] failed to read saved agent status:', err)
+      this.statusHydrationFailed = true
+      return
+    }
+    if (!store || !saved) {
+      return
+    }
+    if (saved.source === 'legacy') {
+      if (this.admitSavedStatus(saved.document)) {
+        // Only an admitted file is recorded as imported, once rows holding it commit.
+        store.confirmLegacyImport()
+      } else {
+        // A rejected file must not stand in for the rows: drop it and restore those instead.
+        store.rejectLegacy()
+        const rows = store.readRows()
+        if (rows) {
+          this.admitSavedStatus(rows.document)
+        }
       }
-      return
+    } else {
+      this.admitSavedStatus(saved.document)
     }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      console.warn('[agent-hooks] last-status file is not valid JSON; ignoring')
-      return
-    }
+    this.pruneUnplacedPanes()
+    // Repairs and a migrated legacy file are saved now; an unchanged store writes nothing.
+    this.runStatusPersist()
+  }
+
+  /** False when the document is rejected whole; nothing from it is admitted then. */
+  private admitSavedStatus(parsed: unknown): boolean {
     if (typeof parsed !== 'object' || parsed === null) {
       console.warn('[agent-hooks] last-status file is not an object; ignoring')
-      return
+      return false
     }
     const file = parsed as Partial<LastStatusFile>
     if (file.version !== LAST_STATUS_FILE_VERSION) {
@@ -61,12 +83,12 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           file.version
         )} != ${LAST_STATUS_FILE_VERSION}); ignoring`
       )
-      return
+      return false
     }
     const entries = file.entries
     if (typeof entries !== 'object' || entries === null) {
       console.warn('[agent-hooks] last-status file entries missing or wrong shape; ignoring')
-      return
+      return false
     }
     let hydrated = 0
     let dropped = 0
@@ -80,8 +102,20 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           ? rawEntry
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
-      if (entry && entry.receivedAt >= ttlCutoff) {
-        const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
+      const pastTtl = entry !== null && !entry.paneSleep && entry.receivedAt < ttlCutoff
+      // A placed pane's idle agent outlives the TTL; its launch authority expires with it.
+      if (entry && (!pastTtl || this.placementKeepsRow(entry))) {
+        // A shared host still runs this conversation after the restart.
+        if (
+          entry.providerSession &&
+          typeof rawResolvedEntry === 'object' &&
+          rawResolvedEntry !== null &&
+          'executionHost' in rawResolvedEntry &&
+          rawResolvedEntry.executionHost === 'shared'
+        ) {
+          entry.executionHost = 'shared'
+        }
+        const launchTokenHash = pastTtl ? null : readPersistedLaunchTokenHash(rawResolvedEntry)
         if (launchTokenHash) {
           this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, launchTokenHash)
           const evidence = this.toAuthorityEvidence(entry, launchTokenHash)
@@ -138,8 +172,16 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
         dropped += 1
       }
     }
-    for (const exit of readPersistedAgentExits(file.agentExits, ttlCutoff)) {
-      recordAgentExit(this.agentExitedAtByPaneKey, exit.paneKeys, exit, exit.at)
+    for (const exit of readPersistedAgentExits(file.agentExits, -Infinity)) {
+      // A row kept past the TTL keeps its exit, or the pane would read as live again.
+      if (
+        exit.at >= ttlCutoff ||
+        exit.paneKeys.some((key) =>
+          this.state.lastStatusByPaneKey.has(this.resolvePaneKeyAlias(key))
+        )
+      ) {
+        recordAgentExit(this.agentExitedAtByPaneKey, exit.paneKeys, exit, exit.at)
+      }
     }
     for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
@@ -163,12 +205,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
         `[agent-hooks] last-status hydrate dropped ${dropped} entries (kept ${hydrated})`
       )
     }
-    if (dropped > 0 || prunedLegacyClaudeSubagents > 0 || scrubbedLegacyLaunchTokens > 0) {
-      this.runStatusPersist()
-    } else if (hydrated > 0) {
-      // Reuse raw bytes for dedup only after lossless hydration.
-      this.primeStatusPersistBaseline(raw)
-    }
+    return true
   }
 
   listUnconfirmedRestoredStatuses(): EnrichedAgentHookEventPayload[] {

@@ -4,14 +4,14 @@ import { resolveZcodeCliInvocation } from './zcode-cli-invocation'
 const DESKTOP_FILES = new Set(['/opt/ZCode/zcode', '/opt/ZCode/resources/glm/zcode.cjs'])
 const officialRuntime = {
   platform: 'linux' as const,
-  existsSync: (path: string): boolean => DESKTOP_FILES.has(path),
-  realpathSync: (path: string): string => path
+  exists: async (path: string): Promise<boolean> => DESKTOP_FILES.has(path),
+  realpath: async (path: string): Promise<string> => path
 }
 
-describe('resolveZcodeCliInvocation', () => {
-  it('uses the desktop executable as Node with its bundled CLI', () => {
+describe('resolveZcodeCliInvocation', async () => {
+  it('uses the desktop executable as Node with its bundled CLI', async () => {
     expect(
-      resolveZcodeCliInvocation({
+      await resolveZcodeCliInvocation({
         resolveCommand: () => 'zcode',
         officialRuntime
       })
@@ -23,9 +23,9 @@ describe('resolveZcodeCliInvocation', () => {
     })
   })
 
-  it('prefers a resolved standalone CLI over a conventional desktop install', () => {
+  it('prefers a resolved standalone CLI over a conventional desktop install', async () => {
     expect(
-      resolveZcodeCliInvocation({
+      await resolveZcodeCliInvocation({
         resolveCommand: () => '/home/test/.local/bin/zcode',
         officialRuntime
       })
@@ -37,14 +37,14 @@ describe('resolveZcodeCliInvocation', () => {
     })
   })
 
-  it('preserves a supported multi-token Node bundle override', () => {
+  it('preserves a supported multi-token Node bundle override', async () => {
     expect(
-      resolveZcodeCliInvocation({
+      await resolveZcodeCliInvocation({
         commandSettings: {
           agentCmdOverrides: { zcode: 'node "/home/test/ZCode CLI/zcode.cjs"' }
         },
         resolveCommand: (command) => (command === 'node' ? '/usr/bin/node' : command),
-        officialRuntime: { ...officialRuntime, existsSync: () => false }
+        officialRuntime: { ...officialRuntime, exists: async () => false }
       })
     ).toMatchObject({
       command: '/usr/bin/node',
@@ -54,16 +54,16 @@ describe('resolveZcodeCliInvocation', () => {
     })
   })
 
-  it('parses a Windows Node bundle override without consuming path separators', () => {
+  it('parses a Windows Node bundle override without consuming path separators', async () => {
     expect(
-      resolveZcodeCliInvocation({
+      await resolveZcodeCliInvocation({
         commandSettings: {
           agentCmdOverrides: { zcode: 'node "C:\\ZCode CLI\\zcode.cjs"' }
         },
         platform: 'win32',
         resolveCommand: (command) =>
           command === 'node' ? 'C:\\Program Files\\nodejs\\node.exe' : command,
-        officialRuntime: { platform: 'win32', existsSync: () => false }
+        officialRuntime: { platform: 'win32', exists: async () => false }
       })
     ).toMatchObject({
       command: 'C:\\Program Files\\nodejs\\node.exe',

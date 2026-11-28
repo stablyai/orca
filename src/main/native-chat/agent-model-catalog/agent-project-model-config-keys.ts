@@ -14,70 +14,6 @@ function setsAny(table: Record<string, unknown>, keys: readonly string[]): boole
   return keys.some((key) => table[key] !== undefined)
 }
 
-// Claude agent selection can apply its model to the main thread.
-const CLAUDE_MODEL_SETTINGS = [
-  'model',
-  'agent',
-  'effortLevel',
-  'maxEffortLevel',
-  'modelSettings',
-  'availableModels',
-  'enforceAvailableModels',
-  'modelOverrides'
-] as const
-
-function isClaudeModelEnvKey(key: string): boolean {
-  return (
-    key === 'ANTHROPIC_MODEL' ||
-    key === 'CLAUDE_CODE_EFFORT_LEVEL' ||
-    /^ANTHROPIC_DEFAULT_([A-Z]+_)?MODEL$/.test(key) ||
-    /^CLAUDE_CODE_USE_(BEDROCK|VERTEX|FOUNDRY|ANTHROPIC_AWS|ANTHROPIC_GOOGLE_CLOUD|MANTLE|GATEWAY)$/.test(
-      key
-    )
-  )
-}
-
-/** Treat malformed settings as possible model overrides. */
-export function claudeSettingsMayPickModel(text: string): boolean {
-  let settings: Record<string, unknown> | null
-  try {
-    settings = record(JSON.parse(text))
-  } catch {
-    return true
-  }
-  if (!settings) {
-    return true
-  }
-  if (setsAny(settings, CLAUDE_MODEL_SETTINGS)) {
-    return true
-  }
-  const env = record(settings.env)
-  return env !== null && Object.keys(env).some(isClaudeModelEnvKey)
-}
-
-const CODEX_MODEL_KEYS = ['model', 'model_reasoning_effort', 'model_provider'] as const
-
-/** Treat malformed TOML and profile-based picks as possible model overrides. */
-export function codexConfigMayPickModel(text: string): boolean {
-  let config: Record<string, unknown>
-  try {
-    config = parseToml(text)
-  } catch {
-    return true
-  }
-  if (setsAny(config, CODEX_MODEL_KEYS) || config.profile !== undefined) {
-    return true
-  }
-  const profiles = record(config.profiles)
-  return (
-    profiles !== null &&
-    Object.values(profiles).some((profile) => {
-      const table = record(profile)
-      return table === null || setsAny(table, CODEX_MODEL_KEYS)
-    })
-  )
-}
-
 const OPENCODE_MODEL_KEYS = [
   'model',
   'default_agent',
@@ -183,4 +119,24 @@ export function piSettingsMayPickModel(text: string): boolean {
     return true
   }
   return settings === null || setsAny(settings, PI_MODEL_SETTINGS)
+}
+
+/** Treat malformed project settings as a possible model override. */
+function jsonSettingsMayPickModel(text: string, keys: readonly string[]): boolean {
+  const errors: ParseError[] = []
+  const settings = record(parseJsonc(text, errors, { allowTrailingComma: true }))
+  return errors.length > 0 || settings === null || setsAny(settings, keys)
+}
+
+// Cursor's model and its per-model effort parameters.
+const CURSOR_MODEL_SETTINGS = ['model', 'selectedModel', 'modelParameters'] as const
+
+export function cursorCliConfigMayPickModel(text: string): boolean {
+  return jsonSettingsMayPickModel(text, CURSOR_MODEL_SETTINGS)
+}
+
+const COPILOT_MODEL_SETTINGS = ['model', 'autoTier'] as const
+
+export function copilotSettingsMayPickModel(text: string): boolean {
+  return jsonSettingsMayPickModel(text, COPILOT_MODEL_SETTINGS)
 }

@@ -1,83 +1,50 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { PairedRuntimeBrowserClientHostRegistry } from './paired-runtime-browser-client-host-registry'
 
 const authority: BrowserClientHostLeaseAuthority = {
-  authorityRuntimeId: 'runtime-a',
-  authorityEpoch: 'epoch-a',
+  authorityRuntimeId: 'runtime-b',
+  authorityEpoch: 'epoch-b',
   browserHostClientId: 'client-a',
-  browserHostGeneration: 2,
+  browserHostGeneration: 1,
   pageCommandProtocolVersion: 1
 }
 
 describe('PairedRuntimeBrowserClientHostRegistry', () => {
-  it('keeps a failed authority transition tombstoned until cleanup settles', async () => {
-    const cleanup = deferred<void>()
-    const failed = createComposition(undefined, undefined, undefined, false, cleanup.promise)
-    failed.replaceAuthority.mockRejectedValueOnce(new Error('replacement attach failed'))
-    const replacement = createComposition()
-    const compositionFactory = vi.fn().mockReturnValueOnce(failed).mockReturnValueOnce(replacement)
-    const registry = new PairedRuntimeBrowserClientHostRegistry({
-      createComposition: compositionFactory
+  it('accepts a new host once a failed authority replacement finishes failing its cleanup', async () => {
+    let failCleanup = (_error: Error): void => {}
+    const cleanup = new Promise<void>((_resolve, reject) => {
+      failCleanup = reject
     })
-    await registry.start(input(11))
+    const started: string[] = []
+    const registry = new PairedRuntimeBrowserClientHostRegistry({
+      createComposition: (input) => {
+        started.push(input.authorityRuntimeId)
+        const first = started.length === 1
+        return {
+          start: async () => authority,
+          replaceAuthority: async () => {
+            throw new Error('replacement attach failed')
+          },
+          retirePage: async () => true,
+          hostsPage: () => false,
+          close: async () => !first,
+          whenClosed: () => (first ? cleanup : Promise.resolve())
+        }
+      }
+    })
+    const start = (authorityRuntimeId: string) =>
+      registry.start({ environmentId: 'environment-a', pairingRevision: 1, authorityRuntimeId })
 
-    await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow(
-      'replacement attach failed'
-    )
-    await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow(
+    await start('runtime-a')
+    await expect(start('runtime-b')).rejects.toThrow('replacement attach failed')
+    await expect(start('runtime-b')).rejects.toThrow(
       'paired_runtime_browser_client_host_cleanup_pending'
     )
-    expect(replacement.start).not.toHaveBeenCalled()
 
-    cleanup.resolve()
-    await cleanup.promise
-    await expect(registry.start(input(11, 'runtime-b'))).resolves.toEqual(authority)
-    expect(replacement.start).toHaveBeenCalledOnce()
+    failCleanup(new Error('browser_client_page_renderer_request_timeout'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await expect(start('runtime-b')).resolves.toEqual(authority)
+    expect(started).toEqual(['runtime-a', 'runtime-b'])
   })
 })
-
-function createComposition(
-  order?: string[],
-  startLabel?: string,
-  closeLabel?: string,
-  closeSettled = true,
-  closed = Promise.resolve()
-) {
-  return {
-    start: vi.fn(async () => {
-      if (order && startLabel) {
-        order.push(startLabel)
-      }
-      return authority
-    }),
-    replaceAuthority: vi.fn(async () => ({ ...authority, authorityRuntimeId: 'runtime-b' })),
-    retirePage: vi.fn(async () => true),
-    hostsPage: vi.fn((_browserPageId: string) => false),
-    close: vi.fn(async () => {
-      if (order && closeLabel) {
-        order.push(closeLabel)
-      }
-      return closeSettled
-    }),
-    whenClosed: vi.fn(() => closed)
-  }
-}
-
-function deferred<T>() {
-  let resolve = (_value: T): void => {}
-  let reject = (_error: unknown): void => {}
-  const promise = new Promise<T>((innerResolve, innerReject) => {
-    resolve = innerResolve
-    reject = innerReject
-  })
-  return { promise, reject, resolve }
-}
-
-function input(pairingRevision: number, authorityRuntimeId = 'runtime-a') {
-  return {
-    environmentId: 'environment-a',
-    pairingRevision,
-    authorityRuntimeId
-  }
-}

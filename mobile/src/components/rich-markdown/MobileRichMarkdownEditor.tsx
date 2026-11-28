@@ -1,0 +1,236 @@
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { View, type HostInstance } from 'react-native'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { openExternalLink } from '../../platform/external-links/external-link'
+import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
+import { TextInputModal } from '../sheets/TextInputModal'
+import {
+  ensureDocumentStyle,
+  mountRichMarkdownWebDocument,
+  type RichMarkdownWebDocument
+} from './document/rich-markdown-web-document-mount'
+import { useMobileRichMarkdownEditorController } from './use-mobile-rich-markdown-editor-controller'
+import {
+  noWorkspaceImage,
+  type RichMarkdownEditorApi,
+  type RichMarkdownUrlPromptKind
+} from './document/document-host-seams'
+import type {
+  MobileRichMarkdownEditorMessage,
+  MobileRichMarkdownEditorProps,
+  MobileRichMarkdownFormatState
+} from './mobile-rich-markdown-editor-contract'
+
+export type MobileRichMarkdownEditorComponentProps = Omit<
+  MobileRichMarkdownEditorProps,
+  'onOpenLink'
+> & {
+  onOpenLink?: (url: string) => void
+  /** Loads a workspace-relative image path; without it those images stay unloaded. */
+  loadImageSource?: (path: string) => Promise<string>
+  /** What sits under the format row while editing: the keyboard, or the home indicator when it is down. */
+  formatRowBottom: number
+  /** True while the note has the caret and takes edits. */
+  onEditingChange?: (editing: boolean) => void
+}
+
+const IDLE_FORMAT_STATE: MobileRichMarkdownFormatState = { focused: false, active: [] }
+
+// Mount rich-markdown document directly with shared controller/toolbar; call handleMessage, never shell’s window.ReactNativeWebView bridge.
+// Link/Image ask TextInputModal because both native shells’ window.prompt returns null (no dialog delegate).
+function MobileRichMarkdownEditorWebInner({
+  content,
+  editable,
+  onChange,
+  onOpenLink,
+  loadImageSource,
+  formatRowBottom,
+  onEditingChange
+}: MobileRichMarkdownEditorComponentProps) {
+  const t = useMobileTranslation()
+  const colorScheme = useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const hostRef = useRef<HostInstance>(null)
+  const documentRef = useRef<RichMarkdownWebDocument | null>(null)
+  // Document reports ready synchronously during mount before documentRef exists; queue controller content/editable calls until handle arrives or editor stays empty.
+  const beforeMountRef = useRef<((send: RichMarkdownEditorApi) => void)[]>([])
+  const receiveRef = useRef<((message: MobileRichMarkdownEditorMessage) => void) | null>(null)
+  const loadImageSourceRef = useRef(loadImageSource)
+  const [urlPromptKind, setUrlPromptKind] = useState<RichMarkdownUrlPromptKind | null>(null)
+  // Settle promptForUrl once via submit/cancel/unmount so no command stays pending.
+  const pendingUrlRef = useRef<((url: string | null) => void) | null>(null)
+  // Hold typed URL until drawer loses focus; WebKit execCommand otherwise lacks document selection and inserts nothing.
+  const answeredUrlRef = useRef<string | null>(null)
+  const [formatState, setFormatState] = useState<MobileRichMarkdownFormatState>(IDLE_FORMAT_STATE)
+  const editing = formatState.focused && editable
+
+  const send = useCallback((call: (api: RichMarkdownEditorApi) => void) => {
+    const mounted = documentRef.current
+    if (mounted) {
+      call(mounted.send)
+      return
+    }
+    beforeMountRef.current.push(call)
+  }, [])
+
+  const transport = useMemo(
+    () => ({
+      setMarkdown: (markdown: string, generation: number) =>
+        send((api) => {
+          api.setMarkdown(markdown, generation)
+        }),
+      setEditable: (nextEditable: boolean) =>
+        send((api) => {
+          api.setEditable(nextEditable)
+        }),
+      runCommand: (command: Parameters<RichMarkdownEditorApi['runCommand']>[0]) =>
+        send((api) => {
+          void api.runCommand(command)
+        })
+    }),
+    [send]
+  )
+
+  const openLink = useCallback(
+    (url: string) => {
+      if (onOpenLink) {
+        onOpenLink(url)
+        return
+      }
+      openExternalLink(url)
+    },
+    [onOpenLink]
+  )
+
+  const { handleMessage, runCommand } = useMobileRichMarkdownEditorController({
+    content,
+    editable,
+    onChange,
+    onFormatStateChange: setFormatState,
+    onOpenLink: openLink,
+    transport
+  })
+
+  const dismissKeyboard = useCallback(() => {
+    send((api) => {
+      api.dismissKeyboard()
+    })
+  }, [send])
+
+  // Update sink in effect before mount effect: callback outlives renders, which React may replay/discard.
+  useEffect(() => {
+    receiveRef.current = handleMessage
+  }, [handleMessage])
+
+  // Layout effect: the loader must be current before the controller's passive effects render markdown.
+  useLayoutEffect(() => {
+    loadImageSourceRef.current = loadImageSource
+  }, [loadImageSource])
+
+  /** Closes the modal, keeping the answer for the moment the field no longer has the focus. */
+  const answerUrlPrompt = useCallback((url: string | null) => {
+    answeredUrlRef.current = url
+    setUrlPromptKind(null)
+  }, [])
+
+  /** The drawer has gone: the document may have its caret back, and its command may run. */
+  const releaseUrlPrompt = useCallback(() => {
+    const pending = pendingUrlRef.current
+    const url = answeredUrlRef.current
+    pendingUrlRef.current = null
+    answeredUrlRef.current = null
+    pending?.(url)
+  }, [])
+
+  const promptForUrl = useCallback(
+    (kind: RichMarkdownUrlPromptKind) =>
+      new Promise<string | null>((resolve) => {
+        // New prompt cancels prior pending command instead of stranding it on replaced modal.
+        pendingUrlRef.current?.(null)
+        answeredUrlRef.current = null
+        pendingUrlRef.current = resolve
+        setUrlPromptKind(kind)
+      }),
+    []
+  )
+
+  useEffect(() => {
+    // react-native-web renders View as a div and forwards the ref to it.
+    const host = hostRef.current
+    if (!(host instanceof HTMLElement)) {
+      return
+    }
+    const live = mountRichMarkdownWebDocument(host, {
+      postToHost: (message) => receiveRef.current?.(message),
+      promptForUrl,
+      loadImageSource: (path) => (loadImageSourceRef.current ?? noWorkspaceImage)(path)
+    })
+    documentRef.current = live
+    for (const call of beforeMountRef.current) {
+      call(live.send)
+    }
+    beforeMountRef.current = []
+    return () => {
+      documentRef.current = null
+      // Settle modal before disposing document so command resumes into stopped/refusing document rather than retaining mount scope.
+      pendingUrlRef.current?.(null)
+      pendingUrlRef.current = null
+      live.dispose()
+    }
+    // Mount document once; read promptForUrl via closure because rerunning on changing callback props discards live caret/document.
+  }, [])
+
+  // Layout effect: restore the host's scope class before paint after a themed className swap.
+  useLayoutEffect(() => {
+    const host = hostRef.current
+    if (documentRef.current && host instanceof HTMLElement) {
+      ensureDocumentStyle(host)
+    }
+  }, [colorScheme])
+
+  useEffect(() => {
+    onEditingChange?.(editing)
+  }, [editing, onEditingChange])
+
+  return (
+    <View style={[styles.container, editing && { paddingBottom: formatRowBottom }]}>
+      {/* The document's sheet gives its host min-height: 100%, so the host gets a box of its own beside the row. */}
+      <View style={styles.hostFrame}>
+        <View ref={hostRef} style={styles.host} />
+      </View>
+      {editing ? (
+        <MobileRichMarkdownToolbar
+          active={formatState.active}
+          onCommand={runCommand}
+          onDismissKeyboard={dismissKeyboard}
+        />
+      ) : null}
+      <TextInputModal
+        visible={urlPromptKind !== null}
+        title={
+          urlPromptKind === null
+            ? ''
+            : urlPromptKind === 'link'
+              ? t('components.richMarkdownEditor.linkUrl', 'Link URL')
+              : t('components.richMarkdownEditor.imageUrl', 'Image URL')
+        }
+        placeholder="https://"
+        submitLabel={t('components.richMarkdownEditor.insert', 'Insert')}
+        keyboardType="url"
+        onSubmit={answerUrlPrompt}
+        onCancel={() => answerUrlPrompt(null)}
+        onAfterClose={releaseUrlPrompt}
+      />
+    </View>
+  )
+}
+
+export const MobileRichMarkdownEditor = memo(MobileRichMarkdownEditorWebInner)
+
+const stylesSheet = themedStyleSheet((colors) => ({
+  container: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase },
+  hostFrame: { flex: 1, minHeight: 0 },
+  host: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase }
+}))

@@ -1,0 +1,63 @@
+import {
+  selectRuntimeAwareSshStatus,
+  type RuntimeAwareSshStatusState
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { connectRuntimeEnvironmentSshTarget } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
+
+/** The SSH target holding a repo's files; `environmentId` is the paired server that owns it. */
+export type RepoSshConnection = { environmentId: string | null; targetId: string }
+
+type RepoSshFields = Pick<Repo, 'connectionId' | 'executionHostId'>
+
+export function getRepoSshConnection(repo: RepoSshFields): RepoSshConnection | null {
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'runtime') {
+    const targetId = getRepoSshConnectionId(repo)
+    return targetId ? { environmentId: host.environmentId, targetId } : null
+  }
+  return repo.connectionId ? { environmentId: null, targetId: repo.connectionId } : null
+}
+
+/** Gate workspace creation with the repo owner’s SSH state, never this client’s map (#25887). Unreachable/unhydrated server state cannot prove a gate; let that server decide. */
+export function selectRepoSshGateInput(
+  state: RuntimeAwareSshStatusState,
+  statuses: RuntimeStatuses,
+  repo: RepoSshFields
+): { connectionId: string | null; status: SshConnectionStatus | null } {
+  const connection = getRepoSshConnection(repo)
+  if (!connection) {
+    return { connectionId: null, status: null }
+  }
+  if (connection.environmentId === null) {
+    return {
+      connectionId: connection.targetId,
+      status: state.sshConnectionStates.get(connection.targetId)?.status ?? null
+    }
+  }
+  const status = selectRuntimeAwareSshStatus(
+    state,
+    statuses,
+    connection.environmentId,
+    connection.targetId
+  )
+  return status === null
+    ? { connectionId: null, status: null }
+    : { connectionId: connection.targetId, status }
+}
+
+/** Connects the target on whichever machine owns it; a server's target is never dialed here. */
+export async function connectRepoSshConnection(connection: RepoSshConnection): Promise<void> {
+  if (connection.environmentId !== null) {
+    await connectRuntimeEnvironmentSshTarget(connection.environmentId, connection.targetId)
+    return
+  }
+  await window.api.ssh.connect({ targetId: connection.targetId })
+}

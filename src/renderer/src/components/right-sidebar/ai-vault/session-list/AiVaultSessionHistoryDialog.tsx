@@ -4,9 +4,9 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { translate } from '@/i18n/i18n'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   AI_VAULT_AGENTS,
   aiVaultHistoryAgents
@@ -28,6 +28,7 @@ function selectVisibleTabs(state: AppState, chatWorkspaceId: string | null): str
 
 /** `/resume`'s Session History: each opening mounts a fresh panel, apart from the sidebar's. */
 export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null {
+  const t = useTranslate()
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const confirm = useConfirmationDialog()
@@ -78,10 +79,7 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
         }}
       >
         <DialogTitle className="sr-only">
-          {translate(
-            'auto.components.right.sidebar.AiVaultPanel.sessionHistory',
-            'Agent Session History'
-          )}
+          {t('auto.components.right.sidebar.AiVaultPanel.sessionHistory', 'Agent Session History')}
         </DialogTitle>
         <div className="min-h-0 flex-1">
           <AiVaultPanel
@@ -95,6 +93,7 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
               tabId: request.chatTabId,
               workspaceId: request.workspace.worktreeId,
               agent: request.agent,
+              alongside: request.alongside,
               // A refusal can settle after this opening closed and another modal took the slot.
               dismiss: () => {
                 if (useAppStore.getState().modalData === modalData) {
@@ -110,7 +109,7 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
                   variant="ghost"
                   size="icon-xs"
                   className="size-6"
-                  aria-label={translate('auto.components.ui.dialog.f26c4baeda', 'Close')}
+                  aria-label={t('auto.components.ui.dialog.f26c4baeda', 'Close')}
                 >
                   <X className="size-3" />
                 </Button>
@@ -122,11 +121,11 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
           <span className="inline-flex items-center gap-1">
             <ShortcutKeyCombo keys={['↑']} />
             <ShortcutKeyCombo keys={['↓']} />
-            {translate('sessionHistory.dialog.select', 'Select')}
+            {t('sessionHistory.dialog.select', 'Select')}
           </span>
           <span className="inline-flex items-center gap-1">
             <ShortcutKeyCombo keys={[enterKey]} />
-            {translate('sessionHistory.dialog.open', 'Open')}
+            {t('sessionHistory.dialog.open', 'Open')}
           </span>
         </div>
       </DialogContent>

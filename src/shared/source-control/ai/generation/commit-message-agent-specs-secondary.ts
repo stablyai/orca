@@ -9,7 +9,6 @@ type SecondaryAgentSpecDeps = {
   BASIC_THINKING_LEVELS: ThinkingLevel[]
   OPENAI_THINKING_LEVELS: ThinkingLevel[]
   parseCursorModels: (stdout: string) => CommitMessageModel[]
-  parseAntigravityModels: (stdout: string) => CommitMessageModel[]
   parseLineModels: (stdout: string) => CommitMessageModel[]
 }
 
@@ -17,7 +16,6 @@ export function buildSecondaryCommitMessageAgentSpecs({
   BASIC_THINKING_LEVELS,
   OPENAI_THINKING_LEVELS,
   parseCursorModels,
-  parseAntigravityModels,
   parseLineModels
 }: SecondaryAgentSpecDeps): Partial<Record<TuiAgent, CommitMessageAgentSpec>> {
   return {
@@ -64,8 +62,9 @@ export function buildSecondaryCommitMessageAgentSpecs({
       effortFlag: [],
       label: 'Cursor',
       binary: 'cursor-agent',
-      promptDelivery: 'argv',
-      buildArgs: ({ prompt, model }) => [
+      // --print reads piped stdin when argv has no prompt; Windows agent.cmd cannot carry multi-line argv (#8793).
+      promptDelivery: 'stdin',
+      buildArgs: ({ model }) => [
         '--print',
         '--mode',
         'ask',
@@ -73,8 +72,7 @@ export function buildSecondaryCommitMessageAgentSpecs({
         '--output-format',
         'text',
         '--model',
-        model,
-        prompt
+        model
       ],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'cursor-agent', args: ['--list-models'], parse: parseCursorModels },
@@ -123,8 +121,9 @@ export function buildSecondaryCommitMessageAgentSpecs({
         'exec',
         '--no-session-log',
         '--approval-mode',
-        'never',
-        '--disable-sandbox',
+        'on-request',
+        '--approval-judge',
+        'off',
         '--disable-shell',
         '--disable-write',
         '--disable-web-tools',
@@ -170,7 +169,14 @@ export function buildSecondaryCommitMessageAgentSpecs({
         '--no-custom-instructions',
         '--model',
         model,
-        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
+        ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
+        '--available-tools=view,glob,grep',
+        '--allow-tool=read',
+        '--deny-tool=write',
+        '--deny-tool=shell',
+        '--deny-tool=memory',
+        '--disable-builtin-mcps',
+        '--allow-all-paths'
       ],
       modelSource: 'static',
       // Copilot filters the picker by account/org policy; retain the full hosted catalog for permitted selections.
@@ -188,10 +194,7 @@ export function buildSecondaryCommitMessageAgentSpecs({
           id: 'claude-sonnet-4.6',
           label: 'Claude Sonnet 4.6'
         },
-        {
-          id: 'claude-opus-4.5',
-          label: 'Claude Opus 4.5'
-        },
+        { id: 'claude-opus-4.5', label: 'Claude Opus 4.5' },
         {
           id: 'claude-opus-4.6',
           label: 'Claude Opus 4.6'
@@ -254,28 +257,6 @@ export function buildSecondaryCommitMessageAgentSpecs({
       // Plans hide models they do not offer; Auto runs on any plan.
       defaultModelId: 'auto'
     },
-    antigravity: {
-      id: 'antigravity',
-      modelFlag: [{ aliases: ['--model'] }],
-      effortFlag: [{ aliases: ['--effort'] }],
-      label: 'Antigravity',
-      binary: 'agy',
-      // Empty --print selects stream input without consuming the next flag (agy >= 1.1.15).
-      promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel }) => [
-        '--print=',
-        '--input-format=stream-json',
-        '--output-format=stream-json',
-        '--sandbox',
-        ...(model && model !== 'default' ? ['--model', model] : []),
-        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
-      ],
-      singletonOptions: [['--model'], ['--effort']],
-      modelSource: 'dynamic',
-      modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
-      models: [{ id: 'default', label: 'Config default' }],
-      defaultModelId: 'default'
-    },
     jcode: {
       id: 'jcode',
       modelFlag: [{ aliases: ['--model'] }],
@@ -292,6 +273,7 @@ export function buildSecondaryCommitMessageAgentSpecs({
         // Staged patches are attacker-influenced; none removes shell/read/write and MCP via tools.rs base_allowed_tools, matching read-only siblings.
         '--tool-profile',
         'none',
+        '--tools=',
         ...(model && model !== 'default' ? ['--model', model] : []),
         'run',
         '--json',

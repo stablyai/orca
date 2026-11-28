@@ -1,30 +1,27 @@
 import type { RefObject } from 'react'
-import type { View } from 'react-native'
-import {
-  Columns2,
-  Folder,
-  GitBranch,
-  ListChecks,
-  Plus,
-  SquareChevronRight
-} from 'lucide-react-native'
+import type { HostInstance } from 'react-native'
+import { ALargeSmall, Columns2, SquareChevronRight } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
-import type { ActionSheetAction } from '../components/ActionSheetModal'
+import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
+import {
+  getMobileTerminalChatContinuationActions,
+  resolveMobileTerminalChatContinuation
+} from './native-chat/history/mobile-terminal-chat-continuation-actions'
+import { continueMobileTerminalInChat } from './mobile-terminal-chat-continuation'
+import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 
 type Props = {
   controller: MobileSessionController
-  anchorRef: RefObject<View | null>
-  /** A narrow sideways header also moves source control and New tab in here. */
-  actionsCollapsed: boolean
+  anchorRef: RefObject<HostInstance | null>
 }
 
-export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsCollapsed }: Props) {
-  useMobileColorScheme()
+export function MobileSessionHeaderMoreMenu({ controller, anchorRef }: Props) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const {
     isFolderWorkspaceRoute,
@@ -32,52 +29,21 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     showHeaderMoreActions,
     setShowHeaderMoreActions,
     showAgentSessionHistoryAction,
-    showChecksAction,
     openAgentSessionHistory,
-    handlePanelTap,
     canSplitTerminals,
     terminalSplitActive,
     setShowTerminalLayout,
+    setTextSizeSheet,
+    showNativeChat,
+    activeSessionTab,
     connState,
     createTabBusy,
-    handleOpenNewTab,
     handleOpenQuickCommands
   } = controller
+  const workspaceOnPairedHost = useWorkspaceOnPairedHost()
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
+  // Files, Source control and Checks live in the tabs sidebar.
   const panels: ActionSheetAction[] = [
-    ...(!isFloatingWorkspaceRoute
-      ? [
-          {
-            id: 'files',
-            label: t('session.header.fileExplorer', 'File explorer'),
-            icon: Folder,
-            closeBeforePress: true,
-            onPress: () => handlePanelTap('files')
-          }
-        ]
-      : []),
-    ...(actionsCollapsed && !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute
-      ? [
-          {
-            id: 'sourceControl',
-            label: t('session.header.sourceControl', 'Source control'),
-            icon: GitBranch,
-            closeBeforePress: true,
-            onPress: () => handlePanelTap('sourceControl')
-          }
-        ]
-      : []),
-    ...(showChecksAction
-      ? [
-          {
-            id: 'checks',
-            label: t('session.headerMoreActionsSheet.checks', 'Checks'),
-            hint: t('session.headerMoreActionsSheet.checksHint', 'Open pull request checks'),
-            icon: ListChecks,
-            onPress: () => handlePanelTap('pr')
-          }
-        ]
-      : []),
     ...(showAgentSessionHistoryAction
       ? [
           {
@@ -94,17 +60,27 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []),
-    {
-      id: 'quickCommands',
-      label: t('session.header.quickCommands', 'Quick commands'),
-      icon: SquareChevronRight,
-      disabled: tabActionsDisabled,
-      closeBeforePress: true,
-      onPress: handleOpenQuickCommands
-    }
+    // Desktop hides quick commands where there is no repo to run them in.
+    ...(!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute
+      ? [
+          {
+            id: 'quickCommands',
+            label: t('session.header.quickCommands', 'Quick commands'),
+            icon: SquareChevronRight,
+            disabled: tabActionsDisabled,
+            closeBeforePress: true,
+            onPress: handleOpenQuickCommands
+          }
+        ]
+      : [])
   ]
-  const view: ActionSheetAction[] =
-    canSplitTerminals || terminalSplitActive
+  const textSizeSheet = showNativeChat
+    ? 'chat'
+    : activeSessionTab?.type === 'terminal'
+      ? 'terminal'
+      : null
+  const view: ActionSheetAction[] = [
+    ...(canSplitTerminals || terminalSplitActive
       ? [
           {
             id: 'terminalLayout',
@@ -114,19 +90,37 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setShowTerminalLayout(true)
           }
         ]
-      : []
-  const tabs: ActionSheetAction[] = actionsCollapsed
-    ? [
-        {
-          id: 'newTab',
-          label: t('session.header.newTab', 'New tab'),
-          icon: Plus,
-          disabled: tabActionsDisabled,
-          closeBeforePress: true,
-          onPress: handleOpenNewTab
-        }
-      ]
-    : []
+      : []),
+    ...(textSizeSheet
+      ? [
+          {
+            id: 'textSize',
+            label: t('session.header.textSize', 'Text size'),
+            icon: ALargeSmall,
+            closeBeforePress: true,
+            onPress: () => setTextSizeSheet(textSizeSheet)
+          }
+        ]
+      : [])
+  ]
+  const tabs: ActionSheetAction[] = [
+    ...getMobileNativeChatCliForkActions({
+      controller,
+      tab: activeSessionTab?.type === 'agent-session' ? activeSessionTab : null,
+      workspaceOnPairedHost,
+      onDismiss: () => setShowHeaderMoreActions(false),
+      t
+    }).map((action) => ({ ...action, disabled: tabActionsDisabled })),
+    ...getMobileTerminalChatContinuationActions({
+      continuation: resolveMobileTerminalChatContinuation({
+        tab: activeSessionTab,
+        hostCapabilities: controller.hostCapabilities
+      }),
+      onDismiss: () => setShowHeaderMoreActions(false),
+      onContinue: (continuation) => void continueMobileTerminalInChat(controller, continuation),
+      t
+    }).map((action) => ({ ...action, disabled: tabActionsDisabled }))
+  ]
   return (
     <PullDownMenu
       visible={showHeaderMoreActions}

@@ -1,6 +1,10 @@
 // Remote PTY banners are workspace-keyed; SSH listener scans are connection-scoped.
 
-import type { DetectedPort, EnrichedDetectedPort, PortForwardEntry } from '../../shared/ssh-types'
+import type {
+  DetectedPort,
+  EnrichedDetectedPort,
+  PortForwardEntry
+} from '../../shared/remote-runtime/ssh/ssh-types'
 import type { Store } from '../persistence/loading-store/store'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import {
@@ -14,19 +18,27 @@ export function getWorktreeIdsForConnection(
   store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
   connectionId: string
 ): string[] {
-  const matchingRepoIds = new Set(
-    store
-      .getRepos()
-      .filter((repo) => repo.connectionId === connectionId)
-      .map((repo) => repo.id)
-  )
+  const matchingRepoIds = new Set<string>()
+  for (const repo of store.getRepos()) {
+    if (repo.connectionId === connectionId) {
+      matchingRepoIds.add(repo.id)
+    }
+  }
   if (matchingRepoIds.size === 0) {
     return []
   }
-  return Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) => {
+  const allMeta = store.getAllWorktreeMeta()
+  const result: string[] = []
+  for (const worktreeId in allMeta) {
+    if (!Object.hasOwn(allMeta, worktreeId)) {
+      continue
+    }
     const parsed = splitWorktreeId(worktreeId)
-    return parsed ? matchingRepoIds.has(parsed.repoId) : false
-  })
+    if (parsed && matchingRepoIds.has(parsed.repoId)) {
+      result.push(worktreeId)
+    }
+  }
+  return result
 }
 
 export function getConnectionIdsForWorktree(

@@ -1,3 +1,4 @@
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
 import { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
@@ -11,21 +12,22 @@ import {
   useWindowDimensions
 } from 'react-native'
 import { BOTTOM_DRAWER_SHOW_DURATION_MS } from '../components/bottom-drawer/bottom-drawer-constants'
-import { bottomDrawerStyles } from '../components/bottom-drawer/bottom-drawer-styles'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { bottomDrawerStylesSheet } from '../components/bottom-drawer/bottom-drawer-styles'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import {
   DownloadProgressBar,
   downloadedMegabytesCaption
-} from '../mobile-web-shell/DownloadProgressBar'
-import type { ShellOverlayDownload } from '../mobile-web-shell/shell-overlay-load'
-import { SHELL_PAGE_COVER_FADE_MS } from '../mobile-web-shell/ShellWaitingFrame'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+} from '../mobile-web-shell/presentation/DownloadProgressBar'
+import type { ShellOverlayDownload } from '../mobile-web-shell/presentation/shell-overlay-load'
+import { spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 const CANCEL_DRAG_DISTANCE = 40
+// Longer than the page cover's fade: the overlay WebView itself is still taking its first frames.
+const EXIT_FADE_MS = 220
 
 // Render in the loading WebView’s window: a native Modal stalls the page behind it. Fade only after the page paints its own drawer; backdrop/drag/Back cancel.
 export function NewWorkspaceLoadingDrawer({
@@ -38,7 +40,9 @@ export function NewWorkspaceLoadingDrawer({
   onCancel: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const bottomDrawerStyles = useThemedStyles(bottomDrawerStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const insets = useWindowSafeAreaInsets()
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const { height: screenHeight } = useWindowDimensions()
@@ -66,7 +70,7 @@ export function NewWorkspaceLoadingDrawer({
         })
       : Animated.timing(presence, {
           toValue: 0,
-          duration: SHELL_PAGE_COVER_FADE_MS,
+          duration: EXIT_FADE_MS,
           easing: Easing.in(Easing.quad),
           useNativeDriver: true
         })
@@ -131,7 +135,8 @@ export function NewWorkspaceLoadingDrawer({
 
 function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
+  const styles = useThemedStyles(stylesSheet)
   return (
     <>
       <DownloadProgressBar
@@ -142,14 +147,19 @@ function DownloadProgress({ download }: { download: ShellOverlayDownload }) {
       />
       <Text style={styles.caption}>
         {t('newWorkspace.loadingDrawer.downloadProgress', 'Downloading… {{progress}}', {
-          progress: downloadedMegabytesCaption(download.receivedBytes, download.totalBytes)
+          progress: downloadedMegabytesCaption(
+            download.receivedBytes,
+            download.totalBytes,
+            t,
+            intlLocale
+          )
         })}
       </Text>
     </>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   body: {
     height: 96,
     alignItems: 'center',

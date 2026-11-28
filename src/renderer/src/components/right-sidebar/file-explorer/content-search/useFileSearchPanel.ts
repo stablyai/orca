@@ -2,17 +2,18 @@ import type React from 'react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { useFileSearchScope } from './useFileSearchScope'
-import { useActiveWorktree } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import type {
   SearchFileResult,
   SearchMatch,
   SearchResult
-} from '../../../../../../shared/code-search-types'
+} from '../../../../../../shared/file-search/code-search-types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
 import type { SearchQueryRowProps } from './SearchQueryRow'
 import type { SearchFiltersProps } from './SearchFilters'
 import { useFileSearchRunner } from './useFileSearchRunner'
+import { useSearchFiltersDisclosure } from './use-search-filters-disclosure'
 
 const EMPTY_COLLAPSED_FILES = new Set<string>()
 
@@ -68,6 +69,11 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   const seededInputSelectionRafRef = useRef<number | null>(null)
   const includeInputRef = useRef<HTMLInputElement>(null)
   const excludeInputRef = useRef<HTMLInputElement>(null)
+  const filtersDisclosure = useSearchFiltersDisclosure(
+    activeWorktreeId,
+    fileSearchIncludePattern,
+    fileSearchExcludePattern
+  )
 
   const updateActiveSearchState = useCallback(
     (updates: Partial<NonNullable<typeof searchState>>) => {
@@ -284,9 +290,11 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       onToggleRegex: () => {
         updateActiveSearchState({ useRegex: !fileSearchUseRegex })
         rerunSearch()
-      }
+      },
+      ...filtersDisclosure.queryRow
     },
     filtersProps: {
+      ...filtersDisclosure.filters,
       includePattern: fileSearchIncludePattern,
       excludePattern: fileSearchExcludePattern,
       includeInputRef,

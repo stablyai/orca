@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { usePetUrl } from './usePetUrl'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
-import type { CustomPet } from '../../../../shared/pet-types'
+import type { CustomPet } from '../../../../shared/pets/pet-types'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
-import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
+import type { AppState } from '@/store/types'
+import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   selectPetAnimationName,
@@ -16,6 +18,21 @@ import { buildSpriteAnimationCss } from './sprite-animation-css'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
+// Only finished panes' acks, so viewing an unrelated pane doesn't re-render the pet; other store writes reuse the last read.
+function createDoneAcknowledgementsSelector(donePaneKeys: readonly string[]) {
+  let readFrom: AppState['acknowledgedAgentsByPaneKey'] | null = null
+  let doneAcknowledgements: Record<string, number> = {}
+  return (s: AppState): Record<string, number> => {
+    if (s.acknowledgedAgentsByPaneKey !== readFrom) {
+      readFrom = s.acknowledgedAgentsByPaneKey
+      doneAcknowledgements = Object.fromEntries(
+        donePaneKeys.map((paneKey) => [paneKey, s.acknowledgedAgentsByPaneKey[paneKey] ?? 0])
+      )
+    }
+    return doneAcknowledgements
+  }
+}
+
 function usePetAnimationName(
   dragging: boolean,
   dragAnimation: PetDragAnimation,
@@ -23,13 +40,21 @@ function usePetAnimationName(
 ): PetAnimationName {
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
+  const entries = useMemo(() => Array.from(agentStatusByPaneKey.values()), [agentStatusByPaneKey])
+  const selectDoneAcknowledgements = useMemo(
+    () =>
+      createDoneAcknowledgementsSelector(
+        entries.flatMap((entry) => (entry.state === 'done' ? [entry.paneKey] : []))
+      ),
+    [entries]
+  )
+  const doneAcknowledgements = useAppStore(useShallow(selectDoneAcknowledgements))
   // Scheduler ticks expire animation evidence even without other store updates; read the boundary clock before paint.
   const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
 
   return selectPetAnimationName({
-    entries: Object.values(agentStatusByPaneKey),
-    retainedCount: Object.keys(retainedAgentsByPaneKey).length,
+    entries,
+    acknowledgedAgentsByPaneKey: doneAcknowledgements,
     dragging,
     dragAnimation,
     hovering,

@@ -1,7 +1,12 @@
+import { sameBrowserClientPageAuthority } from './browser-client-host-command-authority'
+import { browserCommandUrlDigest, retainBrowserCommandEvent } from './browser-command-retention'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   createPageState,
+  failedCommandResult,
+  resolveCommandRecord,
+  createCommandRecord,
   type CommandRecord,
   type PageState
 } from './browser-client-host-command-state'
@@ -38,7 +43,7 @@ export function selectCommandPage(
       previous?.result?.status === 'completed' &&
       previous.event.pageHostGeneration === command.pageHostGeneration &&
       previous.event.commandId === command.commandId &&
-      commandsMatch(previous.event, command)
+      commandsMatch(previous, command)
     ) {
       return { page, commit: () => {} }
     }
@@ -75,7 +80,7 @@ export function findExistingCommand(
     if (!existing) {
       throw new Error('browser_host_command_result_expired')
     }
-    if (existing.event.commandId !== command.commandId || !commandsMatch(existing.event, command)) {
+    if (existing.event.commandId !== command.commandId || !commandsMatch(existing, command)) {
       throw new Error('browser_host_command_sequence_conflict')
     }
     return existing
@@ -89,10 +94,15 @@ export function findExistingCommand(
   return undefined
 }
 
-function commandsMatch(
-  first: BrowserClientHostCommandEvent,
-  second: BrowserClientHostCommandEvent
-): boolean {
+function commandsMatch(record: CommandRecord, incoming: BrowserClientHostCommandEvent): boolean {
+  const first = record.event
+  const second = record.retainedUrlDigest ? retainBrowserCommandEvent(incoming).event : incoming
+  if (
+    record.retainedUrlDigest &&
+    record.retainedUrlDigest !== browserCommandUrlDigest(incoming.command)
+  ) {
+    return false
+  }
   if (first.command.type !== second.command.type) {
     return false
   }
@@ -108,7 +118,8 @@ function commandsMatch(
   if (first.command.type === 'createPage' && second.command.type === 'createPage') {
     return (
       first.command.browserProfileId === second.command.browserProfileId &&
-      first.command.executionHostKey === second.command.executionHostKey
+      first.command.executionHostKey === second.command.executionHostKey &&
+      first.command.initialUrl === second.command.initialUrl
     )
   }
   if (first.command.type === 'restorePage' && second.command.type === 'restorePage') {
@@ -122,11 +133,17 @@ function commandsMatch(
     return (
       first.command.browserProfileId === second.command.browserProfileId &&
       first.command.executionHostKey === second.command.executionHostKey &&
-      sameCommandAuthority(first.command.previousAuthority, second.command.previousAuthority)
+      sameBrowserClientPageAuthority(
+        first.command.previousAuthority,
+        second.command.previousAuthority
+      )
     )
   }
   if (first.command.type === 'closePage' && second.command.type === 'closePage') {
-    return sameCommandAuthority(first.command.targetAuthority, second.command.targetAuthority)
+    return sameBrowserClientPageAuthority(
+      first.command.targetAuthority,
+      second.command.targetAuthority
+    )
   }
   return false
 }
@@ -161,7 +178,9 @@ export function assertNewPageCommand(
       )
     }
   }
-  if (page.createFailed) {
+  const initializationCleanup =
+    command.command.type === 'closePage' && page.initialization !== undefined
+  if (page.createFailed && !initializationCleanup) {
     throw new Error('browser_host_command_dependency_failed')
   }
 }
@@ -218,27 +237,67 @@ export function removeScheduledCommandPage(
   }
 }
 
-function sameCommandAuthority(
-  left: {
-    authorityRuntimeId: string
-    authorityEpoch: string
-    browserHostClientId: string
-    browserHostGeneration: number
-    pageHostGeneration: number
-  },
-  right: {
-    authorityRuntimeId: string
-    authorityEpoch: string
-    browserHostClientId: string
-    browserHostGeneration: number
-    pageHostGeneration: number
+export function enqueueBrowserClientPageCommand(
+  page: PageState,
+  acceptedCommand: BrowserClientHostCommandEvent
+): CommandRecord {
+  const record = createCommandRecord(acceptedCommand)
+  page.records.set(acceptedCommand.commandSequence, record)
+  page.sequencesByCommandId.set(acceptedCommand.commandId, acceptedCommand.commandSequence)
+  page.queue.push(record)
+  page.nextSequence += 1
+  if (acceptedCommand.command.type === 'closePage') {
+    if (page.initialization?.cancel(acceptedCommand)) {
+      record.closeInitialization = page.initialization.close
+      record.initializationCleanup = true
+      for (const pending of page.queue) {
+        if (pending !== record) {
+          pending.controller?.abort()
+        }
+      }
+    }
   }
-): boolean {
-  return (
-    left.authorityRuntimeId === right.authorityRuntimeId &&
-    left.authorityEpoch === right.authorityEpoch &&
-    left.browserHostClientId === right.browserHostClientId &&
-    left.browserHostGeneration === right.browserHostGeneration &&
-    left.pageHostGeneration === right.pageHostGeneration
-  )
+  return record
+}
+
+export function releaseBrowserClientPageInitialization(page: PageState): void {
+  page.initialization?.release()
+  page.initialization = undefined
+}
+
+export function settleBrowserClientPageInitialization(
+  page: PageState,
+  record: CommandRecord,
+  result: { status: string }
+): void {
+  record.closeInitialization = undefined
+  if (
+    (record.event.command.type === 'navigate' || record.event.command.type === 'closePage') &&
+    result.status === 'completed'
+  ) {
+    releaseBrowserClientPageInitialization(page)
+  }
+}
+
+export function cancelBrowserClientPageCommands(
+  page: PageState,
+  errorCode: string,
+  preserveInitializationCleanup: boolean,
+  removeActive: (record: CommandRecord) => void
+): void {
+  for (const record of page.queue.slice()) {
+    if (preserveInitializationCleanup && record.initializationCleanup) {
+      continue
+    }
+    if (record.status === 'running') {
+      record.status = 'cancelling'
+      record.controller?.abort()
+      resolveCommandRecord(record, failedCommandResult(errorCode))
+    } else if (record.status === 'queued') {
+      record.status = 'settled'
+      record.closeInitialization = undefined
+      resolveCommandRecord(record, failedCommandResult(errorCode))
+      removeActive(record)
+    }
+  }
 }

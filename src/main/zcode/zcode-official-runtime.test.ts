@@ -16,12 +16,12 @@ const MACOS_INSTALL = new Set([
   '/Applications/ZCode.app/Contents/Resources/config/provider/zcode-builtin.json'
 ])
 
-describe('zcode official runtime discovery', () => {
-  it('resolves a desktop executable to its CLI and provider config', () => {
+describe('zcode official runtime discovery', async () => {
+  it('resolves a desktop executable to its CLI and provider config', async () => {
     expect(
-      resolveZcodeOfficialRuntime('/opt/ZCode/zcode', {
-        existsSync: (path) => LINUX_INSTALL.has(path),
-        realpathSync: (path) => path
+      await resolveZcodeOfficialRuntime('/opt/ZCode/zcode', {
+        exists: async (path) => LINUX_INSTALL.has(path),
+        realpath: async (path) => path
       })
     ).toEqual({
       electron: '/opt/ZCode/zcode',
@@ -30,16 +30,16 @@ describe('zcode official runtime discovery', () => {
     })
   })
 
-  it('resolves a per-user macOS app when no PATH candidate exists', () => {
+  it('resolves a per-user macOS app when no PATH candidate exists', async () => {
     const install = new Set([
       '/Users/test/Applications/ZCode.app/Contents/MacOS/ZCode',
       '/Users/test/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs',
       '/Users/test/Applications/ZCode.app/Contents/Resources/config/provider/zcode-builtin.json'
     ])
     expect(
-      probeZcodeOfficialRuntimes([], {
-        existsSync: (path) => install.has(path),
-        realpathSync: (path) => path,
+      await probeZcodeOfficialRuntimes([], {
+        exists: async (path) => install.has(path),
+        realpath: async (path) => path,
         platform: 'darwin',
         home: '/Users/test'
       })
@@ -51,16 +51,16 @@ describe('zcode official runtime discovery', () => {
     })
   })
 
-  it('resolves a per-user Windows app from LOCALAPPDATA', () => {
+  it('resolves a per-user Windows app from LOCALAPPDATA', async () => {
     const install = new Set([
       'C:\\Users\\test\\AppData\\Local\\Programs\\ZCode\\ZCode.exe',
       'C:\\Users\\test\\AppData\\Local\\Programs\\ZCode\\resources\\glm\\zcode.cjs',
       'C:\\Users\\test\\AppData\\Local\\Programs\\ZCode\\resources\\config\\provider\\zcode-builtin.json'
     ])
     expect(
-      probeZcodeOfficialRuntimes([], {
-        existsSync: (path) => install.has(path),
-        realpathSync: (path) => path,
+      await probeZcodeOfficialRuntimes([], {
+        exists: async (path) => install.has(path),
+        realpath: async (path) => path,
         platform: 'win32',
         home: 'C:\\Users\\test',
         localAppData: 'C:\\Users\\test\\AppData\\Local'
@@ -73,11 +73,11 @@ describe('zcode official runtime discovery', () => {
     })
   })
 
-  it('resolves the macOS app executable to Contents/Resources', () => {
+  it('resolves the macOS app executable to Contents/Resources', async () => {
     expect(
-      probeZcodeOfficialRuntimes([], {
-        existsSync: (path) => MACOS_INSTALL.has(path),
-        realpathSync: (path) => path,
+      await probeZcodeOfficialRuntimes([], {
+        exists: async (path) => MACOS_INSTALL.has(path),
+        realpath: async (path) => path,
         platform: 'darwin'
       })
     ).toEqual({
@@ -88,28 +88,28 @@ describe('zcode official runtime discovery', () => {
     })
   })
 
-  it('leaves a standalone CLI alone: no resources sibling, no runtime reuse', () => {
-    const existsSync = (path: string): boolean => path === '/usr/local/bin/zcode'
+  it('leaves a standalone CLI alone: no resources sibling, no runtime reuse', async () => {
+    const exists = async (path: string): Promise<boolean> => path === '/usr/local/bin/zcode'
     expect(
-      resolveZcodeOfficialRuntime('/usr/local/bin/zcode', {
-        existsSync,
-        realpathSync: (path) => path
+      await resolveZcodeOfficialRuntime('/usr/local/bin/zcode', {
+        exists,
+        realpath: async (path) => path
       })
     ).toBeNull()
     expect(
-      resolveZcodeOfficialRuntime('/gone/zcode', {
-        existsSync: () => false,
-        realpathSync: (path) => path
+      await resolveZcodeOfficialRuntime('/gone/zcode', {
+        exists: async () => false,
+        realpath: async (path) => path
       })
     ).toBeNull()
   })
 
-  it('probes the conventional root when the PATH entry misses, binary or root form', () => {
-    const existsSync = (path: string): boolean =>
+  it('probes the conventional root when the PATH entry misses, binary or root form', async () => {
+    const exists = async (path: string): Promise<boolean> =>
       LINUX_INSTALL.has(path) || path === '/opt/Other/zcode'
     expect(
-      probeZcodeOfficialRuntimes(['/opt/Other/zcode', '/opt/ZCode'], {
-        existsSync,
+      await probeZcodeOfficialRuntimes(['/opt/Other/zcode', '/opt/ZCode'], {
+        exists,
         platform: 'linux'
       })
     ).toEqual({
@@ -119,12 +119,12 @@ describe('zcode official runtime discovery', () => {
     })
   })
 
-  it('still resolves an older desktop package without the provider config asset', () => {
+  it('still resolves an older desktop package without the provider config asset', async () => {
     expect(
-      resolveZcodeOfficialRuntime('/opt/ZCode/zcode', {
-        existsSync: (path) =>
+      await resolveZcodeOfficialRuntime('/opt/ZCode/zcode', {
+        exists: async (path) =>
           path === '/opt/ZCode/zcode' || path === '/opt/ZCode/resources/glm/zcode.cjs',
-        realpathSync: (path) => path
+        realpath: async (path) => path
       })
     ).toEqual({
       electron: '/opt/ZCode/zcode',
@@ -132,10 +132,10 @@ describe('zcode official runtime discovery', () => {
     })
   })
 
-  it('never takes a conventional root whose sibling bundle is absent', () => {
+  it('never takes a conventional root whose sibling bundle is absent', async () => {
     expect(
-      probeZcodeOfficialRuntimes([], {
-        existsSync: (path) => path === '/opt/ZCode/zcode',
+      await probeZcodeOfficialRuntimes([], {
+        exists: async (path) => path === '/opt/ZCode/zcode',
         platform: 'linux'
       })
     ).toBeNull()

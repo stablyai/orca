@@ -1,21 +1,16 @@
+import type { PluginBlockNotice } from '../../../shared/plugins/catalog/plugin-kill-list'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
-import { PLUGIN_IMAGE_RULES } from '../../../shared/plugins/images/plugin-image-fields'
-import {
-  pluginShaImageUrl,
-  type PluginHostImages
-} from '../../../shared/plugins/images/plugin-image-url'
-import { readContainedPluginArtifactBytes } from '../plugin-artifact-validation'
-import { declaredPluginImages } from '../plugin-image-artifact-validation'
-import type { PluginImageCache } from '../plugin-image-cache'
-import { pluginManifestHostImages } from '../plugin-manifest-images'
-import { readPluginVmRecipeIdentities } from '../plugin-vm-recipe-identities'
+import type { PluginHostImages } from '../../../shared/plugins/images/plugin-image-url'
+import type { PluginImageCache } from '../media/plugin-image-cache'
+import { cachePluginPreviewImages } from './plugin-marketplace-preview-images'
+import { readPluginVmRecipeIdentities } from '../contributions/plugin-vm-recipe-identities'
 import type { PluginVmRecipeIdentities } from '../../../shared/plugins/approval/plugin-update-access-growth'
 import { pluginCatalogReleaseCompatibilityError } from '../../../shared/plugins/manifest/plugin-manifest-compatibility'
 import { isQualifiedPluginKey } from '../../../shared/plugins/manifest/plugin-manifest'
-import { getUserPluginsDir } from '../plugin-discovery'
+import { getUserPluginsDir } from '../discovery/plugin-discovery'
 import { readPluginRollbackVersion } from '../installation/plugin-rollback-candidate'
 import { checkoutPluginGitSource } from '../installation/plugin-git-repository'
 import {
@@ -29,8 +24,11 @@ import type {
   PluginMarketplaceListing,
   PluginMarketplaceService
 } from './plugin-marketplace-service'
-import { marketplaceInstallOf, type MarketplaceInstall } from './plugin-marketplace-install-origin'
-import { isSamePluginSource } from '../../../shared/plugins/catalog/plugin-marketplace'
+import {
+  marketplaceInstallMoved,
+  marketplaceInstallOf,
+  type MarketplaceInstall
+} from './plugin-marketplace-install-origin'
 import type {
   PluginLockEntry,
   PluginLockfile
@@ -53,13 +51,14 @@ export type PluginMarketplaceInstallPreview = {
   consentFingerprint: string
   manifest: PluginManifest
   official: boolean
+  managedByTeams?: string[]
   bundled: boolean
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   /** The manifest's images, verified at preview and cached by hash. */
   images?: PluginHostImages
   /** What each recipe file can run, read before the staging tree is deleted; null if unreadable. */
   vmRecipeIdentities?: PluginVmRecipeIdentities
-  /** Update previews only: the catalog now points at a different repository than the install. */
+  /** The catalog now points at a different repository than the installed copy came from. */
   repositoryMoved?: true
 }
 
@@ -77,6 +76,7 @@ export class PluginMarketplaceInstaller {
   private readonly hostVersion: string
   private readonly blockedPluginReason: (pluginKey: string) => string | null
   private readonly imageCache: PluginImageCache | null
+  private readonly revokeConsent: (pluginKey: string) => Promise<void>
 
   constructor(options: {
     marketplace: PluginMarketplaceService
@@ -84,8 +84,10 @@ export class PluginMarketplaceInstaller {
     hostVersion: string
     blockedPluginReason?: (pluginKey: string) => string | null
     imageCache?: PluginImageCache
+    revokeConsent: (pluginKey: string) => Promise<void>
   }) {
     this.imageCache = options.imageCache ?? null
+    this.revokeConsent = options.revokeConsent
     this.marketplace = options.marketplace
     this.userDataPath = options.userDataPath
     this.hostVersion = options.hostVersion
@@ -120,11 +122,17 @@ export class PluginMarketplaceInstaller {
       if (!inspection.ok) {
         throw new Error(inspection.error)
       }
-      const images = await this.cachePreviewImages(stagingDirectory, inspection.manifest)
+      const images = await cachePluginPreviewImages(
+        this.imageCache,
+        stagingDirectory,
+        inspection.manifest
+      )
       const vmRecipeIdentities =
         inspection.manifest.contributes.vmRecipes.length > 0
           ? await readPluginVmRecipeIdentities(stagingDirectory, inspection.manifest)
           : undefined
+      // Why every preview, not only updates: an install link to an installed plugin replaces it too.
+      const moved = marketplaceInstallMoved(await this.readLockEntry(pluginKey), listing.source)
       return {
         marketplaceSourceId,
         marketplaceName: listing.marketplaceName,
@@ -137,10 +145,12 @@ export class PluginMarketplaceInstaller {
         consentFingerprint: inspection.consentFingerprint,
         manifest: inspection.manifest,
         official: listing.official,
+        ...(listing.managedByTeams ? { managedByTeams: listing.managedByTeams } : {}),
         bundled: listing.bundled,
         ...(listing.blockedByKillList ? { blockedByKillList: listing.blockedByKillList } : {}),
         ...(images ? { images } : {}),
-        ...(vmRecipeIdentities !== undefined ? { vmRecipeIdentities } : {})
+        ...(vmRecipeIdentities !== undefined ? { vmRecipeIdentities } : {}),
+        ...(moved ? { repositoryMoved: true as const } : {})
       }
     } finally {
       await rm(stagingDirectory, { recursive: true, force: true })
@@ -149,13 +159,24 @@ export class PluginMarketplaceInstaller {
 
   async install(
     preview: PluginMarketplacePreviewIdentity,
-    options: { requireInstalled?: boolean; trigger?: PluginInstallTrigger } = {}
+    options: {
+      requireInstalled?: boolean
+      requireMissing?: boolean
+      expectedInstalledContentHash?: string
+      trigger?: PluginInstallTrigger
+      stillAllowed?: () => boolean
+    } = {}
   ): Promise<PluginMarketplaceInstallResult> {
     const listing = await this.requireListing(preview.marketplaceSourceId, preview.pluginKey)
     const blockedReason =
       listing.blockedByKillList?.reason ?? this.blockedPluginReason(preview.pluginKey)
     if (blockedReason) {
-      return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
+      return {
+        ok: false,
+        error: listing.blockedByKillList?.team
+          ? blockedReason
+          : `plugin is blocked by Orca's safety list: ${blockedReason}`
+      }
     }
     const incompatible = this.releaseCompatibilityError(listing)
     if (incompatible) {
@@ -172,9 +193,9 @@ export class PluginMarketplaceInstaller {
     }
     // Why read first: the install rewrites the lock entry this comparison needs.
     const priorEntry = await this.readLockEntry(preview.pluginKey)
-    const installed = marketplaceInstallOf(priorEntry)
-    const repositoryMoved =
-      installed !== null && !isSamePluginSource(installed.plugin, listing.source)
+    const repositoryMoved = marketplaceInstallMoved(priorEntry, listing.source)
+    // Why revoke before publishing: a content-only fingerprint does not name its repository.
+    await (repositoryMoved ? this.revokeConsent(preview.pluginKey) : undefined)
     const result = await installPluginFromMarketplace({
       pluginsDir: getUserPluginsDir(this.userDataPath),
       hostVersion: this.hostVersion,
@@ -191,8 +212,20 @@ export class PluginMarketplaceInstaller {
         ...(listing.source.path ? { path: listing.source.path } : {})
       },
       ...(listing.release ? { release: listing.release } : {}),
-      blockedPluginReason: this.blockedPluginReason,
-      ...(options.requireInstalled ? { requireInstalled: true } : {})
+      blockedPluginReason: (key) => {
+        if (
+          options.stillAllowed?.() === false ||
+          !this.marketplace.allowsSource(sourceState.source)
+        ) {
+          return 'The team plugin policy changed during installation.'
+        }
+        return this.blockedPluginReason(key)
+      },
+      ...(options.requireInstalled ? { requireInstalled: true } : {}),
+      ...(options.requireMissing ? { requireMissing: true } : {}),
+      ...(options.expectedInstalledContentHash
+        ? { expectedInstalledContentHash: options.expectedInstalledContentHash }
+        : {})
     })
     if (result.ok) {
       trackPluginInstalled({
@@ -230,10 +263,7 @@ export class PluginMarketplaceInstaller {
     if (!installed) {
       throw new Error(`plugin ${pluginKey} was not installed from a marketplace`)
     }
-    const preview = await this.preview(installed.sourceId, pluginKey)
-    return isSamePluginSource(installed.plugin, preview.source)
-      ? preview
-      : { ...preview, repositoryMoved: true }
+    return this.preview(installed.sourceId, pluginKey)
   }
 
   /** The own-catalog listing an installed plugin would update from, read from caches only. */
@@ -270,40 +300,6 @@ export class PluginMarketplaceInstaller {
       pluginKey,
       hostVersion: this.hostVersion,
       blockedPluginReason: this.blockedPluginReason
-    })
-  }
-
-  /** Why cache now: the staging tree is deleted after preview, and images were already checked by
-   *  the install inspection, so their hashes are the only stable names. */
-  private async cachePreviewImages(
-    rootDir: string,
-    manifest: PluginManifest
-  ): Promise<PluginHostImages | undefined> {
-    const cache = this.imageCache
-    if (!cache) {
-      return undefined
-    }
-    const hashes = new Map<string, string>()
-    for (const image of declaredPluginImages(manifest)) {
-      const bytes = await readContainedPluginArtifactBytes(
-        rootDir,
-        image.path,
-        PLUGIN_IMAGE_RULES[image.kind].maxBytes
-      ).catch(() => null)
-      // A cache failure only costs the image; it must never fail the preview or update.
-      const sha256 = bytes
-        ? await cache.put(bytes).catch((error: unknown) => {
-            console.warn(`[plugins] could not cache image ${image.path}:`, error)
-            return null
-          })
-        : null
-      if (sha256) {
-        hashes.set(image.path, sha256)
-      }
-    }
-    return pluginManifestHostImages(manifest, (_slot, path) => {
-      const sha256 = hashes.get(path)
-      return sha256 ? pluginShaImageUrl(sha256) : null
     })
   }
 

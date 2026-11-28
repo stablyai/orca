@@ -1,28 +1,25 @@
-import { nativeChatAskScanOrder } from './native-chat-ask-order'
+import { nativeChatAskScanOrder } from './questions/native-chat-ask-order'
+import { askOptionPreview } from './questions/native-chat-ask-option-preview'
 import type {
   AskOption,
   AskPrompt,
   AskQuestion,
   InteractiveQuestionParser
-} from './native-chat-ask-types'
+} from './questions/native-chat-ask-types'
 import { isInterruptedStatusMessage, type NativeChatMessage } from '../native-chat-types'
 import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput
-} from '../../codex-async-question-input'
+} from './questions/codex-async-question-input'
+import { OMP_ASK_TOOL, parseOmpAskFormInput } from './questions/omp-ask-form-input'
 import {
   isDeliveredNativeChatUserMessage,
   isPendingNativeChatUserMessage,
   quotedByQueuedAnswer,
   withoutPendingQueuedAnswers
-} from './native-chat-ask-answer'
-export { isDeliveredNativeChatUserMessage } from './native-chat-ask-answer'
+} from './questions/native-chat-ask-answer'
 
 const QUESTION_TOOL_PARSERS = new Map<string, InteractiveQuestionParser>()
-
-export function registerQuestionTool(toolName: string, parser: InteractiveQuestionParser): void {
-  QUESTION_TOOL_PARSERS.set(toolName, parser)
-}
 
 function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
   if (!input || typeof input !== 'object' || !('questions' in input)) {
@@ -39,12 +36,12 @@ function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
     }
     const text = 'question' in raw && typeof raw.question === 'string' ? raw.question : ''
     const rawOptions = 'options' in raw ? raw.options : undefined
-    const options = parseOptions(rawOptions)
+    const multiSelect =
+      'multiSelect' in raw
+        ? raw.multiSelect === true
+        : ('multiple' in raw && raw.multiple === true) || ('multi' in raw && raw.multi === true)
+    const options = parseOptions(rawOptions, multiSelect)
     if (text || options.length > 0) {
-      const multiSelect =
-        'multiSelect' in raw
-          ? raw.multiSelect === true
-          : ('multiple' in raw && raw.multiple === true) || ('multi' in raw && raw.multi === true)
       questions.push({
         question: text,
         header: 'header' in raw && typeof raw.header === 'string' ? raw.header : undefined,
@@ -59,20 +56,10 @@ function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
 
 /** Claude only switches a single-select to its preview layout for a non-blank preview. */
 export function askOptionsHavePreview(rawOptions: unknown): boolean {
-  return (
-    Array.isArray(rawOptions) &&
-    rawOptions.some(
-      (option) =>
-        option &&
-        typeof option === 'object' &&
-        'preview' in option &&
-        typeof option.preview === 'string' &&
-        option.preview.trim().length > 0
-    )
-  )
+  return Array.isArray(rawOptions) && rawOptions.some((option) => askOptionPreview(option) !== null)
 }
 
-function parseOptions(raw: unknown): AskOption[] {
+function parseOptions(raw: unknown, multiSelect: boolean): AskOption[] {
   if (!Array.isArray(raw)) {
     return []
   }
@@ -87,12 +74,14 @@ function parseOptions(raw: unknown): AskOption[] {
         'label' in option &&
         typeof option.label === 'string'
       ) {
+        const preview = multiSelect ? null : askOptionPreview(option)
         return {
           label: option.label,
           description:
             'description' in option && typeof option.description === 'string'
               ? option.description
-              : undefined
+              : undefined,
+          ...(preview ? { preview } : {})
         }
       }
       return null
@@ -105,6 +94,7 @@ for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) 
 }
 
 QUESTION_TOOL_PARSERS.set(CODEX_ASYNC_QUESTION_TOOL, parseCodexAsyncQuestionsInput)
+QUESTION_TOOL_PARSERS.set(OMP_ASK_TOOL, parseOmpAskFormInput)
 
 function parseToolInput(toolName: string | undefined, input: unknown): AskPrompt | null {
   const parser = toolName ? QUESTION_TOOL_PARSERS.get(toolName) : undefined
@@ -185,6 +175,18 @@ export function asyncQuestionOccurrenceId(
     contributor.sourceRowId,
     contributor.callSlot
   ])
+}
+
+/** The newest row a shown async prompt draws from: Skip saves through it, never past what it showed. */
+export function newestShownAsyncQuestionRow(
+  contributors: readonly AsyncQuestionContributor[],
+  sourceScope: string,
+  prompt: AskPrompt | null
+): string | undefined {
+  const shown = new Set(prompt?.occurrenceIds)
+  return contributors.findLast((contributor) =>
+    shown.has(asyncQuestionOccurrenceId(sourceScope, contributor))
+  )?.sourceRowId
 }
 
 /** Queued texts hide questions an answer waiting in the queue already quotes; deleting that card brings them back. */

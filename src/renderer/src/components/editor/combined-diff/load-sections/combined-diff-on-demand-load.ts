@@ -1,4 +1,4 @@
-import { hasBinaryFileExtension } from '../../../../../../shared/binary-file-extensions'
+import { hasBinaryFileExtension } from '../../../../../../shared/file-preview/binary-file-extensions'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 

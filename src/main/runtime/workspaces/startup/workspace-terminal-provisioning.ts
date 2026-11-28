@@ -1,20 +1,17 @@
 import type { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
 import type { TerminalSplitOptions } from '../../terminal/launch/terminal-split-surface'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { OrcaRuntimeWithActivateManagedWorktree } from './workspace-activation'
 import type { WorktreeTerminalProvisioningHost } from './runtime-worktree-terminal-provisioning'
 import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-readiness'
-import { prefetchWorktreeCreateBase } from '../../../workspaces/creation/worktree-create-base-prefetch'
-import { prepareWorktreeCreateForRepo } from '../../../workspaces/creation/preparation/worktree-create-preparation'
-import { getWorktreeCreatePrefetchGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
 import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
-} from '../../../../shared/runtime-navigation'
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 
 export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
@@ -40,7 +37,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
   protected shouldProvisionWorktreeInBackground(navigation?: RuntimeNavigationTarget): boolean {
     return (
       navigationTargetsHost(navigation ?? 'host') &&
-      (!this.notifier || this.graphStatus !== 'ready' || !this.getAvailableAuthoritativeWindow())
+      (!this.notifier || this.graphStatus !== 'ready' || !this.hasAuthoritativeWindow())
     )
   }
 
@@ -59,7 +56,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         // renameTerminal stamps a persistent pane title that would mask all later agent titles/status.
         this.notifier?.renameTerminal(tabId, title, { recordInteraction: false })
-        if (!this.getAvailableAuthoritativeWindow()) {
+        if (!this.hasAuthoritativeWindow()) {
           this.persistHeadlessTerminalTitle(worktreeId, tabId, title)
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, {
             title,
@@ -72,7 +69,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
       },
       getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
+      getPtyId: (handle) => this.getTerminalPtyIdForHandle(handle) ?? undefined,
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
     }
@@ -103,7 +100,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
           })
         )
         // The window draws the title from main's frame; a headless phone still reads its snapshot (L238).
-        if (ok && !this.getAvailableAuthoritativeWindow()) {
+        if (ok && !this.hasAuthoritativeWindow()) {
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, {
             title,
             customTitle: title.trim() || null
@@ -120,7 +117,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
             color
           })
         )
-        if (ok && !this.getAvailableAuthoritativeWindow()) {
+        if (ok && !this.hasAuthoritativeWindow()) {
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { color })
         }
       },
@@ -133,7 +130,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         })
         return applied(reply) && reply.ok ? (reply.result.createdTabs ?? []) : null
       },
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
+      getPtyId: (handle) => this.getTerminalPtyIdForHandle(handle) ?? undefined,
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
     }
@@ -172,6 +169,15 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
     const store = this.requireStore()
+    const [
+      { prefetchWorktreeCreateBase },
+      { prepareWorktreeCreateForRepo },
+      { getWorktreeCreatePrefetchGitOptions }
+    ] = await Promise.all([
+      import('../../../workspaces/creation/worktree-create-base-prefetch'),
+      import('../../../workspaces/creation/preparation/worktree-create-preparation'),
+      import('../../../workspaces/execution-host/project-runtime-git-options')
+    ])
     await prefetchWorktreeCreateBase({
       repo,
       baseBranch: args.baseBranch,

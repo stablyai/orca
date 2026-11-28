@@ -194,7 +194,7 @@ function createImeEnterGuardRule(context) {
           context.report({
             node: candidate.node,
             message:
-              'Enter handling on a raw text field must ignore IME composition: use ImeInput/ImeTextarea (or <Input>/<Textarea>), or guard with isImeOwnedKeyboardEvent from @/lib/ime-composition-keyboard-event.'
+              'Enter handling on a raw text field must ignore IME composition: use ImeInput/ImeTextarea (or <Input>/<Textarea>), or guard with isImeOwnedKeyboardEvent from @/lib/text-input/ime/ime-composition-keyboard-event.'
           })
         }
       }

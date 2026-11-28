@@ -1,7 +1,7 @@
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { isCodexAppServerUnsupportedError } from '../../app-server/codex-app-server-session'
 import { providerDiagnosticOf } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionCancelOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
+import type { AgentSessionCancelOutcome } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
 import { CODEX_STOP_GRACE_MS } from './codex-request-end-wait'

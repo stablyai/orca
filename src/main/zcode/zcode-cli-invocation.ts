@@ -4,10 +4,11 @@ import {
   tokenizeStartupCommand
 } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
-  resolveCliCommand,
-  resolveExecutableCommand
-} from '../../shared/node-cli-command-resolution'
-import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
+  resolveCliCommandAsync,
+  resolveExecutableCommandAsync
+} from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import type { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import type { StructuredAgentCommandSettings } from '../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   probeZcodeOfficialRuntimes,
   resolveZcodeOfficialRuntime,
@@ -22,13 +23,28 @@ export type ZcodeCliInvocation = {
   source: 'standalone' | 'desktop-bundle'
 }
 
-type ResolveZcodeCliInvocationOptions = {
+export function zcodeDesktopTerminalRefusal(invocation: ZcodeCliInvocation): string | null {
+  return invocation.source === 'desktop-bundle'
+    ? 'ZCode Desktop does not include the terminal TUI. Use ZCode Chat or install the standalone ZCode CLI.'
+    : null
+}
+
+export type ResolveZcodeCliInvocationOptions = {
   commandSettings?: StructuredAgentCommandSettings
   resolveCommand?: typeof resolveCliCommand
   pathEnv?: string
   homePath?: string
   platform?: NodeJS.Platform
   officialRuntime?: ZcodeOfficialRuntimeDeps
+}
+
+export async function assertZcodeTerminalInvocation(
+  options: ResolveZcodeCliInvocationOptions
+): Promise<void> {
+  const refusal = zcodeDesktopTerminalRefusal(await resolveZcodeCliInvocation(options))
+  if (refusal) {
+    throw new Error(refusal)
+  }
 }
 
 function invocationIdentity(invocation: Omit<ZcodeCliInvocation, 'identity'>): string {
@@ -48,10 +64,10 @@ function isAbsoluteForPlatform(path: string, platform: NodeJS.Platform): boolean
   return platform === 'win32' ? win32.isAbsolute(path) : isAbsolute(path)
 }
 
-function parseOverride(
+async function parseOverride(
   raw: string,
   options: ResolveZcodeCliInvocationOptions
-): { command: string; prefixArgs: string[] } | null {
+): Promise<{ command: string; prefixArgs: string[] } | null> {
   const input = raw.trim()
   if (!input || /[\0\r\n]/.test(input)) {
     return null
@@ -77,7 +93,7 @@ function parseOverride(
         homePath: options.homePath,
         platform: options.platform
       })
-    : resolveExecutableCommand(program, {
+    : await resolveExecutableCommandAsync(program, {
         pathEnv: options.pathEnv,
         homePath: options.homePath,
         platform: options.platform
@@ -108,18 +124,19 @@ function desktopInvocation(
   })
 }
 
-export function resolveZcodeCliInvocation(
+/** Resolve the executable and prefix args for a ZCode CLI or Desktop bundle. */
+export async function resolveZcodeCliInvocation(
   options: ResolveZcodeCliInvocationOptions = {}
-): ZcodeCliInvocation {
+): Promise<ZcodeCliInvocation> {
   const override = options.commandSettings?.agentCmdOverrides?.zcode?.trim()
   if (override) {
-    const parsed = parseOverride(override, options)
+    const parsed = await parseOverride(override, options)
     if (!parsed) {
       throw new Error('the zcode Command setting is not a runnable command')
     }
     const official =
       parsed.prefixArgs.length === 0
-        ? resolveZcodeOfficialRuntime(parsed.command, options.officialRuntime ?? {})
+        ? await resolveZcodeOfficialRuntime(parsed.command, options.officialRuntime ?? {})
         : null
     return official
       ? desktopInvocation(official.electron, official.bundle, official.builtinProviderConfig)
@@ -131,12 +148,12 @@ export function resolveZcodeCliInvocation(
         })
   }
 
-  const command = (options.resolveCommand ?? resolveCliCommand)('zcode', {
+  const command = await (options.resolveCommand ?? resolveCliCommandAsync)('zcode', {
     pathEnv: options.pathEnv,
     homePath: options.homePath,
     platform: options.platform
   })
-  const official = resolveZcodeOfficialRuntime(command, options.officialRuntime ?? {})
+  const official = await resolveZcodeOfficialRuntime(command, options.officialRuntime ?? {})
   if (official) {
     return desktopInvocation(official.electron, official.bundle, official.builtinProviderConfig)
   }
@@ -149,7 +166,7 @@ export function resolveZcodeCliInvocation(
     })
   }
 
-  const conventional = probeZcodeOfficialRuntimes([], {
+  const conventional = await probeZcodeOfficialRuntimes([], {
     home: options.homePath,
     platform: options.platform,
     ...options.officialRuntime

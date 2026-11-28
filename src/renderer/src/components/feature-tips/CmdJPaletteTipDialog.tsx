@@ -1,16 +1,16 @@
 import type { JSX } from 'react'
-import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { formatShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatShortcutLabel, useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { FeatureTipActions } from './FeatureTipActions'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 import {
   FeatureTipDialogFrame,
-  FeatureTipEyebrow,
+  FeatureTipLabel,
   FeatureTipSettingsLine
 } from './FeatureTipDialogFrame'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function CmdJPaletteTipDialog({
   open,
@@ -29,6 +29,7 @@ export function CmdJPaletteTipDialog({
   onSkip: () => void
   onRebindClick: () => void
 }): JSX.Element {
+  const t = useTranslate()
   // Use the live binding for rebindings and platform-specific shortcuts.
   const worktreePaletteShortcutLabel = useShortcutLabel('worktree.palette')
   const displayShortcutLabel =
@@ -51,8 +52,7 @@ export function CmdJPaletteTipDialog({
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          {/* Category label. */}
-          <FeatureTipEyebrow label={copy.eyebrow} />
+          <FeatureTipLabel />
           {/* Keep the shortcut inline so wide Windows/Linux bindings wrap naturally. */}
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
             {titlePrefix.trimEnd()}
@@ -69,7 +69,7 @@ export function CmdJPaletteTipDialog({
           <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
             <span className="block">{copy.description}</span>
             <FeatureTipSettingsLine
-              text={translate(
+              text={t(
                 'auto.components.feature.tips.CmdJPaletteTipDialog.rebindInSettings',
                 'Rebind the shortcut anytime in <link>Settings → Shortcuts</link>.'
               )}

@@ -1,24 +1,22 @@
-import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
-import { CODEBUDDY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-codebuddy'
+import { OPENCODE_LAUNCH_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-opencode'
+import { CODEBUDDY_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-codebuddy'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
-import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
+import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-antigravity'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
-} from './agent-session-option-catalog-claude-codex'
-import {
-  CURSOR_SESSION_OPTION_CATALOG,
-  GEMINI_SESSION_OPTION_CATALOG
-} from './agent-session-option-catalog-gemini-cursor'
-import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
-import { MUSE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-muse'
-import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
+} from './catalog-providers/agent-session-option-catalog-claude-codex'
+import { CURSOR_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-cursor'
+import { GROK_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-grok'
+import { MUSE_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-muse'
+import { OMP_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-omp'
+import { PI_LAUNCH_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-pi'
 import type {
   AgentSessionOptionCatalog,
   AgentSessionOptionCatalogMap,
   CatalogModel,
   CatalogOption
-} from './agent-session-option-catalog-types'
+} from './catalog-providers/agent-session-option-catalog-types'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 
 const CATALOGS: AgentSessionOptionCatalogMap = {
@@ -26,7 +24,6 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   claude: CLAUDE_SESSION_OPTION_CATALOG,
   codebuddy: CODEBUDDY_SESSION_OPTION_CATALOG,
   codex: CODEX_SESSION_OPTION_CATALOG,
-  gemini: GEMINI_SESSION_OPTION_CATALOG,
   cursor: CURSOR_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
@@ -91,5 +88,9 @@ export function sessionOptionValueIsValid(value: unknown): value is SessionOptio
 export function getAgentSessionOptionLaunchCatalog(
   agent: AgentType
 ): AgentSessionOptionCatalog | null {
-  return agent === 'opencode' ? OPENCODE_LAUNCH_OPTION_CATALOG : getAgentSessionOptionCatalog(agent)
+  return agent === 'opencode'
+    ? OPENCODE_LAUNCH_OPTION_CATALOG
+    : agent === 'pi'
+      ? PI_LAUNCH_OPTION_CATALOG
+      : getAgentSessionOptionCatalog(agent)
 }

@@ -1,23 +1,27 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult
 } from '../../../../shared/git/diff/git-diff-compare-types'
-import { getBranchCompare } from '../../../git/source-control/branch-compare'
-import { getCommitCompare } from '../../../git/source-control/commit-compare'
+import { getBranchCompare } from '../../../git/source-control/comparisons/branch-compare'
+import { getCommitCompare } from '../../../git/source-control/comparisons/commit-compare'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { validateFullGitObjectId } from '../access/filesystem-path-containment'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
+import { validateFullGitObjectId } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
-import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
-export function registerGitRemoteCompareHandlers(context: FilesystemHandlerContext): void {
+export function registerGitRemoteCompareHandlers(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'git:branchCompare',
     async (
       _event,
@@ -45,7 +49,7 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:commitCompare',
     async (
       _event,

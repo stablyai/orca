@@ -1,3 +1,10 @@
+import { useRef, useState } from 'react'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
@@ -6,6 +13,52 @@ import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/wor
 import { makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 
 const noop = (): void => {}
+
+function PendingRenameHover(): React.JSX.Element {
+  const control = useWorktreeCardDetailsHoverControl()
+  const [title, setTitle] = useState('Rename me')
+  const completeSave = useRef<() => void>(() => {})
+  return (
+    <div className="h-96 p-4">
+      <ContextMenu onOpenChange={control.setContextMenuOpen}>
+        <ContextMenuTrigger asChild>
+          <div>
+            <WorktreeCardDetailsHover
+              issue={null}
+              linearIssue={null}
+              review={null}
+              comment={null}
+              workspaceTitle={title}
+              hoverControl={control}
+              openDelay={0}
+              onRenameWorkspaceTitle={(nextTitle) =>
+                new Promise<void>((resolve) => {
+                  completeSave.current = () => {
+                    setTitle(nextTitle)
+                    resolve()
+                  }
+                })
+              }
+            >
+              <button type="button">Workspace row</button>
+            </WorktreeCardDetailsHover>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem>Dismiss menu</ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <button type="button" onClick={() => completeSave.current()}>
+        Finish saving
+      </button>
+    </div>
+  )
+}
+
+export const pendingRename = defineFixture({
+  width: 600,
+  render: () => <PendingRenameHover />
+})
 
 const issue = {
   number: 14882,
