@@ -133,6 +133,18 @@ export class ClientSessionTabSelectionStore {
     }
   }
 
+  /** The top-level tab this client shows in the snapshot's workspace, read without changing its selection. */
+  shownTopLevelTabId(
+    snapshot: RuntimeMobileSessionTabsResult,
+    clientNavigationId: string
+  ): string | null {
+    const state = this.statesByClient.get(clientNavigationId)?.get(snapshot.worktree)
+    // A device that never picked a tab follows the host's selection.
+    const activeTabId = state?.shouldPersist ? state.selection.activeTabId : snapshot.activeTabId
+    const tab = snapshot.tabs.find((candidate) => candidate.id === activeTabId)
+    return tab ? topLevelTabId(tab) : null
+  }
+
   activate(
     snapshot: RuntimeMobileSessionTabsResult,
     clientNavigationId: string,

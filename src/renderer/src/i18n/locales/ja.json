@@ -25272,8 +25272,7 @@
         "failing": "失敗",
         "running": "保留中",
         "cancelled": "キャンセル済み",
-        "passing": "合格",
-        "more": "ほか {{count}} 件"
+        "passing": "合格"
       }
     },
     "attachments": {
