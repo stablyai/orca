@@ -14,6 +14,7 @@ export type TuiAgent =
   | 'qoder-cn' // Qoder CLI China
   | 'antigravity'
   | 'aider'
+  | 'gray'
   | 'goose'
   | 'amp'
   | 'kilo' // Kilocode

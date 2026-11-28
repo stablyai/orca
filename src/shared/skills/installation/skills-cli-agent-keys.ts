@@ -20,6 +20,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   'qoder-cn': 'qoder-cn',
   antigravity: 'antigravity',
   aider: null,
+  gray: null,
   goose: 'goose',
   amp: 'amp',
   kilo: 'kilo',

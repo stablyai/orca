@@ -24,6 +24,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   'qoder-cn': 'Qoder CLI China',
   antigravity: 'Antigravity',
   aider: 'Aider',
+  gray: 'Gray',
   goose: 'Goose',
   amp: 'Amp',
   kilo: 'Kilocode',

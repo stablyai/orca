@@ -6,7 +6,7 @@ import { isMuseHeadlessOneShotCommand } from './muse-headless-command'
 import { isDsbHeadlessOneShotCommand } from './dsb-headless-command'
 import { isZCodeHeadlessOneShotCommand } from './zcode-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
-import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
+import { isPrintModeHeadlessOneShotCommand, optionName } from './print-mode-headless-command'
 import type { TerminalAgent } from '../identity/terminal-agent'
 
 // Agent-specific one-shot forms cannot accept pane prompts; DSH server/JSON-RPC modes must be excluded too.
@@ -16,6 +16,16 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   qoder: isQoderHeadlessCommand,
   'qoder-cn': isQoderHeadlessCommand,
   claude: isPrintModeHeadlessOneShotCommand,
+  gray: (tokens) => {
+    const endOfOptions = tokens.indexOf('--', 1)
+    return (
+      isPrintModeHeadlessOneShotCommand(tokens) ||
+      tokens.slice(1, endOfOptions === -1 ? undefined : endOfOptions).some((token) => {
+        const option = optionName(token)
+        return option === '--stdio' || option === '--input-json'
+      })
+    )
+  },
   codebuddy: isCodebuddyNonInteractiveCommand,
   trae: isPrintModeHeadlessOneShotCommand,
   'prime-agent': isPrimeAgentHeadlessOneShotCommand,

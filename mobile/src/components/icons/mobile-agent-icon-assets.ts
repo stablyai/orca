@@ -17,6 +17,7 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   qoder: require('../../../../src/shared/agent-icons/qoder.png'),
   'qoder-cn': require('../../../../src/shared/agent-icons/qoder-cn.png'),
   antigravity: require('../../../../src/shared/agent-icons/antigravity.png'),
+  gray: require('../../../../src/shared/agent-icons/gray.png'),
   goose: require('../../../../src/shared/agent-icons/goose.png'),
   amp: require('../../../../src/shared/agent-icons/amp.png'),
   kilo: require('../../../../src/shared/agent-icons/kilo.png'),

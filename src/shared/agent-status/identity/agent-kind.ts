@@ -22,6 +22,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   'qoder-cn': 'qoder-cn',
   antigravity: 'antigravity',
   aider: 'aider',
+  gray: 'gray',
   goose: 'goose',
   amp: 'amp',
   kilo: 'kilo',

@@ -19,6 +19,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   'qoder-cn': true,
   antigravity: true,
   aider: true,
+  gray: true,
   goose: true,
   amp: true,
   kilo: true,

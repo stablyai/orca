@@ -1,3 +1,4 @@
+import { GRAY_MODEL_LIST_ARGS, parseGrayModelList } from './gray-model-list-probe'
 import {
   getCommitMessageAgentSpec,
   type CommitMessageAgentSpec
@@ -14,6 +15,15 @@ export type AgentModelProbeSpec = Omit<
 
 /** Agents that support model discovery but are not commit-message agents. */
 const MODEL_DISCOVERY_ONLY_SPECS: Partial<Record<TuiAgent, AgentModelProbeSpec>> = {
+  gray: {
+    id: 'gray',
+    label: 'Gray',
+    binary: 'gray',
+    modelSource: 'dynamic',
+    modelDiscovery: { binary: 'gray', args: GRAY_MODEL_LIST_ARGS, parse: parseGrayModelList },
+    models: [],
+    defaultModelId: ''
+  },
   grok: {
     id: 'grok',
     label: 'Grok',
