@@ -1,15 +1,11 @@
 import { rmSync } from 'node:fs'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
-import {
-  listClaudeProfileHomes,
-  listClaudeProfileHomesAsync
-} from '../claude-accounts/profiles/claude-profile-homes'
+// oxfmt-ignore
+import { listClaudeProfileHomes, listClaudeProfileHomesAsync } from '../claude-accounts/profiles/claude-profile-homes'
 import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
-import type {
-  AgentHookInstallState,
-  AgentHookInstallStatus
-} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+// oxfmt-ignore
+import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
@@ -295,9 +291,36 @@ export class ClaudeHookService {
   remove(): AgentHookInstallStatus {
     removeClaudeHookPlugin(this.options.agent)
     const configPath = getConfigPath(this.options.settings)
+    if (!this.stripManagedHooksAt(configPath)) {
+      return this.unparsableSettings(configPath)
+    }
+    if (this.options.agent === 'claude') {
+      for (const configDir of [
+        undefined,
+        ...listClaudeProfileHomes(getAppEnvironment().getPath('userData'))
+      ]) {
+        const profileConfigPath = getConfigPath(this.options.settings, configDir)
+        // Account profiles get their own copy of the hooks at launch; Remove clears those too.
+        if (configDir !== undefined) {
+          this.stripManagedHooksAt(profileConfigPath)
+        }
+        removeClaudeAgentView(profileConfigPath)
+      }
+      try {
+        // Explicit uninstall resets opt-out memory for a future re-enable.
+        rmSync(getStatusLineInstallMarkerPath(this.options.settings), { force: true })
+      } catch {
+        // Marker cleanup is best-effort.
+      }
+    }
+    return this.getStatus()
+  }
+
+  /** Strips Orca's hooks and status line from one settings file; false when it can't be parsed. */
+  private stripManagedHooksAt(configPath: string): boolean {
     const config = readHooksJson(configPath)
     if (!config) {
-      return this.unparsableSettings(configPath)
+      return false
     }
     const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
       config,
@@ -310,21 +333,7 @@ export class ClaudeHookService {
     if (hooksChanged || statusLineChanged) {
       writeHooksJson(configPath, nextConfig)
     }
-    if (this.options.agent === 'claude') {
-      for (const configDir of [
-        undefined,
-        ...listClaudeProfileHomes(getAppEnvironment().getPath('userData'))
-      ]) {
-        removeClaudeAgentView(getConfigPath(this.options.settings, configDir))
-      }
-      try {
-        // Explicit uninstall resets opt-out memory for a future re-enable.
-        rmSync(getStatusLineInstallMarkerPath(this.options.settings), { force: true })
-      } catch {
-        // Marker cleanup is best-effort.
-      }
-    }
-    return this.getStatus()
+    return true
   }
 }
 

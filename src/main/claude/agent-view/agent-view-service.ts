@@ -2,7 +2,11 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
-import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import {
+  isAgentStatusHooksEnabled,
+  isAgentStatusHooksEnabledForAgent
+} from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { readAgentHookConsent } from '../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import { getAgentLaunchExecutableName } from '../../../shared/agent-launch/startup/agent-command-line-intent'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -21,6 +25,7 @@ type NavigationSettings = Partial<
     | 'disabledTuiAgents'
     | 'agentDefaultEnv'
     | 'agentCmdOverrides'
+    | 'agentHookConsent'
   >
 >
 
@@ -66,6 +71,10 @@ export class ClaudeAgentViewService {
   ) {}
 
   reconcile(settings: NavigationSettings): Promise<void> {
+    // Not asked yet: leave the user's keybinding as it is until startup adoption or the card answers.
+    if (isAgentStatusHooksEnabled(settings) && readAgentHookConsent(settings, 'claude') === null) {
+      return this.tail
+    }
     const enabled =
       settings.claudeSubagentNavigationEnabled !== false &&
       isAgentStatusHooksEnabledForAgent(settings, 'claude')

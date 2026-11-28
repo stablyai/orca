@@ -24,7 +24,10 @@ import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-com
 import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
 import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { runtimeClientUpdateTouchesHooks } from './runtime-client-hook-reconcile'
+import {
+  removeHooksDeclinedByClient,
+  runtimeClientUpdateTouchesHooks
+} from './runtime-client-hook-reconcile'
 import { agentHookConsentPatch } from '../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { normalizePRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
@@ -193,7 +196,7 @@ export class RuntimeClientSettingsController {
       this.notifyReposChanged?.()
     }
     if (runtimeClientUpdateTouchesHooks(updates, beforeSettings, settings)) {
-      await this.reconcileManagedAgentHooks()
+      await this.reconcileManagedAgentHooks(updates)
     }
     return this.get()
   }
@@ -289,7 +292,7 @@ export class RuntimeClientSettingsController {
     }
   }
 
-  private reconcileManagedAgentHooks(): Promise<void> {
+  private reconcileManagedAgentHooks(updates: RuntimeClientSettingsUpdate = {}): Promise<void> {
     const generation = ++this.reconciliationGeneration
     const reconciliation = this.reconciliationTail.then(async () => {
       if (generation !== this.reconciliationGeneration) {
@@ -301,9 +304,10 @@ export class RuntimeClientSettingsController {
       }
       const { applyAgentStatusHooksEnabled } =
         await import('../../../agent-hooks/installation/managed-agent-hook-controls')
+      // R42, COMPAT(wsl-bridge): the bridge's panes in this distro share these entries; drop at D4.
+      const keepSharedEntries = isWslHostOrcadProcess()
       await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
-        // R42, COMPAT(wsl-bridge): the bridge's panes in this distro share these entries; drop at D4.
-        keepSharedEntries: isWslHostOrcadProcess(),
+        keepSharedEntries,
         shouldHydrateShellPath: getAppEnvironment().isPackaged(),
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
@@ -311,6 +315,7 @@ export class RuntimeClientSettingsController {
           return current !== undefined && isAgentStatusHooksEnabledForAgent(current, agent)
         }
       })
+      await removeHooksDeclinedByClient(updates, keepSharedEntries)
     })
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation

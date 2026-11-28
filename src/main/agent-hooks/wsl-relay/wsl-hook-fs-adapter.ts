@@ -21,7 +21,8 @@ export async function installWslGuestHooks(options: {
   codexHomePath: string | null
   distro: string
   installHooks: typeof installRemoteManagedAgentHooks
-  settings: ManagedHookDetectionSettings
+  /** Read live: a decline can land while guest detection runs. */
+  settings: () => ManagedHookDetectionSettings
   warn: (message: string) => void
   /** Canonical runtime-host installer for redirected Codex homes. */
   installCodex: (runtimeHomePath: string, distro: string) => Promise<AgentHookInstallStatus | null>
@@ -33,11 +34,12 @@ export async function installWslGuestHooks(options: {
   try {
     const detected = readManagedHookDetectionResult(
       await mux.request('preflight.detectAgents', {
-        commands: buildManagedHookDetectionCommands(settings, 'linux')
+        commands: buildManagedHookDetectionCommands(settings(), 'linux')
       })
     )
     // Only agents the user agreed to; the guest's configs are theirs too.
-    agents = detected.agents.filter((agent) => isAgentHookConsentGranted(settings, agent))
+    const current = settings()
+    agents = detected.agents.filter((agent) => isAgentHookConsentGranted(current, agent))
     claudeVersion = detected.claudeVersion
   } catch (error) {
     warn(

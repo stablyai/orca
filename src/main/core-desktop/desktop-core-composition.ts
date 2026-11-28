@@ -19,10 +19,7 @@ import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconc
 import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
-import {
-  createAgentHookConsentService,
-  registerAgentHookConsentIpc
-} from '../agent-hooks/installation/agent-hook-consent-service'
+import { registerAgentHookConsentIpc } from '../agent-hooks/installation/agent-hook-consent-ipc'
 import { shouldInstallManagedHooks } from '../startup/configure-process'
 import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
 import { installAgentTurnWorktreeActivity } from '../agent-hooks/runtime/agent-turn-worktree-activity'
@@ -234,9 +231,7 @@ export async function composeDesktopCore(
   installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
   installAgentTurnWorktreeActivity()
   await initializeMainProcessPlugins(core, store)
-  registerAgentHookConsentIpc(
-    createAgentHookConsentService(store, { shouldHydrateShellPath: paths.isPackaged })
-  )
+  registerAgentHookConsentIpc(store, { shouldHydrateShellPath: paths.isPackaged })
   startBrowserAutomation(core, runtime, native)
   let releaseProviderMaintenance: () => void = () => {}
   const providerMaintenanceReady = new Promise<void>((resolve) => {

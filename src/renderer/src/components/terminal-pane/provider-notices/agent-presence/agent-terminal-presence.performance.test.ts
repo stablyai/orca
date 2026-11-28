@@ -65,17 +65,37 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 
+function burst(panes: number): void {
+  for (let write = 0; write < 1000; write++) {
+    store.setState({ ...store.getState(), agentStatusByPaneKey: statusMap(panes) })
+  }
+  vi.advanceTimersByTime(1000)
+}
+
 describe('watchAgentTerminalArrivals', () => {
   it.each([50, 500])('scans once per window, not per status write, with %i panes', (panes) => {
-    const initial = stateWith(panes)
-    store.reset(initial)
-    const stop = watchAgentTerminalArrivals(() => {})
-    for (let write = 0; write < 1000; write++) {
-      store.setState({ ...store.getState(), agentStatusByPaneKey: statusMap(panes) })
-    }
-    vi.advanceTimersByTime(1000)
+    store.reset(stateWith(panes))
+    const stop = watchAgentTerminalArrivals(
+      () => {},
+      () => new Set(['codex'])
+    )
+    burst(panes)
     stop()
     // One scan at start plus one for the whole burst.
     expect(store.scans).toBe(2)
+  })
+
+  it('stops scanning once every wanted agent has been seen', () => {
+    store.reset(stateWith(500))
+    const seen: string[] = []
+    const stop = watchAgentTerminalArrivals(
+      (agent) => seen.push(agent),
+      () => new Set(['claude'])
+    )
+    burst(500)
+    burst(500)
+    stop()
+    expect(seen).toEqual(['claude'])
+    expect(store.scans).toBe(1)
   })
 })

@@ -70,25 +70,30 @@ export function whenAgentTerminalAppears(agent: NoticeAgent, onAppear: () => voi
   return unsubscribe
 }
 
-/** Every agent id running in a terminal now, from the same three sources as `hasAgentTerminal`. */
-function collectAgentTerminalIds(state: AppState): Set<string> {
+/** The wanted agent ids running in a terminal now, from the same three sources as `hasAgentTerminal`. */
+function collectAgentTerminalIds(state: AppState, wanted: ReadonlySet<string>): Set<string> {
   const agents = new Set<string>()
+  const take = (agent: string | null | undefined): void => {
+    if (agent && wanted.has(agent)) {
+      agents.add(agent)
+    }
+  }
   for (const tabs of Object.values(state.tabsByWorktree)) {
     for (const tab of tabs) {
-      if (tab.launchAgent) {
-        agents.add(tab.launchAgent)
-      }
+      take(tab.launchAgent)
     }
   }
   for (const [paneKey, entry] of state.agentStatusByPaneKey.entries()) {
-    if (entry.agentType && isTerminalTab(state, paneKeyTabId(paneKey))) {
+    if (
+      entry.agentType &&
+      wanted.has(entry.agentType) &&
+      isTerminalTab(state, paneKeyTabId(paneKey))
+    ) {
       agents.add(entry.agentType)
     }
   }
   for (const entry of Object.values(state.paneForegroundAgentByPaneKey)) {
-    if (entry.agent) {
-      agents.add(entry.agent)
-    }
+    take(entry.agent)
   }
   return agents
 }
@@ -96,17 +101,25 @@ function collectAgentTerminalIds(state: AppState): Set<string> {
 // Why coalesced: status writes arrive per hook event and a scan walks every tab and pane.
 const ARRIVAL_SCAN_MS = 1000
 
-/** Calls `onAppear` once per agent id, the first time a terminal running it exists. Returns the unsubscribe. */
-export function watchAgentTerminalArrivals(onAppear: (agent: string) => void): () => void {
+/**
+ * Calls `onAppear` once per wanted agent id, the first time a terminal running it exists.
+ * Scans only while `wanted()` is non-empty, so a settled app does no fleet-sized work. Returns the unsubscribe.
+ */
+export function watchAgentTerminalArrivals(
+  onAppear: (agent: string) => void,
+  wanted: () => ReadonlySet<string>
+): () => void {
   const seen = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | null = null
   const report = (): void => {
     timer = null
-    for (const agent of collectAgentTerminalIds(useAppStore.getState())) {
-      if (!seen.has(agent)) {
-        seen.add(agent)
-        onAppear(agent)
-      }
+    const pending = new Set([...wanted()].filter((agent) => !seen.has(agent)))
+    if (pending.size === 0) {
+      return
+    }
+    for (const agent of collectAgentTerminalIds(useAppStore.getState(), pending)) {
+      seen.add(agent)
+      onAppear(agent)
     }
   }
   report()

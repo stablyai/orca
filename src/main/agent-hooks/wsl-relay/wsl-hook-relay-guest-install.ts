@@ -94,7 +94,7 @@ async function installGuestHooksAndPlugins(
     distro: state.distro,
     installHooks: deps.installHooks,
     installCodex: deps.installCodex,
-    settings: deps.managedHookSettings(),
+    settings: deps.managedHookSettings,
     warn: deps.warn
   })
   // Record plugin overlays for PTY environments only while this relay still owns the state.

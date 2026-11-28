@@ -14,6 +14,7 @@ import {
   readAgentHookConsent
 } from '../../../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import { formatAgentProductName } from '../../../../../../shared/agent-status/presentation/agent-type-label'
+import { onAgentHookStatusesChanged } from '@/components/agent-hook-consent/agent-hook-status-events'
 import { SettingsGroupNestedRows } from '../../section-layout/SettingsGroup'
 
 /** One row per detected agent Orca has hooks for: installed or not, with Install or Remove. */
@@ -31,8 +32,13 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
   }, [])
   useEffect(() => {
     void ensureNativeDetectedAgents()
+  }, [ensureNativeDetectedAgents])
+  // Re-read disk whenever an answer lands here, on the card, or from another client.
+  const consent = settings?.agentHookConsent
+  useEffect(() => {
     refresh()
-  }, [ensureNativeDetectedAgents, refresh])
+  }, [consent, refresh])
+  useEffect(() => onAgentHookStatusesChanged(refresh), [refresh])
 
   const agents = (detected ?? []).filter(isAgentHookTarget)
   if (agents.length === 0) {
@@ -70,21 +76,25 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
         const pending =
           !present && agent === 'codex' && readAgentHookConsent(settings, agent) === 'granted'
         const installed = present || pending
+        // An unreadable config is unknown, not absent: offer a re-read instead of Install.
+        const unreadable = !present && status?.state === 'error'
         return (
           <div key={agent} className="flex min-h-9 items-center gap-2.5 py-1.5 text-[13px]">
             <AgentTypeIcon agentType={agent} size={14} />
             <span className="w-32 shrink-0 truncate">{formatAgentProductName(agent)}</span>
             <span
               className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
-              title={status?.configPath || undefined}
+              title={(unreadable ? status?.detail : status?.configPath) || undefined}
             >
               {!status
                 ? t('agentHookConsent.settings.checking', 'Checking…')
-                : present
-                  ? t('agentHookConsent.settings.installed', 'Installed')
-                  : pending
-                    ? t('agentHookConsent.settings.pending', 'Added when it next starts')
-                    : t('agentHookConsent.settings.notInstalled', 'Not installed')}
+                : unreadable
+                  ? t('agentHookConsent.settings.unreadable', 'Couldn’t read its settings')
+                  : present
+                    ? t('agentHookConsent.settings.installed', 'Installed')
+                    : pending
+                      ? t('agentHookConsent.settings.pending', 'Added when it next starts')
+                      : t('agentHookConsent.settings.notInstalled', 'Not installed')}
             </span>
             <Button
               type="button"
@@ -92,10 +102,14 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
               size="xs"
               className="w-16"
               disabled={busy !== null || !status}
-              onClick={() => void change(agent, installed ? 'declined' : 'granted')}
+              onClick={
+                unreadable ? refresh : () => void change(agent, installed ? 'declined' : 'granted')
+              }
             >
               {busy === agent ? (
                 <Loader2 className="animate-spin motion-reduce:animate-none" />
+              ) : unreadable ? (
+                t('agentHookConsent.settings.retry', 'Retry')
               ) : installed ? (
                 t('agentHookConsent.settings.remove', 'Remove')
               ) : (

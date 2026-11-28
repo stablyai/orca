@@ -1,6 +1,10 @@
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
-import type { AgentHookTarget } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
+import {
+  AGENT_HOOK_TARGETS,
+  type AgentHookTarget
+} from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { isAgentStatusHooksEnabled } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
   isAgentHookTarget,
   readAgentHookConsent
@@ -16,6 +20,8 @@ export type AgentHookConsentCardOffer = {
 
 let current: AgentHookConsentCardOffer | null = null
 let resolving = false
+// The card's own answer is in flight; its result view owns closing.
+let answeringOnCard = false
 const waiting: AgentHookTarget[] = []
 // Later lasts until Orca restarts, so the agent's next start after that asks again.
 const laterThisRun = new Set<AgentHookTarget>()
@@ -92,13 +98,57 @@ function enqueue(agent: string): void {
   void showNext()
 }
 
+/** Agents a card could still ask about this run; empty once all are answered or hooks are off. */
+function wantedAgents(): ReadonlySet<string> {
+  const settings = useAppStore.getState().settings
+  if (!isAgentStatusHooksEnabled(settings)) {
+    return new Set()
+  }
+  return new Set(
+    AGENT_HOOK_TARGETS.filter((agent) => isUndecided(agent) && !laterThisRun.has(agent))
+  )
+}
+
+// An answer from Settings (or another window) closes a card about it and drops it from the list.
+function followSettingsAnswers(): () => void {
+  return useAppStore.subscribe((state, previous) => {
+    if (
+      !current ||
+      answeringOnCard ||
+      state.settings?.agentHookConsent === previous.settings?.agentHookConsent
+    ) {
+      return
+    }
+    if (!isUndecided(current.agent)) {
+      publish(null)
+      void showNext()
+      return
+    }
+    const agents = current.agents.filter((agent) => agent === current?.agent || isUndecided(agent))
+    if (agents.length !== current.agents.length) {
+      publish({ ...current, agents })
+    }
+  })
+}
+
 /** Watches terminals for each agent's first appearance this run; returns the unsubscribe. */
 export function startAgentHookConsentWatch(): () => void {
-  return watchAgentTerminalArrivals(enqueue)
+  const stopWatch = watchAgentTerminalArrivals(enqueue, wantedAgents)
+  const stopFollow = followSettingsAnswers()
+  return () => {
+    stopWatch()
+    stopFollow()
+  }
 }
 
 /** `later` keeps this agent quiet until Orca restarts; otherwise it was decided. */
+/** Marks the card's own Install or decline as in flight, so Settings-answer handling leaves it open. */
+export function setAnsweringOnCard(active: boolean): void {
+  answeringOnCard = active
+}
+
 export function closeAgentHookConsentOffer(options: { later: boolean }): void {
+  answeringOnCard = false
   if (current && options.later) {
     laterThisRun.add(current.agent)
   }

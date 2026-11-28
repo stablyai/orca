@@ -1,5 +1,4 @@
 import { homedir } from 'node:os'
-import { ipcMain } from 'electron'
 import type {
   AgentHookInstallStatus,
   AgentHookTarget
@@ -28,7 +27,7 @@ import {
   removeManagedAgentHooks
 } from './managed-agent-hook-controls'
 
-type ConsentServiceStore = {
+export type ConsentServiceStore = {
   getSettings: () => GlobalSettings
   updateSettings: (
     updates: Partial<GlobalSettings>,
@@ -120,24 +119,4 @@ export function createAgentHookConsentService(
   }
 
   return { resolveOffer, decide, statuses: getManagedAgentHookStatuses }
-}
-
-export function registerAgentHookConsentIpc(
-  service: ReturnType<typeof createAgentHookConsentService>
-): void {
-  ipcMain.handle('agent-hook-consent:offer', (_event, agent: unknown) =>
-    service.resolveOffer(typeof agent === 'string' ? agent : '')
-  )
-  ipcMain.handle(
-    'agent-hook-consent:decide',
-    (_event, args: { agents?: unknown; decision?: unknown }) => {
-      const agents = Array.isArray(args?.agents) ? args.agents.filter(isAgentHookTarget) : []
-      const decision = args?.decision
-      if (agents.length === 0 || (decision !== 'granted' && decision !== 'declined')) {
-        return []
-      }
-      return service.decide(agents, decision)
-    }
-  )
-  ipcMain.handle('agent-hook-consent:statuses', () => service.statuses())
 }

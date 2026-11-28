@@ -25,10 +25,12 @@ import { formatAgentProductName } from '../../../../shared/agent-status/presenta
 import { AgentHookConsentSlide, agentHookConsentSlides } from './AgentHookConsentSlides'
 import {
   closeAgentHookConsentOffer,
+  setAnsweringOnCard,
   startAgentHookConsentWatch,
   useAgentHookConsentOffer,
   type AgentHookConsentCardOffer
 } from './agent-hook-consent-queue'
+import { notifyAgentHookStatusesChanged } from './agent-hook-status-events'
 
 const SLIDE_ADVANCE_MS = 5000
 const SPINNER_DELAY_MS = 200
@@ -168,9 +170,15 @@ function AgentHookConsentOfferCard({
   const install = async (): Promise<void> => {
     const agents = coversAll ? offer.agents : [offer.agent]
     setView({ kind: 'installing' })
+    setAnsweringOnCard(true)
     try {
       const statuses = await window.api.agentHookConsent.decide({ agents, decision: 'granted' })
-      const failed = statuses.find((status) => status.state === 'error')
+      notifyAgentHookStatusesChanged()
+      // A skipped install for the asked agent (CLI not found here) did not install anything.
+      const failed = statuses.find(
+        (status) =>
+          status.state === 'error' || (status.agent === offer.agent && status.state === 'skipped')
+      )
       setView(
         failed
           ? { kind: 'failed', detail: failed.detail ?? failed.configPath }
@@ -184,9 +192,12 @@ function AgentHookConsentOfferCard({
   const neverAsk = async (): Promise<void> => {
     // Commit the decline before the next offer is built, and keep the card if it fails.
     setDeclining(true)
+    setAnsweringOnCard(true)
     try {
       await window.api.agentHookConsent.decide({ agents: [offer.agent], decision: 'declined' })
+      notifyAgentHookStatusesChanged()
     } catch (error) {
+      setAnsweringOnCard(false)
       setDeclining(false)
       toast.error(t('agentHookConsent.declineFailed', 'Couldn’t save your choice'), {
         description: error instanceof Error ? error.message : String(error)
