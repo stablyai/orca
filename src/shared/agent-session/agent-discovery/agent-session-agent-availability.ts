@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isStructuredAgentId } from '../lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openEnum } from '../../validation/zod-salvage'
+import { managedRuntimeRetired } from '../../agent-launch/installation/managed-runtime-install'
 
 export const AGENT_SESSION_AVAILABILITY_METHOD = 'agentSession.subscribeAvailability'
 
@@ -61,7 +62,12 @@ export function decodeAgentSessionAvailabilityFrame(
       continue
     }
     const { agent, state, reason, chatProgram } = parsed.data
-    const program = chatProgram ? { chatProgram } : {}
+    const program = !chatProgram
+      ? {}
+      : {
+          chatProgram:
+            chatProgram === 'installable' && managedRuntimeRetired(agent) ? 'missing' : chatProgram
+        }
     byAgent.set(
       agent,
       state === 'refused'

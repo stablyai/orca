@@ -123,8 +123,6 @@ export type AcpLaunchSpec = {
   keepsEverySession?: true
   /** A program on the host preferred for new chats; chats whose account home it pins keep it. */
   hostBackend?: AcpHostBackend
-  /** Whether Orca's own copy of this program may run (and be kept updated); absent means it may. */
-  managedCopyAllowed?(settings: ManagedCopySettings): boolean
   /** Whether Orca may bring an installed `managedRuntime` up to its pin by itself; absent means it may. */
   managedRuntimeUpdatesAllowed?(settings: ManagedCopySettings): boolean
 }
@@ -137,7 +135,7 @@ export type AcpOwnMcpServersLoader = (input: {
 }) => Promise<McpServer[]>
 
 export type ManagedCopySettings = Partial<
-  Pick<GlobalSettings, 'antigravityManagedAgyEnabled' | 'antigravityServerAutoUpdateEnabled'>
+  Pick<GlobalSettings, 'antigravityServerAutoUpdateEnabled'>
 >
 
 /** What the host backend weighs: the host program a launch would run, and this host's facts. */
@@ -174,22 +172,16 @@ export type AcpHostBackend = {
   /** Other specs `specFor` may answer, whose model listings the catalog also weighs. */
   otherSpecs?: readonly AcpLaunchSpec[]
   /** The account home pinning a new chat to `spec`, or null when the host should not run it. It
-   *  may pin a program `input.command` didn't find, which an Install then provides. */
+   *  may pin a program `input.command` didn't find, which the user installs later. */
   select(input: AcpHostBackendInput): Promise<AgentSessionAccountHome | null>
   /** Changes whenever a sign-in that `select` weighs changes, so remembered answers are retired. */
   selectionRevision?(): number
   /** Tells when a fact `select` weighs changes apart from settings and Orca's installs. */
   onSelectionChanged?(listener: () => void): () => void
-  /** Where Orca also keeps its own copy of the host program: whether Install, its status and
-   *  removal act on the outer spec's `managedRuntime` instead of that copy. */
-  installsManagedRuntime?(input: AcpHostBackendInput): Promise<boolean>
 }
 
 /** The settings a host backend weighs; a change to any of them can change its answers. */
-export const ACP_HOST_BACKEND_SETTING_KEYS = [
-  'antigravityChatAuth',
-  'antigravityManagedAgyEnabled'
-] as const
+export const ACP_HOST_BACKEND_SETTING_KEYS = ['antigravityChatAuth'] as const
 export type AcpHostBackendSettings = Partial<
   Pick<GlobalSettings, (typeof ACP_HOST_BACKEND_SETTING_KEYS)[number]>
 >

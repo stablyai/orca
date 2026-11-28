@@ -20,7 +20,7 @@ export async function attachOrcadRuntimeServices(args: {
   // Agent detection answers RPC before release reclaim, and must count Orca's copies then too.
   const { provideManagedAgentDetection } =
     await import('../../runtime/rpc/methods/host-management/managed-copy-detection')
-  provideManagedAgentDetection(runtime)
+  provideManagedAgentDetection()
 
   const { installFirstWorkRenameHookSubscription } =
     await import('../../agent-hooks/first-work/first-work-rename-hook-subscription')

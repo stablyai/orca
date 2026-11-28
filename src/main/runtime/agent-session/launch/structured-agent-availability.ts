@@ -39,7 +39,6 @@ const HEALTH_SETTINGS = [
   'nativeChatShellEnvironmentVariables',
   // Why: the saved method picks the home new Antigravity chats run agy in (hostAlternative).
   'antigravityChatAuth',
-  'antigravityManagedAgyEnabled',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 

@@ -93,9 +93,6 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   agent: 'antigravity',
   command: 'agy',
   ignoreAgentCommandSetting: true,
-  // Off, Orca's agy runs no chat: chats run the user's own (same ~/.gemini history), and on a host
-  // without one they get launch's cliMissing refusal.
-  managedCopyAllowed: (settings) => settings.antigravityManagedAgyEnabled !== false,
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
   clientInfo: AGY_ACP_CLIENT_INFO,
   // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
