@@ -12,7 +12,7 @@ export function publishedUsageLimitContinue(
     resetsAt: cut.resetsAt,
     // While the reset is unknown, `hold.resetsAt` is a reading time, not a reset.
     ...(!hold.unknownReset && hold.resetsAt !== cut.resetsAt ? { continueAt: hold.resetsAt } : {}),
-    ...(hold.limitedAccount ? { limitedAccount: hold.limitedAccount } : {}),
+    ...(hold.limitedAccount !== undefined ? { limitedAccount: hold.limitedAccount } : {}),
     state
   }
 }

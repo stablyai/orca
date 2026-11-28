@@ -82,14 +82,19 @@ export function MobileNativeChatUsageLimitStatus({
     usageLimit?.turnItemId === notice.usageLimitTurnItemId
       ? usageLimit
       : null
-  // Continue applies at the cut's own reset, or earlier once the host says the chat moved accounts.
+  // Continue applies at the cut's own reset, or earlier once the host says the chat moved accounts;
+  // a move onto an account itself out of quota waits for that account, even past this reset.
+  const movedOutOfQuota = actions?.limitedAccount !== undefined
   const resetPassed = useResetPassed(
     resetsAt !== undefined && actions?.continueAt !== undefined
-      ? Math.min(resetsAt, actions.continueAt)
+      ? movedOutOfQuota
+        ? actions.continueAt
+        : Math.min(resetsAt, actions.continueAt)
       : resetsAt
   )
   // The line names the reset Orca waits for.
-  const shownAt = actions?.autoContinue ? (actions.continueAt ?? resetsAt) : resetsAt
+  const shownAt =
+    actions?.autoContinue || movedOutOfQuota ? (actions?.continueAt ?? resetsAt) : resetsAt
   const shownPassed = useResetPassed(shownAt)
   if (failure?.kind !== 'usageLimitReached') {
     return null

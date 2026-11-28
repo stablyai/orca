@@ -96,12 +96,18 @@ function accessibleStatus(input: UsageLimitRowWordsInput, t: Translate): string 
           { agent }
         )
   }
-  if (input.limitedAccount && manualTime) {
-    return t(
-      'components.native-chat.usageLimitActions.statusAccountOutOfQuota',
-      '{{account}} is out of quota until {{time}}.',
-      { account: input.limitedAccount, time: manualTime }
-    )
+  if (input.limitedAccount !== undefined && manualTime) {
+    return input.limitedAccount
+      ? t(
+          'components.native-chat.usageLimitActions.statusAccountOutOfQuota',
+          '{{account}} is out of quota until {{time}}.',
+          { account: input.limitedAccount, time: manualTime }
+        )
+      : t(
+          'components.native-chat.usageLimitActions.statusUnnamedAccountOutOfQuota',
+          'That account is out of quota until {{time}}.',
+          { time: manualTime }
+        )
   }
   if (autoTime && sameTime) {
     return t(
@@ -142,12 +148,18 @@ function subline(input: UsageLimitRowWordsInput, t: Translate): string | null {
   if (phase === 'unknown') {
     return t('components.native-chat.usageLimitActions.resetUnknown', 'Reset time unknown')
   }
-  if (phase === 'waiting' && input.limitedAccount && manualTime) {
-    return t(
-      'components.native-chat.usageLimitActions.accountOutOfQuota',
-      '{{account}} is out of quota until {{time}}',
-      { account: input.limitedAccount, time: manualTime }
-    )
+  if (phase === 'waiting' && input.limitedAccount !== undefined && manualTime) {
+    return input.limitedAccount
+      ? t(
+          'components.native-chat.usageLimitActions.accountOutOfQuota',
+          '{{account}} is out of quota until {{time}}',
+          { account: input.limitedAccount, time: manualTime }
+        )
+      : t(
+          'components.native-chat.usageLimitActions.unnamedAccountOutOfQuota',
+          'That account is out of quota until {{time}}',
+          { time: manualTime }
+        )
   }
   if (phase === 'waiting' && autoTime && sameTime) {
     return t('components.native-chat.usageLimitActions.continuesAt', 'Continues at {{time}}', {

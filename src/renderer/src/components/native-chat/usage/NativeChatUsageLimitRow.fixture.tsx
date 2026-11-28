@@ -268,3 +268,12 @@ export const antigravityAccountOutOfQuota = fixture({
   account: 'switch',
   limitedAccount: { email: 'personal@example.com', resetIn: 190 }
 })
+
+// The same, when the saved account it moved to has no email.
+export const antigravityUnnamedAccountOutOfQuota = fixture({
+  agent: 'Antigravity',
+  window: 'session',
+  resetIn: 40,
+  account: 'switch',
+  limitedAccount: { email: '', resetIn: 190 }
+})
