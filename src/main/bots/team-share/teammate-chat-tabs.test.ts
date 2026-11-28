@@ -8,6 +8,10 @@ import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-s
 import { physicalReload } from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import { showBotSessionTab } from '../bot-session-tab-show'
+import { activeProviderContext } from '../../../shared/agent-session/conversation-context/agent-session-provider-context'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { openStructuredAgentSessionConversationJournal } from '../../native-chat/agent-session-wire/host/structured-agent-session-conversation-open'
 import { ownerWindowProbe } from './owner-window-probe.test-support'
 import {
   B,
@@ -227,19 +231,80 @@ it('restores a teammate’s chats with nothing sent to the owner and his saved l
   expect(await fresh.hostChats()).toEqual([])
 })
 
-// A fork's tab is the at-rest create's (`publishTab`), placed where the client asked. The rig's
-// agent keeps no transcript to cut, so this drives that create without a fork source.
-it('opens a teammate’s placed create (a fork’s tab path) in their own list, its host tab row unset', async () => {
-  const r = await rig()
+/** A finished turn in `sessionId`'s journal, as its agent's transcript import writes one; returns
+ *  the answer's item, the one a fork copies through. */
+async function seedFinishedTurn(r: Rig, sessionId: string): Promise<string> {
+  const record = r.host.deps.store.getRecord(sessionId)!
+  const providerSession = activeProviderContext(record).head!.handle.nativeId
+  const identity = (uuid: string) => ({
+    provider: 'claude' as const,
+    sessionId: providerSession,
+    uuid
+  })
+  const { session } = await openStructuredAgentSessionConversationJournal(
+    r.host.deps,
+    agentSessionConversationView(record)
+  )
+  const fence = record.lease.runtimeFence
+  await session.journal.write({
+    kind: 'epoch-replace',
+    reason: 'legacy_import',
+    fence,
+    items: [
+      {
+        identity: identity('ask'),
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Plan the sprint' }]
+        },
+        ownerFence: fence
+      },
+      {
+        identity: identity('answer'),
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Here it is' }]
+        },
+        ownerFence: fence
+      }
+    ]
+  })
+  await session.journal.close()
+  return agentJournalItemKey(identity('answer'))
+}
+
+// The real fork: create handler, fork intent, the fork's admission against the source's journal,
+// founding and its tab. Only the agent's own copy of its conversation is stood in for.
+it('opens a teammate’s fork in their own list, placed and titled by its source, its host row unset', async () => {
+  const r = await rig({
+    chats: {
+      [C]: {
+        conversationName: 'Release',
+        provider: 'claude',
+        location: {
+          executionHostId: 'local',
+          wslDistro: null,
+          workspaceId: '',
+          workspaceKind: 'folder'
+        }
+      }
+    }
+  })
   await r.reveal('owner-desk', O)
   await r.reveal('mate-desk', C)
   await r.reveal('mate-desk', B)
   stubUserData()
+  const throughItemId = await seedFinishedTurn(r, C)
+  r.host.deps.adapter.copyConversation = async () => ({ sessionId: 'provider-copy' })
   const sessionId = randomUUID()
   const where = `id:${r.workspace}`
+  const forkFrom = { sessionId: C, throughItemId }
+  let reply: unknown
 
-  await ownerUntouchedBy(r, () =>
-    r.call('mate-desk', 'agentSession.create', {
+  await ownerUntouchedBy(r, async () => {
+    reply = await r.call('mate-desk', 'agentSession.create', {
       envelope: {
         sessionId,
         clientOperationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
@@ -247,19 +312,30 @@ it('opens a teammate’s placed create (a fork’s tab path) in their own list, 
         payloadFingerprint: structuredAgentSessionCreateFingerprint({
           sessionId,
           worktree: where,
-          agent: 'codex'
+          agent: 'claude',
+          forkFrom
         })
       },
       worktree: where,
-      agent: 'codex',
+      agent: 'claude',
+      forkFrom,
       tabPlacement: { afterTabId: `agent-session:${C}` }
     })
-  )
+  })
 
-  // Placed after C, live and saved.
+  expect(reply).toMatchObject({ ok: true })
+  expect(r.host.deps.store.getRecord(sessionId)?.forkedFrom).toMatchObject({
+    sessionId: C,
+    itemId: throughItemId
+  })
+  // Placed after its source, live and saved.
   expect(r.mine().chats).toEqual([C, sessionId, B])
   expect(r.mineSaved()).toEqual([C, sessionId, B])
   expect(r.host.isSessionTabVisible(sessionId)).toBe(false)
+  const row = r.runtime['toMobileSessionTabsResult'](
+    r.runtime['mobileSessionTabsByWorktree'].get(r.listOf())!
+  ).tabs.find((tab) => tab.type === 'agent-session' && tab.sessionId === sessionId)
+  expect(row).toMatchObject({ title: 'Release', forked: true })
 })
 
 it('titles a teammate’s fork by its source and retitles it when the source is renamed', async () => {

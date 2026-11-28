@@ -147,7 +147,11 @@ export async function authorityProfile(
     return {
       ...record,
       ...options.recordFields?.[id],
-      location: { ...record.location, workspaceId: workspace }
+      location: {
+        ...record.location,
+        ...options.recordFields?.[id]?.location,
+        workspaceId: workspace
+      }
     }
   })
   await seedTestAgentSessionRecordStore(root, {
