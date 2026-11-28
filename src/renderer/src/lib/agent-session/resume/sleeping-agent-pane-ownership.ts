@@ -20,6 +20,7 @@ import {
   isPaneResumingInPlace,
   isPaneSpawnDeferred
 } from '../../../components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
+import { hasSleepingAgentWakeRequest } from './sleeping-agent-wake-request-registry'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -113,7 +114,8 @@ export function stablePaneHasLivePty(
   return layout?.root?.type === 'leaf' && layout.root.leafId === leafId
 }
 
-function paneWillConnectOnActivation(
+/** Activation mounts this pane's tab itself (keep-alive covers hidden panes), so it needs no wake mount. */
+export function paneWillConnectOnActivation(
   worktreeId: string,
   tabId: string,
   state: AppStoreState
@@ -157,25 +159,43 @@ export function isStrandedWorkspaceSleepRecord(
   )
 }
 
+/** The record's own tab and layout leaf survive: its pane can cold-restore the record without a replacement tab. */
+function findColdRestorableTabOwner(
+  record: SleepingAgentSessionRecord,
+  state: AppStoreState
+): { tab: TerminalTab; worktreeId: string; stable: { tabId: string; leafId: string } } | null {
+  const stable = parsePaneKey(record.paneKey)
+  if (!stable || (record.tabId && record.tabId !== stable.tabId)) {
+    return null
+  }
+  const tabId = record.tabId ?? stable.tabId
+  const owner = findPreservedTabOwner(state, record.worktreeId, tabId)
+  if (!owner || !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
+    return null
+  }
+  return { ...owner, stable: { tabId, leafId: stable.leafId } }
+}
+
+/** Whether the record's preserved pane can cold-restore it in place, without a replacement tab. */
+export function recordPaneCanColdRestoreInPlace(
+  record: SleepingAgentSessionRecord,
+  state: AppStoreState
+): boolean {
+  return findColdRestorableTabOwner(record, state) !== null
+}
+
 export function recordPaneIsOwnedByPreservedPane(
   record: SleepingAgentSessionRecord,
   state: AppStoreState
 ): boolean {
   const worktreeTabs = state.tabsByWorktree[record.worktreeId] ?? []
-  const stable = parsePaneKey(record.paneKey)
-  if (stable) {
-    if (record.tabId && record.tabId !== stable.tabId) {
+  const coldRestorable = findColdRestorableTabOwner(record, state)
+  if (parsePaneKey(record.paneKey)) {
+    if (!coldRestorable) {
       return false
     }
-    const tabId = record.tabId ?? stable.tabId
-    const owner = findPreservedTabOwner(state, record.worktreeId, tabId)
-    if (
-      !owner ||
-      !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)
-    ) {
-      return false
-    }
-    const tab = owner.tab
+    const { tab, worktreeId: ownerWorktreeId, stable } = coldRestorable
+    const tabId = stable.tabId
     if (activationTreatsNoteAsFinished(record)) {
       return true
     }
@@ -207,6 +227,10 @@ export function recordPaneIsOwnedByPreservedPane(
     if (isPaneResumingInPlace(record.paneKey)) {
       return true
     }
+    // A wake mark means this pane will cold-restore the record; it lapses, so it never strands it.
+    if (hasSleepingAgentWakeRequest(record)) {
+      return true
+    }
     // Scrollback-only leaves without PTY/session IDs can repaint but cannot cold-resume active sessions.
     return (
       hasRestorableStablePanePty(
@@ -215,7 +239,7 @@ export function recordPaneIsOwnedByPreservedPane(
         stable.leafId,
         state.ptyIdsByTabId,
         state.terminalLayoutsByTabId
-      ) && paneWillConnectOnActivation(owner.worktreeId, tabId, state)
+      ) && paneWillConnectOnActivation(ownerWorktreeId, tabId, state)
     )
   }
 

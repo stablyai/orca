@@ -1,4 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { useAppStore } from '@/store'
 import { takeSleepingAgentWakeRequest } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import {
   holdPaneResumeUntilShown,
@@ -8,6 +9,47 @@ import { startDeferredSessionReattach } from '../reattach/deferred-session-reatt
 import { pendingSpawnByPaneKey } from './pending-pane-spawn'
 import type { ColdRestoreAgentResumeStartup } from '../startup/fresh-spawn-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+
+// Mirrors waitsForMainPaneStart: main's start-to-attach window has no renderer connect in flight.
+const mainPaneStartInFlight = (paneKey: string): boolean => {
+  const status = useAppStore.getState().terminalPaneStartsByPaneKey[paneKey]?.status
+  return status === 'starting' || status === 'resuming' || status === 'failed'
+}
+
+/** The pane is running its own resume and has not bound a PTY yet, so it owns its record meanwhile. */
+const paneResumeAttemptInFlight = (session: ConnectPanePtySession): boolean =>
+  !session.disposed &&
+  session.transport.getPtyId() === null &&
+  (session.transportConnectInFlightSince !== null ||
+    pendingSpawnByPaneKey.has(session.pendingSpawnKey) ||
+    // The flag covers dispatch before any status; cacheKey is the stable key main publishes under.
+    session.mainPaneStartRequestInFlight ||
+    mainPaneStartInFlight(session.cacheKey))
+
+/** Holds the record until this pane's attempt settles, so the sweep cannot fork a duplicate tab. */
+const holdPaneResumeAttempt = (session: ConnectPanePtySession, paneKey: string): void => {
+  if (session.agentResumeAttemptHold && session.agentResumeAttemptHoldPaneKey === paneKey) {
+    return
+  }
+  if (session.agentResumeAttemptHold && session.agentResumeAttemptHoldPaneKey) {
+    releasePaneResumeHold(session.agentResumeAttemptHoldPaneKey, session.agentResumeAttemptHold)
+  }
+  const hold = (): boolean => {
+    const inFlight = paneResumeAttemptInFlight(session)
+    if (!inFlight) {
+      releasePaneResumeHold(paneKey, hold)
+      // A self-released hold must stop matching, or this pane's next attempt never re-registers.
+      if (session.agentResumeAttemptHold === hold) {
+        session.agentResumeAttemptHold = null
+        session.agentResumeAttemptHoldPaneKey = null
+      }
+    }
+    return inFlight
+  }
+  session.agentResumeAttemptHold = hold
+  session.agentResumeAttemptHoldPaneKey = paneKey
+  holdPaneResumeUntilShown(paneKey, hold)
+}
 
 /** Defer hidden restores through the hibernation wake until reveal; visible panes and explicit background wakes run immediately (#7145). */
 export function deferHiddenAgentResume(
@@ -22,11 +64,22 @@ export function deferHiddenAgentResume(
     session.deps.isVisibleRef.current ||
     session.hiddenAgentResumeReleased
   ) {
+    if (recordEntry && (session.disposed || session.deps.isVisibleRef.current)) {
+      // No hidden deferral will spend this mark, and a stale mark would read as ownership forever.
+      if (takeSleepingAgentWakeRequest(recordEntry.record)) {
+        session.hiddenAgentResumeReleased = true
+      }
+      if (!session.disposed) {
+        holdPaneResumeAttempt(session, recordEntry.paneKey)
+      }
+    }
     return false
   }
   if (takeSleepingAgentWakeRequest(recordEntry.record)) {
     // Why: later fallbacks in this same connect must not hold what the background wake released.
     session.hiddenAgentResumeReleased = true
+    // The restore starts async through main; until a PTY binds, the sweep would fork a duplicate.
+    holdPaneResumeAttempt(session, recordEntry.paneKey)
     return false
   }
   const start: () => Promise<string | null> = wake ?? session.wakeHibernatedAgentPane
@@ -78,6 +131,11 @@ export function releaseHiddenAgentResumeHold(session: ConnectPanePtySession): vo
   session.hiddenAgentResumeHeldTarget = null
   if (session.hiddenAgentResumeHold && session.hiddenAgentResumeHoldKey) {
     releasePaneResumeHold(session.hiddenAgentResumeHoldKey, session.hiddenAgentResumeHold)
+  }
+  // The hidden flow can't see the attempt's own hold; left in place it pins the session graph.
+  if (session.agentResumeAttemptHold && session.agentResumeAttemptHoldPaneKey) {
+    releasePaneResumeHold(session.agentResumeAttemptHoldPaneKey, session.agentResumeAttemptHold)
+    session.agentResumeAttemptHold = null
   }
 }
 

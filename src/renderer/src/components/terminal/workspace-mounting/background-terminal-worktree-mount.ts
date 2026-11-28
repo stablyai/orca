@@ -29,14 +29,18 @@ function mergePendingMount(detail: BackgroundMountTerminalWorktreeDetail): void 
 
 // Record before emitting: lazy Terminal may not have a listener yet, otherwise losing navigation-free wakes.
 export function requestBackgroundTerminalWorktreeMount(
-  detail: BackgroundMountTerminalWorktreeDetail
+  detail: BackgroundMountTerminalWorktreeDetail,
+  skipClaimKeys?: ReadonlySet<string>
 ): void {
   if (!detail.worktreeId) {
     return
   }
   // Only targeted wakes mark sleeping agents; whole-worktree mounts must not authorize every hidden remount.
   if (detail.tabIds) {
-    requestSleepingAgentWakeOnMount(detail.worktreeId, detail.tabIds, detail.wakePaneKey)
+    requestSleepingAgentWakeOnMount(detail.worktreeId, detail.tabIds, {
+      paneKey: detail.wakePaneKey,
+      skipClaimKeys
+    })
   }
   mergePendingMount(detail)
   if (!hasRequestedMount) {

@@ -5,9 +5,15 @@ import {
   parsePaneKey
 } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
+import { isWorkspaceSleepRecord } from '../../../../../shared/workspace/lifecycle/workspace-sleep'
+import { markSleepingAgentWakeRequest } from './sleeping-agent-wake-request-registry'
 
-// Why record identity: a replaced or cleared record drops its request, so a stale ask never wakes a later sleep.
-const requestedRecords = new WeakSet<SleepingAgentSessionRecord>()
+export {
+  hasSleepingAgentWakeRequest,
+  takeSleepingAgentWakeRequest
+} from './sleeping-agent-wake-request-registry'
+
 export function getSleepingRecordTabId(record: SleepingAgentSessionRecord): string | null {
   return (
     record.tabId ??
@@ -17,19 +23,31 @@ export function getSleepingRecordTabId(record: SleepingAgentSessionRecord): stri
   )
 }
 
-/** Asks the named tabs' sleeping agents to start when their panes mount hidden. */
+type RequestSleepingAgentWakeOnMountOptions = {
+  paneKey?: string
+  skipClaimKeys?: ReadonlySet<string>
+}
+
+/** Skips claim keys the host still holds live: waking them adds a second writer (STA-3859). */
 export function requestSleepingAgentWakeOnMount(
   worktreeId: string,
   tabIds: readonly string[],
-  paneKey?: string
+  options?: RequestSleepingAgentWakeOnMountOptions
 ): void {
+  const paneKey = options?.paneKey
+  const skipClaimKeys = options?.skipClaimKeys
   const wanted = new Set(tabIds)
   if (paneKey) {
-    // A targeted wake authorizes its one record, not the workspace's.
+    // A targeted wake authorizes its one record, not the workspace's, while still honoring host claims (STA-3859).
     const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]
     const tabId = record ? getSleepingRecordTabId(record) : null
-    if (record?.worktreeId === worktreeId && tabId !== null && wanted.has(tabId)) {
-      requestedRecords.add(record)
+    if (
+      record?.worktreeId === worktreeId &&
+      tabId !== null &&
+      wanted.has(tabId) &&
+      skipClaimKeys?.has(getProviderSessionClaimKey(record)) !== true
+    ) {
+      markSleepingAgentWakeRequest(record)
     }
     return
   }
@@ -37,14 +55,17 @@ export function requestSleepingAgentWakeOnMount(
     useAppStore.getState().sleepingAgentSessionsByPaneKey,
     worktreeId
   )) {
-    const tabId = getSleepingRecordTabId(record)
+    // Never mark explicit sleep (#11598), host-claimed (reattach) or main-owned workspace sleep.
     if (
-      record.worktreeId === worktreeId &&
-      tabId !== null &&
-      wanted.has(tabId) &&
-      (!paneKey || record.paneKey === paneKey)
+      record.restoreOnTabOpenOnly === true ||
+      isWorkspaceSleepRecord(record) ||
+      skipClaimKeys?.has(getProviderSessionClaimKey(record)) === true
     ) {
-      requestedRecords.add(record)
+      continue
+    }
+    const tabId = getSleepingRecordTabId(record)
+    if (record.worktreeId === worktreeId && tabId !== null && wanted.has(tabId)) {
+      markSleepingAgentWakeRequest(record)
     }
   }
 }
@@ -78,8 +99,4 @@ export function mailWakeLaunchToken(
   record: SleepingAgentSessionRecord | undefined
 ): string | undefined {
   return record ? mailWakeLaunchTokens.get(record) : undefined
-}
-
-export function takeSleepingAgentWakeRequest(record: SleepingAgentSessionRecord): boolean {
-  return requestedRecords.delete(record)
 }
