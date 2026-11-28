@@ -104,5 +104,25 @@ export const BOT_TEMPLATES_PLANNING: readonly BotTemplate[] = [
     events: [],
     skills: ['issue-triage'],
     example: ['14 issues untouched since August.', 'ORC-511 and ORC-688 look like the same bug.']
+  },
+  {
+    id: 'super-agent',
+    category: 'planning',
+    name: 'Super Agent',
+    line: 'Your one contact for work: it routes asks to workers and brings back proof.',
+    firstChat:
+      'Give it a task or a link to a doc. It opens an Item, has a worker do it, and tells you when there is evidence it is done, or what access it needs first.',
+    mascot: 'M1',
+    watches: 'The tasks and doc links you give it',
+    does: 'Opens one Item per ask, has workers do the work, accepts it only with evidence, and pauses when it needs access you have not given.',
+    reports: 'Here, on each Item, when you ask',
+    connectors: [],
+    schedules: [],
+    events: [],
+    skills: ['delivery-routing'],
+    example: [
+      'Item 3, “Summarize the launch checklist”: done. 12 of 14 steps complete, quoted from the doc.',
+      'Item 4 needs you: editing the doc is more than the read access you gave me.'
+    ]
   }
 ]

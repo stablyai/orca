@@ -2,6 +2,7 @@
 import type { BotTemplateSkill } from '../../shared/bots/bot-templates'
 import { SKILL as bugReproduction } from './bot-template-skills/bug-reproduction'
 import { SKILL as ciFailureTriage } from './bot-template-skills/ci-failure-triage'
+import { SKILL as deliveryRouting } from './bot-template-skills/delivery-routing'
 import { SKILL as dependencyUpgrade } from './bot-template-skills/dependency-upgrade'
 import { SKILL as feedbackThemes } from './bot-template-skills/feedback-themes'
 import { SKILL as incidentTimeline } from './bot-template-skills/incident-timeline'
@@ -17,6 +18,7 @@ import { SKILL as workspaceHygiene } from './bot-template-skills/workspace-hygie
 export const BOT_TEMPLATE_SKILL_TEXT: Record<BotTemplateSkill, string> = {
   'bug-reproduction': bugReproduction,
   'ci-failure-triage': ciFailureTriage,
+  'delivery-routing': deliveryRouting,
   'dependency-upgrade': dependencyUpgrade,
   'feedback-themes': feedbackThemes,
   'incident-timeline': incidentTimeline,
