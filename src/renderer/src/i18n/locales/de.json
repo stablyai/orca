@@ -13195,7 +13195,7 @@
           "restarting": "Wird neu gestartet…",
           "updated": "Aktualisiert",
           "failed": "Aktualisierung fehlgeschlagen",
-          "nodeServerHelp": "Remote-Updates sind aus: Dieser Server führt den Node-Server von Orca (orcad) aus, der keinen eingebauten Updater hat. Installiere die neuere Orca-Version auf dem Server und starte dann `orca serve` neu.",
+          "nodeServerHelp": "Remote-Updates sind aus: Dieser Server führt Orca ohne eingebauten Updater aus, wie es der Node-Server von Orca (orcad) tut. Installiere die neuere Orca-Version auf dem Server und starte dann `orca serve` neu.",
           "updaterNotStartedHelp": "Remote-Updates sind aus: Orca auf diesem Server hat seinen Updater nicht gestartet. Starte Orca dort neu und prüfe erneut, oder aktualisiere es auf dem Server.",
           "headlessServeHelp": "Remote-Updates sind aus: Dieser Server führt `orca serve` ohne Update-Supervisor aus und kann sich daher nicht selbst in einer neuen Version neu starten. Aktualisiere Orca auf dem Server und starte dann den Dienst neu.",
           "systemPackageHelp": "Remote-Updates sind aus: Orca wurde auf diesem Server aus einem Systempaket (.deb oder .rpm) installiert, das nur sein Paketmanager aktualisieren darf. Aktualisiere es dort, zum Beispiel mit apt oder dnf.",

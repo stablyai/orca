@@ -24,3 +24,14 @@ export function hostAccountSignInFailureText(status: HostAccountSignInStatus): s
     status.error ?? translate('accounts.hostSignIn.errors.failed', 'Sign-in failed. Try again.')
   )
 }
+
+/** After this client stops waiting for a link: a sign-in the host finished meanwhile still wins. */
+export function noPromptOutcome(
+  latest: HostAccountSignInStatus | null,
+  unprompted: HostAccountSignInStatus
+): HostAccountSignInStatus {
+  if (latest?.phase === 'signedIn') {
+    return latest
+  }
+  throw new Error(hostAccountSignInFailureText({ ...unprompted, errorCode: 'noPrompt' }))
+}

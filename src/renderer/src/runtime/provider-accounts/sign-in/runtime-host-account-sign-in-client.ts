@@ -7,7 +7,7 @@ import {
   type HostAccountSignInProvider,
   type HostAccountSignInStatus
 } from '../../../../../shared/agent-accounts/host-account-sign-in-types'
-import { hostAccountSignInFailureText } from './host-account-sign-in-failure-text'
+import { hostAccountSignInFailureText, noPromptOutcome } from './host-account-sign-in-failure-text'
 import {
   HOST_ACCOUNT_REAUTH_RUNTIME_CAPABILITY,
   HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY
@@ -163,9 +163,8 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
       return settle(attempt)
     }
     if (status.phase === 'starting' && !attempt.cancelRequested && Date.now() >= promptDeadline) {
-      // Best effort: the host also ends a flow nobody asks about.
-      await call(attempt, 'accounts.hostSignInCancel', { flowId: status.flowId }).catch(() => {})
-      throw new Error(hostAccountSignInFailureText({ ...status, errorCode: 'noPrompt' }))
+      await deliverCancel(attempt).catch(() => {})
+      return noPromptOutcome(attempt.status, status)
     }
     if (attempt.cancelRequested && !attempt.cancelDelivered) {
       // Why not fatal: an undelivered cancel is asked again after the next answer.

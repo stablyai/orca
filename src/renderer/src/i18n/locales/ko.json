@@ -12803,7 +12803,7 @@
           "restarting": "다시 시작 중…",
           "updated": "업데이트됨",
           "failed": "업데이트 실패",
-          "nodeServerHelp": "원격 업데이트가 꺼져 있습니다: 이 서버는 기본 제공 업데이터가 없는 Orca의 Node 서버(orcad)를 실행합니다. 서버에 최신 Orca 릴리스를 설치한 다음 `orca serve`를 다시 시작하세요.",
+          "nodeServerHelp": "원격 업데이트가 꺼져 있습니다: 이 서버는 Orca의 Node 서버(orcad)처럼 기본 제공 업데이터 없이 Orca를 실행합니다. 서버에 최신 Orca 릴리스를 설치한 다음 `orca serve`를 다시 시작하세요.",
           "updaterNotStartedHelp": "원격 업데이트가 꺼져 있습니다: 이 서버의 Orca가 업데이터를 시작하지 않았습니다. 서버에서 Orca를 다시 시작한 후 다시 확인하거나 서버에서 업데이트하세요.",
           "headlessServeHelp": "원격 업데이트가 꺼져 있습니다: 이 서버는 업데이트 감독 프로세스 없이 `orca serve`를 실행하므로 새 버전으로 스스로 다시 시작할 수 없습니다. 서버에서 Orca를 업데이트한 다음 서비스를 다시 시작하세요.",
           "systemPackageHelp": "원격 업데이트가 꺼져 있습니다: 이 서버의 Orca는 시스템 패키지(.deb 또는 .rpm)로 설치되어 패키지 관리자만 업데이트할 수 있습니다. apt나 dnf 등으로 서버에서 업데이트하세요.",

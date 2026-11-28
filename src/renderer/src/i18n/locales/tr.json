@@ -13532,7 +13532,7 @@
           "restarting": "Yeniden başlatılıyor…",
           "updated": "Güncellendi",
           "failed": "Güncelleme başarısız oldu",
-          "nodeServerHelp": "Uzaktan güncellemeler kapalı: Bu sunucu, yerleşik güncelleyicisi olmayan Orca'nın Node sunucusunu (orcad) çalıştırıyor. Sunucuya yeni Orca sürümünü kurun, ardından `orca serve` komutunu yeniden başlatın.",
+          "nodeServerHelp": "Uzaktan güncellemeler kapalı: Bu sunucu Orca'yı, Orca'nın Node sunucusu (orcad) gibi yerleşik güncelleyicisi olmadan çalıştırıyor. Sunucuya yeni Orca sürümünü kurun, ardından `orca serve` komutunu yeniden başlatın.",
           "updaterNotStartedHelp": "Uzaktan güncellemeler kapalı: Bu sunucudaki Orca güncelleyicisini başlatmadı. Orca'yı orada yeniden başlatıp tekrar kontrol edin ya da sunucuda güncelleyin.",
           "headlessServeHelp": "Uzaktan güncellemeler kapalı: Bu sunucu `orca serve` komutunu bir güncelleme denetleyicisi olmadan çalıştırıyor, bu yüzden kendini yeni bir sürümle yeniden başlatamıyor. Orca'yı sunucuda güncelleyin, ardından hizmetini yeniden başlatın.",
           "systemPackageHelp": "Uzaktan güncellemeler kapalı: Bu sunucudaki Orca bir sistem paketinden (.deb veya .rpm) kuruldu ve yalnızca paket yöneticisi tarafından güncellenebilir. Orada güncelleyin, örneğin apt veya dnf ile.",

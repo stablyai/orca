@@ -102,11 +102,11 @@ export function getRemoteServerManualUpdateHelp(
   const support = entry.support
   const headless = support?.installMode === 'unsupported-headless-serve'
   if (support?.reason === 'updater-unavailable') {
-    // Only orcad, Orca's Node server, reports a headless server with no updater at all.
+    // Mostly orcad, which has no updater; a headless desktop server reports it only before its updater starts.
     return headless
       ? t(
           'auto.components.settings.RemoteServerUpdateStatus.nodeServerHelp',
-          'Remote updates are off: this server runs Orca’s Node server (orcad), which has no built-in updater. Install the newer Orca release on the server, then restart `orca serve`.'
+          'Remote updates are off: this server runs Orca without its built-in updater, as Orca’s Node server (orcad) does. Install the newer Orca release on the server, then restart `orca serve`.'
         )
       : t(
           'auto.components.settings.RemoteServerUpdateStatus.updaterNotStartedHelp',
