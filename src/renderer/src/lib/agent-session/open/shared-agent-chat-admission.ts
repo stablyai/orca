@@ -3,6 +3,7 @@
 // be this viewer's own comes in; another person's opens in the view of their tabs, and one whose
 // person can't be told opens to read alone. An agent shared with no one is unchanged.
 import { botPeoplePicker } from '../../../../../shared/bots/bot-chat-people'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { openBotHome } from '@/lib/bot-catalog'
 import { readBotForWorkspace } from '@/components/bots/bot-workspace'
@@ -24,12 +25,20 @@ export function claimChatMadeHere(sessionId: string): string {
   return sessionId
 }
 
-/** True: the chat may enter this window's own tabs. False: it was shown in a view instead. */
-export async function admitToOwnTabs(target: {
-  worktreeId: string
-  sessionId: string
-}): Promise<boolean> {
-  const bot = readBotForWorkspace(target.worktreeId)
+type OpenTarget = { worktreeId: string; sessionId: string; hostId: ExecutionHostId }
+
+/** True: the chat enters this window's own tabs, which show again over any viewed list. False: it
+ *  was shown in a view instead. */
+export async function admitToOwnTabs(target: OpenTarget): Promise<boolean> {
+  const own = await isOwnElseShownInView(target)
+  if (own) {
+    viewTabList(target.worktreeId, null)
+  }
+  return own
+}
+
+async function isOwnElseShownInView(target: OpenTarget): Promise<boolean> {
+  const bot = readBotForWorkspace(target.worktreeId, target.hostId)
   if (!bot || botPeoplePicker(bot, null) === null) {
     return true
   }

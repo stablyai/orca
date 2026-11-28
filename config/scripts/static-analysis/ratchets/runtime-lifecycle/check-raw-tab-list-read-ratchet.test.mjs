@@ -21,7 +21,11 @@ describe('raw tab list reads', () => {
     ['a call on the registry it returns', 'getRuntimeBrowserPageRegistry(this).everyPage(id)'],
     ['an optional registry call', 'registry?.everyPage()'],
     ['a destructured everyPage', 'const { everyPage } = registry; everyPage()'],
-    ['a renamed everyPage', 'const { everyPage: all } = registry; all()']
+    ['a renamed everyPage', 'const { everyPage: all } = registry; all()'],
+    ['an everyPage alias', 'const all = registry.everyPage; all()'],
+    ['an array destructure', 'const [...all] = this.ptysById'],
+    ['a first entry', 'const [first] = this.ptysById'],
+    ['either side of a condition', 'for (const [id, p] of ok ? this.ptysById : []) {}']
   ])('counts %s', (_form, source) => {
     expect(countRawTabListReads(source)).toBe(1)
   })

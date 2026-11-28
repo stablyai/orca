@@ -48,9 +48,9 @@ export function findBotByWorkspace(
   return homeIndex(bots).get(hostId ? `${hostId}\0${workspaceId}` : workspaceId) ?? null
 }
 
-/** The bot whose home a workspace is, read outside React; null with bots off. */
-export function readBotForWorkspace(workspaceId: string): Bot | null {
-  return readBotsEnabled() ? findBotByWorkspace(readBots(), workspaceId) : null
+/** The bot whose home a workspace is (on `hostId`, when given), read outside React; null with bots off. */
+export function readBotForWorkspace(workspaceId: string, hostId?: ExecutionHostId): Bot | null {
+  return readBotsEnabled() ? findBotByWorkspace(readBots(), workspaceId, hostId) : null
 }
 
 export function isBotPage(workspaceId: string): boolean {

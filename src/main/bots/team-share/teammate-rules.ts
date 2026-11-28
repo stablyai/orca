@@ -47,6 +47,7 @@ import type { Bot } from '../../../shared/bot-types'
 import type { RpcCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { botShareUsable } from '../../../shared/bots/bot-team-shares'
 
 // ── 1. Methods ──────────────────────────────────────────────────────────────────────────────────
 
@@ -236,8 +237,9 @@ export function writesHostTabList(methodName: string): boolean {
 export type TabListPerson = 'owner' | { accountId: string }
 
 /** The list a read of `person`'s tabs names in a workspace: the host's for the owner, a teammate's own
- *  in the Home of an agent shared with them. Null for anyone else: a teammate has no list outside
- *  that Home, and the caller is refused rather than shown another list under their name. */
+ *  in the Home of an agent shared with them, unless they declined. Null for anyone else: a teammate
+ *  has no list outside that Home, and the caller is refused rather than shown another list under
+ *  their name. */
 export function viewedTabListOf(
   worktreeId: string,
   person: TabListPerson,
@@ -248,7 +250,8 @@ export function viewedTabListOf(
   }
   const home = bots.find((bot) => folderWorkspaceKey(bot.folderWorkspaceId) === worktreeId)
   const shared = home?.shares?.some(
-    (share) => share.kind === 'account' && share.accountId === person.accountId
+    (share) =>
+      share.kind === 'account' && share.accountId === person.accountId && botShareUsable(share)
   )
   return home && shared ? teammateTabListKey({ botId: home.id, accountId: person.accountId }) : null
 }

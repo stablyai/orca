@@ -303,17 +303,20 @@ export type BotChatRowRead =
 /** A chat's row by its session (its id, or the live session a /clear moved it to): whose it is, as
  *  the host stamps it. The kept read first, else the host's read of that one chat. */
 export async function readBotChatRow(bot: BotRef, sessionId: string): Promise<BotChatRowRead> {
-  const rowIn = (read: BotChatTreeRead | null): BotChatTreeChat | null =>
-    read?.chats.find((chat) => chat.chatId === sessionId || chat.liveSessionId === sessionId) ??
-    null
-  const kept = rowIn(chatTreeRead.snapshot(botRefKey(bot)))
+  const kept = chatTreeRead
+    .snapshot(botRefKey(bot))
+    ?.chats.find((chat) => chat.chatId === sessionId || chat.liveSessionId === sessionId)
   if (kept) {
     return { kind: 'row', row: kept }
   }
   try {
-    const row = rowIn(
-      await callBotRpc<BotChatTreeRead>(bot, 'bots.chatTree', { botId: bot.id, chatId: sessionId })
-    )
+    // The host answers with the one chat the session is in, whichever /clear of it it names.
+    const {
+      chats: [row]
+    } = await callBotRpc<BotChatTreeRead>(bot, 'bots.chatTree', {
+      botId: bot.id,
+      chatId: sessionId
+    })
     return row ? { kind: 'row', row } : { kind: 'missing' }
   } catch {
     return { kind: 'failed' }

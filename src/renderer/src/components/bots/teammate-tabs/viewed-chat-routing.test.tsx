@@ -149,10 +149,8 @@ it('opens the owner’s Home from a teammate’s Chats in the owner’s tabs', (
   expect(host.rpc).not.toHaveBeenCalled()
 })
 
-it('opens this viewer’s own chat in their own tabs, leaving the view', async () => {
-  viewTabList(HOME, { accountId: MATE.accountId })
+it('opens this viewer’s own chat in their own tabs', async () => {
   openBotChatRow(ownersCopy, chat({ chatId: 'own-side' }))
-  expect(viewed()).toBeNull()
   expect(host.activate).toHaveBeenCalledWith({
     structuredSession: { sessionId: 'own-side', workspaceId: HOME }
   })
@@ -255,9 +253,8 @@ it('opens a chat named only by its session (an item’s link, Needs you) in the 
   })
   expect(host.activate).not.toHaveBeenCalled()
   expect(host.rpc).not.toHaveBeenCalledWith(ownersCopy, 'bots.chats.seen', expect.anything())
-  // One the host lists as no one's yet (just made here) is this viewer's own.
+  // One the host lists as no one's yet goes to the open's own door (`admitToOwnTabs`).
   await openBotChatById(ownersCopy, 'just-made')
-  expect(viewed()).toBeNull()
   expect(host.activate).toHaveBeenCalledWith({
     structuredSession: { sessionId: 'just-made', workspaceId: HOME }
   })

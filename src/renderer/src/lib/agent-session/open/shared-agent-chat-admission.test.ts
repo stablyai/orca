@@ -15,7 +15,7 @@ import { renderHook } from '@testing-library/react'
 import type * as BotHosts from '@/lib/bot-hosts'
 import type * as BotCatalog from '@/lib/bot-catalog'
 import { openBotHomeTab } from '@/lib/bot-catalog'
-import { claimChatMadeHere } from './shared-agent-chat-admission'
+import { admitToOwnTabs, claimChatMadeHere } from './shared-agent-chat-admission'
 import { makeTestBot } from '../../../../../main/bots/bot.test-fixture'
 
 // The agent's host: its chat list (whose each chat is), and every call that would place a chat in
@@ -23,7 +23,15 @@ import { makeTestBot } from '../../../../../main/bots/bot.test-fixture'
 const host = vi.hoisted(() => {
   const bots: Bot[] = []
   const rows: Record<string, unknown> = {}
-  return { bots, rows, down: false, reveal: vi.fn(), seen: vi.fn() }
+  return {
+    bots,
+    rows,
+    down: false,
+    lost: false,
+    reveal: vi.fn(),
+    seen: vi.fn(),
+    located: vi.fn()
+  }
 })
 vi.mock('@/lib/bot-hosts', async (importOriginal) => ({
   ...(await importOriginal<typeof BotHosts>()),
@@ -55,6 +63,10 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
       return { ok: false, refusal: { code: 'agent_session_identity_required' } }
     }
     if (method === 'orchestration.partyLocation' || method === 'orchestration.partyOpen') {
+      host.located(params.address)
+      if (host.lost) {
+        throw new Error('unreachable')
+      }
       // The host finds the chat in the agent's Home.
       const sessionId = params.address?.replace('orca_session_id:', '') ?? ''
       return { location: { kind: 'chat', sessionId, worktreeId: 'folder:home-1' } }
@@ -95,7 +107,7 @@ const shared = makeTestBot({
   ]
 })
 
-function row(chatId: string, person?: typeof MATE): BotChatTreeChat {
+function row(chatId: string, person?: typeof MATE, liveSessionId?: string): BotChatTreeChat {
   return {
     chatId,
     title: 'Chat',
@@ -109,7 +121,8 @@ function row(chatId: string, person?: typeof MATE): BotChatTreeChat {
     finished: [],
     finishedTotal: 0,
     failedTotal: 0,
-    ...(person ? { person } : {})
+    ...(person ? { person } : {}),
+    ...(liveSessionId ? { liveSessionId } : {})
   }
 }
 
@@ -129,6 +142,7 @@ async function open(bot: Bot, sessionId: string): Promise<void> {
 
 beforeEach(() => {
   host.down = false
+  host.lost = false
   for (const key of Object.keys(host.rows)) {
     delete host.rows[key]
   }
@@ -182,5 +196,33 @@ it('shows this window’s own tabs again when it opens its own Home', async () =
   host.bots = [shared]
   viewTabList(HOME, { accountId: MATE.accountId })
   void openBotHomeTab(shared).catch(() => false)
+  expect(viewed()).toBeNull()
+})
+
+it('places this viewer’s own chat opened by a session an earlier /clear of it left', async () => {
+  // Their chat ran S1, then S2, now S3; the host answers for S2 with the chat it is in.
+  host.rows.s2 = row('s1', undefined, 's3')
+  await open(shared, 's2')
+  expect(host.reveal).toHaveBeenCalledWith('s2')
+  expect(viewed()).toBeNull()
+})
+
+it('marks nothing seen for a chat whose host can’t say where it is', async () => {
+  host.lost = true
+  host.bots = [shared]
+  openBotSession(shared, 'someone-side')
+  await vi.waitFor(() => expect(host.located).toHaveBeenCalled())
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(host.reveal).not.toHaveBeenCalled()
+  expect(host.seen).not.toHaveBeenCalled()
+})
+
+it('asks of the agent on the chat’s own host, never a same-id twin on another', async () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a paired host's copy, as the host catalog lists it (Bot types only this app's own).
+  const pairedTwin = { ...shared, hostId: 'runtime:env-twin' } as unknown as Bot
+  host.bots = [pairedTwin, unshared]
+  expect(await admitToOwnTabs({ worktreeId: HOME, sessionId: 'any-side', hostId: 'local' })).toBe(
+    true
+  )
   expect(viewed()).toBeNull()
 })

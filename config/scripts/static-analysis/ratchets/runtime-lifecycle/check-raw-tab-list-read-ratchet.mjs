@@ -94,6 +94,9 @@ export function countRawTabListReads(sourceText, fileName = 'file.ts') {
   const everyPageAliases = new Set()
   const isPtyMap = (node) => {
     const value = unwrap(node)
+    if (ts.isConditionalExpression(value)) {
+      return isPtyMap(value.whenTrue) || isPtyMap(value.whenFalse)
+    }
     if (ts.isIdentifier(value)) {
       return PTY_MAP_NAMES.has(value.text) || aliases.has(value.text)
     }
@@ -110,6 +113,14 @@ export function countRawTabListReads(sourceText, fileName = 'file.ts') {
     if (ts.isVariableDeclaration(node) && node.initializer) {
       if (ts.isIdentifier(node.name) && isPtyMap(node.initializer)) {
         aliases.add(node.name.text)
+      }
+      const initial = unwrap(node.initializer)
+      if (
+        ts.isIdentifier(node.name) &&
+        ts.isPropertyAccessExpression(initial) &&
+        initial.name.text === 'everyPage'
+      ) {
+        everyPageAliases.add(node.name.text)
       }
       if (ts.isObjectBindingPattern(node.name)) {
         for (const element of node.name.elements) {
@@ -165,6 +176,13 @@ export function countRawTabListReads(sourceText, fileName = 'file.ts') {
       (node.expression.text === 'Map' || node.expression.text === 'Set') &&
       node.arguments?.[0] &&
       isPtyMap(node.arguments[0])
+    ) {
+      count += 1
+    } else if (
+      ts.isVariableDeclaration(node) &&
+      ts.isArrayBindingPattern(node.name) &&
+      node.initializer &&
+      isPtyMap(node.initializer)
     ) {
       count += 1
     } else if (ts.isForOfStatement(node) && isPtyMap(node.expression)) {

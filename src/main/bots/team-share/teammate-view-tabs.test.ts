@@ -338,6 +338,23 @@ it('refuses to read or close the list of someone the agent isn’t shared with',
   expect(await r.ownerView()).toBe(owner)
 })
 
+it('refuses the list of someone who declined the share', async () => {
+  const r = await rig()
+  const bot = r.runtime.bots.list()[0]!
+  r.profile.saveBot({
+    ...bot,
+    shares: bot.shares?.map((share) =>
+      share.kind === 'account' && share.accountId === OTHER.accountId
+        ? { ...share, declinedAt: 2 }
+        : share
+    )
+  })
+  expect(await watched(r, 'session.tabs.list', { accountId: OTHER.accountId })).toMatchObject(
+    REFUSED
+  )
+  expect(await watched(r, 'session.tabs.list', MATE)).toMatchObject({ ok: true })
+})
+
 it('refuses a teammate’s list in a worker’s workspace, whose one list is the host’s', async () => {
   const r = await rig({ home: 'other' })
   expect(await watched(r, 'session.tabs.list', MATE)).toMatchObject(REFUSED)

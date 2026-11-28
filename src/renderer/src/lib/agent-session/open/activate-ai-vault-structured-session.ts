@@ -98,8 +98,9 @@ export async function activateAiVaultStructuredSession(
       retry: options?.retry ?? (() => activateAiVaultStructuredSession(session, undefined, target))
     }
   )
-  // Superseded: another open, or a view of another person's chat, took its place here.
-  return result.kind !== 'superseded'
+  // Only a chat placed in this window's tabs is opened: a failed open, another open, or a view of
+  // another person's chat in its place is not.
+  return result.kind === 'opened'
 }
 
 type DesktopStructuredSessionOpenOptions = {

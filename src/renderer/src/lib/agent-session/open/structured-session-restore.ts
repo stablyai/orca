@@ -15,7 +15,10 @@ import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  getRuntimeTargetHostId,
+  runtimeTargetForOwnerEnvironment
+} from '@/runtime/rpc/targets/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
@@ -58,14 +61,14 @@ export async function revealStructuredSession(target: {
   admissionSignal?: AbortSignal
   beforeSend?: () => void
 }): Promise<StructuredSessionRevealOutcome> {
-  if (!(await admitToOwnTabs(target))) {
-    return 'shown-in-view'
-  }
   const host =
     target.target ??
     runtimeTargetForOwnerEnvironment(
       runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), target.worktreeId)
     )
+  if (!(await admitToOwnTabs({ ...target, hostId: getRuntimeTargetHostId(host) }))) {
+    return 'shown-in-view'
+  }
   // Probe the answering paired host’s build; the local host shares this build and needs no probe.
   if (host.kind === 'environment') {
     let supported: boolean
