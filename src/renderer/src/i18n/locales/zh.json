@@ -22923,6 +22923,7 @@
           "deleted": "已删除",
           "kept": "已保留 · {{count}}",
           "showMore": "再显示 {{count}} 个",
+          "showFewer": "收起",
           "waiting": "已不活跃 {{elapsed}}/{{after}} 天",
           "title": "活动记录",
           "notListed_other": "另有 {{count}} 个保留的工作区未列出",

@@ -23099,6 +23099,7 @@
           "deleted": "Eliminado",
           "kept": "Conservados · {{count}}",
           "showMore": "Mostrar {{count}} más",
+          "showFewer": "Mostrar menos",
           "waiting": "Inactivo {{elapsed}} de {{after}} días",
           "title": "Actividad",
           "notListed_one": "1 espacio de trabajo conservado más no aparece en la lista.",

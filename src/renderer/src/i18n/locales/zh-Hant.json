@@ -23222,6 +23222,7 @@
           "deleted": "已刪除",
           "kept": "已保留 · {{count}}",
           "showMore": "再顯示 {{count}} 個",
+          "showFewer": "顯示較少",
           "waiting": "已閒置 {{elapsed}}/{{after}} 天",
           "title": "活動記錄",
           "notListed_other": "另有 {{count}} 個保留的工作區未列出。",

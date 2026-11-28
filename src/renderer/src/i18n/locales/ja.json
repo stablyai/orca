@@ -22757,6 +22757,7 @@
           "deleted": "削除済み",
           "kept": "保持 · {{count}}",
           "showMore": "さらに {{count}} 件を表示",
+          "showFewer": "表示数を減らす",
           "waiting": "非アクティブ: {{elapsed}} / {{after}} 日",
           "title": "アクティビティ",
           "notListed_other": "保持された他の {{count}} 個のワークスペースは一覧に表示されていません。",

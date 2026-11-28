@@ -24004,6 +24004,7 @@
           "deleted": "Deleted",
           "kept": "Kept · {{count}}",
           "showMore": "Show {{count}} more",
+          "showFewer": "Show fewer",
           "waiting": "Inactive {{elapsed}} of {{after}} days",
           "title": "Activity",
           "notListed_one": "1 more kept workspace is not listed.",
