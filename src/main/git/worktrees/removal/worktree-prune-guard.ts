@@ -81,10 +81,7 @@ async function pruneWithForeignEntriesLocked(
   }
 }
 
-/**
- * Each linked worktree's admin entry and its `gitdir` link; none when the folder is missing. A
- * folder or record this process cannot read rejects: it may be one a prune would delete.
- */
+/** Admin entries and `gitdir` links; rejects on any unread record, since a prune may delete it. */
 export async function readWorktreeLinks(
   adminRoot: string
 ): Promise<{ entry: string; link: string }[]> {

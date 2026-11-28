@@ -1,7 +1,6 @@
-// Real Git verifies the prune guard: it keeps a record the other Git wrote, and runs no prune
-// whose records it could not read or lock.
+// Real Git: the guard keeps the other Git's records and runs no prune it could not read or lock.
 import { execFile } from 'node:child_process'
-import { chmodSync, existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -23,9 +22,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   const fails = (syscall: string, path: unknown): boolean =>
     fault.syscall === syscall && String(path).endsWith(fault.path)
-  // Fails only the records folder's own listing, so a missing-folder check still reads its parent.
   const readdir = (...args: Parameters<typeof actual.readdir>) =>
-    fails('readdir', args[0]) && String(args[0]).replaceAll('\\', '/').endsWith('/worktrees')
+    fails('readdir', args[0])
       ? Promise.reject(Object.assign(new Error('share unavailable'), { code: fault.code }))
       : actual.readdir(...args)
   const writeFile = (...args: Parameters<typeof actual.writeFile>) =>
@@ -119,20 +117,13 @@ describe('worktree prune guard', () => {
     })
   })
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'refuses a missing records folder under a parent it cannot list',
-    async () => {
-      const gitDir = join(repoPath, '.git')
-      await removeTree(adminRoot)
-      // 0o111: the child readdir reads ENOENT, so the missing-folder check must hit the parent's EACCES.
-      chmodSync(gitDir, 0o111)
-      try {
-        await expect(readWorktreeLinks(join(gitDir, 'worktrees'))).rejects.toMatchObject({
-          code: 'EACCES'
-        })
-      } finally {
-        chmodSync(gitDir, 0o755)
-      }
-    }
-  )
+  it('refuses a missing records folder under a parent it cannot list', async () => {
+    await removeTree(adminRoot)
+    // Traversable but unlistable (POSIX 0o111): stat passes, only a listing sees EACCES.
+    fault.syscall = 'readdir'
+    fault.path = '.git'
+    fault.code = 'EACCES'
+
+    await expect(readWorktreeLinks(adminRoot)).rejects.toMatchObject({ code: 'EACCES' })
+  })
 })
