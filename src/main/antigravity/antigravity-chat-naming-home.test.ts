@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -137,6 +137,31 @@ describe('Antigravity chat naming', () => {
       expect(await readdir(homes)).toEqual([])
     }
   )
+
+  it('sweeps only run homes, and never through a link', async () => {
+    const data = await mkdtemp(join(tmpdir(), 'orca-agy-naming-data-'))
+    const outside = await mkdtemp(join(tmpdir(), 'orca-agy-naming-outside-'))
+    folders.push(data, outside)
+    const run = (n: number): string => `run-0f0e0d0c-0b0a-4909-8807-06050403020${n}`
+    await mkdir(join(outside, run(1)))
+    await writeFile(join(outside, 'keep'), 'not Orca’s')
+    const root = join(data, 'acp-text-task-homes', 'antigravity')
+    await mkdir(join(data, 'acp-text-task-homes'))
+    await symlink(outside, root, 'junction')
+
+    await sweepAcpTextTaskHomes(data, [ANTIGRAVITY_LAUNCH_SPEC])
+    expect((await readdir(outside)).sort()).toEqual(['keep', run(1)])
+
+    await unlink(root)
+    await mkdir(root)
+    await mkdir(join(root, run(2)))
+    await writeFile(join(root, 'notes'), 'not a run home')
+    await symlink(outside, join(root, run(3)), 'junction')
+
+    await sweepAcpTextTaskHomes(data, [ANTIGRAVITY_LAUNCH_SPEC])
+    expect(await readdir(root)).toEqual(['notes'])
+    expect((await readdir(outside)).sort()).toEqual(['keep', run(1)])
+  })
 
   it("starts no agy for a chat on agy's home that agy's own settings sign in differently", async () => {
     const { title, children } = await nameChat('present', { auth: { type: 'oauth-business' } })
