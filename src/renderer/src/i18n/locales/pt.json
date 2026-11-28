@@ -30,6 +30,11 @@
     "scanTooLarge": "A varredura da Abertura rápida é grande demais ({{reason}})."
   },
   "sourceControl": {
+    "fileMenu": {
+      "stageChanges": "Adicionar alterações ao stage",
+      "unstageChanges": "Remover alterações do stage",
+      "discardChanges": "Descartar alterações"
+    },
     "sectionAgentStarted": "Iniciado em {{value0}}",
     "unlinkedPr": {
       "status": "PR #{{number}} desvinculado"

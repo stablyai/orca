@@ -24934,6 +24934,11 @@
     }
   },
   "sourceControl": {
+    "fileMenu": {
+      "stageChanges": "Değişiklikleri Stage Et",
+      "unstageChanges": "Değişiklikleri Unstage Et",
+      "discardChanges": "Değişiklikleri At"
+    },
     "sectionAgentStarted": "{{value0}} içinde başlatıldı",
     "actionSaveFailed": "Bu eylem kaydedilemedi. Ayarlar bölümünden yeniden kaydetmeyi deneyin.",
     "discard": {

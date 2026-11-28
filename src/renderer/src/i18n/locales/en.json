@@ -24959,6 +24959,11 @@
     }
   },
   "sourceControl": {
+    "fileMenu": {
+      "stageChanges": "Stage Changes",
+      "unstageChanges": "Unstage Changes",
+      "discardChanges": "Discard Changes"
+    },
     "sectionAgentStarted": "Started in {{value0}}",
     "actionSaveFailed": "Could not save this action. Try saving it again in Settings.",
     "discard": {

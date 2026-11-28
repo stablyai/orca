@@ -107,6 +107,29 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
       onView={() => onOpen(entry)}
       conflictResolutions={conflictResolutions}
       onResolveConflict={(resolution) => void onResolveConflict(entry, resolution)}
+      onStage={canStage ? () => void onStage(entry.path) : undefined}
+      onUnstage={
+        canUnstage
+          ? () => void onUnstage(entry.path, entry.status === 'renamed' ? entry.oldPath : undefined)
+          : undefined
+      }
+      discard={
+        canDiscard
+          ? {
+              label:
+                entry.area === 'untracked'
+                  ? t(
+                      'auto.components.right.sidebar.SourceControl.11463f7a98',
+                      'Delete untracked file'
+                    )
+                  : entry.status === 'deleted'
+                    ? t('auto.components.right.sidebar.SourceControl.989f3d5e34', 'Restore file')
+                    : t('sourceControl.fileMenu.discardChanges', 'Discard Changes'),
+              icon: entry.area === 'untracked' ? Trash : Undo2,
+              onSelect: () => onDiscard(entry)
+            }
+          : undefined
+      }
       onRevealInExplorer={onRevealInExplorer}
       onOpenChange={(open) => {
         if (open && onContextMenu) {

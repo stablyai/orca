@@ -24863,6 +24863,11 @@
     }
   },
   "sourceControl": {
+    "fileMenu": {
+      "stageChanges": "변경 사항 스테이징",
+      "unstageChanges": "변경 사항 언스테이징",
+      "discardChanges": "변경 사항 취소"
+    },
     "sectionAgentStarted": "{{value0}}에서 시작했습니다",
     "actionSaveFailed": "이 작업을 저장하지 못했습니다. 설정에서 다시 저장해 보세요.",
     "unlinkedPr": {
