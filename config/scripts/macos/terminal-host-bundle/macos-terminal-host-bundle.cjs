@@ -12,7 +12,7 @@ const {
   writeFileSync
 } = require('node:fs')
 const { builtinModules } = require('node:module')
-const { basename, dirname, join, relative, resolve, sep } = require('node:path')
+const { basename, dirname, isAbsolute, join, relative, resolve, sep } = require('node:path')
 const { pathToFileURL } = require('node:url')
 const {
   assertMacExecutableUuid,
@@ -81,19 +81,19 @@ function packageNameOf(specifier) {
   return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
 }
 
-/** The file a relative load names, as Node resolves it; null for a non-JS target. */
+/** The file a relative load names, as Node resolves it. */
 function resolveRelativeLoad(fromFile, specifier) {
   const base = resolve(dirname(fromFile), specifier)
   for (const candidate of [base, `${base}.js`, join(base, 'index.js')]) {
     if (existsSync(candidate) && statSync(candidate).isFile()) {
-      return candidate.endsWith('.js') ? candidate : null
+      return candidate
     }
   }
   throw new Error(`[macos-terminal-host] ${fromFile} loads ${specifier}, which does not exist`)
 }
 
-/** Package specifiers the daemon loads, walking its files from daemon-entry.js. */
-function daemonBareRequires(outMainDir) {
+/** Files and packages loaded from daemon-entry.js, including lazy imports. */
+function collectDaemonDependencies(outMainDir) {
   const builtins = new Set(builtinModules)
   const specifiers = new Set()
   const visited = new Set()
@@ -104,6 +104,9 @@ function daemonBareRequires(outMainDir) {
       continue
     }
     visited.add(file)
+    if (!file.endsWith('.js')) {
+      continue
+    }
     const source = readFileSync(file, 'utf8')
     for (const call of source.matchAll(LOAD_CALL)) {
       const literal = LITERAL_ARGUMENT.exec(source.slice(call.index + call[0].length))
@@ -114,15 +117,17 @@ function daemonBareRequires(outMainDir) {
       const specifier = literal[2]
       if (specifier.startsWith('.')) {
         const target = resolveRelativeLoad(file, specifier)
-        if (target) {
-          pending.push(target)
-        }
+        pending.push(target)
       } else if (!specifier.startsWith('node:') && !builtins.has(packageNameOf(specifier))) {
         specifiers.add(specifier)
       }
     }
   }
-  return [...specifiers].sort()
+  return { files: [...visited].sort(), specifiers: [...specifiers].sort() }
+}
+
+function daemonBareRequires(outMainDir) {
+  return collectDaemonDependencies(outMainDir).specifiers
 }
 
 /** Where Node loads package `name` from when required inside `fromDir`, never above `nodeModules`. */
@@ -140,8 +145,8 @@ function resolvePackageDir(name, fromDir, nodeModules) {
 }
 
 /** Copies each package the daemon requires, and its dependencies, to the same relative place. */
-function copyDaemonPackages(outMainDir, sourceNodeModules, targetNodeModules) {
-  const pending = daemonBareRequires(outMainDir)
+function copyDaemonPackages(specifiers, sourceNodeModules, targetNodeModules) {
+  const pending = specifiers
     .map(packageNameOf)
     .filter((name) => !PACKAGES_NOT_COPIED.has(name))
     .map((name) => ({ name, from: sourceNodeModules }))
@@ -306,11 +311,20 @@ function assembleMacTerminalHost({ appPath, nodeExecutable, iconPath, info }) {
     macAppExecutableName(appPath)
   )
   cpSync(iconPath, paths.icon)
-  cpSync(join(daemonOut, 'main'), join(paths.daemon, 'out', 'main'), { recursive: true })
+  const { files, specifiers } = collectDaemonDependencies(join(daemonOut, 'main'))
+  for (const file of files) {
+    const relativePath = relative(daemonOut, file)
+    if (isAbsolute(relativePath) || relativePath === '..' || relativePath.startsWith(`..${sep}`)) {
+      throw new Error(`[macos-terminal-host] daemon dependency escapes out/: ${file}`)
+    }
+    const target = join(paths.daemon, 'out', relativePath)
+    mkdirSync(dirname(target), { recursive: true })
+    cpSync(file, target)
+  }
   // Pins out/ to CommonJS so a stray parent package.json cannot change the loader.
   cpSync(join(daemonOut, 'package.json'), paths.outPackageJson)
   copyDaemonPackages(
-    join(daemonOut, 'main'),
+    specifiers,
     join(resourcesDir, 'node_modules'),
     join(paths.daemon, 'node_modules')
   )
