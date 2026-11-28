@@ -171,27 +171,16 @@ export function useMobileTerminalPaste({
           (response) => terminalInputSend.interpret(response) === true,
           () => false
         )
-      let delivered = true
-      // Send in order and stop at the first refusal or reconnect, as desktop's remote paste does.
+      // Enqueue every chunk synchronously so keyboard input cannot land inside a bracketed paste.
       const pasteEpoch = epoch(currentClient)
-      for (const [index, chunk] of splitTerminalInputChunks(
-        payload,
-        PASTE_SEND_CHUNK_BYTES
-      ).entries()) {
-        if (epoch(currentClient) !== pasteEpoch) {
-          delivered = false
-          break
-        }
-        if (!(await sendChunk(chunk))) {
-          // Close a bracketed paste whose start landed so the program leaves paste mode.
-          if (index > 0 && bracketed) {
-            await sendChunk(BRACKETED_PASTE_END)
-          }
-          delivered = false
-          break
-        }
+      const chunks = splitTerminalInputChunks(payload, PASTE_SEND_CHUNK_BYTES)
+      const results = await Promise.all(chunks.map((chunk) => sendChunk(chunk)))
+      const firstRefused = results.indexOf(false)
+      if (firstRefused > 0 && bracketed && epoch(currentClient) === pasteEpoch) {
+        // Close a bracketed paste whose start landed so the program leaves paste mode.
+        await sendChunk(BRACKETED_PASTE_END)
       }
-      if (!delivered) {
+      if (firstRefused !== -1 || epoch(currentClient) !== pasteEpoch) {
         throw new Error('Terminal input was not accepted')
       }
       onSuccess()
