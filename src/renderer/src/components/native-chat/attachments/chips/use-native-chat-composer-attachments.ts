@@ -10,6 +10,7 @@ import { nativeChatComposerTargetIsRemote } from '../../composer/submit/native-c
 import { nativeChatLocalAttachmentUnsupportedNotice } from '../intake/native-chat-attachment-notices'
 import { captureNativeChatEditDraftDestination } from '../../drafts/native-chat-composer-draft-memory'
 import { updateNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import { useNativeChatComposerPathAttach } from './use-native-chat-composer-path-attach'
 import { useNativeChatResolvedPathAttachments } from '../intake/use-native-chat-resolved-path-attachments'
 import type {
   NativeChatPendingAttachmentChips,
@@ -149,6 +150,7 @@ export function useNativeChatComposerAttachments({
       setNotice,
       textareaRef
     })
+  useNativeChatComposerPathAttach(attachmentScopeKey, attachResolvedPaths, disabled)
 
   // Show pending chips immediately so slow saves/uploads do not look like lost pastes.
   const beginPendingImageAttachment = useCallback(
