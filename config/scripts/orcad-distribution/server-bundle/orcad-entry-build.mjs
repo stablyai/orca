@@ -42,6 +42,7 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
     'src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts',
   codexHistoryDiskUsage:
     'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts',
+  codexAccountCopies: 'src/main/codex/history/shared-store/codex-account-copies-worker-entry.ts',
   codexRolloutHistoryReferences:
     'src/main/codex/history/cleanup/codex-rollout-history-references-worker-entry.ts',
   codexProjectTrust: 'src/main/codex/trust/project-trust/codex-project-trust-worker-entry.ts',

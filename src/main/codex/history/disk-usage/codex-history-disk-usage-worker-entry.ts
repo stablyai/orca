@@ -19,8 +19,10 @@ import { openDirectorySync } from '../../../../shared/open-directory'
 // cost ~50x more and occupy the libuv pool Electron main shares.
 
 // `.orca-legacy-copy.<attempt>`: an old session copy's own bytes, kept once its name points at the source.
-const ROLLOUT_FILE = /^rollout-.*\.jsonl(?:\.zst|\.orca-legacy-copy\.\d+)?$/
-// Live, archived, twins set aside when history was shared, and `<folder>[.<ms>].orca-profile-merge` conflicts.
+// `<stamp>-<n>-`: a copy waiting in the trash for its grace period.
+const ROLLOUT_FILE = /^(?:[0-9a-z]+-\d+-)?rollout-.*\.jsonl(?:\.zst|\.orca-legacy-copy\.\d+)?$/
+// Live, archived, twins set aside when history was shared, and `<folder>[.<ms>].orca-profile-merge` conflicts
+// (the copies trash carries the same suffix).
 const HISTORY_FOLDERS = ['sessions', 'archived_sessions', '.orca-set-aside-rollouts']
 const MERGE_PENDING_FOLDER = /\.orca-profile-merge$/
 
