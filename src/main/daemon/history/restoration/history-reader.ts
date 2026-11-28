@@ -144,12 +144,13 @@ export class HistoryReader {
         : { status: 'none' }
     }
 
+    const cwd = meta.lastProbedCwd ?? checkpoint.cwd ?? null
     return {
       status: 'restored',
       sessionId,
-      restoreInfo: coldRestoreInfoFromSnapshot(checkpoint, checkpoint.cwd, meta),
+      restoreInfo: coldRestoreInfoFromSnapshot(checkpoint, cwd, meta),
       hasUnreadableRecovery: logRestore.readFailed,
-      ...((checkpoint.cwd ?? null) === null ? { cwdFromSpawn: true } : {})
+      ...(cwd === null ? { cwdFromSpawn: true } : {})
     }
   }
 
@@ -293,7 +294,7 @@ export class HistoryReader {
         }
         const snapshot = emulator.getSnapshot()
         const lastBatch = log.batches.at(-1)!
-        const cwd = snapshot.cwd ?? checkpoint?.cwd ?? null
+        const cwd = snapshot.cwd ?? meta.lastProbedCwd ?? checkpoint?.cwd ?? null
         return {
           restoreInfo: coldRestoreInfoFromSnapshot(
             { ...snapshot, pendingOutputSeq: lastBatch.seq },
