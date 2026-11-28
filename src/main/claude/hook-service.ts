@@ -9,10 +9,8 @@ import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared
 import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
-import {
-  readHooksJsonRemote,
-  writeHooksJsonRemote
-} from '../agent-hooks/installation/configuration/hooks-json-remote'
+// oxfmt-ignore
+import { readHooksJsonRemote, writeHooksJsonRemote } from '../agent-hooks/installation/configuration/hooks-json-remote'
 import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import { getManagedScript } from './hooks/hook-script'
@@ -314,6 +312,11 @@ export class ClaudeHookService {
       }
     }
     return this.getStatus()
+  }
+
+  /** For a Remove that lands while an account's setup still runs. */
+  removeProfileHooks(configDir: string): void {
+    this.stripManagedHooksAt(getConfigPath(this.options.settings, configDir))
   }
 
   /** Strips Orca's hooks and status line from one settings file; false when it can't be parsed. */

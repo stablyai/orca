@@ -25,7 +25,7 @@ import { recordManagedHookInstallFailure } from '../../../agent-hooks/installati
 import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
-  removeHooksDeclinedByClient,
+  removeHooksForDeclinedAgents,
   runtimeClientUpdateTouchesHooks
 } from './runtime-client-hook-reconcile'
 import { agentHookConsentPatch } from '../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
@@ -196,7 +196,7 @@ export class RuntimeClientSettingsController {
       this.notifyReposChanged?.()
     }
     if (runtimeClientUpdateTouchesHooks(updates, beforeSettings, settings)) {
-      await this.reconcileManagedAgentHooks(updates)
+      await this.reconcileManagedAgentHooks()
     }
     return this.get()
   }
@@ -292,7 +292,7 @@ export class RuntimeClientSettingsController {
     }
   }
 
-  private reconcileManagedAgentHooks(updates: RuntimeClientSettingsUpdate = {}): Promise<void> {
+  private reconcileManagedAgentHooks(): Promise<void> {
     const generation = ++this.reconciliationGeneration
     const reconciliation = this.reconciliationTail.then(async () => {
       if (generation !== this.reconciliationGeneration) {
@@ -315,7 +315,7 @@ export class RuntimeClientSettingsController {
           return current !== undefined && isAgentStatusHooksEnabledForAgent(current, agent)
         }
       })
-      await removeHooksDeclinedByClient(updates, keepSharedEntries)
+      await removeHooksForDeclinedAgents(settings.agentHookConsent, keepSharedEntries)
     })
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation

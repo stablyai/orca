@@ -72,9 +72,9 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
         const status = statuses?.find((entry) => entry.agent === agent)
         // Disk is the truth: a failed removal still shows Installed with Remove.
         const present = status?.managedHooksPresent === true
+        const approved = !present && readAgentHookConsent(settings, agent) === 'granted'
         // Only Codex writes its hooks on its own next start rather than at Install.
-        const pending =
-          !present && agent === 'codex' && readAgentHookConsent(settings, agent) === 'granted'
+        const pending = approved && agent === 'codex'
         const installed = present || pending
         // An unreadable config is unknown, not absent: offer a re-read instead of Install.
         const unreadable = !present && status?.state === 'error'
@@ -94,7 +94,9 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
                     ? t('agentHookConsent.settings.installed', 'Installed')
                     : pending
                       ? t('agentHookConsent.settings.pending', 'Added when it next starts')
-                      : t('agentHookConsent.settings.notInstalled', 'Not installed')}
+                      : approved
+                        ? t('agentHookConsent.settings.approved', 'Approved, not added yet')
+                        : t('agentHookConsent.settings.notInstalled', 'Not installed')}
             </span>
             <Button
               type="button"

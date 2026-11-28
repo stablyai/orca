@@ -17,6 +17,16 @@ export function isAgentStatusHooksEnabled(
   return settings?.agentStatusHooksEnabled !== false
 }
 
+/** The user's switches only, without this computer's consent: for panes whose host installs its own hooks. */
+export function isAgentStatusHooksSwitchedOnForAgent(
+  settings: AgentStatusHooksSettings,
+  agent: TuiAgent
+): boolean {
+  return (
+    isAgentStatusHooksEnabled(settings) && isTuiAgentEnabled(agent, settings?.disabledTuiAgents)
+  )
+}
+
 // Why: turning an agent off removes its hooks, so any install that reads only the global switch writes them back;
 // hooks edit the user's agent config, so an agent is managed only after the user agrees.
 export function isAgentStatusHooksEnabledForAgent(
@@ -24,8 +34,7 @@ export function isAgentStatusHooksEnabledForAgent(
   agent: TuiAgent
 ): boolean {
   return (
-    isAgentStatusHooksEnabled(settings) &&
-    isTuiAgentEnabled(agent, settings?.disabledTuiAgents) &&
+    isAgentStatusHooksSwitchedOnForAgent(settings, agent) &&
     isAgentHookConsentGranted(settings, agent)
   )
 }

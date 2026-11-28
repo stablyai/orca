@@ -1,4 +1,7 @@
-import { isAgentHookTarget } from '../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
+import {
+  isAgentHookTarget,
+  type AgentHookConsent
+} from '../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { RuntimeClientSettingsUpdate } from './runtime-client-settings-shape'
@@ -22,12 +25,15 @@ export function runtimeClientUpdateTouchesHooks(
   )
 }
 
-/** A client's decline removes that agent's hooks, as a desktop decline does; reconcile alone only skips. */
-export async function removeHooksDeclinedByClient(
-  updates: RuntimeClientSettingsUpdate,
+/**
+ * Removes hooks for every agent the saved settings decline, as a desktop decline does. Read from the
+ * store, not the update, so a reconcile that superseded an earlier decline still removes it.
+ */
+export async function removeHooksForDeclinedAgents(
+  consent: AgentHookConsent | undefined,
   keepSharedEntries: boolean
 ): Promise<void> {
-  const declined = Object.entries(updates.agentHookConsent ?? {})
+  const declined = Object.entries(consent ?? {})
     .filter(([, decision]) => decision === 'declined')
     .map(([agent]) => agent)
     .filter(isAgentHookTarget)

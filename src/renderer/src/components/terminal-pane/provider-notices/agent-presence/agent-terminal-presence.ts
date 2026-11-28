@@ -116,6 +116,7 @@ export function watchAgentTerminalArrivals(
 ): () => void {
   const seen = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | null = null
+  const hasPending = (): boolean => [...wanted()].some((agent) => !seen.has(agent))
   const report = (): void => {
     timer = null
     const pending = new Set([...wanted()].filter((agent) => !seen.has(agent)))
@@ -129,7 +130,8 @@ export function watchAgentTerminalArrivals(
   }
   report()
   const unsubscribe = useAppStore.subscribe((state, previous) => {
-    if (timer === null && didSourcesChange(state, previous)) {
+    // Why check wanted first: once nothing is left to find, a status write costs a catalog-sized check, not a timer.
+    if (timer === null && didSourcesChange(state, previous) && hasPending()) {
       timer = setTimeout(report, ARRIVAL_SCAN_MS)
     }
   })

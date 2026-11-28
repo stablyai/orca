@@ -92,6 +92,9 @@ describe('watchAgentTerminalArrivals', () => {
       (agent) => seen.push(agent),
       () => new Set(['claude'])
     )
+    store.setState({ ...store.getState(), agentStatusByPaneKey: statusMap(500) })
+    // Nothing left to find, so a status write arms no timer at all.
+    expect(vi.getTimerCount()).toBe(0)
     burst(500)
     burst(500)
     stop()

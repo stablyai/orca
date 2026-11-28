@@ -1,3 +1,4 @@
+import { claudeHookService } from '../../../claude/hook-service'
 import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
@@ -240,8 +241,13 @@ export class ClaudeProfileRouter {
 
   private async runSetup(profile: ClaudeProfileDescriptor): Promise<ClaudeProfileSetupReport> {
     await this.envReady
-    const hooks = isAgentStatusHooksEnabledForAgent(this.args.getSettings(), 'claude')
-    const claudeVersion = hooks ? await probeRecentClaudeCliVersion(resolveClaudeCommand()) : null
+    const hooksOn = (): boolean =>
+      isAgentStatusHooksEnabledForAgent(this.args.getSettings(), 'claude')
+    const claudeVersion = hooksOn()
+      ? await probeRecentClaudeCliVersion(resolveClaudeCommand())
+      : null
+    // Re-read after the probe: a Remove may have landed while it ran.
+    const hooks = hooksOn()
     const report = await (this.args.runSetup ?? runClaudeProfileSetupInWorker)({
       dataRoot: this.args.dataRoot,
       profile,
@@ -250,6 +256,10 @@ export class ClaudeProfileRouter {
       hooks,
       claudeVersion: claudeVersion ?? undefined
     })
+    // A Remove during setup already ran, so take back what the worker just wrote.
+    if (hooks && !hooksOn()) {
+      claudeHookService.removeProfileHooks(profile.home)
+    }
     if (report.outcome === 'prepared') {
       await getClaudeAgentViewService(this.args.dataRoot).prepareProfile(profile.home)
     }

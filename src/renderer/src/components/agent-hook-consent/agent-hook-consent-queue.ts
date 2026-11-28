@@ -2,10 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { resolveWorktreeResourceTarget } from '@/runtime/hosts/platform/execution-host-facts'
-import {
-  AGENT_HOOK_TARGETS,
-  type AgentHookTarget
-} from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
+import type { AgentHookTarget } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { isAgentStatusHooksEnabled } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
   isAgentHookTarget,
@@ -106,14 +103,19 @@ function isLocalWorktree(state: AppState, worktreeId: string): boolean {
   return host === null || host.kind === 'local'
 }
 
-/** Agents a card could still ask about this run; empty once all are answered or hooks are off. */
+/**
+ * Agents a card could still ask about this run: unanswered CLIs found on this computer. Empty once
+ * those are answered or hooks are off, so the arrival watch stops scanning (a CLI that isn't here can't arrive).
+ */
 function wantedAgents(): ReadonlySet<string> {
-  const settings = useAppStore.getState().settings
-  if (!isAgentStatusHooksEnabled(settings)) {
+  const { settings, detectedAgentIds } = useAppStore.getState()
+  if (!isAgentStatusHooksEnabled(settings) || !detectedAgentIds) {
     return new Set()
   }
   return new Set(
-    AGENT_HOOK_TARGETS.filter((agent) => isUndecided(agent) && !laterThisRun.has(agent))
+    detectedAgentIds.filter(
+      (agent) => isAgentHookTarget(agent) && isUndecided(agent) && !laterThisRun.has(agent)
+    )
   )
 }
 
@@ -141,6 +143,7 @@ function followSettingsAnswers(): () => void {
 
 /** Watches terminals for each agent's first appearance this run; returns the unsubscribe. */
 export function startAgentHookConsentWatch(): () => void {
+  void useAppStore.getState().ensureNativeDetectedAgents()
   const stopWatch = watchAgentTerminalArrivals(enqueue, wantedAgents, isLocalWorktree)
   const stopFollow = followSettingsAnswers()
   return () => {

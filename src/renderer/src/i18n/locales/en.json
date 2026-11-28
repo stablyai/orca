@@ -31574,9 +31574,12 @@
       "pending": "Added when it next starts",
       "checking": "Checking…",
       "unreadable": "Couldn’t read its settings",
-      "retry": "Retry"
+      "retry": "Retry",
+      "approved": "Approved, not added yet"
     },
     "declineFailed": "Couldn’t save your choice",
-    "removeFailed": "Couldn’t remove hooks for {{agent}}"
+    "removeFailed": "Couldn’t remove hooks for {{agent}}",
+    "approved": "Hooks approved for {{agent}}",
+    "approvedNext": "Orca adds them once it finds {{agent}} on this computer."
   }
 }

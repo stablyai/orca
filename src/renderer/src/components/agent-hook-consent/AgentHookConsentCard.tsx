@@ -39,7 +39,7 @@ const SUCCESS_CLOSE_MS = 4000
 type View =
   | { kind: 'ask' }
   | { kind: 'installing' }
-  | { kind: 'done'; agents: AgentHookTarget[] }
+  | { kind: 'done'; agents: AgentHookTarget[]; waiting: boolean }
   | { kind: 'failed'; detail: string }
 
 /** Asks, the first time an agent runs in Orca, to install the hooks that make Orca's view of it complete. */
@@ -174,15 +174,15 @@ function AgentHookConsentOfferCard({
     try {
       const statuses = await window.api.agentHookConsent.decide({ agents, decision: 'granted' })
       notifyAgentHookStatusesChanged()
-      // A skipped install for the asked agent (CLI not found here) did not install anything.
-      const failed = statuses.find(
-        (status) =>
-          status.state === 'error' || (status.agent === offer.agent && status.state === 'skipped')
+      const failed = statuses.find((status) => status.state === 'error')
+      // Skipped means approved but nothing written yet (CLI not found on this side, e.g. only in WSL).
+      const waiting = statuses.some(
+        (status) => status.agent === offer.agent && status.state === 'skipped'
       )
       setView(
         failed
           ? { kind: 'failed', detail: failed.detail ?? failed.configPath }
-          : { kind: 'done', agents }
+          : { kind: 'done', agents, waiting }
       )
     } catch (error) {
       setView({ kind: 'failed', detail: error instanceof Error ? error.message : String(error) })
@@ -245,27 +245,35 @@ function AgentHookConsentOfferCard({
               )}
             </span>
             <p role="status" className="min-w-0 flex-1 truncate text-[13px] font-semibold">
-              {done
-                ? view.agents.length > 1
-                  ? t('agentHookConsent.installedMany', 'Hooks installed for {{count}} agents', {
-                      count: view.agents.length
-                    })
-                  : t('agentHookConsent.installed', 'Hooks installed for {{agent}}', {
+              {done && view.waiting
+                ? t('agentHookConsent.approved', 'Hooks approved for {{agent}}', { agent: name })
+                : done
+                  ? view.agents.length > 1
+                    ? t('agentHookConsent.installedMany', 'Hooks installed for {{count}} agents', {
+                        count: view.agents.length
+                      })
+                    : t('agentHookConsent.installed', 'Hooks installed for {{agent}}', {
+                        agent: name
+                      })
+                  : t('agentHookConsent.failed', 'Couldn’t install hooks for {{agent}}', {
                       agent: name
-                    })
-                : t('agentHookConsent.failed', 'Couldn’t install hooks for {{agent}}', {
-                    agent: name
-                  })}
+                    })}
             </p>
             {closeButton}
           </div>
           <p className="pr-2 pl-9 text-xs text-muted-foreground">
-            {done
-              ? `${view.agents.length > 1 ? `${agentNames(view.agents)}. ` : ''}${t(
-                  'agentHookConsent.installedNext',
-                  'They apply the next time each one starts.'
-                )}`
-              : view.detail}
+            {done && view.waiting
+              ? t(
+                  'agentHookConsent.approvedNext',
+                  'Orca adds them once it finds {{agent}} on this computer.',
+                  { agent: name }
+                )
+              : done
+                ? `${view.agents.length > 1 ? `${agentNames(view.agents)}. ` : ''}${t(
+                    'agentHookConsent.installedNext',
+                    'They apply the next time each one starts.'
+                  )}`
+                : view.detail}
           </p>
           {done ? null : (
             <div className="flex items-center justify-end gap-1 px-2 pt-2">
