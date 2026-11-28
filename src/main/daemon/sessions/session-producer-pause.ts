@@ -5,13 +5,13 @@ import {
 } from '../../../shared/terminal/input/terminal-untyped-input'
 
 /** 'input': typed input waited 2 s behind the pause; 'timeout': the 60 s no-progress deadline passed;
- *  'released': a detach or a failed termination dropped the pause, so the owner may pause afresh;
+ *  'released': a detach, an attach or a failed termination, so the owner may pause afresh;
  *  'terminating': termination began, so the owner stops asking until 'released' or 'exited';
  *  'exited': exit or teardown dropped it, and this incarnation will never produce again. */
 export type StreamStallReason = 'input' | 'timeout' | 'released' | 'terminating' | 'exited'
 export type ProducerLifecycleReason = 'released' | 'terminating' | 'exited'
-/** Why a stream pause was not taken: the producer is gone or going away. */
-export type ProducerAnswer = 'terminating' | 'exited'
+/** Why a stream pause was not taken: the producer is going away, gone, or has no viewer until an attach reports 'released'. */
+export type ProducerAnswer = 'terminating' | 'exited' | 'detached'
 export type StreamStallHandler = (reason: StreamStallReason) => void
 
 // A dropped resume notification must not wedge a shell; a still-flooded client can pause it again.
@@ -37,19 +37,17 @@ export class SessionProducerPause {
   /** Client pauses refresh the lost-resume failsafe; stream pauses use their own stall watchdog. False when a stream pause was declined. */
   pause(
     source?: 'stream',
-    canPauseStream: boolean | 'terminating' = true,
+    canPauseStream: true | 'terminating' | 'detached' = true,
     onStreamStall?: (reason: StreamStallReason) => void
-  ): boolean | 'terminating' {
+  ): true | 'terminating' | 'detached' {
     if (source === 'stream') {
       this.streamOwner = onStreamStall ?? this.streamOwner
-      if (canPauseStream === 'terminating') {
-        return 'terminating'
+      if (canPauseStream !== true) {
+        return canPauseStream
       }
-      if (canPauseStream) {
-        this.onStreamStall = onStreamStall ?? null
-        this.setStreamBackpressured(true)
-      }
-      return canPauseStream
+      this.onStreamStall = onStreamStall ?? null
+      this.setStreamBackpressured(true)
+      return true
     }
     const wasPaused = this.paused || this.streamBackpressured
     this.paused = true
@@ -120,9 +118,21 @@ export class SessionProducerPause {
       }
     }
     if (opts.reason) {
-      this.streamOwner?.(opts.reason)
+      this.report(opts.reason)
     }
-    if (opts.reason === 'exited') {
+  }
+
+  /** A first viewer can consume again, so a stream owner that skipped this viewerless producer may pause it. */
+  noteViewerAttached(firstViewer: boolean): void {
+    if (firstViewer) {
+      this.report('released')
+    }
+  }
+
+  /** Tells the last stream owner about a lifecycle change without touching any pause. */
+  private report(reason: ProducerLifecycleReason): void {
+    this.streamOwner?.(reason)
+    if (reason === 'exited') {
       this.streamOwner = null
     }
   }

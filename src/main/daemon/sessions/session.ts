@@ -168,7 +168,7 @@ export class Session extends SessionProcessInspection {
   /** Apply PTY backpressure with separate lost-resume and stream-stall protection. */
   pauseProducer(source?: 'stream', onStall?: StreamStallHandler) {
     const exited = this._state === 'exited' || this._disposed
-    const canPause = this.isTerminating ? 'terminating' : this.hasAttachedClients
+    const canPause = this.termination.streamPauseAnswer(this.hasAttachedClients)
     return exited ? 'exited' : this.producerPause.pause(source, canPause, onStall)
   }
 
@@ -195,7 +195,10 @@ export class Session extends SessionProcessInspection {
   }
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
-    return this.output.attachClient(client)
+    const firstViewer = !this.output.hasAttachedClients
+    const token = this.output.attachClient(client)
+    this.producerPause.noteViewerAttached(firstViewer)
+    return token
   }
 
   detachClient(token: symbol): void {

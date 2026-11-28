@@ -9,7 +9,7 @@ export class PausedSessionDeliveries {
   credit(sessionId: string, clientId: string): void {
     const previous = this.deliveredAt.get(sessionId)
     if (previous && previous.clientId !== clientId) {
-      this.sessionsByClient.get(previous.clientId)?.delete(sessionId)
+      this.forget(sessionId)
     }
     this.deliveredAt.set(sessionId, { at: Date.now(), clientId })
     let sessions = this.sessionsByClient.get(clientId)

@@ -187,7 +187,9 @@ export class DaemonStreamDataBatcher {
         }
         batch.queue.shift()
         releaseDaemonStreamEntry(batch, entry)
-        this.write(clientId, entry.sessionId, socket, frames.control(entry.control))
+        // Control frames carry no output, so they earn the session no delivery credit.
+        const control = frames.control(entry.control)
+        this.write(clientId, entry.sessionId, socket, control, undefined, false)
         continue
       }
       if (socketDeep && batch.queuedChars <= HELD_WRITE_THROUGH_TOTAL_CHARS) {

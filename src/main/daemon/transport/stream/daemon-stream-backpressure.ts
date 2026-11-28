@@ -38,7 +38,7 @@ export class DaemonStreamBackpressure {
   private pressured = false
   // Cleared on resume, so a delivery credit never outlives its pause.
   private readonly deliveries = new PausedSessionDeliveries()
-  // Exited producers can't pause again; skipped until their final output drains.
+  // Terminating, exited or viewerless producers: skipped until 'released' or their output drains.
   private readonly unpausableSessions = new Set<string>()
   // The producer incarnation each pause or exited record belongs to; a respawn under the same id starts clean.
   private readonly recordIncarnation = new Map<string, string | undefined>()
@@ -49,7 +49,7 @@ export class DaemonStreamBackpressure {
       sessionId: string,
       paused: boolean,
       onStallTimeout?: (reason: StallReason) => void
-    ) => boolean | 'terminating' | 'exited' | void,
+    ) => boolean | 'terminating' | 'exited' | 'detached' | void,
     private readonly isDroppable: (sessionId: string) => boolean,
     // Stall release must reconcile cached droppability for already-queued data.
     private readonly onDroppabilityChanged: (sessionId: string) => void = () => {},
@@ -181,16 +181,21 @@ export class DaemonStreamBackpressure {
       ) {
         continue
       }
-      // Sent once per pause; a detach that releases the producer reports 'released' and is paused afresh.
-      const incarnation = this.incarnationOf(sessionId)
+      // Sent once per record; 'released' (detach, attach, failed termination) drops it so the next refresh asks again.
+      let incarnation: string | undefined
       const paused = this.setPaused(sessionId, true, (reason) =>
         this.onStall(sessionId, reason, incarnation)
       )
-      if (paused === 'exited' || paused === 'terminating') {
-        this.markUnpausable(sessionId, incarnation)
-      } else if (paused !== false) {
+      if (paused === false) {
+        continue
+      }
+      // Looked up once per record, never per refresh.
+      incarnation = this.incarnationOf(sessionId)
+      this.recordIncarnation.set(sessionId, incarnation)
+      if (paused === 'exited' || paused === 'terminating' || paused === 'detached') {
+        this.markUnpausable(sessionId)
+      } else {
         this.pausedAtBySession.set(sessionId, Date.now())
-        this.recordIncarnation.set(sessionId, incarnation)
       }
     }
     // Resume ordinary pausing only after the session has no remaining backlog.
@@ -206,24 +211,25 @@ export class DaemonStreamBackpressure {
 
   /** Called before a session's PTY output is queued: only a live producer enqueues, so this is when a respawn shows. */
   noteSessionOutput(sessionId: string): void {
-    if (
-      this.recordIncarnation.has(sessionId) &&
-      this.recordIncarnation.get(sessionId) !== this.incarnationOf(sessionId)
-    ) {
+    const recorded = this.recordIncarnation.get(sessionId)
+    if (this.recordIncarnation.has(sessionId) && recorded !== this.incarnationOf(sessionId)) {
       // Every record belonged to an earlier incarnation: the new producer starts clean.
-      this.stallReleasedSessions.delete(sessionId)
-      this.unpausableSessions.delete(sessionId)
-      this.forgetPause(sessionId)
-      this.onDroppabilityChanged(sessionId)
+      this.dropRecords(sessionId)
     }
   }
 
-  /** A terminating or exited producer is never asked to pause; it is skipped until 'released' or its output drains. */
-  private markUnpausable(sessionId: string, incarnation: string | undefined): void {
+  /** Pause, unpausable, keep-tail and credit all go, so the next refresh starts from Flowing. */
+  private dropRecords(sessionId: string): void {
+    this.stallReleasedSessions.delete(sessionId)
+    this.unpausableSessions.delete(sessionId)
+    this.forgetPause(sessionId)
+    this.onDroppabilityChanged(sessionId)
+  }
+
+  /** A terminating, exited or viewerless producer is never asked to pause; it is skipped until 'released' or its output drains. */
+  private markUnpausable(sessionId: string): void {
     this.unpausableSessions.add(sessionId)
-    this.recordIncarnation.set(sessionId, incarnation)
-    this.pausedAtBySession.delete(sessionId)
-    this.deliveries.forget(sessionId)
+    this.forgetPause(sessionId)
   }
 
   private forgetPause(sessionId: string): void {
@@ -251,13 +257,11 @@ export class DaemonStreamBackpressure {
       return
     }
     if (reason === 'exited' || reason === 'terminating') {
-      this.markUnpausable(sessionId, incarnation)
+      this.markUnpausable(sessionId)
       return
     }
     if (reason === 'released') {
-      // The producer runs again (detach, or a termination that failed); the next refresh may pause it afresh.
-      this.unpausableSessions.delete(sessionId)
-      this.forgetPause(sessionId)
+      this.dropRecords(sessionId)
       return
     }
     if (this.deliveries.progressed(sessionId)) {
@@ -292,9 +296,9 @@ export class DaemonStreamBackpressure {
 
   clear(clientId?: string): void {
     if (clientId === undefined) {
+      // The refresh below drops keep-tail and unpausable records along with their incarnation.
       this.clients.clear()
       this.deliveries.clear()
-      this.stallReleasedSessions.clear()
     } else {
       this.clients.delete(clientId)
       this.deliveries.forgetClient(clientId)

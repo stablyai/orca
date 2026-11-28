@@ -132,4 +132,43 @@ describe('DaemonStreamBackpressure pause calls', () => {
       expect(lookups).toBe(afterPausing)
     }
   )
+
+  it.each([10, 100])(
+    'detached producers with queued output get no pause calls or lookups on unrelated output (%i detached)',
+    (detachedCount) => {
+      let pauseCalls = 0
+      let lookups = 0
+      const producers = new Map<string, SessionProducerPause>()
+      const backpressure = new DaemonStreamBackpressure(
+        (sessionId, isPaused, onStall) => {
+          if (!isPaused) {
+            return
+          }
+          pauseCalls += 1
+          const producer = new SessionProducerPause({ pause: () => {}, resume: () => {} })
+          producers.set(sessionId, producer)
+          return producer.pause('stream', 'detached', onStall)
+        },
+        () => false,
+        undefined,
+        {
+          incarnationOf: () => {
+            lookups += 1
+            return 'live'
+          }
+        }
+      )
+      const queued = new Map<string, number>([['echo', 10]])
+      for (let i = 0; i < detachedCount; i++) {
+        queued.set(`detached-${i}`, 200 * 1024)
+      }
+      for (let echo = 0; echo < 100; echo++) {
+        backpressure.noteSessionOutput('echo')
+        queued.set('echo', 10 + (echo % 2))
+        backpressure.setQueued('client', queued)
+      }
+      expect(pauseCalls).toBe(detachedCount)
+      expect(lookups).toBe(detachedCount)
+    }
+  )
 })

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonStreamBackpressure } from './daemon-stream-backpressure'
 import { SessionProducerPause } from '../../sessions/session-producer-pause'
 
-type StallHandler = (reason: 'input' | 'timeout' | 'released' | 'exited') => void
+type StallHandler = (reason: 'input' | 'timeout' | 'released' | 'terminating' | 'exited') => void
 
 function recordingBackpressure(options: { incarnationOf?: () => string } = {}): {
   backpressure: DaemonStreamBackpressure
@@ -222,6 +222,72 @@ describe('DaemonStreamBackpressure', () => {
     owner?.('released')
     backpressure.setQueued('client', new Map([['tui', 202 * 1024]]))
     expect(pauseCalls).toBe(2)
+  })
+
+  it('a viewerless producer is skipped until a client attaches, then pauses again', () => {
+    const subprocess = { pause: vi.fn(), resume: vi.fn() }
+    const producer = new SessionProducerPause(subprocess)
+    let viewer: true | 'detached' = 'detached'
+    let pauseCalls = 0
+    const backpressure = new DaemonStreamBackpressure(
+      (_sessionId, isPaused, onStall) => {
+        if (!isPaused) {
+          return producer.resumeClient('stream')
+        }
+        pauseCalls += 1
+        return producer.pause('stream', viewer, onStall)
+      },
+      () => false
+    )
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
+    expect(pauseCalls).toBe(1)
+
+    viewer = true
+    producer.noteViewerAttached(true)
+    backpressure.setQueued('client', new Map([['tui', 202 * 1024]]))
+    expect(pauseCalls).toBe(2)
+    expect(subprocess.pause).toHaveBeenCalledTimes(1)
+  })
+
+  it('a release after keep-tail and termination returns the session to normal pausing', () => {
+    let pauseCalls = 0
+    let owner: StallHandler | undefined
+    const backpressure = new DaemonStreamBackpressure(
+      (_sessionId, isPaused, onStall) => {
+        if (isPaused) {
+          pauseCalls += 1
+          owner = onStall
+          return true
+        }
+        return undefined
+      },
+      () => false
+    )
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    owner?.('timeout')
+    expect(backpressure.isStallReleased('tui')).toBe(true)
+    owner?.('terminating')
+    owner?.('released')
+    expect(backpressure.isStallReleased('tui')).toBe(false)
+    backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
+    expect(pauseCalls).toBe(2)
+  })
+
+  it('clearing every client leaves no record that later output must look up', () => {
+    let lookups = 0
+    const { backpressure, stall } = recordingBackpressure({
+      incarnationOf: () => {
+        lookups += 1
+        return 'live'
+      }
+    })
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    stall()?.('timeout')
+    backpressure.clear()
+    const afterClear = lookups
+    backpressure.noteSessionOutput('tui')
+    expect(lookups).toBe(afterClear)
   })
 
   it('does not count an empty refill frame as the held session delivering', async () => {
