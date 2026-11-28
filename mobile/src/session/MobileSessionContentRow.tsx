@@ -21,6 +21,7 @@ import {
 import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
 import { useThemedStyles } from '../theme/themed-styles'
+import { ComposerUsageSheetHost } from '../composer-usage/ComposerUsageSheetHost'
 import {
   ComposerUsageClientContext,
   ComposerUsageTabAgentContext
@@ -88,11 +89,13 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
           <MobileDictationLiveContext.Provider value={dictationLive}>
             <ComposerUsageClientContext.Provider value={connState === 'connected' ? client : null}>
               <ComposerUsageTabAgentContext.Provider value={tabAgent}>
-                <MobileSessionActiveContent controller={controller} />
-                {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
-                <View style={sideStripMargin(strip.main)}>
-                  <MobileSessionCommandDock controller={controller} />
-                </View>
+                <ComposerUsageSheetHost>
+                  <MobileSessionActiveContent controller={controller} />
+                  {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
+                  <View style={sideStripMargin(strip.main)}>
+                    <MobileSessionCommandDock controller={controller} />
+                  </View>
+                </ComposerUsageSheetHost>
               </ComposerUsageTabAgentContext.Provider>
             </ComposerUsageClientContext.Provider>
           </MobileDictationLiveContext.Provider>

@@ -1,11 +1,12 @@
 import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
-import { lazy, Suspense, useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
   composerInputStylesSheet,
   MESSAGE_TEXT_INSET
 } from '../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
 import { radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -29,6 +30,7 @@ import {
 } from './composer-usage-meter-readout'
 import { useComposerUsagePosition } from './composer-usage-position-preference'
 import { useComposerUsageWindow } from './composer-usage-window-preference'
+import { useComposerUsageSheetOpener } from './ComposerUsageSheetHost'
 import { composerUsageWideMeterLayout } from './composer-usage-wide-meter'
 import { ComposerUsageTrack, TRACK_MIN_WIDTH } from './ComposerUsageTrack'
 import {
@@ -40,11 +42,6 @@ import { usagePaceColor } from './usage-pace-color'
 import { usageResetLabel } from './usage-reset-label'
 import { useResetCountdownNow } from './use-reset-countdown-now'
 import { computeUsagePace } from './usage-window-pace'
-
-// The pop-up loads on first open, so chats that never tap the meter skip its tabs, tiles and graph.
-const ComposerUsageSheet = lazy(() =>
-  import('./ComposerUsageSheet').then((module) => ({ default: module.ComposerUsageSheet }))
-)
 
 type Props = {
   agent: string | null | undefined
@@ -161,8 +158,13 @@ export function ComposerUsageMeter({
   const composerInputStyles = useThemedStyles(composerInputStylesSheet)
 
   useMobileColorScheme()
+  const keepsFocus = useKeyboardPersistingTaps('always')
   const reading = useComposerUsageReading(agent)
-  const { showSheet, sheet } = useComposerUsageSheet(reading, spanSideStrip)
+  const sheet = useComposerUsageSheetOpener(
+    reading?.usage ?? null,
+    reading?.snapshot ?? null,
+    spanSideStrip
+  )
   // The labels' own widths, measured off the row, so a dropped label still reports its need.
   const [resetWidth, setResetWidth] = useState<number | null>(null)
   const [compactWidth, setCompactWidth] = useState<number | null>(null)
@@ -196,14 +198,15 @@ export function ComposerUsageMeter({
           percentLabel={reading.percentLabel}
           readout={reading.readout}
           color={reading.color}
-          onPress={showSheet}
+          onPress={sheet.open}
         />
       ) : fit.meter ? (
         <Pressable
+          ref={keepsFocus}
           accessibilityRole="button"
           accessibilityLabel={reading.accessibilityLabel}
           hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-          onPress={showSheet}
+          onPress={sheet.open}
           style={({ pressed }) => [styles.meter, pressed && composerInputStyles.pressed]}
           testID="composer-usage-meter"
         >
@@ -252,7 +255,7 @@ export function ComposerUsageMeter({
           onPercentWidth={setWidePercentWidth}
         />
       </View>
-      {sheet}
+      {sheet.inlineSheet}
     </>
   )
 }
@@ -266,19 +269,25 @@ export function ComposerUsageStrip({
   const composerInputStyles = useThemedStyles(composerInputStylesSheet)
 
   useMobileColorScheme()
+  const keepsFocus = useKeyboardPersistingTaps('always')
   const position = useComposerUsagePosition()
   const reading = useComposerUsageReading(agent)
-  const { showSheet, sheet } = useComposerUsageSheet(reading, spanSideStrip)
+  const sheet = useComposerUsageSheetOpener(
+    reading?.usage ?? null,
+    reading?.snapshot ?? null,
+    spanSideStrip
+  )
   if (position !== 'above' || !reading) {
     return null
   }
   return (
     <>
       <Pressable
+        ref={keepsFocus}
         accessibilityRole="button"
         accessibilityLabel={reading.accessibilityLabel}
         hitSlop={4}
-        onPress={showSheet}
+        onPress={sheet.open}
         style={({ pressed }) => [styles.strip, pressed && composerInputStyles.pressed]}
         testID="composer-usage-strip"
       >
@@ -290,45 +299,9 @@ export function ComposerUsageStrip({
           {reading.percentLabel}
         </Text>
       </Pressable>
-      {sheet}
+      {sheet.inlineSheet}
     </>
   )
-}
-
-// The row meter and the above-text strip are different mounts. The open flag lives here so
-// switching position does not drop a pop-up the other mount already showed.
-let sheetHeldOpen = false
-
-function useComposerUsageSheet(
-  reading: Reading | null,
-  spanSideStrip: boolean
-): { showSheet: () => void; sheet: React.ReactNode } {
-  const [open, setOpen] = useState(false)
-  // Latched on first open: the lazy pop-up mounts once, then stays mounted while the meter lives.
-  const [opened, setOpened] = useState(false)
-  const visible = open || sheetHeldOpen
-  return {
-    showSheet: () => {
-      sheetHeldOpen = true
-      setOpened(true)
-      setOpen(true)
-    },
-    sheet:
-      (opened || sheetHeldOpen) && reading ? (
-        <Suspense fallback={null}>
-          <ComposerUsageSheet
-            visible={visible}
-            onClose={() => {
-              sheetHeldOpen = false
-              setOpen(false)
-            }}
-            usage={reading.usage}
-            snapshot={reading.snapshot}
-            spanSideStrip={spanSideStrip}
-          />
-        </Suspense>
-      ) : null
-  }
 }
 
 const LABEL_GAP = spacing.xs
