@@ -102,4 +102,3 @@ it('a restore that never reads history keeps its bookmark through the next hide'
   expect(readNativeChatViewMemory(TAB, 'reading-position:t')).toEqual(bookmark)
   vi.unstubAllGlobals()
 })
-
