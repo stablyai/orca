@@ -53,6 +53,8 @@ export class ProviderRelayAttachment {
   }
 
   private nudge: ReturnType<typeof setTimeout> | null = null
+  /** Set while a backed-up stream is awaited instead of a timer; asks again once it drains. */
+  private onDrain: (() => void) | null = null
 
   release(): void {
     if (this.released) {
@@ -139,19 +141,36 @@ export class ProviderRelayAttachment {
         clearTimeout(this.nudge)
         this.nudge = null
       }
+      if (this.onDrain) {
+        this.stream.socket.off('drain', this.onDrain)
+        this.onDrain = null
+      }
       return
     }
-    if (this.nudge) {
+    if (this.nudge || this.onDrain) {
       return
     }
     this.nudge = setTimeout(() => {
       this.nudge = null
+      const next = Math.min(delayMs * 2, RELAY_ACK_NUDGE_MAX_MS)
+      // A client that isn't reading gets no asks and no polling: its stream's drain asks again.
+      if (this.stream.socket.writableNeedDrain === true) {
+        this.onDrain = () => {
+          this.onDrain = null
+          const seq = askedSeq()
+          if (seq !== null) {
+            this.askForAck(seq)
+          }
+          this.whilePaused(true, askedSeq, RELAY_ACK_NUDGE_MAX_MS)
+        }
+        this.stream.socket.once('drain', this.onDrain)
+        return
+      }
       const seq = askedSeq()
-      // A client that isn't reading gets no pile of asks: the next nudge asks for the current seq.
-      if (seq !== null && this.stream.socket.writableNeedDrain !== true) {
+      if (seq !== null) {
         this.askForAck(seq)
       }
-      this.whilePaused(true, askedSeq, Math.min(delayMs * 2, RELAY_ACK_NUDGE_MAX_MS))
+      this.whilePaused(true, askedSeq, next)
     }, delayMs)
     this.nudge.unref?.()
   }
