@@ -27,6 +27,7 @@ import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orche
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
+import { supersededReplyWarning } from './superseded-reply-warning'
 
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
@@ -196,9 +197,12 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       runtimeBotGroups(runtime).saveAnswer(answerTurn, params.body)
     }
 
+    const warnings = [recipient.warning, supersededReplyWarning(db, original)].filter(
+      (warning) => warning !== undefined
+    )
     const receipt = {
       message: exposeMessage(reply),
-      ...(recipient.warning ? { warnings: [recipient.warning] } : {})
+      ...(warnings.length > 0 ? { warnings } : {})
     }
     return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
       runtime.notifyMessageArrived(reply.to_handle, reply.type)

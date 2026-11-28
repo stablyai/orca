@@ -1,4 +1,5 @@
 import type { ChatMailPlace } from '../../../../../shared/connectors/external-conversation-link'
+import { AGENT_MAIL_REPLY_RULE } from '../../../../../shared/orchestration/mailbox/agent-mail-reply-rule'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
@@ -230,12 +231,13 @@ function withConversationNote(
   }
 ): { type: 'text'; text: string }[] {
   const bound = conversationPlace?.(from)
-  const note = !bound
+  const place = !bound
     ? null
     : bound.answersThere
       ? `[Orca: your final message and \`${cliCommand} bot reply\` (with any files) go to ${bound.place}.]`
       : `[Orca: this mail did not come from ${bound.place}, so your final message stays in Orca.]`
-  return [{ type: 'text', text: note ? `${text}\n\n${note}` : text }]
+  const note = [`[${AGENT_MAIL_REPLY_RULE}]`, place].filter((line) => line !== null).join('\n')
+  return [{ type: 'text', text: `${text}\n\n${note}` }]
 }
 
 /** The worker this mail was recorded from when it was written. */
