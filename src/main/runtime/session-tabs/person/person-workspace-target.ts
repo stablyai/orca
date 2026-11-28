@@ -16,7 +16,9 @@ import type { RpcCallerScope } from '../../rpc/callers/rpc-caller-scope'
 /** `home` is the workspace the caller named; `list` is the workspace whose tabs the call reads and writes. */
 export type TabListTarget = { home: string; list: string }
 
-/** Whether the owner's window shows and writes this workspace's tabs; a teammate's own list is the host's alone. */
+/** Whether this workspace's tabs are the owner's window's to show and write, if the host has a window;
+ *  false for a teammate's own list, which is the host's alone. It never checks for a window: on a
+ *  host without one (orcad, headless) every workspace still takes the headless path. */
 export function windowOwns(worktreeId: string): boolean {
   return !isPersonWorkspaceKey(worktreeId)
 }

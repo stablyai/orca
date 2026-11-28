@@ -17,8 +17,9 @@ import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspa
 import { workspaceSessionListsTerminalTab } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { resolveTwinRepoSessionHostId, type CachedWorktreeHost } from './twin-repo-session-host'
-import { isPersonWorkspaceKey } from '../../../../shared/workspace/identity/person-workspace-key'
 import {
+  isExecutionHostPartition,
+  personWorkspacePartition,
   TEAMMATE_HOMES_SESSION_PARTITION,
   type WorkspaceSessionPartitionId
 } from '../../../../shared/workspace-session/teammate-homes-session-partition'
@@ -46,9 +47,9 @@ export class RuntimeWorkspaceSessionController {
     worktreeId: string,
     store: RuntimeStore
   ): WorkspaceSessionPartitionId | null {
-    // A teammate's own workspace in a shared agent's Home is saved in the one partition for them.
-    if (isPersonWorkspaceKey(worktreeId)) {
-      return TEAMMATE_HOMES_SESSION_PARTITION
+    const person = personWorkspacePartition(worktreeId)
+    if (person) {
+      return person
     }
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
@@ -230,16 +231,16 @@ export class RuntimeWorkspaceSessionController {
         return [workspace.id, explicitHostId ?? getConnectionExecutionHostId(connectionId)] as const
       })
     )
-    const hostIds = new Set<ExecutionHostId>(['local'])
+    const hostIds = new Set<WorkspaceSessionPartitionId>(['local'])
     for (const repo of repos) {
       hostIds.add(getRepoExecutionHostId(repo))
     }
-    for (const hostId of store?.getWorkspaceSessionHostIds?.() ?? []) {
+    for (const hostId of store?.getAllWorkspaceSessionPartitionIds?.() ?? []) {
       hostIds.add(hostId)
     }
 
     const targets = new Map<string, WorkspaceSessionState>()
-    const sessionsByHostId = new Map<ExecutionHostId, WorkspaceSessionState>()
+    const sessionsByHostId = new Map<WorkspaceSessionPartitionId, WorkspaceSessionState>()
     for (const hostId of hostIds) {
       const session = store?.getWorkspaceSession?.(hostId)
       if (!session) {
@@ -258,13 +259,15 @@ export class RuntimeWorkspaceSessionController {
             : (this.getTwinRepoHostId(store, repoId, rawWorktreeId, repos) ??
               repoHostIdByRepoId.get(repoId) ??
               LOCAL_EXECUTION_HOST_ID)
-        const ownerHostId = this.resolveHostId(
-          worktreeId,
-          catalogOwnerHostId ?? LOCAL_EXECUTION_HOST_ID,
-          [...sessionsByHostId.keys()],
-          (candidateHostId) =>
-            sessionsByHostId.get(candidateHostId) ?? store.getWorkspaceSession!(candidateHostId)
-        )
+        const ownerHostId =
+          personWorkspacePartition(worktreeId) ??
+          this.resolveHostId(
+            worktreeId,
+            catalogOwnerHostId ?? LOCAL_EXECUTION_HOST_ID,
+            [...sessionsByHostId.keys()].filter(isExecutionHostPartition),
+            (candidateHostId) =>
+              sessionsByHostId.get(candidateHostId) ?? store.getWorkspaceSession!(candidateHostId)
+          )
         if (
           ownerHostId === hostId &&
           (includeAllPersistedWorktrees ||

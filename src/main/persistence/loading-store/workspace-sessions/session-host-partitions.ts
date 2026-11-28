@@ -4,7 +4,6 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
@@ -54,7 +53,10 @@ import {
 } from './runtime-partition-topology-fence'
 import {
   executionHostOfPartition,
+  isExecutionHostPartition,
   normalizeWorkspaceSessionPartitionId,
+  personWorkspacePartition,
+  savedSessionPartitionIds,
   type WorkspaceSessionPartitionId
 } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { withRequiredWorkspaceSessionMaps } from './workspace-session-required-maps'
@@ -106,17 +108,15 @@ export class SessionHostPartitionOperations {
     return hasPersistedWorkspaceSession(this, resolveHostId(hostId))
   }
 
+  /** The machines with a saved partition, to enumerate hosts; the teammates' partition is none. */
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
-    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
-    for (const key of Object.keys(
-      this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId ?? {}
-    )) {
-      const hostId = normalizeExecutionHostId(key)
-      if (hostId) {
-        hostIds.add(hostId)
-      }
-    }
-    return [...hostIds]
+    return this.getAllWorkspaceSessionPartitionIds().filter(isExecutionHostPartition)
+  }
+
+  /** Every saved partition, for persistence, topology, hydration and removal. */
+  getAllWorkspaceSessionPartitionIds(): WorkspaceSessionPartitionId[] {
+    const { state } = this[sessionHostPartitionOperationsContext].runtime
+    return savedSessionPartitionIds(state.workspaceSessionsByHostId)
   }
 
   removeWorkspaceSessionHost(hostId: ExecutionHostId): void {
@@ -157,7 +157,8 @@ export class SessionHostPartitionOperations {
     target: HostWorktreeTarget,
     options: { advanceTerminalTopologyRevision?: boolean } = {}
   ): void {
-    for (const resolved of workspaceSessionPartitionIdsForHost(target.hostId)) {
+    const person = personWorkspacePartition(target.id)
+    for (const resolved of person ? [person] : workspaceSessionPartitionIdsForHost(target.hostId)) {
       removeWorkspaceSessionOwnerInPartition(this, target.id, resolved, options)
     }
   }

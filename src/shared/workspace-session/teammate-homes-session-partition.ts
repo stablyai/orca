@@ -3,6 +3,7 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../execution-host/execution-host'
+import { isPersonWorkspaceKey } from '../workspace/identity/person-workspace-key'
 
 /** Where the host saves its teammates' own workspaces in shared agents' Homes: one session
  *  partition beside the execution hosts' ones, which no window lists, reads or writes. */
@@ -27,4 +28,32 @@ export function normalizeWorkspaceSessionPartitionId(
  *  (`confineBotShareFolderRead`), so the teammates' partition runs on this one. */
 export function executionHostOfPartition(partition: WorkspaceSessionPartitionId): ExecutionHostId {
   return partition === TEAMMATE_HOMES_SESSION_PARTITION ? LOCAL_EXECUTION_HOST_ID : partition
+}
+
+export function isExecutionHostPartition(
+  partition: WorkspaceSessionPartitionId
+): partition is ExecutionHostId {
+  return partition !== TEAMMATE_HOMES_SESSION_PARTITION
+}
+
+/** The partition a teammate's own workspace is saved in, whatever host a caller names; null for
+ *  every other workspace. */
+export function personWorkspacePartition(
+  worktreeId: string
+): typeof TEAMMATE_HOMES_SESSION_PARTITION | null {
+  return isPersonWorkspaceKey(worktreeId) ? TEAMMATE_HOMES_SESSION_PARTITION : null
+}
+
+/** Every partition a profile saves, `local` first; the teammates' one too. */
+export function savedSessionPartitionIds(
+  partitions: object | undefined
+): WorkspaceSessionPartitionId[] {
+  const ids = new Set<WorkspaceSessionPartitionId>([LOCAL_EXECUTION_HOST_ID])
+  for (const key of Object.keys(partitions ?? {})) {
+    const id = normalizeWorkspaceSessionPartitionId(key)
+    if (id) {
+      ids.add(id)
+    }
+  }
+  return [...ids]
 }

@@ -3,6 +3,7 @@ import type { WorkspaceSessionState } from '../../workspace-session/workspace-se
 import type { DetectedWorktreeListResult, Worktree } from '../types'
 import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../id'
+import { isPersonWorkspaceKey } from '../../workspace/identity/person-workspace-key'
 
 type WorktreeValidityCatalog = {
   repos: readonly Pick<Repo, 'id'>[]
@@ -59,6 +60,11 @@ export function buildValidWorktreeIdsForSessionHydration(
   )
 
   for (const worktreeId of persistedWorktreeIds) {
+    // A teammate's own workspace is the host's, never a repo's to prove gone.
+    if (isPersonWorkspaceKey(worktreeId)) {
+      validWorktreeIds.add(worktreeId)
+      continue
+    }
     if (validWorktreeIds.has(worktreeId) || parseWorkspaceKey(worktreeId)?.type === 'folder') {
       continue
     }

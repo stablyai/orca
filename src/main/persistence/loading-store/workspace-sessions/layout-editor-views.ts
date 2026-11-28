@@ -1,10 +1,10 @@
 // Keep editor views in memory through partition applies and tab moves; never serialize them.
 
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
-import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
+  savedSessionPartitionIds,
+  type WorkspaceSessionPartitionId
+} from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutEditorView } from '../../../../shared/workspace-layout/editor-tabs/layout-editor-view'
 import type { WorkspaceLayoutModel } from '../../../../shared/workspace-layout/workspace-layout-model'
@@ -132,13 +132,7 @@ function placesHolding(
   runtime: Pick<StoreRuntimeState, 'state'>,
   tabId: string
 ): { hostId: WorkspaceSessionPartitionId; key: string }[] {
-  const hostIds = new Set<WorkspaceSessionPartitionId>([
-    LOCAL_EXECUTION_HOST_ID,
-    ...Object.keys(runtime.state.workspaceSessionsByHostId ?? {}).flatMap(
-      (id) => normalizeExecutionHostId(id) ?? []
-    )
-  ])
-  return [...hostIds].flatMap((hostId) => {
+  return savedSessionPartitionIds(runtime.state.workspaceSessionsByHostId).flatMap((hostId) => {
     const session = sessionOf(runtime, hostId)
     return Object.keys(session?.unifiedTabs ?? {})
       .filter((key) => holdsEditorTab(session, key, tabId))

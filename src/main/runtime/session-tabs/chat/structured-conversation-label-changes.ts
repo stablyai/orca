@@ -43,7 +43,7 @@ export class StructuredConversationLabelChanges {
     const claims = new Map<WorkspaceSessionPartitionId, number>()
     for (const id of new Set<WorkspaceSessionPartitionId>([
       'local',
-      ...(this.store?.getWorkspaceSessionHostIds?.() ?? [])
+      ...(this.store?.getAllWorkspaceSessionPartitionIds?.() ?? [])
     ])) {
       const claim = routeClaim(this.store?.getWorkspaceSession?.(id), workspaceId)
       if (claim !== 0) {
@@ -87,7 +87,7 @@ export class StructuredConversationLabelChanges {
       writtenHost === null
         ? new Set<WorkspaceSessionPartitionId>([
             'local',
-            ...(this.store?.getWorkspaceSessionHostIds?.() ?? [])
+            ...(this.store?.getAllWorkspaceSessionPartitionIds?.() ?? [])
           ])
         : new Set([writtenHost])
     for (const [workspaceId, baseline] of this.workspaces) {

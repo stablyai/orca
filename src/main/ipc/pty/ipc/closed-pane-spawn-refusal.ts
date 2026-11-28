@@ -12,7 +12,7 @@ export function refuseClosedPaneSpawn(
   if (!tabId || !leafId || !isClosedPaneFenced(`${tabId}:${leafId}`)) {
     return
   }
-  const held = (store?.getWorkspaceSessionHostIds() ?? []).some((hostId) =>
+  const held = (store?.getAllWorkspaceSessionPartitionIds() ?? []).some((hostId) =>
     layoutContainsLeafId(
       store?.getWorkspaceSession(hostId)?.terminalLayoutsByTabId?.[tabId]?.root ?? null,
       leafId

@@ -62,6 +62,7 @@ export type RuntimeStore = {
   onGitHubCacheWritten?: Store['onGitHubCacheWritten']
   getWorkspaceSession?: Store['getWorkspaceSession']
   getWorkspaceSessionHostIds?: Store['getWorkspaceSessionHostIds']
+  getAllWorkspaceSessionPartitionIds?: Store['getAllWorkspaceSessionPartitionIds']
   onWorkspaceSessionWritten?: Store['onWorkspaceSessionWritten']
   onWorkspaceSessionOperationEnded?: Store['onWorkspaceSessionOperationEnded']
   onStateWritten?: Store['onStateWritten']

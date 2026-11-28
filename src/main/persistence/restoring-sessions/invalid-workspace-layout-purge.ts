@@ -1,13 +1,14 @@
 // Main and renderer must share workspace validity or load will resurrect layouts one side discarded.
 
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
-import {
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import {
+  executionHostOfPartition,
+  type WorkspaceSessionPartitionId
+} from '../../../shared/workspace-session/teammate-homes-session-partition'
 import { isWorktreeCatalogVersionBefore } from '../../../shared/worktree/catalog/catalog-version'
 import {
   buildValidWorktreeIdsForSessionHydration,
@@ -26,14 +27,14 @@ type WorkspaceValidityCatalog = Parameters<typeof buildValidWorktreeIdsForSessio
 type PurgeStore = {
   getRepos(): readonly { id: string }[]
   getWorkspaceSession(hostId?: string | null): WorkspaceSessionState
-  getWorkspaceSessionHostIds(): ExecutionHostId[]
+  getAllWorkspaceSessionPartitionIds(): WorkspaceSessionPartitionId[]
   removeWorkspaceSessionStateForWorktree(target: HostWorktreeTarget): void
 }
 
 const ownedByPairedHost = (hostId: string | null | undefined): boolean =>
   parseExecutionHostId(hostId)?.kind === 'runtime'
 
-/** Match hydration: floating and folder workspaces always survive. */
+/** Match hydration: floating and folder workspaces always survive, and teammates' own by its rule. */
 function invalidWorkspaceKeys(
   session: WorkspaceSessionState,
   catalog: WorkspaceValidityCatalog,
@@ -54,13 +55,15 @@ function dropInvalidWorkspaces(
   catalog: WorkspaceValidityCatalog,
   inScope: (key: string) => boolean = () => true
 ): void {
-  for (const hostId of store.getWorkspaceSessionHostIds()) {
+  for (const hostId of store.getAllWorkspaceSessionPartitionIds()) {
     // A missing paired-host catalog cannot prove its workspaces invalid.
     if (ownedByPairedHost(hostId)) {
       continue
     }
     for (const key of invalidWorkspaceKeys(store.getWorkspaceSession(hostId), catalog, inScope)) {
-      store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: key, hostId }))
+      store.removeWorkspaceSessionStateForWorktree(
+        hostWorktreeTarget({ id: key, hostId: executionHostOfPartition(hostId) })
+      )
     }
   }
 }

@@ -12,7 +12,16 @@ vi.mock('electron', async (original) => ({
   }
 }))
 
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
+import { randomUUID } from 'node:crypto'
+import {
+  closeTestStores,
+  createStore,
+  readDataFile,
+  testState
+} from '../../persistence-test-harness'
+import { dropInvalidWorkspaceLayoutsAtLoad } from '../../restoring-sessions/invalid-workspace-layout-purge'
+import { RuntimeWorkspaceSessionController } from '../../../runtime/workspaces/session-hosts/runtime-workspace-session-controller'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { registerSessionHandlers } from '../../../ipc/session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { sessionPartitions } from '../../migrating-orcad-catalog/source/sessions/orcad-source-workspace-session-fragments'
@@ -68,6 +77,9 @@ describe("the teammates' session partition", () => {
       status: 'skipped'
     })
     await invoke('session:patch', { tabGroups: {} }, TEAM)
+    expect(await invoke('session:patch-entries', { tabGroups: {} }, TEAM)).toEqual({
+      status: 'skipped'
+    })
     expect(store.getWorkspaceSession(TEAM)).toEqual(team)
   })
 
@@ -78,5 +90,48 @@ describe("the teammates' session partition", () => {
       workspaceSessionsByHostId: { [TEAM]: store.getWorkspaceSession(TEAM) }
     }
     expect(sessionPartitions(state, 'local').map(([hostId]) => hostId)).toEqual(['local'])
+  })
+
+  it('keeps its workspaces through the load purge: no repo catalog proves one gone', async () => {
+    const store = await storeWithTeammateTab()
+    store.flush()
+    dropInvalidWorkspaceLayoutsAtLoad(store, readDataFile())
+    expect(store.getWorkspaceSession(TEAM).unifiedTabs?.[K]).toHaveLength(1)
+  })
+
+  it('removes a teammate’s workspace from its partition alone', async () => {
+    const store = await storeWithTeammateTab()
+    const local = structuredClone(store.getWorkspaceSession('local'))
+    // A person's workspace runs on this machine; removal finds its partition from the key.
+    store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: K, hostId: 'local' }))
+    expect(store.getWorkspaceSession(TEAM).unifiedTabs?.[K] ?? []).toEqual([])
+    expect(store.getWorkspaceSession('local')).toEqual(local)
+  })
+
+  it('moves a pane in a teammate’s terminal to a new tab, and hydrates their terminals', async () => {
+    const store = createStore()
+    const [tabId, leafId, newLeafId] = [randomUUID(), randomUUID(), randomUUID()]
+    const commands = [
+      { type: 'createTerminalTab', workspace: K, tabId, leafId },
+      { type: 'splitPane', workspace: K, tabId, leafId, direction: 'vertical', newLeafId }
+    ] as const
+    for (const command of commands) {
+      expect(await store.applyLayoutCommand(command, [TEAM])).toMatchObject({ ok: true })
+    }
+    const controller = new RuntimeWorkspaceSessionController({
+      getStore: () => store,
+      resolveFolderConnectionId: () => null,
+      hasRuntimeOwnedPtyCandidate: () => true
+    })
+    expect(controller.getHydrationTargets(true).get(K)).toEqual(store.getWorkspaceSession(TEAM))
+
+    const moved = await store.moveTerminalLeafToNewTab({
+      worktreeId: K,
+      sourceTabId: tabId,
+      targetTabId: randomUUID(),
+      leafId: newLeafId,
+      ptyId: null
+    })
+    expect(moved).toMatchObject({ status: 'moved' })
   })
 })

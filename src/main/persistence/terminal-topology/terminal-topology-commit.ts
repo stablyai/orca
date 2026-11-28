@@ -234,12 +234,12 @@ export function topologyCommitContext({
     Partial<Pick<StoreRuntimeState, 'layoutEditorViews'>>
   sessions: Pick<
     SessionHostPartitionOperations,
-    'getWorkspaceSessionHostIds' | 'getWorkspaceSession'
+    'getAllWorkspaceSessionPartitionIds' | 'getWorkspaceSession'
   >
 }): TerminalTopologyCommitContext {
   return {
     state: runtime.state,
-    hostIds: () => sessions.getWorkspaceSessionHostIds(),
+    hostIds: () => sessions.getAllWorkspaceSessionPartitionIds(),
     getSession: (hostId) => sessions.getWorkspaceSession(hostId),
     markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain),
     ...(runtime.layoutEditorViews

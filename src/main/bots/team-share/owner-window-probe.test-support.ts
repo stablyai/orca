@@ -15,16 +15,18 @@ export type OwnerRelay = { via: 'window' | 'desktop' | 'phone'; name: string }
 export type OwnerWindowProbe = {
   /** Everything sent to the owner since the probe opened, in order. */
   readonly relays: OwnerRelay[]
-  /** What the owner sees of the Home, byte for byte: its tab list, the saved layout and its sidebar record. */
+  /** What the owner sees of the Home, byte for byte: its tab list, the saved layout, its sidebar record and the owner's terminal sizes. */
   ownerState(): Promise<string>
   close(): void
 }
 
 /** Installs a window on `runtime` that records every call, and a desktop that records every send. */
+/** `ownerPtyIds`: the owner's terminals whose sizes a teammate's act must leave as they are. */
 export function ownerWindowProbe(
   runtime: OrcaRuntimeService,
   store: Store,
-  home: string
+  home: string,
+  { ownerPtyIds = [] }: { ownerPtyIds?: readonly string[] } = {}
 ): OwnerWindowProbe {
   const relays: OwnerRelay[] = []
   const record = (via: OwnerRelay['via'], name: string) => relays.push({ via, name })
@@ -61,7 +63,8 @@ export function ownerWindowProbe(
         tabs: await runtime.listMobileSessionTabs(home),
         saved: store.getWorkspaceSession('local'),
         // Its sidebar sort stamps and unread flag.
-        record: scope?.type === 'folder' ? store.getFolderWorkspace(scope.folderWorkspaceId) : null
+        record: scope?.type === 'folder' ? store.getFolderWorkspace(scope.folderWorkspaceId) : null,
+        sizes: ownerPtyIds.map((ptyId) => [ptyId, runtime.getTerminalSize(ptyId)])
       }),
     close: () => {
       stopPhone()
