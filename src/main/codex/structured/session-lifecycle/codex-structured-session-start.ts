@@ -22,8 +22,7 @@ import type { CodexSubagentExecutions } from '../background-work/codex-subagent-
 import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-identity'
-import { openCodexThread, readCodexRunningTurnId } from '../threads/codex-structured-thread-open'
-import { codexThreadIsActive } from '../../app-server/codex-structured-thread-facts'
+import { openCodexThread } from '../threads/codex-structured-thread-open'
 import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
 import { withCodexSkillRootsThreadConfig } from '../launch/codex-structured-skill-roots'
 import { codexReadOnlyMcpOff } from '../prompts/codex-structured-read-only'
@@ -135,6 +134,9 @@ export async function openCodexStructuredSession(
   const returnedTurns = Array.isArray(opened.thread?.turns) ? opened.thread.turns : []
   // A kept app-server's output since the last ack is replayed in order instead of history catch-up.
   const keptRunning = connection.relay?.reattached === true
+  // A kept run on a shared server replays nothing: it catches up from history, then reads its
+  // running state (numbering, commands, helpers) as a replayed one does.
+  const rebuilt = connection.relay?.rebuilt === true
   if (
     !keptRunning &&
     translator &&
@@ -166,7 +168,7 @@ export async function openCodexStructuredSession(
   }
   // The agent's own state first; the replay released after it only fills in content.
   const kept: KeptCodexSnapshot =
-    keptRunning && translator
+    (keptRunning || rebuilt) && translator
       ? await waitForPromiseWithSignal(
           openKeptCodexState({
             connection,
@@ -188,15 +190,6 @@ export async function openCodexStructuredSession(
       : { turns: [], spawns: [] }
   current()
   const keptTurns = kept.turns
-  // Reopened onto a shared server where its turn still runs: that turn is Stop's to interrupt.
-  const resumedTurnId =
-    !keptRunning && codexThreadIsActive(opened.thread)
-      ? await waitForPromiseWithSignal(
-          readCodexRunningTurnId(connection, opened.threadId, deps.requestTimeoutMs),
-          openInput.signal
-        )
-      : null
-  current()
   const configured =
     opened.serviceTier === undefined
       ? await waitForPromiseWithSignal(
@@ -229,12 +222,11 @@ export async function openCodexStructuredSession(
       ...(launch.visuals ? { visualsFolder: launch.visuals.folder } : {})
     },
     // A kept turn still running is Stop's to interrupt, as when it started live.
-    activeTurnIds: new Set([
-      ...keptTurns.flatMap((turn) =>
+    activeTurnIds: new Set(
+      keptTurns.flatMap((turn) =>
         turn.threadId === opened.threadId && turn.status === 'inProgress' ? [turn.turnId] : []
-      ),
-      ...(resumedTurnId ? [resumedTurnId] : [])
-    ]),
+      )
+    ),
     abortedTurnIds: new Set(),
     prompts: attempt.window.prompts,
     options: restoredCodexSessionOptions(input.options),

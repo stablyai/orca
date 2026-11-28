@@ -62,5 +62,11 @@ export function codexSharedRelayAs(
     agent: CODEX_SHARED_RELAY_AGENT,
     ackFloor: () => sharedAckFloor(acks)
   }
-  return { chatKey, markers, durable: acks.durable, ...(attach ? { attach } : {}) }
+  return {
+    chatKey,
+    markers,
+    durable: acks.durable,
+    servesManyFolders: true,
+    ...(attach ? { attach } : {})
+  }
 }

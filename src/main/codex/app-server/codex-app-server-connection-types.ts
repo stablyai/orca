@@ -56,6 +56,8 @@ export type CodexAppServerConnection = {
     keep?: () => Promise<void>
     /** The daemon seq of the frame being handled now (read inside a handler); null when unknown. */
     recordSeq?: () => number | null
+    /** A kept run rebuilt from Codex (a shared server's): history catch-up, then its running state. */
+    rebuilt?: boolean
     /** The last seq of this attach's replay (lines the daemon spooled before it); 0 when none. */
     replayThrough?: () => number
   }

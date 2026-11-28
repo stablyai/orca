@@ -72,6 +72,7 @@ export function codexSharedLeaseRelayView(
   }
   return {
     reattached: false,
+    rebuilt: lease.restored,
     ownServer: false,
     releaseOutput: () => {},
     endedWork: () => undefined,

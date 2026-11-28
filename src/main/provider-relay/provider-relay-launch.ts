@@ -16,6 +16,8 @@ export type ProviderRelayLaunch = {
   keep?: ProviderRelayKeepSpec
   /** An agent serving several chats: acks wait on all of theirs, not on one chat's journal. */
   durable?: (force: boolean) => Promise<boolean>
+  /** Its chats work in folders other than its own cwd, so a folder probe can't vouch for them. */
+  servesManyFolders?: boolean
   /** A shared agent kept from the last run: attached as is, with no chat's run gate (its chats own theirs). */
   attach?: KeptProviderRelay
 }
