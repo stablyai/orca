@@ -4,16 +4,15 @@ import {
   onOverrideChange
 } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
-import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
+import { claimsRemoteDesktopViewportOnInput } from '../../viewport/remote-desktop-viewport-claim'
 
 export function installPaneViewportClaim(session: ConnectPanePtySession): void {
   session.claimViewportForUserActivity = (input?: string): void => {
     const currentPtyId = session.transport.getPtyId()
-    if (!currentPtyId || getFitOverrideForPty(currentPtyId)?.mode !== 'remote-desktop-fit') {
-      return
-    }
-    // Focus reports after SIGWINCH are not ownership claims; otherwise different-grid mirrors steal the viewport forever (#26469).
-    if (input !== undefined && isPassiveTerminalInputReport(input)) {
+    if (
+      !currentPtyId ||
+      !claimsRemoteDesktopViewportOnInput(getFitOverrideForPty(currentPtyId)?.mode, input)
+    ) {
       return
     }
     let proposed: { cols: number; rows: number } | undefined

@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { hasViewedTabList } from '@/components/bots/teammate-tabs/viewed-tab-list'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { AppState } from '@/store/types'
 import type { ActiveWorktreeStateTransition } from '@/store/slices/worktrees/session/worktree-selection-contract'
@@ -123,12 +124,13 @@ export function buildActivationStateTransition(
   }
 }
 
-/** A user visit focuses the tab it shows; automation run retention keeps a tab once focused. */
+/** A user visit focuses the tab it shows; automation run retention keeps a tab once focused. Under
+ *  another person's viewed list no own tab is shown, so none is focused and the view stays. */
 export function recordShownTabFocus(
   state: Pick<AppState, 'getActiveTab' | 'activateTab'>,
   workspaceKey: string
 ): void {
-  const shown = state.getActiveTab(workspaceKey)
+  const shown = hasViewedTabList(workspaceKey) ? null : state.getActiveTab(workspaceKey)
   if (shown) {
     state.activateTab(shown.id, { worktreeId: workspaceKey, preservePreview: true })
   }

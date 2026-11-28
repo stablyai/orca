@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type { Bot } from '../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { hasViewedTabList } from './teammate-tabs/viewed-tab-list'
 
 function activate(bot: Bot, sessionId: string): Promise<boolean> {
   return activateAiVaultStructuredSession({
@@ -22,11 +23,16 @@ async function markSeen(bot: Bot, sessionIds: string[]): Promise<void> {
   }
 }
 
-/** The chat's tab when it is the one on screen, where activating it again would change nothing. */
+/** The chat's tab when it is the one on screen, where activating it again would change nothing. Under
+ *  another person's viewed list it isn't on screen: activating it shows it (and this window's tabs). */
 function shownChatTab(bot: Bot, sessionId: string): { id: string } | null {
   const state = useAppStore.getState()
   const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
-  if (state.activeView !== 'terminal' || state.activeWorktreeId !== workspaceId) {
+  if (
+    state.activeView !== 'terminal' ||
+    state.activeWorktreeId !== workspaceId ||
+    hasViewedTabList(workspaceId)
+  ) {
     return null
   }
   const tab = selectFocusedChatTab(state, workspaceId)

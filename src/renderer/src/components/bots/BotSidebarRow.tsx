@@ -56,6 +56,8 @@ export type BotSidebarRowProps = {
   /** A column after both lines at the row's right edge, such as the fold toggle's strip. Given one,
    *  it shows the row's working state; otherwise the row's end shows it. */
   trailing?: React.ReactNode
+  /** Leads the right-click menu, before Rename. */
+  menuLead?: React.ReactNode
   /** What the hover card shows, rendered only while it is open. */
   hoverDetails: (keyboardFocus: boolean) => React.ReactNode
   /** Rename and Mark Read/Unread lead the menu; these follow. */
@@ -112,6 +114,7 @@ export function BotSidebarRow({
   line,
   trailing = null,
   hoverDetails,
+  menuLead = null,
   menuItems,
   menuFooter
 }: BotSidebarRowProps): React.JSX.Element {
@@ -224,7 +227,9 @@ export function BotSidebarRow({
           </ActivityThreadHoverCardRoot>
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
+      {/* Grows past its usual width for a longer entry, which never wraps. */}
+      <ContextMenuContent className="min-w-52">
+        {menuLead}
         <ContextMenuItem disabled={actionsDisabled} onSelect={() => setRenameRequested(true)}>
           <Pencil className="size-3.5" />
           {t('bots.row.rename', 'Rename')}

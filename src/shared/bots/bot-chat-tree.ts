@@ -149,10 +149,10 @@ export function chatFoldCounts(chat: BotChatTreeChat): ChatFoldCounts | null {
   return waiting > 0 || running > 0 ? { waiting, running } : null
 }
 
-/** Delete chat's rows: a terminal-only run has no chat, and the live Home, where the agent's mail
- *  and connectors land, stays. */
+/** Delete chat's rows: a terminal-only run has no chat, and a live Home (the viewer's own, or another
+ *  person's by `homeOf`), where the agent's mail and connectors land, stays. */
 export function botChatOffersDelete(chat: BotChatTreeChat): boolean {
-  return !chat.run && !(chat.origin === 'home' && !chat.closed)
+  return !chat.run && !((chat.origin === 'home' || chat.homeOf !== undefined) && !chat.closed)
 }
 
 /** Each client's `t`: the desktop's and the phone's both fit. */

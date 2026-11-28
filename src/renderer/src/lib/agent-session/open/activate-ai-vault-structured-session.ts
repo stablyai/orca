@@ -90,7 +90,7 @@ export async function activateAiVaultStructuredSession(
     await openBotGroupRoom(room.group, room.roomId, room.label)
     return true
   }
-  await openDesktopStructuredSession(
+  const result = await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
     {
       target,
@@ -98,7 +98,9 @@ export async function activateAiVaultStructuredSession(
       retry: options?.retry ?? (() => activateAiVaultStructuredSession(session, undefined, target))
     }
   )
-  return true
+  // Only a chat placed in this window's tabs is opened: a failed open, another open, or a view of
+  // another person's chat in its place is not.
+  return result.kind === 'opened'
 }
 
 type DesktopStructuredSessionOpenOptions = {

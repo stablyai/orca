@@ -35,9 +35,9 @@ export function botPersonPickName(
     : (entries.find((entry) => sameBotPersonPick(entry.pick, pick))?.label ?? null)
 }
 
-/** The Items filter's people as its viewer sees them, labelled: "<name> (you)" first. Null for an
- *  agent shared with no one. */
-export function useBotItemsPeople(bot: Bot): BotPersonPickLabelled[] | null {
+/** The Chats and Items filters' people as their viewer sees them, labelled: "<name> (you)" first.
+ *  Null for an agent shared with no one. */
+export function useBotPersonPicks(bot: Bot): BotPersonPickLabelled[] | null {
   const t = useTranslate()
   const ownerLabel = useBotOwnPersonLabel(bot)
   const entries = botPeoplePicker(bot, null)

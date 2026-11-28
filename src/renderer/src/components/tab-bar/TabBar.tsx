@@ -30,9 +30,20 @@ import {
   withPinnedHomeFirst
 } from './model/pinned-home-tab'
 import { resolveRenderedTabStrip } from './strip/rendered-tab-strip'
+import { useTabListPeople } from '../bots/teammate-tabs/tab-list-people'
+import { useAppStore } from '@/store'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 
 const EMPTY_ROWS: readonly ClientHostedBrowserRow[] = []
 const itemIdOf = (item: TabBarItem): string => item.id
+
+function leadGroupId(node: TabGroupLayoutNode | undefined): string | null {
+  let at = node
+  while (at?.type === 'split') {
+    at = at.first
+  }
+  return at?.groupId ?? null
+}
 const idOf = (id: string): string => id
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
@@ -98,6 +109,14 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   const bot = findBotByWorkspace(bots, worktreeId)
   const sharedBot = bot !== null && sharedBotHostOf(bot.hostId) !== null
   const ownerAgents = useSharedBotOwnerAgents(bot, sharedBot, baseCreateMenu.newTabMenuOpen)
+  // A shared agent's Home: whose tabs this window shows, from the start of its lead group's row.
+  const leadsHome = useAppStore(
+    (state) =>
+      bot !== null &&
+      (leadGroupId(state.layoutByWorktree[worktreeId]) ??
+        state.groupsByWorktree[worktreeId]?.[0]?.id) === runtime.resolvedGroupId
+  )
+  const tabListPeople = useTabListPeople(leadsHome ? bot : null)
   // Each chat asks for the bot on its own host, as its row does, so a mixed-host group never borrows another's Home.
   // Null on a strip no bot calls home (any Git worktree, bots off), which then skips the walk over its tabs.
   const homeBotFor = useMemo(() => homeBotLookupFor(bots, worktreeId), [bots, worktreeId])
@@ -215,6 +234,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       surfaceRef,
       bot,
       sharedBot: sharedBot ? { ownerAgents } : null,
+      tabListPeople,
       botGroup
     },
     t

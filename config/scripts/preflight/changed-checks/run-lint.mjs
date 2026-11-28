@@ -44,6 +44,7 @@ export const LINT_STEPS = [
   'check:agent-status-map-ratchet',
   'check:terminal-parking-ownership-ratchet',
   'check:unproven-pty-retirement-ratchet',
+  'check:raw-tab-list-read-ratchet',
   'check:daemon-blocking-call-ratchet',
   'check:main-sync-fs-ratchet',
   'check:main-blocking-helper-ratchet',

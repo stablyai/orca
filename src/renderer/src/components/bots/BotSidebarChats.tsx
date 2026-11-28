@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { openBotHomeTab } from '@/lib/bot-catalog'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
@@ -27,7 +26,7 @@ import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, BotChatRowEnd, useBotChatPress } from './BotChatRowControls'
 import type { BotChatTree } from './use-bot-chat-tree'
 import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
-import { openBotSession } from './bot-session-open'
+import { openBotChatRow } from './bot-chat-row-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
 import { BotSidebarOlderToggle } from './BotSidebarOlderChats'
@@ -312,11 +311,7 @@ function BotSidebarChat({
     if (active) {
       highlight()
     }
-    if (chat.origin === 'home') {
-      void openBotHomeTab(bot)
-    } else {
-      openBotSession(bot, chat.chatId)
-    }
+    openBotChatRow(bot, chat)
   }
 
   return (

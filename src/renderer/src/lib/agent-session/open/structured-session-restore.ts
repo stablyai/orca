@@ -15,11 +15,15 @@ import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  getRuntimeTargetHostId,
+  runtimeTargetForOwnerEnvironment
+} from '@/runtime/rpc/targets/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { sharedBotHostFor } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { admitToOwnTabs } from './shared-agent-chat-admission'
 
 export const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
@@ -30,6 +34,8 @@ export type StructuredSessionRevealOutcome =
   | 'gone'
   | 'host-cannot-open'
   | 'unreachable'
+  /** Not this viewer's own chat on a shared agent: shown in a view, not placed in its tabs. */
+  | 'shown-in-view'
 
 export function callStructuredSessionParty(
   owner: RuntimeClientTarget,
@@ -60,6 +66,9 @@ export async function revealStructuredSession(target: {
     runtimeTargetForOwnerEnvironment(
       runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), target.worktreeId)
     )
+  if (!(await admitToOwnTabs({ ...target, hostId: getRuntimeTargetHostId(host) }))) {
+    return 'shown-in-view'
+  }
   // Probe the answering paired host’s build; the local host shares this build and needs no probe.
   if (host.kind === 'environment') {
     let supported: boolean

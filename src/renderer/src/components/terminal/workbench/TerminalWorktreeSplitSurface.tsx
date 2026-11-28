@@ -15,6 +15,8 @@ import { layoutHoldsOnlyOverlayViews } from './released-layout-eligibility'
 import { useIsQuickCommandEditorOpen } from '../../tab-bar/quick-commands/quick-command-editor-presence'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
+import { ViewedTabListOverlay } from '../../bots/teammate-tabs/ViewedTabListOverlay'
+import { useViewedTabList } from '../../bots/teammate-tabs/viewed-tab-list'
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
@@ -48,6 +50,10 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
+  // Another person's tabs drawn over this window's own: its own panes stay mounted but none is the
+  // active one, so no focus, shortcut or find goes to them.
+  const viewed = useViewedTabList(worktreeId)
+  const ownTabsActive = isVisible && viewed === null
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   // Allowlist: only views drawn outside the layout (terminals restore from parking snapshots, chats stay mounted).
   // Keyed on membership, not the tab array: title updates replace the array but never a tab's content type.
@@ -88,13 +94,13 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
           layout={layout}
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
-          isWorktreeActive={isVisible}
+          isWorktreeActive={ownTabsActive}
         />
       )}
       <WorkspacePaneOverlayLayers
         worktreeId={worktreeId}
         worktreePath={worktreePath}
-        isVisible={isVisible}
+        isVisible={ownTabsActive}
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
         hiddenTerminalPrewarm={prewarmStage === 'mount' ? null : prewarmStage}
         shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
@@ -110,6 +116,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         })}
         mountEmulatorOverlay={isVisible || !hasPendingBackgroundMounts}
       />
+      {isVisible ? <ViewedTabListOverlay worktreeId={worktreeId} /> : null}
     </div>
   )
 })

@@ -25,7 +25,7 @@ import {
 } from '../../native-chat/media/images/native-chat-markdown-image-owner'
 import { NativeChatTextAttachmentScope } from '../../native-chat/media/text/NativeChatTextAttachments'
 import { botErrorMessage } from '../bot-presentation'
-import { openBotSession } from '../bot-session-open'
+import { openBotChatById } from '../bot-chat-row-open'
 import { useBotTranscriptFollow } from '../use-bot-transcript-follow'
 import { useBotGroupFileContexts } from '../BotGroupTranscriptOwner'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
@@ -351,7 +351,7 @@ export function BotItemBody({
                             <button
                               type="button"
                               className="flex min-w-0 items-center gap-1.5 text-foreground hover:underline"
-                              onClick={() => openBotSession(bot, item.chat.id)}
+                              onClick={() => void openBotChatById(bot, item.chat.id)}
                             >
                               <ChatIcon className="size-3 shrink-0 text-muted-foreground" />
                               <span className="truncate">{chatTitle}</span>

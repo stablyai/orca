@@ -9,30 +9,26 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { Bot } from '../../../../shared/bot-types'
-import type { BotChatPerson } from '../../../../shared/bots/bot-chat-tree'
 import type { BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
-import { BotPersonPickItems, botPersonPickName, useBotOwnPersonLabel } from './BotPersonPickItems'
+import {
+  BotPersonPickItems,
+  botPersonPickName,
+  type BotPersonPickLabelled
+} from './BotPersonPickItems'
 
 export function BotChatsPersonFilter({
-  bot,
-  people,
+  entries,
   pick,
   onPick
 }: {
-  bot: Bot
-  people: readonly BotChatPerson[]
+  /** The viewer first (`useBotPersonPicks`). */
+  entries: readonly BotPersonPickLabelled[]
   pick: BotChatPersonPick
   onPick: (pick: BotChatPersonPick) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const you = useBotOwnPersonLabel(bot)
   const on = pick.kind !== 'everyone'
   const label = t('bots.chats.filter.label', 'Filter by person')
-  const entries = [
-    { pick: { kind: 'owner' } as const, label: you },
-    ...people.map((person) => ({ pick: { kind: 'person' as const, person }, label: person.name }))
-  ]
   const named = botPersonPickName(pick, entries)
   const fullLabel = named ? `${label} · ${named}` : label
   return (

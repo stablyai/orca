@@ -1,4 +1,5 @@
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
+import { ownTabsHiddenIn } from '@/components/bots/teammate-tabs/viewed-tab-list'
 import {
   toVisibleTabType,
   type Tab
@@ -141,6 +142,10 @@ export function moveActiveTab(worktreeId: string | null, direction: -1 | 1): boo
   if (!worktreeId) {
     return false
   }
+  // Under another person's tabs, none of this window's own moves unseen.
+  if (ownTabsHiddenIn(worktreeId)) {
+    return true
+  }
   const state = useAppStore.getState()
   const groupId = state.activeGroupIdByWorktree[worktreeId]
   const group = (state.groupsByWorktree[worktreeId] ?? []).find(
@@ -174,6 +179,10 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       }
       if (isFloatingWorkspacePanelFocused()) {
         return false
+      }
+      // Under another person's tabs, nothing of this window's own closes unseen.
+      if (ownTabsHiddenIn(state.activeWorktreeId)) {
+        return true
       }
       if (closeFocusedSplitLanding(state)) {
         return true

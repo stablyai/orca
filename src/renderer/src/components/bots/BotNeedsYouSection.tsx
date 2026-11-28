@@ -19,7 +19,7 @@ import { botWorkerRowOpener } from './bot-worker-open'
 import { botActivityRowTitle } from './bot-activity-row-title'
 import { botErrorMessage } from './bot-presentation'
 import { botConnectorTitleText } from './bot-connector-titles'
-import { openBotSession } from './bot-session-open'
+import { openBotChatById } from './bot-chat-row-open'
 import { useBotHostLabel } from './use-bot-host-label'
 import { useBotSessionPrompt } from './use-bot-session-prompt'
 import { useStructuredAgentSessionAsyncQuestionSkip } from '../native-chat/prompts/use-structured-agent-session-async-question-skip'
@@ -156,7 +156,7 @@ function SessionRowNeed({
         needKey={needKey}
         title={title}
         sessionId={sessionId}
-        onOpen={() => openBotSession(bot, sessionId)}
+        onOpen={() => void openBotChatById(bot, sessionId)}
         onApproval={onApproval}
       />
     )
@@ -228,7 +228,7 @@ const NeedItem = memo(function NeedItem({
           needKey={need.key}
           title={need.title || t('bots.chats.untitled', 'New chat')}
           sessionId={need.sessionId}
-          onOpen={() => openBotSession(bot, need.sessionId)}
+          onOpen={() => void openBotChatById(bot, need.sessionId)}
           onApproval={onApproval}
         />
       )

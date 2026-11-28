@@ -35,6 +35,9 @@ import type { BotGroup } from '../../../../../shared/bots/bot-group'
 import { BotGroupNewThreadMenuItems } from '../../bots/BotGroupNewThreadMenuItems'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
 import { PinnedHomeTabSlot } from './PinnedHomeTabSlot'
+import { TabListPersonControl } from '../../bots/teammate-tabs/TabListPersonControl'
+import type { TabListPeople } from '../../bots/teammate-tabs/tab-list-people'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   newTabButtonHideClassName,
   type RenderedTabStrip,
@@ -55,6 +58,7 @@ export function renderTabBarSurface(
     surfaceRef,
     bot,
     sharedBot,
+    tabListPeople,
     botGroup
   }: {
     props: TabBarProps
@@ -73,6 +77,8 @@ export function renderTabBarSurface(
     /** Set for an agent shared with this account, whose home here holds only its chats: the agents
      *  its owner offers, null until read. */
     sharedBot: { ownerAgents: readonly BotNewChatAgent[] | null } | null
+    /** A shared agent's people, whose tabs its Home can show; null anywhere else. */
+    tabListPeople: TabListPeople | null
     /** Set in a group's home, where the menu leads with a new thread. */
     botGroup: BotGroup | null
   },
@@ -150,6 +156,12 @@ export function renderTabBarSurface(
   const workspaceTabs = botOffers?.workspaceTabs !== false
   return (
     <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+      {tabListPeople && bot ? (
+        <TabListPersonControl
+          homeKey={folderWorkspaceKey(bot.folderWorkspaceId)}
+          people={tabListPeople}
+        />
+      ) : null}
       {pinnedCount > 0 ? (
         <PinnedHomeTabSlot
           sortableIds={strip.pinnedSortableIds}

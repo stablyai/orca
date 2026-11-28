@@ -314,3 +314,51 @@ it('marks the host’s unread chats only on an owner’s phone reading its own l
   expect(await unread('mate-phone')).toEqual([])
   expect(await unread('mate-phone', 'owner')).toEqual([])
 })
+
+type Rig = Awaited<ReturnType<typeof rig>>
+
+/** A watched read or close of `person`'s list; refused with no list to answer from. */
+const watched = (r: Rig, method: string, person: TabListPerson) =>
+  r.send('mate-desk', method, {
+    worktree: `id:${r.workspace}`,
+    tabId: `agent-session:${O}`,
+    reason: 'user',
+    person
+  })
+const REFUSED = { ok: false, error: { message: 'unknown_tab_list_person' } }
+
+it('refuses to read or close the list of someone the agent isn’t shared with', async () => {
+  const r = await rig()
+  await r.reveal('owner-desk', O)
+  const owner = await r.ownerView()
+  for (const method of ['session.tabs.list', 'session.tabs.close']) {
+    expect(await watched(r, method, { accountId: 'usr_stranger' })).toMatchObject(REFUSED)
+  }
+  await chatTabCommandsSettled()
+  expect(await r.ownerView()).toBe(owner)
+})
+
+it('refuses the list of someone who declined the share', async () => {
+  const r = await rig()
+  const bot = r.runtime.bots.list()[0]!
+  r.profile.saveBot({
+    ...bot,
+    shares: bot.shares?.map((share) =>
+      share.kind === 'account' && share.accountId === OTHER.accountId
+        ? { ...share, declinedAt: 2 }
+        : share
+    )
+  })
+  expect(await watched(r, 'session.tabs.list', { accountId: OTHER.accountId })).toMatchObject(
+    REFUSED
+  )
+  expect(await watched(r, 'session.tabs.list', MATE)).toMatchObject({ ok: true })
+})
+
+it('refuses a teammate’s list in a worker’s workspace, whose one list is the host’s', async () => {
+  const r = await rig({ home: 'other' })
+  expect(await watched(r, 'session.tabs.list', MATE)).toMatchObject(REFUSED)
+  expect(sessions(await r.list('mate-desk', undefined, 'owner'))).toEqual(
+    sessions(await r.list('owner-desk'))
+  )
+})

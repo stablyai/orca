@@ -1,0 +1,56 @@
+# Raw reads over every terminal or page per file: registry everyPage(...) calls, and iterations,
+# size reads, copies or spreads of the PTY map under any name it travels by (ptysById,
+# terminalIdentity.ptys, a `ptys` source, getPtys()). This is a RATCHET: counts may only go DOWN.
+# A person's tabs read through pagesOf / ptyInList. A whole-workspace read (teardown, removal,
+# census, lookup by id) needs a row here: count, file, and a trailing # why.
+# Prune after a fix: pnpm check:raw-tab-list-read-ratchet --prune
+
+1 src/main/orcad/browser-providers/orcad-client-page-commands.ts # census: whether any client-hosted page exists on the host
+2 src/main/runtime/agent-senders/agent-sender-live-panes.ts # lookup by id: each sender pane's live PTY, from one copy of the map
+1 src/main/runtime/browser/client-pages/client-hosted-browser-page-persistence.ts # persistence: saves every list's pages, each row keeps its holder
+1 src/main/runtime/browser/client-pages/client-hosted-pages-settings-note.ts # census: whether any client-hosted page exists, for a settings note
+1 src/main/runtime/browser/client-pages/runtime-browser-client-page-recovery.ts # reconnect: the pages the attaching computer's lease placed, matched against its own inventory (by device, not holder)
+1 src/main/runtime/browser/client-pages/runtime-browser-page-registry.ts # pagesOf itself: the per-list filter over every page
+1 src/main/runtime/browser/client-pages/runtime-browser-workspace-routing.ts # census: whether page commands can run with no local bridge
+2 src/main/runtime/client/runtime-client-state.ts # persistence: which workspaces hold pages to save, and whether any page is open
+1 src/main/runtime/construction/runtime-host-services.ts # census: a repo's terminals not known exited, before removing it
+1 src/main/runtime/construction/runtime-repository-command-state.ts # census: a repo's live terminals for repo commands
+1 src/main/runtime/construction/runtime-service-state.ts # census: terminal.list over every PTY; a teammate's call is in the method's filtered class
+1 src/main/runtime/integrations/git/runtime-branch-switch-host.ts # census: terminals in a workspace whose branch is switching
+2 src/main/runtime/orchestration/crew/orchestration-terminal-candidates.ts # lookup by pane: the PTYs a worker's pane may hold
+1 src/main/runtime/orchestration/crew/runtime-agent-orchestration-dependencies.ts # lookup by id: orchestration resolves a worker's terminal by handle
+1 src/main/runtime/orchestration/mailbox/routing/mailbox-terminal-identity.ts # lookup by id: a mailbox names its terminal by handle
+1 src/main/runtime/orchestration/terminal-authority/legacy-worker-terminal-surface.ts # lookup by pane: whether a worker's pane was taken over
+1 src/main/runtime/rpc/methods/browser/browser-client-host.ts # census: page placements when a computer attaches, for reconnect adoption
+2 src/main/runtime/session-graph/session-graph-promotion.ts # census: every live PTY's partition during graph promotion, then each partition's own list
+1 src/main/runtime/session-graph/session-graph-reload-lifecycle.ts # census: whether a workspace has any live terminal (hasTerminalsForWorktree)
+3 src/main/runtime/session-lifecycle/projection/agent-session-resume-claims.ts # not PTY records: a resume hold's exit watchers, kept in a map named ptys
+1 src/main/runtime/session-lifecycle/projection/claude-running-pane-account-move.ts # census: every live Claude terminal on this machine, teammates' included, for a move of this machine's account
+1 src/main/runtime/session-lifecycle/projection/perform-mobile-session-pty-records-refresh.ts # lookup by pane: whether a pane still holds an agent session
+1 src/main/runtime/session-lifecycle/projection/prune-mobile-session-tab-group-layout.ts # lookup by pane: a host tab's live terminals before pruning its layout
+1 src/main/runtime/session-lifecycle/projection/reconcile-headless-mobile-session-browser-tabs.ts # lookup by leaf: the tab holding a leaf
+1 src/main/runtime/session-tabs/layout/headless-pane-move-to-new-tab.ts # lookup by pane: the live PTY in the pane being moved
+1 src/main/runtime/session-tabs/publication/session-tabs-change-publication.ts # per list: each page is indexed within its own list (pageListOf)
+1 src/main/runtime/session-tabs/restoration/mobile-session-publication-preservation.ts # persistence: every workspace holding pages, to save them
+2 src/main/runtime/session-tabs/restoration/renderer-session-terminal-rescue.ts # lookup by tab: a renderer tab's live shell and its ownership
+1 src/main/runtime/sidebar-inputs/orca-runtime-sidebar-temporal.ts # census: workspace activity times for the sidebar
+3 src/main/runtime/sidebar-inputs/workspace-facts/orca-runtime-workspace-activity-facts.ts # census: workspace liveness and activity facts for the sidebar
+1 src/main/runtime/terminal/adoption/unshown-live-terminal-placement.ts # lookup by pane: live terminals no window shows yet, to place them on the host's layout
+1 src/main/runtime/terminal/focus/focus-terminal.ts # lookup by tab: a workspace's terminals grouped by tab, to focus one
+1 src/main/runtime/terminal/identity/pty-worktree-record.ts # lookup by pane: follows exported pane keys to their PTY
+2 src/main/runtime/terminal/launch/terminal-workspace-scope.ts # lookup by id: a workspace selector's exact spelling among live PTYs (canonicalizeWorktreeIdSelector)
+2 src/main/runtime/terminal/lifecycle/floating-session-liveness.ts # liveness: known PTY ids and pruning disconnected records
+1 src/main/runtime/terminal/lifecycle/pty-controller-inventory-refresh.ts # census: every record against the daemon's inventory
+1 src/main/runtime/terminal/output/terminal-orchestration-authority.ts # lookup by id: the CLI's target terminal
+1 src/main/runtime/terminal/output/terminal-output-generation.ts # census: output generations of every live terminal
+1 src/main/runtime/terminal/query/pty-pane-record.ts # lookup by pane: the PTY recorded for a pane key
+2 src/main/runtime/terminal/query/runtime-terminal-list.ts # census: terminal.list over every PTY; a teammate's call is in the method's filtered class
+1 src/main/runtime/terminal/query/terminal-identity-read-context.ts # lookup by pane: the PTYs recorded for a pane key
+2 src/main/runtime/terminal/stop/project-terminal-stop.ts # teardown: a stopping project's terminals and pages
+1 src/main/runtime/terminal/stop/worktree-pty-collection.ts # teardown: a workspace's terminals to stop, each checked with ptyInList
+2 src/main/runtime/terminal/stop/worktree-terminal-stop-targets.ts # teardown: a workspace's stop targets, filtered by list after
+2 src/main/runtime/workspaces/persisted-surfaces/restored-terminal-placement.ts # lookup by pane: where a restored terminal is placed
+2 src/main/runtime/workspaces/process-listing/runtime-worktree-ps-activity.ts # census: process activity per terminal
+1 src/main/runtime/workspaces/process-listing/runtime-worktree-ps-unverifiable-terminals.ts # census: terminals whose processes can't be listed
+1 src/main/runtime/workspaces/removal/project-removal-impact.ts # census: a removed project's live terminals, to say what removal stops
+1 src/main/runtime/workspaces/removal/worktree-browser-client-page-close.ts # removal: every page of a removed workspace
