@@ -27,6 +27,7 @@ import {
   removeLegacyLocalStorageNativeChatComposerDrafts,
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
+import { PENDING_CREATION_DRAFT_SCOPE_PREFIX } from './native-chat-draft-scope'
 
 /** Pre-hydration appends replay over loaded drafts; ordinary edits replace them. */
 export type DraftAppend = (draft: StoredNativeChatComposerDraft) => StoredNativeChatComposerDraft
@@ -84,12 +85,13 @@ type DraftLoadResult = {
   position?: NativeChatDraftPosition
 }
 
-function applyLoaded(
+async function applyLoaded(
   loaded: ReadonlyMap<string, unknown>,
   readAtSequence: number,
   journal: NativeChatComposerDraftJournalSnapshot
-): void {
+): Promise<void> {
   const drafts = new Map<string, StoredNativeChatComposerDraft | null>()
+  const handoffs: string[] = []
   for (const [scopeKey, value] of loaded) {
     if (!isNativeChatSetupDraft(scopeKey)) {
       drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
@@ -120,6 +122,9 @@ function applyLoaded(
       draft,
       position ?? (changed ? undefined : { at: 'start', pending: true })
     )
+    if (draft.handoffSessionId && scopeKey.startsWith(PENDING_CREATION_DRAFT_SCOPE_PREFIX)) {
+      handoffs.push(scopeKey)
+    }
     if (changed) {
       dirtyScopes.add(scopeKey)
     }
@@ -129,6 +134,10 @@ function applyLoaded(
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
+  if (handoffs.length > 0) {
+    const { recoverPendingChatDraftHandoff } = await import('./native-chat-composer-draft-move')
+    handoffs.forEach(recoverPendingChatDraftHandoff)
+  }
   flushNativeChatComposerDrafts()
 }
 
@@ -163,7 +172,7 @@ export function hydrateNativeChatComposerDrafts(): Promise<void> {
     const journal = snapshotNativeChatComposerDraftJournal().filter(
       (entry) => !isNativeChatSetupDraft(entry.scopeKey)
     )
-    applyLoaded(await nativeChatComposerDraftStorage().loadAll(), readAtSequence, journal)
+    await applyLoaded(await nativeChatComposerDraftStorage().loadAll(), readAtSequence, journal)
   })().catch(retryLater)
   return hydration
 }

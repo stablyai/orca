@@ -168,6 +168,7 @@ export function updateNativeChatComposerDraft(
       : [...images],
     savedAt: nextSavedAt(),
     ...(owner ? { owner } : {}),
+    ...(current.handoffSessionId ? { handoffSessionId: current.handoffSessionId } : {}),
     ...(unsavedText === undefined ? {} : { unsavedText })
   }
   installNativeChatDraftRecord(scopeKey, record, position)

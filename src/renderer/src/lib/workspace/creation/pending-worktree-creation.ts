@@ -29,6 +29,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { EnvironmentDoctorCheck } from '../../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import { PENDING_CREATION_DRAFT_SCOPE_PREFIX } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */
@@ -189,7 +190,7 @@ export function pendingWorktreeCreationIsVisible(
 
 /** Draft scope of the chat composer shown while this creation has no workspace yet. */
 export function pendingCreationChatDraftScopeKey(creationId: string): string {
-  return `pending-worktree-creation:${creationId}`
+  return `${PENDING_CREATION_DRAFT_SCOPE_PREFIX}${creationId}`
 }
 
 /** The first message this creation's chat will send: one sent while pending, else the composer's auto-submit prompt. */

@@ -1,9 +1,9 @@
 // Persist whole memory records, journal unconfirmed changes on unload, and adopt other windows’ confirmed writes.
 
-import { basename } from '@/lib/path'
-import { isNativeChatKeptPastePath } from '../paste/native-chat-image-paste'
-import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/attachments/native-chat-image-label'
-import { isAgentSessionAttachmentStorePath } from '../../../../../shared/agent-session/agent-session-attachments'
+import {
+  releaseDeferredDraftRemovals,
+  sourcesToRetireWithDraft
+} from './native-chat-composer-draft-move-retirement'
 import {
   dirtyScopes,
   deferredRemovals,
@@ -17,7 +17,6 @@ import {
   refusedScopes,
   unconfirmed,
   reconcileRestoredImageChecks,
-  type DraftRecord,
   type UnconfirmedDraftChange
 } from './native-chat-composer-draft-memory'
 import type { AppendBeforeLoad, DraftAppend } from './native-chat-composer-draft-load'
@@ -28,7 +27,7 @@ import {
 import {
   nativeChatComposerDraftStorage,
   parseStoredNativeChatComposerDraft,
-  type NativeChatComposerDraftImage,
+  savedNativeChatComposerDraft,
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 
@@ -42,51 +41,16 @@ const inFlight = new Set<Promise<boolean>>()
 const scopeWrites = new Map<string, Set<Promise<boolean>>>()
 let channel: BroadcastChannel | null = null
 
-function completeDeferredRemovals(destinationScope: string, savedAt: number): void {
-  let released = false
-  for (const [sourceScope, pending] of deferredRemovals) {
-    if (pending.destinationScope === destinationScope && savedAt >= pending.savedAt) {
-      deferredRemovals.delete(sourceScope)
-      released = true
-    }
-  }
-  if (released) {
-    flushNativeChatComposerDrafts()
-  }
-}
+export {
+  unavailableNativeChatComposerDraftImage,
+  isKeptLocalPaste
+} from './native-chat-composer-draft-storage'
 
-/** An image the draft names but can no longer send, so the user can attach it again. */
-export function unavailableNativeChatComposerDraftImage(
-  image: NativeChatComposerDraftImage
-): NativeChatComposerDraftImage {
-  return image.unavailableName === undefined
-    ? { id: image.id, path: '', unavailableName: basename(image.path) }
-    : image
-}
-
-/** A local paste in Orca's paste folder: it outlives the run, so a restore can show and send it. */
-export function isKeptLocalPaste(image: NativeChatComposerDraftImage): boolean {
-  return !image.connectionId && isNativeChatKeptPastePath(image.path)
-}
-
-/** Omit launch seeds; retain durable local/server pastes, reduce other pastes to unavailable names, and drop empty records. */
-function savedForm(record: DraftRecord): StoredNativeChatComposerDraft | null {
-  const { unsavedText, ...saved } = record
-  const images = saved.images.map((image) =>
-    isNativeChatPastedImagePath(image.path) &&
-    !isKeptLocalPaste(image) &&
-    !isAgentSessionAttachmentStorePath(image.path)
-      ? unavailableNativeChatComposerDraftImage(image)
-      : image
-  )
-  const text = saved.text === unsavedText ? '' : saved.text
-  if (text === '' && images.length === 0) {
-    return null
-  }
-  return { ...saved, text, images }
-}
-
-function confirm(scopeKey: string, change: UnconfirmedDraftChange): void {
+function confirm(
+  scopeKey: string,
+  change: UnconfirmedDraftChange,
+  retired?: readonly string[]
+): void {
   if (unconfirmed.get(scopeKey) === change) {
     unconfirmed.delete(scopeKey)
     if (refusedScopes.delete(scopeKey)) {
@@ -95,7 +59,12 @@ function confirm(scopeKey: string, change: UnconfirmedDraftChange): void {
   }
   pruneNativeChatComposerDraftJournal(scopeKey, change.at)
   channel?.postMessage({ scopeKey })
-  completeDeferredRemovals(scopeKey, change.at)
+  for (const source of retired ?? []) {
+    channel?.postMessage({ scopeKey: source })
+  }
+  if (releaseDeferredDraftRemovals(scopeKey, change.at, retired)) {
+    flushNativeChatComposerDrafts()
+  }
 }
 
 function refuse(scopeKey: string, change: UnconfirmedDraftChange, error: unknown): void {
@@ -114,13 +83,16 @@ function refuse(scopeKey: string, change: UnconfirmedDraftChange, error: unknown
 function persist(scopeKey: string): void {
   // A refused deliberate setup removal retries only null, even beside new live input.
   const record = isNativeChatSetupDraft(scopeKey) ? undefined : records.get(scopeKey)
-  const draft = record ? savedForm(record) : null
+  const draft = record ? savedNativeChatComposerDraft(record) : null
   const change: UnconfirmedDraftChange = { draft, at: draft?.savedAt ?? nextSavedAt() }
   unconfirmed.set(scopeKey, change)
   const storage = nativeChatComposerDraftStorage()
-  const written = (draft ? storage.write(scopeKey, draft) : storage.remove([scopeKey])).then(
+  const retire = sourcesToRetireWithDraft(scopeKey, change.at)
+  const written = (
+    draft ? storage.write(scopeKey, draft, retire) : storage.remove([scopeKey, ...retire])
+  ).then(
     () => {
-      confirm(scopeKey, change)
+      confirm(scopeKey, change, retire)
       return true
     },
     (error: unknown) => {
@@ -197,7 +169,7 @@ function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
   const written = nativeChatComposerDraftStorage()
     .update(scopeKey, (stored) => {
       const base = parseStoredNativeChatComposerDraft(stored) ?? empty
-      return savedForm({
+      return savedNativeChatComposerDraft({
         ...append({ ...base, ...(base.owner || !owner ? {} : { owner }) }),
         savedAt: nextSavedAt()
       })
@@ -207,7 +179,9 @@ function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
         entry.committed = true
         pruneNativeChatComposerDraftJournal(scopeKey, appendedAt)
         channel?.postMessage({ scopeKey })
-        completeDeferredRemovals(scopeKey, appendedAt)
+        if (releaseDeferredDraftRemovals(scopeKey, appendedAt)) {
+          flushNativeChatComposerDrafts()
+        }
         return true
       },
       (error: unknown) => {
