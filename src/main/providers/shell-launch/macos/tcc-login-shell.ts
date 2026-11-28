@@ -7,8 +7,10 @@ import { runMacosLoginSessionPtyProbe, type LoginPreflightOutcome } from './logi
 export const MACOS_LOGIN_PATH = '/usr/bin/login'
 const MACOS_BASH_PATH = '/bin/bash'
 const MACOS_PRINTF_PATH = '/usr/bin/printf'
-const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'
-const DIRECT_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -- "$@"'
+// LaunchServices treats children inheriting __CFBundleIdentifier as Orca instances (#21768).
+const LOGIN_SHELL_TRAMPOLINE =
+  'unset __CFBundleIdentifier; export SHELL="$1"; shift; exec -l -- "$@"'
+const DIRECT_SHELL_TRAMPOLINE = 'unset __CFBundleIdentifier; export SHELL="$1"; shift; exec -- "$@"'
 const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
 // Off the spawn path, the death watch can outwait a slow PAM stack without delaying terminal creation.
 const LOGIN_SESSION_WATCH_PROBE_TIMEOUT_MS = 4_000

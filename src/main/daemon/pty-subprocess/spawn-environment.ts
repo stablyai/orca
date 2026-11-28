@@ -209,6 +209,8 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   }
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   delete env.ELECTRON_RUN_AS_NODE
+  // LaunchServices treats children inheriting __CFBundleIdentifier as Orca instances (#21768).
+  delete env.__CFBundleIdentifier
   removeAppImageRuntimeEnv(env)
   removeChromiumDisabledSessionBus(env)
   removeInheritedNoColor(env)
@@ -245,6 +247,7 @@ export function finalizeDaemonPtyEnvironment(
   stripLegacyTerminalShimEnv(env, process.platform)
   dropIncoherentCondaActivationEnv(env, process.platform)
   stripPiProcessOwnerEnv(env)
+  delete env.__CFBundleIdentifier
   // A live daemon pins this runtime across app updates; callers cannot name the host executable.
   for (const key of Object.keys(env)) {
     if (key.toUpperCase() === 'ORCA_AGENT_HOOK_NODE') {
