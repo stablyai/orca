@@ -33,11 +33,6 @@ on:
         required: false
         type: string
         default: ''
-      playwright_config:
-        description: Playwright config for test_files; empty uses tests/playwright.config.ts
-        required: false
-        type: string
-        default: ''
   workflow_dispatch:
     inputs:
       ref:
