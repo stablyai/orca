@@ -8,6 +8,7 @@ import { CodexLoginLinkNotice } from './CodexLoginLinkNotice'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ACCOUNTS_SECTION_IDS, getAccountsCodexSearchEntries } from '../accounts-search'
 import { renderCodexSystemDefaultButton } from './accounts-pane-codex-system-default'
+import { AccountCardPlaceholder } from '../account-card'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
 import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
@@ -219,7 +220,7 @@ export function renderCodexAccountsSection(
           <div className="space-y-2">
             {renderCodexSystemDefaultButton(model, t)}
             {visibleCodexAccounts.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
+              <AccountCardPlaceholder>
                 {isRemoteAccountScope
                   ? t(
                       'auto.components.settings.AccountsPane.remoteEmptyCodexAccounts',
@@ -231,7 +232,7 @@ export function renderCodexAccountsSection(
                       "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
                       { value0: accountRuntimeSentenceLabel }
                     )}
-              </div>
+              </AccountCardPlaceholder>
             ) : (
               visibleCodexAccounts.map((account) =>
                 renderCodexAccountRow(account, model, t, intlLocale)

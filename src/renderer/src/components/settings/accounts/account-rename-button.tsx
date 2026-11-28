@@ -34,14 +34,13 @@ export function AccountRenameButton({
 }): React.JSX.Element {
   return (
     <Button
-      variant="ghost"
+      variant="ghost-muted"
       size="xs"
       onClick={(event) => {
         event.stopPropagation()
         onRename()
       }}
       disabled={disabled || pending}
-      className="h-6 px-2 text-muted-foreground hover:text-foreground"
     >
       {pending ? <Loader2 className="size-3 animate-spin" /> : <Pencil className="size-3" />}
       {t('accounts.rename.action', 'Rename')}
