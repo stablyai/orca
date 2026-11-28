@@ -11,12 +11,8 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
 import { markUnreadFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
 import { releaseExitedWorkerTerminalInTransaction } from '../worker-terminal/worker-terminal-release'
-import {
-  beginLifecycleWriteTransaction,
-  commitLifecycleWriteTransaction,
-  rollbackLifecycleWriteTransaction,
-  transitionLifecycleWithDb
-} from '../lifecycle-transition'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
+import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 
 export function isDispatchProcessCurrent(
   this: OrchestrationDb,
@@ -70,8 +66,7 @@ export function beginWorkerStop(
   | { disposition: 'already_settled'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
   | ({ disposition: 'context_only' } & ContextOnlyDispatchReleaseResult) {
   // Nests in a caller's transaction: a stop observed elsewhere settles with that edge's report.
-  const transaction = beginLifecycleWriteTransaction(this.db, 'begin_worker_stop')
-  try {
+  return runLifecycleWriteTransaction(this.db, 'begin_worker_stop', () => {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
     if (!dispatch) {
@@ -82,11 +77,9 @@ export function beginWorkerStop(
       if (!released.alreadySettled) {
         this.closeQuestionsForDispatch(dispatchId)
       }
-      commitLifecycleWriteTransaction(this.db, transaction)
       return { disposition: 'context_only', ...released }
     }
     if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)) {
-      commitLifecycleWriteTransaction(this.db, transaction)
       return { disposition: 'already_settled', worker, dispatch }
     }
     refuseStopWhileKeptOpen(this, dispatchId, options)
@@ -122,21 +115,16 @@ export function beginWorkerStop(
     })
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     this.closeQuestionsForDispatch(dispatchId)
-    commitLifecycleWriteTransaction(this.db, transaction)
     return {
       disposition: 'stopping',
       worker: this.getWorkerDispatch(dispatchId) as WorkerDispatchRow,
       dispatch: this.getDispatchContextById(dispatchId) as DispatchContextRow
     }
-  } catch (error) {
-    rollbackLifecycleWriteTransaction(this.db, transaction)
-    throw error
-  }
+  })
 }
 
 export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): WorkerDispatchRow {
-  const transaction = beginLifecycleWriteTransaction(this.db, 'settle_worker_stop')
-  try {
+  return runLifecycleWriteTransaction(this.db, 'settle_worker_stop', () => {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
     if (!worker || !dispatch || worker.state !== 'stopping') {
@@ -165,20 +153,15 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
     markUnreadFollowUpMail(this, dispatchId)
     // Callers settle only after proving the process gone, so its terminal no longer pins the Run.
     releaseExitedWorkerTerminalInTransaction(this, dispatchId)
-    commitLifecycleWriteTransaction(this.db, transaction)
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
-  } catch (error) {
-    rollbackLifecycleWriteTransaction(this.db, transaction)
-    throw error
-  }
+  })
 }
 
 export function reconcileFederatedWorkerStop(
   this: OrchestrationDb,
   dispatchId: string
 ): WorkerDispatchRow {
-  const transaction = beginLifecycleWriteTransaction(this.db, 'federated_worker_stop_reconcile')
-  try {
+  return runLifecycleWriteTransaction(this.db, 'federated_worker_stop_reconcile', () => {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
     if (!worker || !dispatch || !this.getFederatedDispatch(dispatchId)) {
@@ -188,7 +171,6 @@ export function reconcileFederatedWorkerStop(
       )
     }
     if (worker.state === 'stopped') {
-      commitLifecycleWriteTransaction(this.db, transaction)
       return worker
     }
     if (!['stopping', 'stop_unknown'].includes(worker.state)) {
@@ -222,12 +204,8 @@ export function reconcileFederatedWorkerStop(
     }
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     this.closeQuestionsForDispatch(dispatchId)
-    commitLifecycleWriteTransaction(this.db, transaction)
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
-  } catch (error) {
-    rollbackLifecycleWriteTransaction(this.db, transaction)
-    throw error
-  }
+  })
 }
 
 export function resumeFederatedWorkerForTerminalRelay(

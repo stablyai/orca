@@ -1184,7 +1184,7 @@
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-settlement.ts
 4 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stage.ts
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
-22 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stop.ts
+21 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stop.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-terminal-recovery.ts
 1 src/main/runtime/orchestration/dock/worker-dock-acknowledgment.ts # only on the user's Clear, Clear all or Show in dock again click; no passive caller
 1 src/main/runtime/orchestration/dock/worker-dock-provider-failures.ts # only when a provider subagent or command fails: one transaction per failure batch, so a failure stays until the user clears it; successful child events never reach the database
