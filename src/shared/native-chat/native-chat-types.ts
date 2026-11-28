@@ -82,8 +82,6 @@ export type NativeChatTextBlock = {
   usageLimitTurnItemId?: string
   /** On an automation's result note: the run and its result. */
   automationResult?: AutomationResultNote
-  /** Set by the list projection: a later /clear means this unread note will never reach the agent. */
-  automationResultCleared?: true
   /** A turn that carried an edited SOUL.md or MEMORY.md to a bot; read with `readBotContextNote`. */
   botContext?: BotContextNote
   /** A tidy-up changed the bot's memory: the line offers its summary. */
@@ -266,8 +264,6 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
-  /** On a person's message: how many automation result notes went to the agent with it. */
-  automationResultsCarried?: number
   /** Its text was shortened to fit the copy sent to this client; the host keeps it whole. */
   shortened?: true
   /** The journal row's own lifecycle; absent means unknown, never live. */

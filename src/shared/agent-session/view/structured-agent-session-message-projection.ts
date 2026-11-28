@@ -26,10 +26,6 @@ import {
   deliveredAgentMailRow,
   structuredAgentSessionEchoRows
 } from './structured-agent-session-echo-rows'
-import {
-  automationResultMarks,
-  withAutomationResultMarks
-} from '../../bots/bot-automation-result-marks'
 import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
 import {
   agentSessionContextSequenceFor,
@@ -194,7 +190,6 @@ export function projectStructuredAgentSessionMessageRows(
       submission
     ])
   )
-  const marks = automationResultMarks(visibleItems)
   const delivered: NativeChatMessage[] = []
   const held: NativeChatMessage[] = []
   const shownStopped = new Set<string>()
@@ -219,7 +214,7 @@ export function projectStructuredAgentSessionMessageRows(
     ) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
-      delivered.push(withAutomationResultMarks(message, marks))
+      delivered.push(message)
     } else {
       const { opensTurn, position } = placement(message.id)
       moved ||= position !== undefined

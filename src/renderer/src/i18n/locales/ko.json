@@ -21580,12 +21580,7 @@
         "noGoal": "이 채팅에는 Codex가 변경할 목표가 없습니다. /goal 뒤에 목표를 입력해 설정하세요."
       },
       "automationResult": {
-        "openRun": "실행 열기",
-        "notRead": "{{name}}이(가) 아직 이 내용을 읽지 않았습니다. 다음 메시지와 함께 전달됩니다.",
-        "read": "{{name}}이(가) 다음 메시지와 함께 이 내용을 읽었습니다.",
-        "sentWithOne": "자동화 결과 1개와 함께 전송됨",
-        "sentWithMany": "자동화 결과 {{count}}개와 함께 전송됨",
-        "cleared": "채팅을 지우기 전에 도착했습니다. {{name}}에게는 전달되지 않습니다."
+        "openRun": "실행 열기"
       },
       "slashCommandDescriptions": {
         "clearConversation": "대화 지우기",

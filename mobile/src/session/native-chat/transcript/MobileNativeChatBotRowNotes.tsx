@@ -1,6 +1,5 @@
 import React from 'react'
-import { Text, View } from 'react-native'
-import { automationResultsCarriedText } from '../../../../../src/shared/bots/bot-automation-result-note'
+import { View } from 'react-native'
 import { tookOverLabel } from '../../../../../src/shared/native-chat/took-over-notice'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { mobileNativeChatRowId } from './viewport/mobile-native-chat-reading-place'
@@ -34,13 +33,4 @@ export function MobileNativeChatTookOverRow({
       <MobileNativeChatDivider label={tookOverLabel(workspace)} />
     </View>
   )
-}
-
-export function MobileNativeChatAutomationResultsCarried({
-  count
-}: {
-  count: number
-}): React.JSX.Element {
-  const styles = useThemedStyles(stylesSheet)
-  return <Text style={styles.automationResultsCarried}>{automationResultsCarriedText(count)}</Text>
 }

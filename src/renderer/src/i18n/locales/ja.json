@@ -21345,12 +21345,7 @@
         "noGoal": "このチャットには Codex の変更できる目標がありません。/goal の後に目的を続けて目標を設定してください。"
       },
       "automationResult": {
-        "openRun": "実行を開く",
-        "notRead": "{{name}} はまだこれを読んでいません。次のメッセージと一緒に送られます。",
-        "read": "{{name}} は次のメッセージと一緒にこれを読みました。",
-        "sentWithOne": "オートメーションの結果 1 件と一緒に送信",
-        "sentWithMany": "オートメーションの結果 {{count}} 件と一緒に送信",
-        "cleared": "チャットがクリアされる前に届きました。{{name}} には送られません。"
+        "openRun": "実行を開く"
       },
       "slashCommandDescriptions": {
         "clearConversation": "会話をクリア",

@@ -11,7 +11,7 @@ export const AUTOMATION_RESULT_NOTE_PRESENTATION = 'automation-result'
 export type AutomationResultNote = {
   automationId: string
   automationName: string
-  /** Names the bot in the note's read caption. */
+  /** Older clients name the bot with it in the row's read line; this build doesn't show that line. */
   botName: string
   runId: string
   /** The run's own conversation. */
@@ -37,20 +37,8 @@ export const AUTOMATION_RESULT_PREAMBLE_LIMITS = {
 export const AUTOMATION_RESULT_NOTE_COPY = {
   finished: 'finished',
   couldNotFinish: "couldn't finish",
-  notRead: "{{name}} hasn't read this yet. It goes with your next message.",
-  read: '{{name}} read this with your next message.',
-  cleared: "Arrived before the chat was cleared. It won't go to {{name}}.",
-  openRun: 'Open run',
-  sentWithOne: 'Sent with 1 automation result',
-  sentWithMany: 'Sent with {{count}} automation results'
+  openRun: 'Open run'
 } as const
-
-/** The caption under a person's message that carried results; desktop translates the same copy. */
-export function automationResultsCarriedText(count: number): string {
-  return count === 1
-    ? AUTOMATION_RESULT_NOTE_COPY.sentWithOne
-    : AUTOMATION_RESULT_NOTE_COPY.sentWithMany.replace('{{count}}', String(count))
-}
 
 function clip(text: string, max: number): string {
   return text.length > max ? `${sliceAtCodeUnitLimit(text, max - 1).trimEnd()}…` : text

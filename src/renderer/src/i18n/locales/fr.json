@@ -22208,12 +22208,7 @@
         "noGoal": "Codex n’a aucun objectif à modifier dans ce chat. Définissez-en un avec /goal suivi de l’objectif."
       },
       "automationResult": {
-        "openRun": "Ouvrir l’exécution",
-        "notRead": "{{name}} ne l’a pas encore lu. Il sera envoyé avec votre prochain message.",
-        "read": "{{name}} l’a lu avec votre message suivant.",
-        "sentWithOne": "Envoyé avec 1 résultat d’automatisation",
-        "sentWithMany": "Envoyé avec {{count}} résultats d’automatisation",
-        "cleared": "Arrivé avant que le chat ne soit effacé. Il ne sera pas transmis à {{name}}."
+        "openRun": "Ouvrir l’exécution"
       },
       "slashCommandDescriptions": {
         "clearConversation": "Effacer la conversation",

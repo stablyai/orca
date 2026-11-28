@@ -2508,12 +2508,7 @@
         "questionCount_other": "{{count}} questions"
       },
       "automationResult": {
-        "cleared": "Arrived before the chat was cleared. It won't go to {{name}}.",
-        "notRead": "{{name}} hasn't read this yet. It goes with your next message.",
-        "openRun": "Open run",
-        "read": "{{name}} read this with your next message.",
-        "sentWithMany": "Sent with {{count}} automation results",
-        "sentWithOne": "Sent with 1 automation result"
+        "openRun": "Open run"
       },
       "automationRun": {
         "accessibleName": "Automation run. {{label}}: {{name}}. {{reason}}.",
