@@ -33,27 +33,49 @@ struct QuitChordWatch {
   }
 }
 
+func runQuitChordWatch(
+  sample: (CGEventSourceStateID) -> QuitChordSample?,
+  wait: () -> Void,
+  emit: (QuitChordDecision) -> Void
+) {
+  for source: CGEventSourceStateID in [.hidSystemState, .combinedSessionState] {
+    var watch = QuitChordWatch()
+    guard let first = sample(source), watch.observe(first) == .watching else { continue }
+    emit(.watching)
+
+    // A release in the source that armed the gesture must never be masked by another source.
+    while true {
+      wait()
+      let decision = sample(source).map { watch.observe($0) } ?? .released
+      if decision != .watching {
+        emit(decision)
+        return
+      }
+    }
+  }
+  emit(.released)
+}
+
+private func readQuitChord(keyCode: UInt16, source: CGEventSourceStateID) -> QuitChordSample? {
+  let keyUps = CGEventSource.counterForEventType(source, eventType: .keyUp)
+  let flags = CGEventSource.counterForEventType(source, eventType: .flagsChanged)
+  let sample = QuitChordSample(
+    keyDown: CGEventSource.keyState(source, key: keyCode),
+    modifierFlags: CGEventSource.flagsState(source),
+    keyUpCount: CGEventSource.counterForEventType(source, eventType: .keyUp),
+    flagsCount: CGEventSource.counterForEventType(source, eventType: .flagsChanged),
+    now: DispatchTime.now().uptimeNanoseconds
+  )
+  return keyUps == sample.keyUpCount && flags == sample.flagsCount ? sample : nil
+}
+
 func watchQuitChord(keyCode: UInt16) {
-  var watch = QuitChordWatch()
-  var announced = false
-  while true {
-    let keyUps = CGEventSource.counterForEventType(.combinedSessionState, eventType: .keyUp)
-    let flags = CGEventSource.counterForEventType(.combinedSessionState, eventType: .flagsChanged)
-    let sample = QuitChordSample(
-      keyDown: CGEventSource.keyState(.combinedSessionState, key: keyCode),
-      modifierFlags: CGEventSource.flagsState(.combinedSessionState),
-      keyUpCount: CGEventSource.counterForEventType(.combinedSessionState, eventType: .keyUp),
-      flagsCount: CGEventSource.counterForEventType(.combinedSessionState, eventType: .flagsChanged),
-      now: DispatchTime.now().uptimeNanoseconds
-    )
-    let decision = keyUps == sample.keyUpCount && flags == sample.flagsCount
-      ? watch.observe(sample) : .released
-    if decision != .watching || !announced {
+  runQuitChordWatch(
+    sample: { readQuitChord(keyCode: keyCode, source: $0) },
+    wait: { Thread.sleep(forTimeInterval: 0.008) },
+    emit: { decision in
       let data = Data("{\"state\":\"\(decision.rawValue)\"}\n".utf8)
       FileHandle.standardOutput.write(data)
-      announced = true
     }
-    if decision != .watching { return }
-    Thread.sleep(forTimeInterval: 0.008)
-  }
+  )
 }

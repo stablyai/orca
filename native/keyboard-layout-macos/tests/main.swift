@@ -44,4 +44,43 @@ expect(clockRegression.observe(sample(99)), .released, "clock regression fails c
 var atDeadlineRelease = QuitChordWatch()
 expect(atDeadlineRelease.observe(sample(0)), .watching, "deadline release starts")
 expect(atDeadlineRelease.observe(sample(1000, key: false)), .released, "release wins over deadline")
+func expectSourceWatch(
+  hid: [QuitChordSample?], session: [QuitChordSample?],
+  decisions: [QuitChordDecision], sources: [CGEventSourceStateID], label: String
+) {
+  var hidSamples = hid.makeIterator()
+  var sessionSamples = session.makeIterator()
+  var sampled: [CGEventSourceStateID] = []
+  var emitted: [QuitChordDecision] = []
+  runQuitChordWatch(
+    sample: { source in
+      sampled.append(source)
+      switch source {
+        case .hidSystemState: return hidSamples.next() ?? nil
+        case .combinedSessionState: return sessionSamples.next() ?? nil
+        default: fatalError("Unexpected source: \(source)")
+      }
+    },
+    wait: {},
+    emit: { emitted.append($0) }
+  )
+  assertions += 1
+  guard emitted == decisions && sampled == sources else {
+    fatalError("\(label): \(emitted), \(sampled)")
+  }
+}
+
+expectSourceWatch(hid: [sample(0), sample(1000)], session: [sample(0, key: false)],
+                  decisions: [.watching, .held], sources: [.hidSystemState, .hidSystemState],
+                  label: "physical hold succeeds when the session does not report the key")
+expectSourceWatch(hid: [sample(0, key: false)], session: [sample(0), sample(1000)],
+                  decisions: [.watching, .held],
+                  sources: [.hidSystemState, .combinedSessionState, .combinedSessionState],
+                  label: "a session shortcut uses its own samples and clock")
+expectSourceWatch(hid: [sample(0), sample(1000, up: 11)], session: [sample(1000)],
+                  decisions: [.watching, .released], sources: [.hidSystemState, .hidSystemState],
+                  label: "releasing the armed shortcut cannot fall back to another source")
+expectSourceWatch(hid: [sample(0), nil], session: [sample(1000)],
+                  decisions: [.watching, .released], sources: [.hidSystemState, .hidSystemState],
+                  label: "incoherent input cancels an armed shortcut")
 print("QuitChordWatch: \(assertions) assertions passed")

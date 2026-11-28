@@ -18,7 +18,7 @@ describe.runIf(process.platform === 'darwin')('macOS continuous quit chord predi
         '-o',
         binary
       ])
-      expect(execFileSync(binary, { encoding: 'utf8' })).toContain('21 assertions passed')
+      expect(execFileSync(binary, { encoding: 'utf8' })).toContain('25 assertions passed')
     } finally {
       rmSync(temp, { recursive: true, force: true })
     }
