@@ -12,8 +12,17 @@ import {
 import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import { readDaemonWslQuitCwds } from '../wsl/daemon-wsl-sleep-cwd'
+import { RETIRE_WHEN_IDLE_REQUEST } from '../../server/daemon-superseded-clients'
+import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
+import { isDaemonEndpointGoneError } from '../../protocol/daemon-errors'
 
 export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
+  /** The live connection asked the daemon to retire when idle. */
+  private heldForRetirement = false
+  /** A held connection dropped and nothing has reconnected since: the daemon may have retired. */
+  private heldConnectionDropped = false
+  private stopHeldDropWatch: (() => void) | null = null
+
   onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
     this.dataListeners.push(callback)
     return () => removeDaemonListener(this.dataListeners, callback)
@@ -74,6 +83,8 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.identityChangeListeners.length = 0
     this.removeEventListener?.()
     this.removeEventListener = null
+    this.stopHeldDropWatch?.()
+    this.stopHeldDropWatch = null
     // Daemon-side teardown writes final checkpoints; adapter disposal marks history ended to prevent false restores.
     if (this.historyManager) {
       void this.historyManager
@@ -152,6 +163,66 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       this.idleRetirementState = 'unverifiable'
       return { state: 'unverifiable' }
     }
+  }
+
+  /** Asks an older generation to retire by itself once it owns nothing; 'unsupported' predates the request. */
+  async askRetireWhenIdle(
+    currentProtocolVersion: number
+  ): Promise<'held' | 'unsupported' | 'unanswered'> {
+    try {
+      await this.ensureConnected()
+      await this.client.request(RETIRE_WHEN_IDLE_REQUEST, { currentProtocolVersion })
+      this.heldForRetirement = true
+      this.heldConnectionDropped = false
+      this.stopHeldDropWatch ??= this.client.onDisconnected(() => {
+        this.heldConnectionDropped ||= this.heldForRetirement
+        this.heldForRetirement = false
+      })
+      return 'held'
+    } catch (error) {
+      return isUnknownRequestTypeError(error) ? 'unsupported' : 'unanswered'
+    }
+  }
+
+  /** After a held connection drops: retired only once the endpoint is proven gone with no tracked session. */
+  async confirmRetiredWhenIdle(): Promise<'retired' | 'connected' | 'reconnected' | 'unknown'> {
+    if (this.idleRetirementState === 'retiring') {
+      return 'retired'
+    }
+    if (this.client.isConnected()) {
+      return 'connected'
+    }
+    if (!this.heldConnectionDropped || this.activeSessionIds.size > 0) {
+      return 'unknown'
+    }
+    try {
+      await this.ensureConnected()
+      // The new connection keeps the daemon alive until it is asked again.
+      this.heldConnectionDropped = false
+      return 'reconnected'
+    } catch (error) {
+      if (!isDaemonEndpointGoneError(error) || this.activeSessionIds.size > 0) {
+        return 'unknown'
+      }
+      this.idleRetirementState = 'retiring'
+      this.idleRetirementAdmissionClosed = true
+      this.respawnAdoptionClosed = true
+      return 'retired'
+    }
+  }
+
+  /** Asked to retire on the live connection; the daemon may decide at any moment. */
+  isHeldForRetirement(): boolean {
+    return this.heldForRetirement
+  }
+
+  /** Asked to retire, on the live connection or on one that dropped since. */
+  wasAskedToRetireWhenIdle(): boolean {
+    return this.heldForRetirement || this.heldConnectionDropped
+  }
+
+  onConnectionLost(listener: () => void): () => void {
+    return this.client.onDisconnected(listener)
   }
 
   /** True once this daemon accepted idle retirement: it is leaving and never serves again. */

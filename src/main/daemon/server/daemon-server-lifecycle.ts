@@ -16,6 +16,8 @@ type DaemonServerLifecycleOptions = {
   endpoint: DaemonEndpointLifecycle
   log: DaemonFileLog
   isIdle: () => boolean
+  /** A newer app asked this daemon to retire once only its own connections remain. */
+  isSuperseded: () => boolean
   disposeResources: () => Promise<void>
   onIdleShutdown: () => void
   onRpcShutdown: () => void
@@ -119,7 +121,7 @@ export class DaemonServerLifecycle {
     if (this.state !== 'running') {
       return
     }
-    if (this.retirementRequested) {
+    if (this.retirementRequested || this.options.isSuperseded()) {
       this.cancelInitialAdoptionTimer()
       if (this.options.isIdle()) {
         this.beginIdleShutdown()

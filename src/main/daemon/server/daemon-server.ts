@@ -36,6 +36,8 @@ import {
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
 import { sendDaemonTransientFact } from './daemon-transient-fact-delivery'
 import { answerDaemonControlRequest } from './daemon-control-request'
+import * as superseded from './daemon-superseded-clients'
+import { disposeTerminalsAndRelays } from './daemon-shutdown-requests'
 
 export class DaemonServer {
   private static readonly INITIAL_ADOPTION_TIMEOUT_MS = 2 * 60 * 1000
@@ -193,6 +195,7 @@ export class DaemonServer {
       endpoint: this.endpoint,
       log: this.log,
       isIdle: () => this.isIdle(),
+      isSuperseded: () => superseded.anyClient(this.connections),
       disposeResources: () => this.disposeResources(),
       onIdleShutdown: options.onIdleShutdown ?? (() => {}),
       onRpcShutdown: options.onRpcShutdown ?? (() => {}),
@@ -262,7 +265,7 @@ export class DaemonServer {
       this.admission.inFlight === 0 &&
       !this.host.hasLiveSessions() &&
       this.relays.liveCount === 0 &&
-      (this.endpoint.lost || noClients)
+      (this.endpoint.lost || noClients || superseded.onlyClients(this.connections))
     )
   }
 
@@ -272,15 +275,7 @@ export class DaemonServer {
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
     this.preparations.cancelAll()
-    // Both finish before shutdown goes on, even when one of them fails.
-    const disposed = await Promise.allSettled([this.host.dispose(), this.relays.dispose()])
-    const failure = disposed.find((result) => result.status === 'rejected')
-    if (failure) {
-      const error: unknown = failure.reason
-      this.log.log('shutdown-dispose-failed', {
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
+    await disposeTerminalsAndRelays({ host: this.host, relays: this.relays, log: this.log })
     this.streamDataBatcher.clear()
     this.historySeedTransfers.dispose()
     // Clearing earlier could make a crash during PTY teardown look like orderly shutdown.
@@ -308,6 +303,9 @@ export class DaemonServer {
         answerProviderRequest(request, this.connections.get(clientId), socket, this.providerWork) ??
         answerProviderRelayRequest(request, this.connections.get(clientId), socket, this.relays) ??
         answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
+        superseded.answer(request, clientId, this.connections, this.log, () =>
+          this.lifecycle.reevaluateIdleShutdown()
+        ) ??
         this.requestRouter.route(clientId, request),
       () => this.lifecycle.startPendingShutdownReply(clientId, request.id)
     )

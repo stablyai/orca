@@ -24,6 +24,8 @@ export type ConnectedDaemonClient = {
   /** Set per stream socket by its hello; absent means NDJSON. */
   streamFraming?: DaemonStreamFraming
   authenticatedPairEstablished: boolean
+  /** A newer app asked that this connection no longer keep the daemon alive. */
+  superseded?: true
 }
 
 type DaemonClientConnectionOptions = {
@@ -104,8 +106,18 @@ export class DaemonClientConnections {
   }
 
   hasOnlyTransportsFor(client: ConnectedDaemonClient): boolean {
-    return [...this.transportSockets].every(
-      (transport) => transport === client.controlSocket || transport === client.streamSocket
+    return this.hasOnlyTransportsOf([client])
+  }
+
+  get protocolVersion(): number {
+    return this.options.protocolVersion
+  }
+
+  hasOnlyTransportsOf(clients: readonly ConnectedDaemonClient[]): boolean {
+    return [...this.transportSockets].every((transport) =>
+      clients.some(
+        (client) => transport === client.controlSocket || transport === client.streamSocket
+      )
     )
   }
 

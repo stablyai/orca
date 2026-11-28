@@ -1,13 +1,21 @@
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
+import {
+  DaemonConnectionLostError,
+  isDaemonEndpointGoneError,
+  TerminalSessionOwnerUnverifiedError
+} from '../../protocol/daemon-errors'
 
 /** Lets a burst of exits settle into one inventory. */
 const EXIT_SETTLE_MS = 250
-/** Work that sends this app no exit (chat agents, terminals it never attached) is rechecked, backing off to the cap. */
+// Transitional, for generations older than `retireWhenIdle` (v63 and before); remove once those are gone.
+/** Their work that sends this app no exit (chat agents, unattached terminals) is rechecked, backing off. */
 const RECHECK_MS = 60_000
 const RECHECK_MAX_MS = 30 * 60_000
 /** A hung decision must not hold reattaches; the generation's own fence still refuses them. */
 const DECISION_FENCE_MAX_MS = 2_000
+/** A held generation closes as it retires; its endpoint is proven gone within a few of these. */
+const RETIRED_CONFIRM_DELAYS_MS = [100, 250, 500, 1_000, 2_000]
 
 type Timer = ReturnType<typeof setTimeout>
 
@@ -19,7 +27,11 @@ export type LegacyIdleRetirementOptions = {
   timing?: { exitSettleMs?: number; recheckMs?: number; recheckMaxMs?: number; fenceMaxMs?: number }
 }
 
-/** Retires an older generation once it owns nothing; the daemon decides atomically, and reattaches (the only work that reaches it) never overlap that decision. */
+/**
+ * Retires an older generation once it owns nothing. Held generations (`retireWhenIdle`) decide by
+ * themselves, atomically, and are forgotten once their endpoint is gone. Older ones are asked by
+ * this app (`shutdownIfIdle`) after their exits, and reattaches never overlap that decision.
+ */
 export class DaemonRouterLegacyIdleRetirement {
   private readonly timers = new Map<DaemonPtyAdapter, Timer>()
   private readonly checking = new Set<DaemonPtyAdapter>()
@@ -29,6 +41,8 @@ export class DaemonRouterLegacyIdleRetirement {
   private readonly fences = new Set<Promise<void>>()
   // Weak: a generation can also leave through the endpoint-loss path, which never tells this class.
   private readonly recheckDelays = new WeakMap<DaemonPtyAdapter, number>()
+  private readonly modes = new WeakMap<DaemonPtyAdapter, 'asking' | 'held' | 'pre-rpc'>()
+  private readonly lostListeners = new Map<DaemonPtyAdapter, () => void>()
   private reattachesInFlight = 0
   private reattachEpoch = 0
   private disposed = false
@@ -38,7 +52,7 @@ export class DaemonRouterLegacyIdleRetirement {
   /** Call before routing any spawn that may reach an older generation; call the result when it settles. */
   async admitReattach(): Promise<() => void> {
     while (this.fences.size > 0) {
-      await Promise.all([...this.fences])
+      await Promise.all(this.fences)
     }
     // Counted in the same turn the loop saw no fence, so no decision can start between.
     this.reattachesInFlight++
@@ -51,7 +65,7 @@ export class DaemonRouterLegacyIdleRetirement {
       released = true
       this.reattachesInFlight--
       if (this.reattachesInFlight === 0) {
-        for (const adapter of [...this.waitingForQuiet]) {
+        for (const adapter of this.waitingForQuiet) {
           this.waitingForQuiet.delete(adapter)
           this.schedule(adapter, 0)
         }
@@ -59,10 +73,99 @@ export class DaemonRouterLegacyIdleRetirement {
     }
   }
 
-  /** An exit or other event on the generation: check soon and restart the recheck backoff. */
+  /** An exit, discovery or reattach on the generation. */
   noteActivity(adapter: DaemonPtyAdapter): void {
-    this.recheckDelays.delete(adapter)
-    this.schedule(adapter)
+    if (this.disposed || !this.isRetirableLegacy(adapter)) {
+      return
+    }
+    // Accepted under another router (a restart carries adapters over): it is already leaving.
+    if (adapter.hasRetiredForIdle()) {
+      this.forget(adapter)
+      return
+    }
+    const mode = this.modes.get(adapter)
+    if (mode === undefined && adapter.wasAskedToRetireWhenIdle()) {
+      this.adoptHeld(adapter)
+      void this.confirmRetired(adapter, false)
+    } else if (mode === undefined) {
+      void this.hold(adapter)
+    } else if (mode === 'held' && !adapter.isHeldForRetirement()) {
+      void this.confirmRetired(adapter, false)
+    } else if (mode === 'pre-rpc') {
+      this.recheckDelays.delete(adapter)
+      this.schedule(adapter)
+    }
+  }
+
+  /** After a spawn failed: forgets every held generation that retired under it; true if any did. */
+  async settleHeldRetirements(error: unknown): Promise<boolean> {
+    if (!mayComeFromRetirement(error)) {
+      return false
+    }
+    const held = this.options.legacy().filter((adapter) => this.modes.get(adapter) === 'held')
+    const settled = await Promise.all(held.map((adapter) => this.confirmRetired(adapter, true)))
+    return settled.includes(true)
+  }
+
+  private async hold(adapter: DaemonPtyAdapter): Promise<void> {
+    this.modes.set(adapter, 'asking')
+    const result = await adapter.askRetireWhenIdle(this.options.current().protocolVersion)
+    if (this.disposed || !this.isRetirableLegacy(adapter)) {
+      return
+    }
+    if (result === 'unanswered') {
+      // The next exit, discovery or reattach asks again.
+      this.modes.delete(adapter)
+      return
+    }
+    if (result === 'unsupported') {
+      this.modes.set(adapter, 'pre-rpc')
+      this.schedule(adapter)
+      return
+    }
+    this.adoptHeld(adapter)
+  }
+
+  private adoptHeld(adapter: DaemonPtyAdapter): void {
+    this.modes.set(adapter, 'held')
+    if (!this.lostListeners.has(adapter)) {
+      this.lostListeners.set(
+        adapter,
+        adapter.onConnectionLost(() => void this.confirmRetired(adapter, false))
+      )
+    }
+  }
+
+  /** A held connection only closes when the daemon retires, stops, or the link drops. */
+  private async confirmRetired(adapter: DaemonPtyAdapter, awaitClose: boolean): Promise<boolean> {
+    for (const delayMs of RETIRED_CONFIRM_DELAYS_MS) {
+      if (this.disposed || this.modes.get(adapter) !== 'held') {
+        return false
+      }
+      const verdict = await adapter.confirmRetiredWhenIdle()
+      if (verdict === 'retired') {
+        this.forget(adapter)
+        return true
+      }
+      // Reconnected, here or by another path: a new connection keeps the daemon alive until asked again.
+      if (
+        verdict === 'reconnected' ||
+        (verdict === 'connected' && !adapter.isHeldForRetirement())
+      ) {
+        void this.hold(adapter)
+        return false
+      }
+      // A refused spawn can beat the close that follows a retirement.
+      if (verdict === 'connected' && !awaitClose) {
+        return false
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs).unref?.())
+    }
+    if (!this.disposed && this.modes.get(adapter) === 'held' && !adapter.isHeldForRetirement()) {
+      // Still unproven: endpoint-loss handling keeps it, and the next activity looks again.
+      this.modes.delete(adapter)
+    }
+    return false
   }
 
   private schedule(
@@ -84,7 +187,7 @@ export class DaemonRouterLegacyIdleRetirement {
     this.timers.set(adapter, timer)
   }
 
-  scheduleAll(): void {
+  noteAll(): void {
     for (const adapter of this.options.legacy()) {
       this.noteActivity(adapter)
     }
@@ -98,6 +201,10 @@ export class DaemonRouterLegacyIdleRetirement {
     this.timers.clear()
     this.waitingForQuiet.clear()
     this.checkAgain.clear()
+    for (const stop of this.lostListeners.values()) {
+      stop()
+    }
+    this.lostListeners.clear()
   }
 
   /** The current generation is never retired here, even when it is empty. */
@@ -112,7 +219,7 @@ export class DaemonRouterLegacyIdleRetirement {
   }
 
   private async check(adapter: DaemonPtyAdapter): Promise<void> {
-    if (this.disposed) {
+    if (this.disposed || this.modes.get(adapter) !== 'pre-rpc') {
       return
     }
     if (this.checking.has(adapter)) {
@@ -154,6 +261,8 @@ export class DaemonRouterLegacyIdleRetirement {
 
   private forget(adapter: DaemonPtyAdapter): void {
     this.recheckDelays.delete(adapter)
+    this.lostListeners.get(adapter)?.()
+    this.lostListeners.delete(adapter)
     this.options.drop(adapter)
   }
 
@@ -216,4 +325,16 @@ export class DaemonRouterLegacyIdleRetirement {
       releaseFence()
     }
   }
+}
+
+/** Refusals a retiring generation gives work that reached it after it decided. */
+function mayComeFromRetirement(error: unknown): boolean {
+  return (
+    error instanceof DaemonConnectionLostError ||
+    error instanceof TerminalSessionOwnerUnverifiedError ||
+    isDaemonEndpointGoneError(error) ||
+    (error instanceof Error &&
+      (error.message.includes('temporarily unavailable') ||
+        error.message.includes('decommissioning')))
+  )
 }
