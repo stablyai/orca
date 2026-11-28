@@ -9,7 +9,8 @@ import {
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted,
-  markKimiWorkspaceTrusted
+  markKimiWorkspaceTrusted,
+  markMistralVibeWorkspaceTrusted
 } from './agent-trust-presets'
 import { awaitAgentTrustWriteWithinDeadline } from './agent-trust-write-deadline'
 import { getAntigravityTrustLedgerPath } from './antigravity-workspace-trust-ownership'
@@ -56,11 +57,12 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
   'qoder-cn': true,
   'qwen-code': true,
   antigravity: false,
-  kimi: false
+  kimi: false,
+  'mistral-vibe': false
 }
 
 /** Exact-folder agents that load project config (Kimi: MCP servers) from a trusted home or root. */
-const AGENT_TRUST_UNSAFE_AT_A_HOME: ReadonlySet<AgentTrustPreset> = new Set(['kimi'])
+const AGENT_TRUST_UNSAFE_AT_A_HOME: ReadonlySet<AgentTrustPreset> = new Set(['kimi', 'mistral-vibe'])
 
 /** Trust these agents’ starting folders; a workspace ancestor may not be a valid trust key. */
 export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean> = {
@@ -72,7 +74,8 @@ export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean
   'qoder-cn': false,
   'qwen-code': false,
   antigravity: false,
-  kimi: true
+  kimi: true,
+  'mistral-vibe': true
 }
 
 // Claude stores resolved paths; resolve also collapses .. when realpath fails.
@@ -122,6 +125,8 @@ async function writePreset(
         storedPath,
         host.kimiHome || join(host.agentHome, '.kimi-code')
       )
+    case 'mistral-vibe':
+      return markMistralVibeWorkspaceTrusted(storedPath, host.agentEnv ?? {}, host.agentHome)
   }
 }
 

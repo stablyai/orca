@@ -55,6 +55,7 @@ export type TuiAgentConfig = {
     | 'qoder-cn'
     | 'qwen-code'
     | 'kimi'
+    | 'mistral-vibe'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteMarkerSignal
   /** Signal before a paste that Enter follows, for agents that show their composer before it can submit; defaults to `draftPasteReadySignal`. */
