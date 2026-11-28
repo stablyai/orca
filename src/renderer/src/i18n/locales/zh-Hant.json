@@ -13043,7 +13043,7 @@
           "nodeServerHelp": "遠端更新已關閉：此伺服器執行 Orca 時沒有內建更新程式，Orca 的 Node 伺服器（orcad）就是如此。請在伺服器上安裝較新的 Orca 版本，然後重新啟動 orca serve。",
           "updaterNotStartedHelp": "遠端更新已關閉：此伺服器上的 Orca 尚未啟動更新程式。請在伺服器上重新啟動 Orca 後再檢查一次，或直接在伺服器上更新。",
           "headlessServeHelp": "遠端更新已關閉：此伺服器執行 orca serve 時沒有更新監督程式，因此無法自行以新版本重新啟動。請在伺服器上更新 Orca，然後重新啟動其服務。",
-          "systemPackageHelp": "遠端更新已關閉：此伺服器上的 Orca 是從系統套件（.deb 或 .rpm）安裝的，只能由套件管理員更新。請在伺服器上更新，例如使用 apt 或 dnf。",
+          "systemPackageHelp": "遠端更新已關閉：此伺服器上的 Orca 是透過系統套件或其他安裝程式安裝的，必須由它來更新。請用安裝時的方式更新，例如 .deb 或 .rpm 使用 apt 或 dnf。",
           "devBuildHelp": "遠端更新已關閉：此伺服器執行的是開發版本。請從其原始碼目錄更新。",
           "legacyHelp": "此伺服器無法遠端更新。請在伺服器主機上更新 Orca。",
           "managedOverSshHelp": "這臺電腦會透過 SSH 更新此伺服器。請在「遠端 Orca 伺服器」中，點選此伺服器所在列的「更新」。"

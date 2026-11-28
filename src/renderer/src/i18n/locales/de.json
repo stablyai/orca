@@ -13198,7 +13198,7 @@
           "nodeServerHelp": "Remote-Updates sind aus: Dieser Server führt Orca ohne eingebauten Updater aus, wie es der Node-Server von Orca (orcad) tut. Installiere die neuere Orca-Version auf dem Server und starte dann orca serve neu.",
           "updaterNotStartedHelp": "Remote-Updates sind aus: Orca auf diesem Server hat seinen Updater nicht gestartet. Starte Orca dort neu und prüfe erneut, oder aktualisiere es auf dem Server.",
           "headlessServeHelp": "Remote-Updates sind aus: Dieser Server führt orca serve ohne Update-Supervisor aus und kann sich daher nicht selbst in einer neuen Version neu starten. Aktualisiere Orca auf dem Server und starte dann den Dienst neu.",
-          "systemPackageHelp": "Remote-Updates sind aus: Orca wurde auf diesem Server aus einem Systempaket (.deb oder .rpm) installiert, das nur sein Paketmanager aktualisieren darf. Aktualisiere es dort, zum Beispiel mit apt oder dnf.",
+          "systemPackageHelp": "Remote-Updates sind aus: Orca wurde auf diesem Server über ein Systempaket oder einen anderen Installer installiert, der es auch aktualisieren muss. Aktualisiere es auf demselben Weg, zum Beispiel mit apt oder dnf bei einem .deb- oder .rpm-Paket.",
           "devBuildHelp": "Remote-Updates sind aus: Dieser Server führt einen Entwicklungs-Build aus. Aktualisiere ihn über seinen Quellcode-Checkout.",
           "legacyHelp": "Remote-Updates sind für diesen Server nicht verfügbar. Orca auf dem Server-Host aktualisieren.",
           "managedOverSshHelp": "Dieser Desktop aktualisiert diesen Server über SSH. In dessen Zeile unter „Entfernte Orca-Server“ auf „Aktualisieren“ klicken."

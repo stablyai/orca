@@ -121,7 +121,7 @@ export function getRemoteServerManualUpdateHelp(
         )
       : t(
           'auto.components.settings.RemoteServerUpdateStatus.systemPackageHelp',
-          'Remote updates are off: Orca on this server was installed from a system package (.deb or .rpm), which only its package manager may update. Update it there, for example with apt or dnf.'
+          'Remote updates are off: Orca on this server was installed by a system package or another installer that has to update it. Update it the way it was installed, for example with apt or dnf for a .deb or .rpm.'
         )
   }
   if (support?.reason === 'unpackaged-build') {

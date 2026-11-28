@@ -13000,7 +13000,7 @@
           "nodeServerHelp": "Les mises à jour à distance sont désactivées : ce serveur exécute Orca sans son programme de mise à jour intégré, comme le fait le serveur Node d’Orca (orcad). Installez la nouvelle version d’Orca sur le serveur, puis redémarrez orca serve.",
           "updaterNotStartedHelp": "Les mises à jour à distance sont désactivées : Orca n’a pas démarré son programme de mise à jour sur ce serveur. Redémarrez Orca sur le serveur et vérifiez à nouveau, ou mettez-le à jour sur place.",
           "headlessServeHelp": "Les mises à jour à distance sont désactivées : ce serveur exécute orca serve sans superviseur de mise à jour, il ne peut donc pas redémarrer sur une nouvelle version. Mettez à jour Orca sur le serveur, puis redémarrez son service.",
-          "systemPackageHelp": "Les mises à jour à distance sont désactivées : Orca a été installé sur ce serveur depuis un paquet système (.deb ou .rpm), que seul son gestionnaire de paquets peut mettre à jour. Mettez-le à jour sur place, par exemple avec apt ou dnf.",
+          "systemPackageHelp": "Les mises à jour à distance sont désactivées : Orca a été installé sur ce serveur par un paquet système ou un autre installateur qui doit le mettre à jour. Mettez-le à jour de la même façon, par exemple avec apt ou dnf pour un .deb ou un .rpm.",
           "devBuildHelp": "Les mises à jour à distance sont désactivées : ce serveur exécute une version de développement. Mettez-la à jour depuis son dépôt source.",
           "legacyHelp": "Les mises à jour à distance ne sont pas disponibles pour ce serveur. Mettez Orca à jour sur le serveur.",
           "managedOverSshHelp": "Ce bureau met à jour ce serveur via SSH. Utilisez Mettre à jour sur sa ligne dans Serveurs Orca distants."
