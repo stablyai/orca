@@ -1154,7 +1154,9 @@
         "pending": "연결 중…",
         "tools_other": "도구 {{count}}개",
         "waitingForSignIn": "로그인을 기다리는 중…",
-        "tools_one": "도구 {{count}}개"
+        "tools_one": "도구 {{count}}개",
+        "orcaRemoved": "제거됨: 다음 메시지에서 다시 시작",
+        "orcaChanged": "변경됨: 다음 메시지에서 다시 시작"
       },
       "source": {
         "project": "프로젝트",
@@ -1186,7 +1188,8 @@
         "failed": "실패: {{count}}"
       },
       "pasteHint": "브라우저가 불러올 수 없는 페이지로 이동하면 주소를 복사해 여기에 붙여넣으세요.",
-      "manage": "MCP 서버 관리"
+      "manage": "MCP 서버 관리",
+      "stillFailing": "다시 연결한 후에도 실패합니다."
     }
   },
   "common": {
@@ -1709,7 +1712,9 @@
         "permissionAcceptEditsDescription": "파일 편집과 파일 명령은 승인하고, 나머지는 묻습니다",
         "permissionAutoDescription": "승인 요청을 대신 검토합니다",
         "permissionFullAccessCodexDescription": "묻지 않습니다. 모든 파일을 편집하고 네트워크를 사용할 수 있습니다",
-        "permissionFullAccessDescription": "편집이나 명령 전에 묻지 않습니다"
+        "permissionFullAccessDescription": "편집이나 명령 전에 묻지 않습니다",
+        "permissionAgentSettings": "{{agent}} 설정",
+        "permissionFromAgentSettings": "{{mode}}, {{agent}} 설정에서"
       },
       "slackMirror": {
         "retry": "다시 시도",
@@ -3134,7 +3139,7 @@
       "collapse": "접기"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "새 CLI에서 재개"
+      "continueInTerminal": "터미널에서 계속"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "최신 내용으로 스크롤"
@@ -3688,6 +3693,18 @@
       "terminalTitle": "터미널 텍스트",
       "pointsAndColumns": "{{points}} · {{count}}열",
       "moreTerminal": "터미널 설정 더 보기"
+    },
+    "terminalChatContinuation": {
+      "busy": "다른 채팅이나 터미널을 여는 중입니다. 잠시 후 다시 시도하세요.",
+      "continueInChat": "채팅에서 계속",
+      "failed": "채팅에서 계속할 수 없습니다. {{detail}}",
+      "failedAfterClose": "채팅에서 계속할 수 없습니다. {{detail}} 대화는 에이전트 기록에 있습니다.",
+      "otherJob": "이 터미널에서 {{process}}이(가) 실행 중입니다. 종료한 뒤 채팅에서 계속하세요.",
+      "terminalChanged": "Orca가 확인하는 동안 이 터미널이 바뀌었습니다. 다시 시도하세요.",
+      "tryAgain": "다시 시도하세요.",
+      "unavailable": "이 컴퓨터에서는 {{agent}} 채팅을 사용할 수 없습니다.",
+      "uncheckable": "Orca가 이 터미널에서 실행 중인 항목을 확인하지 못했습니다. 다시 시도하세요.",
+      "unconfirmed": "Orca가 채팅이 열렸는지 확인하지 못했습니다. 다시 시도하기 전에 탭을 확인하세요."
     }
   },
   "settings": {
@@ -3845,9 +3862,6 @@
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
-    },
-    "agents": {
-      "permissionOwnAll": "에이전트 자체 설정"
     },
     "voiceTranscribeOn": {
       "heading": "받아쓰기 위치",
@@ -4273,6 +4287,9 @@
       "agentCouldNotStart": "{{label}}을(를) 시작할 수 없습니다. 설정에서 에이전트 명령을 확인하고 다시 시도하세요.",
       "agentFailedToStart": "{{label}} 시작에 실패했습니다. 설정에서 에이전트 명령을 확인하고 다시 시도하세요.",
       "agentReportedError": "{{label}}에서 오류를 보고했습니다.",
+      "antigravityInvalidEvents": "Antigravity가 잘못된 JSON 이벤트를 반환했습니다.",
+      "antigravityInvalidResult": "Antigravity가 잘못된 결과를 반환했습니다.",
+      "antigravityNoFinalResult": "Antigravity가 최종 결과를 반환하지 않았습니다.",
       "chatNameAgentUnsupported": "설정 -> 채팅 -> 채팅 이름에서 이 작업에 사용할 수 있는 채팅 이름 생성 에이전트를 선택하세요. 지원되는 에이전트: {{agents}} 또는 사용자 지정 명령.",
       "chatNameCustomCommandEmpty": "사용자 지정 명령이 비어 있습니다. 설정 -> 채팅 -> 채팅 이름에서 추가하세요.",
       "cliFailed": "{{label}} CLI 명령이 코드 {{exitCode}}로 실패했습니다.",
@@ -7667,6 +7684,7 @@
     "workspacesCount": "워크스페이스 {{count}}개",
     "workspacesAllButCount": "{{count}}개 제외 전체",
     "headerMissing": "이 서버를 추가하려면 {{header}} 값을 입력하세요.",
-    "servers": "서버"
+    "servers": "서버",
+    "unreadable": "저장된 로그인 또는 키를 열 수 없습니다. 다시 로그인하세요."
   }
 }

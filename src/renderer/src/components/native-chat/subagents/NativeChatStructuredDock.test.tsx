@@ -21,6 +21,7 @@ afterEach(cleanup)
 
 const dock = () => (
   <NativeChatStructuredDock
+    part="approvals"
     hasWork={false}
     strip={<div data-testid="strip" />}
     target={{ kind: 'local' }}

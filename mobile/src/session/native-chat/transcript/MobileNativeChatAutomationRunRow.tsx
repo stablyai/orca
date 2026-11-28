@@ -37,7 +37,7 @@ import { MobileNativeChatBotIdentityContext } from '../mobile-native-chat-bot-id
 import { useMobileBotCardHost } from './bot-cards/mobile-bot-card-host'
 import { MobileNativeChatNoticePill } from './notices/MobileNativeChatNoticePill'
 import { botRunSendAgain } from '../../../bots/bot-sheet-operations'
-import { mobileBotRefusalText } from '../../../bots/mobile-bot-refusal-text'
+import { mobileAgentSessionRefusalText } from '../agent-session/mobile-agent-session-refusal-text'
 import { useBotPanelOpener } from '../../../bots/bot-item-open'
 import { triggerError } from '../../../platform/haptics/haptics'
 import { intlLocaleFor } from '../../../i18n/ui-intl-locale'
@@ -75,7 +75,7 @@ function startErrorText(
   failure: Pick<MergedRunFailure, 'error' | 'refusal'>,
   t: Translate
 ): string {
-  return failure.refusal ? mobileBotRefusalText(failure.refusal, t) : failure.error
+  return failure.refusal ? mobileAgentSessionRefusalText(failure.refusal, t) : failure.error
 }
 
 /** A transcript message that is an automation's run, or one no chat took, as its row. */

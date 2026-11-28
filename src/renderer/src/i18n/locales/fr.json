@@ -122,10 +122,11 @@
     },
     "clientHosted": {
       "preparationFailed": "Impossible de démarrer le navigateur distant sur ce bureau. Vérifiez la connexion couplée et réessayez.",
-      "unavailableTitle": "Navigateur hébergé par le client indisponible",
-      "unavailableDescription": "Cette page n'est pas disponible sur ce bureau pour le moment.",
-      "unavailableOtherDesktopDescription": "Cette page est ouverte sur un autre bureau.",
-      "unavailableHostOfflineDescription": "{{host}} est hors ligne. Cette page se rechargera ici dès sa reconnexion.",
+      "runsOnServerTitle": "Cet onglet s’exécute sur votre serveur",
+      "runsOnServerBody": "Ouvrez-le là-bas pour continuer.",
+      "details": "Détails",
+      "noBrowserTitle": "Impossible d’ouvrir cet onglet ici",
+      "noBrowserBody": "Ce serveur n’a pas de navigateur.",
       "download": {
         "started": "Téléchargement de {{filename}}…",
         "completed": "Téléchargé {{filename}}",
@@ -150,9 +151,9 @@
       "reload": "Recharger"
     },
     "reopenOnServer": {
-      "action": "Réouvrir sur le serveur",
-      "pending": "Réouverture…",
-      "caveat": "Cela ouvre une nouvelle page sur l'hôte distant à la dernière adresse de cette page. L'état de la page connectée et celui des autres pages transitoires peuvent différer, et une page provenant d'une soumission de formulaire s'ouvre en blanc.",
+      "action": "Ouvrir sur le serveur",
+      "pending": "Ouverture…",
+      "caveat": "S’ouvre sur le serveur à la dernière adresse de cette page. L’état de connexion peut différer.",
       "failed": "Impossible d'ouvrir cette page sur l'hôte distant. Vérifiez la connexion et réessayez."
     },
     "deviceMove": {
@@ -1600,7 +1601,8 @@
         "add": "Ajouter un serveur pour ce dépôt",
         "files": "Issus des fichiers de ce dépôt",
         "open": "Ouvrir {{file}}"
-      }
+      },
+      "unreadable": "La connexion ou la clé enregistrée ne peut pas être ouverte sur cet ordinateur"
     }
   },
   "menu": {
@@ -1879,8 +1881,6 @@
           "localBaseRefNotUpdatedDirty": "Modifications non commitées dans {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Commits uniquement locaux sur {{value0}}.",
           "localBaseRefNotUpdatedError": "Erreur Git.",
-          "localBaseRefHideDetails": "Masquer les détails",
-          "localBaseRefShowDetails": "Détails",
           "0216895fb5": "Échec de la suppression de la branche",
           "c6cf133786": "Cet espace de travail n'est plus disponible.",
           "5366d13eec": "Espace de travail supprimé, branche conservée",
@@ -1916,6 +1916,9 @@
           "localBaseRefShallowHistory": "Votre espace de travail a été créé à partir de {{value0}} et n'est pas affecté. Orca n'a toutefois pas pu mettre à jour votre branche locale {{value1}}, car ce clone ne contient que l'historique récent : Git ne peut donc pas confirmer que {{value1}} locale est seulement en retard. Pour corriger cela pour tous les nouveaux espaces de travail, exécutez une fois :",
           "localBaseRefRefreshTurnOff": "Désactiver la vérification",
           "localBaseRefRefreshTurnOffHelp": "Ce que fait Désactiver la vérification",
+          "localBaseRefRefreshDisable": "Désactiver",
+          "localBaseRefRefreshDisableTooltip": "Ne plus vérifier {{value0}}",
+          "localBaseRefClose": "Fermer",
           "localBaseRefRefreshTurnOffTooltip": "Désactive le paramètre Orca {{value0}}. Orca cessera de mettre à jour {{value1}} locale lors de la création d'un espace de travail, et cet avertissement n'apparaîtra plus. Les nouveaux espaces de travail ne sont pas affectés. Réactivez-le à tout moment dans Paramètres › Git.",
           "localBaseRefUnshallow": "Récupérer l'historique complet",
           "localBaseRefUnshallowFailed": "Impossible d'ouvrir un terminal pour cet espace de travail",
@@ -3759,7 +3762,7 @@
         "99c2755218": "Recherchez des issues ou saisissez du JQL, ex. project = ABC",
         "2ff9fd71fd": "Actualiser les tickets Jira",
         "0b65d3fb2c": "Rechercher des projets Linear...",
-        "eec0c5c079": "Rechercher des tickets Linear...",
+        "eec0c5c079": "Rechercher...",
         "8964184a8b": "Actualiser Linear",
         "3feb524d42": "Nouveau ticket Linear",
         "0cbf7e5cf3": "Mode tâches Linear",
@@ -15220,12 +15223,7 @@
             "keepFile": "Conserver le fichier",
             "keepDeletion": "Conserver la suppression",
             "refreshAll": "Tout actualiser",
-            "rebaseConflictCount_one": "{{count}} conflit",
-            "rebaseConflictCount_other": "{{count}} conflits",
-            "rebaseConflictCount_many": "{{count}} conflits",
-            "rebasePaused": "Rebase en pause",
             "rebaseResolveConflictsFirst": "Résolvez d’abord les conflits",
-            "rebaseAbort": "Annuler",
             "rebaseContinue": "Continuer",
             "continueRebasePausedAgain": "Rebase en pause au conflit suivant",
             "continueRebaseFailed": "Échec de la poursuite du rebase",
@@ -15236,7 +15234,6 @@
             "rebaseStopMovedOn": "Le rebase a déjà avancé. Vérifiez le panneau et réessayez.",
             "rebaseEmptyStep": "Rien à commiter à cette étape. Annulez le rebase ou terminez-le dans un terminal.",
             "rebaseStepUnreadableShort": "Échec de vérification",
-            "rebaseCheckAgain": "Vérifier à nouveau",
             "rebaseRetryInspect": "Réessayer",
             "rebaseRetryInspectLabel": "Revérifier l’étape du rebase",
             "rebaseStoppedFinishInTerminal": "Git a mis cette étape en pause. Terminez-la dans un terminal ou annulez.",
@@ -15270,7 +15267,11 @@
             "scopeNoUncommitted": "Aucune modification non validée.",
             "scopeCommitFiles": "Fichiers",
             "gitGraphButton": "Graphe",
-            "compareLoadingAgainst": "Comparaison avec {{base}}"
+            "compareLoadingAgainst": "Comparaison avec {{base}}",
+            "operationResolve": "Résoudre",
+            "operationResolveLabel": "Résoudre les conflits avec l'IA",
+            "operationMoreActions": "Plus d'actions",
+            "operationAbortConfirm": "Sélectionnez à nouveau pour abandonner"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -15428,9 +15429,6 @@
                 "unresolvedCount_one": "{{count}} non résolu",
                 "unresolvedCount_other": "{{count}} non résolus",
                 "unresolvedCount_many": "{{count}} non résolus",
-                "sendQueuedCommentsToAi_one": "Envoyer {{count}} commentaire en file d'attente à l'IA",
-                "sendQueuedCommentsToAi_other": "Envoyer {{count}} commentaires en file d'attente à l'IA",
-                "sendQueuedCommentsToAi_many": "Envoyer {{count}} commentaires en file d'attente à l'IA",
                 "conflictsBlockThisMr": "Des conflits bloquent cette MR",
                 "conflictsBlockThisPr": "Des conflits bloquent cette PR",
                 "copyComment": "Copier le commentaire",
@@ -15899,15 +15897,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Conflits de fusion",
-                    "7f3af87549": "Conflits de rebase",
-                    "6a8e9ad490": "Conflits de cherry-pick",
-                    "bdf8772106": "Conflits",
-                    "edc2d82a2b": "Fusion en cours",
-                    "5c3707aa44": "Rebase en cours",
-                    "ffe53a1da6": "Cherry-pick en cours",
-                    "35eb76d323": "Opération en cours",
-                    "completeMerge": "Terminer la fusion"
+                    "bdf8772106": "Conflits"
                   }
                 }
               },
@@ -17485,10 +17475,6 @@
           "39b6b9e4e4": "Committé sur la branche"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Envoyé",
-          "84898c548d": "Effacer",
-          "88b70d0ef5": "Copier",
-          "bb84b4c374": "Notes IA",
           "948a5fd6c8": "Effacer les notes",
           "0f806a2ab1": "Annuler",
           "b6c3b84476": "Afficher l'arborescence des fichiers",
@@ -17496,7 +17482,6 @@
           "820ec01f24": "Les fichiers en conflit sont examinés séparément",
           "fd8892b120": "Aucune modification à afficher",
           "eb5f40e49c": "Cette vue de diff exclut les conflits non résolus, car le pipeline de diff bidirectionnel habituel n'est pas conçu pour gérer les conflits.",
-          "45cf23b418": "Échec de l'effacement des notes.",
           "ec5053c7f5": "Côte à côte",
           "f786fd54e1": "En ligne",
           "ea08dae15b": "Tout réduire",
@@ -17514,12 +17499,6 @@
           "noExtension": "(sans extension)",
           "diffLoadTimedOut": "Le chargement du diff n'a pas abouti.",
           "diffLoadFailed": "Impossible de charger le diff.",
-          "moreNotesInSourceControl_one": "{{count}} note supplémentaire dans « Contrôle de code source »",
-          "moreNotesInSourceControl_other": "{{count}} notes supplémentaires dans « Contrôle de code source »",
-          "moreNotesInSourceControl_many": "{{count}} notes supplémentaires dans « Contrôle de code source »",
-          "clearNotesConfirm_one": "Effacer {{count}} note de ce worktree ?",
-          "clearNotesConfirm_other": "Effacer {{count}} notes de ce worktree ?",
-          "clearNotesConfirm_many": "Effacer {{count}} notes de ce worktree ?",
           "changedFilesVs_one": "{{count}} fichier modifié par rapport à {{baseRef}}",
           "changedFilesVs_other": "{{count}} fichiers modifiés par rapport à {{baseRef}}",
           "changedFilesVs_many": "{{count}} fichiers modifiés par rapport à {{baseRef}}",
@@ -17529,10 +17508,6 @@
           "changedFiles_one": "{{count}} fichier modifié",
           "changedFiles_other": "{{count}} fichiers modifiés",
           "changedFiles_many": "{{count}} fichiers modifiés",
-          "showAiNotes_one": "Afficher {{count}} note IA",
-          "showAiNotes_other": "Afficher {{count}} notes IA",
-          "showAiNotes_many": "Afficher {{count}} notes IA",
-          "send": "Envoyer",
           "openDiff": "Ouvrir le diff",
           "openInEditor": "Ouvrir dans l'éditeur",
           "skippedConflictsExcluded": "Les conflits non résolus {{count}} ont été exclus de cette vue différentielle."
@@ -17735,7 +17710,6 @@
           "b1bfc04034": "Texte sélectionné",
           "f37b98999e": "Cette note",
           "2b2b31382c": "Front Matter",
-          "bb629de58a": "Copier les notes pour l'agent",
           "322afab6ff": "Notes de revue",
           "0f9969a159": "Aller à la première note de revue",
           "12052c639c": "Fermer la recherche",
@@ -17808,7 +17782,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Envoyer les notes",
-          "433928cd9f": "Envoyer {{value0}} à un agent",
           "thisNote": "Cette note",
           "noteAlreadySent": "Note déjà envoyée",
           "sendNotesToAgent": "Envoyer les notes à un agent",
@@ -17894,8 +17867,6 @@
           "3ababd949d": "Notes de revue"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Copier les notes pour l'agent",
-          "a807596997": "Notes copiées",
           "8aaf2c4c69": "Afficher les notes de revue",
           "af02dc2456": "Masquer les notes de revue"
         },
@@ -18807,8 +18778,6 @@
             "b5ba6085de": "Question",
             "143204e423": "Modifier",
             "b71dc3d930": "Reconnecter",
-            "d51ef37351": "Copier",
-            "6f4ab3592b": "Copied",
             "168350ae6a": "Cliquez ou survolez un élément, puis appuyez sur C pour copier ou S pour capturer.",
             "777b5bc4ec": "Cliquez sur un élément pour ajouter un retour pour l'agent.",
             "b733a91bd9": "Ajouter un retour pour l'élément sélectionné.",
@@ -18827,9 +18796,7 @@
             "756bfc25c9": "Ouvert",
             "09a9489aa5": "Afficher",
             "2a4c4b8e1f": "Copier",
-            "fileUrlUnsupported": "Cet onglet du navigateur ne peut pas ouvrir les fichiers locaux. Utilisez plutôt \"Ouvrir l'aperçu sur le côté\" sur le fichier.",
-            "11c5084aa2": "Effacer les annotations",
-            "734e4343ec": "Effacer les annotations du navigateur"
+            "fileUrlUnsupported": "Cet onglet du navigateur ne peut pas ouvrir les fichiers locaux. Utilisez plutôt \"Ouvrir l'aperçu sur le côté\" sur le fichier."
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Annuler",
@@ -20557,7 +20524,10 @@
         "resumedMany_other": "Repris : {{count}} agents",
         "needYou_one": "{{count}} a besoin de vous",
         "needYou_many": "{{count}} ont besoin de vous",
-        "needYou_other": "{{count}} ont besoin de vous"
+        "needYou_other": "{{count}} ont besoin de vous",
+        "resumedCount_one": "Repris : {{count}}",
+        "resumedCount_many": "Repris : {{count}}",
+        "resumedCount_other": "Repris : {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Aucune distro WSL trouvée",
@@ -22578,7 +22548,9 @@
           "pending": "Connexion au serveur…",
           "tools_many": "{{count}} outils",
           "tools_one": "{{count}} outil",
-          "tools_other": "{{count}} outils"
+          "tools_other": "{{count}} outils",
+          "orcaRemoved": "Supprimé : redémarre au prochain message",
+          "orcaChanged": "Modifié : redémarre au prochain message"
         },
         "signIn": {
           "external": "Terminez sur la page qui s’est ouverte",
@@ -22620,7 +22592,8 @@
           "user": "Utilisateur",
           "plugin": "Plugin",
           "session": "Session"
-        }
+        },
+        "stillFailing": "Échoue toujours après la reconnexion."
       }
     },
     "tab": {
@@ -24176,6 +24149,31 @@
         "cancel": "Annuler",
         "tryAgain": "Réessayer"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sendCommentsToAgent_one": "Envoyer {{count}} commentaire à un agent",
+        "sendNotes_many": "Envoyer {{count}} notes",
+        "sendComments_many": "Envoyer {{count}} commentaires",
+        "sendCommentsToAgent_other": "Envoyer {{count}} commentaires à un agent",
+        "sendNotes_one": "Envoyer {{count}} note",
+        "clearPageNotes_one": "Effacer {{count}} note de cette page ?",
+        "sendShort": "Envoyer {{count}}",
+        "clearNotes": "Effacer les notes…",
+        "sendNotes_other": "Envoyer {{count}} notes",
+        "sendNotesToAgent_many": "Envoyer {{count}} notes à un agent",
+        "sendComments_one": "Envoyer {{count}} commentaire",
+        "copyNotes": "Copier les notes",
+        "sendComments_other": "Envoyer {{count}} commentaires",
+        "clearPageNotes_many": "Effacer {{count}} notes de cette page ?",
+        "sendCommentsToAgent_many": "Envoyer {{count}} commentaires à un agent",
+        "sending": "Envoi…",
+        "sendNotesToAgent_one": "Envoyer {{count}} note à un agent",
+        "clearPageNotes_other": "Effacer {{count}} notes de cette page ?",
+        "sendNotesToAgent_other": "Envoyer {{count}} notes à un agent",
+        "sentNotesStillListed": "Notes envoyées, mais toujours dans la liste.",
+        "removeSentNotes": "Retirer"
+      }
     }
   },
   "dashboardPopout": {
@@ -24971,6 +24969,9 @@
         "planModelWithoutThinking": "Le modèle « {{model}} » ne prend pas en charge les niveaux d’effort de réflexion.",
         "planThinkingLevelInvalid": "Le niveau de réflexion « {{level}} » n’est pas valide pour {{model}}.",
         "openCodeInvalidEvents": "OpenCode a renvoyé des événements JSON invalides.",
+        "antigravityInvalidEvents": "Antigravity a renvoyé des événements JSON invalides.",
+        "antigravityInvalidResult": "Antigravity a renvoyé un résultat invalide.",
+        "antigravityNoFinalResult": "Antigravity n’a renvoyé aucun résultat final.",
         "kimiUnreadableOutput": "Kimi a renvoyé une sortie qu’Orca n’a pas pu lire. Réessayez.",
         "kimiSessionOccupied": "Kimi n’a pas pu utiliser cette session car elle est active dans un autre client. Arrêtez la session dans ce client ou quittez-le, puis réessayez.",
         "kimiInterrupted": "Kimi a été interrompu avant d’avoir terminé la génération de texte. Réessayez.",
@@ -25719,7 +25720,9 @@
     "failed": "La recherche a échoué. Essayer à nouveau.",
     "filters": {
       "toggle": "Afficher ou masquer les détails de la recherche",
-      "active": "{{count}} actifs"
+      "active": "{{count}} actifs",
+      "includeSummary": "Inclure : {{patterns}}",
+      "excludeSummary": "Exclure : {{patterns}}"
     },
     "noResults": "Aucun résultat. Essayez une autre recherche ou ajustez vos filtres."
   },
@@ -26112,8 +26115,7 @@
         "failing": "en échec",
         "running": "en attente",
         "cancelled": "annulés",
-        "passing": "réussis",
-        "more": "+{{count}} de plus"
+        "passing": "réussis"
       }
     },
     "attachments": {
@@ -27720,13 +27722,10 @@
     "loadFailed": "Impossible de charger l’historique Git",
     "updateHost": "Mettez à jour Orca sur {{host}} pour ouvrir le graphe Git",
     "title": "Graphe Git",
-    "revertConflicts": "Conflits de réversion",
-    "revertInProgress": "Réversion en cours",
     "abortOperationTitle": "Abandonner {{operation}} ?",
     "abortOperationDescription": "Cette action annule l’opération en cours et peut supprimer les résolutions de conflits effectuées pendant celle-ci.",
     "abortOperation": "Abandonner {{operation}}",
     "recoveryFailed": "Impossible de terminer l’opération. Actualisez le contrôle de code source et réessayez.",
-    "continueOperation": "Continuer {{operation}}",
     "reverting": "Réversion",
     "updateActionsHost": "Mettez à jour Orca sur {{host}} pour agir sur les commits",
     "thisHost": "cet hôte",
@@ -27839,15 +27838,11 @@
       "colorSlate": "Ardoise",
       "colorGraphite": "Graphite",
       "colorInk": "Encre",
-      "noChatAgents": "Aucun agent de chat disponible sur cet ordinateur.",
-      "change": "Modifier",
       "computer": "Ordinateur",
-      "computerHint": "Où le bot s’exécute.",
       "computerAccountHint": "Où le bot s’exécute, connecté à Orca en tant que {{account}}.",
       "useChatDefaults": "Utiliser les réglages par défaut du chat",
       "chatDefault": "Du chat",
       "agent": "Agent",
-      "folder": "Dossier : {{path}}",
       "name": "Nom",
       "validation": {
         "addName": "Ajoutez un nom",

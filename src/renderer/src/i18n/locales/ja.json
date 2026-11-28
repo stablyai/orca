@@ -1249,7 +1249,8 @@
         "add": "このリポジトリにサーバーを追加",
         "files": "このリポジトリのファイルから",
         "open": "{{file}} を開く"
-      }
+      },
+      "unreadable": "保存されたサインインまたはキーをこのコンピューターで開けません"
     }
   },
   "menu": {
@@ -1526,8 +1527,6 @@
           "localBaseRefNotUpdatedDirty": "{{value0}} に未コミットの変更があります。",
           "localBaseRefNotUpdatedNotFastForward": "{{value0}} にローカルのみのコミットがあります。",
           "localBaseRefNotUpdatedError": "Git エラー。",
-          "localBaseRefHideDetails": "詳細を隠す",
-          "localBaseRefShowDetails": "詳細",
           "0216895fb5": "ブランチの削除に失敗しました",
           "5366d13eec": "ワークスペースを削除しました、ブランチは保持されました",
           "2e17f825d4": "ワークツリーを削除しました、ブランチは保持されました",
@@ -1563,6 +1562,9 @@
           "localBaseRefShallowHistory": "ワークスペースは {{value0}} から作成されており、影響はありません。このクローンには最近の履歴しかないため、Git はローカルの {{value1}} が単に遅れているだけかを確認できず、Orca はローカルの {{value1}} ブランチを更新できませんでした。すべての新しいワークスペースでこれを解決するには、次を一度実行してください:",
           "localBaseRefRefreshTurnOff": "チェックを無効化",
           "localBaseRefRefreshTurnOffHelp": "「チェックを無効化」の動作",
+          "localBaseRefRefreshDisable": "無効化",
+          "localBaseRefRefreshDisableTooltip": "{{value0}} のチェックを停止",
+          "localBaseRefClose": "閉じる",
           "localBaseRefRefreshTurnOffTooltip": "Orca の設定 {{value0}} をオフにします。ワークスペースの作成時に Orca はローカルの {{value1}} を更新しなくなり、この警告も表示されなくなります。新しいワークスペースには影響しません。設定 › Git からいつでも再度オンにできます。",
           "localBaseRefUnshallow": "完全な履歴を取得",
           "localBaseRefUnshallowFailed": "このワークスペースのターミナルを開けませんでした",
@@ -3372,7 +3374,7 @@
         "99c2755218": "Issue を検索するか JQL を入力、例: project = ABC",
         "2ff9fd71fd": "Jira Issue を更新する",
         "0b65d3fb2c": "Linear プロジェクトを検索…",
-        "eec0c5c079": "Linear Issue を検索…",
+        "eec0c5c079": "検索…",
         "8964184a8b": "Linear を更新",
         "3feb524d42": "新規 Linear Issue",
         "0cbf7e5cf3": "Linear タスクモード",
@@ -14546,10 +14548,7 @@
             "keepFile": "ファイルを残す",
             "keepDeletion": "削除を維持",
             "refreshAll": "すべて更新",
-            "rebaseConflictCount_other": "{{count}} 件の競合",
-            "rebasePaused": "リベースを一時停止中",
             "rebaseResolveConflictsFirst": "先に競合を解決してください",
-            "rebaseAbort": "中止",
             "rebaseContinue": "続行",
             "continueRebasePausedAgain": "次の競合でリベースを一時停止しました",
             "continueRebaseFailed": "リベースの続行に失敗しました",
@@ -14560,7 +14559,6 @@
             "rebaseStopMovedOn": "リベースはすでに先へ進んでいます。パネルを確認してもう一度お試しください。",
             "rebaseEmptyStep": "このステップにはコミットする内容がありません。リベースを中止するか、ターミナルで完了してください。",
             "rebaseStepUnreadableShort": "確認失敗",
-            "rebaseCheckAgain": "再確認",
             "rebaseRetryInspect": "再試行",
             "rebaseRetryInspectLabel": "リベースステップを再確認",
             "rebaseStoppedFinishInTerminal": "Git がこのステップで一時停止しました。ターミナルで完了するか、中止してください。",
@@ -14592,7 +14590,11 @@
             "scopeNoUncommitted": "未コミットの変更はありません。",
             "scopeCommitFiles": "ファイル",
             "gitGraphButton": "グラフ",
-            "compareLoadingAgainst": "{{base}} と比較中"
+            "compareLoadingAgainst": "{{base}} と比較中",
+            "operationResolve": "解決",
+            "operationResolveLabel": "AI で競合を解決する",
+            "operationMoreActions": "その他の操作",
+            "operationAbortConfirm": "もう一度選択すると中止します"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -14738,7 +14740,6 @@
                 "failingCount_other": "{{count}} 件失敗",
                 "pendingCount_other": "{{count}} 件保留中",
                 "unresolvedCount_other": "{{count}} 件未解決",
-                "sendQueuedCommentsToAi_other": "キュー内の {{count}} 件のコメントを AI に送信",
                 "conflictsBlockThisMr": "競合によりこの MR がブロックされています",
                 "conflictsBlockThisPr": "競合によりこの PR がブロックされています",
                 "copyComment": "コメントをコピー",
@@ -15197,15 +15198,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "マージ競合",
-                    "7f3af87549": "リベースの競合",
-                    "6a8e9ad490": "チェリーピックの競合",
-                    "bdf8772106": "競合",
-                    "edc2d82a2b": "結合が進行中です",
-                    "5c3707aa44": "リベースが進行中です",
-                    "ffe53a1da6": "チェリーピック進行中",
-                    "35eb76d323": "操作が進行中です",
-                    "completeMerge": "マージを完了"
+                    "bdf8772106": "競合"
                   }
                 }
               },
@@ -16760,10 +16753,6 @@
           "39b6b9e4e4": "コミット先のブランチ"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "送信済み",
-          "84898c548d": "クリア",
-          "88b70d0ef5": "コピー",
-          "bb84b4c374": "AIメモ",
           "948a5fd6c8": "ノートをクリア",
           "0f806a2ab1": "キャンセル",
           "b6c3b84476": "ファイルツリーを表示",
@@ -16773,7 +16762,6 @@
           "820ec01f24": "競合したファイルは個別にレビューされます",
           "fd8892b120": "表示に変更はありません",
           "eb5f40e49c": "通常の双方向 diff パイプラインは競合に対して安全ではないため、この diff ビューでは未解決の競合が除外されます。",
-          "45cf23b418": "メモを消去できませんでした。",
           "ec5053c7f5": "サイドバイサイド",
           "f786fd54e1": "インライン",
           "ea08dae15b": "すべて折りたたむ",
@@ -16788,13 +16776,9 @@
           "noExtension": "(拡張子なし)",
           "diffLoadTimedOut": "差分の読み込みが完了しませんでした。",
           "diffLoadFailed": "差分を読み込めません。",
-          "moreNotesInSourceControl_other": "ソース管理にさらに {{count}} 件のメモ",
-          "clearNotesConfirm_other": "このワークツリーから {{count}} 件のメモを消去しますか？",
           "changedFilesVs_other": "{{baseRef}} と比較して {{count}} 件のファイルに変更",
           "changedFilesIn_other": "{{compareRef}} の変更ファイル {{count}} 件",
           "changedFiles_other": "変更ファイル {{count}} 件",
-          "showAiNotes_other": "AIメモを {{count}} 件表示",
-          "send": "送信",
           "openDiff": "差分を開く",
           "openInEditor": "エディターで開く",
           "skippedConflictsExcluded": "未解決の競合 {{count}} 件がこの差分ビューから除外されました。"
@@ -16990,7 +16974,6 @@
           "b1bfc04034": "選択したテキスト",
           "f37b98999e": "このメモ",
           "2b2b31382c": "フロントマター",
-          "bb629de58a": "Agent 用のメモをコピーする",
           "322afab6ff": "レビューノート",
           "0f9969a159": "最初のレビューノートにジャンプ",
           "12052c639c": "検索を閉じる",
@@ -17063,7 +17046,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "メモを送信する",
-          "433928cd9f": "{{value0}} を Agent に送信します",
           "thisNote": "このメモ",
           "noteAlreadySent": "送信済みのメモ",
           "sendNotesToAgent": "メモを Agent に送信",
@@ -17149,8 +17131,6 @@
           "3ababd949d": "レビューノート"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Agent 用のメモをコピーする",
-          "a807596997": "コピーしたメモ",
           "8aaf2c4c69": "レビューメモを表示",
           "af02dc2456": "レビューメモを非表示にする"
         },
@@ -18028,8 +18008,6 @@
             "b472c5fe03": "ブラウザの注釈を追加する",
             "b5ba6085de": "質問",
             "143204e423": "変更",
-            "d51ef37351": "コピー",
-            "6f4ab3592b": "コピーしました",
             "168350ae6a": "要素をクリックまたはマウスを移動し、C を押してコピーするか、S を押してスクリーンショットを行います。",
             "777b5bc4ec": "要素をクリックして Agent へのフィードバックを追加します。",
             "b733a91bd9": "選択した要素のフィードバックを追加します。",
@@ -18068,9 +18046,7 @@
             "devToolsDockRight": "右側にドッキング",
             "devToolsDockBottom": "下部にドッキング",
             "devToolsUndock": "別ウィンドウで開く",
-            "devToolsClose": "DevTools を閉じる",
-            "11c5084aa2": "注釈をクリアする",
-            "734e4343ec": "ブラウザの注釈をクリアする"
+            "devToolsClose": "DevTools を閉じる"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "キャンセル",
@@ -19732,7 +19708,8 @@
         "failedSome_other": "再開できませんでした：{{total}} 件中 {{count}} 件",
         "resumedOne": "再開済み：{{name}}",
         "resumedMany_other": "再開済み：{{count}} 件の Agent",
-        "needYou_other": "{{count}} 件は対応が必要です"
+        "needYou_other": "{{count}} 件が対応待ち",
+        "resumedCount_other": "再開済み：{{count}} 件"
       },
       "RunTargetCombobox": {
         "noWslDistros": "WSL ディストリビューションが見つかりません",
@@ -21753,7 +21730,9 @@
           "needsAuth": "サインインが必要",
           "needsAuthAfterSend": "サインインが必要です。メッセージを送信すると、ここでサインインできます。",
           "pending": "接続中…",
-          "tools_other": "{{count}} 個のツール"
+          "tools_other": "{{count}} 個のツール",
+          "orcaRemoved": "削除済み: 次のメッセージで再起動します",
+          "orcaChanged": "変更済み: 次のメッセージで再起動します"
         },
         "signIn": {
           "external": "開いたページで完了してください",
@@ -21793,7 +21772,8 @@
           "user": "ユーザー",
           "plugin": "プラグイン",
           "session": "セッション"
-        }
+        },
+        "stillFailing": "再接続後も失敗しています。"
       }
     },
     "tab": {
@@ -23171,6 +23151,21 @@
         "cancel": "キャンセル",
         "tryAgain": "再試行"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sending": "送信中…",
+        "sendShort": "{{count}} 件を送信",
+        "clearNotes": "メモを削除…",
+        "sendCommentsToAgent_other": "{{count}} 件のコメントを Agent に送信",
+        "sendNotes_other": "{{count}} 件のメモを送信",
+        "sendComments_other": "{{count}} 件のコメントを送信",
+        "clearPageNotes_other": "このページから {{count}} 件のメモを削除しますか？",
+        "copyNotes": "メモをコピー",
+        "sendNotesToAgent_other": "{{count}} 件のメモを Agent に送信",
+        "sentNotesStillListed": "メモを送信しましたが、リストに残っています。",
+        "removeSentNotes": "削除"
+      }
     }
   },
   "dashboardPopout": {
@@ -23332,10 +23327,11 @@
     },
     "clientHosted": {
       "preparationFailed": "このデスクトップ上でリモートブラウザを起動できませんでした。ペアリングされた接続を確認して、もう一度試してください。",
-      "unavailableTitle": "クライアントホスト型ブラウザは利用不可",
-      "unavailableDescription": "このページは現在このデスクトップでは利用できません。",
-      "unavailableOtherDesktopDescription": "このページは別のデスクトップで開かれています。",
-      "unavailableHostOfflineDescription": "{{host}} はオフラインです。再接続されると、このページはここで再読み込みされます。",
+      "runsOnServerTitle": "このタブはサーバー上で動作しています",
+      "runsOnServerBody": "続けるにはサーバーで開いてください。",
+      "details": "詳細",
+      "noBrowserTitle": "このタブはここでは開けません",
+      "noBrowserBody": "このサーバーにはブラウザーがありません。",
       "download": {
         "started": "{{filename}}をダウンロード中…",
         "completed": "{{filename}}をダウンロードしました",
@@ -23360,9 +23356,9 @@
       "reload": "リロード"
     },
     "reopenOnServer": {
-      "action": "サーバー上で再度開く",
-      "pending": "再開…",
-      "caveat": "これにより、リモートホスト上のこのページの最後のアドレスにある新規ページが開きます。サインインとその他の一時的なページの状態は異なる場合があり、フォーム送信からのページは空白で開きます。",
+      "action": "サーバーで開く",
+      "pending": "開いています…",
+      "caveat": "このページの最後のアドレスでサーバー上に開きます。サインイン状態は異なる場合があります。",
       "failed": "リモートホストでこのページを開けませんでした。接続を確認して再試行してください。"
     },
     "deviceMove": {
@@ -24241,6 +24237,9 @@
         "planModelWithoutThinking": "モデル「{{model}}」は思考の強度設定に対応していません。",
         "planThinkingLevelInvalid": "思考レベル「{{level}}」は {{model}} では無効です。",
         "openCodeInvalidEvents": "OpenCode が無効な JSON イベントを返しました。",
+        "antigravityInvalidEvents": "Antigravity が無効な JSON イベントを返しました。",
+        "antigravityInvalidResult": "Antigravity が無効な結果を返しました。",
+        "antigravityNoFinalResult": "Antigravity が最終結果を返しませんでした。",
         "kimiUnreadableOutput": "Kimi が Orca で読み取れない出力を返しました。もう一度お試しください。",
         "kimiSessionOccupied": "Kimi は、別のクライアントで使用中のため、このセッションを使用できませんでした。そのクライアントでセッションを停止するか、クライアントを終了してから、もう一度お試しください。",
         "kimiInterrupted": "Kimi はテキストの生成が完了する前に中断されました。もう一度お試しください。",
@@ -24962,7 +24961,9 @@
     "failed": "検索失敗。もう一度お試しください",
     "filters": {
       "toggle": "検索の詳細を切り替える",
-      "active": "{{count}} 件が有効"
+      "active": "{{count}} 件が有効",
+      "includeSummary": "含める: {{patterns}}",
+      "excludeSummary": "除外: {{patterns}}"
     },
     "noResults": "結果がありません。別の検索を試すか、フィルターを調整してください。"
   },
@@ -25278,8 +25279,7 @@
         "failing": "失敗",
         "running": "保留中",
         "cancelled": "キャンセル済み",
-        "passing": "合格",
-        "more": "ほか {{count}} 件"
+        "passing": "合格"
       }
     },
     "attachments": {
@@ -26984,13 +26984,10 @@
     "loadFailed": "Git履歴を読み込めませんでした",
     "updateHost": "Gitグラフを開くには{{host}}のOrcaを更新してください",
     "title": "Gitグラフ",
-    "revertConflicts": "取り消しの競合",
-    "revertInProgress": "取り消し中",
     "abortOperationTitle": "{{operation}}を中止しますか？",
     "abortOperationDescription": "進行中の操作を中止します。この操作中に行った競合の解決が失われる場合があります。",
     "abortOperation": "{{operation}}を中止",
     "recoveryFailed": "操作を完了できませんでした。ソース管理を更新して、もう一度お試しください。",
-    "continueOperation": "{{operation}}を続行",
     "reverting": "取り消し中",
     "updateActionsHost": "コミットを操作するには、{{host}}のOrcaを更新してください",
     "thisHost": "このホスト",
@@ -27144,15 +27141,11 @@
       "colorSlate": "スレート",
       "colorGraphite": "グラファイト",
       "colorInk": "インク",
-      "noChatAgents": "このコンピュータで利用できるチャット Agent はありません。",
-      "change": "変更",
       "computer": "コンピュータ",
-      "computerHint": "ボットの実行場所です。",
       "computerAccountHint": "ボットの実行場所です。Orca には {{account}} としてサインインしています。",
       "useChatDefaults": "チャットのデフォルトを使用",
       "chatDefault": "チャット既定",
       "agent": "Agent",
-      "folder": "フォルダー: {{path}}",
       "name": "名前",
       "validation": {
         "addName": "名前を入力",

@@ -1,5 +1,6 @@
-import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-route-restore'
+import { session } from 'electron'
 import { clearBrowserCookieJarWithSource } from '../session-restore/browser-session-cookie-clear'
+import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-route-restore'
 import { boundLocalSshBrowserPartition } from '../../routing/local-host-partitions/local-ssh-browser-partition-bindings'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
@@ -7,7 +8,7 @@ import {
   sshCookieImportRoute
 } from '../client-route/client-route-cookie-import-source-store'
 
-/** Clears a route jar after checking its binding and clearing its source. */
+/** Clears a route jar after checking its binding and clearing its source; throws when it couldn't. */
 export function clearRoutePartitionCookies(
   partition: string,
   clearSource: () => Promise<boolean>
@@ -18,6 +19,9 @@ export function clearRoutePartitionCookies(
     }
     // A route jar restores its saved session cookies lazily; a later restore would undo this clear.
     await restoreBrowserRoutePartitionSessionCookies(partition)
+    const { clearBrowserCookieJar } =
+      await import('../session-restore/browser-session-cookie-clear')
+    await clearBrowserCookieJar(session.fromPartition(partition))
     return true
   })
 }

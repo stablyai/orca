@@ -404,10 +404,11 @@
     },
     "clientHosted": {
       "preparationFailed": "Der entfernte Browser konnte auf diesem Desktop nicht gestartet werden. Die gekoppelte Verbindung prüfen und erneut versuchen.",
-      "unavailableTitle": "Auf dem Client gehosteter Browser nicht verfügbar",
-      "unavailableDescription": "Diese Seite ist auf diesem Desktop derzeit nicht verfügbar.",
-      "unavailableOtherDesktopDescription": "Diese Seite ist auf einem anderen Desktop geöffnet.",
-      "unavailableHostOfflineDescription": "{{host}} ist offline. Diese Seite wird hier neu geladen, sobald die Verbindung wiederhergestellt ist.",
+      "runsOnServerTitle": "Dieser Tab läuft auf deinem Server",
+      "runsOnServerBody": "Öffne ihn dort, um weiterzumachen.",
+      "details": "Details",
+      "noBrowserTitle": "Dieser Tab kann hier nicht geöffnet werden",
+      "noBrowserBody": "Dieser Server hat keinen Browser.",
       "download": {
         "started": "{{filename}} wird heruntergeladen…",
         "completed": "{{filename}} heruntergeladen",
@@ -432,9 +433,9 @@
       "reload": "Neu laden"
     },
     "reopenOnServer": {
-      "action": "Auf dem Server erneut öffnen",
-      "pending": "Wird erneut geöffnet…",
-      "caveat": "Dies öffnet auf dem Remote-Host eine neue Seite mit der zuletzt verwendeten Adresse dieser Seite. Der Anmeldestatus und andere vorübergehende Seitenzustände können abweichen. Eine durch Formularübermittlung entstandene Seite wird leer geöffnet.",
+      "action": "Auf Server öffnen",
+      "pending": "Wird geöffnet…",
+      "caveat": "Öffnet sich auf dem Server unter der letzten Adresse dieser Seite. Der Anmeldestatus kann abweichen.",
       "failed": "Diese Seite konnte auf dem Remote-Host nicht geöffnet werden. Die Verbindung prüfen und erneut versuchen."
     },
     "deviceMove": {
@@ -1926,7 +1927,8 @@
         "add": "Server für dieses Repo hinzufügen",
         "files": "Aus den Dateien dieses Repos",
         "open": "{{file}} öffnen"
-      }
+      },
+      "unreadable": "Gespeicherte Anmeldung oder Schlüssel lässt sich auf diesem Computer nicht öffnen"
     }
   },
   "menu": {
@@ -2204,13 +2206,14 @@
           "localBaseRefNotUpdatedDirty": "Nicht committete Änderungen in {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Nur lokale Commits auf {{value0}}.",
           "localBaseRefNotUpdatedError": "Git-Fehler.",
-          "localBaseRefHideDetails": "Details ausblenden",
-          "localBaseRefShowDetails": "Details",
           "localBaseRefShallowHistoryTitle": "Lokaler Branch {{value0}} nicht aktualisiert: flacher Klon",
           "localBaseRefShallowHistoryNamed": "„{{value0}}“ wurde aus {{value1}} erstellt und ist nicht betroffen. Orca konnte den lokalen Branch {{value2}} nicht zusätzlich aktualisieren, da dieser Klon nur den jüngsten Verlauf enthält. Git kann daher nicht bestätigen, dass der lokale Branch {{value2}} lediglich zurückliegt. Um dies für alle neuen Arbeitsbereiche zu beheben, einmalig Folgendes ausführen:",
           "localBaseRefShallowHistory": "Der Arbeitsbereich wurde aus {{value0}} erstellt und ist nicht betroffen. Orca konnte den lokalen Branch {{value1}} nicht zusätzlich aktualisieren, da dieser Klon nur den jüngsten Verlauf enthält. Git kann daher nicht bestätigen, dass der lokale Branch {{value1}} lediglich zurückliegt. Um dies für alle neuen Arbeitsbereiche zu beheben, einmalig Folgendes ausführen:",
           "localBaseRefRefreshTurnOff": "Prüfung deaktivieren",
           "localBaseRefRefreshTurnOffHelp": "Was „Prüfung deaktivieren“ bewirkt",
+          "localBaseRefRefreshDisable": "Deaktivieren",
+          "localBaseRefRefreshDisableTooltip": "{{value0}} nicht mehr prüfen",
+          "localBaseRefClose": "Schließen",
           "localBaseRefRefreshTurnOffTooltip": "Deaktiviert die Orca-Einstellung {{value0}}. Orca aktualisiert den lokalen Branch {{value1}} beim Erstellen eines Arbeitsbereichs nicht mehr, und diese Warnung wird nicht mehr angezeigt. Neue Arbeitsbereiche sind davon nicht betroffen. Die Einstellung lässt sich jederzeit unter Einstellungen › Git wieder aktivieren.",
           "localBaseRefUnshallow": "Vollständigen Verlauf laden",
           "localBaseRefUnshallowFailed": "Für diesen Arbeitsbereich konnte kein Terminal geöffnet werden",
@@ -4075,7 +4078,7 @@
         "99c2755218": "Issues suchen oder JQL eingeben, z. B. project = ABC",
         "2ff9fd71fd": "Jira-Issues aktualisieren",
         "0b65d3fb2c": "Linear-Projekte suchen…",
-        "eec0c5c079": "Linear-Issues suchen…",
+        "eec0c5c079": "Suchen…",
         "8964184a8b": "Linear aktualisieren",
         "3feb524d42": "Neues Linear-Issue",
         "0cbf7e5cf3": "Linear-Aufgabenmodus",
@@ -15375,11 +15378,7 @@
             "keepFile": "Datei behalten",
             "keepDeletion": "Löschung beibehalten",
             "refreshAll": "Alle aktualisieren",
-            "rebaseConflictCount_one": "{{count}} Konflikt",
-            "rebaseConflictCount_other": "{{count}} Konflikte",
-            "rebasePaused": "Rebase angehalten",
             "rebaseResolveConflictsFirst": "Löse zuerst die Konflikte",
-            "rebaseAbort": "Abbrechen",
             "rebaseContinue": "Fortsetzen",
             "continueRebasePausedAgain": "Rebase beim nächsten Konflikt angehalten",
             "continueRebaseFailed": "Rebase konnte nicht fortgesetzt werden",
@@ -15390,7 +15389,6 @@
             "rebaseStopMovedOn": "Der Rebase ist bereits weitergegangen. Prüfe das Panel und versuche es erneut.",
             "rebaseEmptyStep": "In diesem Schritt gibt es nichts zu committen. Brich den Rebase ab oder schließe ihn im Terminal ab.",
             "rebaseStepUnreadableShort": "Prüfung fehlgeschlagen",
-            "rebaseCheckAgain": "Erneut prüfen",
             "rebaseRetryInspect": "Erneut versuchen",
             "rebaseRetryInspectLabel": "Rebase-Schritt erneut prüfen",
             "rebaseStoppedFinishInTerminal": "Git hat diesen Schritt angehalten. Schließe ihn im Terminal ab oder brich ab.",
@@ -15422,7 +15420,11 @@
             "scopeNoUncommitted": "Keine nicht committeten Änderungen.",
             "scopeCommitFiles": "Dateien",
             "gitGraphButton": "Graph",
-            "compareLoadingAgainst": "Vergleich mit {{base}}"
+            "compareLoadingAgainst": "Vergleich mit {{base}}",
+            "operationResolve": "Lösen",
+            "operationResolveLabel": "Konflikte mit KI lösen",
+            "operationMoreActions": "Weitere Aktionen",
+            "operationAbortConfirm": "Zum Abbrechen erneut auswählen"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",
@@ -15573,8 +15575,6 @@
                 "pendingCount_other": "{{count}} ausstehend",
                 "unresolvedCount_one": "{{count}} ungelöst",
                 "unresolvedCount_other": "{{count}} ungelöst",
-                "sendQueuedCommentsToAi_one": "{{count}} Kommentar aus der Warteschlange an die KI senden",
-                "sendQueuedCommentsToAi_other": "{{count}} Kommentare aus der Warteschlange an die KI senden",
                 "conflictsBlockThisMr": "Konflikte blockieren diesen MR",
                 "conflictsBlockThisPr": "Konflikte blockieren diesen PR",
                 "copyComment": "Kommentar kopieren",
@@ -16033,15 +16033,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Merge-Konflikte",
-                    "7f3af87549": "Rebase-Konflikte",
-                    "6a8e9ad490": "Cherry-pick-Konflikte",
-                    "bdf8772106": "Konflikte",
-                    "edc2d82a2b": "Merge läuft",
-                    "5c3707aa44": "Rebase läuft",
-                    "ffe53a1da6": "Cherry-pick läuft",
-                    "35eb76d323": "Vorgang läuft",
-                    "completeMerge": "Merge abschließen"
+                    "bdf8772106": "Konflikte"
                   }
                 }
               },
@@ -17615,10 +17607,6 @@
           "39b6b9e4e4": "Auf Branch committet"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Gesendet",
-          "84898c548d": "Leeren",
-          "88b70d0ef5": "Kopieren",
-          "bb84b4c374": "KI-Notizen",
           "948a5fd6c8": "Notizen löschen",
           "0f806a2ab1": "Abbrechen",
           "b6c3b84476": "Dateibaum anzeigen",
@@ -17628,7 +17616,6 @@
           "820ec01f24": "Dateien mit Konflikten werden separat geprüft",
           "fd8892b120": "Keine Änderungen zum Anzeigen",
           "eb5f40e49c": "Diese Diff-Ansicht schließt ungelöste Konflikte aus, da die normale Zwei-Wege-Diff-Verarbeitung Konflikte nicht sicher verarbeiten kann.",
-          "45cf23b418": "Die Notizen konnten nicht gelöscht werden.",
           "ec5053c7f5": "Nebeneinander",
           "f786fd54e1": "Untereinander",
           "ea08dae15b": "Alle einklappen",
@@ -17643,19 +17630,12 @@
           "noExtension": "(keine Dateiendung)",
           "diffLoadTimedOut": "Der Diff wurde nicht vollständig geladen.",
           "diffLoadFailed": "Der Diff konnte nicht geladen werden.",
-          "moreNotesInSourceControl_one": "{{count}} weitere Notiz in der Quellcodeverwaltung",
-          "moreNotesInSourceControl_other": "{{count}} weitere Notizen in der Quellcodeverwaltung",
-          "clearNotesConfirm_one": "{{count}} Notiz aus diesem Worktree löschen?",
-          "clearNotesConfirm_other": "{{count}} Notizen aus diesem Worktree löschen?",
           "changedFilesVs_one": "{{count}} geänderte Datei gegenüber {{baseRef}}",
           "changedFilesVs_other": "{{count}} geänderte Dateien gegenüber {{baseRef}}",
           "changedFilesIn_one": "{{count}} geänderte Datei in {{compareRef}}",
           "changedFilesIn_other": "{{count}} geänderte Dateien in {{compareRef}}",
           "changedFiles_one": "{{count}} geänderte Datei",
           "changedFiles_other": "{{count}} geänderte Dateien",
-          "showAiNotes_one": "{{count}} KI-Notiz anzeigen",
-          "showAiNotes_other": "{{count}} KI-Notizen anzeigen",
-          "send": "Senden",
           "openDiff": "Diff öffnen",
           "openInEditor": "Im Editor öffnen",
           "skippedConflictsExcluded": "{{count}} ungelöste Konflikte wurden aus dieser Diff-Ansicht ausgeschlossen."
@@ -17857,7 +17837,6 @@
           "b1bfc04034": "Ausgewählter Text",
           "f37b98999e": "Diese Notiz",
           "2b2b31382c": "Metadaten",
-          "bb629de58a": "Notizen für Agenten kopieren",
           "322afab6ff": "Review-Notizen",
           "0f9969a159": "Zur ersten Review-Notiz springen",
           "12052c639c": "Suche schließen",
@@ -17930,7 +17909,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Notizen senden",
-          "433928cd9f": "{{value0}} an einen Agenten senden",
           "thisNote": "Diese Notiz",
           "noteAlreadySent": "Notiz bereits gesendet",
           "sendNotesToAgent": "Notizen an einen Agenten senden",
@@ -18016,8 +17994,6 @@
           "3ababd949d": "Review-Notizen"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Notizen für Agenten kopieren",
-          "a807596997": "Notizen kopiert",
           "8aaf2c4c69": "Review-Notizen anzeigen",
           "af02dc2456": "Review-Notizen ausblenden"
         },
@@ -18900,8 +18876,6 @@
             "b5ba6085de": "Frage",
             "143204e423": "Änderung",
             "b71dc3d930": "Erneut verbinden",
-            "d51ef37351": "Kopieren",
-            "6f4ab3592b": "Kopiert",
             "168350ae6a": "Ein Element anklicken oder mit dem Mauszeiger darauf zeigen, dann C zum Kopieren oder S für einen Screenshot drücken.",
             "777b5bc4ec": "Ein Element anklicken, um Feedback für den Agenten hinzuzufügen.",
             "b733a91bd9": "Feedback für das ausgewählte Element hinzufügen.",
@@ -18939,9 +18913,7 @@
             "devToolsDockRight": "Rechts andocken",
             "devToolsDockBottom": "Unten andocken",
             "devToolsUndock": "In separatem Fenster öffnen",
-            "devToolsClose": "DevTools schließen",
-            "11c5084aa2": "Anmerkungen entfernen",
-            "734e4343ec": "Browser-Anmerkungen entfernen"
+            "devToolsClose": "DevTools schließen"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Abbrechen",
@@ -20625,7 +20597,9 @@
         "resumedMany_one": "Fortgesetzt: {{count}} Agent",
         "resumedMany_other": "Fortgesetzt: {{count}} Agenten",
         "needYou_one": "{{count}} braucht dich",
-        "needYou_other": "{{count}} brauchen dich"
+        "needYou_other": "{{count}} brauchen dich",
+        "resumedCount_one": "Fortgesetzt: {{count}}",
+        "resumedCount_other": "Fortgesetzt: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Keine WSL-Distributionen gefunden",
@@ -22717,7 +22691,9 @@
           "needsAuthAfterSend": "Anmeldung nötig. Zum Anmelden hier eine Nachricht senden.",
           "pending": "Verbindung wird hergestellt…",
           "tools_one": "{{count}} Werkzeug",
-          "tools_other": "{{count}} Werkzeuge"
+          "tools_other": "{{count}} Werkzeuge",
+          "orcaRemoved": "Entfernt: Neustart bei der nächsten Nachricht",
+          "orcaChanged": "Geändert: Neustart bei der nächsten Nachricht"
         },
         "signIn": {
           "external": "Auf der geöffneten Seite abschließen",
@@ -22758,7 +22734,8 @@
           "user": "Benutzer",
           "plugin": "Plugin",
           "session": "Sitzung"
-        }
+        },
+        "stillFailing": "Nach dem erneuten Verbinden weiterhin fehlerhaft."
       }
     },
     "tab": {
@@ -24152,6 +24129,26 @@
         "cancel": "Abbrechen",
         "tryAgain": "Erneut versuchen"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sendCommentsToAgent_one": "{{count}} Kommentar an einen Agenten senden",
+        "clearPageNotes_one": "{{count}} Notiz von dieser Seite löschen?",
+        "sendShort": "{{count}} senden",
+        "clearNotes": "Notizen löschen…",
+        "sending": "Wird gesendet…",
+        "sendCommentsToAgent_other": "{{count}} Kommentare an einen Agenten senden",
+        "sendNotes_other": "{{count}} Notizen senden",
+        "sendNotesToAgent_one": "{{count}} Notiz an einen Agenten senden",
+        "sendNotes_one": "{{count}} Notiz senden",
+        "sendComments_other": "{{count}} Kommentare senden",
+        "sendComments_one": "{{count}} Kommentar senden",
+        "copyNotes": "Notizen kopieren",
+        "clearPageNotes_other": "{{count}} Notizen von dieser Seite löschen?",
+        "sendNotesToAgent_other": "{{count}} Notizen an einen Agenten senden",
+        "sentNotesStillListed": "Notizen gesendet, aber noch in der Liste.",
+        "removeSentNotes": "Entfernen"
+      }
     }
   },
   "dashboardPopout": {
@@ -24603,6 +24600,9 @@
         "planModelWithoutThinking": "Modell „{{model}}“ unterstützt keine Einstellung des Denkaufwands.",
         "planThinkingLevelInvalid": "Die Denkstufe „{{level}}“ ist für {{model}} nicht gültig.",
         "openCodeInvalidEvents": "OpenCode hat ungültige JSON-Ereignisse zurückgegeben.",
+        "antigravityInvalidEvents": "Antigravity hat ungültige JSON-Ereignisse zurückgegeben.",
+        "antigravityInvalidResult": "Antigravity hat ein ungültiges Ergebnis zurückgegeben.",
+        "antigravityNoFinalResult": "Antigravity hat kein abschließendes Ergebnis zurückgegeben.",
         "kimiUnreadableOutput": "Kimi hat eine Ausgabe zurückgegeben, die Orca nicht lesen konnte. Erneut versuchen.",
         "kimiSessionOccupied": "Kimi konnte diese Sitzung nicht verwenden, da sie in einem anderen Client aktiv ist. Die Sitzung dort stoppen oder den Client beenden und erneut versuchen.",
         "kimiInterrupted": "Kimi wurde vor Abschluss der Textgenerierung unterbrochen. Erneut versuchen.",
@@ -25370,7 +25370,9 @@
     "failed": "Suche fehlgeschlagen. Erneut versuchen.",
     "filters": {
       "toggle": "Suchdetails ein-/ausblenden",
-      "active": "{{count}} aktiv"
+      "active": "{{count}} aktiv",
+      "includeSummary": "Einschließen: {{patterns}}",
+      "excludeSummary": "Ausschließen: {{patterns}}"
     },
     "noResults": "Keine Ergebnisse. Eine andere Suche versuchen oder die Filter anpassen."
   },
@@ -25631,8 +25633,7 @@
         "failing": "fehlschlagend",
         "running": "ausstehend",
         "cancelled": "abgebrochen",
-        "passing": "erfolgreich",
-        "more": "+{{count}} weitere"
+        "passing": "erfolgreich"
       }
     },
     "attachments": {
@@ -27319,15 +27320,11 @@
       "colorSlate": "Schiefergrau",
       "colorGraphite": "Graphit",
       "colorInk": "Tinte",
-      "noChatAgents": "Auf diesem Computer sind keine Chat-Agenten verfügbar.",
-      "change": "Ändern",
       "computer": "Computer",
-      "computerHint": "Wo der Bot läuft.",
       "computerAccountHint": "Wo der Bot läuft, bei Orca angemeldet als {{account}}.",
       "useChatDefaults": "Chat-Standardeinstellungen verwenden",
       "chatDefault": "Wie im Chat",
       "agent": "Agent",
-      "folder": "Ordner: {{path}}",
       "name": "Name",
       "validation": {
         "addName": "Name eingeben",
@@ -28221,13 +28218,10 @@
     "loadFailed": "Git-Verlauf konnte nicht geladen werden",
     "updateHost": "Aktualisiere Orca auf {{host}}, um den Git-Graphen zu öffnen",
     "title": "Git-Graph",
-    "revertConflicts": "Konflikte beim Rückgängigmachen",
-    "revertInProgress": "Rückgängigmachen läuft",
     "abortOperationTitle": "{{operation}} abbrechen?",
     "abortOperationDescription": "Dies bricht den laufenden Vorgang ab und kann dabei vorgenommene Konfliktlösungen verwerfen.",
     "abortOperation": "{{operation}} abbrechen",
     "recoveryFailed": "Der Vorgang konnte nicht abgeschlossen werden. Aktualisiere die Quellcodeverwaltung und versuche es erneut.",
-    "continueOperation": "{{operation}} fortsetzen",
     "reverting": "Wird rückgängig gemacht",
     "updateActionsHost": "Aktualisiere Orca auf {{host}}, um Commit-Aktionen auszuführen",
     "thisHost": "diesem Host",

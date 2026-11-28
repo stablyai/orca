@@ -1,6 +1,6 @@
 import { boundRoutePartition } from './browser-client-route-cookie-import'
 import { forgetClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
-import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import { clearRoutePartitionCookies } from '../route-partition/browser-route-partition-cookie-clear'
 
 /** Clears the jar a server profile's This-device pages use on this desktop; null when this desktop doesn't host them. */

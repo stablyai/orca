@@ -1,5 +1,5 @@
 import { readCommandBody } from '../arguments/command-body-input'
-import { hasImpossibleLeadingDate } from '../arguments/calendar-date'
+import { hasImpossibleLeadingDate } from '../../shared/validation/calendar-date'
 import type {
   LinearIssueInclude,
   LinearIssueListRequest,

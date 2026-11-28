@@ -1158,7 +1158,9 @@
         "pending": "Verbindung wird hergestellt…",
         "tools_one": "{{count}} Werkzeug",
         "tools_other": "{{count}} Werkzeuge",
-        "waitingForSignIn": "Wartet auf Anmeldung…"
+        "waitingForSignIn": "Wartet auf Anmeldung…",
+        "orcaRemoved": "Entfernt: Neustart bei der nächsten Nachricht",
+        "orcaChanged": "Geändert: Neustart bei der nächsten Nachricht"
       },
       "source": {
         "project": "Projekt",
@@ -1190,7 +1192,8 @@
         "failed": "Fehler: {{count}}"
       },
       "pasteHint": "Wenn der Browser auf einer Seite landet, die nicht lädt, ihre Adresse kopieren und hier einfügen.",
-      "manage": "MCP-Server verwalten"
+      "manage": "MCP-Server verwalten",
+      "stillFailing": "Nach dem erneuten Verbinden weiterhin fehlerhaft."
     }
   },
   "common": {
@@ -1713,7 +1716,9 @@
         "permissionAcceptEditsDescription": "Genehmigt Dateiänderungen und Dateibefehle; fragt bei allem anderen nach",
         "permissionAutoDescription": "Prüft Genehmigungsanfragen stellvertretend",
         "permissionFullAccessCodexDescription": "Fragt nie nach; kann jede Datei bearbeiten und das Netzwerk nutzen",
-        "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen"
+        "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen",
+        "permissionAgentSettings": "{{agent}}-Einstellungen",
+        "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen"
       },
       "goal": {
         "sentAsGoal": "Als Ziel gesendet"
@@ -3132,7 +3137,7 @@
       "collapse": "Einklappen"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "In neuer CLI fortsetzen"
+      "continueInTerminal": "Im Terminal fortsetzen"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "Zur neuesten Nachricht scrollen"
@@ -3686,6 +3691,18 @@
       "terminalTitle": "Terminal-Text",
       "pointsAndColumns": "{{points}} · {{count}} Spalten",
       "moreTerminal": "Weitere Terminal-Einstellungen"
+    },
+    "terminalChatContinuation": {
+      "busy": "Ein anderer Chat oder ein anderes Terminal wird geöffnet. Warte kurz und versuche es dann erneut.",
+      "continueInChat": "Im Chat fortsetzen",
+      "failed": "Fortsetzen im Chat nicht möglich. {{detail}}",
+      "failedAfterClose": "Fortsetzen im Chat nicht möglich. {{detail}} Die Unterhaltung findest du im Agentenverlauf.",
+      "otherJob": "In diesem Terminal läuft {{process}}. Beende es und setze dann im Chat fort.",
+      "terminalChanged": "Dieses Terminal hat sich geändert, während Orca es geprüft hat. Versuche es erneut.",
+      "tryAgain": "Versuche es erneut.",
+      "unavailable": "{{agent}}-Chats sind auf diesem Computer nicht verfügbar.",
+      "uncheckable": "Orca konnte nicht prüfen, was in diesem Terminal läuft. Versuche es erneut.",
+      "unconfirmed": "Orca konnte nicht bestätigen, dass der Chat geöffnet wurde. Prüfe deine Tabs, bevor du es erneut versuchst."
     }
   },
   "settings": {
@@ -3843,9 +3860,6 @@
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
-    },
-    "agents": {
-      "permissionOwnAll": "Eigene Einstellungen der Agenten"
     },
     "voiceTranscribeOn": {
       "heading": "Transkribieren auf",
@@ -4271,6 +4285,9 @@
       "agentCouldNotStart": "{{label}} konnte nicht gestartet werden. Den Agentenbefehl in den Einstellungen prüfen und erneut versuchen.",
       "agentFailedToStart": "Der Start von {{label}} ist fehlgeschlagen. Den Agentenbefehl in den Einstellungen prüfen und erneut versuchen.",
       "agentReportedError": "{{label}} hat einen Fehler gemeldet.",
+      "antigravityInvalidEvents": "Antigravity hat ungültige JSON-Ereignisse zurückgegeben.",
+      "antigravityInvalidResult": "Antigravity hat ein ungültiges Ergebnis zurückgegeben.",
+      "antigravityNoFinalResult": "Antigravity hat kein abschließendes Ergebnis zurückgegeben.",
       "chatNameAgentUnsupported": "Für diese Aktion unter Einstellungen -> Chat -> Chat-Namen einen unterstützten Agenten für Chat-Namen auswählen. Unterstützte Agenten: {{agents}} oder „Benutzerdefinierter Befehl“.",
       "chatNameCustomCommandEmpty": "Der benutzerdefinierte Befehl ist leer. Unter Einstellungen -> Chat -> Chat-Namen einen hinzufügen.",
       "cliFailed": "Der CLI-Befehl von {{label}} ist mit Code {{exitCode}} fehlgeschlagen.",
@@ -6674,6 +6691,7 @@
     "workspacesCount": "{{count}} Arbeitsbereiche",
     "workspacesAllButCount": "Alle außer {{count}}",
     "headerMissing": "{{header}} ausfüllen, um diesen Server hinzuzufügen.",
-    "servers": "Server"
+    "servers": "Server",
+    "unreadable": "Gespeicherte Anmeldung oder Schlüssel lässt sich nicht öffnen. Erneut anmelden."
   }
 }

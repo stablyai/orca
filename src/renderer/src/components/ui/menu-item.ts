@@ -4,9 +4,9 @@ import { cva } from 'class-variance-authority'
 /**
  * Row styles shared by dropdown-menu.tsx and context-menu.tsx, in the spirit of menu-surface.ts.
  * `default` density is the 26px row (5 + 16 + 5); `compact` is the older 24px row for menus
- * that need to fit more rows.
+ * that need to fit more rows; `comfortable` is the 30px row with 8px side/menu padding.
  */
-export type MenuDensity = 'default' | 'compact'
+export type MenuDensity = 'default' | 'compact' | 'comfortable'
 
 const MenuDensityContext = React.createContext<MenuDensity>('default')
 
@@ -18,7 +18,17 @@ export function useMenuDensity(density: MenuDensity | undefined): MenuDensity {
   return density ?? inherited
 }
 
-const ROW_PADDING_Y = { default: 'py-[5px]', compact: 'py-1' } as const
+const ROW_DENSITY = {
+  default: 'px-2.5 py-[5px]',
+  compact: 'px-2.5 py-1',
+  comfortable: 'h-[30px] px-2 py-0'
+} as const
+
+const INDICATOR_ROW_DENSITY = {
+  default: 'pr-2.5 pl-8 py-[5px]',
+  compact: 'pr-2.5 pl-8 py-1',
+  comfortable: 'h-[30px] pr-2 pl-8 py-0'
+} as const
 
 const ROW_BASE =
   'flex cursor-default items-center gap-2 rounded-md text-[13px] leading-4 font-normal outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0'
@@ -29,7 +39,7 @@ const ROW_ICON =
 
 export const menuItemVariants = cva(
   [
-    'relative px-2.5',
+    'relative',
     ROW_BASE,
     ROW_FOCUS,
     ROW_DISABLED,
@@ -40,7 +50,7 @@ export const menuItemVariants = cva(
   ],
   {
     variants: {
-      density: ROW_PADDING_Y,
+      density: ROW_DENSITY,
       menu: {
         // Dropdown rows carry the extra states its consumers set: search default, nested context
         // menu, aria-disabled, current, and the shared agent menu's 36px `launch` row.
@@ -55,15 +65,9 @@ export const menuItemVariants = cva(
 
 /** Checkbox and radio rows: inset to leave room for the indicator at the left edge. */
 export const menuIndicatorItemVariants = cva(
-  [
-    'relative pr-2.5 pl-8',
-    ROW_BASE,
-    ROW_FOCUS,
-    ROW_DISABLED,
-    "[&_svg:not([class*='size-'])]:size-3.5"
-  ],
+  ['relative', ROW_BASE, ROW_FOCUS, ROW_DISABLED, "[&_svg:not([class*='size-'])]:size-3.5"],
   {
-    variants: { density: ROW_PADDING_Y },
+    variants: { density: INDICATOR_ROW_DENSITY },
     defaultVariants: { density: 'default' }
   }
 )
@@ -71,10 +75,10 @@ export const menuIndicatorItemVariants = cva(
 export const MENU_ITEM_INDICATOR_CLASS =
   'pointer-events-none absolute left-2.5 flex size-3.5 items-center justify-center'
 
-export const menuSubTriggerVariants = cva(['px-2.5', ROW_BASE, 'data-[inset]:pl-8', ROW_ICON], {
+export const menuSubTriggerVariants = cva([ROW_BASE, 'data-[inset]:pl-8', ROW_ICON], {
   variants: {
     // Density precedes variant so the chip and launch rows' own padding wins the merge.
-    density: ROW_PADDING_Y,
+    density: ROW_DENSITY,
     variant: {
       default: `${ROW_FOCUS} data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14`,
       'launch-row':
@@ -100,8 +104,14 @@ export const menuSubTriggerVariants = cva(['px-2.5', ROW_BASE, 'data-[inset]:pl-
 export const MENU_LABEL_CLASS =
   'px-2.5 pt-[5px] pb-[3px] text-2xs font-semibold text-muted-foreground data-[inset]:pl-8'
 
-export const menuSeparatorVariants = cva('-mx-[6px] h-px bg-black/7 dark:bg-white/10', {
-  variants: { density: { default: 'my-[6px]', compact: 'my-[5px]' } },
+export const menuSeparatorVariants = cva('h-px bg-black/7 dark:bg-white/10', {
+  variants: {
+    density: {
+      default: '-mx-[6px] my-[6px]',
+      compact: '-mx-[6px] my-[5px]',
+      comfortable: '-mx-2 my-2'
+    }
+  },
   defaultVariants: { density: 'default' }
 })
 
