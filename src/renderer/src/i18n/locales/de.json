@@ -25564,7 +25564,8 @@
       "decline": "Nein danke",
       "failed": "Claude-Code-Designsynchronisierung konnte nicht aktiviert werden",
       "failedDescription": "Aktiviere sie in den Einstellungen."
-    }
+    },
+    "shellOverrideRequired": "Dieser Orca-Server kann keinen Befehl in der gewünschten Shell ausführen. Aktualisiere den Server und versuche es erneut."
   },
   "fileExplorer": {
     "root": {
@@ -25585,7 +25586,8 @@
       "titleRecycleBin": "„{{name}}“ konnte nicht in den Papierkorb verschoben werden. Endgültig löschen?",
       "titleTrash": "„{{name}}“ konnte nicht in den Papierkorb verschoben werden. Endgültig löschen?",
       "description": "Dies kann nicht rückgängig gemacht werden."
-    }
+    },
+    "runInTerminal": "Im Terminal ausführen"
   },
   "sparsePreset": {
     "name": "Name",

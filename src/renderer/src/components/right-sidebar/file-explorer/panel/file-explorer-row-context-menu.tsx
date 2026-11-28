@@ -48,6 +48,7 @@ import {
 } from './file-explorer-row-action-visibility'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
 import { fileExplorerNodeTabRelativePath } from '../tree/file-explorer-directory-listing'
+import { FileExplorerRunScriptItem } from './file-explorer-run-script-item'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -74,7 +75,8 @@ type FileExplorerRowContextMenuProps = Pick<
   | 'onRequestDelete'
   | 'onCollapseFolderSubtree'
   | 'onFindInFolder'
->
+> &
+  Partial<Pick<FileExplorerRowProps, 'sourceWorkspaceId' | 'selectedPaths'>>
 
 export function FileExplorerRowContextMenu({
   node,
@@ -86,6 +88,8 @@ export function FileExplorerRowContextMenu({
   canCollapseFolderSubtree,
   targetDir,
   targetDepth,
+  sourceWorkspaceId,
+  selectedPaths,
   selectionSize,
   onViewFile,
   onCopyPaths,
@@ -204,6 +208,13 @@ export function FileExplorerRowContextMenu({
           {t('auto.components.right.sidebar.FileExplorerRow.e887fa4b2e', 'Open in Terminal')}
         </ContextMenuItem>
       )}
+      {!node.isDirectory &&
+        activeWorktreeId &&
+        sourceWorkspaceId === activeWorktreeId &&
+        selectedPaths &&
+        (!selectedPaths.has(node.path) || selectedPaths.size === 1) && (
+          <FileExplorerRunScriptItem node={node} worktreeId={activeWorktreeId} />
+        )}
       {shouldShowViewFileAction(node) && (
         <ContextMenuItem onSelect={onViewFile}>
           <File />

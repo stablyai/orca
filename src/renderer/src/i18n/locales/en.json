@@ -25585,6 +25585,7 @@
       "count": "{{count}} running terminals"
     },
     "restartedInputNotSent": "The terminal restarted while you were typing, so some input may not have reached it. Check the new shell before typing it again.",
+    "shellOverrideRequired": "This Orca server cannot run a command in the requested shell. Update the server and try again.",
     "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent.",
     "windowsFontWeight": {
       "title": "Terminal text on Windows is now lighter",
@@ -25603,6 +25604,7 @@
     }
   },
   "fileExplorer": {
+    "runInTerminal": "Run in Terminal",
     "root": {
       "label": "Explorer root",
       "full": "Repository root",

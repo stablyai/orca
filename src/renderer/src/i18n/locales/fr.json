@@ -25803,7 +25803,8 @@
       "titleRecycleBin": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
       "titleTrash": "Impossible de déplacer « {{name}} » vers la Corbeille. Le supprimer définitivement ?",
       "description": "Cette action est irréversible."
-    }
+    },
+    "runInTerminal": "Exécuter dans le terminal"
   },
   "sparsePreset": {
     "nameRequired": "Le nom est obligatoire.",
@@ -26208,7 +26209,8 @@
       "gotIt": "J'ai compris",
       "title": "Claude Code peut ouvrir son propre panneau de différences à côté du chat dans les terminaux larges. Ce panneau appartient à Claude, pas à Orca.",
       "body": "Pour le masquer, tapez /diff dans Claude Code. Claude se souvient de ce choix pour les sessions ultérieures."
-    }
+    },
+    "shellOverrideRequired": "Ce serveur Orca ne peut pas exécuter de commande dans le shell demandé. Mettez à jour le serveur et réessayez."
   },
   "fileSearch": {
     "failed": "La recherche a échoué. Essayer à nouveau.",

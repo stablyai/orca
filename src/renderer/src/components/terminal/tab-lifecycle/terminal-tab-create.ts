@@ -11,6 +11,8 @@ export function createNewTerminalTab(
   options?: {
     startupCwd?: string
     command?: string
+    /** A file-backed command must not cross from the file's owner to another host. */
+    expectedRuntimeEnvironmentId?: string | null
     /** Reports whether the tab was created; a caller that passes it reports failure itself. */
     onSettled?: (started: boolean) => void
   }
@@ -21,7 +23,11 @@ export function createNewTerminalTab(
   }
   const state = useAppStore.getState()
   const worktreeRoute = resolveTerminalWorktreeRoute(state, activeWorktreeId)
-  if (!worktreeRoute) {
+  if (
+    !worktreeRoute ||
+    (options?.expectedRuntimeEnvironmentId !== undefined &&
+      worktreeRoute.runtimeEnvironmentId !== options.expectedRuntimeEnvironmentId)
+  ) {
     options?.onSettled?.(false)
     return
   }

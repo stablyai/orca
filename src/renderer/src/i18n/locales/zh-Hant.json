@@ -25213,7 +25213,8 @@
       "decline": "不用了",
       "failed": "無法開啟 Claude Code 主題同步",
       "failedDescription": "請在「設定」中開啟。"
-    }
+    },
+    "shellOverrideRequired": "此 Orca 伺服器無法在指定的 Shell 中執行命令。請更新伺服器後再試一次。"
   },
   "fileExplorer": {
     "root": {
@@ -25234,7 +25235,8 @@
       "titleRecycleBin": "無法將「{{name}}」移至資源回收筒。要永久刪除嗎？",
       "titleTrash": "無法將「{{name}}」移至垃圾桶。要永久刪除嗎？",
       "description": "此操作無法復原。"
-    }
+    },
+    "runInTerminal": "在終端機中執行"
   },
   "sparsePreset": {
     "name": "名稱",

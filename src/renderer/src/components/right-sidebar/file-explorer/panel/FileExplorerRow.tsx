@@ -276,6 +276,8 @@ export function FileExplorerRow({
         canCollapseFolderSubtree={canCollapseFolderSubtree}
         targetDir={targetDir}
         targetDepth={targetDepth}
+        sourceWorkspaceId={sourceWorkspaceId}
+        selectedPaths={selectedPaths}
         selectionSize={selectionSize}
         onViewFile={onViewFile}
         onCopyPaths={onCopyPaths}
