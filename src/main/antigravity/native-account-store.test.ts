@@ -12,7 +12,7 @@ import { AntigravityAccountService } from './native-account-service'
 import type { AntigravityCredentialIdentity } from './native-credential-codec'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { createAntigravityWindowsCredentialBackend } from './native-windows-credentials'
-import { keychainAccessIsBrief } from './native-macos-credentials'
+import { AntigravityKeychainAccessError, keychainAccessIsBrief } from './native-macos-credentials'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
 import { createFakeWindowsSecurity } from '../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
@@ -365,7 +365,7 @@ describe('protected Antigravity account snapshots', () => {
     let brief = false
     vi.mocked(h.backend.read).mockImplementationOnce(async () => {
       brief = keychainAccessIsBrief()
-      throw new Error('no answer')
+      throw new AntigravityKeychainAccessError('no answer')
     })
     await expect(restarted.prepareForLaunch({ mayPrompt: false })).rejects.toThrow('no answer')
     expect(brief).toBe(true)
@@ -377,6 +377,22 @@ describe('protected Antigravity account snapshots', () => {
       'keychain access'
     )
     expect(h.backend.read).toHaveBeenCalledTimes(3)
+  })
+
+  it('lets a later chat restore the selection after a sign-in, not a keychain refusal, held one back', async () => {
+    const h = harness(credential('a'), { keychain: true })
+    const selected = (await h.service.addCurrentAccount()).activeAccountId!
+    h.setNative(credential('b', 2))
+    await h.service.addCurrentAccount()
+    await h.service.selectAccount(selected)
+    h.setNative(refreshedWithoutIdToken(3, 'refresh-2'))
+    h.setSignInHeld(true)
+    await expect(h.service.prepareForLaunch({ mayPrompt: false })).rejects.toThrow(
+      'sign-in is in progress'
+    )
+    h.setSignInHeld(false)
+    await h.service.prepareForLaunch({ mayPrompt: false })
+    expect(h.getNative()).toBe(credential('a'))
   })
 
   it('removes the selected account after agy signs in to another one, unblocking launches', async () => {

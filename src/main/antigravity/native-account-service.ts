@@ -17,7 +17,7 @@ import {
   antigravityLoginMatches,
   type AntigravityQuietRead
 } from './native-account-login-view'
-import { withBriefKeychainAccess } from './native-macos-credentials'
+import { AntigravityKeychainAccessError, withBriefKeychainAccess } from './native-macos-credentials'
 
 export type AntigravityCredentialBackend = {
   parse?(contents: string): AntigravityNativeCredential
@@ -203,10 +203,11 @@ export class AntigravityAccountService {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
       }
     }
-    // A chat's keychain reads and writes give up early; one that fails stops the next chats asking.
+    // A chat's keychain calls give up early; one the keychain refused or left unanswered stops the
+    // next chats asking, while other refusals (a sign-in in progress) don't.
     const chatRestore = () =>
       withBriefKeychainAccess(restore).catch((error: unknown) => {
-        this.logins.briefAccessFailed = true
+        this.logins.briefAccessFailed ||= error instanceof AntigravityKeychainAccessError
         throw error
       })
     return this.serialize(mayPrompt ? restore : chatRestore, mayPrompt)

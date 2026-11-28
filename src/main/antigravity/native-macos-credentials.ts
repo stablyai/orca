@@ -60,12 +60,19 @@ const ITEM_NOT_FOUND = 44 // errSecItemNotFound
 const ACCESS_REFUSED = new Set([51, 128]) // errSecAuthFailed (Deny), errSecUserCanceled (Cancel)
 const NO_DIALOG = 36 // errSecInteractionNotAllowed: a locked keychain with no dialog to unlock it
 
+/** The keychain refused agy's login or didn't answer: a dialog was denied, cancelled, left
+ *  unanswered or couldn't be shown. */
+export class AntigravityKeychainAccessError extends Error {}
+
+const unanswered = () =>
+  new AntigravityKeychainAccessError("The keychain didn't answer. Unlock it and try again.")
+
 function readFailure(result: Awaited<ReturnType<typeof runProcess>>): Error {
   if (result.timedOut || result.code === NO_DIALOG) {
-    return new Error("The keychain didn't answer. Unlock it and try again.")
+    return unanswered()
   }
   if (result.code !== null && ACCESS_REFUSED.has(result.code)) {
-    return new Error(
+    return new AntigravityKeychainAccessError(
       "Orca was denied access to agy's login in the keychain. Allow it when asked to show or switch accounts."
     )
   }
@@ -176,6 +183,9 @@ export async function writeAntigravityMacOSCredential(
     throw new Error('Antigravity credentials exceed the macOS credential command limit.')
   }
   const result = await runSecurity(['-i'], secretWaitMs(), input)
+  if (result.timedOut) {
+    throw unanswered()
+  }
   if (result.code !== 0 || result.timedOut || result.signal || result.outputTruncated) {
     throw new Error('The Antigravity macOS credential store could not be updated.')
   }
