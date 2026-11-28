@@ -235,6 +235,10 @@ export class ToolRelayFronts {
         FRONT_REQUEST_TIMEOUT_MS
       )
       .then(({ port, kept }) => {
+        // A reply after close or the client's retirement restores nothing.
+        if (this.closed || this.watched.get(client) !== watched) {
+          return
+        }
         this.noteServed(client, Number.isSafeInteger(port) ? port : null)
         // Before any held connection is answered, so a kept agent's token is already known.
         const live = (Array.isArray(kept) ? kept : []).filter((relay) => !ended.has(relay.relayId))

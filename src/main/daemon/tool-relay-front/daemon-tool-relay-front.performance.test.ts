@@ -1,15 +1,14 @@
 import { connect, createServer, Socket, type Server } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 // Guards #51086's front bounds: held connections, live pipes, announcements, and their release.
-import {
-  DaemonToolRelayFront,
-  TOOL_RELAY_FRONT_HOLD_MS,
-  TOOL_RELAY_FRONT_MAX_ANSWERING,
-  TOOL_RELAY_FRONT_MAX_HELD,
-  TOOL_RELAY_FRONT_MAX_PIPES
-} from './daemon-tool-relay-front'
+import { DaemonToolRelayFront, TOOL_RELAY_FRONT_HOLD_MS } from './daemon-tool-relay-front'
 
 import type { ToolRelayFrontEventPayload } from '../protocol/daemon-tool-relay-front-protocol'
+
+// The guarded caps, hardcoded so a raised limit fails here.
+const MAX_HELD = 64
+const MAX_ANSWERING = 64
+const MAX_PIPES = 128
 
 const opened: Socket[] = []
 
@@ -28,8 +27,11 @@ afterEach(() => {
 })
 
 /** An agent's connection to the front; resolves with everything it read once it closed. */
-function agent(port: number): { socket: Socket; answer: Promise<string> } {
-  const socket = connect(port, '127.0.0.1')
+function agent(
+  port: number,
+  allowHalfOpen = false
+): { socket: Socket; answer: Promise<string> } {
+  const socket = connect({ port, host: '127.0.0.1', allowHalfOpen })
   opened.push(socket)
   let read = ''
   socket.on('data', (chunk) => (read += chunk.toString('utf8')))
@@ -84,11 +86,11 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     front = new DaemonToolRelayFront('start-1')
     const port = await front.open()
     const announced: string[] = []
-    const held = Array.from({ length: TOOL_RELAY_FRONT_MAX_HELD }, () => agent(port))
-    await vi.waitFor(() => expect(front!.heldCount).toBe(TOOL_RELAY_FRONT_MAX_HELD))
+    const held = Array.from({ length: MAX_HELD }, () => agent(port))
+    await vi.waitFor(() => expect(front!.heldCount).toBe(MAX_HELD))
     const over = agent(port)
     expect(await over.answer).toContain('503 Service Unavailable')
-    expect(front.heldCount).toBe(TOOL_RELAY_FRONT_MAX_HELD)
+    expect(front.heldCount).toBe(MAX_HELD)
 
     // Registering announces every held connection; the same connection registering again (one per
     // chat launch) announces nothing more.
@@ -96,16 +98,16 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     for (let launch = 0; launch < 100; launch += 1) {
       front.serve('app', control, (event) => announced.push(heldId(event)))
     }
-    expect(announced).toHaveLength(TOOL_RELAY_FRONT_MAX_HELD)
+    expect(announced).toHaveLength(MAX_HELD)
     for (const id of announced) {
       front.splice(id, await appSocket(), 'app')
     }
     expect(front.heldCount).toBe(0)
-    expect(front.pipeCount).toBe(TOOL_RELAY_FRONT_MAX_HELD)
+    expect(front.pipeCount).toBe(MAX_HELD)
 
     // An agent closing frees its pipe.
     held[0]!.socket.destroy()
-    await vi.waitFor(() => expect(front!.pipeCount).toBe(TOOL_RELAY_FRONT_MAX_HELD - 1))
+    await vi.waitFor(() => expect(front!.pipeCount).toBe(MAX_HELD - 1))
     // The app going frees every pipe it answered.
     front.clientGone('app')
     expect(front.pipeCount).toBe(0)
@@ -114,18 +116,16 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
   it('counts connections it is answering, caps them, and closes them on dispose', async () => {
     front = new DaemonToolRelayFront('start-1')
     const port = await front.open()
-    Array.from({ length: TOOL_RELAY_FRONT_MAX_HELD }, () => agent(port))
-    await vi.waitFor(() => expect(front!.heldCount).toBe(TOOL_RELAY_FRONT_MAX_HELD))
+    Array.from({ length: MAX_HELD }, () => agent(port))
+    await vi.waitFor(() => expect(front!.heldCount).toBe(MAX_HELD))
     // Refused peers that never close their side: each is counted, and past the cap closed unanswered.
-    const refused = Array.from({ length: 2 * TOOL_RELAY_FRONT_MAX_ANSWERING }, () => agent(port))
+    const refused = Array.from({ length: 2 * MAX_ANSWERING }, () => agent(port, true))
     await vi.waitFor(() =>
       expect(
         refused.filter((call) => call.socket.readableEnded || call.socket.destroyed).length
       ).toBe(refused.length)
     )
-    expect(front.descriptorCount).toBeLessThanOrEqual(
-      1 + TOOL_RELAY_FRONT_MAX_HELD + TOOL_RELAY_FRONT_MAX_ANSWERING
-    )
+    expect(front.descriptorCount).toBe(1 + MAX_HELD + MAX_ANSWERING)
     front.dispose()
     expect(front.descriptorCount).toBe(0)
   })
@@ -157,14 +157,14 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
         handled += 1
       })
     })
-    for (let index = 0; index < TOOL_RELAY_FRONT_MAX_PIPES + 8; index += 1) {
+    for (let index = 0; index < MAX_PIPES + 8; index += 1) {
       answered.push(agent(port).answer)
       // One at a time, so the hold cap never refuses: every refusal is the pipe cap's.
       await vi.waitFor(() => expect(handled).toBe(index + 1))
     }
-    expect(front.pipeCount).toBe(TOOL_RELAY_FRONT_MAX_PIPES)
-    expect(spliced).toBe(TOOL_RELAY_FRONT_MAX_PIPES)
-    const refused = await Promise.all(answered.slice(TOOL_RELAY_FRONT_MAX_PIPES))
+    expect(front.pipeCount).toBe(MAX_PIPES)
+    expect(spliced).toBe(MAX_PIPES)
+    const refused = await Promise.all(answered.slice(MAX_PIPES))
     expect(refused.every((text) => text.includes('503 Service Unavailable'))).toBe(true)
     front.clientGone('app')
     expect(front.pipeCount).toBe(0)

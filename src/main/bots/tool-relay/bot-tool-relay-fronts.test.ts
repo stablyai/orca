@@ -9,7 +9,6 @@ import { DaemonServer } from '../../daemon/server/daemon-server'
 import { getDaemonSocketPath } from '../../daemon/launch/daemon-spawner'
 import { installProviderRelayRoute } from '../../provider-relay/provider-relay-route'
 import { BotToolRelay } from './bot-tool-relay'
-import { TOOL_RELAY_FRONT_MAX_PIPES } from '../../daemon/tool-relay-front/daemon-tool-relay-front'
 
 const cleanups: (() => Promise<void> | void)[] = []
 
@@ -26,6 +25,8 @@ async function daemon(): Promise<DaemonClient> {
   const server = new DaemonServer({
     socketPath,
     tokenPath,
+    // macOS checks the daemon can read a launch's folder, which needs provider spawns.
+    providerSpawn: true,
     spawnSubprocess: () => {
       throw new Error('no terminals here')
     }
@@ -89,7 +90,7 @@ describe.skipIf(process.platform === 'win32')('tool relay fronts', () => {
   it('keep-alive calls past the pipe cap never hold pipes, so cleanup still gets through', async () => {
     const port = await servedFront()
     // Each asks to keep its connection; the relay closes it after answering, freeing its pipe.
-    for (let call = 0; call < TOOL_RELAY_FRONT_MAX_PIPES + 4; call += 1) {
+    for (let call = 0; call < 128 + 4; call += 1) {
       const answer = await agentCall(
         port,
         `POST /bot-tools/abcdefgh/mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\n{}`

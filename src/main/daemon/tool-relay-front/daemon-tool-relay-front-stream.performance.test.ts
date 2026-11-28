@@ -15,10 +15,7 @@ import { getDaemonSocketPath } from '../launch/daemon-spawner'
 import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 import type { ToolRelayFrontOpenResult } from '../protocol/daemon-tool-relay-front-protocol'
 import { DaemonToolRelayFront } from './daemon-tool-relay-front'
-import {
-  answerToolRelayFrontRequest,
-  MAX_UNREAD_STREAM_BYTES
-} from './daemon-tool-relay-front-requests'
+import { answerToolRelayFrontRequest } from './daemon-tool-relay-front-requests'
 
 const cleanups: (() => Promise<void> | void)[] = []
 
@@ -73,7 +70,7 @@ describe.skipIf(process.platform === 'win32')('front notices on a stalled app st
       front.forgetKept(`r-${relay}`)
     }
     // At most one notice past the bound (the write that crossed it) is queued.
-    expect(stream.writableLength).toBeLessThanOrEqual(MAX_UNREAD_STREAM_BYTES + 1024)
+    expect(stream.writableLength).toBeLessThanOrEqual(1024 * 1024 + 1024)
     // Once the app reads again, the ends held back come as one notice to serve again.
     const reader = await stream.peer
     const changed = new Promise<void>((resolve) => {
@@ -127,13 +124,14 @@ describe.skipIf(process.platform === 'win32')('front notices on a stalled app st
     const id = await announced
     const idleChecks = vi.spyOn(DaemonServerLifecycle.prototype, 'reevaluateIdleShutdown')
     cleanups.push(() => idleChecks.mockRestore())
-    const { socket: app } = await openDaemonToolRelayConnection(client, id)
+    const { socket: app, remainder } = await openDaemonToolRelayConnection(client, id)
     cleanups.push(() => {
       app.destroy()
     })
     // The held request reaches the app's connection, and its answer reaches the agent.
     await new Promise<void>((resolve) => {
-      let seen = ''
+      // Bytes spliced in right behind the hello come back with it.
+      let seen = remainder.toString('utf8')
       app.on('data', (chunk) => {
         seen += chunk.toString('utf8')
         if (seen.includes('\r\n\r\n')) {

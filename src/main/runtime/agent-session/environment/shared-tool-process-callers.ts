@@ -20,6 +20,10 @@ const hashToken = (token: string): string => createHash('sha256').update(token).
 
 /** A kept agent's caller, as its daemon start handed it back to this run. */
 export function restoreKeptSharedToolCaller(chatKey: string, kept: ToolRelayFrontCaller): void {
+  const replaced = keptCallers.get(chatKey)
+  if (replaced && replaced.token !== kept.token) {
+    callers.delete(hashToken(replaced.token))
+  }
   keptCallers.set(chatKey, kept)
   callers.set(hashToken(kept.token), kept.caller)
 }

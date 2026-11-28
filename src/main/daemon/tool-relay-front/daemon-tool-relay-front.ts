@@ -92,6 +92,11 @@ export class DaemonToolRelayFront {
       server.listen(0, '127.0.0.1', () => {
         const address = server.address()
         server.unref()
+        if (this.disposed) {
+          server.close()
+          reject(new Error('Tool relay front closed'))
+          return
+        }
         this.server = server
         this.port = address && typeof address === 'object' ? address.port : null
         if (this.port === null) {
@@ -144,7 +149,11 @@ export class DaemonToolRelayFront {
 
   /** An app's control connection closed: it answers nothing more, and its pipes close. */
   clientGone(clientId: string, control?: Socket): void {
-    if (this.serving?.clientId === clientId && (!control || this.serving.control === control)) {
+    // A replaced control's close leaves its successor's pipes alone.
+    if (control && this.serving?.clientId === clientId && this.serving.control !== control) {
+      return
+    }
+    if (this.serving?.clientId === clientId) {
       this.serving = null
     }
     for (const pipe of this.pipes) {
@@ -158,7 +167,8 @@ export class DaemonToolRelayFront {
   /** Joins a held connection to the app's authenticated one; false when it is no longer held. */
   splice(frontConnectionId: string, app: Socket, clientId: string): boolean {
     const held = this.held.get(frontConnectionId)
-    if (!held) {
+    // An app no longer serving answers nothing; the call stays held for the next one.
+    if (!held || this.serving?.clientId !== clientId) {
       app.destroy()
       return false
     }

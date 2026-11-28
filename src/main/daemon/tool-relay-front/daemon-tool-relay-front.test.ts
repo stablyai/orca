@@ -98,12 +98,13 @@ describe.skipIf(process.platform === 'win32')('tool relay front protocol', () =>
     expect(stolen).not.toContain('POST /bot-tools')
 
     // The app's own connection gets the held request, and its answer reaches the agent.
-    const { socket: app } = await openDaemonToolRelayConnection(client, id)
+    const { socket: app, remainder } = await openDaemonToolRelayConnection(client, id)
     cleanups.push(() => {
       app.destroy()
     })
     const request = await new Promise<string>((resolve) => {
-      let seen = ''
+      // Bytes spliced in right behind the hello come back with it.
+      let seen = remainder.toString('utf8')
       app.on('data', (chunk) => {
         seen += chunk.toString('utf8')
         if (seen.includes('\r\n\r\n')) {
