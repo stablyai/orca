@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useId, useState } from 'react'
 import { MoreHorizontal, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -65,38 +65,11 @@ function useOperationCopy(operation: OperationRowOperation) {
   }
 }
 
-/** Measures now, again whenever a slot or its hidden measurer resizes, and once web fonts load. */
-function observeForMeasure(measure: () => void, elements: (Element | null)[]): () => void {
-  measure()
-  const observer = new ResizeObserver(measure)
-  for (const element of elements) {
-    if (element) {
-      observer.observe(element)
-    }
-  }
-  let live = true
-  // A first measure can run on fallback font metrics; the text then shrinks without a resize.
-  void document.fonts?.ready
-    .then(() => {
-      if (live) {
-        measure()
-      }
-    })
-    .catch(() => {})
-  return () => {
-    live = false
-    observer.disconnect()
-  }
-}
-
-// Narrower than this, a branch shows too little to recognize, so it hides whole instead.
-const MIN_BRANCH_PX = 56
-const VERB_GAP_PX = 6
-
 /**
- * "Rebasing feature/x": the branch truncates, and hides whole when it can't show
- * min(its own width, 56px). A detail such as "Check failed" outranks the verb (the tooltip
- * carries the verb) and, when even it can't fit, truncates rather than vanish.
+ * Two lines: the verb ("Rebasing"), then the branch, muted and in the same family, so the branch
+ * gets the row's full width instead of the gap between the verb and the buttons. Each line
+ * truncates on its own; the trigger's tooltip carries the full text. A detail such as
+ * "Check failed" takes the branch's line.
  */
 function OperationLabel({
   verb,
@@ -107,72 +80,12 @@ function OperationLabel({
   branch: string | null
   detail: string | null
 }): React.JSX.Element {
-  const slot = useRef<HTMLSpanElement>(null)
-  const verbMeasure = useRef<HTMLSpanElement>(null)
-  const tailMeasure = useRef<HTMLSpanElement>(null)
-  const [visible, setVisible] = useState<'full' | 'verb' | 'detail'>('full')
-  useLayoutEffect(() => {
-    const measure = () => {
-      const width = slot.current?.clientWidth ?? 0
-      const verbWidth = verbMeasure.current?.scrollWidth ?? Infinity
-      const tailFull = tailMeasure.current?.scrollWidth ?? Infinity
-      const tailWidth = detail ? tailFull : Math.min(MIN_BRANCH_PX, tailFull)
-      const tail = detail || branch
-      setVisible(
-        tail && width >= verbWidth + VERB_GAP_PX + tailWidth ? 'full' : detail ? 'detail' : 'verb'
-      )
-    }
-    return observeForMeasure(measure, [slot.current, verbMeasure.current, tailMeasure.current])
-  }, [verb, branch, detail])
   const tail = detail ?? branch
   return (
-    <span
-      ref={slot}
-      aria-hidden="true"
-      className="relative flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden"
-    >
-      <span
-        ref={verbMeasure}
-        className="pointer-events-none invisible absolute text-xs font-medium whitespace-nowrap"
-      >
-        {verb}
-      </span>
-      <span
-        ref={tailMeasure}
-        className={
-          detail
-            ? 'pointer-events-none invisible absolute text-xs whitespace-nowrap'
-            : 'pointer-events-none invisible absolute font-mono text-[10.5px] whitespace-nowrap'
-        }
-      >
-        {tail}
-      </span>
-      {visible === 'full' || visible === 'verb' ? (
-        <span
-          className={
-            // Alone, a long translated verb truncates rather than leave the row empty; beside the
-            // branch it stays whole and only the branch truncates.
-            visible === 'verb'
-              ? 'min-w-0 truncate text-xs font-medium whitespace-nowrap text-foreground'
-              : 'shrink-0 text-xs font-medium whitespace-nowrap text-foreground'
-          }
-        >
-          {verb}
-        </span>
-      ) : null}
-      {(visible === 'full' || visible === 'detail') && tail ? (
-        <span
-          className={
-            detail
-              ? // Alone, a detail truncates rather than vanish: a long translation must still say why.
-                visible === 'detail'
-                ? 'min-w-0 truncate text-xs text-muted-foreground'
-                : 'shrink-0 text-xs whitespace-nowrap text-muted-foreground'
-              : 'min-w-0 truncate font-mono text-[10.5px] text-muted-foreground'
-          }
-        >
-          {tail}
-        </span>
+    <span aria-hidden="true" className="flex min-w-0 flex-1 flex-col">
+      <span className="truncate text-xs leading-4 font-medium text-foreground">{verb}</span>
+      {tail ? (
+        <span className="truncate text-2xs leading-3.5 text-muted-foreground">{tail}</span>
       ) : null}
     </span>
   )
@@ -379,8 +292,8 @@ function AbortMenu({
 }
 
 /**
- * A paused rebase, merge, cherry-pick or revert, drawn in place of the HEAD row: "Rebasing
- * feature/x", one primary that follows the state, and a ⋯ menu holding Abort.
+ * A paused rebase, merge, cherry-pick or revert, drawn in place of the HEAD row: "Rebasing" over
+ * "feature/x", one primary that follows the state, and a ⋯ menu holding Abort.
  */
 export function OperationRow({
   operation,

@@ -194,7 +194,7 @@ export const cherryPickHostUnsupported = defineFixture({
   }
 })
 
-// A long translated detail beside a long Retry label at the narrowest width truncates, never blanks.
+// A long translated detail beside a long Retry label at the narrowest width truncates on its own line.
 export const longDetail220 = defineFixture({
   width: 220 + 32,
   render: () => (
