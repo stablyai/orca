@@ -7,7 +7,7 @@ import { configureBrowserSitePermissionStore } from '../site-settings/permission
 import { configureBrowserSiteDisplayStore } from '../site-settings/display/browser-site-display-store'
 import { configureBrowserExtensionProfileDataDirectory } from '../extensions/profile-storage/browser-extension-profile-data-directory'
 import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-state'
-import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
+import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vault-directory'
 import { configureBrowserSessionCookieSnapshots } from '../cookies/session-restore/browser-session-cookie-snapshot-file'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
