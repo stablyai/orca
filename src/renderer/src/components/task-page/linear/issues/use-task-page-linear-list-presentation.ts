@@ -120,6 +120,9 @@ export function getLinearIssueGridTemplate(
   if (visibleProperties.has('labels')) {
     columns.push('minmax(168px,0.9fr)')
   }
+  if (visibleProperties.has('project')) {
+    columns.push('minmax(132px,0.7fr)')
+  }
   if (visibleProperties.has('team')) {
     columns.push('minmax(172px,0.9fr)')
   }

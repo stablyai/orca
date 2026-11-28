@@ -4622,7 +4622,9 @@
           "linearViewNotFound": "Saved Linear view was not found.",
           "linearViewRestoreFailed": "Failed to restore saved Linear view."
         },
-        "shownCount_one": "{{count}} shown"
+        "shownCount_one": "{{count}} shown",
+        "linearNoProject": "No project",
+        "linearChangeProject": "Change project for {{value0}} from {{value1}}"
       },
       "Terminal": {
         "73768427cf": "Close",
