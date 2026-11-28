@@ -1,7 +1,7 @@
 import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
 import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot-identity'
 import { useContext, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { nativeChatElapsedSeconds } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import {
@@ -9,6 +9,7 @@ import {
   nativeChatTurnStatusCopy
 } from './native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { LoadingSpinner } from '../../../../components/feedback/LoadingSpinner'
 import type { AgentTurnOutcome } from '../../../../../../src/shared/agent-status/lifecycle/agent-turn-outcome'
 import { feedback, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
@@ -30,7 +31,9 @@ export function MobileNativeChatTurnStatus({
   verdict,
   expanded = false,
   onToggleExpanded,
-  trailing
+  trailing,
+  live = false,
+  style
 }: {
   pendingLabel?: string
   startedAt: number | null
@@ -40,6 +43,9 @@ export function MobileNativeChatTurnStatus({
   onToggleExpanded?: () => void
   /** At the row's end, inside its hairline, while the turn is unsettled: a group turn's Stop. */
   trailing?: React.ReactNode
+  /** The live line under it would only say "Working…": the row spins in its place, with no line to divide. */
+  live?: boolean
+  style?: StyleProp<ViewStyle>
 }): React.JSX.Element {
   const styles = useThemedStyles(stylesSheet)
   const colors = useMobileColors()
@@ -60,7 +66,7 @@ export function MobileNativeChatTurnStatus({
   if (settled && onToggleExpanded) {
     return (
       <Pressable
-        style={({ pressed }) => [styles.row, styles.bar, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.row, styles.bar, style, pressed && styles.pressed]}
         onPress={onToggleExpanded}
         hitSlop={6}
         accessibilityRole="button"
@@ -88,8 +94,13 @@ export function MobileNativeChatTurnStatus({
   }
 
   return (
-    <View style={[styles.row, styles.bar]}>
+    <View style={[styles.row, !live && styles.bar, style]}>
       {identity}
+      {live ? (
+        <View style={styles.spinner}>
+          <LoadingSpinner size={12} color={colors.textMuted} />
+        </View>
+      ) : null}
       {bot?.showName ? (
         <Text style={styles.name} numberOfLines={1}>
           {bot.name}
@@ -108,10 +119,12 @@ const stylesSheet = themedStyleSheet((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    minHeight: 28,
-    paddingHorizontal: spacing.md
+    minHeight: 36,
+    paddingHorizontal: spacing.lg
   },
+  // Half of the 20 pt gap the line sits in; the line under it gives the other half.
   bar: {
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
   },
@@ -137,6 +150,9 @@ const stylesSheet = themedStyleSheet((colors) => ({
   },
   trailing: {
     marginLeft: 'auto'
+  },
+  spinner: {
+    marginLeft: spacing.xxs
   },
   caretOpen: {
     transform: [{ rotate: '90deg' }]

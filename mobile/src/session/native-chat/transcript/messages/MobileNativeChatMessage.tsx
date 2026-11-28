@@ -61,6 +61,7 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   turnStatus,
   turnStatusAbove = false,
+  turnStatusLive = false,
   turnExpanded,
   turnKey,
   rewindable,
@@ -94,6 +95,7 @@ function MobileNativeChatMessageImpl({
   fontScale?: number
   turnStatus?: NativeChatTurnStatus | null
   turnStatusAbove?: boolean
+  turnStatusLive?: boolean
   turnExpanded?: boolean
   turnKey?: string
   /** The chat may rewind to this row, by desktop's `nativeChatRowOffersRewind`. */
@@ -189,6 +191,8 @@ function MobileNativeChatMessageImpl({
       startedAt={turnStatus.startedAt}
       workedSeconds={turnStatus.workedSeconds}
       verdict={turnStatus.verdict}
+      live={turnStatusLive}
+      style={styles.turnStatus}
       expanded={turnExpanded ?? false}
       onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
     />

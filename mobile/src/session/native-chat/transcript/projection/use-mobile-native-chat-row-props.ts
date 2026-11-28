@@ -14,6 +14,8 @@ export type MobileNativeChatTurnRow = {
   turnDiff?: NativeChatTurnDiff
   turnStatus: NativeChatTurnStatus | null
   turnStatusAbove?: boolean
+  /** The live turn's bar stands in for a bare "Working…" line under it, which is not drawn. */
+  turnStatusLive?: true
   turnExpanded: boolean
   turnKey?: string
   /** The row is the user message its turn starts from, whether or not the turn folds. */
