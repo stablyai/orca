@@ -145,14 +145,28 @@ it.each(['pick', 'box'] as const)(
   }
 )
 
-it("waits for a reopened line's new answer before posting on the last open line", () => {
-  const words = 'only the internal ones'
-  const { hook, posted } = reopenedDraft('reopen-then-last', words)
-  act(() => hook.result.current.steps!.pick(2, 'Yes'))
-  expect(posted).toEqual([])
-  enter(hook, words)
-  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → ${words}\n${GO} → No\n${PLAN} → Yes`])
-})
+it.each(['folded', 'remounted'] as const)(
+  "waits for a reopened line's new answer before posting on the last open line (%s)",
+  (how) => {
+    const uid = `reopen-then-last-${how}`
+    const words = 'only the internal ones'
+    let run = reopenedDraft(uid, words)
+    if (how === 'remounted') {
+      run.hook.unmount()
+      run = steps(uid)
+    } else {
+      // Another line reopened and folded by its own pick: the draft keeps its line.
+      act(() => run.hook.result.current.steps!.reopen(1))
+      act(() => run.hook.result.current.steps!.pick(1, 'No'))
+    }
+    act(() => run.hook.result.current.steps!.pick(2, 'Yes'))
+    expect(run.posted).toEqual([])
+    enter(run.hook, words)
+    expect(run.posted.map(({ text }) => text)).toEqual([
+      `${HOSTS} → ${words}\n${GO} → No\n${PLAN} → Yes`
+    ])
+  }
+)
 
 it('swaps a pick for another, and keeps it when picked again', () => {
   const { hook, posted } = steps('swap')

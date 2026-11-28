@@ -203,11 +203,14 @@ export function useBotItemQuestionSteps(
   ): void =>
     send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers, rideAlongText })
   // Held until the last open line has an answer: then every answer goes, the held copy kept to recover.
-  // A line reopened to change waits for its new answer.
+  // A line reopened, or with words started in the box, waits for its new answer.
   const holdOrSend = (index: number, answer: BotItemHeldAnswer): void => {
     hold(stored(index, answer))
     const next = picks.map((pick, at) => (at === index ? answer : pick))
-    if (lines.every((at) => next[at] && (at !== reopened || at === index))) {
+    const drafting = boxEmpty || target.hidden ? null : target.line?.id
+    const settled = (at: number): boolean =>
+      at === index || (at !== reopened && drafting !== `${askId}:${at}`)
+    if (lines.every((at) => next[at] && settled(at))) {
       post(botItemHeldAnswersComment(shape, next))
     }
   }
