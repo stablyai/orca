@@ -5,7 +5,7 @@ import {
   type ParsedRrule,
   type ParsedSchedule
 } from './automation-schedule-parsing'
-import { cronDateMatches, cronMatches, floorToMinute } from './automation-cron-occurrence'
+import { cronDateMatches, cronWallDateMatches, floorToMinute } from './automation-cron-occurrence'
 import { automationScheduleCalendar, type ScheduleCalendar } from './automation-schedule-calendar'
 
 const MINUTE_MS = 60 * 1000
@@ -112,6 +112,41 @@ function latestMatchingMinute(
   return null
 }
 
+function matchingCronMinute(
+  rule: ParsedCron,
+  calendar: ScheduleCalendar,
+  first: number,
+  dtstart: number,
+  direction: 1 | -1
+): number | null {
+  const end = first + direction * CRON_SCAN_MINUTES * MINUTE_MS
+  let candidate = first
+  while ((candidate - end) * direction < 0 && candidate >= dtstart) {
+    const wall = calendar.fields(candidate)
+    if (cronWallDateMatches(rule, wall)) {
+      if (rule.hours.has(wall.hour) && rule.minutes.has(wall.minute)) {
+        return candidate
+      }
+      candidate += direction * MINUTE_MS
+      continue
+    }
+    // A midnight rollback can put the previous date inside this day's absolute interval.
+    // Visit transition days and repeated date fragments minute by minute, as matching dates do.
+    const day = calendar.startOfDay(candidate)
+    const nextDay = calendar.addDays(day, 1)
+    if (nextDay - day !== DAY_MS || candidate < day || candidate >= nextDay) {
+      candidate += direction * MINUTE_MS
+      continue
+    }
+    const next = direction === 1 ? nextDay : day - MINUTE_MS
+    candidate =
+      direction === 1
+        ? Math.max(candidate + MINUTE_MS, next)
+        : Math.min(candidate - MINUTE_MS, next)
+  }
+  return null
+}
+
 export function buildAutomationRrule(args: {
   preset: Exclude<AutomationSchedulePreset, 'custom'>
   hour: number
@@ -164,7 +199,15 @@ export function nextAutomationOccurrenceAfter(
   const rule = parseSchedule(rrule)
   const calendar = automationScheduleCalendar(timezone)
   if (rule.kind === 'cron' && !rule.fixedTime) {
-    return nextMatchingMinute(dtstart, after, (candidate) => cronMatches(rule, candidate, calendar))
+    let first = floorToMinute(Math.max(dtstart, after))
+    if (first <= after || first < dtstart) {
+      first += MINUTE_MS
+    }
+    const candidate = matchingCronMinute(rule, calendar, first, dtstart, 1)
+    if (candidate === null) {
+      throw new Error('Unable to compute next automation run.')
+    }
+    return candidate
   }
   if (rule.kind === 'rrule' && rule.freq === 'HOURLY') {
     return nextMatchingMinute(dtstart, after, (candidate) =>
@@ -196,7 +239,7 @@ export function latestAutomationOccurrenceAtOrBefore(
   const rule = parseSchedule(rrule)
   const calendar = automationScheduleCalendar(timezone)
   if (rule.kind === 'cron' && !rule.fixedTime) {
-    return latestMatchingMinute(dtstart, now, (candidate) => cronMatches(rule, candidate, calendar))
+    return matchingCronMinute(rule, calendar, floorToMinute(now), dtstart, -1)
   }
   if (rule.kind === 'rrule' && rule.freq === 'HOURLY') {
     return latestMatchingMinute(dtstart, now, (candidate) =>
