@@ -10,6 +10,7 @@ import { useTranslate } from '@/i18n/use-translate'
 export type QueuedEditAttachTarget = {
   terminalTabId: string
   agent?: AgentType
+  isVisible?: boolean
   transport: NativeChatStructuredComposerTransport
 }
 
@@ -83,6 +84,7 @@ export function NativeChatQueuedMessageComposer({
           ref={composer}
           terminalTabId={attachTo.terminalTabId}
           agent={attachTo.agent ?? 'codex'}
+          isVisible={attachTo.isVisible}
           paneKey={editor.draftScopeKey}
           draftScopeKey={editor.draftScopeKey}
           targetPtyId={null}

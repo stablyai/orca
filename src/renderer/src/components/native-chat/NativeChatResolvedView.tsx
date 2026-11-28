@@ -343,6 +343,7 @@ export function NativeChatResolvedView({
           <NativeChatComposer
             ref={shownPromptCard ? undefined : composerRef}
             inputOwnedByCard={shownPromptCard !== null}
+            isVisible={isVisible}
             terminalTabId={terminalTabId}
             paneKey={paneKey}
             targetPtyId={targetPtyId}

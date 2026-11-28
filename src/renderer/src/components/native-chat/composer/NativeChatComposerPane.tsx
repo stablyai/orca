@@ -17,6 +17,7 @@ import { useNativeChatComposerAttachments } from '../attachments/chips/use-nativ
 import { nativeChatComposerSendState } from './submit/native-chat-composer-send-state'
 import { useNativeChatSteerChordPreview } from './controls/use-native-chat-steer-chord-preview'
 import { useNativeChatComposerHandle } from './editor/use-native-chat-composer-handle'
+import { nativeChatComposerTargetKey } from './submit/native-chat-composer-target'
 import { useNativeChatFileDrops } from '../attachments/intake/use-native-chat-file-drops'
 import { useNativeChatComposerKeyDown } from './editor/use-native-chat-composer-keydown'
 import { useNativeChatSendLifecycle } from '../session/terminal/send/use-native-chat-send-lifecycle'
@@ -47,6 +48,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       targetPtyId,
       agent,
       canSend = true,
+      isVisible = true,
       unavailableHint,
       isWorking = false,
       isStopping = false,
@@ -173,22 +175,18 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const localHandle = useRef<C.NativeChatComposerHandle>(null)
     const root = useRef<HTMLDivElement>(null)
-    const handlePasteEvent = useNativeChatComposerHandle(localHandle, {
+    const { handlePasteEvent, addressPreviews } = useNativeChatComposerHandle(localHandle, {
       resend: (text, imagePaths) => !structuredTransport && sendPty({ text, imagePaths }),
       attachmentScopeKey: draftScopeKey,
       textareaRef,
+      draft,
       isComposing: imeEnterGesture.isComposing,
       caret,
       setDraft,
       setCaret,
+      addressPreviewsEnabled: isVisible && !inputOwnedByCard,
       setActiveSuggestion,
-      targetKey: JSON.stringify([
-        paneKey,
-        targetPtyId,
-        structuredTransport?.sessionId,
-        structuredTransport?.worktreeId,
-        structuredTransport?.runtimeEnvironmentId
-      ]),
+      targetKey: nativeChatComposerTargetKey(paneKey, targetPtyId, structuredTransport),
       agent,
       disabled,
       resolveAttachmentOwner: fileDrops.resolveAttachmentOwner,
@@ -379,6 +377,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
             activeSuggestion={mentions.activeIndex ?? activeSuggestion}
             notices={mentions.notices}
             imageAttachments={imageAttachments}
+            addressPreviews={addressPreviews}
             numberImages={Boolean(structuredTransport)}
             attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
             {...sendButton}

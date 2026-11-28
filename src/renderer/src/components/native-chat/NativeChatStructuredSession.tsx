@@ -84,6 +84,7 @@ import {
 } from './worker-approvals/NativeChatWorkerApprovals'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
+  const { tabId: terminalTabId, agent, isVisible } = props
   const { ownerWorktreeId, turnBot, bot: chatBot } = useBotChatOwner(props)
   const slackMirror = useNativeChatSlackMirror(chatBot, props.sessionId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
@@ -371,7 +372,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   statedFailures={startFailures}
                   steerHeld={bot.stopControls.stopping || hostHeld}
                   focusComposer={focusComposer}
-                  editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
+                  editAttachTo={{ terminalTabId, agent, isVisible, transport }}
                 />
                 {botServerDown && hostOutage ? (
                   <BotServerOutageCard key={hostOutage.environmentId} outage={hostOutage} />
@@ -386,11 +387,10 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 {composerShown ? (
                   <NativeChatComposer
                     ref={composerRef}
-                    terminalTabId={props.tabId}
+                    {...{ isVisible, terminalTabId, agent }}
                     paneKey={paneKey}
                     draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
                     targetPtyId={null}
-                    agent={props.agent}
                     {...bot.stopControls.composer}
                     unavailableHint={install.unavailableHint}
                     steerHead={
