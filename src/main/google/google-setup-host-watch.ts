@@ -6,10 +6,6 @@ import { setPageTextWithheld } from '../browser/agent-browser/agent-browser-with
 import type { StandingDownloadClaimResolver } from '../browser/guest-lifecycle/manager/downloads/browser-manager-download-creation'
 import { setClientDownloadClaimant } from '../runtime/browser/downloads/client-download-claims'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import {
-  answerGoogleSetupCard,
-  recordGoogleSetupKeyMissed
-} from '../runtime/rpc/methods/bots-google-setup'
 import { getGoogleConnect } from './google-connect'
 import {
   googleSetupClientDownloadClaimant,
@@ -47,9 +43,15 @@ export function installGoogleSetupHostWatch(
       }
       await connect.importClient(text)
     },
-    keyArrived: (botId) =>
-      answerGoogleSetupCard(runtime, botId, 'owner', 'step', ['done', 'client']),
-    keyRefused: (botId, reason) => recordGoogleSetupKeyMissed(runtime, botId, reason)
+    keyArrived: async (botId) => {
+      const { answerGoogleSetupCard } = await import('../runtime/rpc/methods/bots-google-setup')
+      return answerGoogleSetupCard(runtime, botId, 'owner', 'step', ['done', 'client'])
+    },
+    keyRefused: async (botId, reason) => {
+      const { recordGoogleSetupKeyMissed } =
+        await import('../runtime/rpc/methods/bots-google-setup')
+      return recordGoogleSetupKeyMissed(runtime, botId, reason)
+    }
   }
   browser?.setStandingDownloadClaim(
     googleSetupKeyDownloadClaim(deps, {
