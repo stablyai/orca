@@ -166,7 +166,11 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
 
   it('finds an ask the coordinator mail trigger stored as run:<id>', async () => {
     const asked = await mail.sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff', body: 'b' })
-    const run = mail.db.createRun({ objective: 'Docs chat run', coordinatorHandle: 'term_docs' })
+    const run = mail.db.createRun({
+      objective: 'Docs chat run',
+      coordinatorHandle: 'term_docs',
+      coordinatorPaneKey: null
+    })
     mail.db.rememberRunCoordinatorHandle(run.id, `orca_session_id:${DOCS_CHAT}`)
     mail.db.db
       .prepare('UPDATE messages SET to_handle = ?, run_id = ? WHERE id = ?')
