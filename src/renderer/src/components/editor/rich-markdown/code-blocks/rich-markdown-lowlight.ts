@@ -207,6 +207,15 @@ export const RichMarkdownCodeBlockLowlight = CodeBlock.extend<CodeBlockLowlightO
   addOptions() {
     return { ...CodeBlockLowlight.options }
   },
+  addKeyboardShortcuts() {
+    // TipTap's code block claims Mod-Alt-c. That chord belongs to Orca keybindings.
+    const addBaseShortcuts = getExtensionField<
+      NonNullable<typeof CodeBlock.config.addKeyboardShortcuts>
+    >(CodeBlock, 'addKeyboardShortcuts', this)
+    const shortcuts = { ...(addBaseShortcuts?.() ?? {}) }
+    delete shortcuts['Mod-Alt-c']
+    return shortcuts
+  },
   addProseMirrorPlugins() {
     // Why: Tiptap copies this method into child configs, so this.parent() would re-enter it and install a second plugin.
     const basePlugins = getExtensionField<
