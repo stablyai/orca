@@ -137,6 +137,8 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     const text = await answer
     expect(text).toContain('503 Service Unavailable')
     expect(text).toContain('Retry-After: 5')
+    // A JSON-RPC body here would name no id, and an MCP client would wait out its own timeout.
+    expect(text).toContain('Content-Type: text/plain')
     expect(text).toContain('Orca is restarting')
     expect(front.heldCount).toBe(0)
   })

@@ -26,20 +26,20 @@ const ANSWER_LINGER_MS = 5_000
 const RESTARTING_MESSAGE =
   'Orca is restarting, so this tool is briefly unavailable. Your session is still running. Wait a few seconds and try the tool again.'
 
-/** The 503 every answer from the front carries; the daemon never reads the request, so no id. */
-export function toolRelayRestartingAnswer(
-  message = RESTARTING_MESSAGE,
-  id: unknown = null
-): string {
-  const body = JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32000, message } })
+/**
+ * The 503 every answer from the front carries. Plain text: the daemon never reads the request, so
+ * a JSON-RPC error could name no id, and an MCP client drops an id-less error and waits out its own
+ * timeout; a non-JSON error fails the call at once with this text.
+ */
+function toolRelayRestartingAnswer(): string {
   return [
     'HTTP/1.1 503 Service Unavailable',
-    'Content-Type: application/json',
+    'Content-Type: text/plain; charset=utf-8',
     'Retry-After: 5',
-    `Content-Length: ${Buffer.byteLength(body)}`,
+    `Content-Length: ${Buffer.byteLength(RESTARTING_MESSAGE)}`,
     'Connection: close',
     '',
-    body
+    RESTARTING_MESSAGE
   ].join('\r\n')
 }
 
