@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
-import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, posix, relative, resolve, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
@@ -31,6 +31,7 @@ import {
   readBrowserExtensionContentScript,
   readBrowserExtensionWorkerShim
 } from '../api-runtime/browser-extension-worker-shim-source'
+import { copyPath } from '../../../../shared/copy-path'
 
 /**
  * Orca loads every extension from a folder it owns, so it can add its worker's shim loading, API shim
@@ -246,7 +247,7 @@ async function prepare(
     : extension.path
   if (unpacked) {
     await rm(directory, { recursive: true, force: true, maxRetries: 3 })
-    await cp(extension.path, directory, {
+    await copyPath(extension.path, directory, {
       recursive: true,
       dereference: true,
       filter: (source) => basename(source) !== '.git'
