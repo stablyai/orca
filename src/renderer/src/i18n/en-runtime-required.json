@@ -158,9 +158,19 @@
         }
       },
       "artifacts": {
+        "ArtifactListSelectionBar": {
+          "selected_one": "{{count}} selected",
+          "selected_other": "{{count}} selected"
+        },
         "ArtifactListTableHeader": {
           "name": "Name",
           "size": "Size"
+        },
+        "ArtifactsPage": {
+          "deleteBatchStopped_one": "Could not delete “{{name}}”. {{count}} more was not deleted.",
+          "deleteBatchStopped_other": "Could not delete “{{name}}”. {{count}} more were not deleted.",
+          "deleteManyDescription_one": "{{count}} artifact will no longer be available at its public link.",
+          "deleteManyDescription_other": "{{count}} artifacts will no longer be available at their public links."
         }
       },
       "automations": {

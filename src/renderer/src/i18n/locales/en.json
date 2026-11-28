@@ -20523,8 +20523,11 @@
           "signInAgainAction": "Sign in again",
           "unconfiguredCopy": "Orca account sign-in is not configured on this machine yet.",
           "openAccountSettings": "Open account settings",
-          "deleteManyDescription": "{{count}} artifacts will no longer be available at their public links.",
-          "deleteManyFailed": "Could not delete {{count}} artifacts."
+          "deleteManyDescription_one": "{{count}} artifact will no longer be available at its public link.",
+          "deleteManyDescription_other": "{{count}} artifacts will no longer be available at their public links.",
+          "deleteNamedFailed": "Could not delete “{{name}}”.",
+          "deleteBatchStopped_one": "Could not delete “{{name}}”. {{count}} more was not deleted.",
+          "deleteBatchStopped_other": "Could not delete “{{name}}”. {{count}} more were not deleted."
         },
         "copySuccess": "Artifact link copied",
         "copyFailed": "Could not copy artifact link",
@@ -20618,16 +20621,16 @@
           "pastMonth": "Past 30 days",
           "anyExpiry": "Any",
           "withinWeek": "Within 7 days",
-          "expired": "Expired",
-          "clear": "Clear"
+          "expired": "Expired"
         },
         "ArtifactListRow": {
           "select": "Select {{name}}"
         },
         "ArtifactListSelectionBar": {
-          "selected": "{{count}} selected",
           "delete": "Delete",
-          "clear": "Clear"
+          "clear": "Clear",
+          "selected_one": "{{count}} selected",
+          "selected_other": "{{count}} selected"
         }
       },
       "BrowserCookieImportMachineNotice": {

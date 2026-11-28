@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -14,9 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { RailPageFilterButton } from '@/components/rail-page/RailPageToolbar'
 import { RailPageFilterPill } from '@/components/rail-page/RailPageFilterPill'
-import { RAIL_PAGE_HIDE_NARROW } from '@/components/rail-page/RailPageHeader'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import {
   countArtifactListFilters,
   EMPTY_ARTIFACT_LIST_FILTER,
@@ -111,10 +108,7 @@ export function ArtifactListFilterMenu({
                 onCheckedChange={() => toggleType(option.type)}
                 onSelect={(event) => event.preventDefault()}
               >
-                <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                  {option.count}
-                </span>
+                {option.label} <span className="text-muted-foreground">{option.count}</span>
               </DropdownMenuCheckboxItem>
             ))}
           </DropdownMenuSubContent>
@@ -172,7 +166,7 @@ export function ArtifactListFilterMenu({
   )
 }
 
-/** Active filters after the Filter button; hidden when narrow, where the button's count stands in. */
+/** Active filters in the notice band under the toolbar, like the other rail-page filters. */
 export function ArtifactListFilterPills({
   filter,
   typeOptions,
@@ -192,7 +186,7 @@ export function ArtifactListFilterPills({
   const updatedValue = updatedOptions(t).find((option) => option.value === filter.updated)?.label
   const expiresValue = expiresOptions(t).find((option) => option.value === filter.expires)?.label
   return (
-    <div className={cn('flex min-w-0 items-center gap-1.5', RAIL_PAGE_HIDE_NARROW)}>
+    <div className="flex flex-wrap items-center gap-1.5">
       {filter.types.length > 0 ? (
         <RailPageFilterPill
           label={typeLabel(t)}
@@ -214,14 +208,6 @@ export function ArtifactListFilterPills({
           onClear={() => onChange({ ...filter, expires: 'any' })}
         />
       ) : null}
-      <Button
-        type="button"
-        variant="ghost-muted"
-        size="toolbar"
-        onClick={() => onChange(EMPTY_ARTIFACT_LIST_FILTER)}
-      >
-        {t('auto.components.artifacts.ArtifactListFilterMenu.clear', 'Clear')}
-      </Button>
     </div>
   )
 }

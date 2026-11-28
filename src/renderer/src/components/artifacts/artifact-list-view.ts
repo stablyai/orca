@@ -34,15 +34,21 @@ export function countArtifactListFilters(filter: ArtifactListFilter): number {
   )
 }
 
-/** asc → desc → off (the order the list was loaded in); a new column starts at asc. */
+/** asc → desc → off, where off is the default order (Updated, newest first). On the Updated column
+ * itself off would change nothing, so it flips between desc and asc instead. */
 export function nextArtifactListSort(
-  current: ArtifactListSort | null,
+  current: ArtifactListSort,
   field: ArtifactListSortField
-): ArtifactListSort | null {
-  if (current?.field !== field) {
+): ArtifactListSort {
+  if (current.field !== field) {
     return { field, direction: 'asc' }
   }
-  return current.direction === 'asc' ? { field, direction: 'desc' } : null
+  if (current.direction === 'asc') {
+    return { field, direction: 'desc' }
+  }
+  return field === DEFAULT_ARTIFACT_LIST_SORT.field
+    ? { field, direction: 'asc' }
+    : DEFAULT_ARTIFACT_LIST_SORT
 }
 
 export type ArtifactTypeOption = { type: string; label: string; count: number }

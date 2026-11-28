@@ -2,11 +2,19 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { RailPageSortHeader } from '@/components/rail-page/RailPageSortHeader'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { ARTIFACTS_TABLE_GRID_CLASS } from './artifacts-table-layout'
+import {
+  ARTIFACTS_TABLE_GRID_CLASS,
+  ARTIFACTS_TABLE_WIDE_ONLY_CLASS
+} from './artifacts-table-layout'
 import { LIST_TABLE_HEADER_CLASS } from '@/lib/list-interaction/list-table-layout'
 import type { ArtifactListSort, ArtifactListSortField } from './artifact-list-view'
 
-const COLUMNS: readonly { field: ArtifactListSortField; key: string; fallback: string }[] = [
+const COLUMNS: readonly {
+  field: ArtifactListSortField
+  key: string
+  fallback: string
+  wideOnly?: boolean
+}[] = [
   {
     field: 'name',
     key: 'auto.components.artifacts.ArtifactListTableHeader.name',
@@ -15,12 +23,14 @@ const COLUMNS: readonly { field: ArtifactListSortField; key: string; fallback: s
   {
     field: 'type',
     key: 'auto.components.artifacts.ArtifactListTableHeader.type',
-    fallback: 'Type'
+    fallback: 'Type',
+    wideOnly: true
   },
   {
     field: 'size',
     key: 'auto.components.artifacts.ArtifactListTableHeader.size',
-    fallback: 'Size'
+    fallback: 'Size',
+    wideOnly: true
   },
   {
     field: 'updated',
@@ -30,7 +40,8 @@ const COLUMNS: readonly { field: ArtifactListSortField; key: string; fallback: s
   {
     field: 'expires',
     key: 'auto.components.artifacts.ArtifactListTableHeader.expires',
-    fallback: 'Expires'
+    fallback: 'Expires',
+    wideOnly: true
   }
 ]
 
@@ -84,7 +95,10 @@ export function ArtifactListTableHeader({
             {sortHeader}
           </span>
         ) : (
-          <span key={column.field} className="min-w-0">
+          <span
+            key={column.field}
+            className={cn('min-w-0', column.wideOnly && ARTIFACTS_TABLE_WIDE_ONLY_CLASS)}
+          >
             {sortHeader}
           </span>
         )

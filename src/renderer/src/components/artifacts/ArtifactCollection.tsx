@@ -21,7 +21,7 @@ import { ArtifactListSelectionBar } from './ArtifactListSelectionBar'
 import { ArtifactListTableHeader } from './ArtifactListTableHeader'
 import { ArtifactListSearchField } from './ArtifactListSearchField'
 import { useArtifactListSelection } from './use-artifact-list-selection'
-import { RailPageBody, RailPageScroll } from '@/components/rail-page/RailPage'
+import { RailPageBody, RailPageNotice, RailPageScroll } from '@/components/rail-page/RailPage'
 import { RailPageToolbar } from '@/components/rail-page/RailPageToolbar'
 import { RailPageSearch } from '@/components/rail-page/RailPageSearch'
 
@@ -60,7 +60,7 @@ export function ArtifactCollection({
   }>(() => ({ filter: EMPTY_ARTIFACT_LIST_FILTER, nowMs: Date.now() }))
   const setFilter = (next: ArtifactListFilter): void =>
     setFilterState({ filter: next, nowMs: Date.now() })
-  const [sort, setSort] = useState<ArtifactListSort | null>(DEFAULT_ARTIFACT_LIST_SORT)
+  const [sort, setSort] = useState<ArtifactListSort>(DEFAULT_ARTIFACT_LIST_SORT)
   const searchInputRef = useRef<HTMLInputElement>(null)
   // Clamp before state/filtering so multi-MB pastes cannot reach either.
   const onQueryChange = (next: string): void => setQuery(clampArtifactListSearchQuery(next))
@@ -104,29 +104,23 @@ export function ArtifactCollection({
     <>
       <RailPageToolbar
         start={
-          selecting ? (
-            <ArtifactListSelectionBar
-              count={checkedItems.length}
-              deleteDisabled={checkedItems.every(({ artifact }) =>
-                deletingSlugs.has(artifact.slug)
-              )}
-              onDelete={() => deleteArtifacts(checkedItems)}
-              onClear={selection.clear}
+          <div className="flex min-w-0 items-center gap-3">
+            <ArtifactListFilterMenu
+              filter={filter}
+              typeOptions={typeOptions}
+              onChange={setFilter}
             />
-          ) : (
-            <div className="flex min-w-0 items-center gap-1.5">
-              <ArtifactListFilterMenu
-                filter={filter}
-                typeOptions={typeOptions}
-                onChange={setFilter}
+            {selecting ? (
+              <ArtifactListSelectionBar
+                count={checkedItems.length}
+                deleteDisabled={checkedItems.every(({ artifact }) =>
+                  deletingSlugs.has(artifact.slug)
+                )}
+                onDelete={() => deleteArtifacts(checkedItems)}
+                onClear={selection.clear}
               />
-              <ArtifactListFilterPills
-                filter={filter}
-                typeOptions={typeOptions}
-                onChange={setFilter}
-              />
-            </div>
-          )
+            ) : null}
+          </div>
         }
         end={
           <RailPageSearch inputRef={searchInputRef} hasValue={query !== ''} focusTarget="page">
@@ -139,7 +133,21 @@ export function ArtifactCollection({
           </RailPageSearch>
         }
       />
+      {/* Mounted before any row is checked so the first count is announced, not just inserted. */}
+      <span className="sr-only" aria-live="polite">
+        {selecting
+          ? t('auto.components.artifacts.ArtifactListSelectionBar.selected', '{{count}} selected', {
+              count: checkedItems.length,
+              defaultValue_one: '{{count}} selected'
+            })
+          : ''}
+      </span>
       {notice}
+      {countArtifactListFilters(filter) > 0 ? (
+        <RailPageNotice>
+          <ArtifactListFilterPills filter={filter} typeOptions={typeOptions} onChange={setFilter} />
+        </RailPageNotice>
+      ) : null}
       <RailPageBody>
         {/* Not padded: rows pad from the page gutter so hairlines and sticky cells share the page edges. */}
         <RailPageScroll

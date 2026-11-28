@@ -82,33 +82,40 @@ export function useArtifactDeletion({
     if (items.length === 0) {
       return
     }
-    if (!settings?.skipDeleteArtifactConfirm) {
+    const bulk = items.length > 1
+    // Why: "Don't ask again" was given for one artifact at a time; it never waives a bulk confirm.
+    if (bulk || !settings?.skipDeleteArtifactConfirm) {
       const accepted = await confirm({
         title: t('common.delete', 'Delete'),
-        description:
-          items.length === 1
-            ? t(
-                'auto.components.artifacts.ArtifactsPage.deleteDescription',
-                '“{{name}}” will no longer be available at its public link.',
-                { name: artifactName(items[0]) }
-              )
-            : t(
-                'auto.components.artifacts.ArtifactsPage.deleteManyDescription',
-                '{{count}} artifacts will no longer be available at their public links.',
-                { count: items.length }
-              ),
+        description: bulk
+          ? t(
+              'auto.components.artifacts.ArtifactsPage.deleteManyDescription',
+              '{{count}} artifacts will no longer be available at their public links.',
+              {
+                count: items.length,
+                defaultValue_one:
+                  '{{count}} artifact will no longer be available at its public link.'
+              }
+            )
+          : t(
+              'auto.components.artifacts.ArtifactsPage.deleteDescription',
+              '“{{name}}” will no longer be available at its public link.',
+              { name: artifactName(items[0]) }
+            ),
         confirmLabel: t('auto.components.artifacts.ArtifactsPage.delete', 'Delete'),
         confirmVariant: 'destructive',
-        dontAskAgain: {
-          onConfirmed: () =>
-            persistConfirmationSkipPreference({
-              updates: { skipDeleteArtifactConfirm: true },
-              settingsSectionId: 'general-skip-delete-artifact-confirm',
-              updateSettings,
-              openSettingsPage,
-              openSettingsTarget
-            })
-        }
+        dontAskAgain: bulk
+          ? undefined
+          : {
+              onConfirmed: () =>
+                persistConfirmationSkipPreference({
+                  updates: { skipDeleteArtifactConfirm: true },
+                  settingsSectionId: 'general-skip-delete-artifact-confirm',
+                  updateSettings,
+                  openSettingsPage,
+                  openSettingsTarget
+                })
+            }
       })
       if (!accepted) {
         return
@@ -130,10 +137,10 @@ export function useArtifactDeletion({
       }
       return { identity: requestedIdentity, slugs }
     })
-    let failedCount = 0
+    let failed: { item: ArtifactListItem; untried: number } | null = null
     for (const [index, item] of items.entries()) {
       const slug = item.artifact.slug
-      if (failedCount > 0 || !requestedAccountIsCurrent()) {
+      if (failed || !requestedAccountIsCurrent()) {
         setDeleting((current) => withoutSlug(current, requestedIdentity, slug))
         continue
       }
@@ -141,22 +148,33 @@ export function useArtifactDeletion({
       if (outcome === 'deleted') {
         removeArtifact(requestedIdentity, slug)
       } else if (outcome === 'failed') {
-        failedCount = items.length - index
+        failed = { item, untried: items.length - index - 1 }
       }
       setDeleting((current) => withoutSlug(current, requestedIdentity, slug))
     }
-    if (failedCount > 0 && requestedAccountIsCurrent()) {
+    if (failed && requestedAccountIsCurrent()) {
+      // The failed row and any rows after it stay listed and checked, so the batch can be retried.
       setError(
-        failedCount === 1
+        !bulk
           ? t(
               'auto.components.artifacts.ArtifactsPage.deleteFailed',
               'Could not delete the artifact.'
             )
-          : t(
-              'auto.components.artifacts.ArtifactsPage.deleteManyFailed',
-              'Could not delete {{count}} artifacts.',
-              { count: failedCount }
-            )
+          : failed.untried === 0
+            ? t(
+                'auto.components.artifacts.ArtifactsPage.deleteNamedFailed',
+                'Could not delete “{{name}}”.',
+                { name: artifactName(failed.item) }
+              )
+            : t(
+                'auto.components.artifacts.ArtifactsPage.deleteBatchStopped',
+                'Could not delete “{{name}}”. {{count}} more were not deleted.',
+                {
+                  name: artifactName(failed.item),
+                  count: failed.untried,
+                  defaultValue_one: 'Could not delete “{{name}}”. {{count}} more was not deleted.'
+                }
+              )
       )
     }
   }

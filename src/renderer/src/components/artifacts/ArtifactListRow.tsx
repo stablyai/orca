@@ -42,7 +42,10 @@ import {
   formatByteSize
 } from './artifact-display-labels'
 import { copyArtifactLink, openArtifactInBrowser } from './artifact-link-actions'
-import { ARTIFACTS_TABLE_GRID_CLASS } from './artifacts-table-layout'
+import {
+  ARTIFACTS_TABLE_GRID_CLASS,
+  ARTIFACTS_TABLE_WIDE_ONLY_CLASS
+} from './artifacts-table-layout'
 import {
   LIST_TABLE_ROW_CLASS,
   LIST_TABLE_ROW_DIVIDER_CLASS,
@@ -205,16 +208,34 @@ export function ArtifactListRow({
               {name}
             </span>
           </div>
-          <span className="min-w-0 truncate text-muted-foreground" title={typeLabel}>
+          <span
+            className={cn(
+              'min-w-0 truncate text-muted-foreground',
+              ARTIFACTS_TABLE_WIDE_ONLY_CLASS
+            )}
+            title={typeLabel}
+          >
             {typeLabel}
           </span>
-          <span className="min-w-0 truncate text-muted-foreground" title={sizeLabel}>
+          <span
+            className={cn(
+              'min-w-0 truncate text-muted-foreground',
+              ARTIFACTS_TABLE_WIDE_ONLY_CLASS
+            )}
+            title={sizeLabel}
+          >
             {sizeLabel}
           </span>
           <span className="min-w-0 truncate text-muted-foreground" title={updatedLabel}>
             {updatedLabel}
           </span>
-          <span className="min-w-0 truncate text-muted-foreground" title={expiryLabel}>
+          <span
+            className={cn(
+              'min-w-0 truncate text-muted-foreground',
+              ARTIFACTS_TABLE_WIDE_ONLY_CLASS
+            )}
+            title={expiryLabel}
+          >
             {expiryLabel}
           </span>
           <DropdownMenu>

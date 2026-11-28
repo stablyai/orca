@@ -17,9 +17,10 @@ export function ArtifactListSelectionBar({
   const t = useTranslate()
   return (
     <div className="flex min-w-0 items-center gap-1.5">
-      <span className="me-1 shrink-0 text-xs font-medium tabular-nums" aria-live="polite">
+      <span className="me-1 shrink-0 text-xs font-medium tabular-nums">
         {t('auto.components.artifacts.ArtifactListSelectionBar.selected', '{{count}} selected', {
-          count
+          count,
+          defaultValue_one: '{{count}} selected'
         })}
       </span>
       <Button
