@@ -2,7 +2,7 @@
 // read; conversation text comes from the host's session search index when the owner turned it on.
 import type { BotChatTreeChat, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
 import { orderBotChats } from '../../shared/bots/bot-chat-tree'
-import { botChatTreeForViewer } from './bot-chat-tree-viewer'
+import { botChatTreeForViewer, viewerChatId, type BotChatTreeViewer } from './bot-chat-tree-viewer'
 import {
   botChatTreeDispatchWorker,
   type BotChatTreePlaced
@@ -77,17 +77,20 @@ type BotChatSearchIndex = {
   rootOf: (sessionId: string) => string
 }
 
-const indexes = new WeakMap<BotChatTreeParts, BotChatSearchIndex>()
+const indexes = new WeakMap<BotChatTreeParts, Map<string, BotChatSearchIndex>>()
 
-/** What a search matches against, built once per tree read so a typing burst's searches share it.
- *  The tree as its owner reads it (search is owner-only), so a teammate's Home is theirs by name. */
-function searchIndexOf(parts: BotChatTreeParts, bot: Pick<Bot, 'shares'>): BotChatSearchIndex {
-  const kept = indexes.get(parts)
+/** What a search matches against, built once per tree read and viewer so a typing burst's searches
+ *  share it. The tree as its reader reads it: their own Home is "Home", anyone else's by name. */
+function searchIndexOf(parts: BotChatTreeParts, viewer: BotChatTreeViewer): BotChatSearchIndex {
+  const viewerKey = viewer.person === 'owner' ? 'owner' : `account:${viewer.person.accountId}`
+  const byViewer = indexes.get(parts) ?? new Map<string, BotChatSearchIndex>()
+  indexes.set(parts, byViewer)
+  const kept = byViewer.get(viewerKey)
   if (kept) {
     return kept
   }
   const { placed, rootOf } = parts
-  const tree = botChatTreeForViewer(parts.tree, { kind: 'owner', bot }, { page: false })
+  const tree = botChatTreeForViewer(parts.tree, viewer, { page: false })
   const chats = orderBotChats(tree.chats)
   const shown = new Map(
     chats.flatMap((chat) => [...chat.running, ...chat.finished].map((w) => [w.key, w] as const))
@@ -96,7 +99,7 @@ function searchIndexOf(parts: BotChatTreeParts, bot: Pick<Bot, 'shares'>): BotCh
   const workers = [
     ...placed.map((entry) => ({
       key: `worker:${entry.dispatch.id}`,
-      chatId: entry.chatId,
+      chatId: viewerChatId(entry.chatId, viewer.person),
       title: entry.dispatch.title ?? shown.get(`worker:${entry.dispatch.id}`)?.title ?? ''
     })),
     ...chats.flatMap((chat) =>
@@ -113,13 +116,14 @@ function searchIndexOf(parts: BotChatTreeParts, bot: Pick<Bot, 'shares'>): BotCh
     placedByKey: new Map(placed.map((entry) => [`worker:${entry.dispatch.id}`, entry])),
     rootOf
   }
-  indexes.set(parts, index)
+  byViewer.set(viewerKey, index)
   return index
 }
 
 export async function searchBotChats(
   host: Pick<BotChatSearchHost, 'bots' | 'treeParts' | 'contentMatches' | 'dispatchWorkers'>,
-  params: BotChatSearchParams
+  params: BotChatSearchParams,
+  viewer: Omit<BotChatTreeViewer, 'bot'> = { person: 'owner' }
 ): Promise<BotChatSearchResult> {
   const bot = host.bots().find((entry) => entry.id === params.botId)
   if (!bot) {
@@ -129,7 +133,10 @@ export async function searchBotChats(
     host.treeParts(bot.id),
     host.contentMatches(bot, params.query).catch(() => [])
   ])
-  const { chats, byId, shown, workers, placedByKey, rootOf } = searchIndexOf(parts, bot)
+  const { chats, byId, shown, workers, placedByKey, rootOf } = searchIndexOf(parts, {
+    ...viewer,
+    bot
+  })
   const { matches, more } = matchBotChats(chats, workers, params.query, {
     limit: params.limit ?? BOT_CHAT_SEARCH_LIMIT,
     contentChatIds: new Set(content.map(rootOf))

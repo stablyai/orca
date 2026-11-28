@@ -20,6 +20,8 @@ import {
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
 import { countUnreadWorkspaces } from './metadata/unread-workspace-count'
+import { ownsHostReadMarks } from '../../bots/team-share/teammate-rules'
+import type { RpcCallerScope } from '../rpc/callers/rpc-caller-scope'
 
 function writesWorkspaceRecords(domains: readonly string[] | undefined): boolean {
   return domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))
@@ -93,9 +95,10 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
     })
   }
 
+  /** A teammate's write leaves the owner's unread mark (rule 6). */
   async updateManagedWorktreeMeta(
     worktreeSelector: string,
-    updates: Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
+    requested: Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
       pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
@@ -104,11 +107,13 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
         crossStoreParentIsBotHome?: true
         noParent?: boolean
       }
-    }
+    },
+    writer: RpcCallerScope | undefined
   ) {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+    const updates = ownsHostReadMarks(writer) ? requested : { ...requested, isUnread: undefined }
     // A folder workspace's only lineage is its workspace link; other fields stay git-only as before.
     const { lineage, ...rest } = updates
     const folder =

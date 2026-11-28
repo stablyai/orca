@@ -3,7 +3,8 @@ import { readCreatedWorkspaceLaunch } from '../../../../agent-launch/agent-launc
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { defineMethod, defineStreamingMethod } from '../../core'
-import { WorktreeTabSelector } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
+import { SessionTabListRead } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
+import { unreadVerdictClient } from '../../../../bots/team-share/teammate-rules'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,
@@ -34,23 +35,32 @@ export const SESSION_TAB_METHODS = [
     name: 'session.tabs.list',
     permission: 'workspace',
     share: 'not-shared',
-    params: WorktreeTabSelector,
-    handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
+    params: SessionTabListRead,
+    handler: async (
+      params,
+      { runtime, pairedDeviceId, clientKind, clientCapabilities, callerScope }
+    ) => {
       await prepareStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
+      const includeAgentSenders = clientKind !== 'mobile'
+      // A watched list (another person's) is read as it is: no device's pick, no page observation.
+      const raw = params.person
+        ? (
+            await runtime.listViewedSessionTabs(params.worktree, params.person, {
+              includeAgentSenders
+            })
+          ).frame
+        : await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
+            includeInitialSurfaceLaunch: true,
+            includeAgentSenders
+          })
       const result = projectSessionTabUnreadForClient(
         runtime,
-        projectSessionTabsForClient(
-          await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
-            includeInitialSurfaceLaunch: true,
-            includeAgentSenders: clientKind !== 'mobile'
-          }),
-          clientKind,
-          clientCapabilities,
-          runtime
-        ),
-        clientKind
+        projectSessionTabsForClient(raw, clientKind, clientCapabilities, runtime),
+        unreadVerdictClient(callerScope, clientKind, params.person !== undefined)
       )
-      runtime.observeClientHostedPageSnapshots?.([result], pairedDeviceId)
+      if (!params.person) {
+        runtime.observeClientHostedPageSnapshots?.([result], pairedDeviceId)
+      }
       return result
     }
   }),
@@ -72,7 +82,7 @@ export const SESSION_TAB_METHODS = [
     name: 'session.tabs.subscribe',
     permission: 'workspace',
     share: 'not-shared',
-    params: WorktreeTabSelector,
+    params: SessionTabListRead,
     handler: async (params, context, emit) => {
       const {
         runtime,
@@ -82,8 +92,14 @@ export const SESSION_TAB_METHODS = [
         clientKind,
         clientCapabilities,
         capabilitySource,
-        signal
+        signal,
+        callerScope
       } = context
+      // A watcher of another person's list: their frames as they are, with no device's pick laid
+      // over them, no phone-session hold and no page observation; watching writes nothing.
+      const watching = params.person
+      const navigationId = watching ? undefined : pairedDeviceId
+      const unreadClient = unreadVerdictClient(callerScope, clientKind, watching !== undefined)
       const observation = Symbol('session-tabs-stream')
       let subscriptionId: string | null = null
       let released = false
@@ -107,8 +123,8 @@ export const SESSION_TAB_METHODS = [
         subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
         // Switch point: a phone holding the workspace's session open is looking at it.
         const closePhoneSession =
-          ORCA_SIDEBAR_INPUTS_IS_MAIN && clientKind === 'mobile'
-            ? runtime.sidebarFacts?.readAndHoldPhoneSession(worktreeId)
+          ORCA_SIDEBAR_INPUTS_IS_MAIN && clientKind === 'mobile' && !watching
+            ? runtime.sidebarFacts?.readAndHoldPhoneSession(worktreeId, callerScope)
             : undefined
         runtime.registerSubscriptionCleanup(
           subscriptionId,
@@ -120,7 +136,7 @@ export const SESSION_TAB_METHODS = [
             closePhoneSession?.()
             signal?.removeEventListener('abort', release)
             stopListening()
-            runtime.forgetClientHostedPageObservation?.(pairedDeviceId, observation)
+            runtime.forgetClientHostedPageObservation?.(navigationId, observation)
             stopReprojecting()
             if (endOnRelease) {
               emit({ type: 'end' })
@@ -144,7 +160,7 @@ export const SESSION_TAB_METHODS = [
         projectSessionTabUnreadForClient(
           runtime,
           projectSessionTabsForClient(snapshot, clientKind, capabilities, runtime),
-          clientKind
+          unreadClient
         )
       let sentUnreadMarks = ''
       const emitSnapshot = (
@@ -155,7 +171,7 @@ export const SESSION_TAB_METHODS = [
           return
         }
         sentUnreadMarks = currentSnapshot
-          ? sessionTabUnreadMarks(runtime, currentSnapshot, clientKind)
+          ? sessionTabUnreadMarks(runtime, currentSnapshot, unreadClient)
           : ''
         const launch = readCreatedWorkspaceLaunch(runtime, projected.worktree)
         const launchAware = launch ? { ...projected, initialSurfaceLaunch: launch } : projected
@@ -165,7 +181,7 @@ export const SESSION_TAB_METHODS = [
             ? tabDelta.full(withProofDelta(launchAware))
             : tabDelta.update(withProofDelta(launchAware)))
         })
-        if (!released) {
+        if (!released && !watching) {
           runtime.observeClientHostedPageSnapshots?.([projected], pairedDeviceId, observation)
         }
       }
@@ -181,13 +197,13 @@ export const SESSION_TAB_METHODS = [
         }) ?? (() => {})
       // Verdicts move on every agent step; project and re-send only when this workspace's unread tabs change.
       const stopObservingVerdicts =
-        clientKind === 'mobile'
+        unreadClient === 'mobile'
           ? runtime.onAgentListChanged((paneKeys) => {
               if (
                 !released &&
                 currentSnapshot &&
                 (paneKeys === null || sessionTabsShowAnyPane(currentSnapshot, paneKeys)) &&
-                sessionTabUnreadMarks(runtime, currentSnapshot, clientKind) !== sentUnreadMarks
+                sessionTabUnreadMarks(runtime, currentSnapshot, unreadClient) !== sentUnreadMarks
               ) {
                 emitSnapshot(project(currentSnapshot), 'updated')
               }
@@ -212,9 +228,15 @@ export const SESSION_TAB_METHODS = [
         if (released) {
           return
         }
-        const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
-          includeAgentSenders: clientKind !== 'mobile'
-        })
+        const includeAgentSenders = clientKind !== 'mobile'
+        const viewed = watching
+          ? await runtime.listViewedSessionTabs(params.worktree, watching, { includeAgentSenders })
+          : null
+        const initial =
+          viewed?.frame ??
+          (await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
+            includeAgentSenders
+          }))
         if (released) {
           return
         }
@@ -261,9 +283,9 @@ export const SESSION_TAB_METHODS = [
             currentSnapshot = retained
             emitSnapshot(project(streamSnapshot), 'updated')
           },
-          pairedDeviceId,
+          navigationId,
           clientKind,
-          { observation: 'caller', acceptsWorktree }
+          { observation: 'caller', acceptsWorktree, ...(viewed ? { list: viewed.list } : {}) }
         )
       } catch (error) {
         // A stream already ended by its release must not also report an error.

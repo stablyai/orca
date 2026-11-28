@@ -286,7 +286,7 @@ export function buildBotChatTree(input: {
   const byChat = refsByChat(input.placed, extras, home, input.workers)
   const listed = new Set(input.chats.map((chat) => chat.chatId))
   const facts = [
-    ...(listed.has(home) ? [] : [idleHomeRow(NO_HOME_CHAT_ID)]),
+    ...(listed.has(home) ? [] : [{ ...idleHomeRow(NO_HOME_CHAT_ID), whoseHome: 'owner' as const }]),
     ...input.chats,
     ...botChatHomePlaceholders(
       input.placed.map((entry) => entry.chatId),

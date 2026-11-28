@@ -9,7 +9,7 @@ import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { HostBotAgentChoices } from '../../runtime/rpc/methods/bots-agent-choices'
 import { botShareListedBots } from './bot-share-access'
-import { botShareChatFilter, botShareScopeOf, botShareSessionFilter } from './bot-share-chats'
+import { botShareChatIsTheirs, botShareReachesSession, botShareScopeOf } from './bot-share-chats'
 import type { BotTools } from '../../../shared/bot-tools'
 import type { BotActivityRead } from '../../../shared/bots/bot-activity-schema'
 import { readBotShareActivity } from './bot-share-activity'
@@ -40,7 +40,7 @@ export type BotShareScopedView = EveryScopedMethod<{
   }
   /** The agents the owner's + menu offers for a new chat; not those New bot offers. */
   'bots.agentChoices': (choices: HostBotAgentChoices) => Pick<HostBotAgentChoices, 'newChatAgents'>
-  /** By session id; one per stream, as it keeps the answers it has given. */
+  /** By session id: any chat of the shared agent. */
   'agentSession.subscribeStatus': (sessionId: string) => boolean
   /** The protocol and capabilities a teammate's Orca checks; nothing of the owner's computer. */
   'status.get': (status: RuntimeStatus) => RuntimeStatus
@@ -59,7 +59,7 @@ export type BotShareScopedView = EveryScopedMethod<{
 }>
 
 /** The owner as this host's Orca sign-in names them; null signed out. */
-function hostOwnerName(): string | null {
+export function hostOwnerName(): string | null {
   const account = getOrcaServerSignIn()?.status()
   return account?.state === 'signed-in' ? (account.displayName ?? account.email ?? null) : null
 }
@@ -83,11 +83,12 @@ export function botShareScopedView(
       })),
     'bots.chats.own': {
       botIds: [scope.botId],
-      owns: botShareChatFilter(runtime, scope),
+      owns: botShareChatIsTheirs(runtime, scope),
       home: { accountId: scope.accountId }
     },
     'bots.agentChoices': ({ newChatAgents }) => ({ newChatAgents }),
-    'agentSession.subscribeStatus': botShareSessionFilter(runtime, scope),
+    'agentSession.subscribeStatus': (sessionId) =>
+      botShareReachesSession(runtime, scope, sessionId),
     'status.get': botShareStatus,
     'bots.linear.state': (state) => botShareLinearState(state, scope.botId),
     'bots.github.state': (state) => botShareGitHubState(state, scope.botId),

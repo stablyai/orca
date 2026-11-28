@@ -28,7 +28,10 @@ import {
   RuntimeGraphReloadLifecycle
 } from '../session-graph/runtime-graph-reload-lifecycle'
 import { ClientHostedPageReconciliationWindow } from '../browser/client-pages/client-hosted-page-reconciliation-window'
-import { ClientSessionTabSelectionStore } from '../client/navigation/client-session-tab-selection'
+import {
+  ClientSessionTabSelectionStore,
+  type SessionTabListName
+} from '../client/navigation/client-session-tab-selection'
 import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-terminal-mutation-lock'
 import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
@@ -84,6 +87,8 @@ export type MobileSessionTabSubscription = {
   clientKind?: 'mobile' | 'runtime'
   observation?: 'caller'
   acceptsWorktree?: (worktree: string) => boolean
+  /** The list a watcher named (`viewedTabListOf`); absent, the device's own (`tabOwnerOf`). */
+  list?: SessionTabListName
 }
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHooks {

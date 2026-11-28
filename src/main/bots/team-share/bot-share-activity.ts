@@ -10,7 +10,7 @@ import {
   readAgentSessionRecordStore
 } from '../../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { readBotActivity, runtimeBotActivityHost, type BotActivityHost } from '../bot-activity-host'
-import { botShareChatFilter } from './bot-share-chats'
+import { botShareChatIsTheirs } from './bot-share-chats'
 
 export async function readBotShareActivity(
   runtime: OrcaRuntimeService,
@@ -21,7 +21,7 @@ export async function readBotShareActivity(
   if (!bot) {
     throw new Error('bot_not_found')
   }
-  const owns = botShareChatFilter(runtime, scope)
+  const owns = botShareChatIsTheirs(runtime, scope)
   const chats = (await readBotChats(runtime, bot, null)).filter((chat) => owns(chat.id))
   const store = readAgentSessionRecordStore()
   const theirs = chats.map((chat) => ({

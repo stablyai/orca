@@ -10,9 +10,10 @@ import {
   botMemorySourceLabel,
   botMemorySourcesOf
 } from '../../shared/bots/bot-memory-source'
+import { typedOnAnotherDevice } from './bot-typed-in-orca'
 
 /** The ended turn was opened by the owner's words or card click: not Orca's kickoff, a connector's
- *  message, an automation run's prompt or another agent's mail. A turn id can repeat; the last is it. */
+ *  message, an automation run's prompt, another agent's mail or a teammate's words. A turn id can repeat; the last is it. */
 export function ownerOpened(journal: AgentJournalTurnOpenerRows, turnId: string): boolean {
   const turn = journal.items.findLast(
     ({ body }) => body.kind === 'turn' && body.turnId === turnId && body.state !== 'running'
@@ -24,6 +25,8 @@ export function ownerOpened(journal: AgentJournalTurnOpenerRows, turnId: string)
     body.role === 'user' &&
     !body.from &&
     !body.memorySource &&
+    // A teammate's words, typed on their own device, are not the owner's.
+    !typedOnAnotherDevice({ body }) &&
     (body.origin === undefined || body.origin === 'card-answer')
   )
 }

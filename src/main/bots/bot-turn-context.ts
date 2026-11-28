@@ -167,7 +167,7 @@ export function createBotTurnContext(
         workNote(sessionId, message).catch(() => null),
         readTopics(stored.folder),
         recentChats(stored.botId, sessionId).catch(() => null),
-        unansweredQuestionNote(sessionId, stored.botId).catch(() => null)
+        unansweredQuestionNote(sessionId, stored.botId, message).catch(() => null)
       ])
       const soul = fingerprint(files.soul)
       const memory = fingerprint(files.memory)

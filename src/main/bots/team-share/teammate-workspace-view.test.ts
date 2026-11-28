@@ -427,7 +427,7 @@ describe('a workspace teammate’s calls', () => {
     }
   })
 
-  it('streams layouts of the agent’s workspaces in order, the home with only their own chats', async () => {
+  it('streams layouts of the agent’s workspaces in order, the home with none of the host’s tabs', async () => {
     const layout = (worktreeId: string, sessionIds: string[]): PublishedWorkspaceLayout =>
       fake({
         worktreeId,
@@ -476,7 +476,8 @@ describe('a workspace teammate’s calls', () => {
     expect(
       frames[0]?.workspaces?.map((entry) => [entry.key, entry.layout.tabs.map((tab) => tab.id)])
     ).toEqual([
-      [HOME, [ALICES_CHAT]],
+      // Their Home tabs are their own list's (session.tabs); the host's there are the owner's.
+      [HOME, []],
       // A worker's workspace goes whole, as it does to the owner.
       [WORKER, [OWNERS_WORKSPACE_CHAT, 'term']]
     ])
@@ -498,8 +499,8 @@ describe('a workspace teammate’s calls', () => {
       `removed:${WORKER}`,
       `workspace:${HOME}`
     ])
-    // The home goes out as they see it: the owner's chat and the home's terminal stay the owner's.
-    expect(frames[3]?.layout?.tabs.map((tab) => tab.id)).toEqual([ALICES_CHAT])
+    // The home goes out as they see it: every host tab there, their chat's too, is the owner's.
+    expect(frames[3]?.layout?.tabs.map((tab) => tab.id)).toEqual([])
     runtime.cleanupSubscription(`layout:c-layout:${frames[0]?.subscriptionId}`)
   })
 })

@@ -6,22 +6,26 @@ import {
 } from '../../../../shared/workspace-layout/tab-groups/tab-group-moves'
 import type { Bot } from '../../../../shared/bot-types'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
+import { botHome, type BotHomeOf } from '../../../../shared/bots/bot-home-of'
 import { areHostBotsEnabled } from '../../../bots/bot-team-policy'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 type BotHomeStore = {
   getSettings?: () => Partial<Pick<GlobalSettings, 'botsEnabled'>>
-  getBots?: () => readonly Pick<Bot, 'folderWorkspaceId' | 'chatSessionId'>[]
+  getBots?: () => readonly Pick<Bot, 'folderWorkspaceId' | 'chatSessionId' | 'shares'>[]
 }
 
 /** The session the bot whose home `workspaceId` is names Home now; null off a bot's page or with bots off. */
 export function botHomeSessionId(
   store: BotHomeStore | null | undefined,
-  workspaceId: string
+  workspaceId: string,
+  // Whose list it is: each person's own Home pins in theirs.
+  of: BotHomeOf = 'owner'
 ): string | null {
-  return areHostBotsEnabled(store?.getSettings?.())
-    ? (botOfHomeWorkspace(store?.getBots?.() ?? [], workspaceId)?.chatSessionId ?? null)
-    : null
+  const bot = areHostBotsEnabled(store?.getSettings?.())
+    ? botOfHomeWorkspace(store?.getBots?.() ?? [], workspaceId)
+    : undefined
+  return bot ? botHome(bot, of) : null
 }
 
 /** Why a pin edit on a bot's page is refused; null when allowed. Home stays pinned, side chats never pin. */

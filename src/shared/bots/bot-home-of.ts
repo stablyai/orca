@@ -135,13 +135,22 @@ export function botSharePersonName(bot: Pick<Bot, 'shares'>, accountId: string):
   return share?.name ?? share?.email ?? accountId
 }
 
-function teammateHomeName(person: string): string {
+/** "<Name>’s Home": another person's Home, as anyone but its person reads it. */
+export function personHomeName(person: string): string {
   return `${person}’s ${BOT_HOME_NAME}`
+}
+
+/** The owner's name to a teammate: their Orca account's, else this (a signed-out host). */
+export const BOT_OWNER_FALLBACK_NAME = 'Owner'
+
+/** The owner's Home as a teammate reads it. */
+export function ownerHomeName(ownerName: string | null | undefined): string {
+  return personHomeName(ownerName ?? BOT_OWNER_FALLBACK_NAME)
 }
 
 /** "Home" for the owner's; "<Name>’s Home" for a teammate's. */
 export function botHomeName(bot: Pick<Bot, 'shares'>, of: BotHomeOf): string {
-  return of === 'owner' ? BOT_HOME_NAME : teammateHomeName(botSharePersonName(bot, of.accountId))
+  return of === 'owner' ? BOT_HOME_NAME : personHomeName(botSharePersonName(bot, of.accountId))
 }
 
 /** Every name an older build may have saved on a teammate's Home ("<name>’s Home", by the name the
@@ -157,7 +166,7 @@ export function legacyTeammateHomeNames(
   const people = [share?.name, share?.email, of.accountId].filter((name): name is string =>
     Boolean(name)
   )
-  return [...new Set(people)].map(teammateHomeName)
+  return [...new Set(people)].map(personHomeName)
 }
 
 /** Whether this chat is the viewer's own Home slot (the owner's Home on their computer, a teammate's on

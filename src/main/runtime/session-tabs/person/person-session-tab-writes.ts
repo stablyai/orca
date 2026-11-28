@@ -26,6 +26,7 @@ export type PersonChatTabPublication = StructuredSessionTabPublicationInput & { 
 export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeWithPersonSessionTabs {
   abstract listAutomationRuns(): AutomationRun[]
   abstract showAutomation(id: string): Automation
+  abstract restoreStructuredAgentSessionTabs(): Promise<void>
 
   /** The chat's stamp: whom it was created for. A chat in an agent's Home that acts for one of its
    *  teammates alone is theirs (their Home Chat, a New chat they started); every other chat is the
@@ -77,7 +78,13 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     if (!isTeammateTabList(owner)) {
       return false
     }
-    const host = getStructuredAgentSessionHost()
+    let host = getStructuredAgentSessionHost()
+    if (host?.getSessionTabId(input.sessionId)) {
+      // Whether the host's list shows the chat is known only once the host's tabs are restored, as
+      // the owner's own writes wait for (a teammate's call can be the first after a start).
+      await this.restoreStructuredAgentSessionTabs()
+      host = getStructuredAgentSessionHost()
+    }
     // A create founds a host tab row for its new chat; a chat the host's list shows keeps its tab.
     const hostListed = this.mobileSessionTabsByWorktree
       .get(input.workspaceId)
