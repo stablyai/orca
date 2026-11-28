@@ -471,9 +471,6 @@ for (const scenario of SCENARIOS) {
     const suffix = REPEAT > 1 ? ` #${attempt}` : ''
     // oxlint-disable-next-line no-empty-pattern -- Each scenario owns its launches.
     test(`layout oracle: ${scenario.id}${suffix}`, async ({}, testInfo) => {
-      if (scenario.id === 'live-daemon-restart') {
-        knownSwitchOnFailure('B4 (L314)')
-      }
       if (scenario.id === 'sleep-quit-resume') {
         knownSwitchOnFailure('B3 (L309)')
       }
