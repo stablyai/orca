@@ -7,6 +7,7 @@ import {
 import type { DraftPasteReadySignal, TuiAgentConfig } from '../../catalog/tui-agent-config-types'
 import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
 import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
+import { createOuroStatusReportScanner } from './ouro-status-report-scanner'
 
 // Paste mode precedes composer readiness; per-agent markers avoid guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
@@ -61,13 +62,15 @@ type DraftPasteReadySignalSpec = {
 }
 
 // Signals that read the screen's structure, not one marker; a Record so none lacks its scanner.
-type StructuralSignal = 'opencode-agent-row' | 'codex-composer-prompt'
+type StructuralSignal = 'opencode-agent-row' | 'codex-composer-prompt' | 'ouro-composer-prompt'
 const STRUCTURAL_SCANNERS: Record<
   StructuralSignal,
   () => { observe: (data: string) => { ready: boolean; readyAfterMs?: number | null } }
 > = {
   'opencode-agent-row': createOpenCodeAgentRowScanner,
-  'codex-composer-prompt': createCodexComposerReadyScanner
+  'codex-composer-prompt': createCodexComposerReadyScanner,
+  // No quiet fallback: a quiet window can settle while the agent picker waits, and the paste would answer it.
+  'ouro-composer-prompt': createOuroStatusReportScanner
 }
 
 type SingleSignal = Exclude<DraftPasteReadySignal, StructuralSignal>
