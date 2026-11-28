@@ -20,8 +20,7 @@ import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { loadWslMappedDriveAnswers } from '../wsl/filesystem/wsl-mapped-drive-answers-file'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
-import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
-import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
+import { wslHostsGateOpen } from '../wsl/host-lifecycle/wsl-host-gate'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/startup/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
@@ -30,7 +29,6 @@ import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guar
 import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
 import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
-import { createWindowsShellPathHydration } from './shell-environment/windows-shell-path-hydration'
 import { configureWindowsHostGitEnvironmentReadiness } from '../git/command-runner/host-routing/windows-host-git-environment'
 import { setDefaultWslDistroOverride } from '../git/command-runner/host-routing/wsl-command-resolution'
 import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
@@ -53,10 +51,6 @@ import { mainProcessState as state } from './main-process-state'
 import { createStoreNativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import { followNativeSettingChanges } from './native-setting-subscriptions'
 import { updateGpuAccelerationAboutPanel } from './gpu-recovery/gpu-lifecycle'
-import {
-  logWslCliReconciliationResults,
-  reconcileManagedWslCliRegistrations
-} from '../cli/wsl/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-startup/wsl-cli-reconciliation-startup-barrier'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
@@ -123,26 +117,34 @@ export async function initializeReadyFoundation(): Promise<void> {
     })
   }
   // Managed WSL launchers live outside the bundle; reconcile launcher/bridge compatibility after app updates.
-  state.managedWslCliReconciliationStatus = 'pending'
-  state.managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations({
-    isPackaged: app.isPackaged,
-    userDataPath: canonicalUserDataPath,
-    appVersion: app.getVersion()
-  })
-    .then((results) => {
-      logWslCliReconciliationResults(results)
-      state.managedWslCliReconciliationStatus = 'settled'
-    })
-    .catch((error) => {
-      state.managedWslCliReconciliationStatus = 'failed'
-      console.warn(
-        '[wsl-cli] Managed registration reconciliation discovery failed:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
-  state.managedWslCliStartupBarrierReady = createWslCliReconciliationStartupBarrier(
-    state.managedWslCliReconciliationReady
-  )
+  if (process.platform === 'win32' && app.isPackaged) {
+    state.managedWslCliReconciliationStatus = 'pending'
+    state.managedWslCliReconciliationReady =
+      import('../cli/wsl/wsl-cli-registration-reconciliation')
+        .then(async ({ logWslCliReconciliationResults, reconcileManagedWslCliRegistrations }) => {
+          const results = await reconcileManagedWslCliRegistrations({
+            isPackaged: app.isPackaged,
+            userDataPath: canonicalUserDataPath,
+            appVersion: app.getVersion()
+          })
+          logWslCliReconciliationResults(results)
+          state.managedWslCliReconciliationStatus = 'settled'
+        })
+        .catch((error) => {
+          state.managedWslCliReconciliationStatus = 'failed'
+          console.warn(
+            '[wsl-cli] Managed registration reconciliation discovery failed:',
+            error instanceof Error ? error.message : String(error)
+          )
+        })
+    state.managedWslCliStartupBarrierReady = createWslCliReconciliationStartupBarrier(
+      state.managedWslCliReconciliationReady
+    )
+  } else {
+    state.managedWslCliReconciliationStatus = 'settled'
+    state.managedWslCliReconciliationReady = Promise.resolve()
+    state.managedWslCliStartupBarrierReady = Promise.resolve()
+  }
   const profile = ensureActiveOrcaProfile()
   state.activeOrcaProfile = profile
   await initializeTeamCapabilities(getProfileUserDataPath(), profile.profile)
@@ -150,11 +152,15 @@ export async function initializeReadyFoundation(): Promise<void> {
   initializeBrowserClientHostId(profile.profileDirectory)
   // Before the profile store and the fence: a conversion that rewrites the profile here leaves
   // nothing to fence.
-  await runPendingWslDriveUncConversions({
-    userDataPath: getAppEnvironment().getPath('userData'),
-    profileUserDataPath: getProfileUserDataPath(),
-    profileId: profile.profile.id
-  })
+  if (wslHostsGateOpen()) {
+    const { runPendingWslDriveUncConversions } =
+      await import('../wsl/filesystem/wsl-drive-unc-conversion-startup')
+    await runPendingWslDriveUncConversions({
+      userDataPath: getAppEnvironment().getPath('userData'),
+      profileUserDataPath: getProfileUserDataPath(),
+      profileId: profile.profile.id
+    })
+  }
   // Why before the store loads: its pane normalization tells a moved project's retained rows from
   // a rival host's, and no handler or runtime may give a moving project a new terminal.
   // Saved drive answers first: the fence and the move prune read them and never a drive.
@@ -207,8 +213,12 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
   )
   installElectronProxyRequestGuard(session.defaultSession)
-  if (!state.isServeMode) {
-    void state.initialProxyApplicationReady.then(startWslHostsPolicyLiveUpdates)
+  if (!state.isServeMode && process.platform === 'win32') {
+    void state.initialProxyApplicationReady.then(async () => {
+      const { startWslHostsPolicyLiveUpdates } =
+        await import('../wsl/host-lifecycle/wsl-hosts-policy-live-update')
+      startWslHostsPolicyLiveUpdates()
+    })
   }
   // Wait for profile-sidecar location, then defer potentially blocking OS-keyring probes past first paint (STA-5765).
   scheduleSecretProtectionGapReport({
@@ -222,24 +232,28 @@ export async function initializeReadyFoundation(): Promise<void> {
   initOrcadHeldFenceTokenFile(profile.dataFile)
   // Neutralize legacy shims before PTY handlers, including headless serve which never opens a main window.
   neutralizeLegacyTerminalShimDir(app.getPath('userData'))
-  const windowsShellPathHydration = createWindowsShellPathHydration()
-  state.windowsShellPathHydration = windowsShellPathHydration
-  configureWindowsHostGitEnvironmentReadiness(
-    process.platform === 'win32' ? windowsShellPathHydration.whenReady : null
-  )
-  if (process.platform === 'win32') {
-    const settings = store.getSettings()
-    if (app.isPackaged) {
-      void windowsShellPathHydration.hydrate(
-        settings.terminalWindowsShell,
-        settings.terminalWindowsPowerShellImplementation
-      )
-    } else {
-      windowsShellPathHydration.configure(
-        settings.terminalWindowsShell,
-        settings.terminalWindowsPowerShellImplementation
-      )
+  const applyWindowsShellPath = (settings: ReturnType<typeof store.getSettings>): void => {
+    const hydration = state.windowsShellPathHydration
+    if (!hydration) {
+      return
     }
+    const { terminalWindowsShell: shell, terminalWindowsPowerShellImplementation: ps } = settings
+    if (app.isPackaged) {
+      void hydration.hydrate(shell, ps)
+    } else {
+      hydration.configure(shell, ps)
+    }
+  }
+  if (process.platform === 'win32') {
+    const { createWindowsShellPathHydration } =
+      await import('./shell-environment/windows-shell-path-hydration')
+    const windowsShellPathHydration = createWindowsShellPathHydration()
+    state.windowsShellPathHydration = windowsShellPathHydration
+    configureWindowsHostGitEnvironmentReadiness(windowsShellPathHydration.whenReady)
+    applyWindowsShellPath(store.getSettings())
+  } else {
+    state.windowsShellPathHydration = null
+    configureWindowsHostGitEnvironmentReadiness(null)
   }
   wslHookRelayManager.setManagedHookSettingsResolver(() => state.store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
@@ -263,17 +277,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       ('terminalWindowsShell' in updates || 'terminalWindowsPowerShellImplementation' in updates) &&
       process.platform === 'win32'
     ) {
-      if (app.isPackaged) {
-        void windowsShellPathHydration.hydrate(
-          settings.terminalWindowsShell,
-          settings.terminalWindowsPowerShellImplementation
-        )
-      } else {
-        windowsShellPathHydration.configure(
-          settings.terminalWindowsShell,
-          settings.terminalWindowsPowerShellImplementation
-        )
-      }
+      applyWindowsShellPath(settings)
     }
     if ('agentStatusHooksEnabled' in updates) {
       agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))

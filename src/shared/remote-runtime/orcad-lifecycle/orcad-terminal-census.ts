@@ -27,6 +27,8 @@ export const OrcadTerminalCensusSchema = lazyZodSchema(() =>
 export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema> & {
   /** Client-side stamp, never on the wire: the desktop's census client parsed a server reply. */
   answered?: true
+  /** Client-side, never on the wire: the check that left an unanswered census uncounted. */
+  unansweredBecause?: string
 }
 
 /** A daemon that could not answer: unknown, never zero. */
