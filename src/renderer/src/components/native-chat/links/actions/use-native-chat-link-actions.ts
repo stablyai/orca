@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { useCallback, useState, type RefObject } from 'react'
 import {
   closeLinkActionRequest,
@@ -10,6 +12,8 @@ import type { NativeChatFileLinkContext } from './native-chat-file-link-context'
 import { resolveNativeChatHttpLinkRouting } from './native-chat-link-target-actions'
 import { handleNativeChatWebLink } from './native-chat-web-link-actions'
 import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
+import { focusRuntimeTerminalHandle } from '@/components/terminal-pane/links/handles/terminal-handle-links'
+import { terminalHandleFromChatHref } from '../../markdown/native-chat-terminal-references'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 
 export type NativeChatLinkActions = {
@@ -61,6 +65,19 @@ export function useNativeChatLinkClick(
   const onLinkClick = useCallback<CommentMarkdownLinkClickHandler>(
     (event, href) => {
       if (!context) {
+        return
+      }
+      const terminalHandle = terminalHandleFromChatHref(href)
+      if (terminalHandle) {
+        event.preventDefault()
+        void focusRuntimeTerminalHandle(terminalHandle, context.runtimeEnvironmentId).catch(() => {
+          toast.error(
+            translate(
+              'components.agentNotes.selectedTerminalUnavailable',
+              'The selected terminal is no longer available.'
+            )
+          )
+        })
         return
       }
       const route = routeNativeChatHref(href)
