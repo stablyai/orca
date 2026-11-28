@@ -2,11 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import type { Bot, BotAgent } from '../../shared/bot-types'
-import {
-  botPrimaryTarget,
-  type BotActiveBackup,
-  type BotBackupModelEntry
-} from '../../shared/bots/bot-backup-models'
+import type { BotActiveBackup, BotBackupModelEntry } from '../../shared/bots/bot-backup-models'
 import type { AgentJournalBotBackupModelSwitchItem } from '../../shared/agent-journal-orca-card-items'
 import type { HostUsageLimitCut } from '../native-chat/agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 import {
@@ -36,6 +32,10 @@ export type BotBackupSwitchResult = {
   continued?: boolean
   newSessionId?: string
 }
+
+type BotBackupSwitchAttempt =
+  | (BotBackupSwitchResult & { switched: true })
+  | { switched: false; failure: 'apply-failed' | 'vetoed' | 'guard-unavailable' }
 
 export type BotAppliedBackupOptions = { target: BotBackupModelEntry; complete: boolean }
 
@@ -98,14 +98,28 @@ export async function executeBotBackupSwitch(
     now: number
     maySwitch?: () => Promise<boolean>
   }
-): Promise<BotBackupSwitchResult> {
+): Promise<BotBackupSwitchAttempt> {
   const { bot, session, cut, target, now, maySwitch } = input
   const primaryModel =
     bot.activeBackup?.primaryModel ??
     bot.launch?.model ??
     (session.provider === bot.agent && !bot.activeBackup ? session.model : undefined)
   const primaryResetsAt = bot.activeBackup ? bot.activeBackup.primaryResetsAt : cut.resetsAt
-  const commitActiveBackup = async (applied: BotBackupModelEntry) => {
+  let guardUnavailable = false
+  const confirmSwitch = async () => {
+    try {
+      return (await maySwitch?.()) ?? true
+    } catch (error) {
+      guardUnavailable = true
+      console.warn('[bots] could not confirm backup switch', error)
+      return false
+    }
+  }
+  const vetoed = (): BotBackupSwitchAttempt => ({
+    switched: false,
+    failure: guardUnavailable ? 'guard-unavailable' : 'vetoed'
+  })
+  const reserveActiveBackup = async (applied: BotBackupModelEntry) => {
     let prior: BotActiveBackup | undefined
     const stored = await deps
       .updateBot(bot.id, (latest) => {
@@ -126,27 +140,8 @@ export async function executeBotBackupSwitch(
       .catch((error: unknown) => {
         throw new BotHandoffRollbackError([error], 'Could not save the active backup')
       })
-    return { prior, active: stored.activeBackup }
-  }
-
-  if (target.agent === session.provider) {
-    if (!target.model || (maySwitch && !(await maySwitch()))) {
-      return { switched: false }
-    }
-    const minimalTarget: BotBackupModelEntry = { agent: target.agent, model: target.model }
-    const { prior, active } = await commitActiveBackup(minimalTarget)
-    const allowed = await maySwitch?.()
-    const applied =
-      allowed === false
-        ? null
-        : await withProgrammaticOptions(session.sessionId, () =>
-            deps.applySameAgentOptions(session.sessionId, target)
-          ).catch(async () =>
-            (await deps.getSessionInfo(session.sessionId))?.model === target.model
-              ? { target: minimalTarget, complete: false }
-              : null
-          )
-    if (!applied) {
+    const active = stored.activeBackup
+    const restore = async () => {
       try {
         await deps.updateBot(bot.id, (latest) =>
           isDeepStrictEqual(latest.activeBackup, active) ? { activeBackup: prior ?? null } : {}
@@ -154,7 +149,33 @@ export async function executeBotBackupSwitch(
       } catch (error) {
         throw new BotHandoffRollbackError([error], 'Could not restore the previously active backup')
       }
-      return { switched: false }
+    }
+    return { active, restore }
+  }
+
+  if (target.agent === session.provider) {
+    if (!target.model) {
+      return { switched: false, failure: 'apply-failed' }
+    }
+    if (!(await confirmSwitch())) {
+      return vetoed()
+    }
+    const minimalTarget: BotBackupModelEntry = { agent: target.agent, model: target.model }
+    const { active, restore } = await reserveActiveBackup(minimalTarget)
+    if (!(await confirmSwitch())) {
+      await restore()
+      return vetoed()
+    }
+    const applied = await withProgrammaticOptions(session.sessionId, () =>
+      deps.applySameAgentOptions(session.sessionId, target)
+    ).catch(async () =>
+      (await deps.getSessionInfo(session.sessionId))?.model === target.model
+        ? { target: minimalTarget, complete: false }
+        : null
+    )
+    if (!applied) {
+      await restore()
+      return { switched: false, failure: 'apply-failed' }
     }
     if (applied.target.options) {
       await deps
@@ -203,102 +224,15 @@ export async function executeBotBackupSwitch(
     direction: 'to-backup',
     resetsAt: cut.resetsAt,
     now,
-    maySwitch
+    maySwitch: confirmSwitch,
+    reserveBackup: async () => {
+      const { restore } = await reserveActiveBackup(target)
+      if (await confirmSwitch()) {
+        return restore
+      }
+      await restore()
+      return null
+    }
   })
-  if (!handedOff) {
-    return { switched: false }
-  }
-  await commitActiveBackup(target)
-  return { switched: true, newSessionId: handedOff.newSessionId }
-}
-
-export async function returnHomeChatToPrimary(
-  deps: BotUsageLimitFailoverDeps,
-  withProgrammaticOptions: <T>(sessionId: string, run: () => Promise<T>) => Promise<T>,
-  input: {
-    bot: Bot
-    home: BotFailoverSessionInfo
-    fromTarget: BotBackupModelEntry
-    primaryModel: string | undefined
-    manual?: boolean
-    now: number
-    mayReturn: () => Promise<boolean>
-  }
-): Promise<boolean> {
-  const { bot, home, fromTarget, primaryModel, manual, now, mayReturn } = input
-  const returnReason = manual ? ('manual' as const) : ('limit-reset' as const)
-  const primaryTarget = botPrimaryTarget(bot)
-  const canRestoreInPlace =
-    home.provider === bot.agent &&
-    home.model &&
-    primaryModel &&
-    Object.keys(fromTarget.options ?? {}).every((key) => key in (primaryTarget.options ?? {}))
-  let partial = false
-  if (canRestoreInPlace) {
-    if (!(await mayReturn())) {
-      return false
-    }
-    const restoreTarget = { ...primaryTarget, model: primaryModel }
-    const applied = await withProgrammaticOptions(home.sessionId, () =>
-      deps.applySameAgentOptions(home.sessionId, restoreTarget)
-    ).catch(() => null)
-    if (!applied) {
-      return false
-    }
-    partial = !applied.complete
-  }
-  if (canRestoreInPlace && !partial) {
-    await deps
-      .appendSwitchCard(
-        home.sessionId,
-        {
-          kind: 'bot-backup-model-switch',
-          switchId: randomUUID(),
-          botId: bot.id,
-          direction: 'to-primary',
-          returnReason,
-          fromAgent: fromTarget.agent,
-          ...(fromTarget.model ? { fromModel: fromTarget.model } : {}),
-          toAgent: bot.agent,
-          ...(primaryModel ? { toModel: primaryModel } : {}),
-          at: now
-        },
-        now
-      )
-      .catch(() => {})
-    return true
-  }
-  try {
-    const handoff = await executeCrossAgentBotHandoff(deps.crossAgentHandoff, {
-      bot,
-      sourceSessionId: home.sessionId,
-      sourceAgent: home.provider,
-      sourceModel: home.model ?? fromTarget.model,
-      target: primaryTarget,
-      direction: 'to-primary',
-      returnReason,
-      now,
-      maySwitch: mayReturn
-    })
-    if (handoff) {
-      return true
-    }
-  } catch (error) {
-    if (error instanceof BotHandoffRollbackError) {
-      console.warn('[bots] could not roll back the primary handoff', error)
-    }
-  }
-  if (partial) {
-    const restored = await withProgrammaticOptions(home.sessionId, () =>
-      deps.applySameAgentOptions(home.sessionId, {
-        agent: home.provider,
-        model: home.model,
-        options: home.options
-      })
-    ).catch(() => null)
-    if (!restored?.complete) {
-      console.warn('[bots] could not restore backup options after a partial primary return')
-    }
-  }
-  return false
+  return handedOff ? { switched: true, newSessionId: handedOff.newSessionId } : vetoed()
 }

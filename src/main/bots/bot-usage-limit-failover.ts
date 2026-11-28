@@ -1,5 +1,5 @@
 // Coordinates bot usage-limit failover (same-agent in-place & cross-agent handoff) and return to primary.
-import type { Bot, BotAgent } from '../../shared/bot-types'
+import type { Bot } from '../../shared/bot-types'
 import {
   botModelTargetKey,
   botPrimaryTarget,
@@ -15,8 +15,10 @@ import type {
   BotUsageLimitFailoverDeps
 } from './bot-usage-limit-failover-execution'
 import {
-  isCurrentBotCut,
+  readBackupsExhaustedState,
+  readCurrentBotCut,
   resolveBotLaunchSetup,
+  resolveBotUsageLimitKey,
   selectAndSwitchBotBackup,
   type BotLaunchSelection
 } from './bot-backup-target-selection'
@@ -29,17 +31,16 @@ import {
 
 export type { BotCutBackupState, BotFailoverSessionInfo, BotUsageLimitFailoverDeps }
 
+type ObservedCut = { cut: HostUsageLimitCut; key: BotUsageLimitKey; tracksDefault: boolean }
+
 export class BotUsageLimitFailover {
   private readonly botQueues = new Map<string, Promise<void>>()
   private readonly cutStates = new Map<string, BotCutBackupState>()
   private readonly attemptedByCut = new Map<string, { turnItemId: string; targets: Set<string> }>()
-  private readonly inFlightCuts = new Set<string>()
+  private readonly inFlightCuts = new Map<string, number | undefined>()
   private readonly pendingRechecks = new Set<string>()
   private readonly switchingCuts = new Set<string>()
-  private readonly observedCuts = new Map<
-    string,
-    { cut: HostUsageLimitCut; key: BotUsageLimitKey }
-  >()
+  private readonly observedCuts = new Map<string, ObservedCut>()
   private readonly handledCuts = new Map<string, { turnItemId: string; superseded: boolean }>()
   private readonly pendingForcedReturns = new Set<string>()
   private readonly programmaticOptionSessions = new Set<string>()
@@ -89,8 +90,17 @@ export class BotUsageLimitFailover {
     }
     const dedupeKey = `${sessionId}:${cut.turnItemId}`
     if (this.inFlightCuts.has(dedupeKey)) {
-      if (recheck) {
+      if (recheck || this.inFlightCuts.get(dedupeKey) !== cut.resetsAt) {
         this.pendingRechecks.add(dedupeKey)
+      }
+      const observed = this.observedCuts.get(sessionId)
+      if (
+        !recheck &&
+        observed?.cut.turnItemId === cut.turnItemId &&
+        observed.cut.resetsAt !== cut.resetsAt
+      ) {
+        // Preserve the source account's deadline even if this switch consumes the cut.
+        this.recordObservedCut(sessionId, { ...observed, cut })
       }
       return
     }
@@ -102,7 +112,7 @@ export class BotUsageLimitFailover {
     ) {
       return
     }
-    this.inFlightCuts.add(dedupeKey)
+    this.inFlightCuts.set(dedupeKey, cut.resetsAt)
     const automatic = bot.backupModels?.automatic && bot.backupModels.order.length > 0
     if (automatic) {
       this.switchingCuts.add(dedupeKey)
@@ -186,7 +196,10 @@ export class BotUsageLimitFailover {
         await this.returnToPrimary(bot.id, { force: true }).catch(() => {})
       } else {
         const primaryModel = bot.launch?.model ?? bot.activeBackup.primaryModel
-        const primaryKey = await this.limitKeyFor(bot.agent, primaryModel)
+        const primaryKey = await resolveBotUsageLimitKey(this.deps, {
+          agent: bot.agent,
+          model: primaryModel
+        })
         if (!this.deps.gate.isLimited(primaryKey)) {
           await this.returnToPrimary(bot.id).catch(() => {})
         }
@@ -205,15 +218,16 @@ export class BotUsageLimitFailover {
   private async handleCutSerialized(
     botId: string,
     sessionId: string,
-    cut: HostUsageLimitCut
+    initialCut: HostUsageLimitCut
   ): Promise<void> {
     const bot = this.deps.listBots().find((entry) => entry.id === botId)
     const session = bot && !bot.paused ? await this.deps.getSessionInfo(sessionId) : null
-    if (!bot || !session || this.handledCuts.get(sessionId)?.turnItemId === cut.turnItemId) {
+    if (!bot || !session || this.handledCuts.get(sessionId)?.turnItemId === initialCut.turnItemId) {
       return
     }
     const accountHomeKey = await this.deps.resolveAccountHomeKey(session.provider, sessionId)
-    if (!(await isCurrentBotCut(this.deps, session, cut))) {
+    const cut = await readCurrentBotCut(this.deps, session, initialCut)
+    if (!cut) {
       return
     }
     const key = {
@@ -228,17 +242,12 @@ export class BotUsageLimitFailover {
       observed.key.accountHomeKey !== key.accountHomeKey ||
       observed.key.model !== key.model
     ) {
-      this.observedCuts.set(sessionId, { cut, key })
-      this.deps.gate.recordLimit({ ...key, resetsAt: cut.resetsAt })
       const setup = bot.activeBackup?.target ?? botPrimaryTarget(bot)
-      if (key.model && setup.agent === key.agent && !setup.model) {
-        this.deps.gate.recordLimit({
-          ...key,
-          model: '',
-          observedModel: key.model,
-          resetsAt: cut.resetsAt
-        })
-      }
+      this.recordObservedCut(sessionId, {
+        cut,
+        key,
+        tracksDefault: !!key.model && setup.agent === key.agent && !setup.model
+      })
     } else if (!this.deps.gate.isLimited(key)) {
       this.clearCutState(sessionId)
       return
@@ -262,11 +271,25 @@ export class BotUsageLimitFailover {
     if (result.state === 'switched') {
       this.completeCut(sessionId, cut, result.superseded)
     } else if (result.state === 'backups-exhausted') {
-      await this.markBackupsExhausted(result.bot, sessionId, cut)
+      this.setCutState(sessionId, await readBackupsExhaustedState(this.deps, result.bot, cut))
     } else if (result.state === 'ask-backup') {
       this.setCutState(sessionId, { turnItemId: cut.turnItemId, backupState: 'ask-backup' })
     } else {
       this.clearCutState(sessionId)
+    }
+  }
+
+  private recordObservedCut(sessionId: string, observed: ObservedCut): void {
+    const { cut, key, tracksDefault } = observed
+    this.observedCuts.set(sessionId, observed)
+    this.deps.gate.recordLimit({ ...key, resetsAt: cut.resetsAt })
+    if (tracksDefault) {
+      this.deps.gate.recordLimit({
+        ...key,
+        model: '',
+        observedModel: key.model,
+        resetsAt: cut.resetsAt
+      })
     }
   }
 
@@ -275,28 +298,6 @@ export class BotUsageLimitFailover {
     this.observedCuts.delete(sessionId)
     this.attemptedByCut.delete(sessionId)
     this.clearCutState(sessionId)
-  }
-
-  private async markBackupsExhausted(
-    bot: Bot,
-    sessionId: string,
-    cut: HostUsageLimitCut
-  ): Promise<void> {
-    const candidates = [botPrimaryTarget(bot), ...(bot.backupModels?.order ?? [])]
-    const keys = await Promise.all(
-      candidates.map((entry) => this.limitKeyFor(entry.agent, entry.model))
-    )
-    const earliest = this.deps.gate.earliestResetAt(keys) ?? cut.resetsAt
-    this.setCutState(sessionId, {
-      turnItemId: cut.turnItemId,
-      backupState: 'backups-exhausted',
-      ...(earliest !== undefined ? { backupResetsAt: earliest } : {})
-    })
-  }
-
-  private async limitKeyFor(agent: BotAgent, model = ''): Promise<BotUsageLimitKey> {
-    const accountHomeKey = await this.deps.resolveAccountHomeKey(agent)
-    return { agent, accountHomeKey, model }
   }
 
   private setCutState(sessionId: string, next: BotCutBackupState): void {

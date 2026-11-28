@@ -33,6 +33,7 @@ export type BotCrossAgentHandoffInput = {
   resetsAt?: number
   now: number
   maySwitch?: () => Promise<boolean>
+  reserveBackup?: () => Promise<(() => Promise<void>) | null>
 }
 
 export type BotCrossAgentHandoffSend = {
@@ -164,16 +165,18 @@ export async function executeCrossAgentBotHandoff(
 
   // Rebind connector links before startSession so early mirrored events on newSessionId find their link.
   const store = deps.linkStore()
-  const reboundLinks = store
-    ? findLinksForSession(store, sourceSessionId).filter(
-        (linked) => linked.link.bot?.kind !== 'bot-chat'
-      )
-    : []
   const attemptedRebinds: LinkedConversation[] = []
   let homeRebound = false
+  const restoreBackup = await input.reserveBackup?.()
+  if (restoreBackup === null) {
+    return null
+  }
   try {
     if (store) {
-      for (const linked of reboundLinks) {
+      for (const linked of findLinksForSession(store, sourceSessionId)) {
+        if (linked.link.bot?.kind === 'bot-chat') {
+          continue
+        }
         attemptedRebinds.push(linked)
         writeLink(store, linked.workspace, {
           ...linked.link,
@@ -216,8 +219,11 @@ export async function executeCrossAgentBotHandoff(
         }
       }
     }
+    await restoreBackup?.().catch((failure: unknown) => {
+      rollbackErrors.push(failure)
+    })
     if (rollbackErrors.length > 0) {
-      throw new BotHandoffRollbackError([error, ...rollbackErrors], 'Could not restore bot routing')
+      throw new BotHandoffRollbackError([error, ...rollbackErrors], 'Could not restore bot handoff')
     }
     throw error
   }
@@ -228,12 +234,16 @@ export async function executeCrossAgentBotHandoff(
       console.warn('[bots] could not move queued messages during backup handoff', error)
       return { complete: false, messages: new Map<string, never>() }
     })
-  deps.onSessionHandedOff?.(
-    sourceSessionId,
-    newSessionId,
-    direction === 'to-backup' ? handoffSend : undefined,
-    carry.messages
-  )
+  try {
+    deps.onSessionHandedOff?.(
+      sourceSessionId,
+      newSessionId,
+      direction === 'to-backup' ? handoffSend : undefined,
+      carry.messages
+    )
+  } catch (error) {
+    console.warn('[bots] could not notify watchers of completed backup handoff', error)
+  }
   if (conversationName) {
     await deps.nameSession(newSessionId, conversationName).catch(() => {})
   }

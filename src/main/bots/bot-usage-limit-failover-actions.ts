@@ -1,19 +1,23 @@
+import { randomUUID } from 'node:crypto'
+import type { Bot } from '../../shared/bot-types'
 import {
   botPrimaryTarget,
   rememberedBotBackupModels,
   sameBotModelTarget,
+  type BotBackupModelEntry,
   type BotBackupSwitchParams
 } from '../../shared/bots/bot-backup-models'
 import type { HostUsageLimitCut } from '../native-chat/agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 import {
   executeBotBackupSwitch,
-  returnHomeChatToPrimary,
   type BotBackupSwitchResult,
   type BotCutBackupState,
+  type BotFailoverSessionInfo,
   type BotUsageLimitFailoverDeps
 } from './bot-usage-limit-failover-execution'
 import type { BotUsageLimitKey } from './bot-usage-limit-gate'
-import { isCurrentBotCut } from './bot-backup-target-selection'
+import { readCurrentBotCut } from './bot-backup-target-selection'
+import { BotHandoffRollbackError, executeCrossAgentBotHandoff } from './bot-cross-agent-handoff'
 
 export type BotBackupActions = {
   deps: BotUsageLimitFailoverDeps
@@ -60,7 +64,8 @@ export async function switchBackupManually(
       target,
       now: now(),
       maySwitch: async () =>
-        (await isCurrentBotCut(deps, session, cut)) && deps.botOfSession(sessionId)?.id === botId
+        (await readCurrentBotCut(deps, session, cut)) !== null &&
+        deps.botOfSession(sessionId)?.id === botId
     })
     if (result.switched) {
       state.complete(sessionId, cut, result.newSessionId !== undefined)
@@ -71,7 +76,7 @@ export async function switchBackupManually(
         }))
       }
     }
-    return result
+    return result.switched ? result : { switched: false }
   } finally {
     state.switching.delete(key)
     releaseWatch?.()
@@ -122,9 +127,9 @@ export async function returnBackupToPrimary(
       (!primaryKey || !deps.gate.isLimited(primaryKey))
     )
   }
-  if (
-    home &&
-    !(await returnHomeChatToPrimary(deps, withProgrammaticOptions, {
+  let expectedHomeSessionId = bot.chatSessionId
+  if (home) {
+    const returnedSessionId = await returnHomeChatToPrimary(deps, withProgrammaticOptions, {
       bot,
       home,
       fromTarget: bot.activeBackup.target,
@@ -132,12 +137,16 @@ export async function returnBackupToPrimary(
       manual: force,
       now: now(),
       mayReturn
-    }))
-  ) {
-    return false
+    })
+    if (!returnedSessionId) {
+      return false
+    }
+    expectedHomeSessionId = returnedSessionId
   }
   const returned = await deps.updateBot(botId, (latest) =>
-    isSameBackup(latest) && (home || !primaryKey || !deps.gate.isLimited(primaryKey))
+    isSameBackup(latest) &&
+    latest.chatSessionId === expectedHomeSessionId &&
+    (home || !primaryKey || !deps.gate.isLimited(primaryKey))
       ? { activeBackup: null }
       : {}
   )
@@ -146,6 +155,97 @@ export async function returnBackupToPrimary(
   }
   pendingForcedReturns.delete(botId)
   return true
+}
+
+async function returnHomeChatToPrimary(
+  deps: BotUsageLimitFailoverDeps,
+  withProgrammaticOptions: <T>(sessionId: string, run: () => Promise<T>) => Promise<T>,
+  input: {
+    bot: Bot
+    home: BotFailoverSessionInfo
+    fromTarget: BotBackupModelEntry
+    primaryModel: string | undefined
+    manual?: boolean
+    now: number
+    mayReturn: () => Promise<boolean>
+  }
+): Promise<string | null> {
+  const { bot, home, fromTarget, primaryModel, manual, now, mayReturn } = input
+  const returnReason = manual ? ('manual' as const) : ('limit-reset' as const)
+  const primaryTarget = botPrimaryTarget(bot)
+  const canRestoreInPlace =
+    home.provider === bot.agent &&
+    home.model &&
+    primaryModel &&
+    Object.keys(fromTarget.options ?? {}).every((key) => key in (primaryTarget.options ?? {}))
+  let partial = false
+  if (canRestoreInPlace) {
+    if (!(await mayReturn())) {
+      return null
+    }
+    const restoreTarget = { ...primaryTarget, model: primaryModel }
+    const applied = await withProgrammaticOptions(home.sessionId, () =>
+      deps.applySameAgentOptions(home.sessionId, restoreTarget)
+    ).catch(() => null)
+    if (!applied) {
+      return null
+    }
+    partial = !applied.complete
+  }
+  if (canRestoreInPlace && !partial) {
+    await deps
+      .appendSwitchCard(
+        home.sessionId,
+        {
+          kind: 'bot-backup-model-switch',
+          switchId: randomUUID(),
+          botId: bot.id,
+          direction: 'to-primary',
+          returnReason,
+          fromAgent: fromTarget.agent,
+          ...(fromTarget.model ? { fromModel: fromTarget.model } : {}),
+          toAgent: bot.agent,
+          ...(primaryModel ? { toModel: primaryModel } : {}),
+          at: now
+        },
+        now
+      )
+      .catch(() => {})
+    return home.sessionId
+  }
+  try {
+    const handoff = await executeCrossAgentBotHandoff(deps.crossAgentHandoff, {
+      bot,
+      sourceSessionId: home.sessionId,
+      sourceAgent: home.provider,
+      sourceModel: home.model ?? fromTarget.model,
+      target: primaryTarget,
+      direction: 'to-primary',
+      returnReason,
+      now,
+      maySwitch: mayReturn
+    })
+    if (handoff) {
+      return handoff.newSessionId
+    }
+  } catch (error) {
+    if (error instanceof BotHandoffRollbackError) {
+      console.warn('[bots] could not roll back the primary handoff', error)
+    }
+  }
+  if (partial) {
+    const restored = await withProgrammaticOptions(home.sessionId, () =>
+      deps.applySameAgentOptions(home.sessionId, {
+        agent: home.provider,
+        model: home.model,
+        options: home.options
+      })
+    ).catch(() => null)
+    if (!restored?.complete) {
+      console.warn('[bots] could not restore backup options after a partial primary return')
+    }
+  }
+  return null
 }
 
 export async function reconsiderReleasedLimit(

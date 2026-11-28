@@ -10,7 +10,10 @@ import {
   type BotFailoverSessionInfo,
   type BotUsageLimitFailoverDeps
 } from './bot-usage-limit-failover'
-import { buildBotFailoverHandoffPrompt } from './bot-cross-agent-handoff'
+import {
+  buildBotFailoverHandoffPrompt,
+  type BotCrossAgentHandoffDeps
+} from './bot-cross-agent-handoff'
 import { botPackageFor } from './sharing/bot-package-export'
 import {
   BOT_BACKUP_RETURN_METHOD,
@@ -55,6 +58,7 @@ function createBot(overrides: Partial<Bot> = {}): Bot {
 type Harness = {
   observeCut: (id: string, cut: HostUsageLimitCut) => Promise<void>
   editBot: (updates: BotHostUpdates) => void
+  setHomeChat: (sessionId: string) => void
   gate: BotUsageLimitGate
   failover: BotUsageLimitFailover
   getBot: () => Bot
@@ -78,9 +82,17 @@ type Harness = {
 function createHarness(
   initialBot: Bot,
   initialLinks: ExternalConversationLink[] = [],
-  overrides: Partial<BotUsageLimitFailoverDeps> = {}
+  {
+    crossAgentHandoff,
+    ...overrides
+  }: Partial<Omit<BotUsageLimitFailoverDeps, 'crossAgentHandoff'>> & {
+    crossAgentHandoff?: Partial<BotCrossAgentHandoffDeps>
+  } = {}
 ): Harness {
   let bot = initialBot
+  const setHomeChat = (sessionId: string) => {
+    bot = { ...bot, chatSessionId: sessionId }
+  }
   const cuts = new Map<string, HostUsageLimitCut>()
   const sessions = new Map<string, BotFailoverSessionInfo>([
     [
@@ -167,7 +179,7 @@ function createHarness(
         return input.sessionId
       },
       setHomeChatSession: async (_botId, sessionId) => {
-        bot = { ...bot, chatSessionId: sessionId }
+        setHomeChat(sessionId)
       },
       carryQueuedMessages: async (from, to) => {
         queuedCarries.push({ from, to })
@@ -194,7 +206,8 @@ function createHarness(
       }),
       onSessionHandedOff: (from, to) => {
         handedOff.push({ from, to })
-      }
+      },
+      ...crossAgentHandoff
     },
     ...overrides
   }
@@ -203,6 +216,7 @@ function createHarness(
   return {
     gate,
     failover,
+    setHomeChat,
     observeCut: (id, cut) => {
       cuts.set(id, cut)
       return failover.onUsageLimitCut(id, cut)
@@ -414,8 +428,18 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     expect(resolved.launch?.model).toBe('gpt-5-codex')
     expect(h.getBot().activeBackup).toBeUndefined()
     h.gate.recordSuccess(primary)
-    await resolved.markActive?.()
+    await resolved.markActive!()
     expect(h.getBot().activeBackup).toBeUndefined()
+
+    h.gate.recordLimit(primary)
+    const next = await h.failover.resolveLaunchSetup(h.getBot())
+    const extendedReset = NOW + 900_000
+    h.gate.recordLimit({ ...primary, resetsAt: extendedReset })
+    await next.markActive!()
+    expect(h.getBot().activeBackup).toMatchObject({
+      target: { agent: 'codex', model: 'gpt-5-codex' },
+      primaryResetsAt: extendedReset
+    })
     h.gate.dispose()
   })
 
@@ -452,17 +476,140 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     h.gate.dispose()
   })
 
-  it('does not change the session or try a second backup when recording the switch fails', async () => {
-    const h = createHarness(createBot(), [], {
-      updateBot: async () => {
-        throw new Error('storage offline')
+  it.each(['claude', 'codex'] as const)(
+    'leaves the chat untouched when recording a %s backup fails',
+    async (agent) => {
+      const bot = createBot()
+      const first = bot.backupModels!.order.find((entry) => entry.agent === agent)!
+      const h = createHarness(
+        createBot({ backupModels: { automatic: true, order: [first] } }),
+        [],
+        {
+          updateBot: async () => {
+            throw new Error('storage offline')
+          }
+        }
+      )
+      await h.observeCut('session-home', { turnItemId: 'turn-1', chain: 1 })
+      expect(h.sessions.get('session-home')?.model).toBe('claude-sonnet-4-5')
+      expect(h.getBot().chatSessionId).toBe('session-home')
+      expect(h.startedSessions).toEqual([])
+      h.gate.dispose()
+    }
+  )
+
+  it('can switch the same cut after a provisional backup is vetoed and later released', async () => {
+    const backup = { agent: 'claude' as const, model: 'claude-haiku-4-5' }
+    const key = { ...backup, accountHomeKey: 'acct-a' }
+    let holdRecorded = false
+    const h = createHarness(createBot({ backupModels: { automatic: true, order: [backup] } }), [], {
+      updateBot: async (_id, edit) => {
+        const updates = edit(h.getBot())
+        h.editBot(updates)
+        if (updates.activeBackup && !holdRecorded) {
+          holdRecorded = true
+          h.gate.recordLimit(key)
+        }
+        return h.getBot()
       }
     })
-    await h.observeCut('session-home', { turnItemId: 'turn-1', chain: 1 })
+    await h.observeCut('session-home', { turnItemId: 'turn-veto', chain: 1 })
+    expect(h.getBot().activeBackup).toBeUndefined()
+    expect(h.sessions.get('session-home')?.model).toBe('claude-sonnet-4-5')
+    h.gate.recordSuccess(key)
+    await h.failover.onLimitReleased(key)
+    expect(h.getBot().activeBackup?.target).toEqual(backup)
+    expect(h.sessions.get('session-home')?.model).toBe('claude-haiku-4-5')
+    h.gate.dispose()
+  })
+
+  it('restores the backup record if the final cut check rejects', async () => {
+    const cut = { turnItemId: 'turn-unreadable', chain: 1 }
+    const h = createHarness(createBot(), [], {
+      readSessionCut: async () => {
+        if (h.getBot().activeBackup) {
+          throw new Error('journal unavailable')
+        }
+        return cut
+      }
+    })
+    await h.observeCut('session-home', cut)
+    expect(h.getBot().activeBackup).toBeUndefined()
     expect(h.sessions.get('session-home')?.model).toBe('claude-sonnet-4-5')
     expect(h.startedSessions).toEqual([])
     h.gate.dispose()
   })
+
+  it('restores the prior backup and Home Chat when the handoff opening turn fails', async () => {
+    const activeBackup = {
+      target: { agent: 'claude' as const, model: 'claude-haiku-4-5' },
+      switchedAt: NOW - 1
+    }
+    const h = createHarness(createBot({ activeBackup }), [], {
+      crossAgentHandoff: {
+        startSession: async (_bot, input) => {
+          await input.beforeFirstMessage!()
+          throw new Error('opening message refused')
+        }
+      }
+    })
+    const home = h.sessions.get('session-home')!
+    h.sessions.set(home.sessionId, { ...home, model: activeBackup.target.model })
+    await h.observeCut(home.sessionId, { turnItemId: 'turn-handoff', chain: 1 })
+    expect(h.getBot().chatSessionId).toBe(home.sessionId)
+    expect(h.getBot().activeBackup).toEqual(activeBackup)
+    h.gate.dispose()
+  })
+
+  it('keeps the backup active if a Home Chat is created during a return', async () => {
+    const activeBackup = {
+      target: { agent: 'codex' as const, model: 'gpt-5-codex' },
+      switchedAt: NOW
+    }
+    const h = createHarness(createBot({ chatSessionId: null, activeBackup }), [], {
+      updateBot: async (_id, edit) => {
+        h.setHomeChat('new-home')
+        h.editBot(edit(h.getBot()))
+        return h.getBot()
+      }
+    })
+    expect(await h.failover.returnToPrimary('bot-1', { force: true })).toBe(false)
+    expect(h.getBot().activeBackup).toEqual(activeBackup)
+    h.gate.dispose()
+  })
+
+  it.each([
+    { agents: [], continuations: [] },
+    { agents: ['claude'], continuations: ['session-home'] }
+  ] as const)(
+    'records a revised in-flight reset with available agents $agents',
+    async ({ agents, continuations }) => {
+      const checking = Promise.withResolvers<void>()
+      const available = Promise.withResolvers<ReadonlySet<BotAgent>>()
+      const h = createHarness(createBot(), [], {
+        availableAgents: () => {
+          checking.resolve()
+          return available.promise
+        }
+      })
+      const cut = { turnItemId: 'turn-revised', chain: 1, resetsAt: NOW + 600_000 }
+      const handling = h.observeCut('session-home', cut)
+      await checking.promise
+      const revisedReset = NOW + 900_000
+      await h.observeCut('session-home', { ...cut, resetsAt: revisedReset })
+      available.resolve(new Set(agents))
+      await handling
+      expect(
+        h.gate.limitResetAt({
+          agent: 'claude',
+          accountHomeKey: 'acct-a',
+          model: 'claude-sonnet-4-5'
+        })
+      ).toBe(revisedReset)
+      expect(h.sameAgentContinuations).toEqual(continuations)
+      h.gate.dispose()
+    }
+  )
 
   it('redacts secrets in handoff prompts, excludes backups from botPackageFor, and rejects agent callers via ownerOnly', async () => {
     const prompt = buildBotFailoverHandoffPrompt({

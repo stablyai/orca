@@ -11,6 +11,7 @@ import {
 import type { HostUsageLimitCut } from '../native-chat/agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 import {
   executeBotBackupSwitch,
+  type BotCutBackupState,
   type BotFailoverSessionInfo,
   type BotUsageLimitFailoverDeps
 } from './bot-usage-limit-failover-execution'
@@ -30,6 +31,30 @@ export function sameBackupPolicy(left: Bot, right: Bot): boolean {
     isDeepStrictEqual(botPrimaryTarget(left), botPrimaryTarget(right)) &&
     isDeepStrictEqual(left.backupModels, right.backupModels)
   )
+}
+
+export async function resolveBotUsageLimitKey(
+  deps: BotUsageLimitFailoverDeps,
+  { agent, model }: Pick<BotBackupModelEntry, 'agent' | 'model'>,
+  sessionId?: string
+): Promise<BotUsageLimitKey> {
+  const accountHomeKey = await deps.resolveAccountHomeKey(agent, sessionId)
+  return { agent, accountHomeKey, model: model ?? '' }
+}
+
+export async function readBackupsExhaustedState(
+  deps: BotUsageLimitFailoverDeps,
+  bot: Bot,
+  cut: HostUsageLimitCut
+): Promise<BotCutBackupState> {
+  const candidates = [botPrimaryTarget(bot), ...(bot.backupModels?.order ?? [])]
+  const keys = await Promise.all(candidates.map((entry) => resolveBotUsageLimitKey(deps, entry)))
+  const earliest = deps.gate.earliestResetAt(keys) ?? cut.resetsAt
+  return {
+    turnItemId: cut.turnItemId,
+    backupState: 'backups-exhausted',
+    ...(earliest !== undefined ? { backupResetsAt: earliest } : {})
+  }
 }
 
 export async function pickReadyBotBackup(
@@ -60,11 +85,7 @@ export async function pickReadyBotBackup(
     ) {
       continue
     }
-    const key: BotUsageLimitKey = {
-      agent: candidate.agent,
-      accountHomeKey: await deps.resolveAccountHomeKey(candidate.agent, sameAgentSession),
-      model: candidate.model ?? ''
-    }
+    const key = await resolveBotUsageLimitKey(deps, candidate, sameAgentSession)
     if (await deps.gate.verifyReturnReady(key)) {
       return { target: candidate, key }
     }
@@ -86,8 +107,7 @@ export async function resolveBotLaunchSetup(
       return effective
     }
     const primary = botPrimaryTarget(current)
-    const accountHomeKey = await deps.resolveAccountHomeKey(primary.agent)
-    const primaryKey = { agent: primary.agent, accountHomeKey, model: primary.model ?? '' }
+    const primaryKey = await resolveBotUsageLimitKey(deps, primary)
     if (!deps.gate.isLimited(primaryKey)) {
       return effectiveBotSetup(latest())
     }
@@ -102,26 +122,29 @@ export async function resolveBotLaunchSetup(
     if (!ready || !deps.gate.isLimited(primaryKey)) {
       return effective
     }
-    const resetsAt = deps.gate.limitResetAt(primaryKey)
     return {
       agent: ready.target.agent,
       launch: backupEntryToLaunch(ready.target),
       markActive: async () => {
-        await deps.updateBot(bot.id, (stored) =>
-          !stored.activeBackup &&
-          sameBackupPolicy(current, stored) &&
-          !deps.gate.isLimited(ready.key) &&
-          deps.gate.isLimited(primaryKey)
-            ? {
-                activeBackup: {
-                  target: ready.target,
-                  switchedAt: now,
-                  ...(primary.model ? { primaryModel: primary.model } : {}),
-                  ...(resetsAt !== undefined ? { primaryResetsAt: resetsAt } : {})
-                }
-              }
-            : {}
-        )
+        await deps.updateBot(bot.id, (stored) => {
+          if (
+            stored.activeBackup ||
+            !sameBackupPolicy(current, stored) ||
+            deps.gate.isLimited(ready.key) ||
+            !deps.gate.isLimited(primaryKey)
+          ) {
+            return {}
+          }
+          const resetsAt = deps.gate.limitResetAt(primaryKey)
+          return {
+            activeBackup: {
+              target: ready.target,
+              switchedAt: now,
+              ...(primary.model ? { primaryModel: primary.model } : {}),
+              ...(resetsAt !== undefined ? { primaryResetsAt: resetsAt } : {})
+            }
+          }
+        })
       }
     }
   }
@@ -132,19 +155,22 @@ type CutSelection =
   | { state: 'ask-backup' | 'backups-exhausted'; bot: Bot }
   | { state: 'switched'; superseded: boolean }
 
-export async function isCurrentBotCut(
+export async function readCurrentBotCut(
   deps: BotUsageLimitFailoverDeps,
   session: BotFailoverSessionInfo,
   cut: HostUsageLimitCut
-): Promise<boolean> {
+): Promise<HostUsageLimitCut | null> {
   const liveSession = await deps.getSessionInfo(session.sessionId)
-  return (
-    liveSession?.isIdle === true &&
-    liveSession.runtimeFence === session.runtimeFence &&
-    liveSession.provider === session.provider &&
-    liveSession.model === session.model &&
-    (await deps.readSessionCut(session.sessionId))?.turnItemId === cut.turnItemId
-  )
+  if (
+    !liveSession?.isIdle ||
+    liveSession.runtimeFence !== session.runtimeFence ||
+    liveSession.provider !== session.provider ||
+    liveSession.model !== session.model
+  ) {
+    return null
+  }
+  const latestCut = await deps.readSessionCut(session.sessionId)
+  return latestCut?.turnItemId === cut.turnItemId ? latestCut : null
 }
 
 export async function selectAndSwitchBotBackup(
@@ -179,7 +205,8 @@ export async function selectAndSwitchBotBackup(
       available,
       attempted
     )
-    if (!(await isCurrentBotCut(deps, session, cut))) {
+    const liveCut = await readCurrentBotCut(deps, session, cut)
+    if (!liveCut) {
       return { state: 'stale' }
     }
     const current = readBot()
@@ -197,11 +224,11 @@ export async function selectAndSwitchBotBackup(
       const result = await executeBotBackupSwitch(deps, withProgrammaticOptions, {
         bot,
         session,
-        cut,
+        cut: liveCut,
         target: ready.target,
         now: now(),
         maySwitch: async () => {
-          const live = await isCurrentBotCut(deps, session, cut)
+          const live = await readCurrentBotCut(deps, session, cut)
           const latest = readBot()
           if (
             !live ||
@@ -212,13 +239,18 @@ export async function selectAndSwitchBotBackup(
           ) {
             return false
           }
-          attempted.add(targetKey)
           onSwitching()
           return true
         }
       })
       if (result.switched) {
         return { state: 'switched', superseded: result.newSessionId !== undefined }
+      }
+      if (result.failure === 'guard-unavailable') {
+        return { state: 'stale' }
+      }
+      if (result.failure === 'apply-failed') {
+        attempted.add(targetKey)
       }
     } catch (error) {
       if (error instanceof BotHandoffRollbackError) {
