@@ -6,11 +6,13 @@ import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-sub
 import type { Bot } from '../../../../../shared/bot-types'
 import { createSessionTabsTabDeltaDecoder } from '../../../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
 import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TabListPerson } from './viewed-tab-list'
 
 export type PersonTabList = {
   tabs: readonly RuntimeMobileSessionClientTab[]
-  activeTabId: string | null
+  /** The tab active on that person's own side, which this read only shows. */
+  theirActiveTabId: string | null
 }
 
 export type PersonTabListRead =
@@ -22,16 +24,17 @@ function frameOf(result: unknown): PersonTabList | null {
   if (typeof result !== 'object' || result === null) {
     return null
   }
-  const type = Reflect.get(result, 'type')
-  const tabs: unknown = Reflect.get(result, 'tabs')
-  const activeTabId: unknown = Reflect.get(result, 'activeTabId')
-  if ((type !== 'snapshot' && type !== 'updated') || !Array.isArray(tabs)) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a session.tabs frame, this contract's wire shape; its kind and rows are checked below.
+  const frame = result as Partial<Pick<RuntimeMobileSessionTabsResult, 'activeTabId'>> & {
+    type?: unknown
+    tabs?: RuntimeMobileSessionClientTab[]
+  }
+  if ((frame.type !== 'snapshot' && frame.type !== 'updated') || !Array.isArray(frame.tabs)) {
     return null
   }
   return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's session.tabs frame rows, this contract's wire shape.
-    tabs: tabs as RuntimeMobileSessionClientTab[],
-    activeTabId: typeof activeTabId === 'string' ? activeTabId : null
+    tabs: frame.tabs,
+    theirActiveTabId: typeof frame.activeTabId === 'string' ? frame.activeTabId : null
   }
 }
 

@@ -139,7 +139,7 @@ export function ViewedTabListSurface({
           ? tab.id === picked.tabId
           : tab.type === 'agent-session' && tab.sessionId === picked.sessionId
     ) ??
-    tabs.find((tab) => read.state === 'ready' && tab.id === read.list.activeTabId) ??
+    tabs.find((tab) => read.state === 'ready' && tab.id === read.list.theirActiveTabId) ??
     tabs[0] ??
     null
   const close = (tab: RuntimeMobileSessionClientTab): void => {
