@@ -25,7 +25,8 @@ import {
 import {
   lastAntigravityAgySignedOut,
   noteAgyLoginChanged,
-  onAntigravityChatApiKeyChanged
+  onAntigravityChatApiKeyChanged,
+  savedChatAuthUsesGeminiApiKey
 } from '../../../../antigravity/antigravity-chat-route'
 import {
   antigravityHostCatalogFingerprints,
@@ -62,11 +63,13 @@ import type { AntigravityChatSignInHost } from '../../../../antigravity/antigrav
 
 const stopLiveChats = () => stopStructuredAgentChats('antigravity', 'Antigravity')
 
-// Running chats hold the old key until they start again.
-const restartLiveChats = (): Promise<void> =>
-  stopLiveChats().catch((error: unknown) =>
-    console.warn('[antigravity] chats kept the previous key:', error)
-  )
+// Running chats hold the old key until they start again; unrelated auth methods keep running.
+const restartLiveKeyChats = (runtime: OrcaRuntimeService): Promise<void> =>
+  savedChatAuthUsesGeminiApiKey(runtime.requireStore().getSettings().antigravityChatAuth)
+    ? stopLiveChats().catch((error: unknown) =>
+        console.warn('[antigravity] chats kept the previous key:', error)
+      )
+    : Promise.resolve()
 
 const chatLaunchEnv = (runtime: OrcaRuntimeService) => () =>
   resolveHostStructuredAgentLaunchEnvironment('antigravity', runtime.requireStore().getSettings())
@@ -312,7 +315,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     handler: async ({ apiKey }, ctx) => {
       await storeAntigravityChatApiKey(apiKey)
       onAntigravityChatApiKeyChanged()
-      await restartLiveChats()
+      await restartLiveKeyChats(ctx.runtime)
       return apiKeyStatus(ctx.runtime)
     }
   }),
@@ -323,7 +326,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     handler: async (_, ctx) => {
       await clearAntigravityChatApiKey()
       onAntigravityChatApiKeyChanged()
-      await restartLiveChats()
+      await restartLiveKeyChats(ctx.runtime)
       return apiKeyStatus(ctx.runtime)
     }
   })
