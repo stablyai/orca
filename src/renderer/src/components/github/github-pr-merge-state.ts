@@ -217,14 +217,24 @@ function presentMergeChipKind(
   }
 }
 
+export function viewerMergeDeniedTooltip(t: Translate = translate): string {
+  return t(
+    'auto.components.github.pr.merge.state.viewerMergeDenied',
+    'Your GitHub account needs write access to this repository to merge pull requests'
+  )
+}
+
 export function presentGitHubPRMergeState(
   item: GitHubPRMergeStateInput,
   t?: Translate
 ): GitHubPRMergeStatePresentation {
   const decision = resolveGitHubPRMergeState(item)
   const chip = getGitHubPRMergeChip(decision.kind, item)
+  const chipCopy = presentMergeChipKind(chip.kind, t)
   return {
-    ...presentMergeChipKind(chip.kind, t),
+    label: chipCopy.label,
+    // The label keeps the PR's state; the tooltip names what blocks the merge action.
+    tooltip: decision.viewerMergeDenied ? viewerMergeDeniedTooltip(t) : chipCopy.tooltip,
     tone: TONE_CLASSES[chip.tone],
     directMergeAvailable: decision.directMergeAvailable,
     autoMergeAction: presentAutoMergeAction(decision.autoMergeAction, t)

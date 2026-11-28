@@ -87,6 +87,7 @@ export function resolveGitHubPRStackMergeDecision(args: {
   reviewMergeQueueRequired: boolean | null | undefined
   stackMergeQueueRequired: boolean | null | undefined
   directMergeAvailable: boolean
+  viewerCanMerge?: boolean | null
 }): GitHubPRStackMergeDecision {
   const scope = getGitHubPRStackMergeScope(args.stack)
   const blocker = getGitHubPRStackMergeBlocker(scope)
@@ -99,6 +100,8 @@ export function resolveGitHubPRStackMergeDecision(args: {
     blocker,
     usesMergeQueue,
     directMergeAvailable:
-      !blocker && (scope.complete || args.directMergeAvailable || usesMergeQueue)
+      args.viewerCanMerge !== false &&
+      !blocker &&
+      (scope.complete || args.directMergeAvailable || usesMergeQueue)
   }
 }

@@ -18118,7 +18118,8 @@
               "def355ff38": "Pode ser mergeado",
               "e42c5bae67": "O GitHub diz que este PR pode ser mergeado e as verificações passaram",
               "cbf0113af6": "O GitHub diz que este PR pode ser mergeado",
-              "autoMergeOn": "Merge automático ativado"
+              "autoMergeOn": "Merge automático ativado",
+              "viewerMergeDenied": "Sua conta do GitHub precisa de acesso de escrita a este repositório para fazer merge de pull requests"
             }
           }
         },

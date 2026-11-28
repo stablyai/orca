@@ -51,6 +51,8 @@ export type GitHubWorkItem = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  /** False only when GitHub reports the viewer lacks write access to the PR's repository. */
+  viewerCanMerge?: boolean | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean

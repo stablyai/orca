@@ -44,6 +44,8 @@ export function assemblePRRefreshFoundOutcome(args: {
     conflictSummary
   } = args
   const mergeMethodSettings = stackMergeMetadata?.mergeMethodSettings ?? data.mergeMethodSettings
+  // Permission is per repository, so the stack base read may fill in a value the PR read missed.
+  const viewerCanMerge = stackMergeMetadata?.viewerCanMerge ?? data.viewerCanMerge
   const checksSummary = summarizePRCheckRollup(data.statusCheckRollup)
   const checksReadComplete = data.checksUnavailable === false
   const checkResult = classifyPRCheckRollupResult(data.statusCheckRollup, checksReadComplete)
@@ -73,6 +75,7 @@ export function assemblePRRefreshFoundOutcome(args: {
           }
         : {}),
       ...(mergeMethodSettings ? { mergeMethodSettings } : {}),
+      ...(viewerCanMerge !== undefined ? { viewerCanMerge } : {}),
       ...(data.mergeStateStatus !== undefined ? { mergeStateStatus: data.mergeStateStatus } : {}),
       ...(stack ? { stack } : {}),
       headSha: data.headRefOid,

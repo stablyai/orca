@@ -4038,7 +4038,8 @@
               "def355ff38": "可以合并",
               "e42c5bae67": "GitHub 显示此 PR 可以合并且检查已通过",
               "cbf0113af6": "GitHub 显示此 PR 可以合并",
-              "autoMergeOn": "自动合并已开启"
+              "autoMergeOn": "自动合并已开启",
+              "viewerMergeDenied": "合并拉取请求需要您的 GitHub 账户拥有此仓库的写入权限"
             }
           }
         },

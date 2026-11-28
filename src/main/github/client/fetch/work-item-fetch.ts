@@ -180,6 +180,9 @@ export async function fetchPullRequestWorkItem(
           ...(mergeMetadata.autoMergeAllowed !== null
             ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
             : {}),
+          ...(mergeMetadata.viewerCanMerge !== null
+            ? { viewerCanMerge: mergeMetadata.viewerCanMerge }
+            : {}),
           ...(mergeMethodSettings ? { mergeMethodSettings } : {})
         }
       } catch {

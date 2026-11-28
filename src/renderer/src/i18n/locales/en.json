@@ -4830,7 +4830,8 @@
               "def355ff38": "Able to merge",
               "e42c5bae67": "GitHub says this PR can merge and checks passed",
               "cbf0113af6": "GitHub says this PR can merge",
-              "autoMergeOn": "Auto-merge on"
+              "autoMergeOn": "Auto-merge on",
+              "viewerMergeDenied": "Your GitHub account needs write access to this repository to merge pull requests"
             }
           }
         },

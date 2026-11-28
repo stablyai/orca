@@ -4767,7 +4767,8 @@
               "def355ff38": "可以合併",
               "e42c5bae67": "GitHub 表示此 PR 可以合併，且檢查已通過",
               "cbf0113af6": "GitHub 表示此 PR 可以合併",
-              "autoMergeOn": "自動合併已開啟"
+              "autoMergeOn": "自動合併已開啟",
+              "viewerMergeDenied": "合併 PR 需要您的 GitHub 帳戶具有此存放庫的寫入權限"
             }
           }
         },

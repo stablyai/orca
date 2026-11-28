@@ -4110,7 +4110,8 @@
               "def355ff38": "Se puede mergear",
               "e42c5bae67": "GitHub dice que este PR se puede mergear y los checks pasaron",
               "cbf0113af6": "GitHub dice que este PR se puede mergear",
-              "autoMergeOn": "Fusión automática activada"
+              "autoMergeOn": "Fusión automática activada",
+              "viewerMergeDenied": "Tu cuenta de GitHub necesita acceso de escritura a este repositorio para mergear pull requests"
             }
           }
         },

@@ -4822,7 +4822,8 @@
               "def355ff38": "Merge edilebilir",
               "e42c5bae67": "GitHub bu PR'ın merge edilebileceğini ve kontrollerin başarıyla tamamlandığını söylüyor",
               "cbf0113af6": "GitHub bu PR'ın merge edilebileceğini söylüyor",
-              "autoMergeOn": "Otomatik merge açık"
+              "autoMergeOn": "Otomatik merge açık",
+              "viewerMergeDenied": "Pull request'leri merge etmek için GitHub hesabınızın bu repository'ye yazma erişimi olmalıdır"
             }
           }
         },

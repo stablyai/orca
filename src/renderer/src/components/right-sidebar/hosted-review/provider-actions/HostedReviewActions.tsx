@@ -11,7 +11,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { presentGitHubPRMergeState } from '@/components/github/github-pr-merge-state'
+import {
+  presentGitHubPRMergeState,
+  viewerMergeDeniedTooltip
+} from '@/components/github/github-pr-merge-state'
 import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -111,20 +114,23 @@ export default function HostedReviewActions({
       label: stackMergeLabel ?? stackMergeScope.label,
       tooltip:
         stackBlocker ??
-        (stackUsesMergeQueue
-          ? t(
-              'auto.components.right.sidebar.HostedReviewActions.3de88351c5',
-              'GitHub will add this pull request and every pull request below it to the merge queue.'
-            )
-          : t(
-              'auto.components.right.sidebar.HostedReviewActions.a32fe6dba6',
-              'GitHub will merge this pull request and every pull request below it in the stack.'
-            )),
+        (githubPR.viewerCanMerge === false
+          ? viewerMergeDeniedTooltip(t)
+          : stackUsesMergeQueue
+            ? t(
+                'auto.components.right.sidebar.HostedReviewActions.3de88351c5',
+                'GitHub will add this pull request and every pull request below it to the merge queue.'
+              )
+            : t(
+                'auto.components.right.sidebar.HostedReviewActions.a32fe6dba6',
+                'GitHub will merge this pull request and every pull request below it in the stack.'
+              )),
       directMergeAvailable: resolveGitHubPRStackMergeDecision({
         stack: githubPR.stack,
         reviewMergeQueueRequired: review.mergeQueueRequired,
         stackMergeQueueRequired: githubPR.mergeQueueRequired,
-        directMergeAvailable: presentation.directMergeAvailable
+        directMergeAvailable: presentation.directMergeAvailable,
+        viewerCanMerge: githubPR.viewerCanMerge
       }).directMergeAvailable,
       autoMergeAction: null
     }

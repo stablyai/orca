@@ -4048,7 +4048,8 @@
               "def355ff38": "병합 가능",
               "e42c5bae67": "GitHub에서는 이 PR을 병합할 수 있으며 체크를 통과했다고 합니다",
               "cbf0113af6": "GitHub에서는 이 PR을 병합할 수 있다고 합니다",
-              "autoMergeOn": "자동 병합 켜짐"
+              "autoMergeOn": "자동 병합 켜짐",
+              "viewerMergeDenied": "이 저장소에서 PR을 병합하려면 GitHub 계정에 쓰기 권한이 필요합니다"
             }
           }
         },

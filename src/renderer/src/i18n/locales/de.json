@@ -4822,7 +4822,8 @@
               "def355ff38": "Merge möglich",
               "e42c5bae67": "Laut GitHub ist ein Merge dieses PRs möglich und die Checks sind bestanden",
               "cbf0113af6": "Laut GitHub ist ein Merge dieses PRs möglich",
-              "autoMergeOn": "Auto-Merge aktiviert"
+              "autoMergeOn": "Auto-Merge aktiviert",
+              "viewerMergeDenied": "Zum Mergen von Pull Requests braucht dein GitHub-Konto Schreibzugriff auf dieses Repository"
             }
           }
         },
