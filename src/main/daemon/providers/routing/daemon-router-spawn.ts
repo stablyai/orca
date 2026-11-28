@@ -26,6 +26,8 @@ type RouterSpawnState = {
   ownerResolver: () => DaemonSessionOwnerResolver<DaemonPtyAdapter>
   subscriptions: () => DaemonPtyAdapterSubscriptionFanout
   legacyIdleRetirementTiming: LegacyIdleRetirementOptions['timing'] | undefined
+  /** Retired generations a restart carried over only to deliver the exits they still owe. */
+  retiring: DaemonPtyAdapter[]
 }
 
 /** Routes spawns across generations and retires older ones once they own nothing. */
@@ -51,6 +53,9 @@ export class DaemonRouterSpawn {
       release: (adapter) => releaseLegacyAdapter(adapter, state.subscriptions()),
       ...(state.legacyIdleRetirementTiming ? { timing: state.legacyIdleRetirementTiming } : {})
     })
+    for (const adapter of state.retiring) {
+      this.legacyIdle.adoptRetiring(adapter)
+    }
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {

@@ -55,7 +55,8 @@ export class DaemonPtyRouter implements IPtyProvider {
       exitProof: this.legacyExitProof,
       ownerResolver: () => this.ownerResolver,
       subscriptions: () => this.subscriptions,
-      legacyIdleRetirementTiming: opts.legacyIdleRetirementTiming
+      legacyIdleRetirementTiming: opts.legacyIdleRetirementTiming,
+      retiring: opts.retiring ?? []
     })
     for (const adapter of this.allAdapters()) {
       // A close that finds no session asks every daemon this router knows before ending history.
@@ -83,14 +84,9 @@ export class DaemonPtyRouter implements IPtyProvider {
       (adapter) => this.ownerResolver.invalidateProvider(adapter)
     )
     this.legacyExitProof.record(this.legacy)
-    for (const adapter of opts.retiring ?? []) {
-      this.spawner.legacyIdle.adoptRetiring(adapter)
-    }
   }
 
-  getRetiringAdapters(): DaemonPtyAdapter[] {
-    return this.spawner.legacyIdle.retiringAdapters()
-  }
+  readonly getRetiringAdapters = (): DaemonPtyAdapter[] => this.spawner.legacyIdle.retiringAdapters()
 
   async discoverLegacySessions(): Promise<void> {
     await this.ownerResolver.discoverRoutes()
@@ -359,18 +355,14 @@ export class DaemonPtyRouter implements IPtyProvider {
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }
 
-  getCurrentAdapter(): DaemonPtyAdapter {
-    return this.current
-  }
+  getCurrentAdapter = (): DaemonPtyAdapter => this.current
 
   // Preserve array identity while removing exited legacy adapters in place.
   getLegacyAdapters(): readonly DaemonPtyAdapter[] {
     return this.legacy
   }
 
-  getAllAdapters(): readonly DaemonPtyAdapter[] {
-    return this.allAdapters()
-  }
+  getAllAdapters = (): readonly DaemonPtyAdapter[] => this.allAdapters()
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
     return this.sessionAdapters.get(sessionId) ?? this.current

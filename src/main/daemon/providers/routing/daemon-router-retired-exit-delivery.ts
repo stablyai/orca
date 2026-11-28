@@ -30,13 +30,10 @@ export class DaemonRouterRetiredExitDelivery {
     return Array.from(this.lingering.keys())
   }
 
-  /** Carried over from the router a restart replaced, already unrouted. */
+  /** Carried over from the router a restart replaced, already unrouted; settled once that router is built. */
   adopt(adapter: DaemonPtyAdapter): void {
-    if (!adapter.hasWatchedSessions()) {
-      this.options.release(adapter)
-      return
-    }
     this.wait(adapter)
+    queueMicrotask(() => this.settle(adapter))
   }
 
   /** The generation retired, or one of its owed exits arrived. */

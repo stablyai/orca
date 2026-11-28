@@ -17,6 +17,10 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
   private stopHeldWatch: (() => void) | null = null
   /** Bridge exits awaiting classification: their sessions may already be gone from `activeSessionIds`. */
   protected exitsClassifying = 0
+  protected readonly exitClassificationFailed = (error: unknown): never => {
+    this.exitsClassifying--
+    throw error
+  }
 
   /** Asks an older generation to retire by itself once it owns nothing; 'unsupported' predates the request. */
   async askRetireWhenIdle(

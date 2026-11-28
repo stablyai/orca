@@ -238,9 +238,8 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
         // A terminate never exits 0 (awin: -1 per bridge pane; `exit`/`exit 0` gave 0): a clean exit is
         // the user's own, so it closes at once, without the settle wait or classification.
         if (wslDistro && event.payload.code !== 0 && isProvenProcessExit(event.payload.code)) {
-          const exitAt = performance.now()
           this.exitsClassifying++
-          void this.finishWslBridgeExit(event.sessionId, event.payload, wslDistro, exitAt)
+          void this.finishWslBridgeExit(event.sessionId, event.payload, wslDistro, performance.now())
           return
         }
         this.finishExit(event.sessionId, event.payload)
@@ -262,15 +261,11 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
     wslDistro: string,
     exitAt: number
   ): Promise<void> {
-    let verdict: Awaited<ReturnType<typeof classifyWslBridgeExit>>
-    try {
-      verdict = await classifyWslBridgeExit(wslDistro, exitAt, this.readRunningWslDistros, () =>
-        this.wslBridgeBootIdentity.rebootedSinceSpawn(sessionId, wslDistro)
-      )
-    } finally {
-      // In the same turn as the emit below, so no check sees it neither classifying nor exited.
-      this.exitsClassifying--
-    }
+    const verdict = await classifyWslBridgeExit(wslDistro, exitAt, this.readRunningWslDistros, () =>
+      this.wslBridgeBootIdentity.rebootedSinceSpawn(sessionId, wslDistro)
+    ).catch(this.exitClassificationFailed)
+    // In the same turn as the emit below, so no check sees it neither classifying nor exited.
+    this.exitsClassifying--
     // Lost, or booted again since the spawn, keeps the tab; an unanswered check reads as an exit.
     // The code shows a verify run which codes a terminate yields.
     const probeMs = Math.round(performance.now() - exitAt)
