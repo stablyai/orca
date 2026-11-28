@@ -76,6 +76,7 @@ describe('files sent with mail to a bot on a paired server', () => {
   let journal: ReturnType<typeof openTestJournalHostDatabase>
   /** The upload's claims on B, by chat; none means the sweep treats it as unused. */
   const claimsOn = (path: string): string[] =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects only session_id, a TEXT column.
     (
       journal.db
         .prepare('SELECT session_id FROM agent_session_attachment_claims WHERE upload_id = ?')
@@ -85,6 +86,7 @@ describe('files sent with mail to a bot on a paired server', () => {
   let lostCommit: number | null
   let releaseFails: boolean
   let deliveryTimesOut: boolean
+  let claimClock = 1_000_000
 
   function openSide(name: string, machine: string, transport?: OrchestrationEnvironmentTransport) {
     const db = new OrchestrationDb(join(dir, `${name}.db`))
@@ -257,6 +259,7 @@ describe('files sent with mail to a bot on a paired server', () => {
   const methods = () => calls.map(({ method }) => method)
   /** Questions A still waits on an answer for. */
   const questionsOut = () =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: COUNT(*) AS n always returns one row with a number.
     (a.db.db.prepare('SELECT COUNT(*) AS n FROM peer_questions_out').get() as { n: number }).n
 
   beforeEach(() => {
@@ -284,7 +287,8 @@ describe('files sent with mail to a bot on a paired server', () => {
       bStore,
       async (sessionId, body) => {
         claimedFor.push(sessionId)
-        const now = Date.now()
+        // A fixed clock: each claim its own moment, as the release tells them apart.
+        const now = (claimClock += 1)
         const claim = { sessionId, body, required: true, now }
         const claimed = applyJournalWriterEffect(journal.db, bState, { kind: 'claim', claim })
         duringClaim?.()
@@ -350,6 +354,7 @@ describe('files sent with mail to a bot on a paired server', () => {
     await send({ to: 'bot:Docs', files: [image] })
 
     const [message] = b.db.getUnreadMessages(CHAT_ON_B)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a bot request's payload is the JSON botRequestPayload writes, whose images are store paths.
     const { images } = JSON.parse(message!.payload!) as { images?: string[] }
     expect(images).toEqual([expect.stringContaining(bStore.rootDir)])
     expect(images![0]).toContain('shot.png')
@@ -521,7 +526,7 @@ describe('files sent with mail to a bot on a paired server', () => {
         "Timed out. The message wasn't sent. A file may have been copied to devB for it; if so, it is attached to nothing there, and Orca on devB clears unused uploads later.",
       data: { unattachedUploads: 0, maybeUploadedOneMore: true }
     })
-    expect((error as { data: { effectsApplied?: unknown } }).data.effectsApplied).toBeUndefined()
+    expect(error).not.toHaveProperty('data.effectsApplied')
     expect(committed).toHaveLength(1)
     expect(b.db.getInbox(10)).toEqual([])
   })
@@ -617,6 +622,7 @@ describe('files sent with mail to a bot on a paired server', () => {
     const path = await bStore.storeFile('shared.txt', Buffer.from('x'))
     const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: `@${path}` }] }
     const claim = (now: number) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a claim effect returns its referenced and inserted uploads.
       applyJournalWriterEffect(journal.db, bState, {
         kind: 'claim',
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a user message naming one upload is all the claim reads.

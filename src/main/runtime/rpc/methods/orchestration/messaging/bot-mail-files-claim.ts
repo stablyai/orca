@@ -143,10 +143,13 @@ export function peerMailStored(error: unknown): OrchestrationError {
   )
 }
 
+/** What a relabeled refusal adds to its data. */
+type RelabelFacts = { effectsApplied: boolean; filesMaybeKept?: true }
+
 function relabeled(
   error: unknown,
   code: string,
-  extra: object,
+  extra: RelabelFacts,
   say: (reason: string) => string = (reason) => reason
 ): OrchestrationError {
   const known = error instanceof OrchestrationError
