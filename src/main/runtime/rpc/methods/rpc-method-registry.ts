@@ -76,6 +76,9 @@ import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessio
 import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-sessions/attachments/structured-agent-session-visual'
 import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-sessions/catalog/structured-agent-session-agents'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-sessions/structured-agent-session'
+import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
+import { TERMINAL_DAEMON_METHODS } from './terminal/terminal-daemon'
+import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
 import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 
@@ -102,6 +105,7 @@ const CORE_RPC_METHODS = [
   ...STRUCTURED_AGENT_SESSION_VISUAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
   ...STRUCTURED_AGENT_SESSION_METHODS,
+  ...AGENT_ACTIVITY_METHODS,
   ...AGENT_LAUNCH_METHODS
 ] as const
 
@@ -162,6 +166,8 @@ const SERVICE_RPC_METHODS = [
   ...GIT_METHODS,
   ...CLIPBOARD_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
+  ...TERMINAL_DAEMON_METHODS,
+  ...CLIENT_UI_METHODS,
   ...NATIVE_CHAT_METHODS
 ] as const
 
