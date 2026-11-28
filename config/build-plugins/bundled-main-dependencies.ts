@@ -1,5 +1,10 @@
 // Main-process dependencies compiled into the bundle instead of loaded from node_modules.
 export const BUNDLED_MAIN_DEPENDENCIES = new Set([
+  // Keep the pure-JS preview decoder and its dependency versions inside the worker bundle.
+  '@jimp/core',
+  '@jimp/js-jpeg',
+  '@jimp/js-png',
+  '@jimp/plugin-resize',
   'stream-json',
   'stream-chain',
   '@xterm/headless',
