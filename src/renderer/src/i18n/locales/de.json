@@ -1924,7 +1924,8 @@
         "add": "Server für dieses Repo hinzufügen",
         "files": "Aus den Dateien dieses Repos",
         "open": "{{file}} öffnen"
-      }
+      },
+      "unreadable": "Gespeicherte Anmeldung oder Schlüssel lässt sich auf diesem Computer nicht öffnen"
     }
   },
   "menu": {
@@ -22687,7 +22688,9 @@
           "needsAuthAfterSend": "Anmeldung nötig. Zum Anmelden hier eine Nachricht senden.",
           "pending": "Verbindung wird hergestellt…",
           "tools_one": "{{count}} Werkzeug",
-          "tools_other": "{{count}} Werkzeuge"
+          "tools_other": "{{count}} Werkzeuge",
+          "orcaRemoved": "Entfernt: Neustart bei der nächsten Nachricht",
+          "orcaChanged": "Geändert: Neustart bei der nächsten Nachricht"
         },
         "signIn": {
           "external": "Auf der geöffneten Seite abschließen",
@@ -22728,7 +22731,8 @@
           "user": "Benutzer",
           "plugin": "Plugin",
           "session": "Sitzung"
-        }
+        },
+        "stillFailing": "Nach dem erneuten Verbinden weiterhin fehlerhaft."
       }
     },
     "tab": {

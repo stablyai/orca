@@ -76,11 +76,13 @@ export function NativeChatMcpTray({
   )
   // An agent at rest has no servers to list; re-read once it starts or stops.
   const phase = useStructuredAgentSessionHostExecutionPhase(sessionId, target)
-  const panel = useAgentSessionMcpPanel(call, openSignInPage, `${opens}:${phase}`)
-  const readAgain = panel.retry
-  const [retrying, setRetrying] = useState(false)
   // Only a host whose MCP servers are on has a settings page for them.
   const managed = useStructuredAgentSessionHostCapability(target, MCP_SERVERS_RUNTIME_CAPABILITY)
+  const panel = useAgentSessionMcpPanel(call, openSignInPage, `${opens}:${phase}`, {
+    reconnectFeedback: managed
+  })
+  const readAgain = panel.retry
+  const [retrying, setRetrying] = useState(false)
   const retry = useCallback(() => {
     setRetrying(true)
     void readAgain().finally(() => setRetrying(false))

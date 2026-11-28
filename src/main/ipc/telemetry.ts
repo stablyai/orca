@@ -2,10 +2,6 @@
 
 import { BrowserWindow, ipcMain } from 'electron'
 import { consumeConsentMutationToken } from '../telemetry/burst-cap'
-import {
-  assignBrowserExtensionsBanner,
-  initBrowserExtensionsBanner
-} from '../telemetry/browser-extensions-banner'
 import type { BrowserExtensionsBannerAssignmentReply } from '../../shared/browser/extensions/browser-extensions-banner'
 import { isTrustedBrowserRenderer } from './browser/browser-renderer-trust'
 import { hasTrackedAgentDashboardActiveToday } from '../telemetry/agent-dashboard-active-days'
@@ -23,6 +19,7 @@ import type { OptInVia } from '../../shared/telemetry/schemas/telemetry-property
 
 // Derive consent provenance synchronously from pre-mutation settings.
 let storeRef: Store | null = null
+let bannerInitializedStore: Store | null = null
 
 const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'agent_dashboard_enabled',
@@ -75,14 +72,22 @@ function deriveOptInVia(store: Store, incomingOptedIn: boolean): OptInVia {
 
 export function registerTelemetryHandlers(store: Store): void {
   storeRef = store
-  initBrowserExtensionsBanner(store)
+  bannerInitializedStore = null
 
   ipcMain.handle(
     'telemetry:assignBrowserExtensionsBanner',
-    (event): Promise<BrowserExtensionsBannerAssignmentReply> =>
-      isTrustedBrowserRenderer(event.sender)
-        ? assignBrowserExtensionsBanner()
-        : Promise.resolve({ status: 'not_ready' })
+    async (event): Promise<BrowserExtensionsBannerAssignmentReply> => {
+      if (!isTrustedBrowserRenderer(event.sender) || !storeRef) {
+        return { status: 'not_ready' }
+      }
+      const { assignBrowserExtensionsBanner, initBrowserExtensionsBanner } =
+        await import('../telemetry/browser-extensions-banner')
+      if (bannerInitializedStore !== storeRef) {
+        bannerInitializedStore = storeRef
+        initBrowserExtensionsBanner(storeRef)
+      }
+      return assignBrowserExtensionsBanner()
+    }
   )
 
   ipcMain.handle('telemetry:track', (event, name: unknown, props: unknown): boolean => {
