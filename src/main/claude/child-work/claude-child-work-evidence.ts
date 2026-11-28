@@ -43,6 +43,9 @@ export type DecodedClaudeTask = {
   uncertain?: true
   /** The tool call that started it has had its result: a foreground command must have ended by then. */
   answered?: true
+  /** A workflow whose phase line is on screen, with its last agent summary: the ending reports that,
+   *  not the phase line admission would otherwise keep as its message. */
+  phased?: { summary?: string }
 }
 
 export function claudeChildWorkObservation(
@@ -108,11 +111,16 @@ export function claudeChildWorkOutcome(status: unknown): AgentChildWorkOutcome {
   }
 }
 
-export function claudeTaskProgressFacts(message: Record<string, unknown>): ClaudeTaskFacts {
+export function claudeTaskProgressFacts(
+  message: Record<string, unknown>,
+  task?: DecodedClaudeTask
+): ClaudeTaskFacts {
   const toolName = taskText(message.last_tool_name)
-  // A Workflow's phase progress says more than its last agent's summary.
+  // A Workflow's phase progress says more than its last agent's summary, and a throttled frame
+  // without the snapshot keeps the phase line rather than replacing it with a summary.
   const lastMessage =
-    claudeWorkflowProgressText(message.workflow_progress) ?? taskText(message.summary)
+    claudeWorkflowProgressText(message.workflow_progress) ??
+    (task?.phased ? undefined : taskText(message.summary))
   const totalTokens = taskUsageTotalTokens(message)
   return {
     ...(toolName ? { toolName } : {}),

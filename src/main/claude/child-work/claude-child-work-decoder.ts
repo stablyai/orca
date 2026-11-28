@@ -188,7 +188,8 @@ export class ClaudeChildWorkDecoder {
     }
     // Progress descriptions describe the current activity, not the task.
     const name = task.name ?? taskName(message)
-    this.upsert(id, { ...tf.claudeTaskSeenAgain(task), name }, claudeTaskProgressFacts(message))
+    const seen = tf.claudeTaskSeenAgain(task, message)
+    this.upsert(id, { ...seen, name }, claudeTaskProgressFacts(message, seen))
   }
 
   private updated(
@@ -323,7 +324,7 @@ export class ClaudeChildWorkDecoder {
         ...(reported.runId !== undefined ? { runId: reported.runId } : {})
       },
       outcome,
-      ...(reported.lastMessage ? { lastMessage: reported.lastMessage } : {}),
+      ...tf.claudeEndedMessage(task, reported.lastMessage),
       ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {})
     }))
     // Its own foreground commands could not outlive it either.
