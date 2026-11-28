@@ -17,6 +17,7 @@ import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-hos
 import { translate } from '@/i18n/i18n'
 import { classifyHtmlSuperscriptLinkAction } from '../citations/rich-markdown-html-superscript-link-context'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
+import { scrollToFootnoteDefinition } from '../footnotes/rich-markdown-footnote-navigation'
 import { getClickedLinkHref } from './rich-markdown-link-dom-events'
 import type { MutableRefObject } from 'react'
 import type { Editor } from '@tiptap/react'
@@ -97,6 +98,12 @@ export function handleRichMarkdownEditorClick({
       onOpenDocLinkRef.current?.(clickedNode.attrs.target as string)
       return true
     }
+  }
+  if (clickedNode?.type.name === 'richMarkdownFootnoteReference') {
+    const identifier = String(clickedNode.attrs.identifier ?? '')
+    return (
+      Boolean(identifier) && scrollToFootnoteDefinition(rootRef.current ?? view.dom, identifier)
+    )
   }
   const isSuperscriptLink = clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink'
   const href = isSuperscriptLink

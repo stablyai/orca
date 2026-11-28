@@ -7,6 +7,11 @@ import { normalizeMarkdownReferenceLinks } from '../../markdown/source-scanning/
 import type { RichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { isReservedRichMarkdownTransportBody } from '../document/rich-markdown-source-transport'
 import { matchHtmlSuperscriptLinkSource } from '../citations/rich-markdown-html-superscript-link-source'
+import {
+  collectDefinedFootnoteIdentifiers,
+  matchFootnoteDefinitionLinePrefix,
+  matchFootnoteReferenceSource
+} from '../footnotes/rich-markdown-footnote-source'
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
 
@@ -48,6 +53,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
   { htmlSuperscriptLinks = false }: { htmlSuperscriptLinks?: boolean } = {}
 ): string {
   const normalizedContent = normalizeMarkdownReferenceLinks(content)
+  const definedFootnoteIdentifiers = collectDefinedFootnoteIdentifiers(normalizedContent)
   const matchDetails = createDetailsMatcher(normalizedContent)
   const lastCommentClose = normalizedContent.lastIndexOf('-->')
   const { transport } = codec
@@ -56,7 +62,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
   let activeFence: '`' | '~' | null = null
   let activeFenceLength = 0
   let result = ''
-  const nonWhitespace = /\S/g
+  const nonWhitespace = /[^ \t\r\n>]/g
   const fencePrefix = /(`{3,}|~{3,})/y
   let fenceProbe = -1
   let fenceMatch: RegExpExecArray | null = null
@@ -64,20 +70,28 @@ export function encodeRawMarkdownHtmlForRichEditor(
   while (index < normalizedContent.length) {
     const isLineStart = index === 0 || normalizedContent[index - 1] === '\n'
     if (isLineStart) {
-      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
+      // Reuse the lookahead across blank lines while toggling fences only on the fence's own line.
       if (index > fenceProbe) {
         nonWhitespace.lastIndex = index
         fenceProbe = nonWhitespace.exec(normalizedContent)?.index ?? normalizedContent.length
         fencePrefix.lastIndex = fenceProbe
         fenceMatch = fencePrefix.exec(normalizedContent)
       }
-      if (fenceMatch) {
+      const lineEnd = findLineEnd(normalizedContent, index)
+      if (fenceMatch && fenceProbe < lineEnd) {
         const fenceChar = fenceMatch[1][0] as '`' | '~'
         const fenceLength = fenceMatch[1].length
+        const trailing = normalizedContent.slice(fenceProbe + fenceLength, lineEnd)
         if (activeFence === null) {
-          activeFence = fenceChar
-          activeFenceLength = fenceLength
-        } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
+          if (fenceChar === '~' || !trailing.includes('`')) {
+            activeFence = fenceChar
+            activeFenceLength = fenceLength
+          }
+        } else if (
+          activeFence === fenceChar &&
+          fenceLength >= activeFenceLength &&
+          /^[ \t]*\r?$/.test(trailing)
+        ) {
           activeFence = null
           activeFenceLength = 0
         }
@@ -144,6 +158,15 @@ export function encodeRawMarkdownHtmlForRichEditor(
         index += blockHtml.length
         continue
       }
+
+      if (definedFootnoteIdentifiers.size > 0) {
+        const footnotePrefixEnd = matchFootnoteDefinitionLinePrefix(normalizedContent, index)
+        if (footnotePrefixEnd !== null) {
+          result += normalizedContent.slice(index, footnotePrefixEnd)
+          index = footnotePrefixEnd
+          continue
+        }
+      }
     }
 
     // Keep authored random-envelope prefixes literal, including after edits and in HTML-free documents.
@@ -200,6 +223,24 @@ export function encodeRawMarkdownHtmlForRichEditor(
           index = closingIndex + 2
           continue
         }
+      }
+    }
+
+    if (
+      definedFootnoteIdentifiers.size > 0 &&
+      normalizedContent[index] === '[' &&
+      normalizedContent[index + 1] === '^' &&
+      !isEscaped(normalizedContent, index)
+    ) {
+      const footnoteRef = matchFootnoteReferenceSource(
+        normalizedContent,
+        index,
+        definedFootnoteIdentifiers
+      )
+      if (footnoteRef) {
+        result += transport.create('footnote-ref', footnoteRef.identifier)
+        index = footnoteRef.end
+        continue
       }
     }
 

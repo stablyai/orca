@@ -33,6 +33,7 @@ import {
   getRichMarkdownPlaceholder
 } from '../details/rich-markdown-details-extension'
 import { createMarkdownDocLink } from '../doc-links/rich-markdown-doc-link'
+import { createRichMarkdownFootnoteExtensions } from '../footnotes/rich-markdown-footnotes-extension'
 import { RichMarkdownCodeBlock } from '../code-blocks/RichMarkdownCodeBlock'
 import { ReactNodeViewRenderer } from '@tiptap/react'
 import { positionStableNodeViewUpdate } from './position-stable-node-view-update'
@@ -292,6 +293,7 @@ export function createRichMarkdownExtensions({
     createRawMarkdownHtmlInline(codec.transport),
     createRawMarkdownHtmlBlock(codec.transport),
     createMarkdownDocLink(codec.transport),
+    ...createRichMarkdownFootnoteExtensions(codec.transport),
     DragSelectionGuard,
     createRichMarkdownExtension(codec, htmlSuperscriptLinks).configure({
       marked: codec.marked,
@@ -304,10 +306,7 @@ export function createRichMarkdownExtensions({
 
   if (includePlaceholder) {
     extensions.push(
-      Placeholder.configure({
-        includeChildren: true,
-        placeholder: getRichMarkdownPlaceholder
-      })
+      Placeholder.configure({ includeChildren: true, placeholder: getRichMarkdownPlaceholder })
     )
   }
 
@@ -315,6 +314,5 @@ export function createRichMarkdownExtensions({
 }
 
 function getImageContextVersion(storage: Record<string, unknown>): number {
-  const version = storage.contextVersion
-  return typeof version === 'number' ? version : 0
+  return typeof storage.contextVersion === 'number' ? storage.contextVersion : 0
 }
