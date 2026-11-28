@@ -1,6 +1,7 @@
 import type { RetainedUpdateTarget } from './retained-update-target'
 import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
+import type { SourceControlVisibleRow } from '../../../../../shared/source-control/listing/source-control-visible-row'
 import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
   ActivityGroupBy,
@@ -186,6 +187,13 @@ export type UISliceSurfaces = {
   // Why: cleared by the diff decorator after it reveals the line, so the same id can be requested again without a stale value.
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void
+  /** Uncommitted rows the mounted Source Control panels display, by worktree; diff-change navigation follows them. */
+  sourceControlVisibleRowsByWorktree: Record<string, readonly SourceControlVisibleRow[]>
+  /** null clears a worktree's rows, e.g. when its panel unmounts. */
+  setSourceControlVisibleRows: (
+    worktreeId: string,
+    rows: readonly SourceControlVisibleRow[] | null
+  ) => void
   /** Floating cwd resolved like runtime session cwd; null until resolved. */
   floatingWorkspacePath: string | null
   setFloatingWorkspacePath: (path: string | null) => void

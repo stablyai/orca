@@ -193,6 +193,22 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
       ),
     scrollToDiffCommentId: null,
     setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
+    sourceControlVisibleRowsByWorktree: {},
+    // Why: identity is enough because each panel hands back a memoized list.
+    setSourceControlVisibleRows: (worktreeId, rows) =>
+      set((state) => {
+        const current = state.sourceControlVisibleRowsByWorktree[worktreeId]
+        if (rows ? current === rows : current === undefined) {
+          return state
+        }
+        const nextRows = { ...state.sourceControlVisibleRowsByWorktree }
+        if (rows) {
+          nextRows[worktreeId] = rows
+        } else {
+          delete nextRows[worktreeId]
+        }
+        return { sourceControlVisibleRowsByWorktree: nextRows }
+      }),
     floatingWorkspacePath: null,
     setFloatingWorkspacePath: (path) =>
       set((state) =>

@@ -11,6 +11,7 @@ import { exportActiveMarkdownToPdf } from './markdown/export/export-active-markd
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import { EditorPanelShell } from './panel/EditorPanelShell'
 import { DiffNavigationProvider } from './diff/review/diff-navigation-context'
+import { useWorktreeDiffFileNavigation } from './diff/review/useWorktreeDiffFileNavigation'
 import { EditorCommandOwnerContext } from './commands/editor-command-owner-context'
 import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
 import { getEditorPanelRenderModel } from './panel/editor-panel-render-model'
@@ -186,6 +187,16 @@ function EditorPanelInner({
     openFiles,
     requestRenameForFile
   })
+  const {
+    canNavigateWorktreeFile,
+    handleNavigateWorktreeFile,
+    isWorktreeFileNavigationSurface,
+    worktreeFileArrivalReveal
+  } = useWorktreeDiffFileNavigation({
+    activeFile,
+    viewStateId: activeViewStateId,
+    requestedChangesMode
+  })
   useEditorCmdSaveRequest({
     activeFile,
     openFiles,
@@ -242,6 +253,7 @@ function EditorPanelInner({
     markdownDefaultViewMode,
     markdownRichModeSizeOverridden,
     isChangesMode,
+    hasWorktreeDiffNavigation: canNavigateWorktreeFile,
     canOpenWorkspaceFileBrowser,
     ...customEditors
   })
@@ -322,7 +334,11 @@ function EditorPanelInner({
   return (
     <EditorCommandOwnerContext value={isCmdSaveOwner}>
       {/* Split panes need independent bridges between diff editors and header controls. */}
-      <DiffNavigationProvider>
+      <DiffNavigationProvider
+        canNavigateFile={canNavigateWorktreeFile}
+        onNavigateFile={isWorktreeFileNavigationSurface ? handleNavigateWorktreeFile : undefined}
+        arrivalReveal={worktreeFileArrivalReveal}
+      >
         <EditorPanelShell
           panelRef={setPanelRef}
           activeFile={viewedFile}
