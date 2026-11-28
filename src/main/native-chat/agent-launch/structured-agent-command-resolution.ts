@@ -8,6 +8,7 @@ import {
   resolveCliCommand,
   resolveExecutableCommand
 } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { isCodexAppFallback } from '../../../shared/shell/command-resolution/macos-codex-app-launcher'
 import {
   hasExplicitTuiLaunchCommand,
   structuredAgentCommandPlan
@@ -67,6 +68,7 @@ function resolveOverride(
   const command = plan
     ? resolveExecutableCommand(plan.program, {
         ...options,
+        codexAppFallback: agent === 'codex',
         pathEnv: guestNativePathEnv(options.pathEnv ?? overlay?.PATH ?? overlay?.Path)
       })
     : null
@@ -96,10 +98,15 @@ export function resolveStructuredAgentCommand(
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
-    const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
+    const resolved = resolveGuestNativeProgram(
+      command,
+      { ...options, codexAppFallback: agent === 'codex' },
+      stock.resolve
+    )
     // The user's own install wins; Orca's copy serves hosts that have none, where it may run.
     const managed =
-      stock.managedCopy !== false && (resolved === null || !isAbsolute(resolved))
+      stock.managedCopy !== false &&
+      (resolved === null || !isAbsolute(resolved) || isCodexAppFallback(resolved, options.pathEnv))
         ? managedAgentCommandFor(agent, command)
         : null
     if (managed) {

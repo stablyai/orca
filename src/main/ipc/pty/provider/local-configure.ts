@@ -90,7 +90,7 @@ export function configureLocalPtyProvider(args: {
     const agentsOnPath = agentStatusHooksEnabled
       ? await detectBareShellPluginAgentsOnPath(ptySettings)
       : undefined
-    const env = buildPtyHostEnv(id, baseEnv, {
+    const env = await buildPtyHostEnv(id, baseEnv, {
       isPackaged: getAppEnvironment().isPackaged(),
       resourcesPath: process.resourcesPath,
       userDataPath: getAppEnvironment().getPath('userData'),

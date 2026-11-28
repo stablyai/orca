@@ -246,7 +246,7 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
     const agentsOnPath = agentStatusHooksEnabled
       ? await detectBareShellPluginAgentsOnPath(ptySettings)
       : undefined
-    buildPtyHostEnv(sessionId, env, {
+    await buildPtyHostEnv(sessionId, env, {
       isPackaged: getAppEnvironment().isPackaged(),
       resourcesPath: process.resourcesPath,
       userDataPath: getAppEnvironment().getPath('userData'),

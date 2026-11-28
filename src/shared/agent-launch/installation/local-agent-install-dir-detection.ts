@@ -13,6 +13,7 @@ export function detectCommandsInInstallDirs(
   }
   try {
     const resolvedCommands = resolveCliCommands(commands, {
+      codexAppFallback: true,
       ...(pathEnv === undefined ? {} : { pathEnv }),
       ...(options?.skipPathSearch ? { skipPathSearch: true } : {})
     })

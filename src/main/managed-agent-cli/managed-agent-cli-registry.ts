@@ -26,6 +26,7 @@ import {
 import { readInheritedPath } from '../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
+import { findCodexAppBinDirectory } from '../../shared/shell/command-resolution/macos-codex-app-launcher'
 
 // Hermes ships only as a git checkout its installer builds with uv, so it stays the user's own install.
 export const MANAGED_AGENT_CLI_IDS = [
@@ -170,17 +171,21 @@ export function onManagedAgentUse(listener: (agent: ManagedAgentCliId) => void):
   managedUseListener = listener
 }
 
-/** Last on PATH, so sign-in commands and CLI tabs reach Orca's copies and never shadow the user's own. */
-export function appendManagedAgentDirsToChildPath(
+/** Last on PATH, so sign-in commands and CLI tabs reach fallback launchers without shadowing existing CLIs. */
+export async function appendAgentFallbackDirsToChildPath(
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform
-): void {
+): Promise<void> {
   delete env.ORCA_MANAGED_AGENT_PATH
   // Opening a terminal isn't use of an agent, so this reads the folders without the use hook.
   const folders = MANAGED_AGENT_CLI_IDS.flatMap((agent) => {
     const folder = installedFolders.get(agent)
     return folder ? [dirname(MANAGED_AGENT_CLIS[agent].executable(folder))] : []
   })
+  const codexAppBin = await findCodexAppBinDirectory(platform, env.HOME)
+  if (codexAppBin) {
+    folders.push(codexAppBin)
+  }
   if (folders.length === 0) {
     return
   }
@@ -191,6 +196,6 @@ export function appendManagedAgentDirsToChildPath(
   if (missing.length > 0) {
     env[key] = [...entries, ...missing].join(separator)
   }
-  // Startup files re-add them after a login profile rebuilds PATH.
+  // Startup files re-add these fallbacks after a login profile rebuilds PATH.
   env.ORCA_MANAGED_AGENT_PATH = folders.join(separator)
 }
