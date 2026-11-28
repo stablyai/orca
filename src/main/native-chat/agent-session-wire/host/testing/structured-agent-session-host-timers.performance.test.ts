@@ -197,9 +197,10 @@ it('keeps the existing deadlines only while chats or leases need them', async ()
     await vi.advanceTimersByTimeAsync(9_999)
     expect(probe).not.toHaveBeenCalled()
     await release(first)
+    const renewalDeadline = Date.now() + 1
     await vi.advanceTimersByTimeAsync(1)
     await vi.waitFor(() =>
-      expect(store.getRecord(second.sessionId)?.lease.lastRenewedAt).toBe(Date.now())
+      expect(store.getRecord(second.sessionId)?.lease.lastRenewedAt).toBe(renewalDeadline)
     )
     expect(probe.mock.calls).toHaveLength(1)
     await release(second)
