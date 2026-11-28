@@ -9,6 +9,7 @@ import type {
 import type { AgentSessionMcpPanelState } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp-panel'
 import {
   agentSessionMcpRowFailure,
+  agentSessionMcpShownStatus,
   agentSessionMcpServerDisplayName,
   groupAgentSessionMcpServers,
   ORCA_MCP_SOURCE
@@ -217,7 +218,7 @@ function McpServerRow({
     <View>
       <View style={styles.row}>
         <View style={styles.mark}>
-          <StatusMark status={signingIn ? 'pending' : server.status} />
+          <StatusMark status={signingIn ? 'pending' : agentSessionMcpShownStatus(server)} />
         </View>
         <Text style={styles.name} numberOfLines={1}>
           {agentSessionMcpServerDisplayName(server)}
@@ -225,7 +226,7 @@ function McpServerRow({
         <Text
           style={[
             styles.statusLine,
-            !signingIn && server.status === 'failed' && styles.statusLineFailed
+            !signingIn && agentSessionMcpShownStatus(server) === 'failed' && styles.statusLineFailed
           ]}
           numberOfLines={1}
         >
@@ -295,7 +296,9 @@ function McpServerRow({
                 'chat.mcp.signInUnfinished',
                 "Sign-in isn't finished yet. Finish it on the page that opened, then tap Done."
               )
-            : (refusal.message ?? t('chat.mcp.actionFailed', "Couldn't do that. Try again."))}
+            : refusal.kind === 'stillFailing'
+              ? t('chat.mcp.stillFailing', 'Still failing after reconnecting.')
+              : (refusal.message ?? t('chat.mcp.actionFailed', "Couldn't do that. Try again."))}
         </Text>
       ) : null}
       {signingIn?.finish === 'callback' ? (

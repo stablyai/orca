@@ -1516,7 +1516,8 @@
         "add": "为此仓库添加服务器",
         "files": "来自此仓库的文件",
         "open": "打开 {{file}}"
-      }
+      },
+      "unreadable": "已保存的登录或密钥无法在这台电脑上打开。请登录，或在下方重新输入密钥。"
     },
     "navigation": {
       "accounts": {
@@ -21645,7 +21646,9 @@
           "failedReason": "失败：{{error}}",
           "disabled": "已禁用",
           "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录",
-          "notStarted": "尚未启动"
+          "notStarted": "尚未启动",
+          "orcaRemoved": "已移除：下一条消息时重新启动",
+          "orcaChanged": "已更改：下一条消息时重新启动"
         },
         "signIn": {
           "action": "登录",
@@ -21660,7 +21663,8 @@
           "unfinished": "尚未完成登录，请在打开的页面上完成，然后点击“完成”",
           "pastePlaceholder": "http://localhost:…"
         },
-        "manage": "管理 MCP 服务器"
+        "manage": "管理 MCP 服务器",
+        "stillFailing": "重新连接后仍然失败。"
       },
       "ciResultLine": {
         "failingLead": "CI 失败于",

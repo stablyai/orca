@@ -13,10 +13,8 @@ import {
   type McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
 import { botToolDetailsOf, resolveBotToolInput } from '../bots/bot-tool-details'
-import {
-  botToolCredentialsFingerprint,
-  withSavedBotToolHeaders
-} from '../bots/bot-tool-credentials'
+import { botToolCredentialsFingerprint } from '../bots/bot-tool-credentials'
+import { withSavedBotToolHeaders } from '../bots/bot-tool-saved-headers'
 import {
   botOwnTools,
   botToolEntries,
@@ -128,7 +126,8 @@ export async function storedViews(folder: string, ids: readonly string[]): Promi
   })
   const tools = botOwnTools(
     entries.map((entry) => entry.server),
-    folder
+    folder,
+    { unreadable: true }
   )
   return entries.map((entry, i) => viewOf(entry, tools[i]!))
 }
@@ -157,7 +156,8 @@ export async function readMcpHostList(
   const { entries, file } = await readHostEntries(folder)
   const tools = botOwnTools(
     entries.map((entry) => entry.server),
-    folder
+    folder,
+    { unreadable: true }
   )
   return {
     servers: entries.map((entry, i) => viewOf(entry, tools[i]!)),

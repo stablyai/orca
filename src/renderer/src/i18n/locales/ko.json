@@ -1528,7 +1528,8 @@
         "add": "이 저장소에 서버 추가",
         "files": "이 저장소 파일에 있는 서버",
         "open": "{{file}} 열기"
-      }
+      },
+      "unreadable": "저장된 로그인 또는 키를 이 컴퓨터에서 열 수 없습니다. 로그인하거나 아래에 키를 다시 입력하세요."
     }
   },
   "menu": {
@@ -22353,7 +22354,9 @@
           "needsAuth": "로그인 필요",
           "needsAuthAfterSend": "로그인이 필요합니다. 메시지를 보내면 여기서 로그인할 수 있습니다.",
           "pending": "연결 중…",
-          "tools_other": "도구 {{count}}개"
+          "tools_other": "도구 {{count}}개",
+          "orcaRemoved": "제거됨: 다음 메시지에서 다시 시작",
+          "orcaChanged": "변경됨: 다음 메시지에서 다시 시작"
         },
         "signIn": {
           "external": "열린 페이지에서 완료하세요",
@@ -22394,7 +22397,8 @@
           "user": "사용자",
           "plugin": "플러그인",
           "session": "세션"
-        }
+        },
+        "stillFailing": "다시 연결한 후에도 실패합니다."
       }
     },
     "tab": {

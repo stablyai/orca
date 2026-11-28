@@ -89,7 +89,10 @@ function useOrcaMcpProblems(
 }
 
 function McpTrayContent({ panel }: { panel: MobileStructuredMcpPanel }) {
-  const state = useAgentSessionMcpPanel(panel.request, openExternalLink, panel.refreshKey)
+  // Only a host whose MCP servers are on (it has their page) says a reconnect is still failing.
+  const state = useAgentSessionMcpPanel(panel.request, openExternalLink, panel.refreshKey, {
+    reconnectFeedback: panel.manage !== null
+  })
   // Before the agent starts, Orca checks its own servers and signs in to them itself.
   const problems = useOrcaMcpProblems(
     panel.orca,

@@ -1154,7 +1154,9 @@
         "pending": "接続中…",
         "tools_other": "{{count}} 個のツール",
         "waitingForSignIn": "サインイン待ち…",
-        "tools_one": "{{count}} 個のツール"
+        "tools_one": "{{count}} 個のツール",
+        "orcaRemoved": "削除済み: 次のメッセージで再起動します",
+        "orcaChanged": "変更済み: 次のメッセージで再起動します"
       },
       "source": {
         "project": "プロジェクト",
@@ -1186,7 +1188,8 @@
         "failed": "失敗: {{count}}"
       },
       "pasteHint": "ブラウザーが読み込めないページに移動したら、そのアドレスをコピーしてここに貼り付けてください。",
-      "manage": "MCP サーバーを管理"
+      "manage": "MCP サーバーを管理",
+      "stillFailing": "再接続後も失敗しています。"
     }
   },
   "common": {
@@ -7252,6 +7255,7 @@
     "workspacesCount": "{{count}} 件のワークスペース",
     "workspacesAllButCount": "{{count}} 件以外すべて",
     "headerMissing": "このサーバーを追加するには、{{header}} を入力してください。",
-    "servers": "サーバー"
+    "servers": "サーバー",
+    "unreadable": "保存されたサインインまたはキーをコンピューターで開けません。もう一度サインインしてください。"
   }
 }

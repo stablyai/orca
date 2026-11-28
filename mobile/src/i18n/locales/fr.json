@@ -1171,7 +1171,9 @@
         "tools_many": "{{count}} outils",
         "tools_one": "{{count}} outil",
         "tools_other": "{{count}} outils",
-        "waitingForSignIn": "En attente de connexion…"
+        "waitingForSignIn": "En attente de connexion…",
+        "orcaRemoved": "Supprimé : redémarre au prochain message",
+        "orcaChanged": "Modifié : redémarre au prochain message"
       },
       "source": {
         "project": "Projet",
@@ -1204,7 +1206,8 @@
         "needsAuth_many": "{{count}} connexions requises"
       },
       "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici.",
-      "manage": "Gérer les serveurs MCP"
+      "manage": "Gérer les serveurs MCP",
+      "stillFailing": "Échoue toujours après la reconnexion."
     },
     "agentMessage": {
       "open": "Ouvrir {{name}}",
@@ -7429,6 +7432,7 @@
     "workspacesCount": "{{count}} espaces de travail",
     "workspacesAllButCount": "Tous sauf {{count}}",
     "headerMissing": "Renseignez {{header}} pour ajouter ce serveur.",
-    "servers": "Serveurs"
+    "servers": "Serveurs",
+    "unreadable": "Sa connexion ou sa clé enregistrée ne s’ouvre pas sur l’ordinateur. Reconnectez-vous."
   }
 }

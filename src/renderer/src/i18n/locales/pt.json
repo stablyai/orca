@@ -3099,7 +3099,8 @@
         "add": "Adicionar um servidor para este repositório",
         "files": "Dos arquivos deste repositório",
         "open": "Abrir {{file}}"
-      }
+      },
+      "unreadable": "O login ou a chave salvos não abrem neste computador. Entre ou digite a chave novamente abaixo."
     }
   },
   "auto": {
@@ -24103,7 +24104,9 @@
           "pending": "Conectando…",
           "tools_many": "{{count}} ferramentas",
           "tools_one": "{{count}} ferramenta",
-          "tools_other": "{{count}} ferramentas"
+          "tools_other": "{{count}} ferramentas",
+          "orcaRemoved": "Removido: reinicia na próxima mensagem",
+          "orcaChanged": "Alterado: reinicia na próxima mensagem"
         },
         "signIn": {
           "external": "Conclua na página que foi aberta",
@@ -24145,7 +24148,8 @@
           "user": "Usuário",
           "plugin": "Plugin",
           "session": "Sessão"
-        }
+        },
+        "stillFailing": "Continua falhando após reconectar."
       },
       "botContext": {
         "soul": "Alma atualizada aplicada",
