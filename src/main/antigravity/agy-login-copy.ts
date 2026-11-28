@@ -51,7 +51,16 @@ export async function copyAgyLoginIntoOrcaHome(
   try {
     await sweepTemps(folder)
     const entry = await lstat(file).catch(() => null)
-    const login = google ? wholeLogin(await readFile(target).catch(() => null)) : null
+    // Only a missing file means agy has no login; any other read error keeps the copy as it is.
+    const source = google
+      ? await readFile(target).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') {
+            return null
+          }
+          throw error
+        })
+      : null
+    const login = wholeLogin(source)
     if (login === 'unreadable') {
       return false
     }

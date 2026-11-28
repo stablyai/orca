@@ -270,9 +270,10 @@ export async function agySignsInWithPersonalGoogle(homePath: string): Promise<bo
   const text = await readFile(
     join(homePath, AGY_HOME_FOLDER, 'antigravity-cli', 'settings.json'),
     'utf8'
-  ).catch(() => null)
-  if (text === null) {
-    return true
+  ).catch((error: NodeJS.ErrnoException) => (error.code === 'ENOENT' ? null : undefined))
+  // Missing: agy's defaults. Unreadable: unknown, so not the same sign-in.
+  if (text === null || text === undefined) {
+    return text === null
   }
   try {
     const settings: unknown = JSON.parse(text)
