@@ -11,7 +11,7 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
       'Move ownership to another agent with enough context to continue.'
     ),
     prompt:
-      'Use /orchestration to hand this billing settings task to the idle Claude agent. Include the goal, current context, and what they should finish next.'
+      'Use /orchestration to hand this billing settings task to the idle Claude agent. Include the goal, what is already done, what they should finish next, and how to check it is done.'
   },
   {
     id: 'worktree-handoff',
@@ -24,7 +24,7 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
       'Move work to an agent that is already running in a different branch.'
     ),
     prompt:
-      'Use /orchestration to hand this settings cleanup to the agent in the settings-polish worktree. Send the goal, relevant files, and expected result.'
+      'Use /orchestration to hand this settings cleanup to the agent in the settings-polish worktree. Send the goal, relevant files, expected result, and how to verify it.'
   },
   {
     id: 'child-sequence',
@@ -34,7 +34,7 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
       'Use child agents one after another when each phase depends on the last.'
     ),
     prompt:
-      'Use /orchestration to run this auth refactor in phases: plan, backend, UI, then tests. Start each child agent after the previous phase is done.'
+      'Use /orchestration to run this auth refactor in phases: plan, backend, UI, then tests. Start each child agent after the previous phase reports passing checks, pass on its decisions, and ask me before continuing if a phase fails.'
   },
   {
     id: 'child-parallel',
@@ -47,7 +47,7 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
       'Split non-overlapping investigation or implementation tasks across child agents.'
     ),
     prompt:
-      'Use /orchestration to split this auth refactor across parallel child agents: API contract, backend call sites, UI flow, and test gaps.'
+      'Use /orchestration to split this auth refactor across parallel child agents: backend call sites, UI flow, and test gaps. Settle the API contract first, give each agent its own files, and report each result with its test output.'
   },
   {
     id: 'child-worktrees',
@@ -60,6 +60,6 @@ export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsa
       'Give each child agent its own worktree so parallel implementation stays reviewable.'
     ),
     prompt:
-      'Use /orchestration to split this onboarding update into smaller PRs, each in its own child worktree: setup state, settings UI, copy, and tests.'
+      'Use /orchestration to split this onboarding update into smaller PRs, each in its own child worktree: setup state, settings UI, copy, and tests. Keep each file in one PR, and make each PR pass the checks on its own.'
   }
 ])
