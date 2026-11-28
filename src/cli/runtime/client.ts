@@ -183,7 +183,9 @@ export class RuntimeClient {
       envelope,
       requestSelection: options?.requestSelection,
       pinnedRuntimeId: options?.preflightRuntimeId ?? options?.terminalPromptPreflight?.runtimeId,
-      recover
+      recover,
+      // An orchestration request this dial never wrote keeps its key, which may name an earlier attempt.
+      recoverUnsent: orchestrationMutation
     })
     if (response.ok === false) {
       throw recover(new RuntimeRpcFailureError(response), metadata.runtimeId ?? null)

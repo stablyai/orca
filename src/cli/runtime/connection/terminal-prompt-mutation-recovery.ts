@@ -1,4 +1,8 @@
-import { attachMutationRecovery } from './client-error-recovery'
+import {
+  attachMutationRecovery,
+  attachUnsentMutationRecovery,
+  isRequestUnsent
+} from './client-error-recovery'
 import { RuntimeClientError, RuntimeRpcFailureError } from './types'
 import { PLUGIN_HOOK_DENIED_CODE } from '../../../shared/plugins/contributions/plugin-hook-contribution'
 
@@ -15,7 +19,10 @@ export function attachDurableMutationRecovery(
     return error
   }
   if (method !== 'terminal.send' || !requestId || !(error instanceof RuntimeClientError)) {
-    return attachMutationRecovery(error, requestId, originalCommand)
+    // Never written by this invocation: its key may still name an earlier attempt that ran.
+    return isRequestUnsent(error)
+      ? attachUnsentMutationRecovery(error, requestId, originalCommand)
+      : attachMutationRecovery(error, requestId, originalCommand)
   }
   // Why: a text-plus-Enter prompt refuses a menu; text-only and bare-Enter sends stay direct input.
   const menuHint =

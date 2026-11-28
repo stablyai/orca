@@ -36,6 +36,21 @@ export function attachMutationRecovery(
   )
 }
 
+/**
+ * A request this invocation never wrote ran nothing now, but its key can still name an earlier
+ * attempt that did, so it keeps the key and command with its no-write marker. A definitive
+ * pre-send refusal stays bare: resending the same bytes would be refused the same way.
+ */
+export function attachUnsentMutationRecovery(
+  error: unknown,
+  requestId: string | undefined,
+  originalCommand?: string[]
+): unknown {
+  return error instanceof RuntimeClientError && hasNoEffects(error.data)
+    ? error
+    : attachMutationRecovery(error, requestId, originalCommand, true)
+}
+
 /** True when this invocation never sent the request. */
 export function isRequestUnsent(error: unknown): boolean {
   const data: unknown = error instanceof RuntimeClientError ? error.data : undefined

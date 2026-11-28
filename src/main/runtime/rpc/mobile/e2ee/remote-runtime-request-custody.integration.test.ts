@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { E2EEChannel } from './e2ee-channel'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { readRuntimeRpcStagedReply } from '../../../../../shared/remote-runtime/requests/runtime-rpc-staged-reply-read'
@@ -18,9 +18,11 @@ import type { PairedRuntimeConnection } from '../../../../../shared/remote-runti
 type Host = {
   connection: PairedRuntimeConnection
   frames: Record<string, unknown>[]
+  /** Resolves once the host has received a frame for `method`. */
+  received: (method: string) => Promise<void>
   close: () => Promise<void>
 }
-type HostMode = 'stall' | 'lose-reply' | 'respond' | 'stage-reply' | 'old-runtime'
+type HostMode = 'stall' | 'hold-status' | 'lose-reply' | 'respond' | 'stage-reply' | 'old-runtime'
 
 const params = { type: 'worker_done', from: 'term_worker', subject: 'Done' }
 const envelope = { orchestrationRequestId: 'mutation_1', orchestrationCapability: 'test-proof' }
@@ -31,6 +33,7 @@ let userDataPath = ''
 async function startHost(...modes: HostMode[]): Promise<Host> {
   const keyPair = nacl.box.keyPair()
   const frames: Record<string, unknown>[] = []
+  const waiters: { method: string; resolve: () => void }[] = []
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   server.on('connection', (ws: WebSocket) => {
     const mode = modes.shift()
@@ -56,8 +59,15 @@ async function startHost(...modes: HostMode[]): Promise<Host> {
     channel.onMessage((plaintext, reply) => {
       const frame: Record<string, unknown> = JSON.parse(plaintext)
       frames.push(frame)
+      for (const waiter of waiters.filter(({ method }) => method === frame.method)) {
+        waiter.resolve()
+      }
       const meta = { id: frame.id, _meta: { runtimeId: 'r' } }
       if (frame.method === 'status.get') {
+        // Authenticated and holding the same connection's status request: the mutation never goes.
+        if (mode === 'hold-status') {
+          return
+        }
         const capabilities = mode === 'old-runtime' ? [] : ['orchestration.replay-only-retry.v1']
         reply(JSON.stringify({ ...meta, ok: true, result: { capabilities } }))
       } else if (mode === 'respond') {
@@ -88,6 +98,10 @@ async function startHost(...modes: HostMode[]): Promise<Host> {
       credential: { kind: 'token', deviceToken: 'device-token' }
     },
     frames,
+    received: (method) =>
+      frames.some((frame) => frame.method === method)
+        ? Promise.resolve()
+        : new Promise((resolve) => waiters.push({ method, resolve })),
     close: () =>
       new Promise((resolve) => {
         for (const client of server.clients) {
@@ -107,18 +121,37 @@ function send(host: Host) {
   })
 }
 
+const REPLAY_TIMEOUT_MS = 2_000
+
 function replay(host: Host, requestSelection: RuntimeRequestSelection) {
   return sendRemoteRuntimeRequestOnSocket(
     host.connection,
     'orchestration.send',
     params,
-    2_000,
+    REPLAY_TIMEOUT_MS,
     { ...envelope, orchestrationContractVersion: 2 },
     () => {},
     undefined,
     [],
     requestSelection
   )
+}
+
+/**
+ * A replay whose timeout fires only once the host has the named frame, so a slow host can neither
+ * expire it before authentication nor stretch it past the frame under test.
+ */
+async function timeOutOnceReceived(host: Host, method: string): Promise<unknown> {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const pending = replay(host, { paramsForStatus: () => params })
+    pending.catch(() => {})
+    await host.received(method)
+    await vi.advanceTimersByTimeAsync(REPLAY_TIMEOUT_MS)
+    return await pending
+  } finally {
+    vi.useRealTimers()
+  }
 }
 
 beforeEach(() => {
@@ -163,6 +196,34 @@ describe('a paired request that times out', () => {
       { method: 'orchestration.send', params, ...envelope, orchestrationContractVersion: 2 }
     ])
     expect(new Set(host.frames.map(({ id }) => id)).size).toBe(3)
+  })
+
+  it('marks a timeout unsent when an authenticated host withholds the status reply before the mutation', async () => {
+    const host = await startHost('hold-status')
+    const pending = timeOutOnceReceived(host, 'status.get')
+
+    await expect(pending).rejects.toMatchObject({
+      code: 'runtime_timeout',
+      data: { requestSent: false }
+    })
+
+    expect(host.frames.map((frame) => frame.method)).toEqual(['status.get'])
+    expect(host.frames[0]).not.toHaveProperty('orchestrationRequestId')
+  })
+
+  it('keeps a timeout after the mutation frame ambiguous at the same authenticated stage', async () => {
+    const host = await startHost('lose-reply')
+
+    const error = await timeOutOnceReceived(host, 'orchestration.send').catch(
+      (failure: unknown) => failure
+    )
+
+    expect(error).toMatchObject({ code: 'runtime_timeout' })
+    expect(error).not.toHaveProperty('data.requestSent')
+    expect(host.frames).toMatchObject([
+      { method: 'status.get' },
+      { method: 'orchestration.send', params, ...envelope, orchestrationContractVersion: 2 }
+    ])
   })
 
   it('sends only a clean status preflight to a runtime without replay support', async () => {

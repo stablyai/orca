@@ -14,9 +14,14 @@ export function orchestrationMigrationFence(
   meta: RpcEnvelopeMeta
 ): RpcResponse | undefined {
   let reason: OrchestrationMigrationReason | undefined
-  // Before the read and legacy routes: replay-only is admitted for its one producer, nothing else.
+  // Before the read, legacy and peer routes: replay-only is admitted for its one producer, nothing
+  // else. That producer never names a peer Run, and admitting one would commit its conversation,
+  // Run or label before the receipt lookup could refuse the replay.
   if (isReplayOnlyRequest(request)) {
-    reason = isKeyedWorkerDone(request) ? undefined : 'client_contract_unsupported'
+    reason =
+      isKeyedWorkerDone(request) && request.orchestrationPeerRun === undefined
+        ? undefined
+        : 'client_contract_unsupported'
   } else if (!isOrchestrationMutation(request.method, request.params)) {
     return undefined
   } else if (isRetiredOrchestrationMethod(request.method)) {

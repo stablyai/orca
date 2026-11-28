@@ -61,7 +61,7 @@ describe('recovery guidance inspects the Orca the command chose', () => {
       recovery: { recoveryBlocked: true, disposition: 'outcome_unknown' }
     })
     expect(error.data).not.toHaveProperty('recovery.queryCommand')
-    expect(error.message).toContain('with the same --pairing-code this command used')
+    expect(error.message).toContain("adding this command's original --pairing-code option")
     expect(error.message).toContain('request-show --request request_1')
     expect(JSON.stringify(error)).not.toContain('private-code')
   })
