@@ -39,6 +39,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-a
 import { useNativeChatNamingFailure } from '../session-actions/use-native-chat-naming-failure'
 import { ForkMarkedName } from '../../native-chat/fork/ForkMarkedName'
 import { BOT_HOME_TAB_LABEL_CLASSES, BotHomeTabAccent } from '../../bots/home-chat/BotHomeTabAccent'
+import { TabShortcutDigitBadge } from '../strip/TabShortcutDigitBadge'
 
 import {
   LazyNativeChatNamingErrorBlock,
@@ -329,6 +330,7 @@ export default function SortableTab({
             }
           }}
         >
+          <TabShortcutDigitBadge tabId={tab.id} />
           {isEditing || menuOpen ? (
             tabRoot
           ) : (

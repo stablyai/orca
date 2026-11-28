@@ -40,6 +40,7 @@ import { editorTabDocumentFolderAccess } from '@/lib/files/access/local-file-acc
 import { useTabCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { PluginContributionIcon } from '../../plugins/PluginContributionIcon'
 import type { EditorFileTabProps } from './editor-file-tab-props'
+import { TabShortcutDigitBadge } from '../strip/TabShortcutDigitBadge'
 
 export default function EditorFileTab({
   file,
@@ -369,6 +370,7 @@ export default function EditorFileTab({
             handleMenuOpenChange(true)
           }}
         >
+          <TabShortcutDigitBadge tabId={file.tabId ?? file.id} />
           {isRenaming || menuOpen ? (
             tabRoot
           ) : (

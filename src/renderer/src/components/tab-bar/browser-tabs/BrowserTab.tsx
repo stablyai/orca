@@ -39,6 +39,7 @@ const LazyBrowserTabContextMenu = lazyWithRetry(
 
 import { formatBrowserTabUrlLabel, getBrowserTabLabel } from './browser-tab-label'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
+import { TabShortcutDigitBadge } from '../strip/TabShortcutDigitBadge'
 
 export default function BrowserTab({
   tab,
@@ -221,6 +222,7 @@ export default function BrowserTab({
             handleMenuOpenChange(true)
           }}
         >
+          <TabShortcutDigitBadge tabId={tab.id} />
           {menuOpen ? (
             tabRoot
           ) : (

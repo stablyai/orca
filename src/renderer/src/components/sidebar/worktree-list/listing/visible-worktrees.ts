@@ -37,10 +37,23 @@ export function setVisibleWorktreeIds(ids: string[] | null): void {
   _publishedVisibleIds = ids
 }
 
+const shortcutTargetListeners = new Set<() => void>()
+
 export function setVisibleWorktreeShortcutTargets(
   targets: VisibleWorktreeShortcutTarget[] | null
 ): void {
   _publishedVisibleShortcutTargets = targets
+  for (const listener of shortcutTargetListeners) {
+    listener()
+  }
+}
+
+/** Rows showing their 1–9 digit follow a reorder without re-rendering the list. */
+export function subscribeVisibleWorktreeShortcutTargets(listener: () => void): () => void {
+  shortcutTargetListeners.add(listener)
+  return () => {
+    shortcutTargetListeners.delete(listener)
+  }
 }
 
 export function getPublishedVisibleWorktreeShortcutTargets():

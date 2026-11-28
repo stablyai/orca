@@ -224,6 +224,7 @@ export function createWebUiApi(): WebUiApi {
     onToggleAgentDashboard: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
+    onMainKeyInput: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
