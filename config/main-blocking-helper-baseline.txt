@@ -694,7 +694,7 @@
 2 src/main/ipc/wsl/wsl-host-automation-wake-wiring.ts
 8 src/main/ipc/wsl/wsl-host-handlers.ts
 6 src/main/ipc/wsl/wsl-move-driver-wiring.ts
-3 src/main/ipc/wsl/wsl-move-orchestrator-wiring.ts
+2 src/main/ipc/wsl/wsl-move-orchestrator-wiring.ts
 1 src/main/ipc/wsl/wsl-move-release-here.ts
 2 src/main/ipc/wsl/wsl-move-undo-wiring.ts
 8 src/main/jcode/hook-service.ts

@@ -11,6 +11,20 @@ import type {
 } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { WslMovedDistroVerdict } from './wsl-move-orchestrator-external-transitions'
 
+/**
+ * The sidecar's read. `unreadable` (an I/O error, or a newer build's file) may hide a distro's
+ * decline, so the orchestrator neither starts moves nor saves until a later load reads it.
+ * `unknownKeys`: distros whose record only a newer build can parse.
+ */
+export type WslMoveOrchestratorLoad =
+  | { kind: 'missing' }
+  | {
+      kind: 'readable'
+      records: Map<string, WslMoveOrchestratorRecord>
+      unknownKeys: ReadonlySet<string>
+    }
+  | { kind: 'unreadable' }
+
 export type WslMoveHostReadiness = 'ready' | 'not-running' | 'unverifiable' | 'failed'
 
 /** The newest finished move of a distro, as R38's check needs it. */
@@ -60,7 +74,8 @@ export type WslMoveOrchestratorPorts = {
     distro: string,
     unsavedWorkspaceIds: readonly string[]
   ) => Promise<WslMoveUseLocallyResult>
-  load: () => Map<string, WslMoveOrchestratorRecord>
+  load: () => WslMoveOrchestratorLoad
+  /** Throws on failure; never called before a load succeeded. */
   save: (records: ReadonlyMap<string, WslMoveOrchestratorRecord>) => void
   /** Returns the cancel. */
   schedule: (delayMs: number, run: () => void) => () => void

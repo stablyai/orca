@@ -30,6 +30,7 @@ import {
   applyWslMoveUserAction,
   settleWslMoveOrchestratorRecord
 } from './orchestration/wsl-move-orchestrator-external-transitions'
+import { WslMoveOrchestratorSidecar } from './orchestration/wsl-move-orchestrator-sidecar'
 
 /** A project opened again within this window does not read the running distros again. */
 export const WSL_MOVE_ORCHESTRATOR_PROJECT_OPENED_THROTTLE_MS = 60_000
@@ -44,7 +45,8 @@ function recordsUserChoice(record: WslMoveOrchestratorRecord): boolean {
 }
 
 export class WslMoveOrchestrator {
-  private readonly records: Map<string, WslMoveOrchestratorRecord>
+  private readonly records = new Map<string, WslMoveOrchestratorRecord>()
+  private readonly sidecar: WslMoveOrchestratorSidecar
   private readonly busy = new Set<string>()
   private readonly timers = new Map<string, () => void>()
   private readonly projectOpenedAt = new Map<string, number>()
@@ -57,24 +59,40 @@ export class WslMoveOrchestrator {
   private disposed = false
 
   constructor(private readonly ports: WslMoveOrchestratorPorts) {
-    const now = ports.now()
-    this.records = new Map(
-      [...ports.load()].map(([key, record]) => [
-        key,
-        // An unreadable journal says nothing about whether a move is finished: keep the record.
-        settleWslMoveOrchestratorRecord(
-          record,
-          now,
-          readWslMoveFinishedMove(ports, record.distro) !== null
-        )
-      ])
-    )
-    for (const [key, record] of this.records) {
-      this.scheduleFor(key, record)
-    }
+    this.sidecar = new WslMoveOrchestratorSidecar(ports)
+    this.adopt(this.sidecar.tryLoad())
     void this.prune().catch((error: unknown) =>
       console.warn('[wsl-move] Could not prune inactive moves', error)
     )
+  }
+
+  /** Takes in the sidecar's records once read; what the user did before that stays newer. */
+  private adopt(loaded: Map<string, WslMoveOrchestratorRecord> | null): boolean {
+    if (!loaded) {
+      return false
+    }
+    const now = this.ports.now()
+    for (const [key, record] of loaded) {
+      if (this.records.has(key)) {
+        continue
+      }
+      // An unreadable journal says nothing about whether a move is finished: keep the record.
+      const settled = settleWslMoveOrchestratorRecord(
+        record,
+        now,
+        readWslMoveFinishedMove(this.ports, record.distro) !== null
+      )
+      this.records.set(key, settled)
+      this.scheduleFor(key, settled)
+    }
+    return true
+  }
+
+  /** Reads a sidecar the start could not (a sharing violation passes) and saves the merge. */
+  private retryLoad(): void {
+    if (!this.sidecar.isLoaded && this.adopt(this.sidecar.tryLoad())) {
+      this.saveAndPublish()
+    }
   }
 
   list(): WslMoveOrchestratorRecord[] {
@@ -88,6 +106,11 @@ export class WslMoveOrchestrator {
   async trigger(distro: string, trigger: WslMoveOrchestratorTrigger): Promise<void> {
     const key = wslMoveJournalKey(distro)
     if (this.disposed || (trigger !== 'user' && !this.ports.autoMoveEnabled())) {
+      return
+    }
+    this.retryLoad()
+    // An unread sidecar may hold this distro's decline: only the user's own act moves it now.
+    if (trigger !== 'user' && this.sidecar.holdsAutomaticSteps(key)) {
       return
     }
     if (this.busy.has(key)) {
@@ -155,6 +178,7 @@ export class WslMoveOrchestrator {
 
   /** The user added the distro's host themselves, which takes back a decline. */
   hostAddedByUser(distro: string): void {
+    this.retryLoad()
     const key = wslMoveJournalKey(distro)
     const current = this.records.get(key)
     if (current) {
@@ -167,6 +191,7 @@ export class WslMoveOrchestrator {
    * the user adds the host or presses Retry.
    */
   async releasedByUser(distro: string, cause: WslMoveOrchestratorDeclineCause): Promise<void> {
+    this.retryLoad()
     const key = wslMoveJournalKey(distro)
     this.commit(
       key,
@@ -210,6 +235,7 @@ export class WslMoveOrchestrator {
     action: WslMoveOrchestratorUserAction,
     options: { unsavedWorkspaceIds?: readonly string[] } = {}
   ): Promise<{ record: WslMoveOrchestratorRecord; release?: WslMoveUseLocallyResult }> {
+    this.retryLoad()
     const key = wslMoveJournalKey(distro)
     const current = this.recordFor(key, distro)
     if (this.busy.has(key)) {
@@ -303,6 +329,9 @@ export class WslMoveOrchestrator {
       return previous ?? next
     }
     this.records.set(key, next)
+    if (trigger === 'user') {
+      this.sidecar.releasedByUser(key)
+    }
     // Every new attempt is reported too, so a backoff series shows each failure.
     if (previous?.state.kind !== next.state.kind || previous.attempts !== next.attempts) {
       this.ports.track(trigger, next, cause)
@@ -313,12 +342,7 @@ export class WslMoveOrchestrator {
   }
 
   private saveAndPublish(): void {
-    try {
-      this.ports.save(this.records)
-    } catch (error) {
-      // The sidecar is the orchestrator's memory, not the move's record: keep going in memory.
-      console.warn('[wsl-move] Orchestrator state not saved:', error)
-    }
+    this.sidecar.save(this.records)
     this.ports.publish(this.list())
   }
 
