@@ -56,6 +56,7 @@ export class RuntimeBrowserTabCreation {
       | 'getAuthoritativeWindowId'
       | 'markHeadlessBrowserSessionTabActive'
       | 'notifyHeadlessBrowserSessionTabsChanged'
+      | 'notifyBrowserPageList'
       | 'serveBrowserTabs'
     >,
     private readonly targets: Pick<

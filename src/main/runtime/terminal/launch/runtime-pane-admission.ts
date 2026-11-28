@@ -190,16 +190,19 @@ export async function spawnInAdmittedPane(
     return controller.spawn!(spawnArgs)
   }
   try {
-    // A reconnect into its own pane skips admission: the pane is already written.
+    // A reconnect into its own pane skips admission: the pane is already written. A spawn bound to
+    // no host pane (a teammate's own terminal) has none to write.
     run = args.paneSpawnOperation?.mustExist
       ? { outcome: undefined, result: await start('exists') }
-      : await startInAdmittedPane(
-          store,
-          admissionFor(args),
-          hostIdOf(args),
-          start,
-          startStatus?.keepOnFailure
-        )
+      : args.persistHostSessionBinding === false
+        ? { outcome: undefined, result: await start(undefined) }
+        : await startInAdmittedPane(
+            store,
+            admissionFor(args),
+            hostIdOf(args),
+            start,
+            startStatus?.keepOnFailure
+          )
   } catch (error) {
     if (
       admittedAs === 'admitted' &&

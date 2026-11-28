@@ -79,7 +79,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     const worktreeId = workspace.id
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     assertMobileTerminalShellSupported(this.store, workspace, opts.shellOverride, cwd)
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    // The host's list, which a teammate's own terminal never joins.
+    if (!opts.personList) {
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    }
     // Older mobile clients optimistically append; match until they advertise grouped placement.
     const requestedAfterTabId = opts.afterTabId
     const afterTabId =
@@ -87,6 +90,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         ? undefined
         : requestedAfterTabId
     if (opts.sourceChatFork) {
+      // A fork terminal opens beside its chat in the host's list; a teammate's own list is not it.
+      if (opts.personList) {
+        throw new Error('chat_fork_source_unavailable')
+      }
       return this.createMobileChatForkTerminal({
         workspace,
         worktreeId,
@@ -107,6 +114,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     this.assertStableReadyGraph(graphEpoch)
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
+    }
+    if (opts.personList) {
+      return await this.createPersonTerminal(opts.personList, workspace, cwd, startupCommand, opts)
     }
     if (opts.clientMutationId && startupCommand.command && startupCommand.launchAgent === 'qoder') {
       const clientIdentity = opts.clientNavigationId ?? 'local'

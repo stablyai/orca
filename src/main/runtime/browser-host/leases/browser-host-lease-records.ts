@@ -21,6 +21,8 @@ export type BrowserHostLease = Readonly<{
   leaseReconnectProtocolVersion?: 1
   fileChannelProtocolVersion?: 1
   pageInventory?: readonly BrowserClientHostedPageInventory[]
+  /** Set once, at attach: a teammate's computer, never picked for a page no one placed. */
+  teammate?: true
 }>
 
 export type BrowserHostLeaseIdentity = Pick<

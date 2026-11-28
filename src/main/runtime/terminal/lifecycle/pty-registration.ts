@@ -111,9 +111,12 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.mainDaemonAttachments.markSpawnPublished(ptyId)
     // Record spawn-time pane identity so stalled graph sync cannot hide the live PTY backing a pending mobile create.
+    // A teammate's terminal binds to its tab in their list (its record's stamp), never a host pane.
+    const held = binding ? this.personSessionTabs.bindTerminal(binding.tabId, ptyId) : null
+    const pane = held ? null : binding
     const paneKey =
-      binding && isValidTerminalTabId(binding.tabId) && isTerminalLeafId(binding.leafId)
-        ? makePaneKey(binding.tabId, binding.leafId)
+      pane && isValidTerminalTabId(pane.tabId) && isTerminalLeafId(pane.leafId)
+        ? makePaneKey(pane.tabId, pane.leafId)
         : null
     const pty = this.recordPtyWorktree(ptyId, worktreeId, {
       connected: true,

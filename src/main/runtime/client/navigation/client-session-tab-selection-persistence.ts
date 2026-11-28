@@ -1,3 +1,4 @@
+import { parsePersistedPersonTabs } from '../../../../shared/orca-profiles/persisted-person-tab'
 import type {
   PersistedMobileClientTabSelection,
   PersistedMobileClientTabSelections
@@ -33,12 +34,14 @@ function normalizeClientSessionTabSelection(
   const personTabs = Array.isArray(candidate.personTabs)
     ? candidate.personTabs.filter((sessionId): sessionId is string => typeof sessionId === 'string')
     : []
+  const personTabList = parsePersistedPersonTabs(candidate.personTabList)
   return {
     activeTabId,
     activeGroupId,
     activeTabIdByGroupId,
     ...(recentTabIds.length > 0 ? { recentTabIds } : {}),
-    ...(personTabs.length > 0 ? { personTabs } : {})
+    ...(personTabs.length > 0 ? { personTabs } : {}),
+    ...(personTabList.length > 0 ? { personTabList } : {})
   }
 }
 

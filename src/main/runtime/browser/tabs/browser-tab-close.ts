@@ -23,6 +23,7 @@ export class RuntimeBrowserTabClose {
       | 'getBrowserHostLeaseRegistry'
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'notifyHeadlessBrowserSessionTabsChanged'
+      | 'notifyBrowserPageList'
       | 'getAgentBrowserBridge'
       | 'resolveWorkspaceSelector'
       | 'getAvailableAuthoritativeWindowId'

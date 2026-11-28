@@ -21,6 +21,7 @@ import type {
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from './browser-tab-catalog'
 import { findListedBrowserTab, readBrowserTabAnnotations } from './browser-tab-annotations'
+import { pageListOf } from '../client-pages/runtime-browser-page-registry'
 
 export class RuntimeBrowserTabQueries {
   constructor(
@@ -31,6 +32,7 @@ export class RuntimeBrowserTabQueries {
       | 'getRuntimeBrowserPageRegistry'
       | 'markHeadlessBrowserSessionTabActive'
       | 'notifyHeadlessBrowserSessionTabsChanged'
+      | 'notifyBrowserPageList'
       | 'readBrowserPageAnnotations'
     >,
     private readonly targets: Pick<
@@ -51,11 +53,18 @@ export class RuntimeBrowserTabQueries {
   ) {}
 
   async browserTabList(params: { worktree?: string }): Promise<BrowserTabListResult> {
+    return { tabs: await this.tabsOf({ worktree: params.worktree }) }
+  }
+
+  /** The tabs of one list: a named page's own, else the host's (what `tab list` shows). */
+  private async tabsOf(params: { worktree?: string; page?: string }) {
     const workspaceId = params.worktree
       ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
       : undefined
-    const clientPages = this.host.getRuntimeBrowserPageRegistry().listPages(workspaceId)
-    return { tabs: this.catalog.listLogicalBrowserTabs(workspaceId, clientPages) }
+    const pages = this.host.getRuntimeBrowserPageRegistry()
+    const named = params.page ? pages.getPage(params.page) : undefined
+    const list = named ? pageListOf(named) : 'host'
+    return this.catalog.listLogicalBrowserTabs(workspaceId, pages.pagesOf(list, workspaceId))
   }
 
   async browserProceedCertificate(
@@ -88,11 +97,7 @@ export class RuntimeBrowserTabQueries {
       return readBrowserTabAnnotations(this.host, (await this.browserTabCurrent(params)).tab)
     }
     // A named page's notes are saved state: list the tab bar as saved rather than waking a browser.
-    const workspaceId = params.worktree
-      ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
-      : undefined
-    const clientPages = this.host.getRuntimeBrowserPageRegistry().listPages(workspaceId)
-    const tabs = this.catalog.listLogicalBrowserTabs(workspaceId, clientPages)
+    const tabs = await this.tabsOf(params)
     return readBrowserTabAnnotations(this.host, findListedBrowserTab(tabs, params.page))
   }
 
@@ -110,7 +115,7 @@ export class RuntimeBrowserTabQueries {
       focus?: boolean
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSwitchResult> {
-    const listed = await this.browserTabList({ worktree: params.worktree })
+    const listed = { tabs: await this.tabsOf(params) }
     const switchedIndex = params.page
       ? listed.tabs.findIndex((tab) => tab.browserPageId === params.page)
       : (params.index ?? -1)

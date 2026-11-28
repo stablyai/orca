@@ -2,6 +2,7 @@ import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-fea
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { defineMethod } from '../../core'
+import { callerTabPerson } from '../../../../bots/team-share/teammate-rules'
 import { CreateTerminalTab } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
@@ -14,7 +15,7 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
   share: 'not-shared',
   params: CreateTerminalTab,
   handler: async (params, context) => {
-    const { runtime, signal, clientKind, pairedDeviceId, clientCapabilities } = context
+    const { runtime, signal, clientKind, pairedDeviceId, clientCapabilities, callerScope } = context
     if (params.command) {
       await assertLegacyAiVaultResumeCommandAllowed(params.command, () =>
         runtime.ensureStructuredAgentSessionHost()
@@ -49,6 +50,7 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
         clientKind
       }),
       clientMutationId: params.clientMutationId,
+      person: callerTabPerson(callerScope),
       ...(pairedDeviceId
         ? {
             supportsSplitGroupPlacement:

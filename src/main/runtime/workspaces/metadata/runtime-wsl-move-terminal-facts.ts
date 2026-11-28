@@ -13,7 +13,7 @@ export abstract class OrcaRuntimeWithWslMoveTerminalFacts extends OrcaRuntimeWit
     const terminals = new Map<string, WslMoveLiveTerminal>()
     for (const workspaceId of workspaceIds) {
       // Local only: a same-id SSH twin's terminals are another host's.
-      for (const ptyId of this.getLivePtyIdsForWorktree(workspaceId, undefined, {
+      for (const ptyId of this.getLivePtyIdsForWorktree(workspaceId, 'every', undefined, {
         resolvedConnectionId: null
       })) {
         const pty = this.ptysById.get(ptyId)

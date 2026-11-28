@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -48,7 +49,7 @@ export function actOnRuntimeBrowserInitialization(input: {
   action: BrowserPageInitializationAction
   explicitUrl?: boolean
   resolveExecutionHostKey(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
-  notifyWorkspace(workspaceId: string): void
+  notifyPageList(page: TabListRef): void
 }): Promise<string | undefined> {
   const { pages, authority, page, action } = input
   const url = action.type === 'navigate' ? normalizeBrowserNavigationUrl(action.url) : undefined
@@ -101,7 +102,7 @@ export function actOnRuntimeBrowserInitialization(input: {
           agent: false
         }
   )
-  input.notifyWorkspace(page.workspaceId)
+  input.notifyPageList(page)
   return issued.result.then((result) => {
     if (result.status === 'failed') {
       throw new Error(result.errorCode)

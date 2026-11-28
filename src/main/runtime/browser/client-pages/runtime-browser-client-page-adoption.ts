@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import { sameRuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { admitModernAdoptions } from './runtime-browser-client-page-modern-adoption'
@@ -33,7 +34,7 @@ export type RuntimeBrowserClientPageAdoptionOptions = {
   lease: BrowserHostLease
   authority: AdoptionAuthority
   pages: RuntimeBrowserPageRegistry
-  notifyWorkspace: (workspaceId: string) => void
+  notifyPageList: (page: TabListRef) => void
   /** The execution-host key that workspace's pages would be created under now. */
   resolveExecutionHostKey: (workspaceId: string) => Promise<BrowserExecutionHostKeyResolution>
   signal?: AbortSignal
@@ -66,14 +67,23 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
   ) {
     return NOTHING_TO_ADOPT
   }
-  const inventoryByPageId = new Map(inventory.map((page) => [page.browserPageId, page]))
+  // A teammate's computer brings a page back only into a list still holding it (a record here, or
+  // their own list): one closed while it was away stays closed, in no one's list.
+  const listed = options.lease.teammate
+    ? inventory.filter(
+        (page) =>
+          options.pages.getPage(page.browserPageId) !== undefined ||
+          options.pages.heldBy(page.browserPageId) !== null
+      )
+    : inventory
+  const inventoryByPageId = new Map(listed.map((page) => [page.browserPageId, page]))
   const modern = options.lease.hostCapabilities.includes(
     BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY
   )
   const pending = (page: BrowserClientHostedPageInventory): boolean =>
     page.state !== 'active' || (!modern && page.currentUrl === undefined)
   const adoptable = selectAdoptableClientHostedPages({
-    inventory,
+    inventory: listed,
     browserHostClientId: options.lease.browserHostClientId,
     authorityRuntimeId: options.authority.authorityRuntimeId,
     hasSavedPage: (inventory) => {
@@ -167,7 +177,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
     )
   )
   const byPageId = new Map(adoptable.map((page) => [page.browserPageId, page]))
-  const publishedWorkspaces = new Set<string>()
+  const publishedLists = new Map<string, TabListRef>()
   const publishedPageIds: string[] = []
   for (const browserPageId of adoptedPageIds) {
     const page = byPageId.get(browserPageId)
@@ -182,7 +192,9 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
       if (
         (expected &&
           (!restored || !sameRuntimeBrowserPlacement(restored.placement, expected.placement))) ||
-        (!expected && restored !== undefined)
+        (!expected && restored !== undefined) ||
+        // Closed from their list while adoption waited on their computer.
+        (!expected && options.lease.teammate && options.pages.heldBy(browserPageId) === null)
       ) {
         options.authority.retireUnpublishedClientPage(options.lease, {
           browserPageId,
@@ -200,7 +212,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
         // Retire before replacing from host inventory: publishing over a live id is refused.
         options.pages.retirePage(browserPageId, restored.placement)
       }
-      options.pages.publishClientPage({
+      const adopted = options.pages.publishClientPage({
         browserPageId,
         workspaceId: page.workspaceId,
         browserProfileId: page.browserProfileId,
@@ -212,7 +224,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
         // Leave focus to client activation reports; adopting active would deactivate a visible sibling.
         active: false
       })
-      publishedWorkspaces.add(page.workspaceId)
+      publishedLists.set(`${adopted.holder ?? 'host'}\0${adopted.workspaceId}`, adopted)
       publishedPageIds.push(browserPageId)
     } catch (error) {
       console.warn('[browser-host-lease] client page adoption publish failed:', {
@@ -221,8 +233,8 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
       })
     }
   }
-  for (const workspaceId of publishedWorkspaces) {
-    options.notifyWorkspace(workspaceId)
+  for (const list of publishedLists.values()) {
+    options.notifyPageList(list)
   }
   const published = new Set(publishedPageIds)
   return {

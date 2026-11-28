@@ -36,6 +36,7 @@ export type BrowserClientPageOpeningHost = Pick<
   | 'getRuntimeBrowserPageRegistry'
   | 'markHeadlessBrowserSessionTabActive'
   | 'notifyHeadlessBrowserSessionTabsChanged'
+  | 'notifyBrowserPageList'
   | 'retireRuntimeOwnedBrowserSessionTab'
 >
 
@@ -146,17 +147,17 @@ export async function createBrowserClientPage(
     throw error
   }
   if (url !== 'about:blank') {
-    try {
-      await navigateRuntimeBrowserClientPage(authority, {
-        browserPageId,
-        placement: created.placement,
-        url
-      })
-      pages.updatePage(browserPageId, created.placement, { url, loading: false })
-    } catch {
-      pages.updatePage(browserPageId, created.placement, { loading: false })
-    }
-    host.notifyHeadlessBrowserSessionTabsChanged?.(worktree.id)
+    // A failed navigation leaves the page where it was.
+    const loaded = await navigateRuntimeBrowserClientPage(authority, {
+      browserPageId,
+      placement: created.placement,
+      url
+    })
+      .then(() => ({ url }))
+      .catch(() => ({}))
+    host.notifyBrowserPageList(
+      pages.updatePage(browserPageId, created.placement, { ...loaded, loading: false })
+    )
   }
   return { browserPageId }
 }
@@ -296,7 +297,7 @@ function chooseAmongHosts(
   const showingWorkspace = new Set(
     host
       .getRuntimeBrowserPageRegistry()
-      .listPages()
+      .pagesOf('host')
       .filter((page) => page.workspaceId === workspaceId)
       .map((page) => page.placement.browserHostClientId)
   )

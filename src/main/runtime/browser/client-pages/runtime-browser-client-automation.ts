@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import { actOnRuntimeBrowserInitialization } from './runtime-browser-page-initialization-action'
 import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/browser-expected-url'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
@@ -28,7 +29,7 @@ type ClientAutomationRoute = {
   pages: RuntimeBrowserPageRegistry
   leases: BrowserHostLeaseRegistry
   resolveExecutionHostKey?(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
-  notifyWorkspace?(workspaceId: string): void
+  notifyPageList?(page: TabListRef): void
   resolveWorkspace(selector: string): Promise<{ id: string }>
 }
 
@@ -70,7 +71,7 @@ async function runOnClientPage(
     typeof requestParams.url === 'string' &&
     options.leases.clientPageInitializations.lease(page.browserPageId, page.placement) &&
     options.resolveExecutionHostKey &&
-    options.notifyWorkspace
+    options.notifyPageList
   ) {
     if (
       typeof requestParams.expectUrl === 'string' &&
@@ -89,7 +90,7 @@ async function runOnClientPage(
       page,
       action: { type: 'navigate', url: requestParams.url },
       resolveExecutionHostKey: options.resolveExecutionHostKey,
-      notifyWorkspace: options.notifyWorkspace
+      notifyPageList: options.notifyPageList
     })
     const current = options.pages.getPage(page.browserPageId)
     if (!current || !url) {
@@ -174,7 +175,7 @@ async function resolveTargetPage(
     return undefined
   }
   const workspace = await resolveWorkspace(params.worktree)
-  return pages.listPages(workspace.id).find((page) => page.active)
+  return pages.pagesOf('host', workspace.id).find((page) => page.active)
 }
 
 // Relative paths (older CLIs, paired callers) stay inside the workspace; absolute ones are this host's.

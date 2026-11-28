@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import {
   MAX_REMOTE_TAB_FAVICON_URL_LENGTH,
   remoteTabFaviconUrl
@@ -124,7 +125,7 @@ const runtimeFavicons = new WeakMap<object, BrowserTabFaviconDataUrls>()
 
 /** Inline with this runtime's cache; a finished icon republishes at a new version, since viewers drop same-version republishes. */
 export function inlineRuntimeBrowserTabFavicons(
-  runtime: { touchMobileSessionTabsForWorktree(worktreeId: string): void },
+  runtime: { touchSessionTabList(list: TabListRef): void },
   snapshot: RuntimeMobileSessionTabsSnapshot
 ): RuntimeMobileSessionTabsSnapshot {
   let favicons = runtimeFavicons.get(runtime)
@@ -133,7 +134,9 @@ export function inlineRuntimeBrowserTabFavicons(
       fetchFor: (browserPageId) =>
         getRuntimeDesktopSurface().browserTabFaviconFetch?.(browserPageId) ?? null,
       encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng,
-      onInlined: (worktreeId) => runtime.touchMobileSessionTabsForWorktree(worktreeId)
+      // Icons are inlined into the host's snapshot as it is projected: its list re-reads them.
+      onInlined: (worktreeId) =>
+        runtime.touchSessionTabList({ workspaceId: worktreeId, holder: undefined })
     })
     runtimeFavicons.set(runtime, favicons)
   }

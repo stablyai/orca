@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
 import {
@@ -22,13 +23,28 @@ type BrowserTabCreatePublicationBridge = Pick<
 
 export type BrowserTabCreatePublicationHost = {
   getAgentBrowserBridge(): BrowserTabCreatePublicationBridge | null
-  getRuntimeBrowserPageRegistry(): Pick<RuntimeBrowserPageRegistry, 'yieldSelection'>
+  getRuntimeBrowserPageRegistry(): Pick<RuntimeBrowserPageRegistry, 'yieldSelection' | 'getPage'>
   markHeadlessBrowserSessionTabActive?(
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
   ): Promise<void>
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
+  notifyBrowserPageList(page: TabListRef): void
+}
+
+/** A client page's tab changed: the list that holds the page hears; an engine tab's, its workspace. */
+function notifyPublishedTab(
+  host: BrowserTabCreatePublicationHost,
+  browserPageId: string,
+  worktreeId: string
+): void {
+  const page = host.getRuntimeBrowserPageRegistry().getPage(browserPageId)
+  if (page) {
+    host.notifyBrowserPageList(page)
+  } else {
+    host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
+  }
 }
 
 export type BrowserSessionTabSelectionOptions = {
@@ -168,7 +184,7 @@ export async function publishSwitchedBrowserSessionTab(
 ): Promise<void> {
   const rules = BROWSER_TAB_SWITCH_PUBLICATION_RULES[publication.placementKind]
   if (rules.notifiesSessionTabsChanged && publication.worktreeId !== undefined) {
-    host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
+    notifyPublishedTab(host, publication.browserPageId, publication.worktreeId)
   }
   if (rules.marksSessionTabFocus && browserTabSwitchTakesFocus(publication.focus)) {
     // Only the CLI asks a switch for focus, and it has no screen: every screen shows the tab.
@@ -191,7 +207,7 @@ export async function publishCreatedBrowserSessionTab(
     (rules.notifiesSessionTabsChanged || (rules.activatesBridgeTab && leavesAgentTab)) &&
     publication.worktreeId !== undefined
   ) {
-    host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
+    notifyPublishedTab(host, publication.browserPageId, publication.worktreeId)
   }
   if (rules.activatesBridgeTab && !leavesAgentTab) {
     const bridge = host.getAgentBrowserBridge()

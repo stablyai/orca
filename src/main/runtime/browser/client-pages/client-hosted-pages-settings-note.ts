@@ -9,7 +9,7 @@ export function clientHostedPagesSettingsNote(
   runtime: WeakKey,
   setting: HostSetting
 ): ClientHostedPagesSettingsNote {
-  if (getRuntimeBrowserPageRegistry(runtime).listPages().length === 0) {
+  if (getRuntimeBrowserPageRegistry(runtime).everyPage().length === 0) {
     return {}
   }
   const pages = 'Pages of this host that render on a paired desktop'

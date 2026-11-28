@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../../bots/team-share/teammate-rules'
 import { batchBrowserPageInitializationNotifications } from './browser-page-initialization-notifications'
 import {
   isRecoverableByLease,
@@ -67,7 +68,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   pages: RuntimeBrowserPageRegistry
   /** Placements as of the attach inventory. Omitting it recovers against unfenced live state. */
   pagePlacementsAtAttach?: ReadonlyMap<string, RuntimeBrowserClientPage['placement']>
-  notifyWorkspace(workspaceId: string): void
+  notifyPageList(page: TabListRef): void
   /** Drops a page whose placement recovery destroyed without replacing it. */
   releaseUnrecoverablePage?: (page: RuntimeBrowserClientPage) => void
   /** Skip newly adopted pages: inventory still names predecessor authority and would wrongly trigger their teardown. */
@@ -88,7 +89,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   }
   const inventoryByPageId = new Map(inventory.map((page) => [page.browserPageId, page]))
   const pages = options.pages
-    .listPages()
+    .everyPage()
     .filter(
       (page) =>
         isPlacedAsObservedAtAttach(page, options.pagePlacementsAtAttach) &&
@@ -103,12 +104,12 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
         !isActiveExactPage(page, inventoryByPageId.get(page.browserPageId), options.lease)
     )
   if (options.lease.hostCapabilities?.includes(BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY)) {
-    batchBrowserPageInitializationNotifications(options.notifyWorkspace, (notifyWorkspace) => {
+    batchBrowserPageInitializationNotifications(options.notifyPageList, (notifyPageList) => {
       for (const page of pages) {
         const previous = inventoryByPageId.get(page.browserPageId)
         admitRuntimeBrowserPageInitialization({
           ...options,
-          notifyWorkspace,
+          notifyPageList,
           lease: options.lease,
           page,
           url: previous?.currentUrl ?? page.url,
@@ -187,7 +188,7 @@ async function recoverPage(
       currentPlacement.browserHostGeneration === options.lease.browserHostGeneration
     ) {
       options.pages.replaceClientPagePlacement(page.browserPageId, page.placement, currentPlacement)
-      options.notifyWorkspace(page.workspaceId)
+      options.notifyPageList(page)
       return
     }
     throw new Error('browser_page_placement_stale')
@@ -245,7 +246,7 @@ async function recoverPage(
   } else if (recovered.loading) {
     options.pages.updatePage(page.browserPageId, placement, { loading: false })
   }
-  options.notifyWorkspace(page.workspaceId)
+  options.notifyPageList(page)
 }
 
 async function closeUnavailablePage(

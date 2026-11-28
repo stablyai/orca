@@ -44,11 +44,11 @@ export type ClientHostedBrowserPagePersistenceHost = {
 /** Persist the registry projection at the shared tab-change seam; unchanged projections write nothing. */
 export function persistClientHostedBrowserPages(
   host: ClientHostedBrowserPagePersistenceHost,
-  registry: Pick<RuntimeBrowserPageRegistry, 'listPages'>,
+  registry: Pick<RuntimeBrowserPageRegistry, 'everyPage'>,
   worktreeId: string
 ): boolean {
   const rows = buildPersistedClientHostedBrowserPages(
-    registry.listPages(worktreeId),
+    registry.everyPage(worktreeId),
     host.now?.() ?? Date.now()
   )
   let session: WorkspaceSessionState | null

@@ -5,6 +5,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { PersistedMobileClientTabSelections } from '../../../../shared/orca-profiles/persisted-state-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -29,7 +30,10 @@ import {
   type SessionTabListName
 } from '../../client/navigation/client-session-tab-selection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { PersonSessionTabLists } from './person-session-tab-lists'
+import type { PersonSurface } from './person-tab-list-snapshot'
+import { personSurfaceRow, withoutHeldTabs } from './person-surface-rows'
 import {
   structuredConversationForked,
   titleStructuredConversationTabs
@@ -78,6 +82,12 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     clientNavigationId?: string,
     options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
   ): Promise<RuntimeMobileSessionTabsResult>
+
+  /** A client-hosted page's row, when the page is in this workspace. */
+  protected abstract clientBrowserPageRow(
+    worktreeId: string,
+    browserPageId: string
+  ): RuntimeMobileSessionBrowserTab | null
   abstract currentLocalStructuredSessionPresentation(
     sessionId: string
   ): { worktreeId: string; tabId: string } | null
@@ -105,6 +115,12 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
       this.personSessionTabs.hydrate(persisted)
       this.pruneTeammateTabLists()
     }
+    getRuntimeBrowserPageRegistry(this).setHolderLookup(
+      (browserPageId) =>
+        this.personSessionTabs.holderOfSurface(
+          (surface) => surface.kind === 'browser' && surface.browserPageId === browserPageId
+        )?.person ?? null
+    )
     const bots = () => this.store?.getBots?.() ?? []
     this.clientSessionTabSelections.setPersistListener(() => this.persistSessionTabLists())
     // Until the share devices load, a device in an agent's Home may be a teammate's: left alone.
@@ -133,16 +149,48 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     worktreeId: string,
     includeAgentSenders = true
   ): RuntimeMobileSessionTabsResult {
-    const snapshot = this.personSessionTabs.snapshot(person, worktreeId, (_worktree, sessionId) => {
-      const record = getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
-      return record?.location.workspaceId === worktreeId
-        ? { agent: record.provider, title: defaultAgentChatLabel(record.provider) }
-        : null
-    })
+    const snapshot = this.personSessionTabs.snapshot(
+      person,
+      worktreeId,
+      (_worktree, sessionId) => {
+        const record = getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
+        return record?.location.workspaceId === worktreeId
+          ? { agent: record.provider, title: defaultAgentChatLabel(record.provider) }
+          : null
+      },
+      (_worktree, surface) =>
+        surface.kind === 'browser'
+          ? this.clientBrowserPageRow(worktreeId, surface.browserPageId)
+          : personSurfaceRow(worktreeId, surface, (ptyId) => this.ptysById.get(ptyId))
+    )
     const result = this.titledSessionTabsResult(snapshot, undefined, {
       accountId: tabListTeammate(person).accountId
     })
     return includeAgentSenders ? this.withMobileSessionTabSenders(result) : result
+  }
+
+  /** Rule 4: the host's list never shows a terminal or page a teammate opened in their Home, by the
+   *  stamp on its PTY or page record. Every write of the host's list passes here
+   *  (`storeMobileSessionSnapshot`), whichever projection made it. */
+  protected withoutPersonSurfaces(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const pages = getRuntimeBrowserPageRegistry(this)
+    return withoutHeldTabs(snapshot, (tab) =>
+      tab.type === 'terminal'
+        ? Boolean(tab.ptyId && this.ptysById.get(tab.ptyId)?.holder)
+        : tab.type === 'browser' &&
+          Boolean(tab.browserPageId && pages.getPage(tab.browserPageId)?.holder)
+    )
+  }
+
+  /** The stamp a terminal's record takes when it is made: the teammate whose list holds its PTY (bound
+   *  as it registers, or saved before a restart). */
+  protected terminalHolderStamp(ptyId: string): { holder?: TeammateTabListKey } {
+    const held = this.personSessionTabs.holderOfSurface(
+      (surface) => surface.kind === 'terminal' && surface.ptyId === ptyId
+    )
+    return held ? { holder: held.person } : {}
   }
 
   /** Chat tabs titled for the list's person, and their Home pinned: the host's list (the owner's), or
@@ -266,12 +314,19 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
         )
       )
     )
-    this.personSessionTabs.forgetPeople((person) => !live.has(person))
+    const ended = this.personSessionTabs.forgetPeople((person) => !live.has(person))
+    for (const { worktreeId, surface } of ended) {
+      this.endPersonSurface(worktreeId, surface)
+    }
   }
+
+  /** Stops a closed terminal, closes a closed page. */
+  protected abstract endPersonSurface(worktreeId: string, surface: PersonSurface): void
+  protected abstract schedulePersonListRedraw(person: TeammateTabListKey, worktreeId: string): void
 
   /** The workspace is gone: each person's list there, and their devices' picks in it, go too. */
   protected forgetPersonTabListsIn(worktreeId: string): void {
-    for (const person of this.personSessionTabs.holdersOf(worktreeId, () => true)) {
+    for (const person of this.personSessionTabs.peopleIn(worktreeId)) {
       this.clientSessionTabSelections.forgetWorktree(worktreeId, person)
     }
     this.personSessionTabs.forgetWorktree(worktreeId)

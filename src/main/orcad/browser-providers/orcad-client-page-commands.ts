@@ -162,7 +162,7 @@ export function orcadClientPageCommand(
   const query = LOGICAL_TAB_QUERIES.find((candidate) => candidate === name)
   if (query) {
     return (...args: unknown[]) => {
-      const hasClientPages = host.getRuntimeBrowserPageRegistry().listPages().length > 0
+      const hasClientPages = host.getRuntimeBrowserPageRegistry().everyPage().length > 0
       if (!hasClientPages && (engineAvailable() || !hasPairedPageHost(host))) {
         return forward(args)
       }
@@ -197,7 +197,7 @@ function createTab(
     if (
       hasEngine &&
       browserTabCreateClientPageStartsActive(params?.activate) &&
-      host.getRuntimeBrowserPageRegistry().listPages().length > 0
+      host.getRuntimeBrowserPageRegistry().pagesOf('host').length > 0
     ) {
       await yieldClientPageSelection(host, params?.worktree)
     }

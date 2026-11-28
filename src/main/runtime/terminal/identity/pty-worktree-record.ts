@@ -104,6 +104,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         worktreeId,
         ...(state.worktreeInferredFromCwd ? { worktreeInferredFromCwd: true } : {}),
         connectionId,
+        ...this.terminalHolderStamp(ptyId),
         runtimeSessionOwned: state.runtimeSessionOwned ?? false,
         isWsl: state.isWsl ?? null,
         wslDistro,

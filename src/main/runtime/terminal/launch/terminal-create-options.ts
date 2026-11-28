@@ -1,4 +1,5 @@
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
+import type { TeammateTabListKey } from '../../../bots/team-share/teammate-rules'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -92,6 +93,9 @@ export type TerminalCreateOptions = {
   isNewSession?: boolean
   preAllocatedHandle?: string
   persistHostSessionBinding?: boolean
+  /** A teammate's own terminal in a shared agent's Home (teammate-rules.ts, rule 4): no pane in any
+   *  host layout, and its PTY record stamped with them as it registers. */
+  holder?: TeammateTabListKey
   agentSessionClaim?: AgentSessionExecutionClaim
   agentSessionCreateOperationId?: string
   /** The paired client's declared intent; the host's fork gate validates and may defer it. */

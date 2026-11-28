@@ -145,12 +145,14 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends LegacyWor
         censusRead = inventory !== null
         return inventory && { ...inventory, workspaceIds }
       },
+      // A teammate's terminal comes back in their own list, never as a tab of the host's window.
       ptys: () =>
-        scope === 'all'
-          ? this.ptysById.values()
-          : [...this.ptysById.values()].filter((pty) =>
-              [...scope].some((worktreeId) => worktreeIdsEqual(worktreeId, pty.worktreeId))
-            ),
+        [...this.ptysById.values()].filter(
+          (pty) =>
+            !pty.holder &&
+            (scope === 'all' ||
+              [...scope].some((worktreeId) => worktreeIdsEqual(worktreeId, pty.worktreeId)))
+        ),
       paneOf: (pty) => this.paneOfPty(pty),
       // Window spawns hold the workspace lock through pane recording; pending registration also reserves its binding.
       isStillBinding: (pty) =>

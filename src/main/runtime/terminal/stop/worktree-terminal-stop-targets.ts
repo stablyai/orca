@@ -1,7 +1,11 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithTerminalSleepSnapshot } from './worktree-terminal-sleep-snapshot'
 import { setsEqual } from '../identity/runtime-worktree-binding-index'
-import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
+import {
+  ptyInList,
+  type PtyList,
+  type RuntimeLeafRecord
+} from '../records/runtime-terminal-state-records'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import {
   worktreePtyBelongsToHost,
@@ -46,7 +50,11 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     if (!refreshedPtyLiveness) {
       throw new Error('terminal_liveness_unavailable')
     }
-    const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
+    // A shared agent's Home keeps each person's terminals in their own list: exact within that list.
+    const list = this.ptysById.get([...expected][0]!)?.holder ?? 'host'
+    const liveInList = (fresh: ReadonlySet<string>) =>
+      this.getLivePtyIdsForWorktree(worktree.id, list, fresh)
+    const livePtyIds = liveInList(refreshedPtyLiveness)
     const targetOnly = opts.targetOnly === true
     const expectedIsLive = [...expected].every((ptyId) => livePtyIds.has(ptyId))
     if (targetOnly ? !expectedIsLive : !setsEqual(livePtyIds, expected)) {
@@ -97,7 +105,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
         postStopFailure: 'terminal_liveness_unavailable'
       }
     }
-    const remainingLivePtyIds = this.getLivePtyIdsForWorktree(worktree.id, postStopLiveness)
+    const remainingLivePtyIds = liveInList(postStopLiveness)
     const stoppedTargetsStillLive = [...expected].filter((ptyId) => remainingLivePtyIds.has(ptyId))
     if (targetOnly ? stoppedTargetsStillLive.length > 0 : remainingLivePtyIds.size > 0) {
       return {
@@ -137,9 +145,11 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     }
   }
 
-  /** With `hostFence`, only that host's copy: a same-id twin's PTYs are another host's. */
+  /** A workspace's live terminals in one list (`ptyInList`). With `hostFence`, only that host's copy:
+   *  a same-id twin's PTYs are another host's. */
   protected getLivePtyIdsForWorktree(
     worktreeId: string,
+    list: PtyList | 'every',
     freshPtyIds?: ReadonlySet<string>,
     hostFence?: WorktreePtyHostFence
   ): Set<string> {
@@ -174,11 +184,13 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
         ptyIds.add(pty.ptyId)
       }
     }
-    if (hostFence) {
-      for (const ptyId of ptyIds) {
-        if (!worktreePtyBelongsToHost(ptyId, this.ptysById.get(ptyId)?.connectionId, hostFence)) {
-          ptyIds.delete(ptyId)
-        }
+    for (const ptyId of ptyIds) {
+      const pty = this.ptysById.get(ptyId)
+      if (
+        !ptyInList(pty, list) ||
+        (hostFence && !worktreePtyBelongsToHost(ptyId, pty?.connectionId, hostFence))
+      ) {
+        ptyIds.delete(ptyId)
       }
     }
     return ptyIds

@@ -59,8 +59,10 @@ export const CLIENT_EVENT_METHODS = [
           },
           { consumesTerminalSideEffects: clientKind !== 'mobile' }
         )
+        // The server asks only the owner's computers to host a page no one placed.
         const unregisterHostVolunteer =
           params.browserHostRequests === true &&
+          ctx.callerScope?.kind !== 'bot-share' &&
           clientKind === 'runtime' &&
           pairedDeviceId &&
           clientCapabilities?.includes(BROWSER_CLIENT_HOST_REQUEST_CAPABILITY)

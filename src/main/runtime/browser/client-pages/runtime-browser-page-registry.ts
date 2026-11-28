@@ -2,6 +2,13 @@ import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserClientPlacement
 } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
+import type { TeammateTabListKey } from '../../../bots/team-share/teammate-rules'
+import type {
+  RuntimeBrowserClientPage,
+  RuntimeBrowserClientPageInput,
+  RuntimeBrowserPageMetadata,
+  RuntimeBrowserPageUpdate
+} from './runtime-browser-client-page'
 import {
   AgentPageUse,
   personPickWaits,
@@ -11,51 +18,14 @@ import {
 const DEFAULT_MAX_RUNTIME_BROWSER_PAGES = 256
 const MAX_IDENTITY_LENGTH = 256
 
-export type RuntimeBrowserClientPage = Readonly<{
-  browserPageId: string
-  workspaceId: string
-  browserProfileId: string
-  executionHostKey: string
-  placement: RuntimeBrowserClientPlacement
-  /** Retain paired-device identity after lease loss so returning hosts can authenticate page recovery. */
-  pairedDeviceId?: string
-  url: string
-  title: string
-  loading: boolean
-  canGoBack: boolean
-  canGoForward: boolean
-  /** Remote-safe icon the hosting desktop reported; null until it reports one. */
-  faviconUrl?: string | null
-  active: boolean
-  metadataRevision: number
-}>
+export type { RuntimeBrowserClientPage } from './runtime-browser-client-page'
 
-type RuntimeBrowserClientPageInput = Pick<
-  RuntimeBrowserClientPage,
-  | 'browserPageId'
-  | 'workspaceId'
-  | 'browserProfileId'
-  | 'executionHostKey'
-  | 'placement'
-  | 'url'
-  | 'loading'
-  | 'active'
-> &
-  Partial<
-    Pick<
-      RuntimeBrowserClientPage,
-      'pairedDeviceId' | 'title' | 'canGoBack' | 'canGoForward' | 'metadataRevision'
-    >
-  >
+/** Whose tab list a page is in: the host's, or the teammate's own list that opened it. */
+export type PageList = 'host' | TeammateTabListKey
 
-type RuntimeBrowserPageUpdate = Partial<
-  Pick<RuntimeBrowserClientPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward'>
->
-
-type RuntimeBrowserPageMetadata = Pick<
-  RuntimeBrowserClientPage,
-  'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'faviconUrl' | 'metadataRevision'
->
+export function pageListOf(page: Pick<RuntimeBrowserClientPage, 'holder'>): PageList {
+  return page.holder ?? 'host'
+}
 
 export class RuntimeBrowserPageRegistry {
   private readonly pages = new Map<string, RuntimeBrowserClientPage>()
@@ -66,6 +36,7 @@ export class RuntimeBrowserPageRegistry {
   readonly agentUse = new AgentPageUse()
   private readonly maxPages: number
   private onRetired?: (page: RuntimeBrowserClientPage) => void
+  private holderOf: (browserPageId: string) => TeammateTabListKey | null = () => null
 
   constructor(options: { maxPages?: number } = {}) {
     this.maxPages = options.maxPages ?? DEFAULT_MAX_RUNTIME_BROWSER_PAGES
@@ -76,6 +47,16 @@ export class RuntimeBrowserPageRegistry {
 
   setRetirementListener(listener: (page: RuntimeBrowserClientPage) => void): void {
     this.onRetired = listener
+  }
+
+  /** Who holds a page as it is published: a teammate's own list that opened it, or none. */
+  setHolderLookup(holderOf: (browserPageId: string) => TeammateTabListKey | null): void {
+    this.holderOf = holderOf
+  }
+
+  /** The teammate's list holding a page, published or not (an adoption asks before it publishes). */
+  heldBy(browserPageId: string): TeammateTabListKey | null {
+    return this.holderOf(browserPageId)
   }
 
   /** Omitting the picker publishes as asked, as restores and adoptions do. */
@@ -93,16 +74,19 @@ export class RuntimeBrowserPageRegistry {
     if (this.pages.size >= this.maxPages) {
       throw new Error('browser_runtime_page_capacity')
     }
+    const holder = this.holderOf(input.browserPageId)
     const held =
       input.active &&
+      !holder &&
       picker === 'person' &&
       this.personPickWaitsIn(input.workspaceId, input.browserPageId)
-    const active = input.active && !held
+    const active = input.active && !held && !holder
     if (active) {
       this.deactivateWorkspace(input.workspaceId)
     }
     const page = freezePage({
       ...input,
+      holder: holder ?? undefined,
       active,
       placement: Object.freeze({ ...input.placement }),
       title: input.title ?? 'Browser',
@@ -164,6 +148,9 @@ export class RuntimeBrowserPageRegistry {
     picker: BrowserPagePicker
   ): RuntimeBrowserClientPage {
     const current = this.requireExactPage(browserPageId, placement)
+    if (current.holder) {
+      return current
+    }
     if (picker === 'person' && this.personPickWaitsIn(current.workspaceId, browserPageId)) {
       this.heldPersonPicks.set(current.workspaceId, browserPageId)
       return current
@@ -262,7 +249,15 @@ export class RuntimeBrowserPageRegistry {
     return this.pages.get(browserPageId)
   }
 
-  listPages(workspaceId?: string): readonly RuntimeBrowserClientPage[] {
+  /** The pages one list holds: the host's are those no teammate's own list holds. The only way to
+   *  list pages for a caller or act on them by index. */
+  pagesOf(list: PageList, workspaceId?: string): readonly RuntimeBrowserClientPage[] {
+    return this.everyPage(workspaceId).filter((page) => pageListOf(page) === list)
+  }
+
+  /** Every page record, whoever's list holds it: only for keeping the records themselves
+   *  (persistence, retirement, a desktop's reconnect inventory), never to list or act for a caller. */
+  everyPage(workspaceId?: string): readonly RuntimeBrowserClientPage[] {
     this.applyHeldPersonPicks(workspaceId)
     const pages = [...this.pages.values()]
     if (workspaceId !== undefined) {

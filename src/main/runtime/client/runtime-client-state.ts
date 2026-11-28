@@ -43,7 +43,7 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   abstract stopTerminalsForWorktree(
     worktreeSelector: string,
-    options?: WorktreeTerminalStopOptions
+    options: WorktreeTerminalStopOptions
   ): Promise<{ stopped: number }>
 
   protected abstract setWorkspaceSessionForWorktree(
@@ -88,7 +88,7 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
           return !ownerRepoId || liveRepoIds.has(ownerRepoId)
         }
       })
-      for (const page of registry.listPages()) {
+      for (const page of registry.everyPage()) {
         this.persistedClientHostedBrowserWorktreeIds.add(page.workspaceId)
       }
     } catch (error) {
@@ -99,7 +99,7 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
   /** Skip session reads for workspaces without client pages on this hot terminal/editor-change seam. */
   protected persistClientHostedBrowserPagesForWorktree(worktreeId: string): void {
     const registry = getRuntimeBrowserPageRegistry(this)
-    const hasPages = registry.listPages(worktreeId).length > 0
+    const hasPages = registry.everyPage(worktreeId).length > 0
     if (!hasPages && !this.persistedClientHostedBrowserWorktreeIds.has(worktreeId)) {
       return
     }

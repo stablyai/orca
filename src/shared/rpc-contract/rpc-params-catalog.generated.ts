@@ -842,6 +842,7 @@ import {
 } from './projects/repo-params'
 import { ReferenceFind, ReferenceList } from './references/reference-params'
 import { BrowserTarget, ExpectUrlBrowserTarget } from './rpc-param-primitives'
+import { OpenFileTab } from './session-tabs/session-tab-open-file-params'
 import { SessionTabsUnsubscribeAllParams } from './session-tabs/session-tabs-params'
 import {
   ActivateTab,
@@ -2169,6 +2170,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.listAll': null,
   'session.tabs.move': MoveTab,
   'session.tabs.movePaneToNewTab': MovePaneToNewTab,
+  'session.tabs.openFile': OpenFileTab,
   'session.tabs.setTabProps': SetTabProps,
   'session.tabs.subscribe': SessionTabListRead,
   'session.tabs.subscribeAll': null,

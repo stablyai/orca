@@ -74,6 +74,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     // A live process awaiting its pane binding is not evidence of an orphan.
     if (
       orphaned &&
+      !pty.holder &&
       (this.pendingPtyRegistrationIncarnations.has(pty.ptyId) ||
         this.terminalMutationLock.hasActiveSpawns(worktreeIdentityKey(pty.worktreeId)))
     ) {
@@ -84,6 +85,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
       orphaned,
+      ...(pty.holder ? { heldByTeammate: true as const } : {}),
       ...(orphaned && pane && pane.tabId === recorded.tabId && recorded.paneKey
         ? { recordedPaneKey: recorded.paneKey }
         : {}),

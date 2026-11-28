@@ -36,7 +36,15 @@ export const BROWSER_CLIENT_HOST_METHODS = [
     params: BrowserClientHostAttachParams,
     handler: async (
       params,
-      { runtime, connectionId, pairedDeviceId, clientKind, clientCapabilities, signal },
+      {
+        runtime,
+        connectionId,
+        pairedDeviceId,
+        clientKind,
+        clientCapabilities,
+        callerScope,
+        signal
+      },
       emit
     ) => {
       if (clientKind !== 'runtime' || !connectionId || !pairedDeviceId) {
@@ -56,7 +64,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
       // Attach inventory cannot describe pages created or replaced after readiness is published.
       const pagePlacementsAtAttach = new Map(
         getRuntimeBrowserPageRegistry(runtime)
-          .listPages()
+          .everyPage()
           .map((page) => [page.browserPageId, page.placement])
       )
       const handle = registry.attach(
@@ -70,7 +78,8 @@ export const BROWSER_CLIENT_HOST_METHODS = [
           pageInventory: params.pageInventory,
           pageReconciliationProtocolVersion: params.pageReconciliationProtocolVersion,
           leaseReconnectProtocolVersion: params.leaseReconnectProtocolVersion,
-          fileChannelProtocolVersion: params.fileChannelProtocolVersion
+          fileChannelProtocolVersion: params.fileChannelProtocolVersion,
+          teammate: callerScope?.kind === 'bot-share'
         },
         () => runtime.markClientHostedPagesReconciled(pairedDeviceId)
       )
@@ -137,7 +146,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
           lease: handle.lease,
           authority: registry,
           pages: getRuntimeBrowserPageRegistry(runtime),
-          notifyWorkspace: (workspaceId) => runtime.notifyMobileSessionTabsChanged(workspaceId),
+          notifyPageList: (page) => runtime.notifyBrowserPageList(page),
           resolveExecutionHostKey: (workspaceId) =>
             runtime.resolveBrowserExecutionHostKeyForWorkspace(workspaceId),
           signal: initializationSignal
@@ -156,7 +165,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
           authority: registry,
           pages: getRuntimeBrowserPageRegistry(runtime),
           pagePlacementsAtAttach,
-          notifyWorkspace: (workspaceId) => runtime.notifyMobileSessionTabsChanged(workspaceId),
+          notifyPageList: (page) => runtime.notifyBrowserPageList(page),
           releaseUnrecoverablePage: (page) =>
             releaseRuntimeBrowserClientPageRecord(runtime, page.browserPageId, page.placement),
           resolveExecutionHostKey: (workspaceId) =>
@@ -272,7 +281,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
       }
       const accepted = pages.updatePageMetadata(params.browserPageId, placement, params)
       if (accepted) {
-        runtime.notifyMobileSessionTabsChanged(page.workspaceId)
+        runtime.notifyBrowserPageList(page)
       }
       return { accepted }
     }

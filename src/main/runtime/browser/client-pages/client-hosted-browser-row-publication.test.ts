@@ -30,7 +30,7 @@ function setUp() {
   const owners: { devices: Set<string> | null } = { devices: null }
   const emitted: ClientHostedBrowserRowsEvent[] = []
   const rows = new ClientHostedBrowserRowPublisher({
-    listClientPages: (worktreeId) => pages.listPages(worktreeId),
+    listClientPages: (worktreeId) => pages.pagesOf('host', worktreeId),
     getClientPage: (browserPageId) => pages.getPage(browserPageId),
     hasLivePlacement: () => true,
     resolveDeviceName: (pairedDeviceId) => pairedDeviceId,
@@ -48,7 +48,8 @@ it('hydrates nothing before pairing loads, then shows only the owner’s compute
   owners.devices = new Set(['owners-laptop'])
   rows.publishAll()
   expect(lastShown()).toEqual(['owners-laptop-page'])
-  expect(rows.row('teammate-page')).toBeUndefined()
+  // A client that shows it as a placeholder still learns whose computer it is on.
+  expect(rows.row('teammate-page')).toMatchObject({ hostDeviceName: 'teammate-desk' })
   expect(
     rows.deliverHydrationSnapshot().flatMap((event) => event.rows.map((row) => row.browserPageId))
   ).toEqual(['owners-laptop-page'])

@@ -266,7 +266,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
   protected readonly mobileSessionTabsAgentStatusHeartbeat =
     createMobileSessionTabsAgentStatusHeartbeat(
       (ptyId) => this.mobileSessionTabsByWorktree.worktreeIdsForPty(ptyId),
-      (worktreeId) => this.touchMobileSessionTabsForWorktree(worktreeId)
+      // Agent status is shown in the host's list alone (`scheduleSessionTabListAgentStatusHeartbeat`).
+      (worktreeId) => this.touchSessionTabList({ workspaceId: worktreeId, holder: undefined })
     )
 
   // Concurrent focus requests share one host reveal; the latest pane wins.

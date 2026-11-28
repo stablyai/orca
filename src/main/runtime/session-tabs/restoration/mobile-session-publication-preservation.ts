@@ -236,7 +236,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
       for (const id of new Set([
         ...this.persistedClientHostedBrowserWorktreeIds,
         ...getRuntimeBrowserPageRegistry(this)
-          .listPages()
+          .everyPage()
           .map((page) => page.workspaceId)
       ])) {
         this.persistClientHostedBrowserPagesForWorktree(id)
@@ -248,7 +248,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     this.clientHostedBrowserRows.publish(worktreeId)
     this.persistClientHostedBrowserPagesForWorktree(worktreeId)
     const hasClientBrowserPages =
-      getRuntimeBrowserPageRegistry(this).listPages(worktreeId).length > 0
+      getRuntimeBrowserPageRegistry(this).pagesOf('host', worktreeId).length > 0
     if (this.offscreenBrowserBackend || hasClientBrowserPages) {
       const reconciled = this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
         worktreeId,

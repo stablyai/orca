@@ -89,9 +89,17 @@ export class ClientHostedBrowserRowPublisher {
     return events
   }
 
+  /** Where one page is open, for a client that shows it as a placeholder: any person's computer. */
   row(browserPageId: string): ClientHostedBrowserRow | undefined {
     const page = this.host.getClientPage(browserPageId)
-    return page ? this.buildRows([page])[0] : undefined
+    return page ? projectClientHostedBrowserRows([page], this.rowSources())[0] : undefined
+  }
+
+  private rowSources() {
+    return {
+      hasLivePlacement: (browserPageId: string) => this.host.hasLivePlacement(browserPageId),
+      resolveDeviceName: (pairedDeviceId: string) => this.host.resolveDeviceName(pairedDeviceId)
+    }
   }
 
   private buildRows(
@@ -101,9 +109,6 @@ export class ClientHostedBrowserRowPublisher {
     const hostPages = pages.filter(
       (page) => page.pairedDeviceId !== undefined && this.host.isOwnerDevice(page.pairedDeviceId)
     )
-    return projectClientHostedBrowserRows(hostPages, {
-      hasLivePlacement: (browserPageId) => this.host.hasLivePlacement(browserPageId),
-      resolveDeviceName: (pairedDeviceId) => this.host.resolveDeviceName(pairedDeviceId)
-    })
+    return projectClientHostedBrowserRows(hostPages, this.rowSources())
   }
 }

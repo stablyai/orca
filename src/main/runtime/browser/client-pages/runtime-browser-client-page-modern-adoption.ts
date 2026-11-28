@@ -23,7 +23,7 @@ export function admitModernAdoptions(
   const claimed: string[] = []
   const ordered = [...candidates].sort((a, b) => a.pageHostGeneration - b.pageHostGeneration)
   const highest = ordered.reduce((value, page) => Math.max(value, page.pageHostGeneration), 0)
-  batchBrowserPageInitializationNotifications(options.notifyWorkspace, (notifyWorkspace) => {
+  batchBrowserPageInitializationNotifications(options.notifyPageList, (notifyPageList) => {
     for (const [index, inventory] of ordered.entries()) {
       if (options.signal?.aborted) {
         continue
@@ -49,7 +49,7 @@ export function admitModernAdoptions(
       try {
         const disposition = admitRuntimeBrowserPageInitialization({
           ...options,
-          notifyWorkspace,
+          notifyPageList,
           page,
           previous: inventory,
           pageHostGeneration: highest + index + 1,
@@ -58,14 +58,14 @@ export function admitModernAdoptions(
           ...(!existing
             ? {
                 claim: () => {
-                  options.pages.publishClientPage(page)
-                  notifyWorkspace(page.workspaceId)
+                  notifyPageList(options.pages.publishClientPage(page))
                 }
               }
             : {}),
           releaseUnrecoverablePage: (held) => {
-            if (options.pages.retirePage(held.browserPageId, held.placement)) {
-              notifyWorkspace(held.workspaceId)
+            const current = options.pages.getPage(held.browserPageId)
+            if (current && options.pages.retirePage(held.browserPageId, held.placement)) {
+              notifyPageList(current)
             }
           },
           settled: (outcome) => {

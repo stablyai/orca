@@ -44,7 +44,7 @@ export class BrowserHostPageInitializations extends BrowserHostPageInitializatio
     private readonly authority: Omit<InitializationTransactionAuthority, 'current'>,
     requireState: (state: BrowserHostLeaseState) => void,
     private readonly retireLease: (state: BrowserHostLeaseState) => void,
-    changed: (workspaceId: string) => void = () => {}
+    changed: (page: { browserPageId: string; workspaceId: string }) => void = () => {}
   ) {
     super(requireState, changed)
   }
@@ -131,10 +131,8 @@ export class BrowserHostPageInitializations extends BrowserHostPageInitializatio
   }
 
   retireAuthority(state: BrowserHostLeaseState): void {
-    const changed = new Set(
-      [...this.records.values()]
-        .filter((record) => record.scope === state && this.presentation(record))
-        .map((record) => record.workspaceId)
+    const changed = [...this.records.values()].filter(
+      (record) => record.scope === state && this.presentation(record)
     )
     const affected = new Set([state.lease.pairedDeviceId])
     this.completion.retire(state)
@@ -150,8 +148,8 @@ export class BrowserHostPageInitializations extends BrowserHostPageInitializatio
     )
     this.preparation.retire(state)
     this.completion.publishDevices(affected)
-    for (const workspace of changed) {
-      this.changed(workspace)
+    for (const record of changed) {
+      this.changed(record)
     }
   }
 
@@ -304,7 +302,7 @@ export class BrowserHostPageInitializations extends BrowserHostPageInitializatio
       schedule: (token, queue) => this.schedule(token, queue)
     })
     if (before !== this.presentation(this.records.get(record.browserPageId))) {
-      this.changed(record.workspaceId)
+      this.changed(record)
     }
   }
 

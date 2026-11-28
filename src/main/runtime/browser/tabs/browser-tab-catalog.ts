@@ -1,4 +1,7 @@
-import type { RuntimeBrowserClientPage } from '../client-pages/runtime-browser-page-registry'
+import {
+  pageListOf,
+  type RuntimeBrowserClientPage
+} from '../client-pages/runtime-browser-page-registry'
 import type { BrowserTabListResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { mergeBrowserTabListing } from './browser-tab-listing'
@@ -100,7 +103,7 @@ export class RuntimeBrowserTabCatalog {
       return undefined
     }
     const workspaceId = (await this.host.resolveBrowserWorkspace(params.worktree)).id
-    return pages.listPages(workspaceId).find((page) => page.active)
+    return pages.pagesOf('host', workspaceId).find((page) => page.active)
   }
 
   describeClientHostedBrowserTab(
@@ -108,7 +111,7 @@ export class RuntimeBrowserTabCatalog {
   ): BrowserTabListResult['tabs'][number] {
     const tab = this.listLogicalBrowserTabs(
       page.workspaceId,
-      this.host.getRuntimeBrowserPageRegistry().listPages(page.workspaceId)
+      this.host.getRuntimeBrowserPageRegistry().pagesOf(pageListOf(page), page.workspaceId)
     ).find((candidate) => candidate.browserPageId === page.browserPageId)
     if (!tab) {
       throw new BrowserError(
@@ -138,7 +141,7 @@ export class RuntimeBrowserTabCatalog {
     // Why the caller's scope: the index must be the one `tab list`, `switch` and `close` use there.
     const listed = this.listLogicalBrowserTabs(
       explicitWorktreeId,
-      this.host.getRuntimeBrowserPageRegistry().listPages(explicitWorktreeId)
+      this.host.getRuntimeBrowserPageRegistry().pagesOf('host', explicitWorktreeId)
     ).find((entry) => entry.browserPageId === browserPageId)
     return listed ?? this.enrichBrowserTabInfo(tab)
   }

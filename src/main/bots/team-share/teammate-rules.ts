@@ -20,11 +20,18 @@
 //     the chat's stamp (`chatTabPerson`: whom it acts for, written once when it starts), the host's
 //     own terminals and saved tabs `HOST_STATE_PERSON`. `homeTabListOf` names the list it lands in:
 //     a teammate's own in their agent's Home, the host's everywhere else, so the owner's list only
-//     ever takes owner writes. A teammate's Home list holds chats; `homeTabs.hostList` methods are
-//     refused at admission when they name the teammate's Home. Reads and streams use the device's
-//     list (`tabOwnerOf`), or the list a read names (`viewedTabListOf`): anyone may watch anyone's
-//     list in the Home; watching writes nothing, and closing a tab there names that list's person.
-//     The census test checks every write's person source.
+//     ever takes owner writes. A teammate's Home list holds their chats and the terminals, pages and
+//     files they open there. Their list holds each before it starts; a terminal's PTY record and a
+//     page's record take the stamp (`holder`) when made, and every door that places a tab in a host
+//     list or window reads it (the host's snapshot store, pane admission, orphan adoption, restored
+//     placement, exit retirement, the page selection). Every reader that lists or acts on a
+//     workspace's terminals or pages for someone takes that list (`ptyInList`, `pagesOf`); only work
+//     on the workspace itself reads them all. Other `homeTabs.hostList` methods (incl. stopping,
+//     closing or sleeping all of a workspace's terminals) are refused at admission when they name
+//     the teammate's Home.
+//     Reads and streams use the device's list (`tabOwnerOf`), or the list a read names
+//     (`viewedTabListOf`): anyone may watch anyone's list in the Home; watching writes nothing, and
+//     closing a tab there names that list's person. The census test checks every write's person source.
 //  5. Name and asker. A teammate is named by their share row's `name`, and every chat or turn they start
 //     acts for them (`botShareAsker`).
 //  6. Read marks. The host's read marks (a chat's unread, notification attention, a workspace's unread,
@@ -147,6 +154,14 @@ export function reachesHostWindow(
 export type TabTeammate = { botId: string; accountId: string }
 export type TeammateTabListKey = `teammate:${string}`
 export type TabOwner = 'owner' | 'shared' | TeammateTabListKey
+
+/** One tab list in a workspace: the host's (`holder` undefined) or a teammate's own. `holder` is read
+ *  from the stamp on the terminal's or page's record, never chosen by a caller, and is required so
+ *  no change can name a workspace alone. */
+export type TabListRef = {
+  readonly workspaceId: string
+  readonly holder: TeammateTabListKey | undefined
+}
 
 export function teammateTabListKey(teammate: TabTeammate): TeammateTabListKey {
   // Encoded so no bot id and account id pair spells another's.
