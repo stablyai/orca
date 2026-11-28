@@ -2,14 +2,11 @@
 // couldn't finish, and a person asking for access.
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { OwnerNotice } from '../runtime/push/notifications/runtime-mobile-notification-controller'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { BOT_FOLDER_MISSING } from '../automations/bot-run-target'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { botOwnerNoticeText } from './bot-owner-notice-copy'
 
 export type BotOwnerNotice = Pick<OwnerNotice, 'title' | 'body' | 'phone'>
@@ -57,10 +54,7 @@ export function notifyBotCouldNotFinish(
     worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
     ...(tapSession
       ? {
-          paneKey: structuredAgentSessionPaneKey(
-            structuredAgentSessionTabId(tapSession),
-            tapSession
-          )
+          paneKey: chatPaneKey(tapSession)
         }
       : {})
   })

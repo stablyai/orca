@@ -18,47 +18,161 @@ const RECENT_SNAPSHOT_LIMIT = 16
 // Row hashes only, never row content: eviction costs one full reply, never correctness.
 const recentRowHashes = new Map<string, readonly string[]>()
 
+type CachedSnapshot = {
+  snapshotId: string
+  envelope: Record<string, unknown>
+  rows: readonly unknown[]
+  rowHashes: readonly string[]
+}
+
+function cloneForCache<T>(value: T): { ok: true; value: T } | { ok: false } {
+  if (typeof value !== 'object' || value === null) {
+    return { ok: true, value }
+  }
+  try {
+    return { ok: true, value: structuredClone(value) }
+  } catch {
+    return { ok: false }
+  }
+}
+
+function cloneEnvelope(
+  result: Catalog
+): { ok: true; value: Record<string, unknown> } | { ok: false } {
+  const envelope: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(result)) {
+    if (key === 'worktrees') {
+      continue
+    }
+    const cloned = cloneForCache(value)
+    if (!cloned.ok) {
+      return cloned
+    }
+    envelope[key] = cloned.value
+  }
+  return { ok: true, value: envelope }
+}
+
+function sameEnvelope(result: Catalog, cachedEnvelope: Record<string, unknown>): boolean {
+  const cachedKeys = Object.keys(cachedEnvelope)
+  let extraCount = 0
+  for (const [key, value] of Object.entries(result)) {
+    if (key === 'worktrees') {
+      continue
+    }
+    extraCount += 1
+    if (!Object.hasOwn(cachedEnvelope, key) || !isDeepStrictEqual(value, cachedEnvelope[key])) {
+      return false
+    }
+  }
+  return extraCount === cachedKeys.length
+}
+
 /**
- * One catalog's row hashes from its last reply, by worktree id. Rows arrive as new objects on every
- * fetch, so a row equal by value to its last copy (key order aside) reuses that hash: a one-row
- * change hashes one row, not all.
+ * One catalog's row hashes and last snapshot identity from its last reply. Rows arrive as new
+ * objects on every fetch, so equal rows reuse their hash (a one-row change hashes one row, not
+ * all) and an unchanged catalog reuses its snapshot id without serializing or hashing.
  */
 export class WorktreeCatalogRowHashes {
   private byId = new Map<string, { row: unknown; hash: string }>()
+  private lastSnapshot: CachedSnapshot | null = null
 
   hash(rows: readonly unknown[]): string[] {
+    const { rowHashes } = this.hashRows(rows)
+    this.lastSnapshot = null
+    return rowHashes
+  }
+
+  identify(result: Catalog): {
+    snapshotId: string
+    rowHashes: readonly string[]
+  } {
+    const { rowHashes, cachedRows, allRowsSamePosition, cacheableRows } = this.hashRows(
+      result.worktrees
+    )
+    if (
+      allRowsSamePosition &&
+      this.lastSnapshot !== null &&
+      sameEnvelope(result, this.lastSnapshot.envelope)
+    ) {
+      return {
+        snapshotId: this.lastSnapshot.snapshotId,
+        rowHashes: this.lastSnapshot.rowHashes
+      }
+    }
+    const snapshotId = contentSnapshotId(JSON.stringify({ ...result, worktrees: rowHashes }))
+    const envelope = cacheableRows ? cloneEnvelope(result) : { ok: false as const }
+    this.lastSnapshot = envelope.ok
+      ? { snapshotId, envelope: envelope.value, rows: cachedRows, rowHashes }
+      : null
+    return { snapshotId, rowHashes }
+  }
+
+  private hashRows(rows: readonly unknown[]): {
+    rowHashes: string[]
+    cachedRows: unknown[]
+    allRowsSamePosition: boolean
+    cacheableRows: boolean
+  } {
+    const prevSnapshot = this.lastSnapshot
+    let allRowsSamePosition = prevSnapshot !== null && prevSnapshot.rows.length === rows.length
+    let cacheableRows = true
     const next = new Map<string, { row: unknown; hash: string }>()
-    const hashes = rows.map((row) => {
+    const cachedRows: unknown[] = []
+    const rowHashes = rows.map((row, index) => {
       const id =
         typeof row === 'object' && row !== null && 'worktreeId' in row ? row.worktreeId : undefined
+      const hasPrevAtIndex = prevSnapshot !== null && index < prevSnapshot.rows.length
+      const prevAtIndex = hasPrevAtIndex ? prevSnapshot.rows[index] : undefined
+      if (hasPrevAtIndex && isDeepStrictEqual(prevAtIndex, row)) {
+        const hash = prevSnapshot.rowHashes[index]!
+        cachedRows[index] = prevAtIndex
+        if (typeof id === 'string' && !next.has(id)) {
+          next.set(id, { row: prevAtIndex, hash })
+        }
+        return hash
+      }
+      allRowsSamePosition = false
       const last = typeof id === 'string' ? this.byId.get(id) : undefined
-      const hash =
-        last && isDeepStrictEqual(last.row, row)
-          ? last.hash
-          : contentSnapshotId(JSON.stringify(row))
-      if (typeof id === 'string' && !next.has(id)) {
-        next.set(id, { row, hash })
+      if (
+        last &&
+        (!hasPrevAtIndex || last.row !== prevAtIndex) &&
+        isDeepStrictEqual(last.row, row)
+      ) {
+        cachedRows[index] = last.row
+        if (typeof id === 'string' && !next.has(id)) {
+          next.set(id, last)
+        }
+        return last.hash
+      }
+      const hash = contentSnapshotId(JSON.stringify(row))
+      const cloned = cloneForCache(row)
+      if (cloned.ok) {
+        cachedRows[index] = cloned.value
+        if (typeof id === 'string' && !next.has(id)) {
+          next.set(id, { row: cloned.value, hash })
+        }
+      } else {
+        cacheableRows = false
       }
       return hash
     })
     // Only the latest reply's rows are kept, so a removed row is not held.
     this.byId = next
-    return hashes
+    return { rowHashes, cachedRows, allRowsSamePosition, cacheableRows }
   }
 }
+
+const defaultCatalogRowHashes = new WorktreeCatalogRowHashes()
 
 function identify(
   result: Catalog,
   memo: WorktreeCatalogRowHashes | undefined
 ): {
   snapshotId: string
-  rowHashes: string[]
+  rowHashes: readonly string[]
 } {
-  const rowHashes = memo
-    ? memo.hash(result.worktrees)
-    : result.worktrees.map((row) => contentSnapshotId(JSON.stringify(row)))
-  const snapshotId = contentSnapshotId(JSON.stringify({ ...result, worktrees: rowHashes }))
-  return { snapshotId, rowHashes }
+  return (memo ?? defaultCatalogRowHashes).identify(result)
 }
 
 function remember(snapshotId: string, rowHashes: readonly string[]): void {

@@ -32,7 +32,7 @@ export class MobileSessionSnapshotsByWorktree extends ReverseIndexedMap<
   // Status-only changes owe one version bump, paid when a client frame is next built.
   private readonly owedVersions = new Set<string>()
   // A fresh mark per owe stands in for the stored object, so queued frames see the newer status as a change.
-  private readonly deliveryMarks = new Map<string, number>()
+  private readonly deliveryMarks = new Map<string, unknown>()
   private deliveryMarkSequence = 0
   private payingWorktreeId: string | null = null
 
@@ -43,6 +43,15 @@ export class MobileSessionSnapshotsByWorktree extends ReverseIndexedMap<
   oweVersion(worktreeId: string): void {
     this.owedVersions.add(worktreeId)
     this.deliveryMarks.set(worktreeId, ++this.deliveryMarkSequence)
+  }
+
+  /** A change no listener reads: owe the bump but pin the current source, or a queued frame would drop unreplaced. */
+  oweUnpublishedVersion(worktreeId: string): void {
+    this.owedVersions.add(worktreeId)
+    if (!this.deliveryMarks.has(worktreeId)) {
+      // Paying keeps marks, so this survives until a real change replaces the snapshot.
+      this.deliveryMarks.set(worktreeId, this.get(worktreeId))
+    }
   }
 
   /** Runs pay only when a bump is owed; paying only catches the version up, so it keeps the delivery mark. */

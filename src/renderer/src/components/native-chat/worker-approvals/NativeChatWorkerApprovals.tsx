@@ -9,6 +9,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useWorkerDockStructuralValue } from '../tools/tasks/dock/NativeChatWorkerDockFrame'
+import { useNativeChatViewState } from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -37,6 +38,8 @@ import type { WorkerApprovalDecision } from '../../../../../shared/orchestration
 
 // The person's own Deny: the worker gets this, word for word where its agent takes a message.
 const OWNER_DENY_REASON = 'Denied by the owner.'
+
+const NONE_SUBMITTING: ReadonlyMap<string, WorkerApprovalDecision> = new Map()
 
 /** A worker's answered or lapsed prompt, in the transcript where the worker first asked. */
 export function NativeChatWorkerApprovalReceipt({
@@ -119,8 +122,10 @@ export function NativeChatWorkerApprovalStack({
     [approvals]
   )
   // Each prompt being answered here, and with which decision: the card waits on the host's outcome.
-  const [submitting, setSubmitting] = useState<ReadonlyMap<string, WorkerApprovalDecision>>(
-    new Map()
+  // Kept with the tab, so a chat view released mid-answer still waits on it when it returns.
+  const [submitting, setSubmitting] = useNativeChatViewState(
+    'worker-approvals-submitting',
+    NONE_SUBMITTING
   )
   const now = useSecondClock(isVisible && open.some(({ approval }) => approval.expiresAt))
   const answer = (entry: NativeChatWorkerApproval, decision: WorkerApprovalDecision): void => {
@@ -165,7 +170,7 @@ export function NativeChatWorkerApprovalStack({
         setSubmitting((current) => {
           const next = new Map(current)
           next.delete(approvalId)
-          return next
+          return next.size === 0 ? NONE_SUBMITTING : next
         })
       )
   }
@@ -191,6 +196,7 @@ export function NativeChatWorkerApprovalStack({
       <NativeChatApprovalCard
         key={approval.approvalId}
         approval={workerApprovalCard(approval, t)}
+        memoryKey={`worker:${approval.approvalId}`}
         onChoose={(decision) => {
           if (isWorkerApprovalDecision(decision)) {
             answer(entry, decision)

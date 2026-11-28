@@ -44,7 +44,18 @@ type Row = {
   retryReadAt: number
   // What the backend holds; undefined after a failed write, so the next save cannot match it.
   written: string | undefined
+  // The last write didn't land, so the store may still hold what it was replacing.
+  writeFailed: boolean
   timer: ReturnType<typeof setTimeout> | null
+  // A write is queued and not started; it snapshots when it runs, so a second would add nothing.
+  writeQueued: boolean
+  hidingQueued: boolean
+  // Reads and writes queued or running; a row with any is released only once they settle.
+  steps: number
+  // The one read queued or running, which every load joins.
+  loading: Promise<void> | null
+  // Set when the row's owner closed it; runs when the row is dropped.
+  onReleased: (() => void) | null
   handle: DurableDraftRow
 }
 
@@ -104,9 +115,11 @@ export function workspaceDraftRowKey(
   )
 }
 
+/** `clearOverCap`: write a value past the store's cap as a clear, encoding it once, for owners that don't pre-fit. */
 export function deviceStoreDraftBackend(
   store: PageDeviceStore,
-  key: string
+  key: string,
+  options: { clearOverCap?: boolean } = {}
 ): DurableDraftRowBackend {
   return {
     read: async () => {
@@ -123,12 +136,15 @@ export function deviceStoreDraftBackend(
       }
       return { ok: true, value }
     },
-    write: async (value) =>
-      (
-        await store.write('draft', [
-          { key, value: value === null ? null : encodeDeviceStoreValue(value) }
-        ])
-      ).written
+    write: async (value) => {
+      const encoded = value === null ? null : encodeDeviceStoreValue(value)
+      // A value past the cap is refused and would leave an older one behind, so it is cleared instead.
+      const cleared =
+        options.clearOverCap === true &&
+        encoded !== null &&
+        encoded.length > DEVICE_STORE_MAX_VALUE_LENGTH
+      return (await store.write('draft', [{ key, value: cleared ? null : encoded }])).written
+    }
   }
 }
 
@@ -139,16 +155,42 @@ const MEMORY_BACKEND: DurableDraftRowBackend = {
 }
 
 /** The device store when the shell grants it, else memory only, as before the store existed. */
-export function pageDraftRowBackend(key: string): DurableDraftRowBackend {
+export function pageDraftRowBackend(
+  key: string,
+  options: { clearOverCap?: boolean } = {}
+): DurableDraftRowBackend {
   const store = readPageDeviceStore()
-  return store?.available() ? deviceStoreDraftBackend(store, key) : MEMORY_BACKEND
+  return store?.available() ? deviceStoreDraftBackend(store, key, options) : MEMORY_BACKEND
 }
 
 function enqueue(row: Row, step: () => Promise<void>): Promise<void> {
-  row.chain = row.chain.then(step).catch((error: unknown) => {
-    console.warn('[draft-rows] a draft could not be saved; it is kept in memory', error)
-  })
+  row.steps += 1
+  row.chain = row.chain
+    .then(step)
+    .catch((error: unknown) => {
+      console.warn('[draft-rows] a draft could not be saved; it is kept in memory', error)
+    })
+    .finally(() => {
+      row.steps -= 1
+      releaseIfIdle(row)
+    })
   return row.chain
+}
+
+function releaseIfIdle(row: Row): void {
+  // A write that didn't land keeps the row, so a cleared draft can't come back from the store.
+  if (
+    row.onReleased &&
+    row.steps === 0 &&
+    row.timer === null &&
+    !row.writeFailed &&
+    rows.get(row.handle.key) === row
+  ) {
+    const onReleased = row.onReleased
+    row.onReleased = null
+    rows.delete(row.handle.key)
+    onReleased()
+  }
 }
 
 async function load(row: Row, ignoreRetryWait = false): Promise<void> {
@@ -183,8 +225,10 @@ async function write(row: Row, hiding: boolean): Promise<void> {
     return
   }
   row.written = undefined
+  row.writeFailed = true
   if (await row.backend.write(value)) {
     row.written = serialized
+    row.writeFailed = false
   }
 }
 
@@ -193,7 +237,18 @@ function flush(row: Row, hiding = false): void {
     clearTimeout(row.timer)
     row.timer = null
   }
-  void enqueue(row, () => write(row, hiding))
+  row.hidingQueued ||= hiding
+  // Why: a stalled store write would otherwise collect one queued write per typing pause.
+  if (row.writeQueued) {
+    return
+  }
+  row.writeQueued = true
+  void enqueue(row, () => {
+    const queuedHiding = row.hidingQueued
+    row.writeQueued = false
+    row.hidingQueued = false
+    return write(row, queuedHiding)
+  })
 }
 
 // The app going to the background may be the last chance before it is killed, so pending typing saves then.
@@ -228,11 +283,27 @@ export function durableDraftRow(key: string, owner: DurableDraftRowOwner): Durab
     state: 'pending',
     retryReadAt: 0,
     written: undefined,
+    writeFailed: false,
     timer: null,
+    writeQueued: false,
+    hidingQueued: false,
+    steps: 0,
+    loading: null,
+    onReleased: null,
     handle: {
       key,
       state: () => row.state,
-      load: () => enqueue(row, () => load(row)),
+      // Why join: an editor asks again on every keystroke while a read is stalled. A joining call
+      // waits for the queue's tail, so it still settles after writes queued since that read.
+      load: () => {
+        if (row.loading) {
+          return row.chain
+        }
+        row.loading = enqueue(row, () => load(row)).finally(() => {
+          row.loading = null
+        })
+        return row.loading
+      },
       save: (timing) => {
         if (timing === 'immediate') {
           flush(row)
@@ -244,6 +315,28 @@ export function durableDraftRow(key: string, owner: DurableDraftRowOwner): Durab
   }
   rows.set(key, row)
   return row.handle
+}
+
+/**
+ * Forgets a closed row once nothing is pending, so documents the page has left don't pile up.
+ * `onReleased` runs when it goes; opening the key again first keeps it.
+ */
+export function releaseDurableDraftRow(key: string, onReleased: () => void): void {
+  const row = rows.get(key)
+  if (!row) {
+    onReleased()
+    return
+  }
+  row.onReleased = onReleased
+  releaseIfIdle(row)
+}
+
+/** Cancels a pending release: the row's owner opened the key again. */
+export function keepDurableDraftRow(key: string): void {
+  const row = rows.get(key)
+  if (row) {
+    row.onReleased = null
+  }
 }
 
 export function resetDurableDraftRowsForTests(): void {

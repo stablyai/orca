@@ -30,6 +30,15 @@ export abstract class AgentSessionRecordForgets extends AgentSessionRecordTabs {
     this.deletedChats = new DeletedChats(deletedChats)
   }
 
+  /** The chats that hold a message by this id: a send Orca lost track of, found again by its id. */
+  chatsHoldingMessage = async (messageId: string): Promise<string[]> => {
+    const read = await this.journalDatabase.readers.database({ kind: 'message-chats', messageId })
+    if (read.kind !== 'message-chats') {
+      throw new Error('journal reader returned no chats')
+    }
+    return read.sessionIds
+  }
+
   protected refuseDeletedSession(sessionId: string): void {
     if (this.deletedChats.hasSession(sessionId)) {
       throw new Error('agent_session_deleted')

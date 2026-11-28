@@ -76,6 +76,7 @@ export function workerDockSummary(
   return {
     failures,
     needsYou,
+    running,
     mixed: kinds.size > 1,
     total,
     workers,
@@ -86,52 +87,64 @@ export function workerDockSummary(
   }
 }
 
-/** The folded chip's text, never empty: "3 workers", "1 background command", "2 failed" once only
- *  failures remain, or the empty copy with no rows. A held roster can outlive its live count by a
- *  gesture, so it then counts its own rows. */
+/** The chip's text, never empty: a lone worker's title (folded; open, its row shows the title),
+ *  what needs the user ("1 needs you · 4 workers"), what runs among workers alone ("3 running"),
+ *  or the count ("3 workers", "2 workers · 1 command", "1 background command"), or the empty copy
+ *  with no rows. A held roster can outlive
+ *  its live count by a gesture, so it then counts its own rows. */
 export function workerDockChipLabel(
   t: Translate,
   {
     summary,
     rows,
-    empty
+    empty,
+    single,
+    open
   }: {
-    summary: { total: number; failures: number; label: string }
+    summary: {
+      total: number
+      failures: number
+      needsYou: number
+      running: number
+      commands: number
+      label: string
+    }
     rows: { workers: number; commands: number }
     empty: string | null
+    /** The title of the only listed row, when it is one worker (a lone command is still counted). */
+    single: string | null
+    open: boolean
   }
 ): string {
   if (empty !== null) {
     return empty
   }
+  if (single !== null && !open && (summary.total || rows.workers + rows.commands) === 1) {
+    return single
+  }
   if (!summary.total) {
     return workerDockCountText(t, rows.workers, rows.commands).chip
   }
-  return summary.failures === summary.total
-    ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', {
-        count: summary.failures
+  if (summary.failures === summary.total) {
+    return t('components.native-chat.workerDock.failedCount', '{{count}} failed', {
+      count: summary.failures
+    })
+  }
+  const attention = summary.failures + summary.needsYou
+  if (attention) {
+    return [
+      t('components.native-chat.workerDock.needsYouCount', '{{count}} needs you', {
+        count: attention
+      }),
+      summary.label
+    ].join(' · ')
+  }
+  // With background commands listed, the count names them apart from the workers instead.
+  return summary.running && !summary.commands
+    ? t('components.native-chat.workerDock.runningCount', '{{count}} running', {
+        count: summary.running
       })
     : summary.label
-}
-
-/** The open card's header, one rule: agents only "Workers 2", commands only "Background commands 1",
- *  both the chip's own text (its Stop all covers the whole card). */
-export function workerDockHeading(
-  t: Translate,
-  summary: { workers: number; commands: number; label: string }
-): { title: string; count: number | null } {
-  if (summary.workers && summary.commands) {
-    return { title: summary.label, count: null }
-  }
-  return summary.commands
-    ? {
-        title: t('components.native-chat.workerDock.commandsRegion', 'Background commands'),
-        count: summary.commands
-      }
-    : {
-        title: t('components.native-chat.workerDock.workersRegion', 'Workers'),
-        count: summary.workers || null
-      }
 }
 
 /** The counts that name the card (header, region, chip glyph, spoken chip, pill total). A held
@@ -153,4 +166,21 @@ export function workerDockNamedCounts(
     label: text.chip,
     spoken: text.spoken
   }
+}
+
+/** The chip's text, its spoken form (the counts at its end name both groups in full: "2 workers, 1
+ *  background command"), whether it is a worker's own title, and the counts that name the card. */
+export function workerDockChip(
+  t: Translate,
+  input: Omit<Parameters<typeof workerDockChipLabel>[1], 'summary'> & {
+    summary: ReturnType<typeof workerDockSummary>
+  }
+): { label: string; spoken: string; titled: boolean; named: ReturnType<typeof workerDockSummary> } {
+  const label = workerDockChipLabel(t, input)
+  const named = workerDockNamedCounts(t, input.summary, input.rows)
+  const spoken =
+    named.spoken && label.endsWith(named.label)
+      ? label.slice(0, label.length - named.label.length) + named.spoken
+      : label
+  return { label, spoken, titled: label === input.single, named }
 }

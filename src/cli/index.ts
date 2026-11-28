@@ -116,6 +116,11 @@ export async function main(
     validateCommandAndFlags(COMMAND_SPECS, parsed)
     configureExecutable?.(parsed.commandPath)
     const commandSpec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
+    // Every client below uses the default profile; a foreign pane handle must not reach it.
+    if (process.env.ORCA_TERMINAL_HANDLE) {
+      const fence = await import('./runtime/connection/runtime-source-fence.js')
+      fence.dropForeignTerminalHandle(process.env)
+    }
     // A local client only: the token names a session on this host.
     await adoptSessionToolCaller(process.env, async (token) =>
       tradeSessionToolToken(

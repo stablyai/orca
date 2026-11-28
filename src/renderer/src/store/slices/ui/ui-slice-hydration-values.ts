@@ -1,3 +1,4 @@
+import { readPaneKeyTimestampRecord } from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   TaskResumeState,
@@ -8,7 +9,6 @@ import type { ContextualTourId } from '../../../../../shared/feature-education/c
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
-import { sanitizePaneKeyTimestampRecord } from './ui-slice-hydration-sanitizers'
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',
@@ -163,7 +163,7 @@ export function hydrateOneShotNoticesSeen(
   }
 }
 
-/** Stale acks/marks/cutoffs are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth. */
+// Keep all valid input until verified aliases have had a chance to move.
 export function hydrateAgentReadState(
   ui: PersistedUIState
 ): Pick<
@@ -171,8 +171,8 @@ export function hydrateAgentReadState(
   'acknowledgedAgentsByPaneKey' | 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
 > {
   return {
-    acknowledgedAgentsByPaneKey: sanitizePaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
-    activityClearedAtByPaneKey: sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
-    manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
+    acknowledgedAgentsByPaneKey: readPaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
+    activityClearedAtByPaneKey: readPaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
+    manuallyUnreadTurnsByPaneKey: readPaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
   }
 }

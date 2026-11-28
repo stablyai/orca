@@ -11,10 +11,6 @@ import type {
   RuntimeWorktreePsResult
 } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { structuredAgentSessionIdFromTabId } from '../../../shared/agent-session/view/structured-agent-session-tab-id'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { resolveLineageRunningSession } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
@@ -23,6 +19,7 @@ import { connectionEvidenceHostId } from '../workspaces/process-listing/runtime-
 import { runtimeWorktreeAgentRowNames } from '../workspaces/process-listing/runtime-worktree-agent-rows'
 import type { RuntimeOrchestrationSenderNames } from '../orchestration/mailbox/senders/runtime-orchestration-sender-names'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { chatPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** `worktree.ps` agent rows as one flat list of chats and terminal agents, oldest state first. */
 export function projectAgentConversationList(
@@ -141,15 +138,7 @@ async function agentConversationStatuses(resolved: ResolvedAgentConversation) {
   if (resolved.kind === 'chat') {
     // A chat's status row is keyed by the session that runs its conversation now.
     const running = resolveLineageRunningSession(resolved.store, resolved.record.sessionId)
-    paneKeys =
-      running.kind === 'here'
-        ? [
-            structuredAgentSessionPaneKey(
-              structuredAgentSessionTabId(running.sessionId),
-              running.sessionId
-            )
-          ]
-        : []
+    paneKeys = running.kind === 'here' ? [chatPaneKey(running.sessionId)] : []
   } else {
     // Sleeping panes too, as `agent list` lists them.
     paneKeys = (

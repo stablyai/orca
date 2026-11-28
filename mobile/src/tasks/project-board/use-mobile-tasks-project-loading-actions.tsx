@@ -292,7 +292,8 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     void repoListReload().catch(() => {})
     void loadTasks({ silent: true })
   }, [loadTasks, repoListReload])
-  return Object.assign(model, {
+  return {
+    ...model,
     loadGitHubProjects,
     loadGitHubProjectViews,
     loadGitHubProjectTable,
@@ -300,7 +301,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     selectGitHubProject,
     resolveGitHubProjectFromInput,
     refreshTasks
-  })
+  }
 }
 
 export type ProjectLoadingActionsModel = ReturnType<typeof useMobileTasksProjectLoadingActions>

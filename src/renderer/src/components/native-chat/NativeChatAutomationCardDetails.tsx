@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { useNativeChatViewGuard } from './pane/ownership/native-chat-view-memory'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -135,8 +136,9 @@ function ReadyDetails({
   onRan: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [saving, setSaving] = useState(false)
-  const [running, setRunning] = useState(false)
+  // Kept with the chat tab: a card released mid-request returns still disabled.
+  const [saving, setSaving] = useNativeChatViewGuard(`automation-save:${automation.id}`, false)
+  const [running, setRunning] = useNativeChatViewGuard(`automation-run:${automation.id}`, false)
   const setEnabled = (enabled: boolean): void => {
     setSaving(true)
     void updateAutomationForTarget(automation, { enabled }, target)

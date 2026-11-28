@@ -20,7 +20,6 @@ import {
 } from '../../../../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { mainAgentStatusEqual } from '../../../../../../shared/agent-status/lifecycle/main-agent-status'
 import { structuredChildWorkLegacySubagents } from '../../../../../../shared/agent-session/background-tasks/structured-agent-session-child-work-legacy'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
   structuredAgentSessionDatedMainAgent,
@@ -29,6 +28,7 @@ import {
 import { agentMainAgentVerdict } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/contracts/agent-status-contract'
 import type { StructuredTab } from './structured-agent-session-tabs'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 
 /** Copy modern child views verbatim; convert legacy host task lists and retain the legacy live-agent roster. */
@@ -116,7 +116,7 @@ export function projectStatus(
   observation: 'live' | 'unverifiable',
   launchFailedAt: number | null
 ): void {
-  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const paneKey = chatPaneKey(tab.entityId)
   const store = transaction.getState()
   if (!summary?.status && launchFailedAt !== null) {
     projectFailedStart(transaction, tab, paneKey, launchFailedAt)

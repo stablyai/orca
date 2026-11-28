@@ -3,11 +3,9 @@
 // bot's host, opening the image viewer over all of them; files as buttons that open like file links.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Image, Pressable, Text, View, type LayoutChangeEvent } from 'react-native'
-import {
-  botItemCommentImages,
-  type BotItemCommentImage
-} from '../../../../src/shared/bots/bot-items'
+import { botItemCommentImages } from '../../../../src/shared/bots/bot-items'
 import { botItemCommentFiles } from '../../../../src/shared/bots/bot-item-comment-files'
+import { isNativeChatPastedImagePath } from '../../../../src/shared/native-chat/attachments/native-chat-image-label'
 import { stripSentImagePromptMarkers } from '../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { chatTextAttachmentName } from '../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import { MobileImageViewer } from '../../files/media/presentation/MobileImageViewer'
@@ -25,6 +23,12 @@ const BLANK_IMAGE =
 type Reads = {
   uris: Record<string, string | null>
   read: (path: string) => void
+}
+
+type CommentImage = {
+  path: string
+  caption: string | null
+  label: string
 }
 
 /** Each image read from the host once, for its tile and the viewer alike. */
@@ -67,7 +71,7 @@ function Tile({
   height,
   onOpen
 }: {
-  image: BotItemCommentImage
+  image: CommentImage
   reads: Reads
   width: number
   height: number | null
@@ -90,10 +94,10 @@ function Tile({
         : { width: Math.min(width, 160), height: 120 }
   if (!uri) {
     return (
-      <View style={[styles.tile, size, styles.placeholder]} accessibilityLabel={image.name}>
+      <View style={[styles.tile, size, styles.placeholder]} accessibilityLabel={image.label}>
         {uri === null ? (
           <Text style={styles.caption} numberOfLines={1}>
-            {image.name}
+            {image.label}
           </Text>
         ) : null}
       </View>
@@ -104,7 +108,7 @@ function Tile({
       onPress={onOpen}
       style={({ pressed }) => [styles.tile, size, pressed && { opacity: feedback.pressedOpacity }]}
       accessibilityRole="imagebutton"
-      accessibilityLabel={image.name}
+      accessibilityLabel={image.label}
       accessibilityHint={t('chat.nativeChatProse.openImageHint', 'Opens the image full size')}
     >
       <Image
@@ -126,7 +130,7 @@ function Viewer({
   reads,
   onIndex
 }: {
-  images: readonly BotItemCommentImage[]
+  images: readonly CommentImage[]
   index: number
   reads: Reads
   onIndex: (index: number | null) => void
@@ -158,7 +162,7 @@ function Viewer({
   return (
     <MobileImageViewer
       uri={uri}
-      label={image.name}
+      label={image.label}
       onClose={() => onIndex(null)}
       {...(many
         ? {
@@ -195,9 +199,16 @@ export function MobileBotItemCommentAttachments({
   children?: ReactNode
 }) {
   const styles = useThemedStyles(stylesSheet)
-  const images = botItemCommentImages(data)
-  const { files } = botItemCommentFiles(typeof data.text === 'string' ? data.text : '')
   const t = useMobileTranslation()
+  const images = botItemCommentImages(data).map(({ path, name }): CommentImage => {
+    const caption = isNativeChatPastedImagePath(name) ? null : name
+    return {
+      path,
+      caption,
+      label: caption ?? t('chat.nativeChatProse.attachedImage', 'Attached image')
+    }
+  })
+  const { files } = botItemCommentFiles(typeof data.text === 'string' ? data.text : '')
   const reads = useHostImages(client)
   const [width, setWidth] = useState(0)
   const [all, setAll] = useState(false)
@@ -228,9 +239,9 @@ export function MobileBotItemCommentAttachments({
                     height={height}
                     onOpen={() => setViewing(index)}
                   />
-                  {columns < 3 ? (
+                  {columns < 3 && image.caption ? (
                     <Text style={styles.caption} numberOfLines={1}>
-                      {image.name}
+                      {image.caption}
                     </Text>
                   ) : null}
                 </View>

@@ -1,9 +1,17 @@
 import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store/index'
+import { isWebClientLocation } from '../platform/web-client-location'
+import {
+  writeWebChatReadMarkEdits,
+  type WebChatReadMarks
+} from '@/web/preload-api/preferences/web-chat-read-mark-storage'
+import { adoptChatReadMarkAliases } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
+import type { WebUiApi } from '@/web/preload-api/preferences/web-ui-api'
 import {
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields,
+  PERSISTED_UI_WRITE_BASELINE_FIELDS,
   persistedUIWriteFieldsToWireUpdate,
   type PersistedUIWriteBaseline
 } from '../../store/slices/ui/persisted-ui-write-baseline'
@@ -52,15 +60,63 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     if (disposed) {
       return
     }
-    const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
     const state = useAppStore.getState()
+    const baseline = state.persistedUIWriteBaseline
+    let marks: Partial<WebChatReadMarks> | undefined
+    if (isWebClientLocation()) {
+      const {
+        activityClearedAtByPaneKey,
+        manuallyUnreadTurnsByPaneKey,
+        ...hostAndOtherLocalChanges
+      } = changed
+      if (activityClearedAtByPaneKey || manuallyUnreadTurnsByPaneKey) {
+        marks = {
+          ...(activityClearedAtByPaneKey && { activityClearedAtByPaneKey }),
+          ...(manuallyUnreadTurnsByPaneKey && { manuallyUnreadTurnsByPaneKey })
+        }
+      }
+      changed = hostAndOtherLocalChanges
+    }
+    const fields = PERSISTED_UI_WRITE_BASELINE_FIELDS.filter((field) =>
+      Object.hasOwn(changed, field)
+    )
+    if (fields.length === 0) {
+      if (baseline && marks) {
+        try {
+          const persisted = writeWebChatReadMarkEdits(marks, baseline)
+          useAppStore.setState({
+            ...persisted,
+            persistedUIWriteBaseline: { ...baseline, ...persisted }
+          })
+        } catch {
+          // Leave local marks dirty when storage rejects the write.
+        }
+      }
+      return
+    }
     const sentAtGeneration = state.persistedUIWriteBaselineGeneration
     state.notePersistedUIWriteStarted(fields)
     let request: Promise<void>
     try {
-      // Use acknowledged writes when available; older preloads fall back to set, which web may silently reject.
-      const send = window.api.ui.setWithAck ?? window.api.ui.set
-      request = send(persistedUIWriteFieldsToWireUpdate(changed))
+      const updates = persistedUIWriteFieldsToWireUpdate(changed)
+      if (baseline && marks) {
+        const ui: Window['api']['ui'] & {
+          setPersistedUIWithAck?: WebUiApi['setPersistedUIWithAck']
+        } = window.api.ui
+        const setPersistedUIWithAck = ui.setPersistedUIWithAck
+        if (typeof setPersistedUIWithAck !== 'function') {
+          throw new TypeError('Web UI persistence is unavailable')
+        }
+        const persisted = setPersistedUIWithAck.call(ui, updates, marks, baseline)
+        request = persisted.request
+        useAppStore.setState({
+          ...persisted.marks,
+          persistedUIWriteBaseline: { ...baseline, ...persisted.marks }
+        })
+      } else {
+        const send = window.api.ui.setWithAck ?? window.api.ui.set
+        request = send(updates)
+      }
     } catch {
       // Settle even synchronous failure so fields cannot stay pinned against hydration forever.
       useAppStore.getState().notePersistedUIWriteSettled(fields, null)
@@ -69,7 +125,11 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     // Use two-argument then so an ack-handler throw cannot trigger double settlement in the rejection branch.
     request.then(
       () => {
-        useAppStore.getState().notePersistedUIWriteSettled(fields, changed, { sentAtGeneration })
+        const latest = useAppStore.getState()
+        if (latest.persistedUIWriteBaselineGeneration === sentAtGeneration) {
+          adoptChatReadMarkAliases(changed)
+        }
+        latest.notePersistedUIWriteSettled(fields, changed, { sentAtGeneration })
         scheduleTrailing()
       },
       () => {
@@ -86,8 +146,8 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
         )
         const shouldRetry =
           changedDuringFlight ||
-          Object.keys(dirty).some(
-            (field) => !fields.includes(field as keyof PersistedUIWriteBaseline)
+          PERSISTED_UI_WRITE_BASELINE_FIELDS.some(
+            (field) => Object.hasOwn(dirty, field) && !fields.includes(field)
           )
         if (shouldRetry) {
           scheduleTrailing()
@@ -178,7 +238,7 @@ export function usePersistedUIWriter(): void {
       if (!baseline) {
         return
       }
-      const changed = diffPersistedUIWriteFields(ui, baseline)
+      const changed = diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), baseline)
       if (Object.keys(changed).length === 0) {
         return
       }

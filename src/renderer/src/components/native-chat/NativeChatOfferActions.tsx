@@ -12,7 +12,7 @@ import {
   BOT_OFFER_DISMISS_ANSWER,
   type BotOfferAnswerUpdate
 } from '../../../../shared/bots/bot-offer-answers'
-import { isLostHostAnswer } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
+import { isLostHostAnswer } from '@/runtime/provider-accounts/sign-in/host-sign-in-lost-answers'
 import { botHostTakes } from '../bots/bot-host-capability'
 import { botErrorMessage } from '../bots/bot-presentation'
 import { NativeChatCardActions } from './NativeChatCardFrame'

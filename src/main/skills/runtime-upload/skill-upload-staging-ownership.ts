@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, opendir, rm } from 'node:fs/promises'
+import { lstat, mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { openDirectory } from '../../../shared/open-directory'
 
 const OWNER_DIRECTORY_PREFIX = 'owner-'
 const OWNER_DIRECTORY_PATTERN =
@@ -41,7 +42,7 @@ export class SkillUploadStagingOwnership {
   }
 
   private async cleanupAbandonedOwners(): Promise<void> {
-    const root = await opendir(this.root)
+    const root = await openDirectory(this.root)
     let visited = 0
     try {
       for await (const entry of root) {

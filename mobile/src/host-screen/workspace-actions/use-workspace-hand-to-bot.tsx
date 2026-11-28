@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { structuredAgentSessionStatusPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
 import {
   suggestedBotAgent,
@@ -60,7 +60,7 @@ export function useWorkspaceHandToBot(args: {
   const openChat = (bot: { name: string; folderWorkspaceId: string }, sessionId: string) =>
     controller.actions.openWorktreeSession(
       { worktreeId: botHomeWorktreeId(bot), displayName: bot.name, repo: bot.name },
-      structuredAgentSessionStatusPaneKey(sessionId)
+      chatPaneKey(sessionId)
     )
 
   const newBotRow = newBotFor?.row

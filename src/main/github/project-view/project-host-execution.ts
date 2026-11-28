@@ -4,7 +4,14 @@ import { isDefaultGitHubHost } from '../../../shared/github/repositories/reposit
 import { isGitHubHostAuthenticatedForGlobalCli } from '../repositories/github-enterprise-repository'
 
 /** Project View uses ambient login, independently of Repo.ghAccount; pin Enterprise hosts explicitly. */
-export type ProjectGhExecOptions = { cwd?: string; host?: string }
+export type ProjectGhExecOptions = {
+  cwd?: string
+  host?: string
+  /** True when `host` is omitted so `gh` chooses its default host (which may be Enterprise). */
+  unpinnedDefaultHost?: boolean
+  /** Host learned from an unpinned default-host response for quota accounting without pinning `gh` argv. */
+  quotaHost?: string
+}
 
 // Owner/project calls have no repository slug, so pin their host directly.
 export function projectGhExecOptions(host: string | undefined): ProjectGhExecOptions {
