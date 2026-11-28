@@ -63,6 +63,7 @@ import { attachWorkerDispatchStop } from './worker-dispatch/worker-dispatch-stop
 import { attachWorkerTerminalRecovery } from './worker-dispatch/worker-terminal-recovery'
 import { attachWorkerTerminalArchive } from './worker-terminal/worker-terminal-archive'
 import { attachWorkerTerminalAutoRelease } from './worker-terminal/worker-terminal-auto-release'
+import { attachWorkerTerminalExternalExitRelease } from './worker-terminal/worker-terminal-external-exit-release'
 import { attachWorkerTerminalListing } from './worker-terminal/worker-terminal-listing'
 import { attachWorkerTerminalRelease } from './worker-terminal/worker-terminal-release'
 import { attachWorkerTerminalResourceStore } from './worker-terminal/worker-terminal-resource-store'
@@ -127,6 +128,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachWorkerTerminalRelease(ctor)
   attachWorkerTerminalArchive(ctor)
   attachWorkerTerminalAutoRelease(ctor)
+  attachWorkerTerminalExternalExitRelease(ctor)
   attachWorkerTerminalListing(ctor)
   attachDispatchContextStore(ctor)
   attachDispatchLinksById(ctor)

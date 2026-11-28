@@ -61,6 +61,7 @@ import type { WorkerDispatchStopMethods } from './worker-dispatch/worker-dispatc
 import type { WorkerTerminalRecoveryMethods } from './worker-dispatch/worker-terminal-recovery'
 import type { WorkerTerminalArchiveMethods } from './worker-terminal/worker-terminal-archive'
 import type { WorkerTerminalAutoReleaseMethods } from './worker-terminal/worker-terminal-auto-release'
+import type { WorkerTerminalExternalExitReleaseMethods } from './worker-terminal/worker-terminal-external-exit-release'
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
 import type { StructuredMailSendStoreMethods } from './messages/structured-mail-send-store'
@@ -125,6 +126,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   WorkerTerminalReleaseMethods &
   WorkerTerminalArchiveMethods &
   WorkerTerminalAutoReleaseMethods &
+  WorkerTerminalExternalExitReleaseMethods &
   WorkerTerminalListingMethods &
   DispatchContextStoreMethods &
   DispatchLinksByIdMethods &
