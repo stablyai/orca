@@ -52,7 +52,13 @@ export class OrchestrationRequestEvidence {
   private readonly remoteRead: RuntimeOrchestrationEnvelope
   private readonly chatCaller: RuntimeOrchestrationEnvelope['orchestrationCompatibilityEvidence']
 
+  private readonly linearRequestRef?: string
+
   constructor(env: NodeJS.ProcessEnv) {
+    const thread = env.CODEX_THREAD_ID
+    const call = env.CODEX_TOOL_CALL_ID
+    this.linearRequestRef =
+      env.ORCA_LINEAR_REQUEST ?? (thread && call ? JSON.stringify([thread, call]) : undefined)
     this.orchestration = createOrchestrationCompatibilityEnvelope(env)
     const { agentSessionId: _session, ...shell } =
       this.orchestration.orchestrationCompatibilityEvidence ?? {}
@@ -67,6 +73,15 @@ export class OrchestrationRequestEvidence {
     method: string,
     request: { remote: boolean; mutation: boolean; requestId: string | undefined }
   ): RuntimeOrchestrationEnvelope {
+    if (
+      ['linear.issueCreate', 'linear.createIssue', 'linear.saveIssue'].includes(method) &&
+      !request.remote
+    ) {
+      return {
+        orchestrationCompatibilityEvidence: this.chatCaller,
+        linearRequestRef: this.linearRequestRef
+      }
+    }
     if (method.startsWith('orchestration.')) {
       const base = request.remote && !request.mutation ? this.remoteRead : this.orchestration
       return {

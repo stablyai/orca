@@ -1,3 +1,4 @@
+import { bindLinearCreateRequest } from '../../../../integrations/linear/linear-create-request'
 import { defineMethod } from '../../../core'
 import { linearError } from '../../../../../linear/issues/context/linear-access-errors'
 import { isLinearUuid } from '../../../../../../shared/linear/uuid'
@@ -42,8 +43,12 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
     name: 'linear.saveIssue',
     permission: 'workspace',
     params: LinearSaveIssue,
-    handler: async (params, { runtime, signal }) =>
-      runtime.linearSaveIssue({ ...params, writeId: parseLinearWriteId(params.writeId) }, signal)
+    handler: async (params, ctx) =>
+      ctx.runtime.linearSaveIssue(
+        { ...params, writeId: parseLinearWriteId(params.writeId) },
+        ctx.signal,
+        !params.input && !params.current ? await bindLinearCreateRequest(ctx) : undefined
+      )
   }),
   defineMethod({
     name: 'linear.agentSearchIssues',
@@ -178,7 +183,11 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
     name: 'linear.issueCreate',
     permission: 'workspace',
     params: LinearIssueCreate,
-    handler: async (params, { runtime, signal }) =>
-      runtime.linearIssueCreate({ ...params, writeId: parseLinearWriteId(params.writeId) }, signal)
+    handler: async (params, ctx) =>
+      ctx.runtime.linearIssueCreate(
+        { ...params, writeId: parseLinearWriteId(params.writeId) },
+        ctx.signal,
+        await bindLinearCreateRequest(ctx)
+      )
   })
 ]

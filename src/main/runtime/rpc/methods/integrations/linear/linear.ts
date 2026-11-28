@@ -1,3 +1,5 @@
+import { bindLinearCreateRequest } from '../../../../integrations/linear/linear-create-request'
+import { checkLinearCreateOrigin } from '../../../../integrations/linear/linear-create-origin'
 import { defineMethod } from '../../../core'
 import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
 import { LINEAR_ISSUE_LIST_METHOD, LINEAR_MCP_ISSUE_LIST_METHOD } from './linear-issue-list-method'
@@ -64,8 +66,9 @@ export const LINEAR_METHODS = [
     name: 'linear.createIssue',
     permission: 'workspace',
     params: CreateIssue,
-    handler: async (params, { runtime }) =>
-      runtime.linearCreateIssue(
+    handler: async (params, ctx) => {
+      const authority = await bindLinearCreateRequest(ctx)
+      return ctx.runtime.linearCreateIssue(
         params.teamId.trim(),
         params.title.trim(),
         params.description?.trim() || undefined,
@@ -77,8 +80,12 @@ export const LINEAR_METHODS = [
           priority: params.priority,
           assigneeId: params.assigneeId,
           labelIds: params.labelIds
-        }
+        },
+        authority === undefined
+          ? undefined
+          : (workspace, project) => checkLinearCreateOrigin(authority, workspace, project)
       )
+    }
   }),
   defineMethod({
     name: 'linear.getIssue',

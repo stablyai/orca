@@ -27,7 +27,8 @@ import { resolveWorkspaceSelector } from '../../../linear/issues/context/workspa
 export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
   async linearIssueAddComment(
     params: LinearCommentAddRequest,
-    cancellation?: AbortSignal
+    cancellation?: AbortSignal,
+    expectedIssueId?: string
   ): Promise<LinearAgentResults.LinearCommentAddResult> {
     if (params.body.length > LINEAR_WRITE_BODY_CAP) {
       throw linearError('linear_body_too_large', 'Linear comment body is too large.')
@@ -39,6 +40,9 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
     } = await this.runLinearAgentAction(
       async (signal) => {
         const target = await this.resolveLinearAgentWriteTarget(params, signal)
+        if (expectedIssueId && target.issue.id !== expectedIssueId) {
+          throw linearError('linear_permission_denied', 'Original issue identity changed.')
+        }
         const parentId = params.replyTo
           ? await this.resolveLinearCommentParentId(
               target.issue.id,

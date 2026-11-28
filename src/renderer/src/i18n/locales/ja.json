@@ -24023,6 +24023,11 @@
     }
   },
   "runtimeRpc": {
+    "linearCreateOrigin": {
+      "question": "起票を保留しました。元の依頼が対象とする案件と、引き受けるPMを確認してください。",
+      "unknownOrigin": "{{question}} 依頼元を特定できませんでした。",
+      "unconfirmedDelivery": "{{question}} この質問が依頼元に届いたかは確認できていません。"
+    },
     "startupFailure": {
       "unknownCause": "これ以上のエラー詳細は取得できませんでした。",
       "continueButton": "CLI なしで続行",

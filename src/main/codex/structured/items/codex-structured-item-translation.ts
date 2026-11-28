@@ -82,6 +82,7 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'tool-call',
       name: parsed?.name ?? 'shell',
+      codexCommandExecution: true,
       callId: item.id,
       // Preserve raw execution details alongside the classified label.
       input: { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },

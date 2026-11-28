@@ -1,3 +1,4 @@
+import type { LinearIssueIntake } from './linear/issue-intake'
 import type { Automation } from './automations/automation-definition'
 import type { AutomationRun } from './automations/history/automation-run'
 import { hookIdOfRule, type WebhookFilters } from './connector-webhook-contract'
@@ -188,6 +189,7 @@ export function automationHookId(automation: {
 
 /** What Orca alone knows about a webhook call, shown outside the quote. */
 export type AutomationRunWebhookCall = {
+  linearIssueIntake?: LinearIssueIntake
   hookId: string
   callId: string
   /** The call's body, relative to the bot's folder; null when it couldn't be written. */

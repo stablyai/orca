@@ -61,6 +61,9 @@ const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
 
 /** Non-orchestration methods whose authority depends on the calling session, so it is verified for them too. */
 const SESSION_CALLER_METHODS: ReadonlySet<string> = new Set([
+  'linear.issueCreate',
+  'linear.createIssue',
+  'linear.saveIssue',
   'automation.create',
   'automation.update',
   ...BOT_ITEM_WRITE_METHOD_NAMES,

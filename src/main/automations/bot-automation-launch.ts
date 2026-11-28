@@ -169,7 +169,7 @@ export function createBotAutomationDispatcher(
   return async ({ automation, run, target }) => {
     const turns = await results.watch()
     const asker = run.event ? automationEventAsker(run.event, target.bot.members) : null
-    const text =
+    const prompt =
       automation.once?.by !== undefined && run.trigger === 'scheduled'
         ? automationDeadlinePrompt(
             automation.prompt,
@@ -177,7 +177,13 @@ export function createBotAutomationDispatcher(
             Boolean(automation.on?.length)
           )
         : automationRunPrompt(automation.prompt, run.event, asker)
-    const automationRun = captureAutomationRunMessage(automation, run, text, asker)
+    const text =
+      run.trigger === 'event' && run.event?.webhook?.linearIssueIntake
+        ? `${prompt}\n\nOrca Linear issue creation for this request: use ORCA_LINEAR_REQUEST=${
+            run.id
+          } before the orca command.`
+        : prompt
+    const automationRun = captureAutomationRunMessage(automation, run, text, asker, target.bot.id)
     const fields: BotRunFields = {
       memorySource: automationRunMemoryLabel(automation.name, run.event),
       ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),

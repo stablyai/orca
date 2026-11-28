@@ -1,3 +1,4 @@
+import { LinearRunIntakeSchema } from '../../../shared/linear/issue-intake'
 import { BotMemoryUpdatedNoteSchema } from '../../../shared/bots/bot-memory-updated-note'
 // What a bot's chat adds to a saved journal, declared so strict storage keeps it.
 import { z } from 'zod'
@@ -177,6 +178,7 @@ export const storedWaitEnded = {
 /** What a run's message or its Couldn't start card keeps: the run as delivered. */
 export const storedAutomationRun = lazyZodSchema(() =>
   z.object({
+    linearIssueIntake: LinearRunIntakeSchema.optional(),
     runId: z.string(),
     automation: storedAutomationSaved.automation,
     trigger: z.string(),
