@@ -15,6 +15,7 @@ import { PluginStatusBarItems } from './plugins/PluginStatusBarItems'
 import { useAppStore } from '@/store/index'
 import { shouldShowPluginsStatusSegment } from '@/components/app-rail/plugins-rail-page-visibility'
 import { RemoteServerUpdateStatusSegment } from './updates/RemoteServerUpdateStatusSegment'
+import { WslRuntimeUpdateStatusSegment } from './updates/WslRuntimeUpdateStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/workspace/floating-workspace-open-intent'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/trigger/FloatingTerminalIconContextMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
@@ -118,6 +119,7 @@ export function StatusBarSurface({
             </>
           ) : null}
           <RemoteServerUpdateStatusSegment />
+          <WslRuntimeUpdateStatusSegment />
           <SkillUpdateStatusSegment />
           <AgentCliUpdateStatusSegment />
           <NativeChatResumeStatusSegment />
