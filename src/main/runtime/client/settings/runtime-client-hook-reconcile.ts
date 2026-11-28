@@ -43,9 +43,11 @@ export function noteClientDeclines(updates: RuntimeClientSettingsUpdate): void {
  * Only those agents: hooks are user-global, so other declines here may be another profile's hooks.
  */
 export async function removePendingClientDeclines(
-  consent: AgentHookConsent | undefined,
+  store: { getSettings?: () => { agentHookConsent?: AgentHookConsent } } | null | undefined,
   keepSharedEntries: boolean
 ): Promise<void> {
+  // Live read, not the reconcile's snapshot: a decline that landed mid-reconcile must still be removed.
+  const consent = store?.getSettings?.().agentHookConsent
   const declined = [...pendingClientDeclines].filter((agent) => consent?.[agent] === 'declined')
   pendingClientDeclines.clear()
   if (declined.length === 0 || keepSharedEntries) {

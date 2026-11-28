@@ -314,7 +314,7 @@ export class RuntimeClientSettingsController {
           return current !== undefined && isAgentStatusHooksEnabledForAgent(current, agent)
         }
       })
-      await removePendingClientDeclines(settings.agentHookConsent, keepSharedEntries)
+      await removePendingClientDeclines(this.store, keepSharedEntries)
     })
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation

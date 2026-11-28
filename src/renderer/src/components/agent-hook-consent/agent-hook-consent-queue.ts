@@ -110,9 +110,12 @@ function isLocalWorktree(state: AppState, worktreeId: string): boolean {
  */
 function wantedAgents(): ReadonlySet<string> {
   const state = useAppStore.getState()
+  if (!isAgentStatusHooksEnabled(state.settings)) {
+    return new Set()
+  }
   // This computer's CLIs (WSL distros included), never a remote host's.
   const detectedAgentIds = readThisComputerDetectedAgents(state)
-  if (!isAgentStatusHooksEnabled(state.settings) || !detectedAgentIds) {
+  if (!detectedAgentIds) {
     return new Set()
   }
   return new Set(

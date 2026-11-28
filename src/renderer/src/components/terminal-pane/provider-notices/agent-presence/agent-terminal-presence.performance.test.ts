@@ -108,6 +108,24 @@ describe('watchAgentTerminalArrivals', () => {
     expect(store.scans).toBe(2)
   })
 
+  it('does no wanted-agent work for writes that touch no arrival source', () => {
+    store.reset(stateWith(500))
+    let wantedCalls = 0
+    const stop = watchAgentTerminalArrivals(
+      () => {},
+      () => {
+        wantedCalls++
+        return new Set(['codex'])
+      }
+    )
+    const afterStart = wantedCalls
+    for (let write = 0; write < 1000; write++) {
+      store.setState({ ...store.getState() })
+    }
+    stop()
+    expect(wantedCalls).toBe(afterStart)
+  })
+
   it('arms no timer once every wanted agent has been seen', () => {
     store.reset(stateWith(500))
     const seen: string[] = []

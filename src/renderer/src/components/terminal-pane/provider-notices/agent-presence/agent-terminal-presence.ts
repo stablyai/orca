@@ -97,6 +97,15 @@ function addKeys(target: Set<string> | null, changes: RecordChanges | null): Set
   return target
 }
 
+/** Whether a write touched a source an arrival can show up in; per-hook status updates don't. */
+function sourcesMayHoldArrival(state: AppState, previous: AppState): boolean {
+  return (
+    state.tabsByWorktree !== previous.tabsByWorktree ||
+    state.paneForegroundAgentByPaneKey !== previous.paneForegroundAgentByPaneKey ||
+    state.agentStatusByPaneKey.size !== previous.agentStatusByPaneKey.size
+  )
+}
+
 /** Records one store write's relevant changes; status rows count only when a pane gains or loses one. */
 function noteArrivalDirt(dirt: ArrivalDirt, state: AppState, previous: AppState): boolean {
   let changed = false
@@ -200,6 +209,13 @@ export function watchAgentTerminalArrivals(
   }
   report()
   const unsubscribe = useAppStore.subscribe((state, previous) => {
+    // Cheap identity checks first: unrelated writes and per-hook status updates stop here.
+    const wantedMayChange =
+      state.localDetectedAgentIdsByContext !== previous.localDetectedAgentIdsByContext ||
+      state.settings !== previous.settings
+    if (!sourcesMayHoldArrival(state, previous) && !wantedMayChange) {
+      return
+    }
     // Nothing to find: keep no per-key record (it would grow with every pane ever touched);
     // a later wanted agent gets its own full read instead.
     if (pendingAgents().size === 0) {
@@ -207,11 +223,8 @@ export function watchAgentTerminalArrivals(
       fullyRead.clear()
       return
     }
-    const changed = noteArrivalDirt(dirt, state, previous)
-    if (
-      timer === null &&
-      (changed || state.localDetectedAgentIdsByContext !== previous.localDetectedAgentIdsByContext)
-    ) {
+    noteArrivalDirt(dirt, state, previous)
+    if (timer === null) {
       timer = setTimeout(report, ARRIVAL_SCAN_MS)
     }
   })

@@ -80,7 +80,8 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
         const approved = !present && readAgentHookConsent(settings, agent) === 'granted'
         // Only Codex writes its hooks on its own next start rather than at Install.
         const pending = approved && agent === 'codex'
-        const installed = present || pending
+        // Approved counts as on: Remove declines it, which also stops the WSL relay adding hooks there.
+        const installed = present || approved
         // An unreadable config is unknown, not absent: offer a re-read instead of Install.
         const unreadable = !present && status?.state === 'error'
         return (
