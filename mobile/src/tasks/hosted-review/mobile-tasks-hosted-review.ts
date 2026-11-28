@@ -13,7 +13,7 @@ import type {
   GitHubWorkItem
 } from '../mobile-tasks-provider-detail-types'
 import { GITHUB_PR_MERGE_METHOD_I18N_KEYS } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-methods'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 
 export const LINEAR_PRIORITY_LABELS: Record<number, string> = {
   0: 'None',
@@ -132,8 +132,11 @@ export function hostedBranchSummary(item: TaskItem): { head: string; base: strin
   return null
 }
 
-export function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod): string {
-  return translate(
+export function getHostedReviewMergeMethodLabel(
+  t: Translate,
+  method: HostedReviewMergeMethod
+): string {
+  return t(
     GITHUB_PR_MERGE_METHOD_I18N_KEYS[method],
     method === 'squash'
       ? 'Squash and merge'
@@ -144,48 +147,52 @@ export function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod)
 }
 
 function mergeConfirmMessage(
+  t: Translate,
   provider: 'github' | 'gitlab',
   method: HostedReviewMergeMethod,
   number: number | null
 ): string {
   if (provider === 'gitlab') {
     if (method === 'squash') {
-      return translate(
+      return t(
         'tasks.hostedMerge.confirmGitLabSquash',
         'Squash and merge merge request #{{number}}?',
         { number }
       )
     }
     if (method === 'rebase') {
-      return translate(
+      return t(
         'tasks.hostedMerge.confirmGitLabRebase',
         'Rebase and merge merge request #{{number}}?',
         { number }
       )
     }
-    return translate('tasks.hostedMerge.confirmGitLabMerge', 'Merge merge request #{{number}}?', {
+    return t('tasks.hostedMerge.confirmGitLabMerge', 'Merge merge request #{{number}}?', {
       number
     })
   }
   if (method === 'squash') {
-    return translate('tasks.hostedMerge.confirmGitHubSquash', 'Squash and merge PR #{{number}}?', {
+    return t('tasks.hostedMerge.confirmGitHubSquash', 'Squash and merge PR #{{number}}?', {
       number
     })
   }
   if (method === 'rebase') {
-    return translate('tasks.hostedMerge.confirmGitHubRebase', 'Rebase and merge PR #{{number}}?', {
+    return t('tasks.hostedMerge.confirmGitHubRebase', 'Rebase and merge PR #{{number}}?', {
       number
     })
   }
-  return translate('tasks.hostedMerge.confirmGitHubMerge', 'Merge PR #{{number}}?', { number })
+  return t('tasks.hostedMerge.confirmGitHubMerge', 'Merge PR #{{number}}?', { number })
 }
 
-export function getHostedMergeConfirmMessage(pending: PendingHostedMerge): string {
-  return mergeConfirmMessage(pending.item.provider, pending.method, pending.item.source.number)
+export function getHostedMergeConfirmMessage(t: Translate, pending: PendingHostedMerge): string {
+  return mergeConfirmMessage(t, pending.item.provider, pending.method, pending.item.source.number)
 }
 
-export function getProjectGitHubMergeConfirmMessage(pending: PendingProjectGitHubMerge): string {
-  return mergeConfirmMessage('github', pending.method, pending.row.content.number)
+export function getProjectGitHubMergeConfirmMessage(
+  t: Translate,
+  pending: PendingProjectGitHubMerge
+): string {
+  return mergeConfirmMessage(t, 'github', pending.method, pending.row.content.number)
 }
 
 export function hostedStateChangeAction(nextState: PendingHostedStateChange['nextState']): string {

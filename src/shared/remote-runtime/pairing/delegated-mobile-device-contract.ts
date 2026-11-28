@@ -1,30 +1,40 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 // Why: a paired desktop relays each of its phones to this host as an ordinary phone device it owns.
 export const DELEGATED_MOBILE_DEVICE_SYNC_METHOD = 'pairing.delegatedMobileDevice.sync'
 // Why: a desktop relays phones only to a host advertising this (via MOBILE_RELAY_RUNTIME_CAPABILITIES).
 export const DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY =
   'pairing.delegated-mobile-devices.v1' as const
+// Why: older hosts' strict params refuse clientInstanceId; send it only to hosts advertising this.
+export const DELEGATED_MOBILE_DEVICE_SYNC_ORIGIN_RUNTIME_CAPABILITY =
+  'pairing.delegated-mobile-devices-origin.v1' as const
 export const DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES = 32
 export const DELEGATED_PHONE_NAME_MAX_CHARS = 128
 
-const DelegatedPhoneSchema = z
-  .object({
-    phoneKey: z.string().min(1).max(128),
-    name: z.string().min(1).max(DELEGATED_PHONE_NAME_MAX_CHARS)
-  })
-  .strict()
+const DelegatedPhoneSchema = lazyZodSchema(() =>
+  z
+    .object({
+      phoneKey: z.string().min(1).max(128),
+      name: z.string().min(1).max(DELEGATED_PHONE_NAME_MAX_CHARS)
+    })
+    .strict()
+)
 
-export const DelegatedMobileDeviceSyncParamsSchema = z
-  .object({
-    phones: z
-      .array(DelegatedPhoneSchema)
-      .max(DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES)
-      .refine((phones) => new Set(phones.map((phone) => phone.phoneKey)).size === phones.length, {
-        message: 'duplicate phoneKey'
-      })
-  })
-  .strict()
+export const DelegatedMobileDeviceSyncParamsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      phones: z
+        .array(DelegatedPhoneSchema)
+        .max(DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES)
+        .refine((phones) => new Set(phones.map((phone) => phone.phoneKey)).size === phones.length, {
+          message: 'duplicate phoneKey'
+        }),
+      // The syncing desktop installation: only its phones are dropped, whichever row minted them.
+      clientInstanceId: z.string().min(1).max(128).optional()
+    })
+    .strict()
+)
 
 export type DelegatedPhone = z.infer<typeof DelegatedPhoneSchema>
 export type DelegatedMobileDeviceSyncParams = z.infer<typeof DelegatedMobileDeviceSyncParamsSchema>

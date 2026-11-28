@@ -32,7 +32,7 @@ import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/o
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
-import { federatedAttachmentChatLineage } from '../legacy-remote-home/federated-worker-chat-lineage'
+import { federatedAttachmentBotLineage } from '../legacy-remote-home/federated-worker-chat-lineage'
 import { refuseUninstalledWorkerAgent } from '../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
@@ -96,7 +96,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       })
 
       const db = runtime.getOrchestrationDb()
-      const chatLineage = federatedAttachmentChatLineage(params.chatLineage, context)
+      const botLineage = federatedAttachmentBotLineage(params.botLineage, context)
       // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
       const releaseTerminalClaim = claimTerminalForRemoteAttach(db, params.terminal, runtime, {
         dispatchId: params.dispatchId,
@@ -111,7 +111,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           protocolVersion: params.protocolVersion,
           runtimeEpoch: runtime.getRuntimeId(),
           depth: params.depth,
-          chatLineage,
+          botLineage,
           mutationReceipt: orchestrationMutation
         })
       } catch (error) {
@@ -263,7 +263,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
               subWorkersInOwnRun: true,
               ...runtime.getTerminalOrchestrationCliTarget(terminalHandle),
-              preserveHumanCommitCredit: chatLineage
+              preserveHumanCommitCredit: botLineage
             })
           }
         }).finally(() => briefGuard?.dispose())

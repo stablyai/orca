@@ -10,4 +10,4 @@ export const SkillsCancelInstallParams = lazyZodSchema(() =>
   z.object({ operationId: z.string().min(1).max(128) }).strict()
 )
 
-export const SkillsDiscoverParams = SkillDiscoveryTargetSchema.default({})
+export const SkillsDiscoverParams = lazyZodSchema(() => SkillDiscoveryTargetSchema.default({}))

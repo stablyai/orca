@@ -47,10 +47,7 @@ export function workerStartedByBot(
     seen.add(id)
     const context = db.getDispatchContextById(id)
     if (!context) {
-      return db.getRemoteDispatchAttachment(id)?.chat_lineage === 1
-    }
-    if (context.chat_lineage === 1) {
-      return true
+      return false
     }
     const session =
       context.creator_orca_session_id ??

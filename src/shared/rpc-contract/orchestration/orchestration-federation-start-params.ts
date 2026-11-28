@@ -34,8 +34,8 @@ export const FederationAttachStartParams = lazyZodSchema(() =>
     crossStoreParent: CrossStoreParentRefSchema.optional(),
     /** Orchestration picked the parent; omitted by older coordinators, whose children record `cli`. */
     crossStoreParentInferredFrom: z.literal('orchestration-context').optional(),
-    /** A trusted bot-home lineage stamp from the coordinating host. */
-    chatLineage: z.literal(true).optional()
+    /** A trusted bot-home guidance stamp from the coordinating host. */
+    botLineage: z.literal(true).optional()
   })
 )
 

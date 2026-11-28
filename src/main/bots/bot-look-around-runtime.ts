@@ -20,6 +20,15 @@ import { watchBotTurnEnds } from './bot-run-turn-watch'
 const runners = new WeakMap<object, BotLookAroundRunner>()
 const continuedLookWatches = new WeakSet<object>()
 
+export function isRegisteredLookOpening(
+  runtime: OrcaRuntimeService,
+  botId: string,
+  sessionId: string,
+  clientMessageId: string
+): boolean {
+  return runners.get(runtime)?.ownsOpening(botId, sessionId, clientMessageId) ?? false
+}
+
 export function runtimeLookAroundRunner(runtime: OrcaRuntimeService): BotLookAroundRunner {
   watchContinuedLooksOnce(runtime)
   const existing = runners.get(runtime)

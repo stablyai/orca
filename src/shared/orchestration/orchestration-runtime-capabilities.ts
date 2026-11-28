@@ -73,15 +73,16 @@ export const ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
   'orchestration.chat-lineage.v1' as const
 /** A paired start can carry bot commit-credit guidance without changing its local worker surface. */
 export const ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY = 'orchestration.bot-lineage.v1' as const
-/** A legacy federation attachment accepts a trusted bot-worker lineage stamp from its Run home. */
-export const ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
-  'orchestration.federation-chat-lineage.v1' as const
 /** Its agents can message agents on a paired computer that pulls with `clientAsks`
  *  (`send --on-client`); replies come back by `peerMailReturn`. */
 export const ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY =
   'orchestration.client-agent-asks.v1' as const
+/** `orchestration.taskUpdate` accepts worker-only passive `--note` updates on `dispatch_contexts`. */
+export const ORCHESTRATION_TASK_UPDATE_NOTE_RUNTIME_CAPABILITY =
+  'orchestration.task-update-note.v1' as const
 
 export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
+  ORCHESTRATION_TASK_UPDATE_NOTE_RUNTIME_CAPABILITY,
   ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
@@ -108,6 +109,5 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
   ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
+  ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY
 ] as const

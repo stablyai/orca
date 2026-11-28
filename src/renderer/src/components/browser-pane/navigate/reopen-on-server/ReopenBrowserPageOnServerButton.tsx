@@ -15,14 +15,14 @@ import {
 const REOPEN_PENDING_FEEDBACK_DELAY_MS = 200
 
 export function reopenOnServerLabel(t: Translate = translate): string {
-  return t('browser.reopenOnServer.action', 'Reopen on server')
+  return t('browser.reopenOnServer.action', 'Open on server')
 }
 
 /** Honest about what a new page cannot carry over: it is not a migration. */
 export function reopenOnServerCaveat(t: Translate = translate): string {
   return t(
     'browser.reopenOnServer.caveat',
-    'This opens a new page on the remote host at this page’s last address. Signed-in and other transient page state may differ, and a page that came from a form submission opens blank.'
+    'Opens on the server at this page’s last address. Sign-in state may differ.'
   )
 }
 
@@ -32,13 +32,18 @@ export function ReopenBrowserPageOnServerButton({
   environmentId,
   worktreeId,
   reopenUrl,
-  className
+  className,
+  variant = 'secondary',
+  caveatTooltip = true
 }: {
   browserPageId: string
   environmentId: string
   worktreeId: string
   reopenUrl: string | null | undefined
   className?: string
+  variant?: 'default' | 'secondary'
+  /** Off where the caveat already sits behind its own disclosure. */
+  caveatTooltip?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [pending, setPending] = useState(false)
@@ -88,11 +93,11 @@ export function ReopenBrowserPageOnServerButton({
   return (
     <Button
       size="sm"
-      variant="secondary"
+      variant={variant}
       className={className}
       disabled={pending}
       aria-busy={pending}
-      title={reopenOnServerCaveat(t)}
+      title={caveatTooltip ? reopenOnServerCaveat(t) : undefined}
       onClick={reopen}
     >
       {/* Both labels share one grid cell, so the swap cannot resize the button mid-action. */}
@@ -112,7 +117,7 @@ export function ReopenBrowserPageOnServerButton({
         >
           {/* Spin only while shown: the hidden copy just reserves width. */}
           <Loader2 className={cn('size-3.5', showPending && 'animate-spin')} />
-          {t('browser.reopenOnServer.pending', 'Reopening…')}
+          {t('browser.reopenOnServer.pending', 'Opening…')}
         </span>
       </span>
     </Button>

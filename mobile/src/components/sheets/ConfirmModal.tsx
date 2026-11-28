@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, spacing, radii, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, radii, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
 
 type ContentProps = {
@@ -24,11 +23,15 @@ type ContentProps = {
   onCancel: () => void
 }
 
-type Props = ContentProps & { visible: boolean }
+type Props = ContentProps & {
+  visible: boolean
+  /** False when only an answer may close it, e.g. a page blocked until it gets one. */
+  dismissible?: boolean
+}
 
-export function ConfirmModal({ visible, ...content }: Props) {
+export function ConfirmModal({ visible, dismissible, ...content }: Props) {
   return (
-    <BottomDrawer visible={visible} onClose={content.onCancel}>
+    <BottomDrawer visible={visible} onClose={content.onCancel} dismissible={dismissible}>
       <ConfirmContent {...content} />
     </BottomDrawer>
   )
@@ -47,7 +50,7 @@ export function ConfirmContent({
   onCancel
 }: ContentProps) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <>
       <View style={styles.content}>
@@ -90,7 +93,7 @@ export function ConfirmContent({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   content: {
     paddingBottom: spacing.lg
   },

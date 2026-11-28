@@ -12,8 +12,8 @@ import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-ite
 import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import {
   mobileBotItemCommentWords,
   MobileBotItemCommentAttachments,
@@ -22,6 +22,7 @@ import {
 import { MobileBotItemQuestionLines } from './MobileBotItemQuestionLines'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 const ICON = 13
 
@@ -63,6 +64,8 @@ export function MobileBotItemCommentCard({
   /** Puts the comment's words in the comment box as a quote. */
   onQuote?: (text: string) => void
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { event, replyTo, waiting } = entry
   const time = useMobileMessageTime()
@@ -156,6 +159,7 @@ const FLASH_STILL_MS = 1600
 
 /** The desktop's ring and tint, under the card's content. */
 function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
+  const styles = useThemedStyles(stylesSheet)
   const opacity = useRef(new Animated.Value(1)).current
   useEffect(() => {
     const run = still
@@ -175,7 +179,7 @@ function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
 }
 
 // The Activity event line's grid (MobileBotItemActivity): its glyph column, gap and time.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   flash: {
     position: 'absolute',
     top: 0,

@@ -19,7 +19,7 @@ export function createRemoteDispatchAttachment(
     /** Child depth computed by the Run home; absent from an old client = 1 (fails closed). */
     depth?: number
     /** A paired Run home's trusted bot-worker lineage stamp. */
-    chatLineage?: boolean
+    botLineage?: boolean
     mutationReceipt: {
       callerFingerprint: string
       requestId: string
@@ -82,7 +82,7 @@ export function createRemoteDispatchAttachment(
       protocolVersion: params.protocolVersion,
       runtimeEpoch: params.runtimeEpoch,
       depth: params.depth ?? 1,
-      chatLineage: params.chatLineage
+      botLineage: params.botLineage
     })
     this.db.exec('COMMIT')
     return this.getRemoteDispatchAttachment(params.dispatchId) as RemoteDispatchAttachmentRow

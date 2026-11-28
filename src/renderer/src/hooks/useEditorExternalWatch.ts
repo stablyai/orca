@@ -143,7 +143,7 @@ export function useEditorExternalWatch(): void {
         ),
         // Why: a watched tab folder reports under its own path; its workspaces reconcile the events.
         ...(runtimeEnvironmentId === null
-          ? symlinkedFolders.targetsFor(worktreePath, connectionId)
+          ? symlinkedFolders.targetsFor(worktreePath, connectionId, heldWatchRoots)
           : [])
       ]
     )
@@ -159,11 +159,13 @@ export function useEditorExternalWatch(): void {
       handleFsChanged(payload, null)
     })
     fsChangedHandlerRef.current = handleFsChanged
+    symlinkedFolders.routeHandOversTo((payload) => handleFsChanged(payload, null))
 
     return () => {
       unsubscribe()
       dispose()
       fsChangedHandlerRef.current = null
+      symlinkedFolders.routeHandOversTo(undefined)
       for (const remoteUnsubscribe of remoteWatchUnsubs.values()) {
         remoteUnsubscribe()
       }

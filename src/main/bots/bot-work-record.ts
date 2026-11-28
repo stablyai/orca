@@ -129,6 +129,9 @@ export class BotWorkRecord {
         agent: worker?.agent ?? null,
         state: worker?.state ?? null,
         ...(worker?.idle ? { idle: true } : {}),
+        ...(worker?.state === 'working' && worker.progressNote
+          ? { progressNote: cleanBotWorkText(worker.progressNote) }
+          : {}),
         dispatchId: worker?.dispatchId ?? row.dispatchId,
         workspace: workspace ? cleanBotWorkText(workspace.name) : null,
         server: worker?.hostName ? cleanBotWorkText(worker.hostName) : null,

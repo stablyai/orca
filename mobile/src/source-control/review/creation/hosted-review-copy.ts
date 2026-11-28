@@ -1,4 +1,4 @@
-import { translate } from '../../../i18n/mobile-i18n'
+import { translate, type Translate } from '../../../i18n/mobile-i18n'
 import type { MobileHostedReviewCreateIntentProgress } from './mobile-hosted-review-create-intent'
 
 // Use the desktop provider vocabulary: GitLab says Merge Request.
@@ -8,24 +8,24 @@ export type HostedReviewCopy = {
   titleLabel: string
 }
 
-function prCopy(): HostedReviewCopy {
+function prCopy(t: Translate): HostedReviewCopy {
   return {
-    shortLabel: translate('sourceControl.hostedReview.prCopy.shortLabel', 'PR'),
-    reviewLabel: translate('sourceControl.hostedReview.prCopy.reviewLabel', 'pull request'),
-    titleLabel: translate('sourceControl.hostedReview.prCopy.titleLabel', 'Pull Request')
+    shortLabel: t('sourceControl.hostedReview.prCopy.shortLabel', 'PR'),
+    reviewLabel: t('sourceControl.hostedReview.prCopy.reviewLabel', 'pull request'),
+    titleLabel: t('sourceControl.hostedReview.prCopy.titleLabel', 'Pull Request')
   }
 }
 
-function mrCopy(): HostedReviewCopy {
+function mrCopy(t: Translate): HostedReviewCopy {
   return {
-    shortLabel: translate('sourceControl.hostedReview.mrCopy.shortLabel', 'MR'),
-    reviewLabel: translate('sourceControl.hostedReview.mrCopy.reviewLabel', 'merge request'),
-    titleLabel: translate('sourceControl.hostedReview.mrCopy.titleLabel', 'Merge Request')
+    shortLabel: t('sourceControl.hostedReview.mrCopy.shortLabel', 'MR'),
+    reviewLabel: t('sourceControl.hostedReview.mrCopy.reviewLabel', 'merge request'),
+    titleLabel: t('sourceControl.hostedReview.mrCopy.titleLabel', 'Merge Request')
   }
 }
 
-export function hostedReviewCopy(provider: string | undefined): HostedReviewCopy {
-  return provider === 'gitlab' ? mrCopy() : prCopy()
+export function hostedReviewCopy(provider: string | undefined, t: Translate): HostedReviewCopy {
+  return provider === 'gitlab' ? mrCopy(t) : prCopy(t)
 }
 
 export function mobileHostedReviewCreateIntentProgressMessage(

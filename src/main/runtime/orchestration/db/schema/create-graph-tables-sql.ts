@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS remote_dispatch_attachments (
   -- Run home; absent from an old client means 1, which fails closed.
   depth                   INTEGER NOT NULL DEFAULT 1,
   -- Propagated only by a paired bot lineage; absent on old clients leaves local worker behavior unchanged.
-  chat_lineage            INTEGER,
+  bot_lineage             INTEGER,
   -- Its own counter: a federated worker host has no dispatch_contexts row to borrow one from.
   consumer_generation     INTEGER NOT NULL DEFAULT 0,
   last_error              TEXT,
@@ -221,6 +221,8 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
   last_heartbeat_at   TEXT,
+  progress_note       TEXT,
+  progress_updated_at TEXT,
   -- The settled Dispatch whose worker this one continues (a follow-up sent to it).
   follow_up_of_dispatch_id TEXT,
   -- Set when the worker reported with coordinator mail unread; cleared once that mail continues it.

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../../../shared/schema/lazy-zod-schema'
 import { isInBotHome } from '../../../../../../bots/bot-home-membership'
 import { botOfSession } from '../../../../../../bots/bot-session-tabs'
 import {
@@ -6,6 +7,7 @@ import {
   type OrchestrationEntryCaller
 } from '../../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
+import { dispatchHasBotLineage } from '../../../../../orchestration/db/bot-dispatch-lineage'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { resolveDispatchCreator } from '../../runs/dispatch-creator'
 import {
@@ -42,16 +44,32 @@ export function startsInBotLineage(
   runtime: Parameters<typeof startsInChatLineage>[0],
   db: OrchestrationDb,
   params: { from?: string; retryOf?: string; botLineage?: true },
-  caller: OrchestrationEntryCaller | undefined
+  caller: OrchestrationEntryCaller | undefined,
+  followUpOf?: string
 ): boolean {
-  return (
-    startsInChatLineage(runtime, db, params, caller) ||
-    (params.botLineage === true && caller?.kind === 'peer') ||
-    db.creatorHasBotLineage(
-      resolveDispatchCreator(runtime, params.from, caller),
-      (sessionId) => botOfSession(runtime.bots, sessionId) !== null
+  const isBotChat = (sessionId: string) => botOfSession(runtime.bots, sessionId) !== null
+  if (startsInChatLineage(runtime, db, params, caller, followUpOf)) {
+    return true
+  }
+  if (params.botLineage === true && caller?.kind === 'peer') {
+    return true
+  }
+  const earlier = [params.retryOf, followUpOf].filter((id): id is string => Boolean(id))
+  if (earlier.some((id) => dispatchHasBotLineage(db, id, isBotChat))) {
+    return true
+  }
+  if (
+    earlier.some(
+      (id) =>
+        (db.db.prepare('SELECT bot_lineage FROM remote_dispatches WHERE dispatch_id = ?').get(id) as
+          | { bot_lineage: 1 | null }
+          | undefined)?.bot_lineage === 1
     )
-  )
+  ) {
+    return true
+  }
+  const creatorId = db.resolveCreatorDispatchId(resolveDispatchCreator(runtime, params.from, caller))
+  return creatorId !== null && dispatchHasBotLineage(db, creatorId, isBotChat)
 }
 
 /** The start's mode: the host's settings, unless the caller's lineage starts its workers as chats. */
@@ -121,8 +139,10 @@ export async function noteTerminalFallbackOnItem(
 }
 
 // A failed start reports a terminal mode too, but started nothing to note.
-const TerminalFallbackReceipt = z.object({
-  dispatchId: z.string(),
-  state: z.enum(['ready', 'starting']),
-  mode: z.object({ mode: z.string(), detail: z.string() })
-})
+const TerminalFallbackReceipt = lazyZodSchema(() =>
+  z.object({
+    dispatchId: z.string(),
+    state: z.enum(['ready', 'starting']),
+    mode: z.object({ mode: z.string(), detail: z.string() })
+  })
+)

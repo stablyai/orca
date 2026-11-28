@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { ConnectorTransport } from './connector-machine'
 import { postConnectorAction } from './connector-actions'
 import { isConnectorWorkspaceRef } from '../../shared/connector-action-contract'
@@ -33,16 +34,18 @@ function notFound(source: string, input: string): ConnectorRefNotFoundError {
   )
 }
 
-const Matches = z.object({
-  matches: z.array(
-    z.object({
-      ref: z.string(),
-      label: z.string(),
-      exact: z.literal(true).optional(),
-      key: z.string().optional()
-    })
-  )
-})
+const Matches = lazyZodSchema(() =>
+  z.object({
+    matches: z.array(
+      z.object({
+        ref: z.string(),
+        label: z.string(),
+        exact: z.literal(true).optional(),
+        key: z.string().optional()
+      })
+    )
+  })
+)
 
 /**
  * Through the cloud's find, which alone reads links, #names and keys; only one exact match is taken.

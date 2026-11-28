@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrchestrationDb } from '../db/orchestration-db'
 import {
-  federatedAttachmentChatLineage,
-  federatedWorkerChatLineage,
-  forwardedFederatedChatLineage
+  federatedAttachmentBotLineage,
+  federatedWorkerBotLineage,
+  forwardedFederatedBotLineage
 } from './federated-worker-chat-lineage'
 
-describe('forwardedFederatedChatLineage', () => {
+describe('forwardedFederatedBotLineage', () => {
   it('sends a bot-home lineage stamp only to a peer that advertises support', () => {
     expect(
-      forwardedFederatedChatLineage(true, [
-        ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
+      forwardedFederatedBotLineage(true, [
+        ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY
       ])
-    ).toEqual({ chatLineage: true })
-    expect(forwardedFederatedChatLineage(true, [])).toEqual({})
+    ).toEqual({ botLineage: true })
+    expect(forwardedFederatedBotLineage(true, [])).toEqual({})
     expect(
-      forwardedFederatedChatLineage(false, [
-        ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
+      forwardedFederatedBotLineage(false, [
+        ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY
       ])
     ).toEqual({})
   })
@@ -28,11 +28,11 @@ describe('forwardedFederatedChatLineage', () => {
       const runtime = { bots: { list: () => [{ folderWorkspaceId: 'bot-home' }] } }
       const caller = { sessionId: 'session', workspaceId: 'folder:bot-home' }
       expect(
-        federatedWorkerChatLineage(
-          runtime as Parameters<typeof federatedWorkerChatLineage>[0],
+        federatedWorkerBotLineage(
+          runtime as Parameters<typeof federatedWorkerBotLineage>[0],
           db,
           {},
-          caller as Parameters<typeof federatedWorkerChatLineage>[3]
+          caller as Parameters<typeof federatedWorkerBotLineage>[3]
         )
       ).toBe(true)
     } finally {
@@ -46,25 +46,25 @@ describe('forwardedFederatedChatLineage', () => {
       pairedDeviceId: 'device',
       authenticatedCallerFingerprint: 'fingerprint'
     }
-    expect(federatedAttachmentChatLineage(true, pairedRuntime)).toBe(true)
+    expect(federatedAttachmentBotLineage(true, pairedRuntime)).toBe(true)
     expect(
-      federatedAttachmentChatLineage(true, {
+      federatedAttachmentBotLineage(true, {
         ...pairedRuntime,
         pairedDeviceId: undefined
       })
     ).toBe(false)
     expect(
-      federatedAttachmentChatLineage(true, {
+      federatedAttachmentBotLineage(true, {
         ...pairedRuntime,
         authenticatedCallerFingerprint: undefined
       })
     ).toBe(false)
     expect(
-      federatedAttachmentChatLineage(true, {
+      federatedAttachmentBotLineage(true, {
         ...pairedRuntime,
         clientKind: undefined
       })
     ).toBe(false)
-    expect(federatedAttachmentChatLineage(undefined, pairedRuntime)).toBe(false)
+    expect(federatedAttachmentBotLineage(undefined, pairedRuntime)).toBe(false)
   })
 })

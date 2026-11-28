@@ -18,7 +18,7 @@ export function dispatchHasBotLineage(
     if (!context) {
       // A paired host receives this trusted stamp from a bot home; a missing unstamped row
       // does not prove that another pending ancestry branch is not bot-rooted.
-      if (db.getRemoteDispatchAttachment(id)?.chat_lineage === 1) {
+      if (db.getRemoteDispatchAttachment(id)?.bot_lineage === 1) {
         return true
       }
       continue

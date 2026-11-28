@@ -2,10 +2,10 @@ import type { RefObject } from 'react'
 import { Pressable, Text, View, type TextInputInstance } from 'react-native'
 import { Quote } from 'lucide-react-native'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { queuedMessageStyles } from '../../input/queued-messages/mobile-native-chat-queued-message-styles'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { queuedMessageStylesSheet } from '../../input/queued-messages/mobile-native-chat-queued-message-styles'
 import { useMobileNativeChatSelectionQuote } from './use-mobile-native-chat-selection-quote'
 import {
   appendNativeChatQuote,
@@ -28,7 +28,9 @@ export function MobileNativeChatQuoteTab({
   onChangeText: (text: string) => void
   fieldRef: RefObject<TextInputInstance | null>
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const queuedMessageStyles = useThemedStyles(queuedMessageStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const quote = useMobileNativeChatSelectionQuote()
   if (quote === null) {
@@ -67,7 +69,7 @@ export function MobileNativeChatQuoteTab({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: {
     minHeight: 44,
     flexDirection: 'row',

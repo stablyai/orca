@@ -58,18 +58,20 @@ const [
 const text = lazyZodSchema(() => z.string().optional())
 const count = lazyZodSchema(() => z.number().optional())
 
-export const storedFailureFact = AgentSessionFailureFactSchema.extend({
-  account: text,
-  refusal: storedRefusalReference.optional(),
-  attachment: z.object({ reason: z.string(), limit: count }).optional(),
-  retry: z
-    .object({ error: text, status: count, cause: text, attempt: count, maxRetries: count })
-    .optional(),
-  usageLimit: z.object({ window: text, resetsAt: count }).optional(),
-  neverReachedAgent: z.literal(true).optional(),
-  backgroundStop: text,
-  requestTimeout: z.object({ method: z.string(), timeoutMs: z.number() }).optional()
-})
+export const storedFailureFact = lazyZodSchema(() =>
+  AgentSessionFailureFactSchema.extend({
+    account: text,
+    refusal: storedRefusalReference.optional(),
+    attachment: z.object({ reason: z.string(), limit: count }).optional(),
+    retry: z
+      .object({ error: text, status: count, cause: text, attempt: count, maxRetries: count })
+      .optional(),
+    usageLimit: z.object({ window: text, resetsAt: count }).optional(),
+    neverReachedAgent: z.literal(true).optional(),
+    backgroundStop: text,
+    requestTimeout: z.object({ method: z.string(), timeoutMs: z.number() }).optional()
+  })
+)
 
 // A sender's reader salvages any value of a known key, so only the keys are storage's to close.
 const salvaged = lazyZodSchema(() => z.unknown().optional())
@@ -179,51 +181,53 @@ const block = lazyZodSchema(() =>
   ])
 )
 
-export const storedMessageBody = messageBody.extend({
-  blocks: z.array(block),
-  from: messageSource.nullable().optional(),
-  typedBy: z
-    .discriminatedUnion('by', [
-      z.object({ by: z.literal('host') }),
-      z.object({
-        by: z.literal('device'),
-        deviceId: z.string(),
-        account: z.string().optional(),
-        accountId: z.string().optional(),
-        own: z.boolean().optional(),
-        computer: z.string().optional(),
-        phone: z.string().optional()
-      }),
-      z.object({
-        by: z.literal('agent'),
-        deviceId: z.string().optional(),
-        own: z.boolean().optional()
+export const storedMessageBody = lazyZodSchema(() =>
+  messageBody.extend({
+    blocks: z.array(block),
+    from: messageSource.nullable().optional(),
+    typedBy: z
+      .discriminatedUnion('by', [
+        z.object({ by: z.literal('host') }),
+        z.object({
+          by: z.literal('device'),
+          deviceId: z.string(),
+          account: z.string().optional(),
+          accountId: z.string().optional(),
+          own: z.boolean().optional(),
+          computer: z.string().optional(),
+          phone: z.string().optional()
+        }),
+        z.object({
+          by: z.literal('agent'),
+          deviceId: z.string().optional(),
+          own: z.boolean().optional()
+        })
+      ])
+      .optional(),
+    origin: text,
+    asker: storedConnectorAsker.optional(),
+    connectorConversation: z.object({ source: z.string(), externalId: z.string() }).optional(),
+    leaveEligible: z.literal(true).optional(),
+    connectorDelivery: storedConnectorDelivery.optional(),
+    carriedCards: z.array(z.object({ messageId: z.string(), fingerprint: z.string() })).optional(),
+    carriedAskers: z.array(storedConnectorAsker.nullable()).optional(),
+    connectorClaim: z
+      .object({
+        cutTurnId: z.string(),
+        cutKind: z.enum(['restart', 'usage_limit']),
+        origin: z.array(storedConnectorDelivery)
       })
-    ])
-    .optional(),
-  origin: text,
-  asker: storedConnectorAsker.optional(),
-  connectorConversation: z.object({ source: z.string(), externalId: z.string() }).optional(),
-  leaveEligible: z.literal(true).optional(),
-  connectorDelivery: storedConnectorDelivery.optional(),
-  carriedCards: z.array(z.object({ messageId: z.string(), fingerprint: z.string() })).optional(),
-  carriedAskers: z.array(storedConnectorAsker.nullable()).optional(),
-  connectorClaim: z
-    .object({
-      cutTurnId: z.string(),
-      cutKind: z.enum(['restart', 'usage_limit']),
-      origin: z.array(storedConnectorDelivery)
-    })
-    .optional(),
-  tookOver: z
-    .object({ workspace: z.string(), goal: text, home: z.literal(true).optional() })
-    .optional(),
-  memorySource: text,
-  triggeredBy: z
-    .object({ source: z.string(), event: text, actor: text, actorId: text, place: text })
-    .optional(),
-  automationRun: storedAutomationRun.optional()
-})
+      .optional(),
+    tookOver: z
+      .object({ workspace: z.string(), goal: text, home: z.literal(true).optional() })
+      .optional(),
+    memorySource: text,
+    triggeredBy: z
+      .object({ source: z.string(), event: text, actor: text, actorId: text, place: text })
+      .optional(),
+    automationRun: storedAutomationRun.optional()
+  })
+)
 
 export const storedItemBody = lazyZodSchema(() =>
   z.discriminatedUnion('kind', [
@@ -260,13 +264,17 @@ export const storedProviderHandle = lazyZodSchema(() =>
   ])
 )
 
-export const storedItem = AgentJournalRenderItemSchema.extend({ body: storedItemBody })
+export const storedItem = lazyZodSchema(() =>
+  AgentJournalRenderItemSchema.extend({ body: storedItemBody })
+)
 
-export const storedSubmission = AgentJournalSubmissionSchema.extend({
-  rejection: storedFailureFact.optional(),
-  acceptedSequence: count,
-  origin: z.enum(['client', 'host']).optional()
-})
+export const storedSubmission = lazyZodSchema(() =>
+  AgentJournalSubmissionSchema.extend({
+    rejection: storedFailureFact.optional(),
+    acceptedSequence: count,
+    origin: z.enum(['client', 'host']).optional()
+  })
+)
 
 export type StoredValuesAreDeclared = [
   StorageDeclaresAll<UndeclaredStorageKeys<AgentJournalRenderItem, z.output<typeof storedItem>>>,

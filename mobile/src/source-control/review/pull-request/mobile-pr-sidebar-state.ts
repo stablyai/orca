@@ -24,7 +24,7 @@ import {
 } from '../../../../../src/shared/github/pull-requests/refresh/linked-pr-staleness'
 import type { MobileWorktreeSummary } from '../../branches/mobile-worktree-metadata-operations'
 import type { WorktreeGitHubPRLink } from '../creation/mobile-pr-link'
-import { translate } from '../../../i18n/mobile-i18n'
+import type { Translate } from '../../../i18n/mobile-i18n'
 
 export type PrSidebarData = {
   pr: PRInfo
@@ -265,13 +265,14 @@ export async function loadPrBranchReview(
 
 // What the screen shows for a PR read that failed with nothing accepted to keep.
 export function prSidebarFailureState(
-  error: unknown
+  error: unknown,
+  t: Translate
 ): { kind: 'error'; message: string } | { kind: 'blocked'; message: string } {
   return error instanceof Error
     ? failureState(error.message)
     : {
         kind: 'error',
-        message: translate('session.prSidebarState.loadFailed', 'Unable to load pull request')
+        message: t('session.prSidebarState.loadFailed', 'Unable to load pull request')
       }
 }
 

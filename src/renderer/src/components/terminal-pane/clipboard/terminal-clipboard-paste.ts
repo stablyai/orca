@@ -1,7 +1,8 @@
-import {
-  isClipboardTextTooLargeError,
-  type ReadClipboardTextOptions
-} from '../../../../../shared/clipboard/clipboard-text'
+import { isClipboardTextTooLargeError } from '../../../../../shared/clipboard/clipboard-text'
+import type {
+  ClipboardPasteContent,
+  ReadClipboardPasteContentOptions
+} from '../../../../../shared/clipboard/clipboard-paste-content'
 import { textOnlyLabelsCopiedFiles } from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
 import { TERMINAL_PASTE_MAX_BYTES } from '../input/paste/terminal-paste-limits'
 import type { TerminalPasteTextOptions } from '../input/paste/terminal-paste-model'
@@ -12,14 +13,16 @@ type SaveClipboardImageAsTempFile = (args?: {
 }) => Promise<string | null>
 
 export type TerminalClipboardCopiedFiles = {
-  readPaths: () => Promise<string[]>
+  /** Asked only when the clipboard read skipped its image check. */
   hasImage: () => Promise<boolean | null>
   /** Reports its own failures, like a drop. */
   paste: (paths: string[]) => Promise<void>
 }
 
 type PasteTerminalClipboardDeps = {
-  readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
+  readClipboardContent: (
+    options: ReadClipboardPasteContentOptions
+  ) => Promise<ClipboardPasteContent>
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
   copiedFiles?: TerminalClipboardCopiedFiles
   /** Paths from a DOM paste event; Chromium reads CF_HDROP-only copies (e.g. Zoom) that main cannot. */
@@ -47,7 +50,7 @@ export type TerminalClipboardPasteResult =
     }
 
 export async function pasteTerminalClipboard({
-  readClipboardText,
+  readClipboardContent,
   saveClipboardImageAsTempFile,
   copiedFiles,
   eventCopiedFilePaths = [],
@@ -59,11 +62,18 @@ export async function pasteTerminalClipboard({
   onImagePasteError,
   onLocalImagePasted
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
-  let text = ''
-  // File-manager copies carry the file names as text; read the file list beside it.
-  const copiedFilePathsRead = copiedFiles?.readPaths().catch(() => []) ?? Promise.resolve([])
+  // File-manager copies carry the file names as text; one read returns the file list beside it.
+  let content: ClipboardPasteContent = {
+    text: '',
+    filePaths: [],
+    linkHtml: '',
+    hasImage: null
+  }
   try {
-    text = await readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })
+    content = await readClipboardContent({
+      maxBytes: TERMINAL_PASTE_MAX_BYTES,
+      imageProbe: 'files-without-text'
+    })
   } catch (error) {
     if (isClipboardTextTooLargeError(error)) {
       onTextPasteError?.(error)
@@ -71,16 +81,15 @@ export async function pasteTerminalClipboard({
     }
     // Image-only clipboards can reject text reads; still try the screenshot path.
   }
-  const mainCopiedFilePaths = await copiedFilePathsRead
-  const copiedFilePaths =
-    mainCopiedFilePaths.length > 0 ? mainCopiedFilePaths : eventCopiedFilePaths
+  const { text } = content
+  const copiedFilePaths = content.filePaths.length > 0 ? content.filePaths : eventCopiedFilePaths
   // Unlabelled files beside a picture (screenshot tools, Windows image files) keep the image path.
   if (
     copiedFiles &&
     copiedFilePaths.length > 0 &&
     (text
       ? textOnlyLabelsCopiedFiles(text, copiedFilePaths)
-      : !(await copiedFiles.hasImage().catch(() => false)))
+      : !(content.hasImage ?? (await copiedFiles.hasImage().catch(() => false))))
   ) {
     await copiedFiles.paste(copiedFilePaths)
     return { status: 'pasted', kind: 'file-paths' }

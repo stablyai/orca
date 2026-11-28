@@ -38,7 +38,7 @@ export type CreatorRole = Pick<
 > & { chat_lineage?: 1 | null }
 export type RemoteCreatorRole = Pick<
   RemoteDispatchAttachmentRow,
-  'dispatch_id' | 'depth' | 'pane_key' | 'process_incarnation' | 'state' | 'chat_lineage'
+  'dispatch_id' | 'depth' | 'pane_key' | 'process_incarnation' | 'state'
 >
 
 /** Completed caller derivations live for one command or one snapshot action pass. */
@@ -123,17 +123,5 @@ export function createDispatchCreatorEvaluation(
         value: local?.chat_lineage === 1
       }
     },
-    hasBotLineage(): OrchestrationAdmission<boolean> {
-      const result = roles()
-      if (result.kind === 'refused') {
-        return result
-      }
-      return {
-        kind: 'admitted',
-        value:
-          local?.chat_lineage === 1 ||
-          result.value.some((attachment) => attachment.chat_lineage === 1)
-      }
-    }
   }
 }

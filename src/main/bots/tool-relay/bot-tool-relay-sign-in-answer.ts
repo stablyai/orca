@@ -5,7 +5,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 /** The JSON-RPC error code MCP clients read as "this server needs authorization". */
 const SIGN_IN_NEEDED_CODE = -32001
-const SIGN_IN_NEEDED = 'Sign in to this app in Orca to use it.'
+/** Also how the tray knows an Orca server failed only for want of Orca's sign-in. */
+export const SIGN_IN_NEEDED = 'Sign in to this app in Orca to use it.'
 /** A JSON-RPC server error: the call didn't reach the tool, and may work if tried again. */
 const UNAVAILABLE_CODE = -32000
 const UNAVAILABLE = 'This tool can’t be used from this computer right now. Try again later.'
@@ -54,9 +55,48 @@ export function answerSignInNeeded(
   res: ServerResponse,
   body: Buffer | undefined
 ): void {
+  answerEachRequest(req, res, body, SIGN_IN_NEEDED_CODE, SIGN_IN_NEEDED)
+}
+
+/** What a call to a tool its folder doesn't name, or whose saved entry won't open here, is told. */
+const MISSING = {
+  bot: 'This bot has no such tool.',
+  host: 'Orca’s MCP servers no longer include this server. Your next message picks up the change.'
+} as const
+const UNREADABLE =
+  'Orca can’t open this server’s saved sign-in or key on this computer. Sign in again, or enter its key again, in Orca’s MCP servers settings.'
+
+/**
+ * A tool its folder no longer names gets a 404, as before. A host-list server whose saved entry
+ * won't open here is answered per request, as a sign-in is, so the agent shows why and its
+ * Settings row offers Sign in again.
+ */
+export function answerToolGone(
+  req: IncomingMessage,
+  res: ServerResponse,
+  body: Buffer | undefined,
+  scope: 'bot' | 'host',
+  kind: 'missing' | 'unreadable'
+): void {
+  // A bot's Tools rows can't sign in over such an entry: it reads as missing there, as it always has.
+  if (kind === 'unreadable' && scope === 'host') {
+    answerEachRequest(req, res, body, UNAVAILABLE_CODE, UNREADABLE)
+    return
+  }
+  res.writeHead(404, { 'content-type': 'application/json' })
+  res.end(JSON.stringify({ error: MISSING[scope] }))
+}
+
+function answerEachRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  body: Buffer | undefined,
+  code: number,
+  text: string
+): void {
   if (req.method !== 'POST') {
     res.writeHead(405, { 'content-type': 'application/json', allow: 'POST' })
-    res.end(JSON.stringify({ error: SIGN_IN_NEEDED }))
+    res.end(JSON.stringify({ error: text }))
     return
   }
   const message = parsed(body)
@@ -65,7 +105,7 @@ export function answerSignInNeeded(
     res.end(JSON.stringify(errorFor(null, -32700, 'Parse error')))
     return
   }
-  const errors = errorsFor(message, SIGN_IN_NEEDED_CODE, SIGN_IN_NEEDED)
+  const errors = errorsFor(message, code, text)
   if (!errors) {
     res.writeHead(202)
     res.end()

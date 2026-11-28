@@ -5,8 +5,8 @@ import { buildAutomationCronSchedule } from '../../../src/shared/automations/sch
 import { ListGroup } from '../components/list/ListGroup'
 import type { PickerOption } from '../components/sheets/PickerModal'
 import { DrillRow } from '../host-screen/workspace-options/workspace-option-rows'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import type { BotAutomationDraft } from './bot-automation-edit-draft'
 import type { PresentAutomationSheet } from './AutomationSheets'
 
@@ -18,6 +18,7 @@ export function PickerRow<Value extends string>(props: {
   onSelect: (value: Value) => void
   present: PresentAutomationSheet
   disabled?: boolean
+  searchable?: boolean
 }) {
   return (
     <DrillRow
@@ -29,6 +30,7 @@ export function PickerRow<Value extends string>(props: {
           title: props.label,
           options: props.options,
           selected: props.value,
+          searchable: props.searchable,
           onSelect: (value) => {
             const option = props.options.find((entry) => entry.value === value)
             if (option) {
@@ -59,6 +61,7 @@ export function BotAutomationWhenRows(props: {
   disabled: boolean
 }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { draft } = props
   const descriptor = describeAutomationSchedule(draft.rrule)
   const preset: Preset | null =
@@ -117,10 +120,10 @@ export function BotAutomationWhenRows(props: {
       : [])
   ]
   const cadence: Cadence = draft.eventsOnly ? 'none' : (preset ?? 'custom')
-  const clock = new Intl.DateTimeFormat(getUiIntlLocale(), { hour: 'numeric', minute: '2-digit' })
+  const clock = new Intl.DateTimeFormat(intlLocale, { hour: 'numeric', minute: '2-digit' })
   const timeLabel = (minutes: number) =>
     clock.format(new Date(2000, 0, 1, Math.floor(minutes / 60), minutes % 60))
-  const weekday = new Intl.DateTimeFormat(getUiIntlLocale(), { weekday: 'long', timeZone: 'UTC' })
+  const weekday = new Intl.DateTimeFormat(intlLocale, { weekday: 'long', timeZone: 'UTC' })
   const at = hour * 60 + minute
   const times = HALF_HOURS.includes(at) ? HALF_HOURS : [...HALF_HOURS, at].sort((a, b) => a - b)
   const minutes = QUARTERS.includes(minute) ? QUARTERS : [...QUARTERS, minute].sort((a, b) => a - b)

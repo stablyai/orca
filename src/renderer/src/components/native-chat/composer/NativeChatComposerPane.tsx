@@ -192,7 +192,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       agent,
       disabled,
       resolveAttachmentOwner: fileDrops.resolveAttachmentOwner,
-      attachResolvedPaths,
       attachCopiedFiles: fileDrops.attachExternalPaths,
       captureCopiedFiles: fileDrops.captureCopiedFiles,
       captureExternalPaths: fileDrops.captureExternalPaths,

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { registerLazyIpcHandleGroup } from '../../lazy-ipc-handle-group'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -15,12 +16,9 @@ import {
   detectConflictOperation
 } from '../../../git/source-control/mutations/git-conflict-operation'
 import { getDiff } from '../../../git/source-control/diffs/file-diff'
-import { registerFilesystemGitHistoryHandlers } from './filesystem-git-history-handlers'
-import { registerFilesystemGitAtRiskLocalFilesHandlers } from './filesystem-git-at-risk-local-files-handlers'
 import { isGitWorktreeMutationInFlight } from '../../../git/command-runner/git-worktree-mutation-state'
 import type { GitMutationInFlight } from '../../../../shared/git/commands/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../../git/source-control/ignores/check-ignored-paths'
-import { registerFilesystemGitRebaseHandlers } from './filesystem-git-rebase-handlers'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
@@ -45,11 +43,36 @@ import {
   wslDistroForPath
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
+const FILESYSTEM_GIT_HISTORY_CHANNELS = ['git:refs', 'git:history', 'git:blame'] as const
+const FILESYSTEM_GIT_AT_RISK_CHANNELS = [
+  'git:atRiskLocalFiles',
+  'git:cancelAtRiskLocalFiles'
+] as const
+const FILESYSTEM_GIT_REBASE_CHANNELS = ['git:continueRebase', 'git:rebaseAutoStash'] as const
+
 export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerContext): void {
   const { store, gitStatusCancellations } = context
-  registerFilesystemGitHistoryHandlers(context)
-  registerFilesystemGitAtRiskLocalFilesHandlers(context)
-  registerFilesystemGitRebaseHandlers(context)
+  for (const channel of [
+    ...FILESYSTEM_GIT_HISTORY_CHANNELS,
+    ...FILESYSTEM_GIT_AT_RISK_CHANNELS,
+    ...FILESYSTEM_GIT_REBASE_CHANNELS
+  ]) {
+    ipcMain.removeHandler(channel)
+  }
+  registerLazyIpcHandleGroup(FILESYSTEM_GIT_HISTORY_CHANNELS, async (ipc) => {
+    const { registerFilesystemGitHistoryHandlers } =
+      await import('./filesystem-git-history-handlers')
+    registerFilesystemGitHistoryHandlers(context, ipc)
+  })
+  registerLazyIpcHandleGroup(FILESYSTEM_GIT_AT_RISK_CHANNELS, async (ipc) => {
+    const { registerFilesystemGitAtRiskLocalFilesHandlers } =
+      await import('./filesystem-git-at-risk-local-files-handlers')
+    registerFilesystemGitAtRiskLocalFilesHandlers(context, ipc)
+  })
+  registerLazyIpcHandleGroup(FILESYSTEM_GIT_REBASE_CHANNELS, async (ipc) => {
+    const { registerFilesystemGitRebaseHandlers } = await import('./filesystem-git-rebase-handlers')
+    registerFilesystemGitRebaseHandlers(context, ipc)
+  })
   ipcMain.handle(
     'git:status',
     async (

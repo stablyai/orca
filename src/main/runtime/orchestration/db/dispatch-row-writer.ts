@@ -44,7 +44,7 @@ const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?, ?, ?)`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
-   dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth, chat_lineage
+   dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth, bot_lineage
  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 /** Missing depth would turn a worker into an apparent root. */
@@ -72,7 +72,7 @@ export function claimDispatchContextRow(
     creatorPaneKey?: string | null
     creatorOrcaSessionId?: OrcaSessionId | null
     creatorTurnSource?: DispatchCreatorTurnSource | null
-    chatLineage?: boolean
+    botLineage?: boolean
     botLineage?: boolean
     priorFailures: number
     depth: number
@@ -180,6 +180,6 @@ export function insertRemoteDispatchAttachmentRow(
     params.protocolVersion,
     params.runtimeEpoch,
     params.depth,
-    params.chatLineage ? 1 : null
+    params.botLineage ? 1 : null
   )
 }

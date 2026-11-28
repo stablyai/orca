@@ -4,9 +4,11 @@ import { SlugRepo } from './github-repo-target-params'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 import { IssueUpdate } from './github-issue-update-params'
 
-export const SlugAssignableUsers = SlugRepo.extend({
-  seedLogins: z.array(z.string()).optional()
-})
+export const SlugAssignableUsers = lazyZodSchema(() =>
+  SlugRepo.extend({
+    seedLogins: z.array(z.string()).optional()
+  })
+)
 
 export const ProjectOwnerType = lazyZodSchema(() => z.enum(['organization', 'user']))
 
@@ -24,10 +26,12 @@ export const ProjectViewTable = lazyZodSchema(() =>
   })
 )
 
-export const ProjectWorkItemDetailsBySlug = SlugRepo.extend({
-  number: z.number().int().positive(),
-  type: z.enum(['issue', 'pr'])
-})
+export const ProjectWorkItemDetailsBySlug = lazyZodSchema(() =>
+  SlugRepo.extend({
+    number: z.number().int().positive(),
+    type: z.enum(['issue', 'pr'])
+  })
+)
 
 export const ProjectRef = lazyZodSchema(() =>
   z.object({

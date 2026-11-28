@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
@@ -14,10 +15,12 @@ import type { RuntimeBrowserCommandHost } from '../commands/browser-command-cont
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import {
   createBrowserClientPage,
-  createBrowserPageOnPairedHost,
-  openBrowserUrlOnClient
+  createBrowserPageOnPairedHost
 } from '../client-pages/browser-client-page-opening'
-import { opensOnPairedDesktop } from '../client-pages/server-agent-tab-placement'
+import {
+  openBrowserUrlOnClient,
+  opensOnPairedDesktop
+} from '../client-pages/server-agent-tab-placement'
 
 type BrowserTabCreateRequest = {
   url?: string
@@ -37,6 +40,8 @@ type BrowserTabCreateCaller = {
   pairedDeviceId?: string
   clientKind?: 'mobile' | 'runtime'
   opensPageLink?: boolean
+  /** Only screens showing this terminal tab follow the new tab; the rest just list it. */
+  followsFromTabId?: string
   signal?: AbortSignal
 }
 
@@ -134,7 +139,7 @@ export class RuntimeBrowserTabCreation {
     }
     const { browserPageId } = await createBrowserTabInRenderer(
       this.host,
-      url,
+      redactKagiSessionToken(url),
       worktreeId,
       params.profileId,
       params.profileId ? sessionPartition : undefined,
@@ -220,6 +225,7 @@ export class RuntimeBrowserTabCreation {
       focus,
       ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
       ...(caller?.opensPageLink ? { opensPageLink: true } : {}),
+      ...(caller?.followsFromTabId ? { followsFromTabId: caller.followsFromTabId } : {}),
       targetGroupId: params.targetGroupId
     })
     return { browserPageId: created.browserPageId }
@@ -229,9 +235,27 @@ export class RuntimeBrowserTabCreation {
     params: {
       url: string
       worktree: string
+      fromTabId?: string
     },
     options?: { signal?: AbortSignal }
   ): Promise<{ browserPageId: string }> {
-    return openBrowserUrlOnClient(this.host, params, options?.signal)
+    const { url, worktree, fromTabId } = params
+    // Phone-only servers have no desktop for BROWSER opens such as login links (#48645).
+    // Only screens on the terminal that opened it follow, so a dev server's --open pulls nobody off another tab.
+    const serverPage =
+      this.host.getAvailableAuthoritativeWindowId() === null &&
+      this.host.getOffscreenBrowserBackend()
+        ? () =>
+            this.browserTabCreate(
+              {
+                url,
+                worktree,
+                placement: { kind: 'server' },
+                ...(fromTabId ? { activate: true, navigation: 'clients' as const } : {})
+              },
+              { signal: options?.signal, ...(fromTabId ? { followsFromTabId: fromTabId } : {}) }
+            )
+        : undefined
+    return openBrowserUrlOnClient(this.host, params, options?.signal, serverPage)
   }
 }

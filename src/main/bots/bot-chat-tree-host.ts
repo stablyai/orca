@@ -5,7 +5,6 @@ import type { AgentListVerdict } from '../../shared/agent-status/presentation/ag
 import { handedAgentRows } from '../../shared/bots/bot-activity-handed-agents'
 import type { BotChatTreeRead, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
 import {
-  botChatTreeDispatchIds,
   buildBotChatTree,
   placeBotChatDispatches,
   type BotChatTreeExtra
@@ -17,9 +16,9 @@ import {
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import type { BotBackgroundRuns } from './bot-background-run-records'
 import { buildBotChatBase, orderedBaseChats, readBotChatInputs } from './bot-chat-tree-base'
+import { workerRecordDispatchIds } from './bot-chat-dispatches'
 import { createBotChatTreeIndex, type BotChatTreeIndex } from './bot-chat-tree-index'
 import { overlayBotChats } from './bot-chat-tree-overlay'
 import type { BotChatTreeWorkerCache } from './bot-chat-tree-worker-cache'
@@ -176,7 +175,7 @@ export async function readBotChatTreeParts(
   // Handed-over agents, under Home.
   const extras: BotChatTreeExtra[] = []
   // Unreadable worker records must not hide the chats.
-  const dispatchIds = botChatTreeDispatchIds(chats, placed, extras, page)
+  const dispatchIds = workerRecordDispatchIds(chats, placed, extras, page)
   const workers: OrchestrationSessionWorker[] = await (
     host.workerCache
       ? host.workerCache.read(
@@ -256,8 +255,11 @@ export function runtimeBotChatTreeHost(runtime: OrcaRuntimeService): BotChatTree
       return readAgentSessionRecordStore()
     },
     db: () => runtime.getOrchestrationDb(),
-    dispatchWorkers: (dispatchIds) =>
-      readDispatchWorkers(runtime, dispatchIds, { lostTerminalsEnded: true }),
+    dispatchWorkers: async (dispatchIds) => {
+      const { readDispatchWorkers } =
+        await import('../runtime/rpc/methods/orchestration/worker/session-workers-method')
+      return readDispatchWorkers(runtime, dispatchIds, { lostTerminalsEnded: true })
+    },
     backgroundRuns: runtime.lookAround,
     agentListVerdicts: () => runtime.readAgentListPublication()?.verdicts,
     ...(runtime.botChatTreeIndex ? { index: runtime.botChatTreeIndex } : {}),

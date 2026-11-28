@@ -22,6 +22,8 @@ import { assertTakesNewWork } from '../worker-terminal/worker-terminal-transfer'
 import {
   DISPATCH_LINK_COLUMNS,
   DISPATCH_LINK_JOINS,
+  REMOTE_DISPATCH_LINK_COLUMNS,
+  REMOTE_DISPATCH_LINK_JOINS,
   dispatchLinkRows,
   type DispatchCreatorLink
 } from './dispatch-links-by-id'
@@ -79,7 +81,8 @@ export function createDispatchContext(
       processIncarnation: processIncarnation ?? null,
       creatorDispatchId: requireOrchestrationAdmission(creator.creatorId()),
       ...recordedCreatorIdentity(params.creator),
-      chatLineage: params.chatLineage ?? requireOrchestrationAdmission(creator.startsChatWorkers()),
+      // Claiming an existing task does not change the recipient's worker surface.
+      chatLineage: params.chatLineage,
       botLineage: params.botLineage,
       priorFailures,
       depth,
@@ -213,9 +216,16 @@ export const DISPATCH_LINKS_CREATED_BY_ANY_SQL = `
   WHERE d.creator_orca_session_id IN (SELECT value FROM json_each(?1))
   UNION
   SELECT ${DISPATCH_LINK_COLUMNS} FROM dispatch_contexts d ${DISPATCH_LINK_JOINS}
-  WHERE d.creator_pane_key IN (SELECT value FROM json_each(?2))`
+  WHERE d.creator_pane_key IN (SELECT value FROM json_each(?2))
+  UNION
+  SELECT ${REMOTE_DISPATCH_LINK_COLUMNS} FROM remote_dispatches rd ${REMOTE_DISPATCH_LINK_JOINS}
+  WHERE rd.creator_orca_session_id IN (SELECT value FROM json_each(?1))
+  UNION
+  SELECT ${REMOTE_DISPATCH_LINK_COLUMNS} FROM remote_dispatches rd ${REMOTE_DISPATCH_LINK_JOINS}
+  WHERE rd.creator_pane_key IN (SELECT value FROM json_each(?2))`
 
-/** Every Dispatch these chats or panes created, of any age, with only the columns that place it. */
+/** Every Dispatch these chats or panes created, of any age, here or on a paired server that runs it
+ *  as its own, with only the columns that place it. */
 export function listDispatchLinksCreatedByAny(
   this: OrchestrationDb,
   creators: { orcaSessionIds: readonly string[]; paneKeys: readonly string[] }

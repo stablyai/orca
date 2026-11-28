@@ -1,4 +1,4 @@
-import { ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RpcContext } from '../../rpc/core'
 import { startsInBotLineage } from '../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 import type { OrchestrationDb } from '../db/orchestration-db'
@@ -8,33 +8,33 @@ type AuthenticatedRuntimeTransport = Pick<
   'clientKind' | 'pairedDeviceId' | 'authenticatedCallerFingerprint'
 >
 
-export function forwardedFederatedChatLineage(
-  chatLineage: boolean,
+export function forwardedFederatedBotLineage(
+  botLineage: boolean,
   capabilities: readonly string[] | undefined
-): { chatLineage?: true } {
-  return chatLineage &&
-    capabilities?.includes(ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY)
-    ? { chatLineage: true }
+): { botLineage?: true } {
+  return botLineage && capabilities?.includes(ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY)
+    ? { botLineage: true }
     : {}
 }
 
 /** Includes direct bot-home starts plus retry and helper inheritance before the remote row exists. */
-export function federatedWorkerChatLineage(
-  runtime: Parameters<typeof startsInChatLineage>[0],
+export function federatedWorkerBotLineage(
+  runtime: Parameters<typeof startsInBotLineage>[0],
   db: OrchestrationDb,
-  params: Parameters<typeof startsInChatLineage>[2],
-  caller: Parameters<typeof startsInChatLineage>[3]
+  params: Parameters<typeof startsInBotLineage>[2],
+  caller: Parameters<typeof startsInBotLineage>[3],
+  followUpOf?: string
 ): boolean {
-  return startsInBotLineage(runtime, db, params, caller)
+  return startsInBotLineage(runtime, db, params, caller, followUpOf)
 }
 
 /** Only the paired runtime transport, not a local mutation receipt, may stamp remote bot lineage. */
-export function federatedAttachmentChatLineage(
-  chatLineage: true | undefined,
+export function federatedAttachmentBotLineage(
+  botLineage: true | undefined,
   transport: AuthenticatedRuntimeTransport
 ): boolean {
   return (
-    chatLineage === true &&
+    botLineage === true &&
     transport.clientKind === 'runtime' &&
     transport.pairedDeviceId !== undefined &&
     Boolean(transport.authenticatedCallerFingerprint)

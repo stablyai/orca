@@ -30,7 +30,7 @@ import {
   renderInline,
   type MarkdownInlineContext
 } from '../parsing/mobile-markdown-inline'
-import { MARKDOWN_TONES, scaledMarkdownText, styles } from '../mobile-markdown-styles'
+import { DEFAULT_MARKDOWN_TONE, scaledMarkdownText } from '../mobile-markdown-styles'
 import { MarkdownText } from '../mobile-markdown-text'
 import { codeFenceClosed } from './mobile-markdown-code-nodes'
 import { plainText } from '../parsing/mobile-markdown-plain-text'
@@ -40,14 +40,16 @@ import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownDetails } from './MobileMarkdownDetails'
 import { MobileMarkdownMath } from '../math/MobileMarkdownMath'
 import { drawnBlock } from './mobile-markdown-drawn-blocks'
-import { translate } from '../../../i18n/mobile-i18n'
-import { colors, pressedStyle } from '../../../theme/mobile-theme'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { pressedStyle, type MobilePalette } from '../../../theme/mobile-theme'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
 
 /** A field added here is compared in mobile-markdown-drawn-blocks' `sameContext` too. */
 export type MarkdownBlockContext = MarkdownInlineContext & {
+  colors: MobilePalette
+  t: Translate
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
   /** Multiplies prose line heights; code keeps its own. */
@@ -91,14 +93,25 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
 }
 
 function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: number): ReactNode {
+  const { styles, colors } = ctx
   const nested = mobileMarkdownNestedBlocks(node, depth)
   const itemText: ParagraphText = { style: ctx.listText, selectable: true }
+  // Numbers end on one edge, in a column as wide as the longest, so every item's text starts together.
+  const lastNumber = (node.start ?? 1) + node.children.length - 1
+  const numbers = node.ordered
+    ? {
+        minWidth:
+          (String(lastNumber).length + 1) * 0.6 * styles.listMarker.fontSize * ctx.textScale,
+        textAlign: 'right' as const,
+        fontVariant: ['tabular-nums' as const]
+      }
+    : null
   return (
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
           {item.checked == null ? (
-            <NativeText style={ctx.listMarker}>
+            <NativeText style={[ctx.listMarker, numbers]}>
               {node.ordered ? `${item.data?.value ?? (node.start ?? 1) + itemIndex}.` : '•'}
             </NativeText>
           ) : (
@@ -140,6 +153,7 @@ function cellText(node: Nodes): string {
 }
 
 function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): ReactNode {
+  const { styles } = ctx
   const rows = node.children.map((row) => row.children)
   // Rows lay out independently, so a shared width per column is what lines them up.
   const columnWidths = mobileMarkdownTableColumnWidths(
@@ -147,7 +161,7 @@ function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): React
     ctx.textScale
   )
   // A table keeps its own dark surface, so its spans keep the default palette.
-  const cellCtx = { ...ctx, tone: MARKDOWN_TONES.default }
+  const cellCtx = { ...ctx, tone: DEFAULT_MARKDOWN_TONE }
   return (
     <ScrollView
       key={key}
@@ -187,6 +201,7 @@ function renderBlock(
   text: ParagraphText,
   depth: number
 ): ReactNode {
+  const { styles, t } = ctx
   if (mobileMarkdownBlockIsLiteral(node, depth)) {
     return (
       <MarkdownText key={key} selectable={text.selectable} style={text.style}>
@@ -236,8 +251,8 @@ function renderBlock(
             onPress={() => openMarkdownHref(only.url, ctx)}
             onLongPress={ctx.rowLongPress}
           >
-            <NativeText style={styles.link}>
-              {only.alt || translate('components.markdownBlocks.openImage', 'Open image')}
+            <NativeText style={[styles.paragraph, styles.link]}>
+              {only.alt || t('components.markdownBlocks.openImage', 'Open image')}
             </NativeText>
             <NativeText style={styles.imageCaption} numberOfLines={1}>
               {only.url}
@@ -269,7 +284,7 @@ function renderBlock(
               ctx.lineSpacing
             ),
             ctx.fontFamily ? { fontFamily: ctx.fontFamily } : null,
-            ctx.tone.text
+            ctx.tone.heading ?? ctx.tone.text
           ]}
         >
           {renderInline(node.children, ctx)}
@@ -327,7 +342,7 @@ function renderBlock(
           summary={
             node.summary.length > 0
               ? renderInline(node.summary, ctx)
-              : translate('pullRequest.markdownBlocks.details', 'Details')
+              : t('pullRequest.markdownBlocks.details', 'Details')
           }
         >
           {renderBlocks(nested!.nodes, ctx, text, nested!.depth)}
