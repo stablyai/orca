@@ -112,6 +112,19 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'file open-changed': {
     focus: FILE_OPEN_FOCUS_HELP
   },
+  'project group create': {
+    name: '--name <name>          Name for the new project group',
+    'parent-group': '--parent-group <group> Nest the new group inside this group (id or name)'
+  },
+  'project group rename': {
+    group: '--group <group>        Project group to rename (id or name)',
+    name: '--name <name>          New name for the project group'
+  },
+  'project group move': {
+    group: '--group <group>        Project group to move the repo into (id or name)',
+    'no-group': '--no-group             Move the repo out of every group, to the top level',
+    order: "--order <n>            Position among the target group's projects (default: last)"
+  },
   'repo hide': {
     host: "--host <host>          Which host's copy to hide: local, ssh:<target-id>, runtime:<id>, or a host name"
   },
