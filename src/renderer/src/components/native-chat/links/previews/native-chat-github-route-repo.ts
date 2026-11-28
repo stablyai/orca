@@ -2,16 +2,8 @@ import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
 import { readRepoSlugCache, repoSlugCacheKey } from '@/lib/workspace/catalog/repo-slug-cache'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import {
-  getRepoExecutionHostId,
-  getRepoSshConnectionId,
-  toSshExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
-import {
-  authorityKey,
-  parseHostAuthorityKey,
-  type HostAuthorityKey
-} from '../../../../../../shared/execution-host/host-authority'
+import type { HostAuthorityKey } from '../../../../../../shared/execution-host/host-authority'
+import { repoRouteAuthorityKey } from '@/lib/workspace/ownership/worktree-owner-repo'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,
@@ -20,42 +12,13 @@ import {
 
 export type RepoWithOriginKey = { repo: Repo; originKey: string | null }
 
-export function githubPreviewRepoAuthorityKey(repo: Repo): HostAuthorityKey | null {
-  const authority = parseHostAuthorityKey(getRepoExecutionHostId(repo))
-  if (!authority) {
-    return null
-  }
-  const connectionId = getRepoSshConnectionId(repo)
-  return authorityKey(
-    authority.endpoint.kind === 'environment' && connectionId
-      ? { ...authority, at: toSshExecutionHostId(connectionId) }
-      : authority
-  )
-}
-
-/** One registered route, including its endpoint, nested target and account binding. */
-export function githubPreviewRepoIdentity(repo: Repo): string {
-  return JSON.stringify([
-    githubPreviewRepoAuthorityKey(repo),
-    repo.id,
-    repo.path,
-    repo.kind ?? 'git',
-    repo.connectionId ?? null,
-    repo.ghAccount?.host ?? null,
-    repo.ghAccount?.user ?? null,
-    repo.upstream ?? null,
-    repo.gitRemoteIdentity ?? null
-  ])
-}
-
 /** Git repos on the chat's host; their remotes decide which GitHub sign-in a lookup may use. */
 export function githubPreviewRouteCandidates(
   repos: readonly Repo[],
   routeAuthority: HostAuthorityKey
 ): Repo[] {
   return repos.filter(
-    (repo) =>
-      (!repo.kind || repo.kind === 'git') && githubPreviewRepoAuthorityKey(repo) === routeAuthority
+    (repo) => (!repo.kind || repo.kind === 'git') && repoRouteAuthorityKey(repo) === routeAuthority
   )
 }
 

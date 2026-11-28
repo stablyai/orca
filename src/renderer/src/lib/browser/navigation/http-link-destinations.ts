@@ -1,6 +1,7 @@
 import { showLinkOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
 import { beginLinkOpenRequest } from '../../links/link-open-request'
 import { translate } from '@/i18n/i18n'
+import { githubLinkOpenInOrcaAction } from '@/lib/work-items/github/github-link-task-target'
 import {
   openHttpLink,
   captureHttpLinkIntent,
@@ -58,6 +59,7 @@ export type HttpLinkActionDestinations = {
 
 export type HttpLinkAction = {
   external?: boolean
+  icon?: 'open-in-orca'
   label: string
   run: () => void | Promise<void>
 }
@@ -113,7 +115,10 @@ export function buildHttpLinkActions(
     url?: string
     sourceOwner?: HttpLinkSourceOwner
     sourceTabId?: string | null
-    openInSourceGroup: () => void | Promise<void>
+    /** Omitted when the source can't open the managed browser; that also drops "Open in new tab". */
+    openInSourceGroup?: () => void | Promise<void>
+    /** Runs after "Open PR/issue in Orca" has shown Tasks, so an overlay can close. */
+    onTaskPageOpen?: () => void
   },
   t: Translate = translate
 ): { primary: HttpLinkAction; alternate?: HttpLinkAction; secondaryActions?: HttpLinkAction[] } {
@@ -125,8 +130,10 @@ export function buildHttpLinkActions(
       : t('auto.components.terminal.pane.TerminalLinkActionPopover.openLink', 'Open link'),
     run: () => open(primaryDestination)
   }
-  const secondaryActions =
+  const openInSourceGroup = source?.openInSourceGroup
+  const openInNewTab: HttpLinkAction | null =
     source &&
+    openInSourceGroup &&
     (destinations?.primary === 'orca' || destinations?.alternate === 'orca') &&
     canHttpLinkOpenInSourceGroup(
       source.worktreeId,
@@ -134,16 +141,19 @@ export function buildHttpLinkActions(
       source.url,
       source.sourceOwner
     )
-      ? [
-          {
-            label: t(
-              'auto.components.terminal.pane.TerminalLinkActionPopover.openInNewTab',
-              'Open in new tab'
-            ),
-            run: source.openInSourceGroup
-          }
-        ]
-      : undefined
+      ? {
+          label: t(
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openInNewTab',
+            'Open in new tab'
+          ),
+          run: openInSourceGroup
+        }
+      : null
+  const openInOrca = source
+    ? githubLinkOpenInOrcaAction(source.worktreeId, source.url, t, source.onTaskPageOpen)
+    : null
+  const rows = [openInNewTab, openInOrca].filter((row) => row !== null)
+  const secondaryActions = rows.length > 0 ? rows : undefined
   const alternateDestination = destinations?.alternate
   if (!alternateDestination) {
     return { primary, ...(secondaryActions ? { secondaryActions } : {}) }
