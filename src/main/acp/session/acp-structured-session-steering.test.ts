@@ -156,9 +156,8 @@ async function openChat(meta: unknown, provider: 'omp' | 'cursor' | 'antigravity
       })
     })
   }
-  const mail = async () => {
-    const result = await rig.send(MAIL_TEXT, 'queue-if-active', { internal: true, from: MAIL })
-      .result
+  const mail = async (text = MAIL_TEXT) => {
+    const result = await rig.send(text, 'queue-if-active', { internal: true, from: MAIL }).result
     if (!result.ok || !('queued' in result.value)) {
       throw new Error(`Expected a mail card: ${JSON.stringify(result)}`)
     }
@@ -349,7 +348,8 @@ describe('ACP orchestration mail steering', () => {
     expect(chat.methods()).toEqual([PROMPT, PROMPT])
 
     // A second mail waits in the host queue while the first concurrent steer is still in flight.
-    const secondMail = await chat.mail()
+    const secondMailText = 'Follow-up coordinator instructions.'
+    const secondMail = await chat.mail(secondMailText)
     expect(await chat.submissions(secondMail)).toEqual([])
     expect(chat.methods()).toEqual([PROMPT, PROMPT])
 
@@ -358,7 +358,7 @@ describe('ACP orchestration mail steering', () => {
     const steer2 = await chat.request(PROMPT, 2)
     expect(steer2.params).toEqual({
       sessionId: SESSION,
-      prompt: [{ type: 'text', text: MAIL_TEXT }]
+      prompt: [{ type: 'text', text: secondMailText }]
     })
     expect(chat.methods()).toEqual([PROMPT, PROMPT, PROMPT])
 

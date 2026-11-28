@@ -46,6 +46,7 @@ export class AcpTurnFlight {
       this.promptSteers &&
       this.active !== null &&
       this.active.sent &&
+      !this.active.send.adopted &&
       this.steering === null &&
       !this.ctx.isStopped() &&
       this.steerCancelled !== this.active.send &&

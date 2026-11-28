@@ -12,6 +12,7 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 import type { ProviderTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import type { StructuredAgentSessionTransitionStep } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { AcpRelayTurns } from '../process/acp-relay-turns'
+import { AcpAuthRequiredError } from '../transport/acp-errors'
 import { AcpStructuredTurns } from './acp-structured-turns'
 import type { AcpDispatchSettlement, AcpSteerMode } from './acp-turn-dispatch-contract'
 
@@ -51,9 +52,13 @@ async function createHarness(options: { promptSteers: boolean }) {
   await child.start({ cwd: '/tmp', mcpServers: [] })
 
   const steps: StructuredAgentSessionTransitionStep[] = []
+  const trace: string[] = []
   const sink: ProviderTimelineSink = {
     tryAppendTransition: (transition) => {
       steps.push(...transition.steps)
+      for (const row of endedTurnRows(transition.steps)) {
+        trace.push(`end:${row.turnId}`)
+      }
       transition.onPublished?.()
       return { accepted: true }
     }
@@ -92,7 +97,12 @@ async function createHarness(options: { promptSteers: boolean }) {
     agentName: 'Antigravity',
     dialect: options.promptSteers ? ANTIGRAVITY_ACP_DIALECT : CANCEL_STEER_DIALECT,
     now: () => ++clock,
-    settle: (settlement) => settlements.push(settlement),
+    settle: (settlement) => {
+      settlements.push(settlement)
+      trace.push(
+        `settle:${settlement.clientMessageId}:${'state' in settlement ? settlement.state : 'accepted'}`
+      )
+    },
     sessionLost: (error) => sessionLosses.push(error)
   })
 
@@ -104,6 +114,7 @@ async function createHarness(options: { promptSteers: boolean }) {
     prompts,
     cancels,
     steps,
+    trace,
     settlements,
     sessionLosses,
     withdrawRequests,
@@ -164,6 +175,26 @@ function assistantTextSteps(steps: readonly StructuredAgentSessionTransitionStep
       .join('')
     return [{ text, turnScope: step.options.turnScope }]
   })
+}
+
+function promptText(frame: FakeFrame): string {
+  if (typeof frame.params !== 'object' || frame.params === null || !('prompt' in frame.params)) {
+    return ''
+  }
+  const { prompt } = frame.params
+  if (!Array.isArray(prompt)) {
+    return ''
+  }
+  return prompt
+    .map((block) =>
+      typeof block === 'object' &&
+      block !== null &&
+      'text' in block &&
+      typeof block.text === 'string'
+        ? block.text
+        : ''
+    )
+    .join('')
 }
 
 describe('AcpStructuredTurns concurrent prompt steering', () => {
@@ -272,12 +303,12 @@ describe('AcpStructuredTurns concurrent prompt steering', () => {
     h.send('m3', 'third')
     await tick()
 
-    expect(h.prompts).toHaveLength(2)
+    expect(h.prompts.map(promptText)).toEqual(['first', 'second'])
     expect(h.cancels).toHaveLength(0)
 
     h.agent.reply(h.prompts[0], { stopReason: 'end_turn' })
     await tick()
-    expect(h.prompts).toHaveLength(3)
+    expect(h.prompts.map(promptText)).toEqual(['first', 'second', 'third'])
     expect(h.cancels).toHaveLength(0)
 
     h.agent.reply(h.prompts[1], { stopReason: 'end_turn' })
@@ -398,6 +429,8 @@ describe('AcpStructuredTurns concurrent prompt steering', () => {
       expect.objectContaining({ clientMessageId: 'm2', state: 'rejected' })
     )
     expect(endedTurnRows(h.steps).map((row) => row.turnId)).toEqual(['prompt:m1'])
+    expect(h.trace.indexOf('settle:m2:rejected')).toBeGreaterThan(-1)
+    expect(h.trace.indexOf('settle:m2:rejected')).toBeLessThan(h.trace.indexOf('end:prompt:m1'))
     expect(h.turns.running).toBe(false)
   })
 
@@ -523,30 +556,62 @@ describe('AcpStructuredTurns concurrent prompt steering', () => {
     expect(h.turns.running).toBe(false)
   })
 
-  it('steers an adopted earlier prompt without cancelling it', async () => {
+  it('preserves a confirmed out-of-order steering reply during teardown', async () => {
+    for (const cause of [undefined, new AcpAuthRequiredError('sign in again')]) {
+      const h = await createHarness({ promptSteers: true })
+      h.send('m1', 'first')
+      h.send('m2', 'confirmed before close')
+      await tick()
+
+      // Steer confirms before active yields, then connection tears down before promotion.
+      h.agent.reply(h.prompts[1], { stopReason: 'end_turn' })
+      await tick()
+      h.turns.end('connection lost', cause)
+
+      expect(h.settlements).toContainEqual({
+        clientMessageId: 'm2',
+        providerIdentity: { provider: 'orca', clientMessageId: 'm2' }
+      })
+      expect(h.turns.running).toBe(false)
+    }
+  })
+
+  it('waits non-destructively for an adopted earlier prompt before resuming concurrent steering', async () => {
     const h = await createHarness({ promptSteers: true })
     const earlier = Promise.withResolvers<{ stopReason: 'end_turn' }>()
     h.turns.adoptEarlier('m-adopted', () => earlier.promise)
-    h.send('m-steer', 'steer adopted turn', 'mail')
+    h.send('m-steer', 'after adopted turn', 'mail')
     await tick()
 
-    expect(h.prompts).toHaveLength(1)
+    // Does not overlap or cancel an adopted pre-restart prompt.
+    expect(h.prompts).toHaveLength(0)
     expect(h.cancels).toHaveLength(0)
     expect(h.turns.holdsSteers).toBe(true)
 
     earlier.resolve({ stopReason: 'end_turn' })
     await tick()
+    expect(h.prompts.map(promptText)).toEqual(['after adopted turn'])
+
+    // Once the adopted prompt settles, normal concurrent steering resumes.
+    h.send('m-steer-2', 'concurrent follow-up', 'mail')
+    await tick()
+    expect(h.prompts.map(promptText)).toEqual(['after adopted turn', 'concurrent follow-up'])
+    expect(h.cancels).toHaveLength(0)
+
     h.agent.reply(h.prompts[0], { stopReason: 'end_turn' })
+    await tick()
+    h.agent.reply(h.prompts[1], { stopReason: 'end_turn' })
     await tick()
 
     expect(endedTurnRows(h.steps).map((row) => row.turnId)).toEqual([
       'prompt:m-adopted',
-      'prompt:m-steer'
+      'prompt:m-steer',
+      'prompt:m-steer-2'
     ])
     expect(h.turns.running).toBe(false)
   })
 
-  it('keeps relay ack floor active when a concurrent steer is refused before opening', async () => {
+  it('preserves next-turn replay floor across concurrent handoff and releases acks on completion', async () => {
     const relay = new AcpRelayTurns()
     const floor = relay.ackFloor()
     const first = Promise.withResolvers<string>()
@@ -574,7 +639,8 @@ describe('AcpStructuredTurns concurrent prompt steering', () => {
     await expect(p2).rejects.toThrow('invalid steer')
     expect(floor.promptId).toBe(101)
 
-    // A third prompt tracks concurrently and becomes active once prompt 1 finishes.
+    // Prompt 3 runs concurrently; prompt 1 answers at seq 2 and prompt 3 emits unnumbered text at seq 3
+    // before prompt 1's completion handler runs.
     const third = Promise.withResolvers<string>()
     const p3 = relay.track(
       (onId) => {
@@ -584,12 +650,36 @@ describe('AcpStructuredTurns concurrent prompt steering', () => {
       false,
       true
     )
+    const unnumberedChunk = JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: PROVIDER_SESSION_ID,
+        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Hi' } }
+      }
+    })
+    floor.observe(1, unnumberedChunk)
+    floor.observe(
+      2,
+      JSON.stringify({ jsonrpc: '2.0', id: 101, result: { stopReason: 'end_turn' } })
+    )
+    floor.observe(3, unnumberedChunk)
+    expect(floor.floor(3)).toBe(1)
+
     first.resolve('done-1')
     await expect(p1).resolves.toBe('done-1')
     expect(floor.promptId).toBe(103)
+    // Prompt 3's already-observed unnumbered chunk at seq 3 must stay held by the floor.
+    expect(floor.floor(3)).toBe(3)
 
+    floor.observe(
+      4,
+      JSON.stringify({ jsonrpc: '2.0', id: 103, result: { stopReason: 'end_turn' } })
+    )
     third.resolve('done-3')
     await expect(p3).resolves.toBe('done-3')
+    // The original floor releases acknowledgements once the final concurrent prompt completes.
+    expect(floor.floor(4)).toBeNull()
     const nextFloor = relay.ackFloor()
     expect(nextFloor.promptId).toBeNull()
   })

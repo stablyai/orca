@@ -166,11 +166,14 @@ export function settleAcpEndedTurns(
   cause: Error | undefined
 ): void {
   const entries = [
-    ...(inFlight.active ? [{ send: inFlight.active.send, opened: true }] : []),
-    ...(inFlight.steering ? [{ send: inFlight.steering.send, opened: false }] : [])
+    ...(inFlight.active ? [{ entry: inFlight.active, opened: true }] : []),
+    ...(inFlight.steering ? [{ entry: inFlight.steering, opened: false }] : [])
   ]
-  for (const { send, opened } of entries) {
-    if (cause instanceof AcpAuthRequiredError) {
+  for (const { entry, opened } of entries) {
+    const { send } = entry
+    if (!opened && entry.settled?.ok) {
+      sink.accept(send.clientMessageId)
+    } else if (cause instanceof AcpAuthRequiredError) {
       if (opened) {
         settleAcpActiveAgentFailure(deps, sink, send, cause)
       } else {
