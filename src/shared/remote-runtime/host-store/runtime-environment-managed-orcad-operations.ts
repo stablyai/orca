@@ -21,8 +21,10 @@ import {
 } from './runtime-environment-sidecar'
 import { resolveEnvironmentFromStore } from './runtime-environment-store-operations'
 import { findCollidingEnvironmentName } from '../host-catalog/runtime-environment-name-collision'
+import { findEnvironmentWithHostKey } from '../host-catalog/runtime-environment-host-key-match'
+import { assertRuntimeEnvironmentNotReconciling } from '../host-catalog/runtime-environment-reconciliation-record'
 
-/** Registers a server Orca deployed over SSH, paired through its own loopback tunnel. */
+/** Registers a server Orca deployed over SSH and returns it. With `moveSavedServer`, a saved SSH-managed server with the same host key moves to this route instead and is returned with its own id, name and pairing. */
 export function addManagedOrcadEnvironment(
   userDataPath: string,
   args: {
@@ -30,6 +32,7 @@ export function addManagedOrcadEnvironment(
     name: string
     pairingCode: string
     orcadDeployment: OrcadSshDeploymentLink
+    moveSavedServer: boolean
     now?: number
   }
 ): KnownRuntimeEnvironment {
@@ -38,6 +41,16 @@ export function addManagedOrcadEnvironment(
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'Invalid managed pairing code.')
   }
   const known = readEnvironmentStore(userDataPath, { recoverBlankStore: true }).environments
+  const saved = args.moveSavedServer
+    ? findEnvironmentWithHostKey(
+        known.filter((entry) => entry.id !== args.id && getOrcadSshDeployment(entry)),
+        offer.publicKeyB64
+      )
+    : undefined
+  if (saved) {
+    assertRuntimeEnvironmentNotReconciling(saved)
+    return moveManagedOrcadSshRoute(userDataPath, saved.id, args.orcadDeployment)
+  }
   if (known.some((entry) => entry.id === args.id)) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
@@ -86,6 +99,33 @@ export function addManagedOrcadEnvironment(
     )
   }
   return registered
+}
+
+function moveManagedOrcadSshRoute(
+  userDataPath: string,
+  environmentId: string,
+  route: Pick<OrcadSshDeploymentLink, 'sshTargetId' | 'sshTargetGeneration'>
+): KnownRuntimeEnvironment {
+  const store = readPersistedEnvironmentStore(userDataPath, { recoverBlankStore: true })
+  const persisted = resolveEnvironmentFromStore(store, environmentId)
+  const entry = readCurrentRuntimeEnvironmentSidecarEntry(userDataPath, persisted)
+  const deployment = entry && getOrcadSshDeployment(entry)
+  if (!deployment) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'This server is not managed over SSH.'
+    )
+  }
+  const { binding: _binding, ...state } = entry
+  writeRuntimeEnvironmentSidecarEntry(userDataPath, store.environments, persisted, {
+    ...state,
+    orcadDeployment: {
+      ...deployment,
+      sshTargetId: route.sshTargetId,
+      sshTargetGeneration: route.sshTargetGeneration
+    }
+  })
+  return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
 }
 
 /** Remove the persisted server and deployment sidecar only once orcad is proven exited. */

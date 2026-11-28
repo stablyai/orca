@@ -143,6 +143,7 @@ describe('runtime environment store with records this build cannot read', () => 
         name: 'Pinned',
         pairingCode: encodePairingOffer({ ...pairing, endpoint: 'ws://127.0.0.1:41000/runtime' }),
         orcadDeployment: tunnel,
+        moveSavedServer: true,
         now: 100
       })
       const other = add('Other')

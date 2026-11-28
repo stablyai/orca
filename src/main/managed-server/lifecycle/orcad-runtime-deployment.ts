@@ -38,8 +38,10 @@ import { pruneManagedOrcadVersions } from './orcad-managed-version-gc'
 import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 import { resolveOrcadMigrationFence } from '../../ssh/migration-source/orcad-migration-source-fence'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
-import { findCollidingEnvironmentName } from '../../../shared/remote-runtime/host-catalog/runtime-environment-name-collision'
+import { findNamesakeBeforeDeploy } from './orcad-deploy-namesake'
+import { releaseClaimIfStoreRefused } from './orcad-deploy-claim-release'
 import { deployedOrcadTunnelChecks } from './orcad-managed-tunnel-identity'
+import { finishManagedOrcadRouteMove } from './orcad-managed-route-move'
 import {
   isForceableOrcadDeferral,
   managedOrcadDeployPolicy,
@@ -71,10 +73,12 @@ export async function createManagedOrcadEnvironment(
         throw new Error('The SSH target is owned by a server that is not deployed on it.')
       }
     }
-    const namesake = findCollidingEnvironmentName(
-      environments.filter((entry) => entry.id !== environmentId),
-      args.name
-    )
+    const moveSavedServer = !args.migration
+    const namesake = findNamesakeBeforeDeploy(environments, {
+      name: args.name,
+      environmentId,
+      moveSavedServer
+    })
     if (namesake) {
       throw new Error(`A server named "${namesake.name}" already exists.`)
     }
@@ -157,11 +161,35 @@ export async function createManagedOrcadEnvironment(
           sshTargetGeneration: targetGeneration,
           localPort,
           remotePort: ORCAD_MANAGED_REMOTE_PORT
+        },
+        moveSavedServer
+      }).catch(async (error: unknown) => {
+        if (moveSavedServer) {
+          await releaseClaimIfStoreRefused(claims, error, {
+            targetId: claimed.id,
+            environmentId,
+            signal: args.signal
+          })
         }
+        throw error
       })
+      const outcome = serving.created ? 'created' : 'already-current'
+      if (environment.id !== environmentId) {
+        const moved = await finishManagedOrcadRouteMove(userDataPath, {
+          environmentId: environment.id,
+          target: claimed,
+          provisionalEnvironmentId: environmentId,
+          signal: args.signal
+        })
+        return {
+          outcome,
+          environment: redactRuntimeEnvironment(moved),
+          activeVersion: serving.version
+        }
+      }
       environmentRegistered = true
       return {
-        outcome: serving.created ? 'created' : 'already-current',
+        outcome,
         environment: redactRuntimeEnvironment(environment),
         activeVersion: serving.version
       }
