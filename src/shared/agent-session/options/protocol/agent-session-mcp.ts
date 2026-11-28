@@ -7,6 +7,8 @@ export type AgentSessionMcpServerStatus =
   | 'disabled'
   /** Configured, but the agent connects it only once the chat starts. */
   | 'not-started'
+  /** The chat's agent is running but doesn't report how its servers are doing. */
+  | 'unreported'
 
 export type AgentSessionMcpServer = {
   name: string
@@ -19,7 +21,15 @@ export type AgentSessionMcpServer = {
   canSignIn: boolean
   canReconnect: boolean
   canToggle: boolean
+  /** A server from the host's own list while its chat is at rest, which Orca checks and (when
+   *  `signsIn`) signs in to itself; `url` is null for a command. Older hosts send none. */
+  orca?: AgentSessionMcpOrcaServer
+  /** An Orca server this running chat got that Orca has since removed or changed: the chat keeps
+   *  its launch copy until the next message restarts it. Absent from older hosts. */
+  orcaChange?: 'removed' | 'changed'
 }
+
+export type AgentSessionMcpOrcaServer = { id: string; url: string | null; signsIn: boolean }
 
 export type AgentSessionMcpOperation =
   | { action: 'status' }
@@ -41,8 +51,9 @@ export type AgentSessionMcpSignIn = {
 
 export type AgentSessionMcpResult =
   | { status: 'ok'; servers: AgentSessionMcpServer[]; signIn?: AgentSessionMcpSignIn }
-  /** The chat has no running agent; its servers connect when it next starts. */
-  | { status: 'not-running' }
+  /** The chat has no running agent; its servers connect when it next starts. `servers`: the ones
+   *  that start would get, as the host reads them; older hosts send none. */
+  | { status: 'not-running'; servers?: AgentSessionMcpServer[] }
   | { status: 'unsupported' }
   | { status: 'failed'; message: string | null }
 

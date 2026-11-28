@@ -1,21 +1,24 @@
 // The bots on this host's paired servers, as `bot list` and an `@` pick of one read them: each
 // server's own roster, read from it, with the `--on` that reaches it.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { BotRosterEntry, BotRosterServer } from '../../shared/bot-roster'
 import { BotAgentReadSchema } from '../../shared/bot-types'
 
 const ROSTER_READ_TIMEOUT_MS = 4_000
 
-const PairedRosterEntry = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  agent: BotAgentReadSchema,
-  paused: z.boolean(),
-  specialty: z.string().nullable(),
-  linked: z.array(z.string())
-})
+const PairedRosterEntry = lazyZodSchema(() =>
+  z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    agent: BotAgentReadSchema,
+    paused: z.boolean(),
+    specialty: z.string().nullable(),
+    linked: z.array(z.string())
+  })
+)
 
-const PairedRoster = z.object({ bots: z.array(z.unknown()) })
+const PairedRoster = lazyZodSchema(() => z.object({ bots: z.array(z.unknown()) }))
 
 export type PairedBotServers = {
   listOrchestrationWorkerServers(): Promise<readonly { environmentId: string; name: string }[]>

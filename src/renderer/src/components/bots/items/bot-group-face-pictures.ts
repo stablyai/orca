@@ -2,8 +2,9 @@
 // so the panel, not each row, asks for a member's uploaded picture: once per version, the first time a
 // face of that member is drawn, kept while the panel is open (through the shared picture cache, so a
 // picture already read costs nothing). Nothing is asked while the window is hidden or the member's host
-// is offline (asked once either comes back); a failed read is tried again on Back from an item or when
-// the panel reopens.
+// is offline (asked once either comes back); a failed or empty read is tried again when its host comes
+// back, on Back from an item (failed only), or when the panel reopens, and a face showing an initial
+// takes the picture as soon as any view reads it into the shared cache.
 import { createContext, useEffect, useState } from 'react'
 import {
   readBotHostState,
@@ -18,18 +19,11 @@ import {
 import { parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import { peekBotUploadSrc as readCachedBotUploadSrc, readBotUploadSrc } from '../bot-avatar-image'
-
-type Picture = {
-  bot: BotRef
-  version: string
-  /** The read's result: a data URL, or null for none. */
-  src?: string | null
-  reading: boolean
-  failed: boolean
-  /** The read failed and may be tried again (Back from an item) as a face draws. */
-  retry: boolean
-  faces: Set<() => void>
-}
+import {
+  startFacePictureRead,
+  watchFacePictureRecovery,
+  type FacePicture as Picture
+} from './bot-group-face-recovery'
 
 /** A face's view of one member's picture version, stable for the panel's life. */
 export type BotGroupFacePicture = {
@@ -69,6 +63,7 @@ function createFacePictures(): BotGroupFacePictures {
   const waiting = new Map<BotRef['hostId'], { offline: boolean; pictures: Set<Picture> }>()
   let waitingCount = 0
   let stopWatching: (() => void) | null = null
+  let stopRecovery: (() => void) | null = null
   let liveHosts = readLiveBotHostIds()
   let closed = false
   // A scroll over the panel while the window is marked hidden: after macOS display wake Chromium can keep
@@ -147,17 +142,25 @@ function createFacePictures(): BotGroupFacePictures {
     picture.reading = true
     picture.failed = false
     picture.retry = false
-    void readBotUploadSrc(picture.bot, picture.version).then((src) => settle(picture, src))
+    const attempt = startFacePictureRead(picture)
+    void readBotUploadSrc(picture.bot, picture.version).then((src) => settle(picture, attempt, src))
   }
 
-  const settle = (picture: Picture, src: string | null | undefined): void => {
+  const settle = (picture: Picture, attempt: number, src: string | null | undefined): void => {
+    // A reply from a read since superseded (its host came back, or another view's picture landed) is dropped.
+    if (attempt !== picture.attempt) {
+      return
+    }
     picture.reading = false
     // A reply for a version since replaced is dropped.
     if (pictures.get(botRefKey(picture.bot)) === picture) {
-      if (src === undefined) {
+      // No picture in this reply, but one another view read for this version still shows.
+      const cached = readCachedBotUploadSrc(picture.bot, picture.version)
+      const shown = typeof cached === 'string' ? cached : src
+      if (shown === undefined) {
         picture.failed = true
       } else {
-        picture.src = src
+        picture.src = shown
       }
       picture.faces.forEach((notify) => notify())
     }
@@ -213,6 +216,7 @@ function createFacePictures(): BotGroupFacePictures {
       bot: { hostId: bot.hostId, id: bot.id },
       version,
       reading: false,
+      attempt: 0,
       failed: false,
       retry: false,
       faces: new Set()
@@ -224,10 +228,13 @@ function createFacePictures(): BotGroupFacePictures {
   return {
     open: () => {
       closed = false
+      stopRecovery ??= watchFacePictureRecovery(pictures, admit, syncWatching)
       syncWatching()
     },
     close: () => {
       closed = true
+      stopRecovery?.()
+      stopRecovery = null
       syncWatching()
     },
     retryFailed: () => {

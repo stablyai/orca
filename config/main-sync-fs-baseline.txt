@@ -15,6 +15,7 @@
 1 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 1 src/main/ai-vault-search/worker/session-search-worker-client.ts
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
+2 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open: list and stat the few cache files; not Electron main
 2 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
 1 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 3 src/main/ai-vault/scanners/omp/omp-session-root.ts # small fixed profile-dir probes mirroring OMP dirs.ts; one readdir + per-profile candidate checks, not a per-file sweep
@@ -265,7 +266,6 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/notifications/notification-authorization-status.ts
 1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
 1 src/main/ipc/worktrees/floating-workspace-directory.ts
@@ -357,7 +357,7 @@
 7 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer.ts
 1 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store.ts
 1 src/main/persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite.ts
-1 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts
+2 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts # one read per load (retried on a wake only while unreadable) and one rename setting an unparseable file aside (#49980)
 6 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-scrollback.ts
 2 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-spool-sweep.ts
 5 src/main/persistence/preferences/active-view-preference.ts

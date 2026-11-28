@@ -255,6 +255,7 @@ export type MessageRow = {
   delivered_at: string | null
   sender_pane_key: string | null
   answer_sender_snapshot?: string | null
+  reply_to?: string | null
   pointer_enter_pending?: number
   pointer_pty_id?: string | null
   pointer_process_incarnation?: string | null
@@ -315,6 +316,9 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  /** Concise passive progress note set by `orchestration task-update --note`; never mailed. */
+  progress_note: string | null
+  progress_updated_at: string | null
   /** The settled Dispatch whose worker this follow-up continues. */
   follow_up_of_dispatch_id: string | null
   /** When its worker reported with coordinator mail unread, until that mail continues it. */

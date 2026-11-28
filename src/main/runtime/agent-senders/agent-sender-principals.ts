@@ -6,6 +6,7 @@ import '../../../shared/orchestration/workers/structured-worker-handle'
 import '../../../shared/workspace-layout/stable-pane-id'
 import '../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import '../../../shared/agent-session/view/structured-agent-session-projection'
 import '../orchestration/addressing/session-lineage/structured-session-lineage'
 import '../../../shared/execution-host/execution-host'
@@ -15,7 +16,7 @@ import { tolerant } from './agent-sender-row-decoding'
 
 export type AgentSenderPrincipal = AgentSenderPublication['principals'][number]
 
-const environmentRow = z.object({ environmentId: z.string() })
+const environmentRow = lazyZodSchema(() => z.object({ environmentId: z.string() }))
 
 /** One principal per paired peer, not one route per federated Dispatch ever made. */
 export async function readAgentSenderPrincipals(

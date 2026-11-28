@@ -25,6 +25,7 @@ export type EmulatorErrorCode =
   | 'emulator_not_macos'
   | 'emulator_disabled'
   | 'emulator_unsupported'
+  | 'emulator_backend_unsupported'
   | 'emulator_error'
 
 /** Coded availability text for a caught setup error; non-Errors use the fallback sentence. */

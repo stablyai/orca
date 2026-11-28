@@ -5,6 +5,8 @@ import { chromium } from 'playwright-core'
 // The worker pill and card as the checks read them.
 export const toggle = (page) => page.locator('[data-worker-dock-pill]')
 export const card = (page) => page.locator('[data-worker-dock-card]')
+// The chip's visible box, folded or open (the toggle sits inside its border).
+export const chip = (page) => page.locator('[data-worker-dock-morph]')
 export const region = (page) => page.locator('[data-worker-dock-card] [role="region"]')
 export const rows = (page) =>
   page.evaluate(() =>

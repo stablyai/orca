@@ -15,6 +15,7 @@ export const PAIRED_DESKTOP_METHODS = [
   'notifications.unregisterPush',
   'notifications.unsubscribe',
   'pairing.getEndpoints',
+  'pairing.getDirectEndpoints',
   'pairing.provisionRelay',
   'pairing.registerDeviceKey',
   'pairing.exchangeTicket',

@@ -5,7 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getCodeFenceLanguageLabel } from './code-fence-language-label'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
-import { NativeChatMarkdownRowKeyContext } from '../native-chat-markdown-row-identity'
+import { NativeChatMarkdownCodeBlockContext } from '../native-chat-markdown-code-block-context'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { NativeChatHtmlPreview, NativeChatHtmlViewToggle } from './NativeChatHtmlPreview'
@@ -17,19 +17,21 @@ export function NativeChatCodeBlock({
   children,
   language,
   sourceLine,
+  fenceClosed = false,
   plain = false,
   deferHighlight = false
 }: {
   children?: React.ReactNode
   language?: string
   sourceLine?: number
+  fenceClosed?: boolean
   plain?: boolean
   /** Color only once on screen (an item's clamped, unvirtualized text); chat colors at once. */
   deferHighlight?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const code = extractCodeText(children)
-  const rowKey = useContext(NativeChatMarkdownRowKeyContext)
+  const { rowKey, growing } = useContext(NativeChatMarkdownCodeBlockContext)
   // Keep wrap state in the transcript store so windowing and streaming block recuts cannot reset it; never persist it.
   const blockKey =
     rowKey === undefined || sourceLine === undefined ? undefined : `${rowKey}:${sourceLine}`
@@ -42,10 +44,11 @@ export function NativeChatCodeBlock({
     blockKey && `code-preview:${blockKey}`,
     false
   )
-  const previewing = htmlDocument && previewOpen
+  const previewAvailable = !growing || fenceClosed
+  const previewing = htmlDocument && previewAvailable && previewOpen
   const content = useRef<HTMLPreElement | null>(null)
   const highlights = Boolean(language && code && !plain)
-  const colored = useSeenOnScreen(content, highlights && deferHighlight)
+  const colored = useSeenOnScreen(content, highlights && deferHighlight && !previewing)
   const actions = code ? (
     <>
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
@@ -70,7 +73,11 @@ export function NativeChatCodeBlock({
           )}
         >
           {htmlDocument ? (
-            <NativeChatHtmlViewToggle previewing={previewing} onChange={setPreviewing} />
+            <NativeChatHtmlViewToggle
+              previewing={previewing}
+              previewAvailable={previewAvailable}
+              onChange={setPreviewing}
+            />
           ) : (
             <span
               data-code-language={language}
@@ -96,7 +103,11 @@ export function NativeChatCodeBlock({
       >
         {highlights && language ? (
           <code>
-            {colored ? <NativeChatHighlightedCode code={code} language={language} /> : code}
+            {colored && !previewing ? (
+              <NativeChatHighlightedCode code={code} language={language} />
+            ) : (
+              code
+            )}
           </code>
         ) : (
           children

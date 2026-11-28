@@ -43,7 +43,8 @@ export function NativeChatTranscriptViewport({
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
       <NativeChatForwardedGestureContext.Provider value={forwardedGesture}>
-        <div className="relative min-h-0 flex-1">
+        {/* Never shorter than the worker chip that sits on its end (0 without one). */}
+        <div className="relative min-h-[var(--native-chat-worker-chip-room,0px)] flex-1">
           <div
             ref={scrollRef}
             {...scrollerProps}

@@ -1,7 +1,6 @@
 // `orca google …`: the Google client and accounts kept by the Orca on this computer, and which bots
 // may use them. The host runs the sign-in; this command shows its link and relays a pasted address.
 import { readFileSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { GoogleClientView } from '../../shared/google/google-client-config'
 import { googleEmailKey } from '../../shared/google/google-bot-accounts'
@@ -28,6 +27,7 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import { type AuthInterruptSource, processInterrupts } from '../accounts/auth-interrupts'
 import { findBot } from '../bots/bot'
 import { driveHostSignIn } from '../accounts/host-sign-in-driver'
+import { resolveCallerFilePath } from '../arguments/caller-file-path'
 
 export function prepare(ctx: HandlerContext, command: string): void {
   rejectRemoteSelectionFlags(
@@ -193,7 +193,7 @@ export const GOOGLE_HANDLERS: Record<string, CommandHandler> = {
   },
   'google client import': async (ctx) => {
     prepare(ctx, 'orca google client import')
-    const path = resolve(ctx.cwd, getRequiredStringFlag(ctx.flags, 'file'))
+    const path = resolveCallerFilePath(getRequiredStringFlag(ctx.flags, 'file'), ctx.cwd)
     let file: string
     try {
       file = readFileSync(path, 'utf-8')
@@ -210,7 +210,7 @@ export const GOOGLE_HANDLERS: Record<string, CommandHandler> = {
   },
   'google client export': async (ctx) => {
     prepare(ctx, 'orca google client export')
-    const path = resolve(ctx.cwd, getRequiredStringFlag(ctx.flags, 'out'))
+    const path = resolveCallerFilePath(getRequiredStringFlag(ctx.flags, 'out'), ctx.cwd)
     const result = await ctx.client.call<{ file: string }>('google.client.export', caller())
     writeFileSync(path, result.result.file, { mode: 0o600 })
     printResult(

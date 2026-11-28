@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 import { githubHostExecOptions } from '../../repositories/github-repository-host'
@@ -31,55 +32,67 @@ const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $ch
   }
 }`
 
-const errorsSchema = z
-  .array(
-    z.object({
-      type: z.string().optional(),
-      path: z.array(z.union([z.string(), z.number()])).optional()
-    })
-  )
-  .optional()
+const errorsSchema = lazyZodSchema(() =>
+  z
+    .array(
+      z.object({
+        type: z.string().optional(),
+        path: z.array(z.union([z.string(), z.number()])).optional()
+      })
+    )
+    .optional()
+)
 
-const pullRequestSchema = z.object({
-  number: z.number().int().positive(),
-  title: z.string(),
-  state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
-  url: z.string(),
-  updatedAt: z.string(),
-  isDraft: z.boolean(),
-  mergeable: z.enum(['UNKNOWN', 'MERGEABLE', 'CONFLICTING']),
-  reviewDecision: z.enum(['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED']).nullable(),
-  mergeStateStatus: z.string().nullable(),
-  autoMergeRequest: z.object({ enabledAt: z.string() }).nullable(),
-  baseRefName: z.string(),
-  headRefName: z.string(),
-  baseRefOid: z.string().nullable(),
-  headRefOid: z.string().nullable(),
-  isCrossRepository: z.boolean().optional(),
-  headRepositoryOwner: z.object({ login: z.string() }).nullable(),
-  headRepository: z.object({ name: z.string() }).nullable(),
-  commits: z.unknown(),
-  stack: z.unknown().optional(),
-  stackEntry: z.unknown().optional()
-})
-const stackSchema = z.object({
-  number: z.number().int().positive(),
-  size: z.number().int().positive(),
-  baseRefName: z.string().trim().min(1)
-})
-const stackEntrySchema = z.object({ position: z.number().int().positive() })
-const envelopeSchema = z.object({
-  data: z.object({ repository: z.object({ pullRequest: pullRequestSchema }) }),
-  errors: errorsSchema
-})
-const missingEnvelopeSchema = z.object({
-  data: z.object({ repository: z.object({ pullRequest: z.null() }) }),
-  errors: errorsSchema
-})
-const batchEnvelopeSchema = z.object({
-  data: z.object({ repository: z.record(z.string(), z.unknown()) }),
-  errors: errorsSchema
-})
+const pullRequestSchema = lazyZodSchema(() =>
+  z.object({
+    number: z.number().int().positive(),
+    title: z.string(),
+    state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+    url: z.string(),
+    updatedAt: z.string(),
+    isDraft: z.boolean(),
+    mergeable: z.enum(['UNKNOWN', 'MERGEABLE', 'CONFLICTING']),
+    reviewDecision: z.enum(['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED']).nullable(),
+    mergeStateStatus: z.string().nullable(),
+    autoMergeRequest: z.object({ enabledAt: z.string() }).nullable(),
+    baseRefName: z.string(),
+    headRefName: z.string(),
+    baseRefOid: z.string().nullable(),
+    headRefOid: z.string().nullable(),
+    isCrossRepository: z.boolean().optional(),
+    headRepositoryOwner: z.object({ login: z.string() }).nullable(),
+    headRepository: z.object({ name: z.string() }).nullable(),
+    commits: z.unknown(),
+    stack: z.unknown().optional(),
+    stackEntry: z.unknown().optional()
+  })
+)
+const stackSchema = lazyZodSchema(() =>
+  z.object({
+    number: z.number().int().positive(),
+    size: z.number().int().positive(),
+    baseRefName: z.string().trim().min(1)
+  })
+)
+const stackEntrySchema = lazyZodSchema(() => z.object({ position: z.number().int().positive() }))
+const envelopeSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.object({ repository: z.object({ pullRequest: pullRequestSchema }) }),
+    errors: errorsSchema
+  })
+)
+const missingEnvelopeSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.object({ repository: z.object({ pullRequest: z.null() }) }),
+    errors: errorsSchema
+  })
+)
+const batchEnvelopeSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.object({ repository: z.record(z.string(), z.unknown()) }),
+    errors: errorsSchema
+  })
+)
 
 export type PullRequestSidebarResponse = { payload: unknown; failure?: { error: unknown } }
 

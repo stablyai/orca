@@ -1,3 +1,7 @@
+import {
+  takeKagiPrivateInitialNavigation,
+  discardKagiPrivateInitialNavigation
+} from '@/lib/kagi-private-initial-navigation'
 import { useAppStore } from '@/store/index'
 import {
   browserGuestPreservesRequestedDocument,
@@ -225,12 +229,17 @@ export function bindBrowserPageWebviewListeners({
     // Why: set src only after listeners attach so a fast localhost failure isn't missed.
     const initialUrl =
       normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
+    const navigationUrl = takeKagiPrivateInitialNavigation(
+      browserTabId,
+      browserTabUrlRef.current,
+      initialUrl
+    )
     lastKnownWebviewUrlRef.current = initialUrl
     webview.dataset.orcaAttachPending = 'true'
     startBrowserPageDeferredAttach({
       webview,
       browserTabId,
-      initialUrl,
+      initialUrl: navigationUrl,
       lastKnownWebviewUrlRef,
       onFailed: () => guestRecovery.recoverRenderer()
     })
@@ -248,6 +257,11 @@ export function bindBrowserPageWebviewListeners({
   return () => {
     webview.removeEventListener('did-finish-load', attachedNavigationReady)
     webview.removeEventListener('did-fail-load', attachedNavigationReady)
+    // A parked page still waiting to attach opens its latest address when main answers; keep the
+    // private request it queued for that. Close and purge discard it, and it expires on its own.
+    if (!isBrowserPageAttachWaiting(webview)) {
+      discardKagiPrivateInitialNavigation(browserTabId)
+    }
     unsubscribeMetadata()
     webview.removeEventListener('did-attach', handleDidAttach)
     webview.removeEventListener('dom-ready', handleDomReady)

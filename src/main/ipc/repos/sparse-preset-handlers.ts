@@ -12,12 +12,16 @@ import {
 } from '../../../shared/worktree/creation/sparse-preset-failure'
 import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
-export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: Store): void {
-  ipcMain.handle('sparsePresets:list', (_event, args: { repoId: string }) => {
+export function registerSparsePresetHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
+): void {
+  ipc.handle('sparsePresets:list', (_event, args: { repoId: string }) => {
     return store.getSparsePresets(args.repoId)
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'sparsePresets:save',
     (
       _event,
@@ -57,7 +61,7 @@ export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: S
     }
   )
 
-  ipcMain.handle('sparsePresets:remove', (_event, args: { repoId: string; presetId: string }) => {
+  ipc.handle('sparsePresets:remove', (_event, args: { repoId: string; presetId: string }) => {
     const repo = store.getRepo(args.repoId)
     if (!repo) {
       throw new Error(`Repo "${args.repoId}" not found`)

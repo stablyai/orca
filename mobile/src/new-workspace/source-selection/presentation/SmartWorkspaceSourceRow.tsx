@@ -2,9 +2,9 @@ import { branchRefLabel } from '../../../../../src/shared/git/refs/branch-ref-la
 import { Text, View } from 'react-native'
 import { GitBranch, Sparkles } from 'lucide-react-native'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../../../src/shared/new-workspace/smart-workspace-source-results'
-import { colors, radii, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { radii, spacing, type MobilePalette } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { TaskProviderLogo } from '../../../components/icons/TaskProviderLogo'
@@ -22,7 +22,7 @@ type RowContent = {
   status?: string
 }
 
-function resolveRowContent(row: SourceRow, t: Translate): RowContent {
+function resolveRowContent(row: SourceRow, t: Translate, colors: MobilePalette): RowContent {
   switch (row.kind) {
     case 'use-name':
       return {
@@ -93,9 +93,10 @@ function resolveRowContent(row: SourceRow, t: Translate): RowContent {
 }
 
 export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const content = resolveRowContent(row, t)
+  const colors = useMobileColors()
+  const content = resolveRowContent(row, t, colors)
   return (
     <ListRow
       title={content.title}
@@ -115,7 +116,7 @@ export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pill: {
     backgroundColor: colors.sheetSurface,
     borderRadius: radii.pill,

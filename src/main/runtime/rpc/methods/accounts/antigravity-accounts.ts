@@ -123,6 +123,8 @@ function forgetAgyLogin(runtime: OrcaRuntimeService): void {
 /** Signs agy in where chats on agy's own home run it, with their environment. */
 const agySignInHost = (runtime: OrcaRuntimeService): AntigravityChatSignInHost => ({
   agy: async () => {
+    // A launch restore that began before this sign-in finishes writing before agy's login can.
+    await (await getAntigravityAccountService({ runtime: 'host' })).settled()
     const settings = runtime.requireStore().getSettings()
     const shellEnv = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
     const input = await acpHostBackendInput(
@@ -140,10 +142,10 @@ const agySignInHost = (runtime: OrcaRuntimeService): AntigravityChatSignInHost =
     }
     return { command: input.command, env }
   },
-  signedIn: (intent) => {
+  signedIn: async (intent) => {
     forgetAgyLogin(runtime)
     if (intent === 'changeAccount') {
-      void saveCurrentAgyLogin()
+      await saveCurrentAgyLogin()
     }
   }
 })
@@ -166,28 +168,37 @@ function signInOwner({ caller }: Pick<RpcContext, 'caller'>): string {
   return rpcCallerOperationKey(caller)
 }
 
+type AccountService = Awaited<ReturnType<typeof getAntigravityAccountService>>
+
+/** Runs `operation` on the target's accounts and adds where new chats run. */
+const accountsAnswer =
+  (operation: (service: AccountService) => ReturnType<AccountService['listAccounts']>) =>
+  async (target: Parameters<typeof getAntigravityAccountService>[0], ctx: RpcContext) =>
+    withAntigravityChatBackend(
+      ctx.runtime,
+      target,
+      await operation(await getAntigravityAccountService(target))
+    )
+
 export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityList',
     permission: 'workspace',
     params: AntigravityAccountTargetParams,
-    handler: async (target, ctx) =>
-      withAntigravityChatBackend(
-        ctx.runtime,
-        target,
-        await (await getAntigravityAccountService(target)).listAccounts()
-      )
+    handler: accountsAnswer((service) => service.listAccounts())
+  }),
+  defineMethod({
+    // Settings' Show account: reading agy's login may raise a keychain dialog, which List avoids.
+    name: 'accounts.antigravityReadCurrent',
+    permission: 'accounts-admin',
+    params: AntigravityAccountTargetParams,
+    handler: accountsAnswer((service) => service.readCurrentAccount())
   }),
   defineMethod({
     name: 'accounts.antigravityAddCurrent',
     permission: 'accounts-admin',
     params: AntigravityAccountTargetParams,
-    handler: async (target, ctx) =>
-      withAntigravityChatBackend(
-        ctx.runtime,
-        target,
-        await (await getAntigravityAccountService(target)).addCurrentAccount()
-      )
+    handler: accountsAnswer((service) => service.addCurrentAccount())
   }),
   defineMethod({
     name: 'accounts.antigravitySelect',

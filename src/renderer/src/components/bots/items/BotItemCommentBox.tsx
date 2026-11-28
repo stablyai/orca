@@ -44,6 +44,7 @@ import {
 
 export type { BotItemCommentBoxHandle }
 import type { Bot } from '../../../../../shared/bot-types'
+import type { BotItemReplyMarkState } from '../../../../../shared/bots/bot-item-reply-target'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botItemCommentDraftScope } from './bot-item-comment-draft'
 import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
@@ -63,6 +64,7 @@ import {
 } from './use-bot-item-comment-attachments'
 
 const NO_TARGET = () => null
+const NO_REPLY_MARK: BotItemReplyMarkState = { hidden: false, hide: () => {}, show: () => {} }
 
 type BotItemCommentBoxProps = Parameters<typeof BotItemCommentField>[0]
 
@@ -82,6 +84,7 @@ function BotItemCommentField({
   hidden = false,
   nav,
   question,
+  replyMark = NO_REPLY_MARK,
   onShowQuestion,
   ref
 }: {
@@ -96,6 +99,8 @@ function BotItemCommentField({
   hidden?: boolean
   /** The agent's question the item waits on: its first line, and whether it gave quick replies. */
   question?: BotItemWaitingQuestion | null
+  /** Its "Replying to" closed (×), kept with the draft; absent with no question to name. */
+  replyMark?: BotItemReplyMarkState
   /** Brings the comment that asks the question into view, by its event id. */
   onShowQuestion?: (eventId: string) => void
   /** The item pane's previous / next arrows, between the attach and mic buttons. */
@@ -208,8 +213,17 @@ function BotItemCommentField({
   }, [draft, ime])
 
   const field = useRef<HTMLDivElement | null>(null)
-  const reply = useBotItemReplyMark(box, field, question ?? null, scopeKey, onShowQuestion)
-  const layout = useBotItemCommentStacked(draft, field, reply.crowded)
+  const reply = useBotItemReplyMark(
+    box,
+    field,
+    question ?? null,
+    scopeKey,
+    replyMark,
+    onShowQuestion
+  )
+  const images = attachments.imageAttachments
+  const leads = !reply.quote && images.length + mentions.notices.length === 0
+  const layout = useBotItemCommentStacked(draft, field, reply.crowded, leads)
   const caretToEnd = useBotItemCommentBoxHandle(ref, {
     scopeKey,
     input: () => input.current,
@@ -217,7 +231,6 @@ function BotItemCommentField({
     reply,
     setDraft
   })
-  const images = attachments.imageAttachments
   // The thumbnails' order numbers their pills, as in chat.
   const imageRow = useMemo(() => images.map(({ id }) => id), [images])
   const pending = images.some((image) => image.pending) || attachments.pastedTextSaving

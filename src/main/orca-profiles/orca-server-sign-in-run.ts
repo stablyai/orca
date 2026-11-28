@@ -5,7 +5,7 @@ import type {
   OrcaAccountSignInIntent,
   OrcaAccountSignInPrompt
 } from '../../shared/orca-account-server-sign-in'
-import type { CallerOwnedSignInChannel } from '../runtime/caller-owned-sign-in-flows'
+import type { CallerOwnedSignInChannel } from '../runtime/caller-owned-sign-in-contract'
 import type { OrcaAccountService } from './orca-account-service'
 import {
   getOrcaCloudAuthConfig,

@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import type { RefObject } from 'react'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
 import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
@@ -116,7 +117,7 @@ export async function fallBackMobileDictationToHost(
     client.getState() !== 'connected' ||
     !run.recording.current.complete
   ) {
-    run.failActiveDictation(dictationId, new Error(phoneDictationFailedMessage()))
+    run.failActiveDictation(dictationId, new Error(phoneDictationFailedMessage(translate)))
     return
   }
   run.showEngine('computer', true)
@@ -154,7 +155,7 @@ export async function armMobileDictationEngine(
   }
   if (!route.fallback) {
     throw new Error(
-      refused === 'busy' ? phoneDictationBusyMessage() : phoneDictationFailedMessage()
+      refused === 'busy' ? phoneDictationBusyMessage() : phoneDictationFailedMessage(translate)
     )
   }
   return { kind: 'host' }

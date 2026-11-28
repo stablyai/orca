@@ -8,9 +8,12 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { mcpServerSignInOps, type PhoneMcpServer } from './mcp-server-operations'
 import { mcpServerTitle } from './mcp-server-words'
 
+/** The server to sign in to: its id in the host's list, and what names it. */
+export type McpSignInTarget = Pick<PhoneMcpServer, 'id' | 'name' | 'detail'>
+
 type Props = {
   client: RpcClient | null
-  server: PhoneMcpServer | null
+  server: McpSignInTarget | null
   hostName: string
   online: boolean
   onClose: () => void
@@ -26,7 +29,7 @@ export function MobileMcpSignInSheet(props: Props) {
   )
 }
 
-function SignIn(props: Props & { server: PhoneMcpServer }) {
+function SignIn(props: Props & { server: McpSignInTarget }) {
   const { client, server } = props
   const title = mcpServerTitle(server)
   const owned = useMemo(() => mcpServerSignInOps(server.id), [server.id])

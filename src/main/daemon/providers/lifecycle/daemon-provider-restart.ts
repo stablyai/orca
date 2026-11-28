@@ -116,8 +116,11 @@ async function runRestartDaemon(
   unbindLocalProviderListeners()
 
   let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
+  let killedRelayCount = 0
   try {
-    await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION, expectedDaemonPid)
+    killedRelayCount =
+      (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION, expectedDaemonPid))
+        .killedRelayCount ?? 0
 
     // Reuse the spawner captured by long-lived respawn closures.
     currentSpawner.resetHandle()
@@ -196,7 +199,7 @@ async function runRestartDaemon(
   rebindLocalProviderListeners()
   clearSeveredDaemon()
 
-  return { killedCount }
+  return { killedCount: killedCount + killedRelayCount }
 }
 
 async function assertDaemonEndpointOwner(

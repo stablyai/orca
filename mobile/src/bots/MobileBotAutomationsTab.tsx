@@ -13,13 +13,13 @@ import {
 } from 'lucide-react-native'
 import { hasAutomationSchedule } from '../../../src/shared/automation-event-triggers'
 import { useNow } from '../hooks/use-now'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
 import { botWaitTimeFormat } from '../../../src/shared/bots/bot-row-line'
 import { MobileStateButton, MobileStateView } from '../components/feedback/MobileStateView'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BotAutomationRow } from '../../../src/shared/bots/bot-automation-rows'
@@ -27,10 +27,10 @@ import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-sc
 import type { SheetBot } from './bot-sheet-operations'
 import { automationWhenText, automationWontFireNote } from './mobile-bot-sheet-copy'
 import { useBotAutomations } from './use-bot-automations'
-import { optionStyles } from './mobile-bot-option-styles'
-import { colors } from '../theme/mobile-theme'
+import { optionStylesSheet } from './mobile-bot-option-styles'
 import type { PresentAutomationSheet } from '../automations/AutomationSheets'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../theme/themed-styles'
 
 /** What an automation's ⋯ menu can do besides Run now and Delete; each is absent where it can't. */
 export type BotAutomationRowActions = {
@@ -51,12 +51,15 @@ function AutomationRow(props: {
   onRunNow: () => void
   onDelete: (() => void) | null
 }) {
+  const colors = useMobileColors()
+  const optionStyles = useThemedStyles(optionStylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const anchor = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const { automation, failing } = props.row
   const { onEdit, onAskInChat, onViewRuns } = props.actions
-  const wontFire = automationWontFireNote(automation, props.bot)
+  const wontFire = automationWontFireNote(automation, props.bot, t, intlLocale)
   const Kind = hasAutomationSchedule(automation) ? Clock : Zap
   const menu: ActionSheetAction[][] = [
     [
@@ -119,7 +122,7 @@ function AutomationRow(props: {
     <View ref={anchor} collapsable={false}>
       <ListRow
         title={automation.name}
-        subtitle={automationWhenText(automation, automation.enabled)}
+        subtitle={automationWhenText(automation, automation.enabled, t)}
         subtitleNote={
           props.row.needsSignIn
             ? { text: t('bots.upcoming.needsSignIn', 'Needs sign-in'), color: colors.agentQuestion }
@@ -164,7 +167,9 @@ function WaitRow(props: {
   disabled: boolean
   onCancel: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { automation } = props.row
   const by = automation.once?.by
   return (
@@ -175,10 +180,7 @@ function WaitRow(props: {
         by === undefined
           ? t('bots.waits.noDeadline', 'No deadline')
           : t('bots.waits.until', 'Until {{time}}', {
-              time: new Intl.DateTimeFormat(
-                getUiIntlLocale(),
-                botWaitTimeFormat(by, props.now)
-              ).format(by)
+              time: new Intl.DateTimeFormat(intlLocale, botWaitTimeFormat(by, props.now)).format(by)
             })
       }
       accessory={
@@ -213,7 +215,7 @@ export function MobileBotAutomationsTab(props: {
   /** The host answers: off, the switches and Run now are too. */
   online: boolean
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { present } = props.actions
   const now = useNow(60_000)

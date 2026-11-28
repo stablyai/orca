@@ -6,9 +6,11 @@ import { assertClipboardTextWithinLimit } from '../../../../../shared/clipboard/
 import { setNativeChatPasteFailure } from '../composer/controls/native-chat-composer-notice'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-context-paste-limit'
 import { isMacPlatform } from '../pane/routing/native-chat-shortcut'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   clipboardEventCopiedFilePaths,
   clipboardEventPastedText,
+  clipboardPasteHasImage,
   readClipboardPasteText,
   type ClipboardEventLike
 } from './native-chat-clipboard-payload'
@@ -155,7 +157,9 @@ export function useNativeChatComposerPaste({
           return
         }
         const continueFiles = captureCopiedFiles({ focus: false })
-        void readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES, copiedFilePaths).then(
+        void readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES, {
+          eventFilePaths: copiedFilePaths
+        }).then(
           (read) => {
             if (read.copiedFilePaths.length > 0) {
               void continueFiles(chips.transfer())
@@ -250,14 +254,16 @@ export function useNativeChatComposerPaste({
       captureExternalPaths?.() ?? ((paths: string[]) => attachCopiedFiles(paths, { focus: false }))
     const owner = resolveAttachmentOwner()
     void (async () => {
-      const read = await readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES).catch(
-        (error) => {
-          if (canPaste()) {
-            setNativeChatPasteFailure(setNotice, error)
-          }
-          return null
+      // Desktop answers from the same snapshot; a browser read can prompt, so web probes beside text only after typing it.
+      const probeBesideText = ownerAcceptsClipboardImage(owner) && !isWebClientLocation()
+      const read = await readClipboardPasteText(NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES, {
+        imageProbe: probeBesideText ? 'always' : 'without-text'
+      }).catch((error) => {
+        if (canPaste()) {
+          setNativeChatPasteFailure(setNotice, error)
         }
-      )
+        return null
+      })
       if (read && read.copiedFilePaths.length > 0) {
         if (canComplete()) {
           void attachFiles(read.copiedFilePaths)
@@ -267,12 +273,7 @@ export function useNativeChatComposerPaste({
       // Text belongs to the editor even when the attachment host is unavailable.
       insertText(read?.text ?? '')
       if (!ownerAcceptsClipboardImage(owner)) {
-        // Probe only when no text was typed: in a browser each clipboard read can prompt the user.
-        if (!read || read.text !== '') {
-          return
-        }
-        const hasImage = await window.api.ui.clipboardHasImage().catch(() => null)
-        if (hasImage && canPaste()) {
+        if (read?.hasImage && canPaste()) {
           setNotice(
             owner.kind === 'remote'
               ? nativeChatLocalAttachmentUnsupportedNotice()
@@ -281,13 +282,12 @@ export function useNativeChatComposerPaste({
         }
         return
       }
-      const hasImage = await window.api.ui.clipboardHasImage().catch((error) => {
+      const hasImage = await clipboardPasteHasImage(read, (error) => {
         if (canPaste()) {
           setNativeChatPasteFailure(setNotice, error)
         }
-        return null
       })
-      if (hasImage !== true) {
+      if (!hasImage) {
         return
       }
       if (!canComplete()) {

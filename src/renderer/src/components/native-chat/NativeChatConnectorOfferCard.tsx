@@ -30,6 +30,7 @@ import { OrcaCloudSignInLine, orcaCloudSignInReason } from '../bots/orca-cloud-s
 import { useOrcaCloudNeedsSignIn } from '../bots/orca-cloud-signed-out'
 import { BotConnectorsHostNotice, useServerNoticeState } from '../bots/BotConnectorsHostNotice'
 import { useBotHostLabel } from '../bots/use-bot-host-label'
+import { GhSignedOutLine, useGhSignedOutHost } from '../bots/github/GhSignedOutLine'
 
 type OfferProps = {
   bot: Bot
@@ -51,6 +52,7 @@ function SlackOffer(props: OfferProps): React.JSX.Element {
 
 function GitHubOffer(props: OfferProps): React.JSX.Element {
   const view = useBotGitHub(props.bot.hostId)
+  const ghHost = useGhSignedOutHost(props.bot.hostId, view)
   const removed = props.bot.github?.removedInstallationIds ?? []
   const names =
     props.bot.github && view.status === 'ready'
@@ -58,7 +60,13 @@ function GitHubOffer(props: OfferProps): React.JSX.Element {
           .filter((entry) => !removed.includes(entry.installationId))
           .map((entry) => entry.accountLogin)
       : []
-  return <OfferCard {...props} names={names} />
+  return (
+    <OfferCard
+      {...props}
+      names={names}
+      note={ghHost ? <GhSignedOutLine host={ghHost} /> : undefined}
+    />
+  )
 }
 
 // How the bot can work there without the connector: as its owner.
@@ -85,8 +93,13 @@ function OfferCard({
   offer,
   messageId,
   names,
-  pause
-}: OfferProps & { names: readonly string[] }): React.JSX.Element {
+  pause,
+  note
+}: OfferProps & {
+  names: readonly string[]
+  /** In place of where it is connected, while something on its host keeps part of it from working. */
+  note?: React.ReactNode
+}): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
   const answering = useNativeChatOffer(bot.id, messageId)
@@ -153,13 +166,14 @@ function OfferCard({
       {paused ? (
         <div className="mt-0.5">{pause}</div>
       ) : connected ? (
-        names.length > 0 ? (
+        (note ??
+        (names.length > 0 ? (
           <p className="text-xs text-muted-foreground">
             {t('components.native-chat.connectorOffer.connectedIn', 'Connected in {{places}}', {
               places: names.join(', ')
             })}
           </p>
-        ) : null
+        ) : null))
       ) : (
         <>
           <p className="mt-0.5">{connectorDescription(offer.source)}</p>

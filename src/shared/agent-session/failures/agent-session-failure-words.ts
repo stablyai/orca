@@ -202,6 +202,7 @@ const FAILURE_SENTENCES = {
   providerUnavailable: namingAgent('providerUnavailable'),
   providerSafetyStopped: namingAgent('providerSafetyStopped'),
   providerResponseFailed: quotingForAgent('providerResponseFailed', 'providerResponseFailedQuoted'),
+  contextFull: quotingForAgent('providerResponseFailed', 'providerResponseFailedQuoted'),
   providerRejected: quotingForAgent('providerRejected', 'providerRejectedQuoted'),
   pluginInputRequired: (context, fact, _surface, say) =>
     say('pluginInputRequired', {

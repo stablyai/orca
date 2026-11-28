@@ -2,8 +2,7 @@ import { memo, useCallback, useState, type ReactNode } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { OptionPager, useOptionPager } from '../../components/bottom-drawer/BottomDrawer'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileGitHistoryItem } from './git-history-reply-schema'
@@ -28,6 +27,7 @@ export const MobileCommitsScreen = memo(function MobileCommitsScreen({
   openDiffForFile,
   ...props
 }: Props) {
+  const styles = useThemedStyles(stylesSheet)
   const list = (open: OpenCommit) => <MobileGitHistoryList {...props} onOpenCommit={open} />
   const body = onOpenCommit ? (
     list(onOpenCommit)
@@ -74,6 +74,7 @@ export function MobileCommitPageHost({
   openDiffForFile?: (target: MobileDiffFileTarget) => void
   children: (openCommit: OpenCommit) => ReactNode
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const pager = useOptionPager<'commit'>()
   const { open, close } = pager
   const [commit, setCommit] = useState<MobileGitHistoryItem | null>(null)
@@ -128,6 +129,6 @@ export function MobileCommitPageHost({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   fill: { flex: 1, backgroundColor: colors.bgBase }
 }))
