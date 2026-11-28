@@ -40,8 +40,14 @@ import {
   JOURNAL_LEGACY_SOURCE_RECEIPT_VERSION
 } from './journal-legacy-source-receipt'
 
+vi.mock(import('node:fs/promises'), async (importOriginal) => {
+  const original = await importOriginal()
+  return { ...original, open: vi.fn(original.open) }
+})
+
 const directories: string[] = []
 afterEach(() => {
+  vi.mocked(filePromises.open).mockReset()
   vi.restoreAllMocks()
   for (const path of directories.splice(0)) {
     rmSync(path, { recursive: true, force: true })
@@ -265,10 +271,10 @@ it.each([false, true])(
 )
 
 it('stops reading a definitively malformed primary and still validates the backup', async () => {
-  const open = filePromises.open
+  const { open } = await vi.importActual<typeof filePromises>('node:fs/promises')
   const primaryReadCounts: (() => number)[] = []
   const primaryPaths = new Set<string>()
-  vi.spyOn(filePromises, 'open').mockImplementation(async (...args) => {
+  vi.mocked(filePromises.open).mockImplementation(async (...args) => {
     const handle = await open(...args)
     if (typeof args[0] === 'string' && primaryPaths.has(args[0])) {
       const read = vi.spyOn(handle, 'read')
