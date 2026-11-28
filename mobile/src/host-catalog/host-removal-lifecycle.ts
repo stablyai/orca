@@ -38,3 +38,16 @@ export async function removeHostAndCloseClient(
   void wipeHostStore(hostId).catch(() => undefined)
   void discardConnectionLogs(hostId).catch(() => undefined)
 }
+
+// Reset a paired host's cached web bundle and query store on Reconnect without removing credentials.
+export function refreshHostCacheAndReconnect(
+  hostId: string,
+  forceReconnectHost: ((hostId: string) => Promise<void> | void) | null | undefined,
+  queryClient: QueryClient
+): void {
+  forgetNativeHostQueries(queryClient, hostId)
+  void forgetHostUpdateFailures(hostId).catch(() => undefined)
+  void deleteHostPageCache(hostId).catch(() => undefined)
+  void wipeHostStore(hostId).catch(() => undefined)
+  void forceReconnectHost?.(hostId)
+}

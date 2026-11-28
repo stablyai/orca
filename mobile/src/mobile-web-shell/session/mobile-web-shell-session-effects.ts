@@ -26,6 +26,7 @@ import {
   updateFailureCauseOf,
   type MobileWebShellUpdateFailureCause
 } from '../update-recovery/mobile-web-shell-update-failure'
+import { askPagesAgain } from './app-resume-rounds'
 
 function compatOf(manifest: MobileWebBundleManifestRead): MobileWebBundleCompatManifest {
   return {
@@ -186,9 +187,9 @@ export async function download(
   })
 }
 
-// Stage a newer build behind a running page and leave its commit to an entry with no readers.
+// Stage a newer build behind a running page and ask idle pages to swap once staged.
 export async function stageUpdate(
-  args: Omit<FetchArgs, 'client'> & { client: RpcClient | null }
+  args: Omit<FetchArgs, 'client'> & { client: RpcClient | null; hostId?: string }
 ): Promise<void> {
   const { client, store, hostKey, flow, send, opened } = args
   if (client === null || opened === undefined) {
@@ -208,7 +209,12 @@ export async function stageUpdate(
     return
   }
   try {
-    await fetchAndStage({ ...args, client }, false, async (staged) => store.deferCommit(staged))
+    await fetchAndStage({ ...args, client }, false, async (staged) => {
+      store.deferCommit(staged)
+      if (args.hostId) {
+        askPagesAgain(args.hostId)
+      }
+    })
   } finally {
     release()
   }

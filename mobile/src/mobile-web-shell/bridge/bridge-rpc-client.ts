@@ -160,11 +160,10 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       swapSafety?.disarm()
       emitPageAppInactive()
     },
-    // A leave the page never heard leaves its requests unknown, so it never says safe.
+    // Foreground swap checks (before any leave) inspect currently in-flight requests.
     acceptAppResumed: (round, reloading) => {
-      const sent = sentBeforeLeaving
+      const sent = sentBeforeLeaving ?? requests.ids()
       const safe =
-        sent !== null &&
         swapSafety !== null &&
         swapSafety.answer(
           sent.some((id) => requests.has(id)),
