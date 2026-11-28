@@ -9,9 +9,9 @@ export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
   id, run_id, task_id, contract_version, launch_token_hash,
   assignee_handle, assignee_pane_key, assignee_orca_session_id, process_incarnation,
   creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id,
-  creator_turn_source, status, failure_count, depth, dispatched_at
+  creator_turn_source, chat_lineage, bot_lineage, status, failure_count, depth, dispatched_at
 )
-SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
+SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
 FROM tasks
 WHERE id = ? AND status = 'ready'
   AND NOT EXISTS (
@@ -40,12 +40,12 @@ const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
    id, run_id, task_id, contract_version, launch_token_hash, retry_of_dispatch_id,
    creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id,
    creator_turn_source, depth, status, failure_count, dispatched_at, follow_up_of_dispatch_id,
-   origin_ref, for_message_id, chat_lineage
- ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?, ?)`
+   origin_ref, for_message_id, chat_lineage, bot_lineage
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?, ?, ?)`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
-   dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
- ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+   dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth, bot_lineage
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 /** Missing depth would turn a worker into an apparent root. */
 function assertStampedDepth(depth: number): void {
@@ -72,6 +72,8 @@ export function claimDispatchContextRow(
     creatorPaneKey?: string | null
     creatorOrcaSessionId?: OrcaSessionId | null
     creatorTurnSource?: DispatchCreatorTurnSource | null
+    chatLineage?: boolean
+    botLineage?: boolean
     priorFailures: number
     depth: number
     taskId: string
@@ -94,6 +96,8 @@ export function claimDispatchContextRow(
       params.creatorPaneKey ?? null,
       params.creatorOrcaSessionId ?? null,
       params.creatorTurnSource ?? null,
+      params.chatLineage ? 1 : null,
+      params.botLineage ? 1 : null,
       params.priorFailures,
       params.depth,
       params.taskId,
@@ -126,6 +130,7 @@ export function insertStartingDispatchContextRow(
     originRef?: string | null
     forMessageId?: string | null
     chatLineage?: boolean
+    botLineage?: boolean
   }
 ): void {
   assertStampedDepth(params.depth)
@@ -146,7 +151,8 @@ export function insertStartingDispatchContextRow(
     params.followUpOfDispatchId ?? null,
     params.originRef ?? null,
     params.forMessageId ?? null,
-    params.chatLineage ? 1 : null
+    params.chatLineage ? 1 : null,
+    params.botLineage ? 1 : null
   )
 }
 
@@ -162,6 +168,7 @@ export function insertRemoteDispatchAttachmentRow(
     runtimeEpoch: string
     /** Home-computed depth; old clients default to 1. */
     depth: number
+    botLineage?: boolean
   }
 ): void {
   assertStampedDepth(params.depth)
@@ -172,6 +179,7 @@ export function insertRemoteDispatchAttachmentRow(
     params.homePeerFingerprint,
     params.protocolVersion,
     params.runtimeEpoch,
-    params.depth
+    params.depth,
+    params.botLineage ? 1 : null
   )
 }

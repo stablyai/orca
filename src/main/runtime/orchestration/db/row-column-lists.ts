@@ -82,7 +82,8 @@ export const DISPATCH_CONTEXT_COLUMNS = [
   'creator_turn_source',
   'origin_ref',
   'for_message_id',
-  'chat_lineage'
+  'chat_lineage',
+  'bot_lineage'
 ] as const satisfies readonly (keyof DispatchContextRow)[]
 
 export const WORKER_DISPATCH_COLUMNS = [
@@ -164,6 +165,7 @@ export const REMOTE_DISPATCH_ATTACHMENT_COLUMNS = [
   'residual_resources',
   'to_worker_imported_sequence',
   'depth',
+  'bot_lineage',
   'consumer_generation',
   'last_error',
   'created_at',

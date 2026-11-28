@@ -26,6 +26,7 @@ export type RemoteDispatchRow = {
   creator_orca_session_id: string | null
   creator_pane_key: string | null
   worktree_id: string | null
+  bot_lineage: 1 | null
 }
 
 const SETTLED_WORKER_STATES = ['succeeded', 'failed', 'stopped', 'abandoned']

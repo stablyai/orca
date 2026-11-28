@@ -1,11 +1,13 @@
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../../../../../shared/schema/lazy-zod-schema'
 import { isInBotHome } from '../../../../../../bots/bot-home-membership'
+import { botOfSession } from '../../../../../../bots/bot-session-tabs'
 import {
   sessionCallerOf,
   type OrchestrationEntryCaller
 } from '../../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
+import { dispatchHasBotLineage } from '../../../../../orchestration/db/bot-dispatch-lineage'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { resolveDispatchCreator } from '../../runs/dispatch-creator'
 import {
@@ -35,6 +37,42 @@ export function startsInChatLineage(
     return true
   }
   return db.creatorStartsChatWorkers(resolveDispatchCreator(runtime, params.from, caller))
+}
+
+/** Bot guidance has the same ancestry as chat workers, but a paired stamp never chooses this host's surface. */
+export function startsInBotLineage(
+  runtime: Parameters<typeof startsInChatLineage>[0],
+  db: OrchestrationDb,
+  params: { from?: string; retryOf?: string; botLineage?: true },
+  caller: OrchestrationEntryCaller | undefined,
+  followUpOf?: string
+): boolean {
+  const isBotChat = (sessionId: string) => botOfSession(runtime.bots, sessionId) !== null
+  if (startsInChatLineage(runtime, db, params, caller, followUpOf)) {
+    return true
+  }
+  if (params.botLineage === true && caller?.kind === 'peer') {
+    return true
+  }
+  const earlier = [params.retryOf, followUpOf].filter((id): id is string => Boolean(id))
+  if (earlier.some((id) => dispatchHasBotLineage(db, id, isBotChat))) {
+    return true
+  }
+  if (
+    earlier.some((id) => {
+      const remoteDispatch = db.db
+        .prepare('SELECT bot_lineage FROM remote_dispatches WHERE dispatch_id = ?')
+        .get(id)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this query selects exactly the declared nullable integer column.
+      return (remoteDispatch as { bot_lineage: 1 | null } | undefined)?.bot_lineage === 1
+    })
+  ) {
+    return true
+  }
+  const creatorId = db.resolveCreatorDispatchId(
+    resolveDispatchCreator(runtime, params.from, caller)
+  )
+  return creatorId !== null && dispatchHasBotLineage(db, creatorId, isBotChat)
 }
 
 /** The start's mode: the host's settings, unless the caller's lineage starts its workers as chats. */

@@ -68,6 +68,8 @@ export function createStartingWorkerDispatch(
     forMessageId?: string
     /** Its worker, and the workers under it, start as chats; a retry or follow-up keeps its earlier start's. */
     chatLineage?: boolean
+    /** Carries bot commit-credit guidance without selecting a worker surface. */
+    botLineage?: boolean
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -201,6 +203,11 @@ export function createStartingWorkerDispatch(
         params.chatLineage === true ||
         [params.retryOf, params.followUpOf].some(
           (earlier) => earlier && this.getDispatchContextById(earlier)?.chat_lineage === 1
+        ),
+      botLineage:
+        params.botLineage === true ||
+        [params.retryOf, params.followUpOf].some(
+          (earlier) => earlier && this.getDispatchContextById(earlier)?.bot_lineage === 1
         ),
       ...recordedCreatorIdentity(params.creator)
     })

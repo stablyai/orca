@@ -27,21 +27,22 @@ export function ensureRemoteDispatchRecord(
   db.db
     .prepare(
       `WITH creator AS (
-         SELECT creator_orca_session_id AS session, creator_pane_key AS pane, 1 AS rank
+         SELECT creator_orca_session_id AS session, creator_pane_key AS pane, bot_lineage, 1 AS rank
          FROM remote_placements WHERE task_id = ?5 AND conversation_id = ?2
          UNION ALL
-         SELECT creator_orca_session_id, creator_pane_key, 2
+         SELECT creator_orca_session_id, creator_pane_key, bot_lineage, 2
          FROM remote_dispatches WHERE dispatch_id = ?8 AND conversation_id = ?2
        ),
        chosen AS (
-         SELECT session, pane FROM creator WHERE session IS NOT NULL OR pane IS NOT NULL
+         SELECT session, pane, bot_lineage FROM creator
+         WHERE session IS NOT NULL OR pane IS NOT NULL OR bot_lineage IS NOT NULL
          ORDER BY rank LIMIT 1
        )
        INSERT INTO remote_dispatches (
          dispatch_id, conversation_id, run_id, environment_id, task_id, agent,
-         creator_orca_session_id, creator_pane_key, worktree_id
+         creator_orca_session_id, creator_pane_key, worktree_id, bot_lineage
        )
-       SELECT ?1, ?2, ?3, ?4, ?5, ?6, (SELECT session FROM chosen), (SELECT pane FROM chosen), ?7
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, (SELECT session FROM chosen), (SELECT pane FROM chosen), ?7, (SELECT bot_lineage FROM chosen)
        WHERE true
        ON CONFLICT(dispatch_id) DO UPDATE SET
          agent = COALESCE(remote_dispatches.agent, excluded.agent),
@@ -53,7 +54,8 @@ export function ensureRemoteDispatchRecord(
          creator_pane_key = CASE
            WHEN remote_dispatches.creator_orca_session_id IS NULL
              AND remote_dispatches.creator_pane_key IS NULL
-           THEN excluded.creator_pane_key ELSE remote_dispatches.creator_pane_key END`
+           THEN excluded.creator_pane_key ELSE remote_dispatches.creator_pane_key END,
+         bot_lineage = COALESCE(remote_dispatches.bot_lineage, excluded.bot_lineage)`
     )
     .run(
       identity.dispatchId,

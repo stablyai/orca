@@ -60,7 +60,11 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 50, table: 'dispatch_contexts', column: 'for_message_id' },
   { version: 51, table: 'dispatch_contexts', column: 'chat_lineage' },
   { version: 52, table: 'dispatch_contexts', column: 'progress_note' },
-  { version: 52, table: 'dispatch_contexts', column: 'progress_updated_at' }
+  { version: 52, table: 'dispatch_contexts', column: 'progress_updated_at' },
+  { version: 53, table: 'dispatch_contexts', column: 'bot_lineage' },
+  { version: 53, table: 'remote_dispatch_attachments', column: 'bot_lineage' },
+  { version: 53, table: 'remote_placements', column: 'bot_lineage' },
+  { version: 53, table: 'remote_dispatches', column: 'bot_lineage' }
 ] as const
 
 // v34 stamps can lack these repairs; v35 probes must verify their stored defaults.

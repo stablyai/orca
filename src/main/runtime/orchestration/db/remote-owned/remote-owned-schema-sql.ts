@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   never_sent_at      TEXT,
   -- Who placed it, as a local Dispatch records its creator; each Dispatch adopted for it takes these.
   creator_orca_session_id TEXT,
-  creator_pane_key   TEXT
+  creator_pane_key   TEXT,
+  bot_lineage        INTEGER
 );
 -- Closing a link visits only its own rows here and in remote_dispatches.
 CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);
@@ -79,6 +80,7 @@ CREATE TABLE IF NOT EXISTS remote_dispatches (
   -- Its placement's creator, so it lists under the chat or pane that started it as a local one does.
   creator_orca_session_id TEXT,
   creator_pane_key   TEXT,
+  bot_lineage        INTEGER,
   -- The server's workspace the start created, when its answer named one.
   worktree_id        TEXT
 );

@@ -215,6 +215,8 @@ export type RemoteDispatchAttachmentRow = {
   to_worker_imported_sequence: number
   /** Nesting depth propagated from the Run home; 1 when an old client omitted it. */
   depth: number
+  /** 1 when this remote worker carries bot commit-credit guidance. */
+  bot_lineage: 1 | null
   /** Worker-host mailbox generation; the home's dispatch_contexts row is not visible here. */
   consumer_generation: number
   last_error: string | null
@@ -331,6 +333,8 @@ export type DispatchContextRow = {
   for_message_id: string | null
   /** 1 when this worker, and every worker it starts, starts as a chat wherever one can run. */
   chat_lineage: 1 | null
+  /** 1 when this worker carries bot commit-credit guidance without selecting a worker surface. */
+  bot_lineage: 1 | null
 }
 
 export type DecisionGateRow = {

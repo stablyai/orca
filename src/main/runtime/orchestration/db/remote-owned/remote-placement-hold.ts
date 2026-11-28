@@ -15,6 +15,7 @@ export type RemotePlacementRow = {
   never_sent_at: string | null
   creator_orca_session_id: string | null
   creator_pane_key: string | null
+  bot_lineage: 1 | null
 }
 
 /**

@@ -66,6 +66,8 @@ export async function startLocalWorker(args: {
   parentPermission: CoordinatorChatPermission | undefined
   /** Stamped on the Dispatch so the workers this one starts start as chats too. */
   chatLineage?: boolean
+  /** Stamped independently so bot commit-credit guidance survives a terminal-mode start. */
+  botLineage?: boolean
   /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
   helperCreator?: DispatchContextRow
   followUp?: WorkerFollowUp

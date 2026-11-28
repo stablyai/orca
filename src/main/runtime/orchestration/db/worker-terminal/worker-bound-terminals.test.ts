@@ -20,7 +20,8 @@ import {
 } from '../../../rpc/methods/orchestration/worker/release/worker-bound-terminal-close'
 import {
   coordinatorKeepOpenByDefault,
-  workerKeepOpenByDefault
+  workerKeepOpenByDefault,
+  workerStartedByBot
 } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
 import {
   mintStructuredWorkerHandle,
@@ -28,6 +29,7 @@ import {
 } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-incarnation'
 import { bindTerminalToCallingWorker } from '../../workers/lifecycle/worker-created-terminal-owner'
+import { dispatchHasBotLineage } from '../bot-dispatch-lineage'
 
 describe('terminals bound to a worker', () => {
   let directory: string
@@ -147,13 +149,54 @@ describe('terminals bound to a worker', () => {
 
   it('a worker a bot started is not kept open, and its setup terminal closes with it', async () => {
     const worker = startWorker(botChat)
+    expect(workerStartedByBot(db, worker.dispatchId, isBotChat)).toBe(true)
     expect(workerKeepOpenByDefault(db, 'new-child', worker.dispatchId, isBotChat)).toBe(false)
     const helper = startWorker(personChat, 'succeeded', worker.dispatchId)
+    expect(workerStartedByBot(db, helper.dispatchId, isBotChat)).toBe(true)
     expect(workerKeepOpenByDefault(db, 'new-child', helper.dispatchId, isBotChat)).toBe(false)
 
     const { runtime, closed } = host(worker)
     await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle])
+  })
+
+  it('keeps bot commit-credit lineage when a helper is retried by a person', () => {
+    const worker = startWorker(botChat)
+    const helper = startWorker(personChat, 'succeeded', worker.dispatchId)
+    const retry = startWorker(personChat)
+    db.db
+      .prepare('UPDATE dispatch_contexts SET retry_of_dispatch_id = ? WHERE id = ?')
+      .run(helper.dispatchId, retry.dispatchId)
+
+    expect(workerStartedByBot(db, retry.dispatchId, isBotChat)).toBe(false)
+    expect(workerKeepOpenByDefault(db, 'new-child', retry.dispatchId, isBotChat)).toBe(true)
+    expect(dispatchHasBotLineage(db, retry.dispatchId, isBotChat)).toBe(true)
+  })
+
+  it('keeps bot commit-credit lineage when a helper receives a follow-up', () => {
+    const worker = startWorker(botChat)
+    const helper = startWorker(personChat, 'succeeded', worker.dispatchId)
+    const followUp = startWorker(personChat)
+    db.db
+      .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
+      .run(helper.dispatchId, followUp.dispatchId)
+
+    expect(workerStartedByBot(db, followUp.dispatchId, isBotChat)).toBe(false)
+    expect(workerKeepOpenByDefault(db, 'new-child', followUp.dispatchId, isBotChat)).toBe(true)
+    expect(dispatchHasBotLineage(db, followUp.dispatchId, isBotChat)).toBe(true)
+  })
+
+  it('keeps walking other ancestors when one recorded ancestor is missing', () => {
+    const worker = startWorker(botChat)
+    const helper = startWorker(personChat)
+    db.db
+      .prepare(
+        'UPDATE dispatch_contexts SET creator_dispatch_id = ?, retry_of_dispatch_id = ? WHERE id = ?'
+      )
+      .run(worker.dispatchId, 'ctx_missing', helper.dispatchId)
+
+    expect(workerStartedByBot(db, helper.dispatchId, isBotChat)).toBe(true)
+    expect(dispatchHasBotLineage(db, helper.dispatchId, isBotChat)).toBe(true)
   })
 
   it("a chat worker a bot's home chat started, and the chat workers under it, close with their terminals", async () => {

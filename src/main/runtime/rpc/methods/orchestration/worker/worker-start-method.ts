@@ -25,7 +25,11 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-sess
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
-import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
+import {
+  decideStartMode,
+  noteTerminalFallbackOnItem,
+  startsInBotLineage
+} from './start/worker-chat-lineage'
 import { withKeepOpenDefault } from './start/worker-keep-open-default'
 import { withRetryWorkerLaunchDefaults } from './start/worker-retry-launch-defaults'
 import type { WorkerStartInput } from './start/worker-start-input'
@@ -95,6 +99,7 @@ export async function startWorker(
   const db = runtime.getOrchestrationDb()
   const { linkedParams, withLink } = prepareWorkerQuestionLink(db, params, coordinator)
   const { mode, chatLineage } = decideStartMode(runtime, db, params, orchestrationCaller, followUp)
+  const botLineage = startsInBotLineage(runtime, db, params, orchestrationCaller, followUp?.of)
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
     const receipt = await startFederatedWorker({
@@ -127,6 +132,7 @@ export async function startWorker(
     mode,
     parentPermission,
     chatLineage,
+    botLineage,
     helperCreator,
     followUp
   })
@@ -285,16 +291,7 @@ export async function prepareWorkerStart(
   } else {
     params = withRetryWorkerLaunchDefaults(runtime, db, existingTask?.id, params)
   }
-  return {
-    params,
-    followUp,
-    coordinator,
-    bindRun,
-    helperCreator,
-    taskDeps,
-    existingTask,
-    withRun
-  }
+  return { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun }
 }
 
 function warnItemNote(error: unknown): void {

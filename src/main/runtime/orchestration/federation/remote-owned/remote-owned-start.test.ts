@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
-import { ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import {
+  ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
+} from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { startsInChatLineage } from '../../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
-import { forwardedChatLineage, serverStartOptions } from './remote-owned-start'
+import { forwardedBotLineage, forwardedChatLineage, serverStartOptions } from './remote-owned-start'
 
 type Runtime = Parameters<typeof forwardedChatLineage>[0]
 type Params = Parameters<typeof forwardedChatLineage>[2]
@@ -49,6 +52,17 @@ describe('a chat-lineage start on a paired server', () => {
     expect(await forwardedChatLineage(takes, db, params, elsewhere, server)).toEqual({})
     expect(serverStartOptions(params)).not.toHaveProperty('chatLineage')
     expect(serverStartOptions(params)).toMatchObject({ spec: 'work' })
+  })
+
+  it('forwards bot guidance with its own negotiated stamp', async () => {
+    const home = session('folder:home-1')
+    const takesGuidance = runtimeWith([ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY])
+
+    expect(await forwardedChatLineage(takesGuidance, db, params, home, server)).toEqual({})
+    expect(await forwardedBotLineage(true, takesGuidance, server)).toEqual({
+      botLineage: true
+    })
+    expect(await forwardedBotLineage(true, runtimeWith([]), server)).toEqual({})
   })
 
   it('is honoured on the server only from the paired Orca coordinating the Run', () => {

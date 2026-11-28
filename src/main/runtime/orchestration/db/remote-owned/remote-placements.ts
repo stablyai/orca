@@ -57,6 +57,7 @@ export function reserveRemotePlacement(
     retriesAttemptHere?: boolean
     /** Who is starting it, recorded as a local start records its Dispatch's creator. */
     creator: DispatchCreator
+    botLineage?: boolean
   }
 ): { placement: RemotePlacementRow; task: TaskRow; nothingSent: boolean } {
   const transaction = beginLifecycleWriteTransaction(db.db, 'reserve_remote_placement')
@@ -103,15 +104,16 @@ export function reserveRemotePlacement(
       .prepare(
         `INSERT INTO remote_placements (
            task_id, run_id, environment_id, conversation_id, state, request_key, prior_task_status,
-           dispatch_id, creator_orca_session_id, creator_pane_key
-         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?, ?)
+           dispatch_id, creator_orca_session_id, creator_pane_key, bot_lineage
+         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?, ?, ?)
          ON CONFLICT(task_id) DO UPDATE SET
            run_id = excluded.run_id, environment_id = excluded.environment_id,
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
            dispatch_id = excluded.dispatch_id, never_sent_at = NULL,
            creator_orca_session_id = excluded.creator_orca_session_id,
-           creator_pane_key = excluded.creator_pane_key`
+           creator_pane_key = excluded.creator_pane_key,
+           bot_lineage = excluded.bot_lineage`
       )
       .run(
         task.id,
@@ -123,7 +125,8 @@ export function reserveRemotePlacement(
         // An attempt that ran here is not the server's, so a refusal there leaves no placement.
         retriesAttemptHere ? null : (retryOf ?? null),
         creator.creatorOrcaSessionId,
-        creator.creatorPaneKey
+        creator.creatorPaneKey,
+        params.botLineage ? 1 : null
       )
     transitionLifecycleWithDb(db.db, {
       entity: 'task',

@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS remote_dispatch_attachments (
   -- Nesting depth of the worker this attachment represents. Propagated from the
   -- Run home; absent from an old client means 1, which fails closed.
   depth                   INTEGER NOT NULL DEFAULT 1,
+  -- Propagated only by a paired bot lineage; absent on old clients leaves local worker behavior unchanged.
+  bot_lineage             INTEGER,
   -- Its own counter: a federated worker host has no dispatch_contexts row to borrow one from.
   consumer_generation     INTEGER NOT NULL DEFAULT 0,
   last_error              TEXT,
@@ -224,7 +226,8 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   -- The settled Dispatch whose worker this one continues (a follow-up sent to it).
   follow_up_of_dispatch_id TEXT,
   -- Set when the worker reported with coordinator mail unread; cleared once that mail continues it.
-  follow_up_mail_at TEXT
+  follow_up_mail_at TEXT,
+  bot_lineage INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);

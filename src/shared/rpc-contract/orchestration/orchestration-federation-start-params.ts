@@ -33,7 +33,9 @@ export const FederationAttachStartParams = lazyZodSchema(() =>
      * advertising worktree.lineage.crossMachine. The new worktree nests under it. */
     crossStoreParent: CrossStoreParentRefSchema.optional(),
     /** Orchestration picked the parent; omitted by older coordinators, whose children record `cli`. */
-    crossStoreParentInferredFrom: z.literal('orchestration-context').optional()
+    crossStoreParentInferredFrom: z.literal('orchestration-context').optional(),
+    /** A trusted bot-home guidance stamp from the coordinating host. */
+    botLineage: z.literal(true).optional()
   })
 )
 
