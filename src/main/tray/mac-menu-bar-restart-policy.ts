@@ -1,7 +1,7 @@
-// Three strikes in a row, counted separately for helpers that never start and started helpers that hang or die.
+// Three strikes, counted separately for helpers that never start and started helpers that hang or die.
 const MAX_STRIKES = 3
 const MAX_RETRY_DELAY = 60_000
-// Hangs further apart than this don't add up: a rare stall over days shouldn't turn the icon off.
+// A strike over an hour after the previous one starts a fresh count: rare stalls over days shouldn't turn the icon off.
 const STRIKE_WINDOW = 60 * 60_000
 
 export type MenuBarRestart = number | 'fallback' | 'off'
@@ -25,9 +25,11 @@ export class MenuBarRestartPolicy {
       }
     } else if (hung || livedMs < MAX_RETRY_DELAY) {
       // A hang counts however long the helper lived: the scene deadlock can strike at any update.
-      const now = performance.now()
+      // Wall clock, so a night's sleep between hangs counts.
+      const now = Date.now()
       if (now - this.lastStrikeAt > STRIKE_WINDOW) {
         this.diedAfterStart = 0
+        this.delay = 1_000
       }
       this.lastStrikeAt = now
       this.neverStarted = 0
