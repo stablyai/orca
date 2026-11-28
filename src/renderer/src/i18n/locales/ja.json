@@ -21704,7 +21704,7 @@
         "onAgent": "{{name}} で実行",
         "open": "開く",
         "openNamed": "{{name}} を開く",
-        "savedWhen": "保存時: {{when}}"
+        "savedWhen": "保存済み: {{when}}"
       },
       "connectorOffer": {
         "heading": "サービスに接続",
