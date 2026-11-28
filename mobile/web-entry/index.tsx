@@ -20,7 +20,10 @@ import {
   linkOpenResultSchema,
   storageReadResultSchema
 } from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
-import { BRIDGE_HOST_CATALOGS_GRANT } from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
+import {
+  BRIDGE_HOST_CATALOGS_GRANT,
+  bridgeExternalLinkMaxChars
+} from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
 import {
   publishPageStorage,
   refreshPageTerminalSettings
@@ -190,7 +193,8 @@ bootstrapShellPage({
               return true
             }
           }
-        : (url) => client.notifyExternalLink(url)
+        : (url) => client.notifyExternalLink(url),
+      bridgeExternalLinkMaxChars((grant) => session.grants.native.includes(grant))
     )
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
     // Expose shell keyboard height to hooks and plain functions.

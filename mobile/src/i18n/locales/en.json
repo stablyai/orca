@@ -6951,6 +6951,7 @@
       "signIn": {
         "action": "Sign in",
         "step1Detail": "Sign in to {{app}} and allow access.",
+        "step1Copy": "Copy the link below and open it in your browser.",
         "step2": "Copy the address",
         "step2Detail": "The last page won’t load. That’s expected. Copy its address.",
         "step3": "Paste it here",
@@ -6961,7 +6962,11 @@
         "finish": "Finish",
         "open": "Open sign-in page",
         "notThisSignIn": "That address isn’t from this sign-in. Paste the address you landed on.",
-        "pasteLanded": "After you sign in, paste the address you landed on."
+        "pasteLanded": "After you sign in, paste the address you landed on.",
+        "copyLink": "Copy link",
+        "copyFailed": "Couldn’t copy the link.",
+        "pasteInBrowser": "Paste it into your browser to sign in.",
+        "copyThenPaste": "Copy the link, sign in from your browser, then paste the address you landed on."
       },
       "updateHost": "Update Orca on {{host}} to sign in to apps",
       "none": "None",
