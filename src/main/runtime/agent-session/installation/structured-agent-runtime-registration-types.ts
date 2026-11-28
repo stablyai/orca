@@ -102,7 +102,9 @@ export type StructuredAgentLaunchCheck = {
   resolveLaunch: (
     env: Record<string, string>,
     commandSettings: StructuredAgentCommandSettings
-  ) => { command: string; prefixArgs: string[]; env: Record<string, string> }
+  ) =>
+    | { command: string; prefixArgs: string[]; env: Record<string, string> }
+    | Promise<{ command: string; prefixArgs: string[]; env: Record<string, string> }>
   /** The ascending releases that binary's `--version` must reach; see `agentCliMinimumVersion`. */
   minimumVersions: readonly string[]
   /** Arguments before `--version`. */
@@ -111,7 +113,11 @@ export type StructuredAgentLaunchCheck = {
 
 export type StructuredAgentChatProgram = {
   /** Resolves the binary a chat start from `env` runs, spawning nothing; throws launch refusals. */
-  resolve: StructuredAgentLaunchCheck['resolveLaunch']
+  resolve: (
+    ...args: Parameters<StructuredAgentLaunchCheck['resolveLaunch']>
+  ) =>
+    | ReturnType<StructuredAgentLaunchCheck['resolveLaunch']>
+    | Promise<ReturnType<StructuredAgentLaunchCheck['resolveLaunch']>>
   /** Whether Orca can download this program on this host when none is found. */
   installable?: () => boolean
   /** Whether a new chat would run a compatible program the host already has instead. */

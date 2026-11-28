@@ -311,7 +311,7 @@ export function observeAgentPickerAcquisition(
   return resource.observe(observer)
 }
 
-export function retryAgentPickerCatalog(key: string, agent: string, relist = false) {
+export function retryAgentPickerCatalog(key: string, agent: string, relist = agent === 'qwenwork') {
   pending.get(key)?.retry(agent, relist)
 }
 

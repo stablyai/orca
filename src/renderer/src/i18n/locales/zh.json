@@ -1939,6 +1939,7 @@
           "bee242fe3d": "Qwen Code",
           "ca73055bd0": "Mistral Vibe",
           "28810273af": "Kimi",
+          "qwenwork": "千问办公",
           "739a930554": "Droid",
           "667c104cff": "Cursor",
           "9e2a9bb87b": "Continue",
@@ -20197,6 +20198,7 @@
   },
   "components": {
     "native-chat": {
+      "qwenWorkWelcome": "选一个千问办公模型，开始聊天。",
       "install": {
         "checking": "正在检查 {{agent}} 是否已在此主机上就绪…",
         "cliInstall": "安装",
@@ -26690,6 +26692,7 @@
     "waitForImageUploads": "请等待图片上传完成，然后重试创建 PR"
   },
   "agentPicker": {
+    "qwenWorkCatalogLoadFailed": "启动千问办公并开启本地控制，登录后点重试。",
     "refreshModels": "刷新模型",
     "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效",
     "catalogLoadFailed": "无法加载 {{agent}} 模型",

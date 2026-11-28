@@ -127,7 +127,7 @@ function acpInstallation(
       ...spec.env
     }
     try {
-      const { command } = resolveAcpLaunchCommand(spec, env, {
+      const { command } = await resolveAcpLaunchCommand(spec, env, {
         commandSettings: settings,
         dataDirectory
       })

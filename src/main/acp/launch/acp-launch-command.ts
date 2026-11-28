@@ -26,8 +26,8 @@ import type {
   AcpLaunchSpec
 } from './acp-launch-contract'
 
-/** Prefer explicit commands, then managed releases, then complete pinned copies on PATH. */
-export function resolveAcpLaunchCommand(
+/** Prefer a desktop bundle, then explicit commands, managed releases, and pinned copies on PATH. */
+export async function resolveAcpLaunchCommand(
   spec: AcpLaunchSpec,
   env: Readonly<Record<string, string>>,
   options: {
@@ -36,7 +36,10 @@ export function resolveAcpLaunchCommand(
     homePath?: string
     dataDirectory: string | null
   }
-): StructuredAgentCommand & { version?: string } {
+): Promise<StructuredAgentCommand & { version?: string }> {
+  if (spec.bundledProgram) {
+    return spec.bundledProgram(env)
+  }
   const homePath = env.HOME ?? env.USERPROFILE ?? options.homePath ?? homedir()
   const pathEnv = [env.PATH ?? env.Path, ...spec.installDirectories({ env, homePath })]
     .filter((entry): entry is string => Boolean(entry))

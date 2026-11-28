@@ -2692,6 +2692,7 @@
           "bee242fe3d": "Qwen Code",
           "ca73055bd0": "Mistral Vibe",
           "28810273af": "Kimi",
+          "qwenwork": "QwenWork",
           "739a930554": "Droid",
           "667c104cff": "Cursor",
           "9e2a9bb87b": "Continue",
@@ -21308,6 +21309,7 @@
       "useKnownId": "Use known user ID \"{{value0}}\""
     },
     "native-chat": {
+      "qwenWorkWelcome": "Choose a model from QwenWork desktop, then send a message.",
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…",
         "cliInstall": "Install",
@@ -27280,6 +27282,7 @@
     "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
+    "qwenWorkCatalogLoadFailed": "Open QwenWork desktop with local control enabled, sign in, and retry.",
     "refreshModels": "Refresh models",
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogLoadFailed": "Could not load {{agent}} models.",

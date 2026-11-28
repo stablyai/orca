@@ -2651,6 +2651,7 @@
           "bee242fe3d": "Qwen Code",
           "ca73055bd0": "Mistral Vibe",
           "28810273af": "Kimi",
+          "qwenwork": "千問辦公",
           "739a930554": "Droid",
           "667c104cff": "Cursor",
           "9e2a9bb87b": "Continue",
@@ -21043,6 +21044,7 @@
       "useKnownId": "使用已知的使用者 ID「{{value0}}」"
     },
     "native-chat": {
+      "qwenWorkWelcome": "選擇千問辦公的模型，開始聊天。",
       "install": {
         "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…",
         "cliInstall": "安裝",
@@ -30236,6 +30238,7 @@
     "rerunUnsuccessful": "重新執行未成功的檢查"
   },
   "agentPicker": {
+    "qwenWorkCatalogLoadFailed": "啟動千問辦公並開啟本機控制，登入後點選重試。",
     "refreshModels": "重新整理模型",
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogLoadFailed": "無法載入 {{agent}} 模型。",

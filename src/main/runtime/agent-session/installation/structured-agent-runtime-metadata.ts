@@ -48,10 +48,13 @@ export type StructuredAgentRuntimeCatalogEntry =
 function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
   const { agent, managedRuntime } = spec
   return {
-    resolve: (shellEnv, commandSettings) => {
+    resolve: async (shellEnv, commandSettings) => {
       const env = { ...shellEnv, ...spec.env }
       const options = { commandSettings, dataDirectory: getProfileUserDataPath() }
-      return { ...resolveAcpLaunchCommand(spec, env, options), env }
+      return {
+        ...(await resolveAcpLaunchCommand(spec, env, options)),
+        env
+      }
     },
     ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {}),
     // Hosts without the user's own install can install Orca's copy.
@@ -91,9 +94,9 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
     ...(minimumVersions
       ? {
           launchCheck: {
-            resolveLaunch: (shellEnv, commandSettings) => {
+            resolveLaunch: async (shellEnv, commandSettings) => {
               const env = { ...shellEnv, ...spec.env }
-              const invocation = resolveAcpLaunchCommand(spec, env, {
+              const invocation = await resolveAcpLaunchCommand(spec, env, {
                 commandSettings,
                 dataDirectory: null
               })

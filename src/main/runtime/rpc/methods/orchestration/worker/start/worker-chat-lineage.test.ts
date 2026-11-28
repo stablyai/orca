@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
+import { TUI_AGENT_CONFIG } from '../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../../../../agent-session/installation/structured-agent-runtime-metadata'
 import {
   decideWorkerStartMode,
@@ -23,8 +24,17 @@ describe('a chat-lineage worker start', () => {
       expect(decideWorkerStartMode({ params: { agent }, settings, chatLineage: true }).mode).toBe(
         'structured'
       )
-      expect(decideWorkerStartMode({ params: { agent }, settings }).mode).toBe('terminal')
+      if (!TUI_AGENT_CONFIG[agent].chatOnly) {
+        expect(decideWorkerStartMode({ params: { agent }, settings }).mode).toBe('terminal')
+      }
     }
+  })
+
+  it('opens QwenWork as chat when the terminal is the default surface', () => {
+    const settings = { ...TERMINAL_SETTINGS, nativeChatProviders: { qwenwork: false } }
+    expect(decideWorkerStartMode({ params: { agent: 'qwenwork' }, settings }).mode).toBe(
+      'structured'
+    )
   })
 
   it('falls back to a terminal with its reason instead of refusing where no chat can run', () => {

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { setRendererUiLanguage } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { Terminal } from 'lucide-react'
 import {
   DropdownMenu,
@@ -8,6 +10,7 @@ import {
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { AgentLaunchPicker } from './AgentLaunchPicker'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import { qwenWorkPickerEntries } from './agent-launch-picker-qwenwork-fixture-entries'
 import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import type {
   AgentPickerDraft,
@@ -340,6 +343,22 @@ export const newTabSubmenuCodex = defineFixture({
   render: () => <NewTabMenu />,
   interact: async () => {
     click('[aria-label="Configure Codex"]')
+    await settle()
+  }
+})
+
+function QwenWorkMenu(): React.JSX.Element {
+  const version = useUiLanguageRevision()
+  return <NewTabMenu key={version} entries={[...ENTRIES, ...qwenWorkPickerEntries()]} />
+}
+
+export const qwenWorkChat = defineFixture({
+  width: 760,
+  render: () => <QwenWorkMenu />,
+  interact: async () => {
+    await setRendererUiLanguage('zh')
+    await settle()
+    click('[aria-label="配置 千问办公"]')
     await settle()
   }
 })

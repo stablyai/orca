@@ -203,7 +203,9 @@ function SessionOptionPopover(props: {
           effort: nativeChatSessionChoiceLabel(effortChoice, say, 'effort')
         })
       : modelLabel
-    : t('components.native-chat.composer.modelAndEffort', 'Model and effort')
+    : effort
+      ? t('components.native-chat.composer.modelAndEffort', 'Model and effort')
+      : modelLabel
   const modelName = knownModel ? pillAccessibleName(modelTitle, tooltipLabel, t) : tooltipLabel
   const optionsTitle = nativeChatOptionsPillTitle(options, say)
   const optionsLabel = nativeChatOptionValuesLabel(options, say)
@@ -219,8 +221,8 @@ function SessionOptionPopover(props: {
       return
     }
     focusReturn.notePick()
-    // Why: effort is the last thing set before typing, so its level closes the picker.
-    if (descriptor.id === 'effort') {
+    // Return focus to the composer after the last available choice.
+    if (descriptor.id === 'effort' || options.length === 0) {
       setOpen(false)
     }
     // During a provider fallback, picking the saved model is a real change.
