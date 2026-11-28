@@ -4,12 +4,21 @@ import type { ProjectGroup } from '../../project/groups/project-group-types'
 import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import { getDistinctProjectGroups } from '../../project/groups/project-groups'
 import { getProjectGroupHeaderKey } from './group-keys'
-import { appendOrderedGroups } from './group-sections'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
+import { appendOrderedGroups, getProjectSectionHostIds } from './group-sections'
 import type { SectionAppendContext } from './group-sections'
 import type { OrderedGroupEntry } from './worktree-group-entry'
 import { appendWorktreeRows } from './row-builders'
 import { getFolderLaneSectionKey } from '../folders/folder-workspace-occurrences'
-import { walkProjectGroupTree } from './project-group-tree'
+import { walkProjectGroupTree, type ProjectGroupSubtree } from './project-group-tree'
+import { getFolderWorkspaceHostId } from '../hosts/folder-workspace-host-id'
+import { getHostWorktreeIds } from '../hosts/host-labels'
+
+/** Where a collapsed group's hidden rows live: per-host row counts and worktree ids. */
+type CollapsedGroupHostScope = {
+  hostWorktreeCounts: Map<ExecutionHostId, number>
+  hostWorktreeIds: Map<ExecutionHostId, string[]>
+}
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -28,6 +37,38 @@ export function appendProjectGroupSections(
     const groupId = pair.folderWorkspace.projectGroupId
     folderCountByGroupId.set(groupId, (folderCountByGroupId.get(groupId) ?? 0) + 1)
   }
+
+  const projectGroupsById = new Map(args.projectGroups.map((group) => [group.id, group]))
+  /** A collapsed group has no rows left to tell host sections which machines it belongs to. */
+  const getCollapsedGroupHostScope = (
+    projectGroup: ProjectGroup,
+    subtree: ProjectGroupSubtree<OrderedGroupEntry[1]>
+  ): CollapsedGroupHostScope | undefined => {
+    const hostWorktreeCounts = new Map<ExecutionHostId, number>()
+    const hostWorktreeIds = new Map<ExecutionHostId, string[]>()
+    /** Counts `count` more rows on `hostId`, listing `ids` for its workspace badge. */
+    const add = (hostId: ExecutionHostId, count: number, ids: readonly string[] = []): void => {
+      hostWorktreeCounts.set(hostId, (hostWorktreeCounts.get(hostId) ?? 0) + count)
+      hostWorktreeIds.set(hostId, [...(hostWorktreeIds.get(hostId) ?? []), ...ids])
+    }
+    for (const [, group] of subtree.entries) {
+      const worktreeIds = getHostWorktreeIds(group.items, ctx.repoOf, ctx.defaultHostId)
+      for (const hostId of getProjectSectionHostIds(ctx, group)) {
+        const ids = worktreeIds?.get(hostId) ?? []
+        // Why: an empty project still places the group under its host.
+        add(hostId, Math.max(1, ids.length), ids)
+      }
+    }
+    const groupIds = new Set(subtree.groupIds)
+    for (const { folderWorkspace } of args.folderWorkspaces) {
+      if (groupIds.has(folderWorkspace.projectGroupId)) {
+        // A nested group's folder takes its host fallback from its own group.
+        const owner = projectGroupsById.get(folderWorkspace.projectGroupId) ?? projectGroup
+        add(getFolderWorkspaceHostId(folderWorkspace, owner, ctx.defaultHostId), 1)
+      }
+    }
+    return hostWorktreeCounts.size > 0 ? { hostWorktreeCounts, hostWorktreeIds } : undefined
+  }
   walkProjectGroupTree(
     {
       entries: args.orderedGroups,
@@ -37,8 +78,12 @@ export function appendProjectGroupSections(
       repoOrder: args.repoOrder
     },
     {
-      group: (projectGroup, depth, count) => {
+      group: (projectGroup, depth, count, subtree) => {
         const key = getProjectGroupHeaderKey(projectGroup.id)
+        const collapsed = collapsedGroups.has(key)
+        const hostScope = collapsed
+          ? getCollapsedGroupHostScope(projectGroup, subtree())
+          : undefined
         result.push({
           type: 'header',
           key,
@@ -46,9 +91,10 @@ export function appendProjectGroupSections(
           count,
           icon: { kind: 'project' },
           projectGroup,
-          projectGroupDepth: depth
+          projectGroupDepth: depth,
+          ...hostScope
         })
-        if (collapsedGroups.has(key)) {
+        if (collapsed) {
           return false
         }
         // The group's folders, with whatever is nested under them, precede its projects.

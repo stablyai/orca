@@ -118,6 +118,7 @@ function getProjectGroupHeaderDepth(row: Row): number | null {
     : null
 }
 
+/** Sorts rows into one section per host, keeping each row's enclosing headers with it. */
 export function addHostSectionRows(args: {
   rows: readonly Row[]
   hostOptions: readonly HostSectionOption[]
@@ -157,55 +158,54 @@ export function addHostSectionRows(args: {
   const usedPendingRows = new Set<Row>()
   // Each host's last emitted header path, so a sibling group repeats only what differs.
   const emittedPathByHostId = new Map<ExecutionHostId, string[]>()
-  const flushUnusedPendingRows = (rows: readonly Extract<Row, { type: 'header' }>[]): void => {
-    const unused = rows.filter((row) => !usedPendingRows.has(row))
-    if (unused.length === 0) {
-      return
-    }
-    const hostScopedRow = unused.some((row) => row.hostWorktreeCounts)
-    if (!hostScopedRow) {
-      globalRows.push(...unused)
-      return
-    }
-    for (const row of unused) {
-      for (const [hostId, count] of row.hostWorktreeCounts ?? []) {
-        if (count <= 0) {
-          continue
-        }
-        const hostRows = rowsByHostId.get(hostId) ?? []
-        const hostIds = row.hostWorktreeIds?.get(hostId)
-        hostRows.push({
-          ...row,
-          count,
-          hostId,
-          worktreeIds: hostIds ?? row.worktreeIds
-        })
-        rowsByHostId.set(hostId, hostRows)
-      }
-    }
-  }
-
-  const pushHostRow = (row: Row, rowHostId: ExecutionHostId): void => {
-    const hostRows = rowsByHostId.get(rowHostId) ?? []
-    const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
-    const path = localizedPendingRows.map(getPendingRowKey)
-    const emitted = emittedPathByHostId.get(rowHostId) ?? []
+  /** Emits the part of a header path that `hostId`'s section has not already drawn. */
+  const pushPendingPath = (
+    path: readonly Extract<Row, { type: 'header' }>[],
+    hostId: ExecutionHostId
+  ): void => {
+    const hostRows = rowsByHostId.get(hostId) ?? []
+    const localizedPendingRows = localizePendingRowsForHost(path, hostId)
+    const keys = localizedPendingRows.map(getPendingRowKey)
+    const emitted = emittedPathByHostId.get(hostId) ?? []
     let shared = 0
-    while (shared < path.length && path[shared] === emitted[shared]) {
+    while (shared < keys.length && keys[shared] === emitted[shared]) {
       shared += 1
     }
-    if (shared < path.length || path.length !== emitted.length) {
+    if (shared < keys.length || keys.length !== emitted.length) {
       hostRows.push(...localizedPendingRows.slice(shared))
-      emittedPathByHostId.set(rowHostId, path)
+      emittedPathByHostId.set(hostId, keys)
     }
     if (localizedPendingRows.length > 0) {
-      pendingRows.forEach((pendingRow) => usedPendingRows.add(pendingRow))
+      path.forEach((pendingRow) => usedPendingRows.add(pendingRow))
     }
-    hostRows.push(row)
-    rowsByHostId.set(rowHostId, hostRows)
+    rowsByHostId.set(hostId, hostRows)
+  }
+  /** A header no host claimed and that names no host itself. */
+  const isHostlessUnusedRow = (row: Extract<Row, { type: 'header' }>): boolean =>
+    !row.hostWorktreeCounts && !usedPendingRows.has(row)
+  /** Places headers no row claimed: under their hosts if they name any, else above all hosts. */
+  const flushUnusedPendingRows = (rows: readonly Extract<Row, { type: 'header' }>[]): void => {
+    for (const row of rows) {
+      if (usedPendingRows.has(row)) {
+        continue
+      }
+      for (const [hostId, count] of row.hostWorktreeCounts ?? []) {
+        if (count > 0) {
+          // A collapsed group has no row of its own to pull in the group path above it.
+          pushPendingPath(pendingRows.slice(0, pendingRows.indexOf(row) + 1), hostId)
+        }
+      }
+    }
+    globalRows.push(...rows.filter(isHostlessUnusedRow))
   }
 
-  // Pending headers that do not enclose a header at `depth` end before it.
+  /** Appends a row to its host's section, after any headers it still needs. */
+  const pushHostRow = (row: Row, rowHostId: ExecutionHostId): void => {
+    pushPendingPath(pendingRows, rowHostId)
+    rowsByHostId.get(rowHostId)?.push(row)
+  }
+
+  /** Ends pending headers that do not enclose a header at `depth`. */
   const retainPendingAncestors = (depth: number): void => {
     const kept =
       depth > 0

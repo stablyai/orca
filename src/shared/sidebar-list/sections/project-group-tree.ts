@@ -22,9 +22,23 @@ type GroupedProjectEntry = ProjectSectionEntry<
   ProjectSectionRepo & Partial<Pick<Repo, 'projectGroupId' | 'projectGroupOrder'>>
 >
 
+/** Everything a group holds, nested groups included. */
+export type ProjectGroupSubtree<V extends GroupedProjectEntry> = {
+  entries: [string, V][]
+  groupIds: string[]
+}
+
 export type ProjectGroupTreeVisitor<V extends GroupedProjectEntry> = {
-  /** Lists a group header; returns whether its contents follow (false when collapsed). */
-  group: (group: ProjectGroup, depth: number, count: number) => boolean
+  /**
+   * Lists a group header; returns whether its contents follow (false when collapsed).
+   * `subtree` lists what the group holds, for a header that hides it.
+   */
+  group: (
+    group: ProjectGroup,
+    depth: number,
+    count: number,
+    subtree: () => ProjectGroupSubtree<V>
+  ) => boolean
   projects: (entries: [string, V][], depth: number) => void
 }
 
@@ -97,9 +111,29 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
     )
   }
 
+  const getProjectGroupSubtree = (groupId: string): ProjectGroupSubtree<V> => {
+    const children = childGroupsByParentId.get(groupId) ?? []
+    return children.reduce<ProjectGroupSubtree<V>>(
+      (subtree, child) => {
+        const childSubtree = getProjectGroupSubtree(child.id)
+        return {
+          entries: [...subtree.entries, ...childSubtree.entries],
+          groupIds: [...subtree.groupIds, ...childSubtree.groupIds]
+        }
+      },
+      { entries: [...(groupByProjectGroupId.get(groupId) ?? [])], groupIds: [groupId] }
+    )
+  }
+
   const walkProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
-    if (visit.group(projectGroup, depth, getProjectGroupSubtreeCount(projectGroup.id))) {
+    const listed = visit.group(
+      projectGroup,
+      depth,
+      getProjectGroupSubtreeCount(projectGroup.id),
+      () => getProjectGroupSubtree(projectGroup.id)
+    )
+    if (listed) {
       visit.projects(withRepoSectionDisplayLabels(repoEntries), depth + 1)
       for (const childGroup of childGroupsByParentId.get(projectGroup.id) ?? []) {
         walkProjectGroup(childGroup, depth + 1)
