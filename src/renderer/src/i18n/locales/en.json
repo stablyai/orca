@@ -29967,6 +29967,7 @@
       "filters": "Filters",
       "hidePaused": "Hide paused bots",
       "hideSleepingWorkers": "Hide sleeping workers",
+      "compactRows": "Compact view",
       "hideSleepingWorkersAria": "Hide a bot's worker workspaces that have nothing running",
       "allHidden": "All bots are paused and hidden."
     },
