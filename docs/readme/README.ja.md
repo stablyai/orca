@@ -41,7 +41,7 @@ Slack、Linear、GitHub で Bot にバグ修正を頼めば、戻るころには
 
 </td>
 <td width="50%">
-  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="2 つのワーカーでチェックアウトのバグを修正し、PR をリンクして、「対応待ち」で質問への回答を待っている Orca の Bot" width="100%" /></picture></a>
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="2 つのワーカーでチェックアウトのバグを修正し、PR をリンクして、質問へのあなたの回答を待っている Orca の Bot" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>

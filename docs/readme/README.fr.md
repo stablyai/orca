@@ -41,7 +41,7 @@ Demandez à un bot dans Slack, Linear ou GitHub de corriger un bug, et revenez t
 
 </td>
 <td width="50%">
-  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Un bot dans Orca qui a corrigé un bug de checkout avec deux workers, lié la PR, et attend votre réponse à une question dans la section « Besoin de vous »" width="100%" /></picture></a>
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Un bot dans Orca qui a corrigé un bug de checkout avec deux workers, lié la PR, et attend votre réponse à une question" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>

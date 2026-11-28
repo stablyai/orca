@@ -41,7 +41,7 @@ Slack, Linear, GitHub에서 봇에게 버그 수정을 맡기면, 돌아왔을 �
 
 </td>
 <td width="50%">
-  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="두 워커로 결제 버그를 고치고 PR을 연결한 뒤 ‘확인 필요’에서 질문에 대한 답을 기다리는 Orca의 봇" width="100%" /></picture></a>
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="두 워커로 결제 버그를 고치고 PR을 연결한 뒤 질문에 대한 여러분의 답을 기다리는 Orca의 봇" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>

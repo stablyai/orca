@@ -41,7 +41,7 @@
 
 </td>
 <td width="50%">
-  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Бот в Orca, который исправил ошибку оформления заказа с помощью двух исполнителей, привязал пул-реквест и ждёт ответа на вопрос в разделе «Нужны вы»" width="100%" /></picture></a>
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Бот в Orca, который исправил ошибку оформления заказа с помощью двух исполнителей, привязал пул-реквест и ждёт вашего ответа на вопрос" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>

@@ -41,7 +41,7 @@ Slack, Linear veya GitHub'da bir bottan bir hatayı düzeltmesini isteyin; dönd
 
 </td>
 <td width="50%">
-  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Orca'da iki worker ile bir ödeme hatasını düzelten, PR'ı bağlayan ve “Sizi bekliyor” bölümünde bir soruya yanıt bekleyen bir bot" width="100%" /></picture></a>
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Orca'da iki worker ile bir ödeme hatasını düzelten, PR'ı bağlayan ve bir soruya yanıtınızı bekleyen bir bot" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>

@@ -41,7 +41,7 @@ Pídele a un bot en Slack, Linear o GitHub que arregle un bug y vuelve para enco
 
 </td>
 <td width="50%">
-  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Un bot en Orca que arregló un bug del checkout con dos workers, enlazó el PR y espera tu respuesta a una pregunta en la sección «Te necesita»" width="100%" /></picture></a>
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Un bot en Orca que arregló un bug del checkout con dos workers, enlazó el PR y espera tu respuesta a una pregunta" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
