@@ -109,3 +109,28 @@ export function botLaunchWithPicks(
   const next = botLaunchFromChoices({ ...(model ? { model } : {}), options })
   return next && BotLaunchSchema.safeParse(next).success ? next : launch
 }
+
+export const BOT_AUTO_COMPACT_MIN_PERCENT = 1
+export const BOT_AUTO_COMPACT_MAX_PERCENT = 100
+
+/** The share of the context window at which a Claude Code bot's chats compact on their own. */
+export const BotAutoCompactPercentSchema = lazyZodSchema(() =>
+  z.number().int().min(BOT_AUTO_COMPACT_MIN_PERCENT).max(BOT_AUTO_COMPACT_MAX_PERCENT)
+)
+
+/** Claude Code reads it from settings `env`; the flag settings layer beats the user's own files. */
+export const CLAUDE_AUTO_COMPACT_PERCENT_ENV = 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE'
+
+export function botAutoCompactSupported(agent: string): boolean {
+  return agent === 'claude'
+}
+
+/** `--percent` text as a percent to save, or null when it is not a whole number in range. */
+export function parseBotAutoCompactPercent(text: string): number | null {
+  const trimmed = text.trim().replace(/%$/, '')
+  if (!/^\d+$/.test(trimmed)) {
+    return null
+  }
+  const parsed = BotAutoCompactPercentSchema.safeParse(Number(trimmed))
+  return parsed.success ? parsed.data : null
+}

@@ -29574,6 +29574,11 @@
         "title": "多久后将事项标记为长期无活动",
         "shortTitle": "多久算长期无活动"
       },
+      "autoCompact": {
+        "title": "自动压缩",
+        "default": "默认",
+        "percent": "{{percent}}%"
+      },
       "memoryFiles_other": "{{count}} 个文件",
       "lookAroundShort": {
         "every4h": "4 小时",

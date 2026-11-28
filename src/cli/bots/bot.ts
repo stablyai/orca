@@ -15,6 +15,39 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from '../automations/automation-caller-chat'
 import { formatBotChats, type BotChatsResult } from './bot-chats-format'
 import { orcaCloudNeedsSignIn } from '../../shared/bots/host-orca-sign-in'
+import {
+  BOT_AUTO_COMPACT_MAX_PERCENT,
+  BOT_AUTO_COMPACT_MIN_PERCENT,
+  botAutoCompactSupported,
+  parseBotAutoCompactPercent
+} from '../../shared/bots/bot-launch'
+
+/** `--percent <n>` as the saved percent, or `--off` as null to clear it. */
+function autoCompactPercentFlag(flags: Map<string, string | boolean>): number | null {
+  const off = flags.get('off') === true
+  const text = getOptionalStringFlag(flags, 'percent')
+  if (off === (text !== undefined)) {
+    throw new RuntimeClientError('invalid_argument', 'Pass --percent <1-100> or --off')
+  }
+  if (text === undefined) {
+    return null
+  }
+  const percent = parseBotAutoCompactPercent(text)
+  if (percent === null) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--percent takes a whole number from ${BOT_AUTO_COMPACT_MIN_PERCENT} to ${BOT_AUTO_COMPACT_MAX_PERCENT}`
+    )
+  }
+  return percent
+}
+
+function formatAutoCompact(bot: Bot): string {
+  const percent = bot.autoCompactPercent ?? null
+  return percent === null
+    ? `${bot.name} compacts at Claude Code's own threshold.`
+    : `${bot.name} compacts at ${percent}% of its context window.`
+}
 
 export function formatBot(bot: Bot): string {
   return `${bot.name} (${bot.agent}${bot.paused ? ', paused' : ''})  id: ${bot.id}`
@@ -83,6 +116,22 @@ export async function findBot(
 }
 
 export const BOT_HANDLERS: Record<string, CommandHandler> = {
+  'bot auto-compact': async ({ flags, client, json }) => {
+    const selector = getOptionalStringFlag(flags, 'bot')
+    if (!selector) {
+      throw new RuntimeClientError('invalid_argument', 'Missing --bot')
+    }
+    const autoCompactPercent = autoCompactPercentFlag(flags)
+    const bot = await findBot(client, selector)
+    if (!botAutoCompactSupported(bot.agent)) {
+      throw new RuntimeClientError('invalid_argument', 'Auto compact needs a Claude Code bot.')
+    }
+    const result = await callBots<{ bot: Bot }>(client, 'bots.update', {
+      botId: bot.id,
+      updates: { autoCompactPercent }
+    })
+    printResult(result, json, (value) => formatAutoCompact(value.bot))
+  },
   'bot new-chat': async ({ flags, client, json }) => {
     const selector = getOptionalStringFlag(flags, 'bot')
     const botId = selector ? (await findBot(client, selector)).id : undefined

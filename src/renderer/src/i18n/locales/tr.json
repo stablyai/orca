@@ -29373,6 +29373,11 @@
         "never": "Hiçbir zaman",
         "title": "Öğeleri şu süreden sonra eskimiş say"
       },
+      "autoCompact": {
+        "title": "Otomatik sıkıştırma",
+        "default": "Varsayılan",
+        "percent": "{{percent}}%"
+      },
       "lookAroundShort": {
         "every2h": "2 sa",
         "every4h": "4 sa",

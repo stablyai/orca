@@ -30018,6 +30018,11 @@
         "title": "項目を停滞とみなすまでの期間",
         "shortTitle": "停滞とみなすまで"
       },
+      "autoCompact": {
+        "title": "自動コンパクト",
+        "default": "デフォルト",
+        "percent": "{{percent}}%"
+      },
       "memoryFiles_one": "{{count}} ファイル",
       "memoryFiles_other": "{{count}} ファイル",
       "lookAroundShort": {

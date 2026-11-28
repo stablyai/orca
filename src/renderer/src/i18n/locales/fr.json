@@ -30257,6 +30257,11 @@
         "title": "Marquer les éléments comme inactifs après",
         "shortTitle": "Inactifs après"
       },
+      "autoCompact": {
+        "title": "Compactage automatique",
+        "default": "Par défaut",
+        "percent": "{{percent}}%"
+      },
       "memoryFiles_one": "{{count}} fichier",
       "memoryFiles_other": "{{count}} fichiers",
       "memoryFiles_many": "{{count}} fichiers",

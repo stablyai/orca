@@ -30605,6 +30605,11 @@
         "title": "Mark items stale after",
         "shortTitle": "Stale after"
       },
+      "autoCompact": {
+        "title": "Auto compact",
+        "default": "Default",
+        "percent": "{{percent}}%"
+      },
       "memoryFiles_one": "{{count}} file",
       "memoryFiles_other": "{{count}} files",
       "lookAroundShort": {

@@ -42,6 +42,7 @@ import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
 import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
+import { botAutoCompactSupported } from '../../../../shared/bots/bot-launch'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 
@@ -52,6 +53,13 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   const { members, addMembers: added, permissionMode } = params.updates
   if (members !== undefined || added !== undefined || permissionMode !== undefined) {
     ownerOnly(context, 'Only your owner changes your Who can ask or permissions, in Orca.')
+  }
+  if (typeof params.updates.autoCompactPercent === 'number') {
+    const saved = context.runtime.bots.list().find((entry) => entry.id === params.botId)
+    const agent = params.updates.agent ?? saved?.agent
+    if (agent !== undefined && !botAutoCompactSupported(agent)) {
+      throw new InvalidArgumentError('Auto compact needs a Claude Code bot.')
+    }
   }
   const bot = await context.runtime.bots.update(params.botId, params.updates)
   if (params.updates.skillProjects !== undefined) {

@@ -23,7 +23,7 @@ import { BotStoredOutfitSchema } from '../bots/bot-avatar-outfit'
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from '../bots/bot-made-for-workspaces'
 import { BotProposalSchema, BotProposalSeedSchema } from '../bots/bot-proposal'
 import { BotLookAroundSchema } from '../bots/bot-look-around'
-import { BotLaunchSchema } from '../bots/bot-launch'
+import { BotAutoCompactPercentSchema, BotLaunchSchema } from '../bots/bot-launch'
 import { BOT_OFFER_ALREADY_ANSWERED, BotOfferAnswerUpdateSchema } from '../bots/bot-offer-answers'
 import { OptionalBoolean, requiredString } from './rpc-param-primitives'
 import { ACCESS_REQUEST_TOKEN_PATTERN } from '../connector-bot-access-contract'
@@ -143,6 +143,8 @@ export const BotUpdate = lazyZodSchema(() =>
         permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).nullable().optional(),
         /** null clears it; a new agent without one clears it too, since it belongs to the old agent. */
         launch: BotLaunchSchema.nullable().optional(),
+        /** null puts back Claude Code's own threshold. */
+        autoCompactPercent: BotAutoCompactPercentSchema.nullable().optional(),
         notifications: BotNotificationsSchema.optional(),
         members: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS).optional(),
         /** Takes one person off Who can ask, on the host, so a concurrent edit is kept. */

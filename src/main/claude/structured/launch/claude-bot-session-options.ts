@@ -11,6 +11,7 @@ import {
   type ClaudeReadOnlyOptions,
   claudeReadOnlyOptions
 } from '../../claude-structured-read-only-options'
+import { CLAUDE_AUTO_COMPACT_PERCENT_ENV } from '../../../../shared/bots/bot-launch'
 
 /** What a chat adds over the base launch: its instructions, a read-only session's limits, and a
  *  bot's own tools on top of the owner's (a read-only session gets none, nor one whose managed
@@ -19,6 +20,7 @@ export async function claudeBotSessionOptions(
   basis: {
     instructions(linkedSkills?: string | null): Promise<string | null>
     readOnly?: ReadOnlySessionMode | null
+    autoCompactPercent?: number
   },
   linked: readonly LinkedSkillProject[],
   tools: SessionMcpTools,
@@ -38,14 +40,31 @@ export async function claudeBotSessionOptions(
         .filter(Boolean)
         .join('\n\n')
     : own
+  const readOnly = basis.readOnly ? claudeReadOnlyOptions(basis.readOnly) : {}
+  const settings = withAutoCompactPercent(readOnly.settings, basis.autoCompactPercent)
   return {
     ...(instructions
       ? { systemPrompt: { type: 'preset', preset: 'claude_code', append: instructions } }
       : {}),
-    ...(basis.readOnly ? claudeReadOnlyOptions(basis.readOnly) : {}),
+    ...readOnly,
+    ...(settings ? { settings } : {}),
     // The user's own CLI may predate reading MCP servers from initialize, the SDK's planned default.
     ...(tools.servers.length > 0 && !toolsOff
       ? { mcpServers: claudeLaunchServers(tools), mcpServersDelivery: 'argv' as const }
       : {})
+  }
+}
+
+/** A bot's threshold rides the flag settings layer: an inherited env var would lose to settings files. */
+function withAutoCompactPercent(
+  settings: ClaudeReadOnlyOptions['settings'],
+  percent: number | undefined
+): ClaudeReadOnlyOptions['settings'] {
+  if (percent === undefined || typeof settings === 'string') {
+    return settings
+  }
+  return {
+    ...settings,
+    env: { ...settings?.env, [CLAUDE_AUTO_COMPACT_PERCENT_ENV]: String(percent) }
   }
 }

@@ -85,6 +85,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
     record: AgentSessionRecord,
     launchDirectory: string
   ) => Promise<SessionMcpTools>
+  /** See `StructuredAgentLaunchSources.autoCompactPercent`. */
+  sessionAutoCompactPercent?: (record: AgentSessionRecord) => number | null
   /** See `StructuredAgentLaunchSources.resolveLinkedSkills`. */
   resolveSessionLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>
   /** The chat's bot folder brought up to date, as a launch would load it, with no launch

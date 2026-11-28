@@ -30232,6 +30232,11 @@
         "title": "Elemente als veraltet markieren nach",
         "shortTitle": "Veraltet nach"
       },
+      "autoCompact": {
+        "title": "Automatisch komprimieren",
+        "default": "Standard",
+        "percent": "{{percent}}%"
+      },
       "memoryFiles_one": "{{count}} Datei",
       "memoryFiles_other": "{{count}} Dateien",
       "lookAroundShort": {

@@ -30532,6 +30532,11 @@
         "title": "Помечать элементы устаревшими через",
         "shortTitle": "Устаревают через"
       },
+      "autoCompact": {
+        "title": "Автосжатие",
+        "default": "По умолчанию",
+        "percent": "{{percent}}%"
+      },
       "lookAroundShort": {
         "every2h": "2 ч",
         "every4h": "4 ч",

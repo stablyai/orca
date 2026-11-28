@@ -6,7 +6,7 @@ import { optionalConnectorAvatarUrl } from '../connector-message-asker'
 import type { NativeChatAgent } from '../agent-launch/permissions/agent-chat-permission-support'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host/execution-host'
 import { BotLookAroundSchema } from './bot-look-around'
-import { BotLaunchSchema } from './bot-launch'
+import { BotAutoCompactPercentSchema, BotLaunchSchema } from './bot-launch'
 import { BotTidyUpSchema } from './bot-tidy-up'
 import { BotOfferAnswerSchema } from './bot-offer-answers'
 import { BotCancelledWaitSchema } from './bot-cancelled-waits'
@@ -170,6 +170,8 @@ export const BotSchema = lazyZodSchema(() =>
     /** The owner's model and options for `agent`; absent on older bots and dropped by older hosts. */
     // A malformed value reads as unset rather than losing the whole bot.
     launch: BotLaunchSchema.optional().catch(undefined),
+    /** Context percent its Claude Code chats compact at; absent or null keeps Claude Code's own. Older hosts drop it. */
+    autoCompactPercent: BotAutoCompactPercentSchema.nullable().optional().catch(undefined),
     notifications: BotNotificationsSchema,
     members: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS),
     /** The first of slackApps, kept for readers that know one workspace (older Orcas, the phone). */

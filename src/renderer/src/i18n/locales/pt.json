@@ -30455,6 +30455,11 @@
         "never": "Nunca",
         "title": "Marcar itens como parados após"
       },
+      "autoCompact": {
+        "title": "Compactação automática",
+        "default": "Padrão",
+        "percent": "{{percent}}%"
+      },
       "lookAroundShort": {
         "every2h": "2h",
         "every4h": "4h",

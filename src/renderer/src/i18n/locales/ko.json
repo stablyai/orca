@@ -30664,6 +30664,11 @@
         "title": "항목을 오래됨으로 표시하는 기간",
         "shortTitle": "오래됨으로 표시하는 기간"
       },
+      "autoCompact": {
+        "title": "자동 압축",
+        "default": "기본값",
+        "percent": "{{percent}}%"
+      },
       "memoryFiles_one": "파일 {{count}}개",
       "memoryFiles_other": "파일 {{count}}개",
       "lookAroundShort": {

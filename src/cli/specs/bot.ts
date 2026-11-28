@@ -60,6 +60,18 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['bot', 'auto-compact'],
+    summary: "Set the context percent at which a Claude Code bot's chats compact on their own",
+    usage: 'orca bot auto-compact --bot <name> (--percent <1-100> | --off) [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'percent', 'off'],
+    booleanFlags: ['off'],
+    notes: [
+      ...BOT_NOTES,
+      "--percent 40 compacts each chat at 40% of its context window; --off puts back Claude Code's own threshold. It beats CLAUDE_AUTOCOMPACT_PCT_OVERRIDE in the user's settings, for this bot only.",
+      'A chat already running takes the change when its agent next starts.'
+    ]
+  },
+  {
     path: ['bot', 'new-chat'],
     hidden: true,
     summary:
