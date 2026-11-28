@@ -54,7 +54,10 @@ import { acpHostBackendInput } from '../../../../acp/launch/acp-launch-command'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../../../antigravity/antigravity-acp-launch-spec'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import type { AntigravityChatSignInHost } from '../../../../antigravity/antigravity-chat-sign-in'
-import { followAgyLoginChanges } from '../../../../antigravity/agy-login-change-watch'
+import {
+  agyLoginRevision,
+  followAgyLoginChanges
+} from '../../../../antigravity/agy-login-change-watch'
 import { agyGoogleSignInEnv } from '../../../../antigravity/antigravity-chat-credential'
 
 const stopLiveChats = () => stopStructuredAgentChats('antigravity', 'Antigravity')
@@ -253,6 +256,8 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
         return
       }
       dispose = followAgyLoginChanges((loginRevision) => emit({ loginRevision }))
+      // The first frame is the count so far, so the next one is a change.
+      emit({ loginRevision: agyLoginRevision() })
     }
   }),
   defineMethod({

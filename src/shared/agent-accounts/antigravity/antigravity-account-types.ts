@@ -94,10 +94,6 @@ export type AntigravityChatSignInStatus = {
   flow: AntigravityChatSignInState | null
 }
 
-/** A frame of `accounts.antigravityLoginSubscribe`: moves each time agy's stored login changes on
- *  the host. */
-export type AntigravityLoginChange = { loginRevision: number }
-
 export type AntigravityAccountTarget = {
   runtime: 'host' | 'wsl'
   wslDistro?: string | null

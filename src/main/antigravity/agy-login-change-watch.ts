@@ -11,7 +11,8 @@ const REWATCH_MS = 1000
 let loginRevision = 0
 // By store folder. A folder agy hasn't created yet is waited for from its nearest existing parent.
 const watchers = new Map<string, FSWatcher>()
-const attaching = new Set<string>()
+// The generation each folder's watch is being set up for.
+const attaching = new Map<string, number>()
 // What each store held when last read; a write that leaves agy's login as it was is ignored.
 const seen = new Map<string, { contents: string; uncertain: boolean }>()
 // Stores to check once changes settle, by folder.
@@ -22,6 +23,11 @@ const followers = new Set<(loginRevision: number) => void>()
 let generation = 0
 
 type AgyLoginStore = { dir: string; file: string; keychain: boolean }
+
+/** Counts the changes seen to agy's stored login since Orca started. */
+export function agyLoginRevision(): number {
+  return loginRevision
+}
 
 /** Where agy keeps its login: its token file everywhere, and on macOS the login keychain, whose
  *  database is rewritten when agy stores a new login. The Linux keyring and Windows Credential
@@ -114,7 +120,7 @@ function changed(store: AgyLoginStore): void {
 async function attach(store: AgyLoginStore, home: string): Promise<void> {
   const { dir } = store
   const at = generation
-  attaching.add(dir)
+  attaching.set(dir, at)
   try {
     let target = dir
     for (;;) {
@@ -136,7 +142,9 @@ async function attach(store: AgyLoginStore, home: string): Promise<void> {
       target = dirname(target)
     }
   } finally {
-    attaching.delete(dir)
+    if (attaching.get(dir) === at) {
+      attaching.delete(dir)
+    }
   }
 }
 
@@ -191,7 +199,7 @@ function watchFolder(
     watchers.delete(dir)
     const at = generation
     setTimeout(() => {
-      if (at === generation && !watchers.has(dir) && !attaching.has(dir)) {
+      if (at === generation && !watchers.has(dir) && attaching.get(dir) !== generation) {
         void attach(store, home)
         changed(store)
       }
@@ -214,7 +222,7 @@ export function followAgyLoginChanges(follower: (loginRevision: number) => void)
   }
   const at = generation
   for (const store of stores) {
-    if (!watchers.has(store.dir) && !attaching.has(store.dir)) {
+    if (!watchers.has(store.dir) && attaching.get(store.dir) !== generation) {
       void attach(store, home)
       void storeContents(store).then((contents) => {
         if (at === generation && !seen.has(store.dir)) {

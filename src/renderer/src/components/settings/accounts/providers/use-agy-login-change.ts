@@ -1,10 +1,7 @@
-import { useEffect, useState } from 'react'
-import type {
-  AntigravityAccountState,
-  AntigravityLoginChange
-} from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
+import { useEffect, useRef, useState } from 'react'
+import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { subscribeAntigravityLoginChanges } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import { agyLoginRevisions } from '@/runtime/provider-accounts/sign-in/agy-login-revision-store'
 import { useOnLaterChange } from './use-on-later-change'
 
 // Saving the current login (as a sign-in does before it starts) changes the active account, not the
@@ -17,55 +14,60 @@ function loginKey(state: AntigravityAccountState | null): string | null {
   return current ? [current.subject, current.email, current.expiredAt].join('|') : 'signedOut'
 }
 
-function isLoginChange(result: unknown): result is AntigravityLoginChange {
-  return (
-    typeof result === 'object' &&
-    result !== null &&
-    'loginRevision' in result &&
-    typeof result.loginRevision === 'number'
-  )
+function documentShown(): boolean {
+  return typeof document === 'undefined' || document.visibilityState === 'visible'
 }
 
-/** The host's count of changes to agy's stored login while `follow`; null until the first change,
- *  and from older hosts, which don't offer it. */
-function useAgyLoginRevision(owner: RuntimeClientTarget, follow: boolean): number | null {
+/** The host's count of changes to agy's stored login while `follow` and the window is shown; null
+ *  before the host answers, and from older hosts. Showing the window again calls `shown`, since
+ *  the host stops watching while nothing follows. */
+function useAgyLoginRevision(
+  owner: RuntimeClientTarget,
+  follow: boolean,
+  shown: () => void
+): number | null {
+  const [visible, setVisible] = useState(documentShown)
   const [revision, setRevision] = useState<number | null>(null)
+  const latestShown = useRef(shown)
+  useEffect(() => {
+    latestShown.current = shown
+  })
   const kind = owner.kind
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   useEffect(() => {
     if (!follow) {
       return
     }
-    let closed = false
-    let unsubscribe: (() => void) | null = null
+    const onVisibility = () => {
+      const now = documentShown()
+      setVisible(now)
+      if (now) {
+        latestShown.current()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [follow])
+  useEffect(() => {
+    if (!follow || !visible) {
+      return
+    }
     const target: RuntimeClientTarget =
       kind === 'environment' && environmentId
         ? { kind: 'environment', environmentId }
         : { kind: 'local' }
-    void subscribeAntigravityLoginChanges(target, {
-      onEvent: (result) => {
-        if (!closed && isLoginChange(result)) {
-          setRevision(result.loginRevision)
-        }
-      },
-      // Without it the rows update on Refresh, a sign-in or a reopen, as before.
-      onError: () => {},
-      onClose: () => {}
-    }).then(
-      (subscription) => {
-        if (closed) {
-          subscription.unsubscribe()
-        } else {
-          unsubscribe = subscription.unsubscribe
-        }
-      },
-      () => {}
-    )
-    return () => {
-      closed = true
-      unsubscribe?.()
+    const read = () => {
+      const snapshot = agyLoginRevisions.read(target)
+      setRevision(snapshot.kind === 'known' ? snapshot.state.revision : null)
     }
-  }, [follow, kind, environmentId])
+    const unsubscribe = agyLoginRevisions.subscribe(read)
+    const release = agyLoginRevisions.observe(target)
+    read()
+    return () => {
+      release()
+      unsubscribe()
+    }
+  }, [follow, visible, kind, environmentId])
   return revision
 }
 
@@ -79,7 +81,7 @@ export function useAgyLoginChange(
   reread: () => void,
   loginChanged: () => void
 ): void {
-  const loginRevision = useAgyLoginRevision(owner, follow)
+  const loginRevision = useAgyLoginRevision(owner, follow, reread)
   useOnLaterChange(loginRevision === null ? null : String(loginRevision), reread)
   useOnLaterChange(loginKey(state), loginChanged)
 }
