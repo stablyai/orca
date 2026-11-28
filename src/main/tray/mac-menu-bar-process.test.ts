@@ -206,6 +206,18 @@ it('falls back in-process only when helpers never start', () => {
   expect(vi.getTimerCount()).toBe(0)
 })
 
+it('never falls back in-process after a helper has started', () => {
+  const onUnavailable = vi.fn()
+  failingOwner(onUnavailable)
+  helpers.at(-1)!.send({ type: 'ready' })
+  helpers.at(-1)!.exit()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    vi.advanceTimersByTime(60_000)
+    helpers.at(-1)!.exit()
+  }
+  expect(onUnavailable.mock.calls).toEqual([['off']])
+})
+
 it('turns the icon off when helpers hang after a long healthy run', () => {
   const onUnavailable = vi.fn()
   const { owner: process } = failingOwner(onUnavailable)

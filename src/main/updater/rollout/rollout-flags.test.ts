@@ -1,8 +1,18 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { parseRolloutConfig, resolveRolloutFlag, rolloutBucket } from './rollout-flags'
+import {
+  parseRolloutConfig,
+  recordRolloutPayload,
+  resetRolloutConfigForTests,
+  resolveRolloutFlag,
+  rolloutBucket
+} from './rollout-flags'
 
+const userData = { dir: '/nonexistent' }
 vi.mock('../../persistence/loading-store/user-data-path', () => ({
-  getCanonicalUserDataPath: () => '/nonexistent'
+  getCanonicalUserDataPath: () => userData.dir
 }))
 
 const flags = (entry: unknown) =>
@@ -43,6 +53,26 @@ it('keeps a saved kill switch when the next entry is unreadable, and drops it on
   expect(parseRolloutConfig(payload({ state: 'off', percent: '0' }), off)).toEqual(off)
   expect(parseRolloutConfig(payload(undefined), off)).toEqual({})
   expect(parseRolloutConfig({ id: 'campaign' }, off)).toBeNull()
+})
+
+it('saves the newest of two overlapping payloads, so a kill switch is not lost', async () => {
+  userData.dir = mkdtempSync(join(tmpdir(), 'rollout-flags-'))
+  resetRolloutConfigForTests()
+  const payload = (state: string) => ({
+    rollout: { version: 1, flags: { 'mac-menu-bar-helper': { state } } }
+  })
+  try {
+    await recordRolloutPayload(payload('off'))
+    // The newer 'off' matches the saved text while the older 'on' is still being written.
+    await Promise.all([recordRolloutPayload(payload('on')), recordRolloutPayload(payload('off'))])
+    expect(JSON.parse(readFileSync(join(userData.dir, 'rollout-flags.json'), 'utf8'))).toEqual({
+      'mac-menu-bar-helper': { state: 'off' }
+    })
+  } finally {
+    rmSync(userData.dir, { recursive: true, force: true })
+    userData.dir = '/nonexistent'
+    resetRolloutConfigForTests()
+  }
 })
 
 it('narrows only stable builds with a percentage; prerelease keeps the helper', () => {

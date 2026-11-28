@@ -12,16 +12,19 @@ export class MenuBarRestartPolicy {
   private diedAfterStart = 0
   private delay = 1_000
   private lastStrikeAt = -Infinity
+  private everReady = false
 
   /**
    * Delay before the next helper; 'fallback' when the helper can't start at all (in-process is safe),
    * 'off' when started helpers keep hanging or dying (the in-process icon would hang main the same way).
    */
   next(reachedReady: boolean, livedMs: number, hung = false): MenuBarRestart {
+    this.everReady ||= reachedReady
     if (!reachedReady) {
       this.neverStarted++
       if (this.neverStarted >= MAX_STRIKES) {
-        return 'fallback'
+        // Once a helper has started, the in-process icon could hit the same deadlock.
+        return this.everReady ? 'off' : 'fallback'
       }
     } else if (hung || livedMs < MAX_RETRY_DELAY) {
       // A hang counts however long the helper lived: the scene deadlock can strike at any update.

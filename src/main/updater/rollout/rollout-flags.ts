@@ -111,6 +111,7 @@ let cachedConfig: RolloutConfig | null = null
 let cachedText: string | null = null
 let lastRecorded: RolloutConfig | null = null
 let loading: Promise<void> | null = null
+let recording: Promise<void> = Promise.resolve()
 
 /** Launch-time flips read the last received block; a new block applies from the next launch. */
 export function loadCachedRolloutConfig(): Promise<void> {
@@ -130,7 +131,13 @@ export function cachedRolloutConfig(): RolloutConfig | null {
 }
 
 /** Saves each readable block; a failed fetch or unreadable block keeps the last one so a kill switch can't lift. */
-export async function recordRolloutPayload(payload: unknown): Promise<void> {
+export function recordRolloutPayload(payload: unknown): Promise<void> {
+  // One at a time, so an older write can't land after (and overwrite) a newer block.
+  recording = recording.then(() => saveRolloutPayload(payload))
+  return recording
+}
+
+async function saveRolloutPayload(payload: unknown): Promise<void> {
   await loadCachedRolloutConfig()
   const config = parseRolloutConfig(payload, lastRecorded)
   if (!config) {
@@ -158,4 +165,5 @@ export function resetRolloutConfigForTests(): void {
   cachedText = null
   lastRecorded = null
   loading = null
+  recording = Promise.resolve()
 }

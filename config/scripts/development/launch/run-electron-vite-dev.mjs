@@ -345,13 +345,15 @@ function prepareMacDevElectronApp() {
   }
 
   buildDevSwiftCliHelpers(path.join(appPath, 'Contents', 'MacOS'))
+  let menuBarReady = true
   try {
     // Opt-in: dev versions use the in-process icon unless a rollout file turns the helper on.
     if (process.env.ORCA_DEV_MENU_BAR_HELPER === '1') {
       menuBar.buildDevMenuBarApp(appPath, bundleId)
     }
   } catch (error) {
-    // The app falls back to its in-process icon when the helper can't start.
+    // The app falls back to its in-process icon when the helper can't start; no marker, so the next launch retries.
+    menuBarReady = false
     console.warn('[dev] menu-bar helper build failed; continuing without it', error)
   }
 
@@ -366,7 +368,7 @@ function prepareMacDevElectronApp() {
     )
   }
   // Write reuse marker only after signing: otherwise unsigned cache permanently loses notifications/stable Keychain identity; retry copying next launch instead.
-  if (signed) {
+  if (signed && menuBarReady) {
     writeFileSync(markerPath, expectedMarker, 'utf8')
   }
   touchDevBundle(distDir)
