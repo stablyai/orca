@@ -23,6 +23,7 @@ const EVENTS = [
   'Notification',
   'PostToolUse',
   'PreToolUse',
+  'SessionEnd',
   'SessionStart',
   'Stop',
   'SubagentStop',

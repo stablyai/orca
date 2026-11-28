@@ -18,6 +18,7 @@ import { readTextFileRemote } from '../agent-hooks/installation/remote/hook-text
 // SessionStart clears prompt/tool caches on resume before the next user prompt.
 export const DROID_EVENTS = [
   { eventName: 'SessionStart', definition: {} },
+  { eventName: 'SessionEnd', definition: {} },
   { eventName: 'UserPromptSubmit', definition: {} },
   { eventName: 'Stop', definition: {} },
   // SubagentStop reports mission progress; the listener must not treat it as parent completion.

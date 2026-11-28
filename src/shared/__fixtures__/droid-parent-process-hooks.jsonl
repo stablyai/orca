@@ -1,0 +1,24 @@
+{"run":"0.244.0/s1-init","event":"SessionStart","session":"S1","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:19:49 2026"}}
+{"run":"0.244.0/s1-init","event":"UserPromptSubmit","session":"S1","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:19:49 2026"}}
+{"run":"0.244.0/s1-init","event":"Stop","session":"S1","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:19:49 2026"}}
+{"run":"0.244.0/s1-init","event":"SessionEnd","session":"S1","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:19:49 2026"}}
+{"run":"0.244.0/s1-load","event":"SessionStart","session":"S1","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:20:01 2026"}}
+{"run":"0.244.0/s1-load","event":"SessionEnd","session":"S1","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:20:01 2026"}}
+{"run":"linux-0.244.0/s1-init","event":"SessionStart","session":"S1","capture":{"platform":"linux","startTime":"00000000-0000-0000-0000-000000000000:86228378"}}
+{"run":"linux-0.244.0/s1-init","event":"UserPromptSubmit","session":"S1","capture":{"platform":"linux","startTime":"00000000-0000-0000-0000-000000000000:86228378"}}
+{"run":"linux-0.244.0/s1-init","event":"Stop","session":"S1","capture":{"platform":"linux","startTime":"00000000-0000-0000-0000-000000000000:86228378"}}
+{"run":"linux-0.244.0/s1-init","event":"SessionEnd","session":"S1","capture":{"platform":"linux","startTime":"00000000-0000-0000-0000-000000000000:86228378"}}
+{"run":"tui-0.244.0/t1-new","event":"SessionStart","session":"S1","source":"startup","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:26:43 2026"}}
+{"run":"tui-0.244.0/t1-new","event":"SessionEnd","session":"S1","reason":"clear","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:26:43 2026"}}
+{"run":"tui-0.244.0/t1-new","event":"SessionStart","session":"S2","source":"resume","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:26:43 2026"}}
+{"run":"tui-0.244.0/t1-new","event":"SessionEnd","session":"S1","reason":"other","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:26:43 2026"}}
+{"run":"tui-0.244.0/t1-new","event":"SessionEnd","session":"S2","reason":"other","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:26:43 2026"}}
+{"run":"tui-0.244.0/t2-resume","event":"SessionStart","session":"S1","source":"resume","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:27:04 2026"}}
+{"run":"tui-0.244.0/t2-resume","event":"SessionEnd","session":"S1","reason":"other","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:27:04 2026"}}
+{"run":"tui-0.244.0/t3-hup","event":"SessionEnd","session":"S1","reason":"other","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:27:23 2026"}}
+{"run":"tui-0.244.0/t3-term","event":"SessionStart","session":"S1","source":"startup","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:27:39 2026"}}
+{"run":"tui-0.238.0/t1-new","event":"SessionStart","session":"S1","source":"startup","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:34:09 2026"}}
+{"run":"tui-0.238.0/t1-new","event":"SessionEnd","session":"S1","reason":"clear","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:34:09 2026"}}
+{"run":"tui-0.238.0/t1-new","event":"SessionStart","session":"S2","source":"resume","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:34:09 2026"}}
+{"run":"tui-0.238.0/t1-new","event":"SessionEnd","session":"S1","reason":"other","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:34:09 2026"}}
+{"run":"tui-0.238.0/t1-new","event":"SessionEnd","session":"S2","reason":"other","capture":{"platform":"darwin","startTime":"Sat Oct 17 14:34:09 2026"}}

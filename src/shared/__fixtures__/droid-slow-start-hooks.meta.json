@@ -1,0 +1,10 @@
+{
+  "droid_versions": ["0.238.0", "0.244.0"],
+  "clock": "atMs is milliseconds since the run's first hook arrived",
+  "runs": {
+    "0.238.0/tree-d15000-p1": "Every SessionStart hook sleeps 15 s before it returns. The probe switches the session back and forth, and each old session's SessionEnd other arrives before the new session's SessionStart resume.",
+    "0.244.0/resume-d15000-p1": "The same 15 s SessionStart delay on 0.244.0, in the probe's resume switch mode.",
+    "0.244.0/tree-d11000-p1": "An 11 s SessionStart delay on 0.244.0; the old SessionEnd still arrives first."
+  },
+  "note": "A run name is the probe's: Droid version, switch mode, SessionStart hook delay in ms, and pass. Reduced to one row per hook: run, arrival time, event, session relations (session, previous), source, and reason. Scrubbed: pids, wall-clock and launch timestamps, and payload key lists removed. The p2 and p3 passes and the d11000a repeat, which record the same sequence, were dropped."
+}

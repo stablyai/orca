@@ -5,6 +5,8 @@ import { afterEach, expect, it } from 'vitest'
 import { createHookListenerState } from '../../listener-state'
 import { normalizeHookPayload } from '../../normalization/normalize-hook-payload'
 import { upsertBoundedAgentHookStatus } from '../../state/agent-hook-status-cache'
+import { droidBackgroundChildLeaseDeadline, resolveDroidRowStatus } from './droid-session-status'
+import { droidPaneSessions } from './droid-sessions'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
 const tempDirs: string[] = []
@@ -35,6 +37,14 @@ function post(state: ReturnType<typeof createHookListenerState>, payload: Record
     upsertBoundedAgentHookStatus(state, row)
   }
   return row
+}
+
+function settledAfterLease(state: ReturnType<typeof createHookListenerState>) {
+  const sessions = droidPaneSessions(state, PANE_KEY)
+  return sessions
+    ? resolveDroidRowStatus(sessions, (droidBackgroundChildLeaseDeadline(sessions) ?? 0) + 1)
+        .stateName
+    : undefined
 }
 
 function startRootTurn(state: ReturnType<typeof createHookListenerState>) {
@@ -69,7 +79,10 @@ it("keeps the pane on its root session while a Droid Task worker's hooks arrive"
       transcript_path: workerTranscript,
       prompt: 'reply PONG'
     })
-  ).toBeNull()
+  ).toMatchObject({
+    providerSession: { id: 'root-1' },
+    payload: { state: 'working', prompt: 'go', subagents: [{ id: 'worker-1' }] }
+  })
   // Known worker: no transcript_path needed; its tool activity keeps the root's turn working.
   expect(
     post(state, { hook_event_name: 'PostToolUse', session_id: 'worker-1', tool_name: 'Read' })
@@ -77,20 +90,16 @@ it("keeps the pane on its root session while a Droid Task worker's hooks arrive"
     providerSession: { id: 'root-1' },
     payload: { state: 'working', prompt: 'go' }
   })
-  expect(
-    post(state, {
-      hook_event_name: 'Notification',
-      session_id: 'worker-1',
-      message: 'Droid is waiting for your input'
-    })
-  ).toBeNull()
-  expect(
-    post(state, {
-      hook_event_name: 'Stop',
-      session_id: 'worker-1',
-      transcript_path: workerTranscript
-    })
-  ).toBeNull()
+  post(state, {
+    hook_event_name: 'Notification',
+    session_id: 'worker-1',
+    message: 'Droid is waiting for your input'
+  })
+  post(state, {
+    hook_event_name: 'Stop',
+    session_id: 'worker-1',
+    transcript_path: workerTranscript
+  })
   expect(state.lastStatusByPaneKey.get(PANE_KEY)).toMatchObject({
     providerSession: { id: 'root-1' },
     payload: { state: 'working', prompt: 'go' }
@@ -134,7 +143,8 @@ it('reports a background Droid Task worker that outlives the root turn as the ro
     [{ hook_event_name: 'PostToolUse', tool_name: 'AskUser' }, 'working'],
     [{ hook_event_name: 'Notification', message: 'Droid needs your permission' }, 'waiting'],
     [{ hook_event_name: 'PostToolUse', tool_name: 'Edit' }, 'working'],
-    [{ hook_event_name: 'Stop' }, 'done']
+    // Leased: the root is expected to wake and read the worker's result.
+    [{ hook_event_name: 'Stop' }, 'working']
   ] as const
   for (const [hook, rowState] of expected) {
     expect(post(state, { ...hook, ...worker })).toMatchObject({
@@ -142,6 +152,7 @@ it('reports a background Droid Task worker that outlives the root turn as the ro
       payload: { state: rowState, prompt: 'go' }
     })
   }
+  expect(settledAfterLease(state)).toBe('done')
 })
 
 it('settles background Droid Task workers that run after the root turn ended', () => {
@@ -159,23 +170,23 @@ it('settles background Droid Task workers that run after the root turn ended', (
 
   post(state, { hook_event_name: 'SessionStart', ...workerA })
   post(state, { hook_event_name: 'UserPromptSubmit', ...workerA, prompt: 'reply PONG' })
-  post(state, { hook_event_name: 'PostToolUse', ...workerA, tool_name: 'Read' })
-  expect(post(state, { hook_event_name: 'Stop', ...workerA })).toMatchObject({
-    providerSession: { id: 'root-1' },
-    payload: { state: 'done' }
-  })
-  post(state, { hook_event_name: 'UserPromptSubmit', ...workerA, prompt: 'again' })
   post(state, { hook_event_name: 'PostToolUse', ...workerA, tool_name: 'Task' })
   post(state, { hook_event_name: 'SessionStart', ...workerB })
   post(state, { hook_event_name: 'UserPromptSubmit', ...workerB, prompt: 'nested' })
   post(state, { hook_event_name: 'PostToolUse', ...workerB, tool_name: 'Read' })
   post(state, { hook_event_name: 'Stop', ...workerB })
-  post(state, { hook_event_name: 'PostToolUse', ...workerA, tool_name: 'Task' })
-  post(state, { hook_event_name: 'Stop', ...workerA })
   expect(state.lastStatusByPaneKey.get(PANE_KEY)).toMatchObject({
     providerSession: { id: 'root-1' },
-    payload: { state: 'done' }
+    payload: { state: 'working', subagents: [{ id: 'worker-a' }] }
   })
+  post(state, { hook_event_name: 'Stop', ...workerA })
+  // A finished worker's late hooks must not bring it back.
+  post(state, { hook_event_name: 'UserPromptSubmit', ...workerA, prompt: 'again' })
+  expect(state.lastStatusByPaneKey.get(PANE_KEY)).toMatchObject({
+    providerSession: { id: 'root-1' },
+    payload: { state: 'working', subagents: undefined }
+  })
+  expect(settledAfterLease(state)).toBe('done')
 })
 
 it('still reports a Droid sub-session that has no root row to defer to', () => {
@@ -189,7 +200,7 @@ it('still reports a Droid sub-session that has no root row to defer to', () => {
       transcript_path: subTranscript,
       prompt: 'go'
     })
-  ).toMatchObject({ payload: { state: 'working', prompt: 'go' } })
+  ).toMatchObject({ payload: { state: 'working', prompt: '' } })
   expect(
     post(state, { hook_event_name: 'Stop', session_id: 'sub-1', transcript_path: subTranscript })
   ).toMatchObject({ payload: { state: 'done' } })

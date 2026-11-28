@@ -1,0 +1,12 @@
+{
+  "droid_versions": ["0.238.0", "0.244.0"],
+  "platform": "darwin",
+  "recorded_at": "2026-10-17",
+  "clock": "atMs is milliseconds since the run's first hook",
+  "runs": {
+    "tui-0.238.0/p1-task": "The lead S1 runs a Task subagent S2, whose SessionStart startup and resume both name S1 as caller; S2 works and stops, then S1 gets SubagentStop and PostToolUse.",
+    "tui-0.244.0/p2-task": "The same Task on 0.244.0; after S2's Stop a SessionStart resume and a SessionEnd other arrive for S2.",
+    "tui-0.238.0/p3-bg": "A background Task: S1 stops while S2 still runs an Execute tool, and S1's next prompt arrives 0.66 s after S2's Stop."
+  },
+  "note": "Logged by a research probe in the interactive TUI. Reduced to one row per hook: run, time, event, session relations (session, calling), source, reason, tool, and the captured platform and start time of the droid process. Scrubbed: session-id prefixes, pids, the hook script's ancestor chain, environment variable names, payload key lists, and the probe's process-table rows removed."
+}

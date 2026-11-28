@@ -23,8 +23,9 @@ import {
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-owed-notification-expiry-timers'
+import { HookLeaseExpiryTimers } from '../../../shared/agent-hook-listener/leases/hook-lease-expiry-timers'
 import { AgentHookStopTranscriptReads } from './agent-hook-stop-transcript-reads'
+import type { CachedPaneEnvelopeMeta } from '../status/agent-hook-cached-pane-status'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -57,7 +58,7 @@ export class AgentHookResultRetryScheduler {
   private transcriptPollScheduler: AgentTranscriptPollScheduler<TranscriptPoll>
   private host: AgentHookResultRetryHost
   private readonly claudeHelperKills: ClaudeHelperKillPoller
-  private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
+  private readonly leaseExpiry: HookLeaseExpiryTimers
   readonly stopTranscriptReads: AgentHookStopTranscriptReads
 
   constructor(host: AgentHookResultRetryHost) {
@@ -73,7 +74,7 @@ export class AgentHookResultRetryScheduler {
       },
       listening: host.isListening
     })
-    this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
+    this.leaseExpiry = new HookLeaseExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
       (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
@@ -88,21 +89,20 @@ export class AgentHookResultRetryScheduler {
     this.stopTranscriptReads.clearAll()
     this.transcriptPollScheduler.clearAll()
     this.claudeHelperKills.clearAll()
-    this.claudeOwedNotificationExpiry.clearAll()
+    this.leaseExpiry.clearAll()
   }
 
-  /** No hook fires when Claude never sends an owed task notification; restate the row ourselves. */
-  armClaudeOwedNotificationExpiry(
-    source: AgentHookSource,
-    paneKey: string,
-    env?: string,
-    version?: string
-  ): void {
-    this.claudeOwedNotificationExpiry.arm(paneKey, (row) => {
+  /** No hook fires when a lease runs out; restate the row ourselves. */
+  armLeaseExpiry(source: AgentHookSource, paneKey: string, env?: string, version?: string): void {
+    this.leaseExpiry.arm(paneKey, (row) => {
       if (this.host.isListening()) {
         this.host.applyEvent(row, source, env, version)
       }
     })
+  }
+
+  armLeaseExpiries(metas: ReadonlyMap<string, CachedPaneEnvelopeMeta>): void {
+    metas.forEach((m, paneKey) => this.armLeaseExpiry(m.source, paneKey, m.env, m.version))
   }
 
   clearAssistantMessageRetry(paneKey: string): void {

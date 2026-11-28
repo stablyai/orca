@@ -35,6 +35,7 @@ import { normalizeDshEvent } from './providers/dsh/dsh-events'
 import { normalizeZCodeEvent } from './providers/zcode/zcode-events'
 import { normalizeJcodeEvent } from './providers/jcode/jcode-events'
 import { normalizeKiroEvent } from './providers/kiro/kiro-events'
+import type { HookSessionNormalization } from './provider-hook-session'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -61,8 +62,23 @@ export function normalizeProviderEvent(input: {
   previousOpenCodeMainAgent?: AgentMainAgentStatus
   /** A new Claude prompt_id opened the turn on this event. */
   opensTurn?: boolean
+  sessionNormalization?: HookSessionNormalization
 }): ProviderDispatchResult {
   const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
+  if (input.sessionNormalization) {
+    state.eventReplyCandidate = undefined
+    const payload = input.sessionNormalization.normalize()
+    const replyCandidate = state.eventReplyCandidate
+    state.eventReplyCandidate = undefined
+    return {
+      payload,
+      resolvedPromptText: promptText,
+      hasTranscriptPromptEvidence: false,
+      eventName: input.eventName,
+      hostTurnSignals: readHostTurnSignals(source, hookPayload, undefined),
+      replyCandidate
+    }
+  }
   // Ephemeral side chats share the pane but must not replace its recorded main turn.
   const codexEventName =
     source === 'codex'

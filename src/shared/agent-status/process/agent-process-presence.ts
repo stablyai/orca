@@ -1,6 +1,7 @@
 import { AGENT_TYPE_MAX_LENGTH } from '../contracts/agent-status-field-normalization'
 import type { AgentType } from '../contracts/agent-status-types'
 import { extractAgentProviderSession } from '../../agent-session/lifecycle/agent-session-resume'
+import { PROVIDER_HOOK_CAPABILITIES } from '../../agent-hook-listener/provider-hook-capabilities'
 
 export type AgentProcessIdentity = {
   pid: number
@@ -59,12 +60,12 @@ export function readAgentProcessIdentity(value: unknown): AgentProcessIdentity |
   return { pid, platform, startTime }
 }
 
-// Only installed Claude and Antigravity commands capture the agent process before the managed shell.
+// Only providers with command-shell capture can identify their process.
 export function readHookAgentProcess(
   source: string,
   value: unknown
 ): AgentProcessIdentity | undefined {
-  return source === 'claude' || source === 'antigravity'
+  return PROVIDER_HOOK_CAPABILITIES[source]?.capturesProcessIdentity
     ? readAgentProcessIdentity(value)
     : undefined
 }

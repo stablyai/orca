@@ -2,22 +2,28 @@ import { readHookAgentProcess } from '../../agent-status/process/agent-process-p
 import { isInheritedHookStatus } from '../presence/agent-hook-presence-transition'
 import { readHookProcessAdmission } from '../presence/agent-hook-owner-presence'
 import { normalizeAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
-import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { AgentHookSource } from '../transport/agent-hook-relay'
+import {
+  normalizedHookHasExplicitPrompt,
+  type HookNormalizationOptions
+} from '../hook-normalization-policy'
+import {
+  isImmediateProcessExitSessionEnd,
+  prepareProviderHookSession
+} from '../provider-hook-session'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed
 } from '../providers/claude/lifecycle/claude-compact-completion'
-import { isProcessExitSessionEnd, parseHookEnvelope } from '../hook-envelope'
+import { parseHookEnvelope } from '../hook-envelope'
 import { readFirstString } from '../interactive-tool'
 import type { AgentHookEventPayload } from '../listener-event'
-import { normalizeClaudePromptId, normalizeGrokPromptId } from '../listener-limits'
+import { readHookPromptIdentity } from './hook-prompt-identity'
 import type { HookListenerState } from '../listener-state'
 import { extractPromptText } from '../prompt-fields'
 import { normalizeProviderEvent } from '../provider-dispatch'
 import { hasExplicitUserPrompt } from '../provider-event-routing'
-import { hasExplicitAmpPrompt } from '../providers/amp/amp-events'
 import {
   isOpenCodeSharedServerPost,
   resolveOpenCodeSharedServerEnvelope,
@@ -31,25 +37,12 @@ import { hasSeparateHookSessionAdmission, readPaneSessionContext } from '../pane
 import { routeJcodeHelperHook } from '../providers/jcode/jcode-helper-permission-wait'
 import { orderClaudeHook } from '../providers/claude/lifecycle/claude-prompt-turn-order'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
-
 export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: {
-    deferCompactOwnershipToClient?: boolean
-    previousOpenCodeMainAgent?: AgentMainAgentStatus
-    bindingStatusByPaneKey?: ReadonlyMap<string, AgentHookEventPayload>
-    /** Spool replay restates recorded evidence; it never advances turn identity. */
-    isReplay?: boolean
-    admitOpenCodeTui?: (
-      identity: Pick<
-        AgentHookEventPayload,
-        'paneKey' | 'launchToken' | 'hookEventName' | 'hasExplicitPrompt'
-      >
-    ) => boolean | 'preserve-poster'
-  } = {}
+  options: HookNormalizationOptions = {}
 ): AgentHookEventPayload | null {
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
   if (!envelope) {
@@ -120,18 +113,8 @@ export function normalizeHookPayload(
   if (tuiAdmission !== 'preserve-poster') {
     trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
   }
-  const providerPromptId =
-    source === 'claude'
-      ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
-      : source === 'grok'
-        ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
-        : undefined
-  const compactTrigger =
-    source === 'claude' &&
-    (eventName === 'PreCompact' || eventName === 'PostCompact') &&
-    (hookPayloadRecord.trigger === 'manual' || hookPayloadRecord.trigger === 'auto')
-      ? hookPayloadRecord.trigger
-      : undefined
+  const promptIdentity = readHookPromptIdentity(source, eventName, hookPayloadRecord)
+  const { providerPromptId, compactTrigger } = promptIdentity
   // Reject malformed Claude compacts without suppressing other providers' normalizers.
   if (
     source === 'claude' &&
@@ -206,7 +189,7 @@ export function normalizeHookPayload(
   const agentPresence = agentProcess
     ? { agent: source, process: agentProcess, sessionOwner: true as const }
     : undefined
-  if (agentPresence && isProcessExitSessionEnd(eventName, hookPayloadRecord)) {
+  if (agentPresence && isImmediateProcessExitSessionEnd(source, eventName, hookPayloadRecord)) {
     const payload =
       previousStatus?.payload ??
       normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
@@ -233,7 +216,27 @@ export function normalizeHookPayload(
     return null
   }
   const promptText = extractedPrompt.text
-  const dispatched = normalizeProviderEvent({
+  const sessionAdmission = prepareProviderHookSession(source, {
+    state,
+    paneKey,
+    eventName,
+    hookPayload: hookPayloadRecord,
+    promptText,
+    sender: agentProcess,
+    previous: (options.bindingStatusByPaneKey ?? state.lastStatusByPaneKey).get(paneKey),
+    base: {
+      launchToken,
+      tabId,
+      worktreeId,
+      agentPresence,
+      providerSession: providerSession ?? undefined
+    }
+  })
+  if (sessionAdmission?.kind === 'handled') {
+    return sessionAdmission.event
+  }
+  const sessionNormalization = sessionAdmission?.normalization
+  const dispatchInput = {
     state,
     source,
     eventName: turnOrder.eventName,
@@ -243,8 +246,13 @@ export function normalizeHookPayload(
     hookPayload: turnOrder.hookPayload,
     envelope: record,
     extractedPrompt,
-    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
-  })
+    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent,
+    sessionNormalization
+  }
+  const dispatched = normalizeProviderEvent(dispatchInput)
+  const rowProviderSession = sessionNormalization
+    ? sessionNormalization.providerSession
+    : providerSession
   const providerSessionOnly =
     (source === 'pi' || source === 'prime-agent' || source === 'jcode') &&
     eventName === 'session_start' &&
@@ -276,18 +284,7 @@ export function normalizeHookPayload(
     // Normalization is transport-agnostic; only ingestRemote knows the mux identity to stamp.
     connectionId: null,
     ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
-    hasExplicitPrompt:
-      source === 'amp'
-        ? hasExplicitAmpPrompt(eventName, promptText, hookPayloadRecord)
-          ? true
-          : undefined
-        : hasExplicitUserPrompt(
-            source,
-            dispatched.eventName,
-            extractedPrompt,
-            dispatched.resolvedPromptText,
-            dispatched.hasTranscriptPromptEvidence
-          ),
+    hasExplicitPrompt: normalizedHookHasExplicitPrompt(dispatchInput, dispatched),
     promptInteractionKey: dispatched.promptInteractionKey,
     hookEventName: typeof dispatched.eventName === 'string' ? dispatched.eventName : undefined,
     providerPromptId:
@@ -307,7 +304,7 @@ export function normalizeHookPayload(
         }
       : {}),
     ...(claudeBatchSettledRequests ? { claudeSettledRequests: claudeBatchSettledRequests } : {}),
-    ...(providerSession ? { providerSession } : {}),
+    ...(rowProviderSession ? { providerSession: rowProviderSession } : {}),
     ...(statusAdmissionSession ? { statusAdmissionSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...dispatched.hostTurnSignals,
