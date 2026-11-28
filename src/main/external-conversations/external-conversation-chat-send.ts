@@ -18,6 +18,7 @@ import {
 } from './external-conversation-returned-carry'
 import { callerFor, type ConversationChat } from './external-conversation-chat'
 import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
+import { botWakeGate, notePersonWrote } from './external-conversation-bot-wakes'
 
 /** Sent as a person's message would be: a busy chat takes it into the running turn. A bot's is
  *  labelled with who asked, where and what came before; the chat shows the message alone. Its
@@ -42,12 +43,20 @@ export async function deliverToChat(
   if (!chat.deps.store.getConversation(link.sessionId)) {
     return refused(CHAT_GONE_REFUSAL)
   }
+  const gate = await botWakeGate(chat, link, delivery.asker, delivery.deliveryId)
+  if (gate.kind === 'stop') {
+    return refused('bot_chain_limit')
+  }
+  const note = [delivery.note, gate.note].filter(Boolean).join('\n\n') || undefined
   let admitted = false
+  // When this attempt was admitted, should the writer's own time for it be missing.
+  let admittedAt = 0
   // What takes back an admission the writer then refused.
   const taken: { back?: (() => void) | void } = {}
   const admit = () => {
     if (!admitted) {
       admitted = true
+      admittedAt = Date.now()
       taken.back = delivery.admitted?.()
     }
   }
@@ -63,7 +72,7 @@ export async function deliverToChat(
               delivery.images?.length ?? 0
             )
           : NOTHING_CARRIED
-      const outcome = await sendConnectorTurn(chat, link, delivery, carried, admit)
+      const outcome = await sendConnectorTurn(chat, link, { ...delivery, note }, carried, admit)
       if (
         outcome.kind === 'refused' &&
         carried.cards.length > 0 &&
@@ -87,9 +96,18 @@ export async function deliverToChat(
           outcome.kind === 'sent' ? outcome.submission : null
         )
       }
-      return dispatched === 'unknown'
-        ? { outcome: 'unknown', reason: 'writer_failed' }
-        : { outcome: 'accepted' }
+      if (dispatched === 'unknown') {
+        return { outcome: 'unknown', reason: 'writer_failed' }
+      }
+      // The cards this admission carried were consumed with it, so a person's among them counts, from
+      // the time the writer saved it (the message's own journal time).
+      const savedAt = outcome.kind === 'sent' ? outcome.submission?.submittedAt : undefined
+      notePersonWrote(
+        link,
+        { asker: delivery.asker, carriedPerson: carried.person },
+        savedAt ?? (admittedAt || Date.now())
+      )
+      return { outcome: 'accepted' }
     }
   } catch {
     if (admitted) {

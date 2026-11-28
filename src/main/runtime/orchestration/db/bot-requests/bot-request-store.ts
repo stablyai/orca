@@ -34,9 +34,16 @@ export type BotRequestRow = {
   send_key: string | null
 }
 
-export type BotRequestAdmission =
-  | { kind: 'sent'; message: MessageRow }
-  | { kind: 'duplicate'; messageId: string }
+type BotRequestDuplicate = { kind: 'duplicate'; messageId: string }
+
+export type BotRequestAdmission = { kind: 'sent'; message: MessageRow } | BotRequestDuplicate
+
+/** One bot's quota to another. `refuse` throws, told when the oldest counted send leaves the window. */
+export type BotRequestPairLimit = {
+  requests: number
+  minutes: number
+  refuse: (oldestLeavesAt: number | null) => never
+}
 
 const SAVEPOINT = 'bot_request_admission'
 
@@ -58,6 +65,9 @@ export function admitBotRequest(
     message: MessageInsert
     /** Commits with the stored request, before anyone is woken for it. */
     onAdmitted?: () => void
+    /** Counted and taken in the same synchronous step as the insert, so sends racing on one host
+     *  can't pass it; absent for a send no bot makes. */
+    pairLimit?: BotRequestPairLimit
   }
 ): BotRequestAdmission {
   return withinAdmission(this, () => {
@@ -92,7 +102,7 @@ type AdmissionKey = Pick<Parameters<typeof admitBotRequest>[0], 'sendKey' | 'pur
 export function botRequestBlocked(
   this: OrchestrationDb,
   input: AdmissionKey
-): Exclude<BotRequestAdmission, { kind: 'sent' }> | null {
+): BotRequestDuplicate | null {
   // Status holds no place: information sent twice is sent twice.
   if (input.sendKey && input.purpose !== 'status') {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bot_requests schema above pins message_id as TEXT; the adapter exposes unknown.
@@ -110,11 +120,25 @@ export function botRequestBlocked(
   return null
 }
 
+/** The same send again is its duplicate first; only a new one is held to the pair's quota. */
+function refusedBeforeInsert(
+  db: OrchestrationDb,
+  input: Omit<Parameters<typeof admitBotRequest>[0], 'message'>
+): BotRequestDuplicate | null {
+  const blocked = db.botRequestBlocked(input)
+  if (blocked || !input.pairLimit || !input.fromBotId) {
+    return blocked
+  }
+  const pair = { fromBotId: input.fromBotId, toBotId: input.toBotId }
+  const sent = db.botRequestsSentWithin(pair, input.pairLimit.minutes)
+  return sent.count >= input.pairLimit.requests ? input.pairLimit.refuse(sent.oldestLeavesAt) : null
+}
+
 function admitWithin(
   db: OrchestrationDb,
   input: Parameters<typeof admitBotRequest>[0]
 ): BotRequestAdmission {
-  const blocked = db.botRequestBlocked(input)
+  const blocked = refusedBeforeInsert(db, input)
   if (blocked) {
     return blocked
   }
@@ -138,8 +162,8 @@ type BotRequestReservation = Omit<
 export function reserveBotRequest(
   this: OrchestrationDb,
   input: BotRequestReservation
-): Exclude<BotRequestAdmission, { kind: 'sent' }> | { kind: 'reserved' } {
-  const blocked = this.botRequestBlocked(input)
+): BotRequestDuplicate | { kind: 'reserved' } {
+  const blocked = refusedBeforeInsert(this, input)
   if (blocked) {
     return blocked
   }
@@ -179,8 +203,8 @@ function insertRequestRow(
   db.db
     .prepare(
       `INSERT INTO bot_requests
-         (message_id, root_key, from_bot_id, to_bot_id, purpose, depth, record, send_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         (message_id, root_key, from_bot_id, to_bot_id, purpose, depth, record, send_key, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))`
     )
     .run(
       messageId,
@@ -201,6 +225,38 @@ export function getBotRequest(this: OrchestrationDb, messageId: string): BotRequ
     | undefined
 }
 
+/** A pair's requests in the window, read as a range of idx_bot_requests_pair: from the cutoff's whole
+ *  second on, less the millisecond rows of that second at or before the cutoff. A whole-second row
+ *  (from before milliseconds) in that second stays, counting to its second's end. */
+const BOT_PAIR_WINDOW_SQL = `SELECT COUNT(*) AS count, MIN(created_at) AS oldest FROM bot_requests
+  WHERE from_bot_id = ? AND to_bot_id = ?
+    AND created_at >= strftime('%Y-%m-%d %H:%M:%S', 'now', ?)
+    AND (created_at > strftime('%Y-%m-%d %H:%M:%f', 'now', ?) OR length(created_at) = 19)`
+
+/** How many requests one bot made to another in the last `minutes` (reserved or admitted, delivered
+ *  or not), and when the oldest of them goes out of that window (epoch ms; null with none). */
+export function botRequestsSentWithin(
+  this: OrchestrationDb,
+  pair: { fromBotId: string; toBotId: string },
+  minutes: number
+): { count: number; oldestLeavesAt: number | null } {
+  const window = `-${minutes} minutes`
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: COUNT and MIN over the bot_requests schema above.
+  const row = this.db
+    .prepare(BOT_PAIR_WINDOW_SQL)
+    .get(pair.fromBotId, pair.toBotId, window, window) as {
+    count: number
+    oldest: string | null
+  }
+  // created_at is UTC 'YYYY-MM-DD HH:MM:SS.SSS' as the request was reserved or admitted, which is
+  // when it takes its place; a row from before has whole seconds and counts to its second's end.
+  const oldest = row.oldest ? Date.parse(`${row.oldest.replace(' ', 'T')}Z`) : Number.NaN
+  return {
+    count: row.count,
+    oldestLeavesAt: Number.isNaN(oldest) ? null : oldest + minutes * 60_000
+  }
+}
+
 export type BotRequestStoreMethods = {
   admitBotRequest: typeof admitBotRequest
   reserveBotRequest: typeof reserveBotRequest
@@ -208,6 +264,7 @@ export type BotRequestStoreMethods = {
   releaseBotRequest: typeof releaseBotRequest
   botRequestBlocked: typeof botRequestBlocked
   getBotRequest: typeof getBotRequest
+  botRequestsSentWithin: typeof botRequestsSentWithin
 }
 
 export function attachBotRequestStore(ctor: { prototype: object }): void {
@@ -217,6 +274,7 @@ export function attachBotRequestStore(ctor: { prototype: object }): void {
     admitReservedBotRequest,
     releaseBotRequest,
     botRequestBlocked,
+    botRequestsSentWithin,
     getBotRequest
   })
 }

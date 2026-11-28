@@ -1,11 +1,12 @@
-// Where a new bot request sits in its chain, kept on its record for tracing: a turn a request woke
-// continues that request's chain.
+// Where a new bot request sits in its chain: a turn a request woke continues that request's chain,
+// unless a person's own message joined it.
 import { createHash } from 'node:crypto'
 import type { BotActingTurn } from '../../../../../bots/bot-request-asker'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 
 export type BotRequestChain = {
-  /** The new request's hop: 1 from a person's turn, one past the deepest request that woke the turn. */
+  /** The new request's hop: 1 from a person's turn, one past the deepest request that woke the turn.
+   *  Past BOT_CHAIN_LIMIT it is not sent. */
   depth: number
   /** The chain's key, its first waking request's; null for a send no turn names, which starts its own. */
   rootKey: string | null
@@ -17,14 +18,14 @@ export type BotRequestChain = {
 export function botRequestChain(
   db: OrchestrationDb,
   sessionId: string | null,
-  turn: Pick<BotActingTurn, 'rootItemId' | 'requestIds'>
+  turn: Pick<BotActingTurn, 'rootItemId' | 'requestIds' | 'personJoined'>
 ): BotRequestChain {
   const turnKey = sessionId && turn.rootItemId ? `${sessionId}:${turn.rootItemId}` : null
   const parents = turn.requestIds.flatMap((id) => {
     const row = db.getBotRequest(id)
     return row ? [row] : []
   })
-  if (parents.length === 0) {
+  if (parents.length === 0 || turn.personJoined) {
     return { depth: 1, rootKey: turnKey, turnKey }
   }
   return {
@@ -32,6 +33,15 @@ export function botRequestChain(
     rootKey: parents[0].root_key,
     turnKey
   }
+}
+
+/** What a turn's chain is read from, for a worker it started: a worker never starts a chain over. */
+export function chainOfTurn({
+  turn
+}: {
+  turn: Pick<BotActingTurn, 'requestIds' | 'personJoined'>
+}): Pick<BotActingTurn, 'requestIds' | 'personJoined'> {
+  return { requestIds: turn.requestIds, ...(turn.personJoined ? { personJoined: true } : {}) }
 }
 
 /** One send: from this turn, to this bot, of this kind, with this text. */

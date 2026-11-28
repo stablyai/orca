@@ -16,6 +16,7 @@ import {
 } from '../../shared/agent-session/failures/agent-session-failure'
 import type { JournalReturnedCard } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
 import type { ConversationChat } from './external-conversation-chat'
+import { isPersonAsker } from '../bots/bot-chain-messages'
 
 // What a later send can get past: the agent itself couldn't take the message. A refusal of the
 // message's own content (too large, too many images, empty) would fail again, so it stays a card.
@@ -40,6 +41,8 @@ export type CarriedMessages = {
   askers: (ConnectorMessageAsker | undefined)[]
   /** Everyone who asked a carried message, nested carries included; null for one Orca can't name. */
   askedBy: (ConnectorMessageAsker | null)[]
+  /** A person's own message is among them, nested carries included: not an Orca bot's or an app's. */
+  person: boolean
 }
 
 export const NOTHING_CARRIED: CarriedMessages = {
@@ -47,7 +50,8 @@ export const NOTHING_CARRIED: CarriedMessages = {
   cards: [],
   deliveryIds: [],
   askers: [],
-  askedBy: []
+  askedBy: [],
+  person: false
 }
 
 /** Whether a returned card is one this conversation's next message carries. */
@@ -127,6 +131,10 @@ export function carriedMessages(
     askers: carried.map(({ card }) =>
       card.body.leaveEligible === true ? card.body.asker : undefined
     ),
+    person: carried.some(
+      ({ card: { body } }) =>
+        isPersonAsker(body.asker) || (body.carriedAskers ?? []).some(isPersonAsker)
+    ),
     askedBy: oncePerSender(
       carried.flatMap(({ card: { body } }) => [
         ...(body.asker
@@ -146,8 +154,11 @@ function oncePerSender(
 ): (ConnectorMessageAsker | null)[] {
   const seen = new Set<string>()
   return askers.filter((asker) => {
-    // The authority key bot-acts-for's distinctAskers reads: another app is never a role.
-    const key = asker ? `${asker.source}:${asker.userId}:${asker.app ? 'app' : asker.role}` : ''
+    // The authority key bot-acts-for's distinctAskers reads: another app is never a role. An Orca
+    // bot's post for someone stays apart from that person's own, so a carry keeps who wrote it.
+    const key = asker
+      ? `${asker.source}:${asker.userId}:${asker.app ? 'app' : asker.role}${asker.via ? ':via' : ''}`
+      : ''
     if (seen.has(key)) {
       return false
     }

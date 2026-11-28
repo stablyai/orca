@@ -94,6 +94,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'selector_ambiguous',
   // A refused worker-start names its flag in data; a plain Error('selector_not_found') keeps the bare code.
   'selector_not_found',
+  // A bot request past its chain's hand-offs or its pair's quota (bot-request-limits.ts).
+  'bot_request_chain_limit',
+  'bot_request_rate_limit',
   'run_not_found',
   'run_home_unreachable',
   'run_required',

@@ -16,7 +16,8 @@ const NEW_INDEXES = [
   'idx_question_threads_awaiting',
   'idx_remote_owned_questions_awaiting',
   'idx_dispatch_contexts_for_message',
-  'idx_peer_questions_out_awaiting'
+  'idx_peer_questions_out_awaiting',
+  'idx_bot_requests_pair'
 ]
 const TAKE_COLUMNS = [
   ['bot_requests', 'taken_by'],
@@ -69,7 +70,7 @@ describe('v47-v48 bot dispatch migrations', () => {
   function expectCurrentSchema(path: string, seededTaskId?: string): void {
     const db = new OrchestrationDb(path)
     try {
-      expect(db.db.pragma('user_version', { simple: true })).toBe(52)
+      expect(db.db.pragma('user_version', { simple: true })).toBe(53)
       expect(db.hasColumn('dispatch_contexts', 'chat_lineage')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'progress_note')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'progress_updated_at')).toBe(true)
@@ -135,7 +136,7 @@ describe('v47-v48 bot dispatch migrations', () => {
     expectCurrentSchema(path, taskId)
   })
 
-  it('opens a fresh database at v48, and again unchanged', () => {
+  it('opens a fresh database at the current version, and again unchanged', () => {
     const path = dbPath()
     expectCurrentSchema(path)
     expectCurrentSchema(path)

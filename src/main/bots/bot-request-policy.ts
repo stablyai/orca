@@ -23,6 +23,8 @@ export type BotRequestRefusalCode =
   | 'bot_self'
   | 'bot_request_type'
   | 'bot_request_worker'
+  | 'bot_request_chain_limit'
+  | 'bot_request_rate_limit'
 
 type TargetBot = Pick<Bot, 'id' | 'name' | 'paused'>
 
