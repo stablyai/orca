@@ -1469,7 +1469,7 @@
       "pairingTemporarilyUnavailable": "Appairage temporairement indisponible",
       "unlockHint": "Déverrouillez votre téléphone, puis touchez pour réessayer.",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité",
-      "tapToPairAgain": "Touchez pour réappairer"
+      "tapToPairAgain": "Touchez pour appairer à nouveau"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Vérification de la compatibilité de l'hôte"

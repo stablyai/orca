@@ -18977,7 +18977,7 @@
           "runStatusDispatchFailed": "失败"
         },
         "runContent": {
-          "noOutput": "暂无输出"
+          "noOutput": "没有输出"
         },
         "runViewState": {
           "viewRun": "查看运行",

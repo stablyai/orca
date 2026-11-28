@@ -19709,7 +19709,7 @@
           "runStatusDispatchFailed": "失敗"
         },
         "runContent": {
-          "noOutput": "暫無輸出。"
+          "noOutput": "沒有輸出。"
         },
         "runViewState": {
           "viewRun": "檢視執行",

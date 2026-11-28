@@ -5774,7 +5774,7 @@
         "count": "{{count}} 件"
       },
       "empty": {
-        "allClear": "要対応の項目はありません"
+        "allClear": "対応が必要なものはありません"
       }
     },
     "needs": {

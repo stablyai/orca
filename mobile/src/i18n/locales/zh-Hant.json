@@ -3101,7 +3101,7 @@
       "terminalTitle": "終端機",
       "terminalLayout": "終端機版面配置",
       "sourceControl": "原始碼控制",
-      "itemsNeedYou": "項目，{{count}} 個需要你處理",
+      "itemsNeedYou": "項目，{{count}} 個需要你",
       "quickCommands": "快速命令",
       "items": "項目",
       "textSize": "文字大小"
@@ -5096,7 +5096,7 @@
       "started": "開始",
       "trigger": "觸發",
       "output": "輸出",
-      "noOutput": "暫無輸出。",
+      "noOutput": "沒有輸出。",
       "loadingRuns": "正在載入執行...",
       "loading": "載入中…",
       "hourly": "每小時",

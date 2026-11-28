@@ -28615,10 +28615,10 @@
         "replyTo": "{{name}} に返信…"
       },
       "empty": {
-        "allClear": "要対応の項目はありません",
+        "allClear": "対応が必要なものはありません",
         "body": "{{bot}} があなたのために何かを引き受けると、ここに表示されます。ボットが何をしているか、あなたに何をしてほしいかがわかります。",
         "filtered": "一致する項目はありません。",
-        "needsYou": "要対応の項目はありません。",
+        "needsYou": "対応が必要なものはありません。",
         "title": "項目はまだありません",
         "short": "項目はまだありません。{{bot}} が何かを引き受けると、ここに表示されます。"
       },
@@ -29583,7 +29583,7 @@
       "newThreadTab": "新規スレッド",
       "items": {
         "orNames": "{{names}}、または {{last}}",
-        "emptyBotsNeedsYou": "{{names}} からの要対応項目はありません",
+        "emptyBotsNeedsYou": "{{names}} からの項目で、対応が必要なものはありません",
         "emptyBots": "{{names}} の項目はありません",
         "emptyTitle": "このグループの項目はまだありません",
         "filterNamed": "項目を絞り込み、{{filter}} で絞り込み済み",
