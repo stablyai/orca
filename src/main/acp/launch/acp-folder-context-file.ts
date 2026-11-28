@@ -50,22 +50,24 @@ function orcaBlockRange(existing: string): { start: number; end: number } | null
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
  *  A symlink on the way, or a file that cannot be read as UTF-8, stays untouched. The result is readable
  *  only by this host's user, a file the user wrote included, since it now carries the bot's
- *  instructions. An inheritable ACL the user set on the folder still applies on top of that. */
+ *  instructions. An inheritable ACL the user set on the folder still applies on top of that.
+ *  Returns the file's size in bytes; null when a link or an unreadable file left it as it was. */
 export async function writeFolderContextFile(
   cwd: string,
   path: string,
   agentName: string,
   text: string
-): Promise<void> {
+): Promise<number | null> {
   const realCwd = await realpath(cwd).catch(() => cwd)
   const folders = dirname(path)
     .split(/[\\/]/)
     .filter((segment) => segment && segment !== '.')
   // A linked folder on the way would carry the bot's instructions somewhere else.
   if ((await realFolderUnderRoot(cwd, realCwd, folders)) === 'other') {
-    return
+    return null
   }
   const target = join(realCwd, path)
+  let written: number | null = null
   await replaceWhileUnchanged(
     target,
     async () => {
@@ -77,8 +79,13 @@ export async function writeFolderContextFile(
       // A link may point outside the folder or into a tracked file, so it is left as the user's.
       return info.isSymbolicLink() ? undefined : readUtf8(target).catch(() => undefined)
     },
-    (existing) => withOrcaText(existing, text, agentName)
+    (existing) => {
+      const content = withOrcaText(existing, text, agentName)
+      written = Buffer.byteLength(content)
+      return content
+    }
   )
+  return written
 }
 
 /** Takes Orca's text back out of `cwd`'s `path`: deletes a file Orca wrote for `agentName`, or

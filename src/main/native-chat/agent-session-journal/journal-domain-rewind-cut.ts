@@ -45,9 +45,12 @@ export function planJournalDomainRewindCut(scope: JournalSqlScope, target: Journ
   scope.examined(selected)
   const providerItemId = String(selected.provider_item_id)
   const key = parseAgentJournalItemKey(providerItemId)
-  const claude = key?.provider === 'claude' && target.provider === 'claude'
+  // Fork-cut family: the cut rides the row's own session (a retained ancestor row cuts at its
+  // original position), with zcode's turn id in the uuid slot exactly like claude's parent uuid.
+  const forkCut =
+    (key?.provider === 'claude' || key?.provider === 'zcode') && target.provider === key.provider
   if (
-    !claude &&
+    !forkCut &&
     (key?.provider !== 'codex' || target.provider !== 'codex' || key.threadId !== target.nativeId)
   ) {
     return null
@@ -56,13 +59,16 @@ export function planJournalDomainRewindCut(scope: JournalSqlScope, target: Journ
     floor,
     boundary: rewindPosition(selected),
     nativeId: target.nativeId,
-    claude
+    claude: forkCut
   }
-  if (claude && key?.provider === 'claude') {
+  if (forkCut && key) {
     const cut: JournalRewindCut = {
       floor,
       providerItemId,
-      beforeMessage: { sessionId: key.sessionId, uuid: key.uuid }
+      beforeMessage: {
+        sessionId: key.sessionId,
+        uuid: key.provider === 'zcode' ? key.turnId : key.uuid
+      }
     }
     return { cut, membership }
   }

@@ -93,7 +93,12 @@ export function structuredChatNamingDeps(
       ) {
         return null
       }
-      if (useChatAgent && (record.provider === 'grok' || record.provider === 'antigravity')) {
+      if (
+        useChatAgent &&
+        (record.provider === 'grok' ||
+          record.provider === 'antigravity' ||
+          record.provider === 'zcode')
+      ) {
         const generateText = getStructuredAgentSessionHost()?.deps.adapter.generateText
         try {
           if (!generateText) {
@@ -118,7 +123,13 @@ export function structuredChatNamingDeps(
           throw new Error('The naming agent returned an empty title')
         } catch (error) {
           logger.warn('Native chat naming failed', { ...log, error })
-          return chatNamingFailure(record.provider === 'grok' ? 'grokFailed' : 'antigravityFailed')
+          return chatNamingFailure(
+            record.provider === 'grok'
+              ? 'grokFailed'
+              : record.provider === 'antigravity'
+                ? 'antigravityFailed'
+                : 'agentNotRun'
+          )
         }
       }
       const {

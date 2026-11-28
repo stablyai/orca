@@ -36,12 +36,14 @@ const ASK_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--permission-mode default',
   'claude-agent-teams': '--permission-mode default',
   grok: '--permission-mode default',
-  codex: '-a on-request -s read-only -c approvals_reviewer=user'
+  codex: '-a on-request -s read-only -c approvals_reviewer=user',
+  zcode: '--mode build'
 }
 
 const ACCEPT_EDITS_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--permission-mode acceptEdits',
-  'claude-agent-teams': '--permission-mode acceptEdits'
+  'claude-agent-teams': '--permission-mode acceptEdits',
+  zcode: '--mode edit'
 }
 
 const ARGS_BY_CHOICE: Record<AgentChatPermissionMode, Partial<Record<TuiAgent, string>>> = {
