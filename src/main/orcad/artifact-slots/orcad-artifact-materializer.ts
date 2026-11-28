@@ -27,6 +27,7 @@ import {
 import { findOrcadCachePath } from '../../node-runtime/orcad-cache-path'
 import type { PinnedRuntimeMaterializeOptions } from '../../node-runtime/pinned-runtime-materializer'
 import { readOrcadArtifactVerificationRecord } from './orcad-artifact-verification-record'
+import type { OrcadArtifactVerificationRecord } from './orcad-artifact-verification-record'
 import { orcadArtifactSlotName } from './orcad-artifact-slot-name'
 import {
   isCompleteArtifact,
@@ -54,6 +55,8 @@ type MaterializeOptions = PinnedRuntimeMaterializeOptions & {
 const materializations = new Map<string, Promise<string>>()
 // Retain handed-out slots: concurrent deployments may still be reading them.
 const materializedVersions = new Set<string>()
+// Callers that trust no record on disk (SSH, local serve) remember what this process hashed.
+const processVerificationRecords = new Map<string, OrcadArtifactVerificationRecord>()
 
 export function materializedOrcadArtifactVersions(): ReadonlySet<string> {
   return materializedVersions
@@ -92,7 +95,7 @@ export async function assembleOrcadArtifact(args: {
   target: NodeRuntimeTarget
   manifest?: OrcadTemplateManifest
   now?: () => number
-  /** Disabled for SSH/local serve: hash every launch without reading/writing records. */
+  /** Disabled for SSH/local serve: no record on disk, only what this process already hashed. */
   trustVerificationRecord?: boolean
 }): Promise<string> {
   const trust = args.trustVerificationRecord === true
@@ -102,8 +105,16 @@ export async function assembleOrcadArtifact(args: {
   const expected = expectedTemplateSha256(args.target, manifest, mobileWebAssets)
   const targetRoot = join(args.cacheRoot, args.target)
   const nowMs = (args.now ?? Date.now)()
-  const record = trust ? await readOrcadArtifactVerificationRecord(targetRoot) : null
-  const identity = await verifiedArtifactIdentity(sources, expected, record, nowMs, trust)
+  const record = trust
+    ? await readOrcadArtifactVerificationRecord(targetRoot)
+    : (processVerificationRecords.get(targetRoot) ?? null)
+  const identity = await verifiedArtifactIdentity(sources, expected, record, nowMs)
+  const remember = (slot: Parameters<typeof rememberVerification>[3]): Promise<void> =>
+    trust
+      ? rememberVerification(targetRoot, record, identity, slot)
+      : rememberVerification(targetRoot, record, identity, slot, async (root, next) => {
+          processVerificationRecords.set(root, next)
+        })
   await verifyTemplateMarkers(args.templateDir, args.target)
   const { fullVersion, sourceHashes } = identity
   const recordedSlot =
@@ -123,10 +134,7 @@ export async function assembleOrcadArtifact(args: {
   if (cached.verified) {
     const now = new Date()
     await utimes(targetDir, now, now).catch(() => undefined)
-    if (trust) {
-      const slot = slotFromRecord ? recordedSlot : await signSlot(targetDir, sources, nowMs)
-      await rememberVerification(targetRoot, record, identity, slot)
-    }
+    await remember(slotFromRecord ? recordedSlot : await signSlot(targetDir, sources, nowMs))
     return targetDir
   }
   await mkdir(targetRoot, { recursive: true })
@@ -153,10 +161,8 @@ export async function assembleOrcadArtifact(args: {
         })
       }
     }
-    if (trust) {
-      // Fresh copies are unsettled, so the next launch must hash again.
-      await rememberVerification(targetRoot, record, identity, null)
-    }
+    // Fresh copies are unsettled, so the next launch must hash again.
+    await remember(null)
     return targetDir
   } finally {
     await rm(stagingDir, { recursive: true, force: true })
@@ -315,4 +321,5 @@ function resolveOrcadTemplateDir(): string {
 
 export function resetOrcadArtifactMaterializationsForTests(): void {
   materializations.clear()
+  processVerificationRecords.clear()
 }
