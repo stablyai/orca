@@ -31,3 +31,12 @@ export function startupUpdatePromptSuppression(agent: TuiAgent): {
     env: STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[agent]
   }
 }
+
+/** Adds the agent's update-suppression env under any command-provided assignments. */
+export function withStartupUpdatePromptSuppressionEnv(
+  agent: TuiAgent,
+  env: Record<string, string> | undefined
+): { env?: Record<string, string> } {
+  const suppression = STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV[agent]
+  return suppression || env ? { env: { ...suppression, ...env } } : {}
+}
