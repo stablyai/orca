@@ -127,13 +127,12 @@ it('persists an ended group turn before the provider close control', async () =>
       expect(live.notices).toHaveLength(1)
     })
     expect(rig.closeSession).not.toHaveBeenCalled()
-    await rig.closeSession({
+    const close = {
       sessionId,
       handle: codexProviderHandle(HOST_TEST_THREAD),
       reason: 'closed'
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The rig accepts the production close shape.
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The rig accepts the production close shape.
-    } as never)
+    } satisfies Parameters<typeof rig.closeSession>[0]
+    await rig.closeSession(close)
     expect(store.message('post-1')!.turns[0].end).toBe('finished')
     translator.dispose()
   } finally {
