@@ -5,8 +5,10 @@ import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/
 import { formatUsageWindowLength, type AgentUsage } from '../composer-usage/agent-usage-provider'
 import { composerUsageMeterReadout } from '../composer-usage/composer-usage-meter-readout'
 import { useComposerUsageDisplay } from '../composer-usage/composer-usage-display-preference'
-import { computeUsagePace, usagePaceMarkerPercent } from '../composer-usage/usage-window-pace'
-import { usagePaceColor } from '../composer-usage/usage-pace-color'
+import { useComposerUsageWindow } from '../composer-usage/composer-usage-window-preference'
+import { usagePaceMarkerPercent } from '../composer-usage/usage-window-pace'
+import { usageWindowPaceColor } from '../composer-usage/usage-pace-color'
+import { useUsagePaceColorThresholds } from '../composer-usage/usage-pace-color-preference'
 import { usageResetLabel } from '../composer-usage/usage-reset-label'
 import { UsageProviderGlyph } from '../composer-usage/usage-provider-logo'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -42,14 +44,16 @@ export function RailUsageRing({
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const display = useComposerUsageDisplay()
+  const choice = useComposerUsageWindow()
+  const thresholds = useUsagePaceColorThresholds()
   // "3d 2h" when it fits inside the ring, else its largest unit ("3d", "5h", "40m").
   const [fullLabelWidth, setFullLabelWidth] = useState<number | null>(null)
-  const entry = pickRailUsageWindow(usage.windows)
+  const entry = pickRailUsageWindow(usage.windows, choice)
   if (!entry) {
     return null
   }
   const readout = composerUsageMeterReadout(entry.window.usedPercent, display)
-  const fill = usagePaceColor(computeUsagePace(entry.window, now), readout.used)
+  const fill = usageWindowPaceColor(entry.window, now, thresholds)
   const marker = usagePaceMarkerPercent(entry.window, now, display)
   const provider = getProviderDisplayName(usage.provider)
   const vars = {

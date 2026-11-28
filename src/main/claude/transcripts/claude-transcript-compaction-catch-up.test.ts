@@ -63,7 +63,7 @@ async function catchUp(rows: Record<string, unknown>[], saved: JournalHistoryIte
   }
   const result = await plan.finish()
   plan.dispose()
-  const mutations = result?.mutations ?? []
+  const mutations = (result ?? []).flatMap((plan) => plan.mutations)
   return {
     compactions: mutations.filter(
       (row) =>

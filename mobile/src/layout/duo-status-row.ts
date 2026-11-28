@@ -137,16 +137,23 @@ export function duoRailJumpFrames(
   }
 }
 
-/** The span of the column a collapsed chat leaves empty: below Back, above the jump arrows' slot. */
+/** The span of the column a collapsed chat leaves empty: below Back, above any visible jump arrows. */
 export function duoRailFreeBand(
-  args: DuoStatusRowArgs & { composerTop: number; backShown: boolean }
+  args: DuoStatusRowArgs & {
+    composerTop: number
+    backShown: boolean
+    /** Jump arrows actually drawn in the rail. Hidden arrows leave their slot for rings. */
+    visibleJumpButtons?: number
+  }
 ): { top: number; bottom: number } | null {
   const back = duoRailBackFrame(args)
   const gap = spacing.sm
   // With no rail Back the band starts at the window top, and the shell places it under the status glyph.
-  const top = args.backShown ? back.top + back.size + gap : 0
-  // Reserved even while the arrows are hidden, so the band doesn't jump as they come and go.
-  const bottom = args.composerTop - 3 * gap - 2 * back.size
+  // With rail Back it starts right below Back so the ring stack's own top padding supplies the gap.
+  const top = args.backShown ? back.top + back.size : 0
+  // Reserve only for jump buttons actually shown. Hiding them frees the column down to the composer.
+  const jumps = Math.max(0, Math.min(2, Math.trunc(args.visibleJumpButtons ?? 0)))
+  const bottom = args.composerTop - (jumps + 1) * gap - jumps * back.size
   return bottom > top ? { top, bottom } : null
 }
 

@@ -27,11 +27,13 @@ export function usePageFoldDivision(): {
   onRootLayout: () => void
   onShellLayout: (event: LayoutChangeEvent) => void
 } {
-  const { divisions, windowSafeArea } = useReservedRegions()
-  // The page only reads these for its header; its side rail comes from the native strip.
-  const occlusions = useTopChromeOcclusions()
+  const { divisions, occlusions: rawOcclusions, windowSafeArea } = useReservedRegions()
+  const topChromeOcclusions = useTopChromeOcclusions()
   const strip = useSideRailStrip()
   const sideRail = strip !== null
+  // Rail Back, jump arrows, and the free band need the status column even on a folded cover,
+  // where hasFoldDivision is false and the header-only occlusion list would hide it.
+  const occlusions = sideRail ? rawOcclusions : topChromeOcclusions
   const directionPadAvailable = useSideRailDirectionPadAvailable()
   const rootRef = useRef<HostInstance>(null)
   const layoutRef = useRef<WindowFrame | null>(null)

@@ -10,7 +10,11 @@ import {
 } from 'react'
 import { StyleSheet, View, useWindowDimensions, type HostInstance } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { duoRailFreeBand, type DuoRailJumpFrames } from '../layout/duo-status-row'
+import {
+  duoRailFreeBand,
+  type DuoRailControlFrame,
+  type DuoRailJumpFrames
+} from '../layout/duo-status-row'
 import { useReservedRegions } from '../layout/reserved-regions'
 import { getSideRailStrip } from '../layout/side-rail-strip'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
@@ -53,7 +57,8 @@ function sameActions(left: JumpActions | null, right: JumpActions | null): boole
 function useRailFrames(
   chatVisible: boolean,
   keyboardInset: number,
-  composerTop: number | null
+  composerTop: number | null,
+  actions: JumpActions | null
 ): DuoRailJumpFrames | null {
   const expanded = useDuoChatExpanded()
   const { width, height } = useWindowDimensions()
@@ -66,6 +71,18 @@ function useRailFrames(
     insets,
     occlusions
   })
+  const frames = duoRailJumpPlacement({
+    chatVisible,
+    expanded,
+    strip,
+    keyboardInset,
+    composerTop,
+    windowWidth: width,
+    windowHeight: height,
+    occlusions
+  })
+  // This rail draws one arrow (scroll to latest). Reserve its slot only while it is showing.
+  const visibleJumpButtons = frames !== null && actions?.showJumpToTail ? 1 : 0
   // Without the status occlusions (a folded Duo that reports no fold division) the page draws no
   // rail Back or arrows, so it frees everything above the composer; the shell places the top itself.
   const band =
@@ -77,7 +94,8 @@ function useRailFrames(
             strip,
             occlusions,
             composerTop,
-            backShown
+            backShown,
+            visibleJumpButtons
           })
         : composerTop > spacing.sm
           ? { top: 0, bottom: composerTop - spacing.sm }
@@ -95,16 +113,7 @@ function useRailFrames(
       return () => blurDuoRailFreeBand(owner)
     }, [owner])
   )
-  return duoRailJumpPlacement({
-    chatVisible,
-    expanded,
-    strip,
-    keyboardInset,
-    composerTop,
-    windowWidth: width,
-    windowHeight: height,
-    occlusions
-  })
+  return frames
 }
 
 export function DuoRailJumpHost({
@@ -126,7 +135,7 @@ export function DuoRailJumpHost({
       return prev !== null && Math.abs(prev - top) < 0.5 ? prev : top
     })
   }, [])
-  const frames = useRailFrames(chatVisible, keyboardInset, composerTop)
+  const frames = useRailFrames(chatVisible, keyboardInset, composerTop, actions)
   const register = useCallback((next: JumpActions | null) => {
     setActions((prev) => (sameActions(prev, next) ? prev : next))
   }, [])
@@ -148,6 +157,7 @@ export function DuoRailComposerTop({
   children: ReactNode
 }) {
   const report = useContext(DuoRailJumpContext)?.reportComposerTop
+  const { width, height } = useWindowDimensions()
   const ref = useRef<HostInstance>(null)
   const measure = useCallback(() => {
     ref.current?.measureInWindow((_x, y, _width, height) => {
@@ -163,7 +173,7 @@ export function DuoRailComposerTop({
       return
     }
     measure()
-  }, [measure, report, keyboardInset, hidden])
+  }, [measure, report, keyboardInset, hidden, width, height])
   return (
     <View
       ref={ref}
@@ -178,14 +188,53 @@ export function DuoRailComposerTop({
 
 const stylesHidden = { display: 'none' } as const
 
+function shiftRailFrame(
+  frame: DuoRailControlFrame,
+  originX: number,
+  originY: number
+): DuoRailControlFrame {
+  return { top: frame.top - originY, left: frame.left - originX, size: frame.size }
+}
+
 export function DuoRailJumpOverlay() {
   const ctx = useContext(DuoRailJumpContext)
-  if (ctx?.frames == null || ctx.actions == null) {
-    return null
-  }
+  const { width, height } = useWindowDimensions()
+  const ref = useRef<HostInstance>(null)
+  const [origin, setOrigin] = useState({ x: 0, y: 0 })
+  const measure = useCallback(() => {
+    ref.current?.measureInWindow((x, y, w, h) => {
+      if (w > 0 && h > 0) {
+        setOrigin((prev) =>
+          Math.abs(prev.x - x) < 0.5 && Math.abs(prev.y - y) < 0.5 ? prev : { x, y }
+        )
+      }
+    })
+  }, [])
+  useEffect(() => {
+    measure()
+  }, [measure, width, height, ctx?.frames])
+  const localFrames = useMemo(
+    () =>
+      ctx?.frames == null
+        ? null
+        : {
+            previous: shiftRailFrame(ctx.frames.previous, origin.x, origin.y),
+            latest: shiftRailFrame(ctx.frames.latest, origin.x, origin.y)
+          },
+    [ctx?.frames, origin.x, origin.y]
+  )
   return (
-    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <MobileNativeChatFloatingControls {...ctx.actions} rail={ctx.frames} />
+    // Frames are window coordinates. In Split View this overlay sits inside the session pane.
+    <View
+      ref={ref}
+      collapsable={false}
+      onLayout={measure}
+      pointerEvents="box-none"
+      style={StyleSheet.absoluteFill}
+    >
+      {localFrames != null && ctx?.actions != null ? (
+        <MobileNativeChatFloatingControls {...ctx.actions} rail={localFrames} />
+      ) : null}
     </View>
   )
 }
