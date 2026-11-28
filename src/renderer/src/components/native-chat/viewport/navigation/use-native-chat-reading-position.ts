@@ -76,7 +76,9 @@ export function useNativeChatReadingPosition({
   waitingMessageIdAt: (index: number) => string | null
   jumpTo: (
     position: NativeChatReadingPosition,
-    settled: (result: HistoryJumpResult) => void
+    settled: (result: HistoryJumpResult) => void,
+    /** Older pages left to this return, across its retries. */
+    budget: { pages: number }
   ) => void
   /** History never became readable this reveal (every try superseded): the view opens as it would unbookmarked. */
   onGiveUp: () => void
@@ -142,32 +144,37 @@ export function useNativeChatReadingPosition({
       }
     } else {
       restoringRef.current = position
+      const budget = { pages: NATIVE_CHAT_RESTORE_MAX_PAGES }
       const attempt = (tries: number): void => {
-        latest.current.jumpTo(position, (result) => {
-          if (cancelled) {
-            return
-          }
-          if (result === 'superseded' && tries < MAX_RESTORE_ATTEMPTS) {
-            frame = requestAnimationFrame(() => attempt(tries + 1))
-            return
-          }
-          restoringRef.current = null
-          if (result === 'failed' || result === 'superseded') {
-            // History didn't load; the bookmark stays for the next reveal.
-            if (result === 'superseded') {
-              // Kept for a later remount; this view is past restoring, so a reveal won't pull the reader back.
-              freshMountRef.current = false
-              gaveUpRef.current = true
-              latest.current.onGiveUp()
+        latest.current.jumpTo(
+          position,
+          (result) => {
+            if (cancelled) {
+              return
             }
-            return
-          }
-          // Landed, gone, or the reader moved on: the bookmark has done its job.
-          freshMountRef.current = false
-          if (readNativeChatViewMemory(tab, key) === position) {
-            writeNativeChatViewMemory(tab, key, undefined)
-          }
-        })
+            if (result === 'superseded' && tries < MAX_RESTORE_ATTEMPTS) {
+              frame = requestAnimationFrame(() => attempt(tries + 1))
+              return
+            }
+            restoringRef.current = null
+            if (result === 'failed' || result === 'superseded') {
+              // History didn't load; the bookmark stays for the next reveal.
+              if (result === 'superseded') {
+                // Kept for a later remount; this view is past restoring, so a reveal won't pull the reader back.
+                freshMountRef.current = false
+                gaveUpRef.current = true
+                latest.current.onGiveUp()
+              }
+              return
+            }
+            // Landed, gone, or the reader moved on: the bookmark has done its job.
+            freshMountRef.current = false
+            if (readNativeChatViewMemory(tab, key) === position) {
+              writeNativeChatViewMemory(tab, key, undefined)
+            }
+          },
+          budget
+        )
       }
       attempt(1)
     }

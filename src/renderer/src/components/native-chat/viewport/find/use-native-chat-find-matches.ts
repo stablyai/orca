@@ -143,12 +143,14 @@ export function useNativeChatFindMatches({
   const matchNodesRef = useRef<ReadonlySet<Node>>(new Set())
   // Kept with the chat tab, so a chat switched back to resumes Next/Previous from the match it left on.
   const keptRef = useNativeChatViewRef<KeptMatch | null>('find-active', null)
+  // Until its row draws, a remount shows what's on screen but keeps waiting for the kept match; a step or new query ends it.
+  const resumingRef = useRef(true)
 
   const activate = useCallback(
     (matches: readonly Range[], index: number) => {
       activeIndexRef.current = index
       anchorRef.current = anchorOf(matches[index])
-      if (index >= 0 && searchedQueryRef.current) {
+      if (index >= 0 && searchedQueryRef.current && !resumingRef.current) {
         keptRef.current = keptMatchOf(matches, index, searchedQueryRef.current)
       }
       chatFindHighlights.setActive(instance, matches[index])
@@ -174,16 +176,17 @@ export function useNativeChatFindMatches({
     )
     chatFindHighlights.setMatches(instance, matches)
     setMatchCount(matches.length)
-    const anchor = anchorRef.current
-    if (!newQuery && matches.length > 0 && anchor?.node.isConnected) {
-      activate(matches, survivingMatchIndex(matches, anchor))
+    const kept = keptRef.current
+    resumingRef.current = resumingRef.current && !newQuery && kept?.query === query
+    const keptIndex = resumingRef.current && kept ? keptMatchIndex(matches, kept) : -1
+    if (keptIndex !== -1) {
+      resumingRef.current = false
+      activate(matches, keptIndex)
       return
     }
-    const kept = keptRef.current
-    const keptIndex =
-      !newQuery && !anchor && kept?.query === query ? keptMatchIndex(matches, kept) : -1
-    if (keptIndex !== -1) {
-      activate(matches, keptIndex)
+    const anchor = anchorRef.current
+    if (!resumingRef.current && !newQuery && matches.length > 0 && anchor?.node.isConnected) {
+      activate(matches, survivingMatchIndex(matches, anchor))
       return
     }
     // A new query, or the active match's row scrolled out of the window: start from what is on screen.
@@ -293,6 +296,7 @@ export function useNativeChatFindMatches({
             ? 0
             : matches.length - 1
           : (current + direction + matches.length) % matches.length
+      resumingRef.current = false
       activate(matches, index)
       revealMatch(matches[index])
     },

@@ -26,10 +26,7 @@ import {
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatRailJumpStep, useNativeChatHistoryJump } from './use-native-chat-history-jump'
 import { useNativeChatRailJumpLanding } from './use-native-chat-rail-jump-landing'
-import {
-  NATIVE_CHAT_RESTORE_MAX_PAGES,
-  useNativeChatReadingPosition
-} from './use-native-chat-reading-position'
+import { useNativeChatReadingPosition } from './use-native-chat-reading-position'
 import type { NativeChatAlignEdge } from '../virtualization/use-native-chat-viewport-align'
 
 type NavigationRequest =
@@ -230,21 +227,18 @@ export function useNativeChatNavigation({
     readerAtEnd,
     messageIdAt: (index) => nativeChatSlotKeyAt(slots, index),
     waitingMessageIdAt: (index) => nativeChatSlotKeyAt(waitingSlots, index),
-    jumpTo: ({ messageId, offset }, settled) =>
-      startHistoryJump(
-        { kind: 'item', id: messageId, offset, maxPages: NATIVE_CHAT_RESTORE_MAX_PAGES },
-        (result) => {
-          if (result === 'missing' || result === 'failed') {
-            releaseHistory()
-            if (subagentId === null) {
-              scrollToBottom()
-            } else {
-              startHistoryJump({ kind: 'subagent', agentId: subagentId })
-            }
+    jumpTo: ({ messageId, offset }, settled, budget) =>
+      startHistoryJump({ kind: 'item', id: messageId, offset, budget }, (result) => {
+        if (result === 'missing' || result === 'failed') {
+          releaseHistory()
+          if (subagentId === null) {
+            scrollToBottom()
+          } else {
+            startHistoryJump({ kind: 'subagent', agentId: subagentId })
           }
-          settled(result)
         }
-      ),
+        settled(result)
+      }),
     onGiveUp: () => {
       if (subagentId !== null) {
         startHistoryJump({ kind: 'subagent', agentId: subagentId })

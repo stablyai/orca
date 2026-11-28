@@ -17,10 +17,12 @@ const TAB = { tabId: 'tab-1', worktreeId: 'wt-1', conversation: 'claude:s1' }
 
 function Transcript({
   restoredQuery,
-  report
+  report,
+  rows
 }: {
   restoredQuery: string | null
   report: (find: NativeChatFindMatches) => void
+  rows: readonly string[]
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLElement>(null)
@@ -37,23 +39,31 @@ function Transcript({
   return (
     <div ref={rootRef}>
       <div data-native-chat-transcript-column="">
-        <div data-native-chat-row-key="m1">cat cat</div>
-        <div data-native-chat-row-key="m2">cat cat</div>
+        {rows.map((row) => (
+          <div key={row} data-native-chat-row-key={row}>
+            cat cat
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-function mount(restoredQuery: string | null): {
+function mount(
+  restoredQuery: string | null,
+  rows: readonly string[] = ['m1', 'm2']
+): {
   find: () => NativeChatFindMatches
+  draw: (rows: readonly string[]) => void
   unmount: () => void
 } {
   let latest: NativeChatFindMatches | null = null
-  const view = render(
+  const at = (drawn: readonly string[]) => (
     <NativeChatViewTabContext value={TAB}>
-      <Transcript restoredQuery={restoredQuery} report={(find) => (latest = find)} />
+      <Transcript restoredQuery={restoredQuery} report={(find) => (latest = find)} rows={drawn} />
     </NativeChatViewTabContext>
   )
+  const view = render(at(rows))
   return {
     find: () => {
       if (!latest) {
@@ -61,6 +71,7 @@ function mount(restoredQuery: string | null): {
       }
       return latest
     },
+    draw: (drawn) => view.rerender(at(drawn)),
     unmount: view.unmount
   }
 }
@@ -87,4 +98,19 @@ it('a chat switched back to keeps the match Find had selected', () => {
   first.unmount()
   const back = mount('cat')
   expect(back.find().activeIndex).toBe(2)
+})
+
+it("a chat whose kept match's row draws after the first search still lands on that match", async () => {
+  const first = mount(null)
+  act(() => first.find().step(1))
+  expect(first.find().activeIndex).toBe(1)
+  first.unmount()
+  // Back with only the newest row drawn, as a remount starts at the end.
+  const back = mount('cat', ['m2'])
+  expect(back.find().activeIndex).toBe(0)
+  await act(async () => {
+    back.draw(['m1', 'm2'])
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+  })
+  expect(back.find().activeIndex).toBe(1)
 })
