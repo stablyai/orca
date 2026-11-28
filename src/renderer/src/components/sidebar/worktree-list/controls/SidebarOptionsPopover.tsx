@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -38,13 +38,27 @@ export function SidebarOptionsPopover({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const hasOpened = useLatchedOpen(open)
+  const openRef = useRef(false)
+  const onMenuOpenChangeRef = useRef(onMenuOpenChange)
   const hintOpen = hint?.open === true
   const dismissHint = hint?.onDismiss
+  useEffect(() => {
+    onMenuOpenChangeRef.current = onMenuOpenChange
+  }, [onMenuOpenChange])
+  useEffect(
+    () => () => {
+      if (openRef.current) {
+        onMenuOpenChangeRef.current?.(false)
+      }
+    },
+    []
+  )
   const handleOpenChange = useCallback(
     (next: boolean) => {
       if (next) {
         dismissHint?.()
       }
+      openRef.current = next
       setOpen(next)
       onMenuOpenChange?.(next)
     },

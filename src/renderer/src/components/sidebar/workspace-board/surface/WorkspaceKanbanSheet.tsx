@@ -91,7 +91,7 @@ export default function WorkspaceKanbanSheet({
           top: WORKSPACE_TOP_CHROME_HEIGHT,
           bottom: drawerBottom,
           height: 'auto',
-          width: workspaceBoardSheetWidth(drawerLeftCss)
+          width: workspaceBoardSheetWidth(drawerLeftCss, !sidebarOpen)
         }}
         data-contextual-tour-target="workspace-board-surface"
         data-workspace-board-sheet=""

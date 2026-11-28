@@ -49,7 +49,6 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
           if (showWorkspaceListThen(useAppStore, toggleBoard)) {
             return
           }
-          store.setSidebarOpen(true)
           toggleBoard()
         })
       })
