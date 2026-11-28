@@ -216,32 +216,53 @@ describe('protected Antigravity account snapshots', () => {
     }
   })
 
-  it.each([false, true])(
-    'refuses unavailable or weak encryption without changing saved bytes (available=%s)',
-    async (available) => {
-      const h = harness()
-      await h.service.addCurrentAccount()
-      const path = join(dir, 'vault')
-      const store = createEncryptedAntigravityAccountStore(path)
-      await store.write(h.getVault())
-      const before = readFileSync(path)
-      setSecretStore({
-        isEncryptionAvailable: () => available,
-        describeProtectionGap: () => 'unprotected',
-        encryptString: () => {
-          throw new Error('must not encrypt')
-        },
-        decryptString: () => {
-          throw new Error('must not decrypt')
+  it('refuses unavailable encryption without changing saved bytes', async () => {
+    const h = harness()
+    await h.service.addCurrentAccount()
+    const path = join(dir, 'vault')
+    const store = createEncryptedAntigravityAccountStore(path)
+    await store.write(h.getVault())
+    const before = readFileSync(path)
+    setSecretStore({
+      isEncryptionAvailable: () => false,
+      describeProtectionGap: () => 'unprotected',
+      encryptString: () => {
+        throw new Error('must not encrypt')
+      },
+      decryptString: () => {
+        throw new Error('must not decrypt')
+      }
+    })
+    await expect(store.write({ accounts: [], selectedAccountId: null })).rejects.toThrow(
+      'Protected secret storage'
+    )
+    await expect(store.read()).rejects.toThrow('Protected secret storage')
+    expect(readFileSync(path).equals(before)).toBe(true)
+  })
+
+  it('saves through a host-key seal that reports a protection gap', async () => {
+    // The headless server keeps its key beside the vault and always reports that gap; refusing it
+    // left Antigravity accounts unsaveable there while every other credential saved fine (#50266).
+    setSecretStore({
+      isEncryptionAvailable: () => true,
+      describeProtectionGap: () => 'sealed with a key kept beside the vault',
+      encryptString: (value) => Buffer.from(`sealed:${Buffer.from(value).toString('base64')}`),
+      decryptString: (value) => {
+        if (!value.toString().startsWith('sealed:')) {
+          throw new Error('synthetic decrypt failure')
         }
-      })
-      await expect(store.write({ accounts: [], selectedAccountId: null })).rejects.toThrow(
-        'Protected secret storage'
-      )
-      await expect(store.read()).rejects.toThrow('Protected secret storage')
-      expect(readFileSync(path).equals(before)).toBe(true)
-    }
-  )
+        return Buffer.from(value.toString().slice(7), 'base64').toString()
+      }
+    })
+    const h = harness()
+    await h.service.addCurrentAccount()
+    const vault = h.getVault()
+    const path = join(dir, 'vault')
+    await createEncryptedAntigravityAccountStore(path).write(vault)
+    const saved = readFileSync(path).toString()
+    expect(saved).not.toContain(vault.accounts[0].credentials)
+    expect(await createEncryptedAntigravityAccountStore(path).read()).toEqual(vault)
+  })
 
   it('keeps the selected account launchable across refreshes and a verified grant rotation', async () => {
     const h = harness()

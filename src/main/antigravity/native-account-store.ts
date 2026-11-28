@@ -39,9 +39,11 @@ function isAccount(value: unknown): value is StoredAntigravityAccount {
   )
 }
 
+// Sealing is the bar, not a gap-free backend: a headless server seals with a key kept beside its
+// credential directory and always reports that gap, which is what writeEncryptedCredential accepts
+// for every integration already (#50266).
 function requireProtection(): void {
-  const secrets = getSecretStore()
-  if (!secrets.isEncryptionAvailable() || secrets.describeProtectionGap() !== null) {
+  if (!getSecretStore().isEncryptionAvailable()) {
     throw new Error(
       'Protected secret storage is unavailable; Antigravity accounts were not changed.'
     )
