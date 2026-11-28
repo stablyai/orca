@@ -43,7 +43,7 @@ export async function claimMailFilesFor(
     if ((botChatTakingMailNow(runtime, bot, root)?.sessionId ?? fallback) !== live) {
       throw new OrchestrationError(
         'bot_chat_changed',
-        `${bot.name}'s chat moved on to a new session while the files were attached. Send it again. Nothing was sent.`,
+        `${bot.name}'s chat moved on to a new session while uploading. Nothing was sent. Send it again.`,
         { effectsApplied: false, retryable: true }
       )
     }

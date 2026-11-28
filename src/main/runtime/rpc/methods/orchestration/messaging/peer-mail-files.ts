@@ -53,7 +53,7 @@ export function assertPeerMailFilesAddress(params: PeerMailFilesParams): void {
     )
   }
   if (!isBotRequestPurpose(params.type ?? 'status')) {
-    throw refused('--file goes with mail a bot takes: --type status, handoff or question.')
+    throw refused('--file only works with --type status, handoff or question.')
   }
   if (params.item !== undefined && params.chat !== undefined) {
     throw refused('Pass --item or --chat, not both.')
@@ -207,13 +207,17 @@ export function withUnattachedUploads(
   const files = count === 1 ? 'A file' : `${count} files`
   const note = `${files} already copied to ${server.name} for it ${count === 1 ? 'is' : 'are'} attached to nothing there; Orca on ${server.name} clears unused uploads later.`
   const known = error instanceof OrchestrationError
-  const reason = (error instanceof Error ? error.message : String(error))
-    .replace(/ ?Nothing was sent\.$/, '')
+  // The cause, then what happened, then what to do: a retry hint moves to the end.
+  const text = error instanceof Error ? error.message : String(error)
+  const again = / ?Send it again\.$/.test(text) ? ' Send it again.' : ''
+  const reason = text
+    .replace(/ ?Send it again\.$/, '')
+    .replace(/ ?(Nothing was sent|No message was sent|Nothing was delivered)\.$/, '')
     .replace(/([^.])$/, '$1.')
   const data = known && typeof error.data === 'object' && error.data !== null ? error.data : {}
   return new OrchestrationError(
     known ? error.code : 'peer_mail_not_sent',
-    `${reason} The message wasn't sent. ${note}`,
+    `${reason} The message wasn't sent. ${note}${again}`,
     { ...data, effectsApplied: true, unattachedUploads: count }
   )
 }

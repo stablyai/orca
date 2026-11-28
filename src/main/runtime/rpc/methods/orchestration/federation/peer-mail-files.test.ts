@@ -328,7 +328,7 @@ describe('files sent with mail to a bot on a paired server', () => {
     [
       'mail no bot takes',
       { to: 'bot:Docs', type: 'dispatch' },
-      '--type status, handoff or question'
+      '--file only works with --type status, handoff or question'
     ]
   ])('refuses files to %s before asking the server anything', async (_name, to, message) => {
     await expect(send({ ...to, files: [file] })).rejects.toMatchObject({
@@ -395,7 +395,7 @@ describe('files sent with mail to a bot on a paired server', () => {
       send({ to: 'bot:Docs', chat: `chat:${B_OTHER}`, files: [file] })
     ).rejects.toMatchObject({
       message: expect.stringMatching(
-        /^Docs's chat moved on to a new session while the files were attached\. Send it again\. The message wasn't sent\. A file already copied to devB/
+        /^Docs's chat moved on to a new session while uploading\. The message wasn't sent\. A file already copied to devB .* clears unused uploads later\. Send it again\.$/
       ),
       data: { effectsApplied: true, unattachedUploads: 1 }
     })
