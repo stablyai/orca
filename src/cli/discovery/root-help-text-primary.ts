@@ -149,6 +149,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  agent installed           List agent CLIs installed on this host, with their --agent IDs',
   '  agent list                List open agents, chats and terminals, with their Orca session IDs',
   '  agent show                Show where an agent is open, by its Orca session ID',
+  '  agent focus               Focus an agent in the UI, by its Orca session ID',
   '  agent read                Read what an agent said, by its Orca session ID',
   '  agent hooks               Inspect and toggle Orca agent lifecycle hooks',
   '  claude-teams              Start Claude Code Agent Teams in the current Orca terminal',

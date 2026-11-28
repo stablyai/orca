@@ -30,6 +30,20 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca agent show orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json']
   },
   {
+    path: ['agent', 'focus'],
+    summary: 'Focus an agent in the UI, by its Orca session ID',
+    usage: 'orca agent focus <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id'],
+    positionalArgs: ['id'],
+    notes: [
+      '<id> is the `orca_session_id:` ID from `orca agent list` or Copy Orca Session ID.',
+      'Activates the workspace and focuses the pane `orca agent show` reports first, like `orca terminal switch`; agents should run it only when the user asked to switch.',
+      'An agent that is not open in any workspace is refused.',
+      "With --environment, the desktop app on this machine switches to that server's agent; a server has no window of its own."
+    ],
+    examples: ['orca agent focus orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595']
+  },
+  {
     path: ['agent', 'read'],
     summary: 'Read what an agent said, by its Orca session ID',
     usage: 'orca agent read <id> [--limit <n>] [--json]',
