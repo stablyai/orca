@@ -1,9 +1,14 @@
 import { mkdtemp, mkdir, rm, symlink } from 'node:fs/promises'
 import type * as FsPromisesModule from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { scanNestedRepos } from './nested-repo-discovery'
+import {
+  hasGitMarker,
+  isRealLocalDirectory,
+  readLocalDirectory,
+  scanNestedRepos
+} from './nested-repo-discovery'
 import { isGitRepoAsync } from '../git/repositories/discovery/repo-detection'
 
 vi.mock('../git/repositories/discovery/repo-detection', () => ({ isGitRepoAsync: vi.fn() }))
@@ -99,6 +104,37 @@ describe('scanNestedRepos', () => {
       await symlink(external, join(root, 'linked'), 'dir')
 
       const result = await scanNestedRepos({ path: root })
+
+      expect(result.repos).toEqual([])
+    }
+  )
+  it.skipIf(process.platform === 'win32')(
+    'skips a listed folder that became a symlink before it was probed',
+    async () => {
+      const root = await tempRoot()
+      const external = await tempRoot()
+      await makeGitRepo(join(external, 'outside-repo'))
+      await mkdir(join(root, 'swapped'))
+
+      const result = await scanNestedRepos({
+        path: root,
+        filesystem: {
+          readDirectory: async (dirPath: string) => {
+            const entries = await readLocalDirectory(dirPath)
+            if (dirPath === root) {
+              // Swap after listing so the entry still reads as a plain directory.
+              await rm(join(root, 'swapped'), { recursive: true })
+              await symlink(join(external, 'outside-repo'), join(root, 'swapped'), 'dir')
+            }
+            return entries
+          },
+          isRealDirectory: isRealLocalDirectory,
+          joinPath: join,
+          basename,
+          hasGitMarker,
+          isSelectedPathGitRepo: () => false
+        }
+      })
 
       expect(result.repos).toEqual([])
     }

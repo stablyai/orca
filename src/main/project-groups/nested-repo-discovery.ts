@@ -112,6 +112,14 @@ export async function readLocalDirectory(dirPath: string): Promise<NestedRepoDir
   }))
 }
 
+export async function isRealLocalDirectory(dirPath: string): Promise<boolean> {
+  try {
+    return (await lstat(dirPath)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 type NestedRepoScanArgs = {
   path: string
   options?: unknown
@@ -126,6 +134,7 @@ export async function scanNestedRepos(
     ...args,
     filesystem: args.filesystem ?? {
       readDirectory: readLocalDirectory,
+      isRealDirectory: isRealLocalDirectory,
       readTextFile: (path: string) => readFile(path, 'utf8'),
       joinPath: join,
       basename,
@@ -168,6 +177,8 @@ export async function scanNestedReposWithFilesystem(
     stopped = true
     return true
   }
+  const stillRealDirectory = async (path: string): Promise<boolean> =>
+    !filesystem.isRealDirectory || (await filesystem.isRealDirectory(path))
   const emitProgress = (): void => {
     args.onProgress?.(buildResult('non_git_folder'))
   }
@@ -207,6 +218,10 @@ export async function scanNestedReposWithFilesystem(
       continue
     }
 
+    // The selected folder may itself be a link; only folders found while scanning are rechecked.
+    if (currentFolder.depth > 0 && !(await stillRealDirectory(currentFolder.path))) {
+      continue
+    }
     let entries: NestedRepoDirectoryEntry[]
     try {
       entries = await filesystem.readDirectory(currentFolder.path)
@@ -247,6 +262,9 @@ export async function scanNestedReposWithFilesystem(
         continue
       }
       const childPath = filesystem.joinPath(currentFolder.path, name)
+      if (!(await stillRealDirectory(childPath))) {
+        continue
+      }
       // Filesystem markers avoid per-directory Git spawns, especially over SSH.
       const childHasGitMarker = await filesystem.hasGitMarker(childPath)
       if (noteAbort()) {

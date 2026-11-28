@@ -13,6 +13,7 @@ import {
 import type { NestedRepoCandidate } from '../../../../shared/project/groups/project-group-types'
 import {
   hasGitMarker,
+  isRealLocalDirectory,
   readLocalDirectory,
   scanNestedReposWithFilesystem
 } from '../../../project-groups/nested-repo-discovery'
@@ -72,6 +73,7 @@ async function scanRoot(
     },
     filesystem: {
       readDirectory: readLocalDirectory,
+      isRealDirectory: isRealLocalDirectory,
       joinPath: join,
       basename,
       hasGitMarker: isCandidate,
