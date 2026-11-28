@@ -5,6 +5,7 @@ export const BROWSER_HOST_WEBVIEW_CAPABILITY = 'webview'
 type BrowserHostCapabilityLease = Readonly<{
   browserHostClientId: string
   hostCapabilities: readonly string[]
+  teammate?: true
 }>
 type BrowserHostLeaseStateView<T extends BrowserHostCapabilityLease> = Readonly<{ lease: T }>
 
@@ -30,9 +31,10 @@ export function selectBrowserHostLease<T extends BrowserHostCapabilityLease>(
     }
     return exact.lease
   }
+  // A host no caller named is never a teammate's computer.
   const capable = [...leasesByClientId.values()]
     .map((state) => state.lease)
-    .filter((lease) => hasCapabilities(lease, requiredCapabilities))
+    .filter((lease) => !lease.teammate && hasCapabilities(lease, requiredCapabilities))
   if (capable.length > 1) {
     throw new BrowserHostAmbiguousError(capable.map((lease) => lease.browserHostClientId))
   }

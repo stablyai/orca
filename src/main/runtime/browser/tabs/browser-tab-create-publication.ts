@@ -22,7 +22,10 @@ type BrowserTabCreatePublicationBridge = Pick<
 
 export type BrowserTabCreatePublicationHost = {
   getAgentBrowserBridge(): BrowserTabCreatePublicationBridge | null
-  getRuntimeBrowserPageRegistry(): Pick<RuntimeBrowserPageRegistry, 'yieldSelection'>
+  getRuntimeBrowserPageRegistry(): Pick<
+    RuntimeBrowserPageRegistry,
+    'yieldSelection' | 'notifiesHostList'
+  >
   markHeadlessBrowserSessionTabActive?(
     worktreeId: string | undefined,
     browserPageId: string,
@@ -167,6 +170,9 @@ export async function publishSwitchedBrowserSessionTab(
   publication: BrowserTabSwitchPublication
 ): Promise<void> {
   const rules = BROWSER_TAB_SWITCH_PUBLICATION_RULES[publication.placementKind]
+  if (!host.getRuntimeBrowserPageRegistry().notifiesHostList(publication.browserPageId)) {
+    return
+  }
   if (rules.notifiesSessionTabsChanged && publication.worktreeId !== undefined) {
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
@@ -185,6 +191,10 @@ export async function publishCreatedBrowserSessionTab(
   publication: BrowserTabCreatePublication
 ): Promise<void> {
   const rules = BROWSER_TAB_CREATE_PUBLICATION_RULES[publication.placementKind]
+  // A teammate's page shows in their own list, on the device that opened it (`showPersonSurface`).
+  if (!host.getRuntimeBrowserPageRegistry().notifiesHostList(publication.browserPageId)) {
+    return
+  }
   // A page link no client brought forward must not take over the agent's routing, yet must still appear.
   const leavesAgentTab = publication.opensPageLink === true && !publication.focus.selects
   if (

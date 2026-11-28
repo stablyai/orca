@@ -7,7 +7,7 @@ import type {
   BrowserTabSwitchResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { publishSwitchedBrowserSessionTab } from '../tabs/browser-tab-create-publication'
-import type { RuntimeBrowserClientPage } from './runtime-browser-page-registry'
+import { pageListOf, type RuntimeBrowserClientPage } from './runtime-browser-page-registry'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 
 type BrowserProfileLabel = { id: string; label: string }
@@ -42,13 +42,23 @@ export class BrowserClientPageQueries {
   ) {}
 
   async browserTabList(params: { worktree?: string }): Promise<BrowserTabListResult> {
+    return this.tabsOf({ worktree: params.worktree })
+  }
+
+  /** The tabs of one list: a named page's own, else the host's (what `tab list` shows). */
+  private async tabsOf(params: {
+    worktree?: string
+    page?: string
+  }): Promise<BrowserTabListResult> {
     const workspaceId = params.worktree
       ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
       : undefined
-    const pages = this.host.getRuntimeBrowserPageRegistry().listPages(workspaceId)
+    const registry = this.host.getRuntimeBrowserPageRegistry()
+    const named = params.page ? registry.getPage(params.page) : undefined
+    const pages = registry.pagesOf(named ? pageListOf(named) : 'host', workspaceId)
     const clientPageActive = pages.some((page) => page.active)
     const engineTabs = this.engine
-      ? (await this.engine.list(params)).tabs.map((tab) => ({
+      ? (await this.engine.list({ worktree: params.worktree })).tabs.map((tab) => ({
           ...tab,
           active: clientPageActive ? false : tab.active
         }))
@@ -80,7 +90,7 @@ export class BrowserClientPageQueries {
   async browserTabShow(params: { page: string; worktree?: string }): Promise<BrowserTabShowResult> {
     const page = this.host.getRuntimeBrowserPageRegistry().getPage(params.page)
     const worktree = params.worktree ?? (page ? `id:${page.workspaceId}` : undefined)
-    const tab = (await this.browserTabList({ worktree })).tabs.find(
+    const tab = (await this.tabsOf({ worktree, page: params.page })).tabs.find(
       (candidate) => candidate.browserPageId === params.page
     )
     if (!tab) {
@@ -95,7 +105,7 @@ export class BrowserClientPageQueries {
     worktree?: string
     focus?: boolean
   }): Promise<BrowserTabSwitchResult> {
-    const listed = await this.browserTabList({ worktree: params.worktree })
+    const listed = await this.tabsOf(params)
     const switched = params.page
       ? listed.tabs.findIndex((tab) => tab.browserPageId === params.page)
       : (params.index ?? -1)
@@ -164,7 +174,7 @@ export async function yieldClientPageSelection(
     return
   }
   pages.deactivateGlobal()
-  for (const workspaceId of new Set(pages.listPages().map((page) => page.workspaceId))) {
+  for (const workspaceId of new Set(pages.pagesOf('host').map((page) => page.workspaceId))) {
     pages.yieldSelection(workspaceId)
   }
 }

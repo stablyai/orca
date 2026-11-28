@@ -148,7 +148,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForProject extends OrcaRuntime
     }
     const pageOwners = [
       ...getRuntimeBrowserPageRegistry(this)
-        .listPages()
+        .everyPage()
         .map((page) => page.workspaceId),
       ...listFailedAgentLaunchWorktreeIds(),
       ...(this.agentBrowserBridge?.tabWorktreeIds?.() ?? []).map((id) => id ?? '')
@@ -198,7 +198,13 @@ export abstract class OrcaRuntimeWithStopTerminalsForProject extends OrcaRuntime
     }
     // Stop worktrees concurrently under one project deadline so slow siblings cannot starve each other.
     const stopWorktree = async (id: string): Promise<number> => {
-      const opts = { resolvedWorktreeId: id, ...fence, ...options, requestStopsPastDeadline: true }
+      const opts = {
+        list: 'every' as const,
+        resolvedWorktreeId: id,
+        ...fence,
+        ...options,
+        requestStopsPastDeadline: true
+      }
       // Exclusive leases wait for spawns to register; deadline cancels queued waits, and overdue PTYs get stop requests only.
       const release = await this.acquireWorktreeTerminalMutation(
         id,

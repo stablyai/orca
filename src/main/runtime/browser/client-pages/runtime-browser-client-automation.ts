@@ -174,7 +174,7 @@ async function resolveTargetPage(
     return undefined
   }
   const workspace = await resolveWorkspace(params.worktree)
-  return pages.listPages(workspace.id).find((page) => page.active)
+  return pages.pagesOf('host', workspace.id).find((page) => page.active)
 }
 
 // Relative paths (older CLIs, paired callers) stay inside the workspace; absolute ones are this host's.

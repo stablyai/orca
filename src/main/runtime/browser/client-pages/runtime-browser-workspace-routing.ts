@@ -126,7 +126,7 @@ export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntime
       // This runtime lists/retires desktop-hosted pages even while their desktop is gone, so those commands need no bridge.
       localBrowserAvailable:
         runtimeBrowserCommandsFactoryIsAvailable() ||
-        getRuntimeBrowserPageRegistry(this).listPages().length > 0 ||
+        getRuntimeBrowserPageRegistry(this).everyPage().length > 0 ||
         hasPairedPageHost({ getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this) }),
       resolveWorkspace: (selector) => this.resolveBrowserWorkspace(selector)
     })

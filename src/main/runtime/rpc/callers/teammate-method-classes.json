@@ -1763,9 +1763,13 @@
       "session.tabs.movePaneToNewTab",
       "session.tabs.setTabProps",
       "session.tabs.updatePaneLayout",
+      "terminal.closeAll",
       "terminal.create",
       "terminal.createAgentSession",
-      "terminal.ensureAgentSession"
+      "terminal.ensureAgentSession",
+      "terminal.sleep",
+      "terminal.stop",
+      "worktree.sleep"
     ],
     "none": ["session.tabs.terminalShellChoices"]
   }

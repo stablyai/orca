@@ -20,6 +20,13 @@ const MAX_IDENTITY_LENGTH = 256
 
 export type { RuntimeBrowserClientPage } from './runtime-browser-client-page'
 
+/** Whose tab list a page is in: the host's, or the teammate's own list that opened it. */
+export type PageList = 'host' | TeammateTabListKey
+
+export function pageListOf(page: Pick<RuntimeBrowserClientPage, 'holder'>): PageList {
+  return page.holder ?? 'host'
+}
+
 export class RuntimeBrowserPageRegistry {
   private readonly pages = new Map<string, RuntimeBrowserClientPage>()
   private globalActivePageId: string | null = null
@@ -248,12 +255,21 @@ export class RuntimeBrowserPageRegistry {
     return this.pages.get(browserPageId)
   }
 
-  /** A workspace's pages its host lists show: none a teammate's own list holds. */
-  hostListedPages(workspaceId: string): readonly RuntimeBrowserClientPage[] {
-    return this.listPages(workspaceId).filter((page) => !page.holder)
+  /** Whether a change to this page (or an engine tab, which has no record) is the host list's to
+   *  announce. A held page's own list redraws as its record is stored, never the host's. */
+  notifiesHostList(browserPageId: string | undefined): boolean {
+    return !(browserPageId && this.pages.get(browserPageId)?.holder)
   }
 
-  listPages(workspaceId?: string): readonly RuntimeBrowserClientPage[] {
+  /** The pages one list holds: the host's are those no teammate's own list holds. The only way to
+   *  list pages for a caller or act on them by index. */
+  pagesOf(list: PageList, workspaceId?: string): readonly RuntimeBrowserClientPage[] {
+    return this.everyPage(workspaceId).filter((page) => pageListOf(page) === list)
+  }
+
+  /** Every page record, whoever's list holds it: only for keeping the records themselves
+   *  (persistence, retirement, a desktop's reconnect inventory), never to list or act for a caller. */
+  everyPage(workspaceId?: string): readonly RuntimeBrowserClientPage[] {
     this.applyHeldPersonPicks(workspaceId)
     const pages = [...this.pages.values()]
     if (workspaceId !== undefined) {

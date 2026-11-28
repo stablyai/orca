@@ -24,12 +24,13 @@ afterEach(async () => {
 type Rig = Awaited<ReturnType<typeof rig>>
 
 /** The host's terminals start as the desktop's do: each spawn a live process under the id it was
- *  asked for, recorded as it starts (before it registers); a kill its exit. */
+ *  asked for, else one the daemon names in the workspace, recorded as it starts (before it
+ *  registers); a kill its exit. */
 function startTerminalsOnTheHost(r: Rig) {
   r.runtime['graphStatus'] = 'ready'
   r.runtime.setPtyController({
-    spawn: async ({ sessionId }) => {
-      const id = sessionId ?? `pty-${randomUUID()}`
+    spawn: async ({ sessionId, worktreeId }) => {
+      const id = sessionId ?? `${worktreeId}@@${randomUUID()}`
       r.runtime.vouchSpawnedTerminal(id)
       return { id }
     },
@@ -109,7 +110,7 @@ async function ownersSide(r: Rig): Promise<string> {
     hostList: r.runtime['mobileSessionTabsByWorktree'].get(r.workspace) ?? null,
     picks: Object.entries(picks).filter(([device]) => device.startsWith('owner-')),
     page: getRuntimeBrowserPageRegistry(r.runtime)
-      .listPages(r.workspace)
+      .everyPage(r.workspace)
       .find((page) => page.active)?.browserPageId
   })
 }
@@ -130,7 +131,13 @@ it('opens a teammate’s terminal, page and file in their own list alone, each s
   const before = await ownersSide(r)
 
   const terminal = await openTerminal(r, 'mate-desk')
-  expect((await r.list('mate-desk')).activeTabId).toBe(terminal.id)
+  const shown = await r.list('mate-desk')
+  expect(shown.activeTabId).toBe(terminal.id)
+  // Its group lists and picks the terminal by its parent tab, as every list's groups do.
+  const { parentTabId } = z
+    .object({ parentTabId: z.string() })
+    .parse(shown.tabs.find((tab) => tab.id === terminal.id))
+  expect(shown.tabGroups).toMatchObject([{ activeTabId: parentTabId }])
   const page = await openPage(r, 'mate-desk')
   expect((await r.list('mate-desk')).activeTabId).toBe(page)
   const file = await openFile(r, 'mate-desk', 'notes/plan.md')
@@ -138,6 +145,9 @@ it('opens a teammate’s terminal, page and file in their own list alone, each s
 
   const mates = await r.list('mate-phone')
   expect(tabIds(mates)).toEqual([`agent-session:${C}`, terminal.id, page, file])
+  expect(mates.tabGroups).toMatchObject([
+    { tabOrder: [`agent-session:${C}`, parentTabId, page, file], activeTabId: file }
+  ])
   expect(mates.tabs.at(-1)).toMatchObject({ type: 'file', relativePath: 'notes/plan.md' })
   expect((await r.list('mate-desk')).activeTabId).toBe(file)
   expect(await ownersSide(r)).toBe(before)
@@ -171,26 +181,66 @@ it('opens a teammate’s terminal, page and file in their own list alone, each s
   expect(await ownersSide(r)).toBe(before)
 })
 
-it('keeps the host’s page for pageless commands when a teammate opens one', async () => {
+it('keeps the host’s page and page list when a teammate opens or picks one', async () => {
   servePagesHeadless()
   const r = await rig()
   hostPagesOnTheCallersComputer(r)
+  const worktree = `id:${r.workspace}`
   const pages = getRuntimeBrowserPageRegistry(r.runtime)
-  const routed = () => pages.listPages(r.workspace).find((page) => page.active)?.browserPageId
+  const routed = () => pages.everyPage(r.workspace).find((page) => page.active)?.browserPageId
+  const hostTabs = async () =>
+    z
+      .object({ tabs: z.array(z.object({ browserPageId: z.string() })) })
+      .parse(await r.call('owner-desk', 'browser.tabList', { worktree }))
+      .tabs.map((tab) => tab.browserPageId)
   const ownersPage = await openPage(r, 'owner-desk')
   expect(routed()).toBe(ownersPage)
+  const ownersFrames = await r.subscribe('owner-phone')
+  const framesBefore = ownersFrames.length
 
-  const matesPage = await openPage(r, 'mate-desk')
+  // Opened at an address, so the page navigates after it is made, as a link does.
+  const matesPage = z.object({ browserPageId: z.string() }).parse(
+    await r.call('mate-desk', 'browser.tabCreate', {
+      worktree,
+      url: 'https://example.com/',
+      placement: { kind: 'client', browserHostClientId: 'mate-desk-host' }
+    })
+  ).browserPageId
   expect(pages.getPage(matesPage)?.holder).toMatch(/^teammate:/)
   expect(routed()).toBe(ownersPage)
-  // Picking theirs on their own strip moves no host selection either.
+  // The owner's and the agent's page list and indexes are the host's alone.
+  expect(await hostTabs()).toEqual([ownersPage])
+  // Picking theirs on their own strip, or by the page command, moves no host selection.
   await r.call('mate-desk', 'session.tabs.activate', {
-    worktree: `id:${r.workspace}`,
+    worktree,
     tabId: matesPage,
     navigation: 'caller'
   })
+  await r.call('mate-desk', 'browser.tabSwitch', { worktree, page: matesPage })
+  await chatTabCommandsSettled()
   expect(routed()).toBe(ownersPage)
   expect(tabIds(await r.list('owner-desk'))).toEqual([ownersPage])
+  // Nothing of theirs reached the owner's stream.
+  expect(ownersFrames.length).toBe(framesBefore)
+})
+
+it('stops, closes or sleeps only the host’s terminals of a Home, and never for a teammate', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r)
+  const worktree = `id:${r.workspace}`
+  const ownersTerminal = await openTerminal(r, 'owner-desk')
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
+  const live = (ptyId: string) => r.runtime['ptysById'].get(ptyId)?.connected === true
+
+  for (const method of ['terminal.stop', 'terminal.closeAll', 'terminal.sleep', 'worktree.sleep']) {
+    expect(await r.send('mate-desk', method, { worktree }), method).toMatchObject({ ok: false })
+  }
+  expect(live(ownersTerminal.ptyId) && live(matesTerminal.ptyId)).toBe(true)
+  await r.call('owner-desk', 'terminal.stop', { worktree })
+  expect(live(ownersTerminal.ptyId)).toBe(false)
+  expect(live(matesTerminal.ptyId)).toBe(true)
+  expect(tabIds(await r.list('mate-desk'))).toEqual([matesTerminal.id])
 })
 
 it('ends a teammate’s terminal that exits on its own in their list alone', async () => {

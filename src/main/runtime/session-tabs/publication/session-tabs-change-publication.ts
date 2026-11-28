@@ -7,7 +7,11 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import {
+  getRuntimeBrowserPageRegistry,
+  pageListOf,
+  type PageList
+} from '../../browser/client-pages/runtime-browser-page-registry'
 import { readCreatedWorkspaceLaunch } from '../../../agent-launch/agent-launch-created-workspace'
 import type { AgentSenderRevision } from '../../../../shared/orchestration/mailbox/agent-sender-associations'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
@@ -267,12 +271,15 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   protected getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo> {
     const liveTabs = this.agentBrowserBridge?.tabList?.(worktreeId).tabs ?? []
     const byPageId = new Map(liveTabs.map((tab) => [tab.browserPageId, tab]))
-    for (const [index, page] of getRuntimeBrowserPageRegistry(this)
-      .listPages(worktreeId)
-      .entries()) {
+    // Looked up by id from each list's own tabs; a page's index is the one its own list gives it.
+    const listed = new Map<PageList, number>()
+    for (const page of getRuntimeBrowserPageRegistry(this).everyPage(worktreeId)) {
+      const list = pageListOf(page)
+      const index = listed.get(list) ?? (list === 'host' ? liveTabs.length : 0)
+      listed.set(list, index + 1)
       byPageId.set(page.browserPageId, {
         browserPageId: page.browserPageId,
-        index: liveTabs.length + index,
+        index,
         url: page.url,
         title: page.title,
         active: page.active,

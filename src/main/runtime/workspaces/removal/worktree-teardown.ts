@@ -110,6 +110,7 @@ export async function killAllProcessesForWorktree(
     ? settleBeforeDeadline(
         sweeps.track(() =>
           deps.runtime!.stopTerminalsForWorktree(worktreeId, {
+            list: 'every',
             deadline,
             stopPty,
             ...(deps.resolvedWorktreeId ? { resolvedWorktreeId: deps.resolvedWorktreeId } : {}),

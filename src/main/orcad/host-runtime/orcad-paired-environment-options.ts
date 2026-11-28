@@ -17,17 +17,16 @@ type PairedEnvironmentRuntimeOptions = Required<
 export function createOrcadPairedEnvironmentOptions(): {
   runtimeOptions: PairedEnvironmentRuntimeOptions
   /** RPC owns the device registry and starts after the runtime. */
-  bindRpc: (rpc: Pick<OrcaRuntimeRpcServer, 'getDeviceRegistry' | 'pairedDeviceTypist'>) => void
+  bindRpc: (rpc: Pick<OrcaRuntimeRpcServer, 'pairedDeviceName' | 'pairedDeviceTypist'>) => void
 } {
-  let rpc: Pick<OrcaRuntimeRpcServer, 'getDeviceRegistry' | 'pairedDeviceTypist'> | null = null
+  let rpc: Pick<OrcaRuntimeRpcServer, 'pairedDeviceName' | 'pairedDeviceTypist'> | null = null
   // A headless host's own profile accepts no shares.
   setSharedHosts(NO_SHARED_HOSTS)
   return {
     runtimeOptions: {
       // A headless host is a Run home too; it places workers on its own paired servers (#36853).
       orchestrationEnvironmentTransport: createOrchestrationEnvironmentTransport(),
-      getPairedDeviceName: (pairedDeviceId) =>
-        rpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
+      getPairedDeviceName: (pairedDeviceId) => rpc?.pairedDeviceName(pairedDeviceId) ?? null,
       getPairedDeviceAccount: (pairedDeviceId, connectionClaim) =>
         rpc?.pairedDeviceTypist(pairedDeviceId, connectionClaim) ?? null
     },

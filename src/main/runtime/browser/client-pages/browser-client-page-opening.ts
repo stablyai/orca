@@ -156,7 +156,7 @@ export async function createBrowserClientPage(
     } catch {
       pages.updatePage(browserPageId, created.placement, { loading: false })
     }
-    host.notifyHeadlessBrowserSessionTabsChanged?.(worktree.id)
+    host.notifyHeadlessBrowserSessionTabsChanged?.(worktree.id, browserPageId)
   }
   return { browserPageId }
 }
@@ -296,7 +296,7 @@ function chooseAmongHosts(
   const showingWorkspace = new Set(
     host
       .getRuntimeBrowserPageRegistry()
-      .listPages()
+      .pagesOf('host')
       .filter((page) => page.workspaceId === workspaceId)
       .map((page) => page.placement.browserHostClientId)
   )

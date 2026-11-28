@@ -85,7 +85,10 @@ export async function stopMissingWorktreeTerminals(
         MISSING_WORKTREE_TEARDOWN_CONCURRENCY,
         async (worktreeId) => {
           try {
-            await deps.runtime.stopTerminalsForWorktree(worktreeId, hostFence(repo, worktreeId))
+            await deps.runtime.stopTerminalsForWorktree(worktreeId, {
+              list: 'every',
+              ...hostFence(repo, worktreeId)
+            })
             return worktreeId
           } catch {
             return null

@@ -36,7 +36,15 @@ export const BROWSER_CLIENT_HOST_METHODS = [
     params: BrowserClientHostAttachParams,
     handler: async (
       params,
-      { runtime, connectionId, pairedDeviceId, clientKind, clientCapabilities, signal },
+      {
+        runtime,
+        connectionId,
+        pairedDeviceId,
+        clientKind,
+        clientCapabilities,
+        callerScope,
+        signal
+      },
       emit
     ) => {
       if (clientKind !== 'runtime' || !connectionId || !pairedDeviceId) {
@@ -56,7 +64,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
       // Attach inventory cannot describe pages created or replaced after readiness is published.
       const pagePlacementsAtAttach = new Map(
         getRuntimeBrowserPageRegistry(runtime)
-          .listPages()
+          .everyPage()
           .map((page) => [page.browserPageId, page.placement])
       )
       const handle = registry.attach(
@@ -70,7 +78,8 @@ export const BROWSER_CLIENT_HOST_METHODS = [
           pageInventory: params.pageInventory,
           pageReconciliationProtocolVersion: params.pageReconciliationProtocolVersion,
           leaseReconnectProtocolVersion: params.leaseReconnectProtocolVersion,
-          fileChannelProtocolVersion: params.fileChannelProtocolVersion
+          fileChannelProtocolVersion: params.fileChannelProtocolVersion,
+          teammate: callerScope?.kind === 'bot-share'
         },
         () => runtime.markClientHostedPagesReconciled(pairedDeviceId)
       )
@@ -132,12 +141,16 @@ export const BROWSER_CLIENT_HOST_METHODS = [
             emit
           )
         }
+        // A teammate's computer hosts only pages their own list opened, which redraw as they change.
+        const notifyHostList = handle.lease.teammate
+          ? () => {}
+          : (workspaceId: string) => runtime.notifyMobileSessionTabsChanged(workspaceId)
         // Adopt surviving client guests before recovery, which only reconciles records the runtime already knows.
         const adoption = await adoptRuntimeBrowserClientPagesFromInventory({
           lease: handle.lease,
           authority: registry,
           pages: getRuntimeBrowserPageRegistry(runtime),
-          notifyWorkspace: (workspaceId) => runtime.notifyMobileSessionTabsChanged(workspaceId),
+          notifyWorkspace: notifyHostList,
           resolveExecutionHostKey: (workspaceId) =>
             runtime.resolveBrowserExecutionHostKeyForWorkspace(workspaceId),
           signal: initializationSignal
@@ -156,7 +169,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
           authority: registry,
           pages: getRuntimeBrowserPageRegistry(runtime),
           pagePlacementsAtAttach,
-          notifyWorkspace: (workspaceId) => runtime.notifyMobileSessionTabsChanged(workspaceId),
+          notifyWorkspace: notifyHostList,
           releaseUnrecoverablePage: (page) =>
             releaseRuntimeBrowserClientPageRecord(runtime, page.browserPageId, page.placement),
           resolveExecutionHostKey: (workspaceId) =>

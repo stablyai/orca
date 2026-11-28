@@ -67,6 +67,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         this.ptysById,
         worktree.id,
         hostFence,
+        'host',
         true
       )
       // Main-bound terminals can survive inventory gaps; only certified exits count them stopped.
@@ -83,6 +84,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
       const closed = await this.closeWorktreeTabsOwingPtyStops(worktree.id, parentTabIds)
       await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
       const { stopped } = await this.stopTerminalsForWorktree(`id:${worktree.id}`, {
+        list: 'host',
         resolvedWorktreeId: worktree.id,
         ...hostFence
       })
@@ -159,7 +161,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
 
   async stopTerminalsForWorktree(
     worktreeSelector: string,
-    options: WorktreeTerminalStopOptions = {}
+    options: WorktreeTerminalStopOptions
   ): Promise<{ stopped: number }> {
     // Why: this mutates live PTYs, so reject while the graph is reloading rather than act on cached leaf ownership.
     const graphEpoch = this.captureReadyGraphEpoch()
@@ -186,7 +188,8 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         : this.leaves.values(),
       this.ptysById,
       worktree.id,
-      hostFence
+      hostFence,
+      options.list
     )
 
     let stopped = 0

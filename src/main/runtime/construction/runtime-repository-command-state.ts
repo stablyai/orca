@@ -175,7 +175,8 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
   })
 
   protected readonly clientHostedBrowserRows = new ClientHostedBrowserRowPublisher({
-    listClientPages: (worktreeId) => getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
+    listClientPages: (worktreeId) =>
+      getRuntimeBrowserPageRegistry(this).pagesOf('host', worktreeId),
     getClientPage: (browserPageId) => getRuntimeBrowserPageRegistry(this).getPage(browserPageId),
     hasLivePlacement: (browserPageId) =>
       getBrowserHostLeaseRegistry(this).getPlacement(browserPageId) !== undefined,

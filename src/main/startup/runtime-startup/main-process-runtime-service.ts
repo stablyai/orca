@@ -98,7 +98,7 @@ export function initializeMainProcessRuntime(
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>
-      core.runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
+      core.runtimeRpc?.pairedDeviceName(pairedDeviceId) ?? null,
     getPairedDeviceAccount: (pairedDeviceId, connectionClaim) =>
       core.runtimeRpc?.pairedDeviceTypist(pairedDeviceId, connectionClaim) ?? null,
     // Provide managed Codex homes here for desktop and headless session discovery; core IPC registration is window-only.

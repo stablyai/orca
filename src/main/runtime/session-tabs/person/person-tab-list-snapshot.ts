@@ -12,6 +12,7 @@ import type {
   PersistedPersonTab
 } from '../../../../shared/orca-profiles/persisted-person-tab'
 import { getHeadlessMobileSessionGroupId } from '../../terminal/surface/mobile-session-layout-projection'
+import { topLevelTabId } from '../../terminal/surface/mobile-session-terminal-retirement'
 
 /** What a person's chat tab shows, read from the chat's record; null when it is gone. */
 export type PersonChatTabSource = (
@@ -99,7 +100,13 @@ export function personTabListSnapshot(
     activeTabType: active?.type ?? null,
     tabGroups:
       tabs.length > 0
-        ? [{ id: groupId, activeTabId: active?.id ?? null, tabOrder: tabs.map((tab) => tab.id) }]
+        ? [
+            {
+              id: groupId,
+              activeTabId: active ? topLevelTabId(active) : null,
+              tabOrder: tabs.map(topLevelTabId)
+            }
+          ]
         : [],
     tabs
   }

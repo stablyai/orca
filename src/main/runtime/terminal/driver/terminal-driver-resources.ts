@@ -204,7 +204,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       getAvailableAuthoritativeWindowId: () => this.getAvailableAuthoritativeWindowId(),
       getOffscreenBrowserBackend: () => this.offscreenBrowserBackend,
       markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
-      notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
+      notifyHeadlessBrowserSessionTabsChanged: (worktreeId, browserPageId) =>
+        getRuntimeBrowserPageRegistry(this).notifiesHostList(browserPageId) &&
         this.notifyMobileSessionTabsChanged(worktreeId),
       readBrowserPageAnnotations: (browserPageId) =>
         readSavedBrowserPageAnnotations(this.store, browserPageId),

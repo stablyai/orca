@@ -25,7 +25,7 @@ import { randomUUID } from 'node:crypto'
 import { mintServePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { MobileTerminalCommand } from './mobile-terminal-startup'
-import { personTabId } from '../../session-tabs/person/person-tab-list-snapshot'
+import { personTabId, type PersonSurface } from '../../session-tabs/person/person-tab-list-snapshot'
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
 // Allow lost-response reconnect retries for one minute; later intentional resumes fork fresh.
 const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
@@ -250,12 +250,17 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       this.closePersonSessionTab(person, workspace.id, tabId)
       throw error
     }
+    // It exited before it could show: its exit already took it off their list.
+    const held = (candidate: PersonSurface) =>
+      candidate.kind === 'terminal' && candidate.parentTabId === surface.parentTabId
+    if (!this.personSessionTabs.holderOfSurface(held)) {
+      throw new Error('terminal_handle_stale')
+    }
     const shown = this.showPersonSurface(person, workspace.id, surface, {
       activate,
       clientNavigationId: opts.clientNavigationId
     })
     const tab = shown.tabs.find((candidate) => candidate.id === tabId)
-    // It exited before it could show: its exit already took it off their list.
     if (tab?.type !== 'terminal') {
       throw new Error('terminal_handle_stale')
     }

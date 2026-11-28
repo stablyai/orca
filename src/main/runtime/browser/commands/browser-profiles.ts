@@ -99,7 +99,7 @@ export class RuntimeBrowserProfiles {
             undefined,
             profile.id
           )
-        this.host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId)
+        this.host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId, browserPageId)
       }
       // Deleted while the target resolved: the client would rebuild the page in a retired profile.
       requireBrowserProfile(profile.id)

@@ -120,14 +120,6 @@ export class PersonSessionTabLists {
     return [...this.lists].flatMap(([person, lists]) => (lists.has(worktreeId) ? [person] : []))
   }
 
-  /** Every terminal and page some person holds in this workspace. */
-  surfacesIn(worktreeId: string): PersonSurface[] {
-    return [...this.lists.values()].flatMap(
-      (lists) =>
-        lists.get(worktreeId)?.tabs.filter((tab): tab is PersonSurface => tab.kind !== 'chat') ?? []
-    )
-  }
-
   /** Changes whenever the list does, so a queued frame of an older list is skipped. */
   deliverySource(person: TeammateTabListKey, worktreeId: string): unknown {
     return this.lists.get(person)?.get(worktreeId) ?? this.clock
@@ -168,7 +160,7 @@ export class PersonSessionTabLists {
     }
   }
 
-  /** Teammates lost the share (one, or every teammate of the bot): their lists go. Returns the
+  /** Teammates lost the share (one, or everyone a share reached): their lists go. Returns the
    *  terminals and pages those lists held, which end with them. */
   forgetPeople(
     matches: (person: TeammateTabListKey) => boolean

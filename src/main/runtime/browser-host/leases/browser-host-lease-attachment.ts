@@ -23,6 +23,8 @@ export type BrowserHostLeaseAttachInput = {
   pageReconciliationProtocolVersion?: 1
   leaseReconnectProtocolVersion?: 1
   fileChannelProtocolVersion?: 1
+  /** A teammate's computer: it hosts only the pages its own list opens there. */
+  teammate?: boolean
 }
 
 export function assertBrowserHostReconnectNegotiation(input: BrowserHostLeaseAttachInput): void {
@@ -86,7 +88,8 @@ export function createBrowserHostLeaseState(options: {
       ...(input.pageReconciliationProtocolVersion
         ? { pageReconciliationProtocolVersion: 1 as const }
         : {}),
-      ...(input.fileChannelProtocolVersion ? { fileChannelProtocolVersion: 1 as const } : {})
+      ...(input.fileChannelProtocolVersion ? { fileChannelProtocolVersion: 1 as const } : {}),
+      ...(input.teammate ? { teammate: true as const } : {})
     }),
     status: 'active',
     fence: createBrowserHostFence(),

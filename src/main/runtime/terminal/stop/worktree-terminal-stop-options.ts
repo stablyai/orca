@@ -1,4 +1,8 @@
+import type { PtyList } from '../records/runtime-terminal-state-records'
+
 export type WorktreeTerminalStopOptions = {
+  /** Whose terminals: a list's own (`ptyInList`), or `every` when the workspace itself goes away. */
+  list: PtyList | 'every'
   deadline?: number
   /** Past the deadline, still send each remaining PTY a stop without waiting on it. Only for a
    *  caller giving the PTYs up for good: the stop is recorded and may land after it returns. */

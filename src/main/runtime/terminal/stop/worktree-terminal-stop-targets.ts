@@ -1,7 +1,11 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithTerminalSleepSnapshot } from './worktree-terminal-sleep-snapshot'
 import { setsEqual } from '../identity/runtime-worktree-binding-index'
-import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
+import {
+  ptyInList,
+  type PtyList,
+  type RuntimeLeafRecord
+} from '../records/runtime-terminal-state-records'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import {
   worktreePtyBelongsToHost,
@@ -47,13 +51,9 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
       throw new Error('terminal_liveness_unavailable')
     }
     // A shared agent's Home keeps each person's terminals in their own list: exact within that list.
-    const holder = this.ptysById.get([...expected][0]!)?.holder
+    const list = this.ptysById.get([...expected][0]!)?.holder ?? 'host'
     const liveInList = (fresh: ReadonlySet<string>) =>
-      new Set(
-        [...this.getLivePtyIdsForWorktree(worktree.id, fresh)].filter(
-          (ptyId) => this.ptysById.get(ptyId)?.holder === holder
-        )
-      )
+      this.getLivePtyIdsForWorktree(worktree.id, list, fresh)
     const livePtyIds = liveInList(refreshedPtyLiveness)
     const targetOnly = opts.targetOnly === true
     const expectedIsLive = [...expected].every((ptyId) => livePtyIds.has(ptyId))
@@ -145,9 +145,11 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     }
   }
 
-  /** With `hostFence`, only that host's copy: a same-id twin's PTYs are another host's. */
+  /** A workspace's live terminals in one list (`ptyInList`). With `hostFence`, only that host's copy:
+   *  a same-id twin's PTYs are another host's. */
   protected getLivePtyIdsForWorktree(
     worktreeId: string,
+    list: PtyList | 'every',
     freshPtyIds?: ReadonlySet<string>,
     hostFence?: WorktreePtyHostFence
   ): Set<string> {
@@ -182,11 +184,13 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
         ptyIds.add(pty.ptyId)
       }
     }
-    if (hostFence) {
-      for (const ptyId of ptyIds) {
-        if (!worktreePtyBelongsToHost(ptyId, this.ptysById.get(ptyId)?.connectionId, hostFence)) {
-          ptyIds.delete(ptyId)
-        }
+    for (const ptyId of ptyIds) {
+      const pty = this.ptysById.get(ptyId)
+      if (
+        !ptyInList(pty, list) ||
+        (hostFence && !worktreePtyBelongsToHost(ptyId, pty?.connectionId, hostFence))
+      ) {
+        ptyIds.delete(ptyId)
       }
     }
     return ptyIds

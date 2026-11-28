@@ -88,7 +88,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   }
   const inventoryByPageId = new Map(inventory.map((page) => [page.browserPageId, page]))
   const pages = options.pages
-    .listPages()
+    .everyPage()
     .filter(
       (page) =>
         isPlacedAsObservedAtAttach(page, options.pagePlacementsAtAttach) &&

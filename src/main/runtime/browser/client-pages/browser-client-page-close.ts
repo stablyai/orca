@@ -54,7 +54,7 @@ export async function retireRuntimeBrowserClientPage(
   if (host.retireRuntimeOwnedBrowserSessionTab) {
     host.retireRuntimeOwnedBrowserSessionTab(clientPage.workspaceId, clientPage.browserPageId)
   } else {
-    host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId)
+    host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId, clientPage.browserPageId)
   }
   return { closed: true }
 }
@@ -91,7 +91,7 @@ export async function resolveClientPageToClose(
   const workspaceId = params.worktree
     ? (await host.resolveBrowserWorkspace(params.worktree)).id
     : undefined
-  if (pages.listPages(workspaceId).length === 0) {
+  if (pages.pagesOf('host', workspaceId).length === 0) {
     return undefined
   }
   const tab =

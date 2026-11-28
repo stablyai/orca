@@ -63,7 +63,9 @@ export type RuntimeBrowserCommandHost = {
     browserPageId: string,
     options?: BrowserSessionTabSelectionOptions
   ): Promise<void>
-  notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
+  /** The host's list changed in a workspace; naming the page whose change it was lets a teammate's
+   *  page notify only its own list (`notifiesHostList`). */
+  notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string, browserPageId?: string): void
   /** A page's unsent notes; see readSavedBrowserPageAnnotations. */
   readBrowserPageAnnotations?(browserPageId: string): BrowserPageAnnotation[]
   /** The tab bar's browser tabs, loaded or not, from the published session snapshot. */

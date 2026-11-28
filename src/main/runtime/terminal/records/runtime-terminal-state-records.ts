@@ -69,6 +69,19 @@ export type RuntimeLeafRecord = Readonly<RuntimeSyncedLeaf> &
 
 export type AdoptedRootProcess = { incarnationId: string | null; pid: number }
 
+/** Whose tab list a terminal is in: the host's, or the teammate's own list that opened it. */
+export type PtyList = 'host' | TeammateTabListKey
+
+/** The one test of whose a PTY is, for every reader that lists or acts on a workspace's terminals
+ *  for someone. `every` is only for work on the workspace itself (removal, moves, its census). A
+ *  record not yet made (a pane's id alone) is the host's: a held PTY never binds a host pane. */
+export function ptyInList(
+  pty: Pick<RuntimePtyWorktreeRecord, 'holder'> | undefined,
+  list: PtyList | 'every'
+): boolean {
+  return list === 'every' || (pty?.holder ?? 'host') === list
+}
+
 export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   readonly ptyId: string
   readonly incarnationId: PtyIncarnationId | null

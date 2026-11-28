@@ -161,6 +161,15 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     return scope?.kind === 'bot-share' ? { botId: scope.botId, accountId: scope.accountId } : null
   }
 
+  /** What a paired device is called: its row's name, or for a teammate's device (which has no row
+   *  here) the teammate's name. */
+  pairedDeviceName(deviceId: string): string | null {
+    const share = this.botShareDevices?.get(deviceId)
+    return share
+      ? (this.pairedDeviceTypist(deviceId)?.name ?? null)
+      : (this.deviceRegistry?.getDevice(deviceId)?.name ?? null)
+  }
+
   /** Who typed a paired device's message; see `pairedDeviceTypistOf`. */
   pairedDeviceTypist(
     deviceId: string,
