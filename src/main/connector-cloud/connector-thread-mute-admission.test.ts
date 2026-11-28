@@ -24,7 +24,10 @@ vi.mock('../bots/bot-chat-session', () => ({
   })
 }))
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import type { ConnectorConversation } from '../../shared/connectors/connector-cloud-contract'
+import type {
+  ConnectorAck,
+  ConnectorConversation
+} from '../../shared/connectors/connector-cloud-contract'
 import { DeliveryReceipts } from '../external-conversations/external-conversation-delivery-receipts'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import { findLink, writeLink } from '../external-conversations/external-conversation-links'
@@ -34,6 +37,8 @@ import { closeTestStores, createStore, testState } from '../persistence/persiste
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { ConversationChain } from '../external-conversations/external-conversation-chain'
 import { dispatchDelivery } from './connector-deliveries'
+import { ConnectorDeliveryAcks } from './connector-delivery-acks'
+import { fakeMachine } from './fake-connector-seam.test-fixture'
 import { placeLaunchTarget } from './connector-places'
 import { handleThreadMute, type ThreadMuteDeps } from './connector-thread-mute'
 import { threadMuteSaves, threadMuteSaving } from './connector-thread-mute-saves'
@@ -209,17 +214,11 @@ function connector(
       carriedBefore?: Promise<boolean>
     ) => handleThreadMute(deps, delivery, record, carriedBefore)
   }
-  const dispatch = (raw: unknown) =>
-    dispatchDelivery(
-      seam,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in seam never reads its host.
-      {} as ExternalConversationHost,
-      machine,
-      raw,
-      () => 60_000
-    )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in seam never reads its host.
+  const host = {} as ExternalConversationHost
+  const dispatch = (raw: unknown) => dispatchDelivery(seam, host, machine, raw, () => 60_000)
   const deliver = async (raw: unknown) => await dispatch(raw)?.done
-  return { dispatch, deliver, turns, starts, automationsTaken }
+  return { dispatch, deliver, turns, starts, automationsTaken, seam, host, machine }
 }
 
 const TURN_ID = 1_800_000_000_300
@@ -397,39 +396,75 @@ describe('a muted bot thread', () => {
     expect(starts).toEqual([])
   })
 
-  it('keeps a silenced fresh start automation handled when its receipt replays', async () => {
-    const store = await botHome({ first: true })
-    const { deliver, starts, automationsTaken } = connector(store)
-    const quiet = start(FIRST, 'quiet', {
-      mentioned: false,
-      automations: [
-        {
-          automationId: 'a1',
-          triggerId: 't1',
-          botId: 'bot1',
-          event: { key: THREAD, actorId: 'U1', occurredAt: 1_800_000_000_000, text: 'quiet' }
-        }
-      ]
-    })
+  it.each([null, 'fixture-account'])(
+    'replays a saved muted start without pickup after restart (reply outbox %s)',
+    async (outbox) => {
+      const before = connector(await botHome({ first: true }))
+      const quiet = start(FIRST, 'quiet after leaving', {
+        mentioned: false,
+        automations: [
+          {
+            automationId: 'a1',
+            triggerId: 't1',
+            botId: 'bot1',
+            event: { key: THREAD, actorId: 'U1', occurredAt: 1_800_000_000_000, text: 'quiet' }
+          }
+        ]
+      })
+      const muted = { ...MUTED, inTurn: true }
+      const ordinary = start(ELSEWHERE, 'ordinary start', { mentioned: true })
+      expect(await before.deliver(quiet)).toEqual(muted)
+      expect(await before.deliver(quiet)).toEqual(muted)
+      expect(await before.deliver(ordinary)).toEqual({ outcome: 'accepted' })
+      expect(before.starts).toEqual([ordinary.prompt])
+      expect(before.automationsTaken).toEqual([])
 
-    expect(await deliver(quiet)).toEqual({ ...MUTED, inTurn: true })
-    expect(await deliver(quiet)).toEqual({ ...MUTED, inTurn: true })
-    expect(starts).toEqual([])
-    expect(automationsTaken).toEqual([])
+      await closeTestStores()
+      orchestration.close()
+      orchestration = new OrchestrationDb(join(testState.dir, 'orchestration.db'))
+      const after = connector(createStore())
+      const sent: ConnectorAck[] = []
+      const acks = new ConnectorDeliveryAcks({
+        seam: after.seam,
+        host: after.host,
+        machine: { ...fakeMachine(() => null), ...after.machine },
+        send: async (batch) => {
+          sent.push(...batch)
+          return null
+        },
+        helloRev: () => 1,
+        random: () => 0.5,
+        signal: new AbortController().signal
+      })
+      try {
+        // The first process wrote these receipts but the service can still be waiting for its acks.
+        acks.deliverAll([quiet, ordinary], () => 60_000, outbox)
+        await expect.poll(() => acks.settled).toBe(true)
+        expect(sent.filter((ack) => ack.deliveryId === quiet.deliveryId)).toEqual([
+          { deliveryId: quiet.deliveryId, step: 'done', result: muted }
+        ])
+        expect(sent.filter((ack) => ack.deliveryId === ordinary.deliveryId)).toEqual([
+          { deliveryId: ordinary.deliveryId, step: 'received' },
+          { deliveryId: ordinary.deliveryId, step: 'done', result: { outcome: 'accepted' } }
+        ])
 
-    await closeTestStores()
-    orchestration.close()
-    orchestration = new OrchestrationDb(join(testState.dir, 'orchestration.db'))
-    const receipts = new DeliveryReceipts(() => orchestration)
-    const reopened = connector(createStore(), receipts)
-    expect(await reopened.deliver(quiet)).toEqual({ ...MUTED, inTurn: true })
-    expect(await receipts.recorded(FIRST, quiet.deliveryId)).toEqual({
-      ...MUTED,
-      inTurn: true
-    })
-    expect(reopened.starts).toEqual([])
-    expect(reopened.automationsTaken).toEqual([])
-  })
+        sent.length = 0
+        acks.deliverAll([{ ...quiet, prompt: 'different payload' }], () => 60_000, outbox)
+        await expect.poll(() => acks.settled).toBe(true)
+        expect(sent).toEqual([
+          {
+            deliveryId: quiet.deliveryId,
+            step: 'done',
+            result: { outcome: 'refused', reason: 'delivery_id_reused' }
+          }
+        ])
+        expect(after.starts).toEqual([])
+        expect(after.automationsTaken).toEqual([])
+      } finally {
+        acks.stop()
+      }
+    }
+  )
 
   it.each(['start', 'send'] as const)(
     'recovers an admitted %s automation when its receipt survived but its bookkeeping did not',
