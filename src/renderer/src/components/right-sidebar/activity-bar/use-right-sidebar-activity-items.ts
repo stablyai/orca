@@ -33,6 +33,7 @@ import { useFocusedChatWorkers } from '@/lib/focused-chat-workers'
 import { useBotNeedsYouCount, useBotNow } from '../../bots/use-bot-now'
 import { usePublishedBotsNeedsYou } from '../../bots/bot-needs-you-published'
 import { useBotGroupMembers } from '../../bots/use-bot-group-members'
+import type { Bot } from '../../../../../shared/bot-types'
 
 export type RightSidebarActivityItems = {
   visibleItems: ActivityBarItem[]
@@ -41,6 +42,7 @@ export type RightSidebarActivityItems = {
   pluginFetchStatus: PluginPanelsFetchStatus
   installedPluginTabKeys: Set<string>
   isBotPage: boolean
+  groupMembers: readonly Bot[]
 }
 
 export function useRightSidebarActivityItems({
@@ -71,7 +73,7 @@ export function useRightSidebarActivityItems({
   const now = useBotNow(bot)
   const { needs } = now
   // A bot's first tab is Home: its badge counts Orca's asks and items in Needs you. A group's counts
-  // its members' as their own tabs do, published by its open panel.
+  // its members' as their own tabs do, published while the group's right sidebar is open.
   const botNeedsYou = useBotNeedsYouCount(bot, now)
   const groupNeedsYou = usePublishedBotsNeedsYou(groupMembers)
   const needsYou = isGroupHome ? groupNeedsYou : botNeedsYou
@@ -127,7 +129,7 @@ export function useRightSidebarActivityItems({
         builtInTabNames(builtInItems, t)
       ).map((item) => ({
         ...item,
-        labeledTab: isBot
+        labeledTab: showsHomeTab
       }))
     ]
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
@@ -180,6 +182,7 @@ export function useRightSidebarActivityItems({
     pluginSystemEnabled,
     pluginFetchStatus,
     installedPluginTabKeys,
-    isBotPage: isBot
+    isBotPage: showsHomeTab,
+    groupMembers
   }
 }

@@ -155,7 +155,7 @@ export function useBotHostRead<T, S = T>(
       read.request({ hostId, id: botId })
     }
   }, [read, botId, hostId])
-  usePairedActivityRefresh((bot?.handedPairedWorkspaces?.length ?? 0) > 0, refresh)
+  usePairedActivityRefresh((bot?.handedPairedWorkspaces?.length ?? 0) > 0, read, key, refresh)
 
   return value
 }

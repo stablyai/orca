@@ -25,8 +25,11 @@ export function getVisibleRightSidebarActivityItems(
   }: RightSidebarActivityVisibilityState
 ): ActivityBarItem[] {
   if (isGroupHome) {
-    // A group's page keeps its Items; its folder panels are always empty.
-    return items.filter((item) => item.botOnly)
+    // A group's page keeps Home and app-wide plugin panels; its folder panels are always empty.
+    return [
+      ...items.filter((item) => item.botOnly),
+      ...items.filter((item) => Boolean(item.pluginKey) && !item.botOnly)
+    ]
   }
   if (isBot) {
     // A bot's own tabs lead; Files comes last.
