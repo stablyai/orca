@@ -21,7 +21,7 @@ export const STATUS_METHODS = [
         runtime.machineNameReady(),
         readHostMachineWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
       ])
-      const snapshot = getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
+      const snapshot = await getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
       const hostDescriptor = getPublishedHostDescriptor(runtime.getRuntimeId())
       return {
         ...runtime.getStatus(),

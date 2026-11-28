@@ -1877,8 +1877,6 @@
           "localBaseRefNotUpdatedDirty": "Modifications non commitées dans {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Commits uniquement locaux sur {{value0}}.",
           "localBaseRefNotUpdatedError": "Erreur Git.",
-          "localBaseRefHideDetails": "Masquer les détails",
-          "localBaseRefShowDetails": "Détails",
           "0216895fb5": "Échec de la suppression de la branche",
           "c6cf133786": "Cet espace de travail n'est plus disponible.",
           "5366d13eec": "Espace de travail supprimé, branche conservée",
@@ -1914,6 +1912,9 @@
           "localBaseRefShallowHistory": "Votre espace de travail a été créé à partir de {{value0}} et n'est pas affecté. Orca n'a toutefois pas pu mettre à jour votre branche locale {{value1}}, car ce clone ne contient que l'historique récent : Git ne peut donc pas confirmer que {{value1}} locale est seulement en retard. Pour corriger cela pour tous les nouveaux espaces de travail, exécutez une fois :",
           "localBaseRefRefreshTurnOff": "Désactiver la vérification",
           "localBaseRefRefreshTurnOffHelp": "Ce que fait Désactiver la vérification",
+          "localBaseRefRefreshDisable": "Désactiver",
+          "localBaseRefRefreshDisableTooltip": "Ne plus vérifier {{value0}}",
+          "localBaseRefClose": "Fermer",
           "localBaseRefRefreshTurnOffTooltip": "Désactive le paramètre Orca {{value0}}. Orca cessera de mettre à jour {{value1}} locale lors de la création d'un espace de travail, et cet avertissement n'apparaîtra plus. Les nouveaux espaces de travail ne sont pas affectés. Réactivez-le à tout moment dans Paramètres › Git.",
           "localBaseRefUnshallow": "Récupérer l'historique complet",
           "localBaseRefUnshallowFailed": "Impossible d'ouvrir un terminal pour cet espace de travail",
@@ -26106,8 +26107,7 @@
         "failing": "en échec",
         "running": "en attente",
         "cancelled": "annulés",
-        "passing": "réussis",
-        "more": "+{{count}} de plus"
+        "passing": "réussis"
       }
     },
     "attachments": {

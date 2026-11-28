@@ -1,9 +1,73 @@
+import type { DesktopCore } from './desktop-core'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence/loading-store/store'
+import { registerLazyIpcHandleGroup } from '../ipc/lazy-ipc-handle-group'
+import type { StarNagService } from '../star-nag/service'
+import type { WorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner'
+import { registerWorkspaceCleanupRunnerLoader } from '../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
+
+const STAR_NAG_IPC_CHANNELS = [
+  'star-nag:dismiss',
+  'star-nag:later',
+  'star-nag:complete',
+  'star-nag:disable',
+  'star-nag:openWeb',
+  'star-nag:starOrca',
+  'star-nag:forceShow',
+  'star-nag:agentValueMoment',
+  'star-nag:showAgentValueMoment',
+  'star-nag:onboardingCompleted'
+] as const
 
 // Headless serve has no first window; timer fallback must still sweep trash.
 export const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
+
+export function registerDeferredDesktopCoreServices(
+  core: DesktopCore,
+  runtime: OrcaRuntimeService,
+  store: Store,
+  isQuitting: () => boolean,
+  providerMaintenanceReady: Promise<void>
+): void {
+  let cleanupRunnerPromise: Promise<WorkspaceCleanupRunner | null> | null = null
+  const ensureCleanupRunner = () =>
+    (cleanupRunnerPromise ??= import('../workspaces/cleanup/workspace-cleanup-runner-startup').then(
+      ({ startWorkspaceCleanupRunner }) => startWorkspaceCleanupRunner(runtime, store)
+    ))
+  registerWorkspaceCleanupRunnerLoader(runtime, ensureCleanupRunner)
+
+  let starNagPromise: Promise<StarNagService> | null = null
+  const ensureStarNag = () =>
+    (starNagPromise ??= import('../star-nag/service').then(({ StarNagService }) => {
+      const starNag = new StarNagService(store, core.stats!)
+      core.starNag = starNag
+      starNag.start()
+      return starNag
+    }))
+  registerLazyIpcHandleGroup(STAR_NAG_IPC_CHANNELS, async (ipc) => {
+    const starNag = await ensureStarNag()
+    starNag.registerIpcHandlers(ipc)
+  })
+
+  void providerMaintenanceReady.then(async () => {
+    if (isQuitting()) {
+      return
+    }
+    const [{ scheduleStalePluginGitTempSweep }] = await Promise.all([
+      import('../plugins/installation/plugin-git-temp-sweep'),
+      ensureCleanupRunner().catch((error: unknown) =>
+        console.warn('[workspace-cleanup] deferred startup failed:', error)
+      ),
+      ensureStarNag().catch((error: unknown) =>
+        console.warn('[star-nag] deferred startup failed:', error)
+      )
+    ])
+    if (!isQuitting()) {
+      scheduleStalePluginGitTempSweep()
+    }
+  })
+}
 
 export function scheduleDeferredMaintenance(
   runtime: OrcaRuntimeService,

@@ -1,7 +1,4 @@
-import {
-  compareAppVersions,
-  isValidAppVersion
-} from '../../../../../shared/app-lifecycle/identity/app-version'
+import { compareAppVersions, isValidAppVersion } from '../../app-lifecycle/identity/app-version'
 
 /** This app's version when the server runs a newer one; updating the server can't close that gap. */
 export function getRemoteServerNewerThanClientVersion(entry: {

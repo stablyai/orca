@@ -79,7 +79,7 @@ function peekFixture(states: ReviewState[]) {
     width: 240,
     render: () => (
       <div className="h-80 bg-worktree-sidebar p-1 text-worktree-sidebar-foreground">
-        <div className="flex h-9 items-center gap-2 px-2 text-[13px]">
+        <div data-worktree-card-surface="" className="flex h-9 items-center gap-2 px-2 text-[13px]">
           <span className="min-w-0 flex-1 truncate">a-very-long-workspace-name-that-truncates</span>
           <WorktreeCardMetaBadges
             issue={null}

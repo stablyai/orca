@@ -161,21 +161,6 @@ export async function createBrowserClientPage(
   return { browserPageId }
 }
 
-export function openBrowserUrlOnClient(
-  host: BrowserClientPageOpeningHost,
-  params: { url: string; worktree: string },
-  signal?: AbortSignal
-): Promise<{ browserPageId: string }> {
-  assertClientOpenableUrl(params.url)
-  return createBrowserPageOnPairedHost(
-    host,
-    { url: params.url, worktree: params.worktree, activate: true, navigation: 'caller' },
-    DEFAULT_BROWSER_PROFILE_ID,
-    undefined,
-    signal
-  )
-}
-
 export function assertClientOpenableUrl(url: string): void {
   const protocol = new URL(url).protocol
   if (protocol !== 'http:' && protocol !== 'https:') {
@@ -196,9 +181,13 @@ export async function createBrowserPageOnPairedHost(
   let lease: BrowserHostLease
   try {
     // With a fallback, ask a desktop even while it hosts: its own setting decides, and a sleeping one times out.
-    lease = await acquirePairedPageHost(host, worktree?.id, fallback !== undefined)
+    // An older desktop can't be asked, so one already hosting keeps the page.
+    const askDesktop = fallback !== undefined && host.getBrowserHostRequestRegistry().hasVolunteer()
+    lease = await acquirePairedPageHost(host, worktree?.id, askDesktop)
   } catch (error) {
     if (fallback && error instanceof BrowserError && error.code === 'browser_host_unavailable') {
+      // A caller gone while the desktop was asked must not open, or move every screen to, a page.
+      signal?.throwIfAborted()
       return fallback()
     }
     throw error

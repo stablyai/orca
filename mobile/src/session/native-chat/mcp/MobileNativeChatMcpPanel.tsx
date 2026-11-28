@@ -28,6 +28,7 @@ import {
   mobileMcpTraySummary
 } from './mobile-native-chat-mcp-server-copy'
 import { mcpPanelStylesSheet as stylesSheet } from './mobile-native-chat-mcp-panel-styles'
+import { McpStatusMark as StatusMark } from './mobile-native-chat-mcp-status-mark'
 import { composerInputStylesSheet } from '../../../components/composer-input/composer-input-styles'
 import { useThemedStyles } from '../../../theme/themed-styles'
 
@@ -43,6 +44,8 @@ export type MobileNativeChatMcpPanelProps = AgentSessionMcpPanelState & {
   onManage?: (() => void) | null
   /** The chat's agent, as the header names it. */
   agentLabel: string
+  /** Opens Orca's own sign-in to a server it signs in to itself. */
+  signInWithOrca?: (server: AgentSessionMcpServer) => void
   /** The server list's cap, so the tray and composer stay on screen above the keyboard. */
   listMaxHeight: number
 }
@@ -192,14 +195,16 @@ function McpServerRow({
   dismissSignIn,
   openUrl,
   result,
+  signInWithOrca,
   t
 }: MobileNativeChatMcpPanelProps & { server: AgentSessionMcpServer; t: Translate }) {
   const styles = useThemedStyles(stylesSheet)
   const mine = pending !== null && pending.server === server.name ? pending : null
   const signingIn = signIn?.server === server.name ? signIn : null
   const busy = pending !== null
+  const withOrca = server.orca?.signsIn ? signInWithOrca : undefined
   const action =
-    signingIn === null && server.canSignIn && server.status === 'needs-auth'
+    signingIn === null && (server.canSignIn || withOrca) && server.status === 'needs-auth'
       ? ({ action: 'signIn', server: server.name } as const)
       : server.canReconnect && server.status === 'failed'
         ? ({ action: 'reconnect', server: server.name } as const)
@@ -263,7 +268,9 @@ function McpServerRow({
                 tone={action.action === 'signIn' ? 'primary' : 'secondary'}
                 busy={mine?.action === action.action}
                 disabled={busy}
-                onPress={() => run(action)}
+                onPress={() =>
+                  withOrca && action.action === 'signIn' ? withOrca(server) : run(action)
+                }
               />
             ) : null}
             {server.canToggle ? (
@@ -296,24 +303,6 @@ function McpServerRow({
       ) : null}
     </View>
   )
-}
-
-function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
-  const styles = useThemedStyles(stylesSheet)
-  switch (status) {
-    case 'connected':
-      return <View style={[styles.dot, styles.dotConnected]} />
-    case 'needs-auth':
-      return <View style={[styles.dot, styles.dotNeedsAuth]} />
-    case 'failed':
-      return <View style={[styles.dot, styles.dotFailed]} />
-    case 'disabled':
-    case 'not-started':
-    case 'unreported':
-      return <View style={[styles.dot, styles.dotDisabled]} />
-    case 'pending':
-      return <View style={styles.dotPending} />
-  }
 }
 
 // The phone never runs the agent, so a callback sign-in always finishes by pasting the address.

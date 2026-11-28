@@ -3863,7 +3863,9 @@
         "tools_one": "{{count}} tool",
         "tools_other": "{{count}} tools",
         "disabled": "Disabled",
-        "notStarted": "Not started"
+        "notStarted": "Not started",
+        "commandNotFound": "Command not found",
+        "unreachable": "Can’t reach {{host}}"
       },
       "title": "MCP servers",
       "notRunning": "MCP servers connect when you send your next message.",

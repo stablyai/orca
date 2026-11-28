@@ -2531,6 +2531,9 @@
           "localBaseRefShallowHistory": "Your workspace was created from {{value0}} and is unaffected. Orca could not also update your local {{value1}} branch because this clone only has recent history, so Git cannot confirm local {{value1}} is just behind. To fix this for every new workspace, run once:",
           "localBaseRefRefreshTurnOff": "Disable Check",
           "localBaseRefRefreshTurnOffHelp": "What Disable Check does",
+          "localBaseRefRefreshDisable": "Disable",
+          "localBaseRefRefreshDisableTooltip": "Stop checking {{value0}}",
+          "localBaseRefClose": "Close",
           "localBaseRefRefreshTurnOffTooltip": "Turns off the Orca setting {{value0}}. Orca will stop updating local {{value1}} when you create a workspace, and this warning will stop appearing. New workspaces are unaffected. Turn it back on anytime in Settings › Git.",
           "localBaseRefUnshallow": "Unshallow",
           "localBaseRefUnshallowFailed": "Could not open a terminal for this workspace",
@@ -2571,9 +2574,7 @@
           "localBaseRefNotUpdated": "{{value0}} not updated",
           "localBaseRefNotUpdatedDirty": "Uncommitted changes in {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Local-only commits on {{value0}}.",
-          "localBaseRefNotUpdatedError": "Git error.",
-          "localBaseRefHideDetails": "Hide details",
-          "localBaseRefShowDetails": "Details"
+          "localBaseRefNotUpdatedError": "Git error."
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -26055,8 +26056,7 @@
         "failing": "failing",
         "running": "running",
         "cancelled": "cancelled",
-        "passing": "passing",
-        "more": "+{{count}} more"
+        "passing": "passing"
       }
     },
     "attachments": {
@@ -28118,6 +28118,9 @@
       "unreachable": "Couldn't reach {{hosts}}. The bot may be there; open the link again once it's back.",
       "pick": "More than one computer has a bot for this link: {{hosts}}. Open it from the sidebar.",
       "updateNeeded": "Update Orca on {{hosts}} to open this bot here."
+    },
+    "chatOpen": {
+      "homeDidNotLoad": "Bot's Home didn't load."
     },
     "activity": {
       "title": "Activity",

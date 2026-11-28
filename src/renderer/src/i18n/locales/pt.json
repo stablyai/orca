@@ -3396,8 +3396,6 @@
           "localBaseRefNotUpdatedDirty": "Alterações não confirmadas em {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Commits apenas locais em {{value0}}.",
           "localBaseRefNotUpdatedError": "Erro do Git.",
-          "localBaseRefHideDetails": "Ocultar detalhes",
-          "localBaseRefShowDetails": "Detalhes",
           "0216895fb5": "Falha ao excluir a branch",
           "c6cf133786": "Este espaço de trabalho não está mais disponível.",
           "5366d13eec": "Espaço de trabalho excluído, branch mantida",
@@ -3433,6 +3431,9 @@
           "localBaseRefShallowHistory": "Seu espaço de trabalho foi criado a partir de {{value0}} e não foi afetado. O Orca não conseguiu também atualizar sua branch local {{value1}} porque este clone só tem o histórico recente, então o Git não consegue confirmar que a {{value1}} local está apenas atrasada. Para corrigir isso em todos os novos espaços de trabalho, execute uma vez:",
           "localBaseRefRefreshTurnOff": "Desativar verificação",
           "localBaseRefRefreshTurnOffHelp": "O que Desativar verificação faz",
+          "localBaseRefRefreshDisable": "Desativar",
+          "localBaseRefRefreshDisableTooltip": "Parar de verificar {{value0}}",
+          "localBaseRefClose": "Fechar",
           "localBaseRefRefreshTurnOffTooltip": "Desativa a configuração do Orca {{value0}}. O Orca deixará de atualizar a {{value1}} local ao criar um espaço de trabalho, e este aviso deixará de aparecer. Novos espaços de trabalho não são afetados. Reative quando quiser em Configurações › Git.",
           "localBaseRefUnshallow": "Buscar histórico completo",
           "localBaseRefUnshallowFailed": "Não foi possível abrir um terminal para este espaço de trabalho",
@@ -26385,8 +26386,7 @@
         "failing": "falhando",
         "running": "pendente",
         "cancelled": "cancelado",
-        "passing": "com sucesso",
-        "more": "+{{count}} mais"
+        "passing": "com sucesso"
       },
       "addEmoji": "Adicionar emoji",
       "addEmojiTooltip": "Adicione emoji (ou digite :)",

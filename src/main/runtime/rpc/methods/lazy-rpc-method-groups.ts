@@ -254,5 +254,17 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
         'agentSession.subscribeTurnCompletions'
       ]
     }
+  ),
+  prefixRpcMethodGroup(
+    ['terminalDaemon.'],
+    async () => (await import('./terminal/terminal-daemon')).TERMINAL_DAEMON_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['agentActivity.'],
+    async () => (await import('./workspaces/agent-activity-methods')).AGENT_ACTIVITY_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['ui.', 'settings.'],
+    async () => (await import('./client-state/client-ui')).CLIENT_UI_METHODS
   )
 ]
