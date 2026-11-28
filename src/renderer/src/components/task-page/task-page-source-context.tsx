@@ -10,6 +10,7 @@ import type {
 } from '@/components/task-page/task-page-localized-options'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
+import type { GiteaWorkItem } from '../../../../shared/gitea/gitea-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
@@ -63,6 +64,17 @@ export function getGitLabWorkItemWorkspaceSeed(item: GitLabWorkItem): string {
     getLinkedWorkItemWorkspaceName({
       type: item.type,
       provider: 'gitlab',
+      number: item.number,
+      title: item.title
+    })?.seedName ?? getLinkedWorkItemSuggestedName(item)
+  )
+}
+export function getGiteaWorkItemWorkspaceSeed(item: GiteaWorkItem): string {
+  const type = item.type === 'pull' ? 'pr' : 'issue'
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type,
+      provider: 'gitea',
       number: item.number,
       title: item.title
     })?.seedName ?? getLinkedWorkItemSuggestedName(item)

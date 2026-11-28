@@ -12,20 +12,22 @@ export type PullRequestLinkedIssueMeta = {
 }
 
 type LocalGitOptions = Pick<GitRuntimeOptions, 'wslDistro' | 'admissionTier'>
+type LinkedIssueProvider = 'github' | 'gitlab' | 'gitea'
 
 function inferIssueProvider(
   meta: PullRequestLinkedIssueMeta,
   provider?: HostedReviewProvider | null
-): 'github' | 'gitlab' | null {
-  if (provider === 'github' || provider === 'gitlab') {
+): LinkedIssueProvider | null {
+  if (provider === 'github' || provider === 'gitlab' || provider === 'gitea') {
     return provider
   }
   if (provider) {
     return null
   }
   if (meta.linkedWorkItem?.type === 'issue') {
-    if (meta.linkedWorkItem.provider === 'github' || meta.linkedWorkItem.provider === 'gitlab') {
-      return meta.linkedWorkItem.provider
+    const linked = meta.linkedWorkItem.provider
+    if (linked === 'github' || linked === 'gitlab' || linked === 'gitea') {
+      return linked
     }
   }
   const hasGitHub = isLinkedIssueNumber(meta.linkedIssue)
@@ -35,7 +37,7 @@ function inferIssueProvider(
 
 function fallbackTitle(
   meta: PullRequestLinkedIssueMeta,
-  provider: 'github' | 'gitlab',
+  provider: LinkedIssueProvider,
   number: number
 ): string {
   const item = meta.linkedWorkItem
@@ -55,14 +57,38 @@ export async function loadPullRequestLinkedIssue(args: {
     return null
   }
   const provider = inferIssueProvider(args.meta, args.provider)
+  // Gitea issues are linked only through the workspace's linked work item.
+  const giteaItem = args.meta.linkedWorkItem
   const number =
     provider === 'github'
       ? args.meta.linkedIssue
       : provider === 'gitlab'
         ? args.meta.linkedGitLabIssue
-        : null
+        : giteaItem?.provider === 'gitea' && giteaItem.type === 'issue'
+          ? giteaItem.number
+          : null
   if (!provider || !isLinkedIssueNumber(number)) {
     return null
+  }
+
+  if (provider === 'gitea') {
+    const { getGiteaIssue } = await import('../gitea/issues/gitea-issues')
+    const issue = await getGiteaIssue(
+      {
+        repoPath: args.repoPath,
+        connectionId: args.connectionId,
+        localGitOptions: args.localGitOptions?.wslDistro
+          ? { wslDistro: args.localGitOptions.wslDistro }
+          : undefined
+      },
+      number
+    ).catch(() => null)
+    return {
+      provider,
+      number,
+      title: issue?.title || fallbackTitle(args.meta, provider, number),
+      description: issue?.body ?? ''
+    }
   }
 
   const issue =

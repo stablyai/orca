@@ -15,6 +15,8 @@ import {
   LazyRuntimeGitLabQueryCommands
 } from '../integrations/gitlab/lazy-runtime-gitlab-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
+import { LazyRuntimeGiteaCommands } from '../integrations/gitea/lazy-runtime-gitea-commands'
+import type { RuntimeReviewCommandOwners } from './runtime-review-command-surface'
 import {
   LazyRuntimeGitHubIssueCommentCommands,
   LazyRuntimeGitHubProjectCommands,
@@ -158,6 +160,11 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
+  protected readonly giteaCommands = new LazyRuntimeGiteaCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
   protected readonly gitHubReviewQueries = new LazyRuntimeGitHubReviewQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
@@ -175,6 +182,18 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
   })
 
   protected readonly gitHubProjectCommands = new LazyRuntimeGitHubProjectCommands()
+
+  protected reviewCommandOwners(): RuntimeReviewCommandOwners {
+    return {
+      gitLabQueries: this.gitLabQueryCommands,
+      gitLabMutations: this.gitLabMutationCommands,
+      gitea: this.giteaCommands,
+      gitHubReviewQueries: this.gitHubReviewQueries,
+      gitHubReviewMutations: this.gitHubReviewMutations,
+      gitHubIssueComments: this.gitHubIssueComments,
+      gitHubProjects: this.gitHubProjectCommands
+    }
+  }
 
   protected readonly repositoryHooks = new LazyRuntimeRepositoryHooksCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),

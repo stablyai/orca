@@ -3868,7 +3868,8 @@
           "linearViewNotFound": "저장된 Linear 보기를 찾을 수 없습니다.",
           "linearViewRestoreFailed": "저장된 Linear 보기를 복원하지 못했습니다."
         },
-        "shownCount_one": "{{count}}개 표시됨"
+        "shownCount_one": "{{count}}개 표시됨",
+        "giteaSourceLabel": "Gitea"
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -9992,7 +9993,13 @@
           "integrationsLink": "연동",
           "skillHint": ". Linear를 연결한 후 사용 예시는 설정 → Linear에서 확인할 수 있습니다.",
           "incompleteBannerBodyWithLinear": "사용하지 않는 공급자를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다.",
-          "30255b39dc": "작업 공급자"
+          "30255b39dc": "작업 공급자",
+          "connectGiteaTitle": "Gitea 연결",
+          "connectGiteaDescription": "개인 액세스 토큰으로 Gitea 또는 Forgejo 서버를 추가합니다.",
+          "manageGitea": "서버 관리",
+          "addGitea": "Gitea 서버 추가",
+          "giteaLabel": "Gitea",
+          "giteaDescription": "Gitea 또는 Forgejo 서버에 연결하여 작업에 이슈와 풀 리퀘스트를 표시합니다."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "창 구분선의 두께입니다.",
@@ -11778,7 +11785,8 @@
             "apiKey": "API 키",
             "skill": "스킬",
             "connect": "연결",
-            "12d2fdff3c": "작업 공급자"
+            "12d2fdff3c": "작업 공급자",
+            "gitea": "Gitea"
           }
         },
         "terminal": {
@@ -14489,6 +14497,20 @@
           "shownPluginCount_one": "이 플러그인을 포함해 일치하는 플러그인 {{count}}개 표시 중",
           "shownPluginCount_other": "이 플러그인을 포함해 일치하는 플러그인 {{count}}개 표시 중",
           "samePublisher": "{{value0}}(으)로 등록된 다른 플러그인"
+        },
+        "gitea": {
+          "integration": {
+            "card": {
+              "d4e5f6a7b8": "연결에 실패했습니다.",
+              "bdcb1e773f": "서버 추가",
+              "9ce5f12a0d": "Gitea 연결",
+              "3852b1fd6f": "확인됨",
+              "09bde44485": "테스트 중...",
+              "2bf28d5929": "테스트",
+              "d0b31b4845": "{{value0}} 연결 끊기",
+              "f47924e554": "서버마다 토큰 하나를 로컬에 저장하며 런타임 저장소가 지원하면 암호화합니다."
+            }
+          }
         }
       },
       "right": {
@@ -20235,6 +20257,141 @@
         "notAttachedShort": "다시 연결되지 않았습니다.",
         "dispatchRejectedShort": "에이전트가 계속하기를 거부했습니다.",
         "unsupportedShort": "Orca가 이 에이전트를 재개할 수 없습니다."
+      },
+      "GiteaIssueWorkspace": {
+        "47b064c003": "{{value0}} 복사됨",
+        "927222e135": "복사하지 못했습니다.",
+        "b7c8d9e0f1": "이슈를 불러오지 못했습니다.",
+        "2d2e69fe70": "이슈를 업데이트하지 못했습니다.",
+        "565680a39b": "댓글을 추가하지 못했습니다.",
+        "a792c22414": "Gitea 항목",
+        "01b6ea43ca": "선택한 Gitea 항목을 미리 보고 작업을 시작합니다.",
+        "ce513e3ca2": "닫기",
+        "e849a4c80f": "워크스페이스 시작",
+        "c0d4f97901": "닫힘",
+        "ab08895bb5": "열림",
+        "1ab551635b": "다시 열기",
+        "6b3c5a3144": "이슈 닫기",
+        "63cbb99973": "Gitea에서 열기",
+        "c29b657be3": "URL 복사",
+        "ca242eaf5d": "설명이 제공되지 않았습니다.",
+        "0fee3f06ff": "댓글 추가…",
+        "d3e0033e0f": "댓글"
+      },
+      "GiteaPullRequestWorkspace": {
+        "f5cf34ed40": "댓글을 추가하지 못했습니다.",
+        "22f9c29c9b": "풀 리퀘스트가 병합되었습니다.",
+        "d93415a77d": "병합에 실패했습니다.",
+        "c7c84081fc": "리뷰 댓글을 추가하지 못했습니다.",
+        "f51240a59a": "대화",
+        "4f4abe43ab": "파일",
+        "95a6c97ba6": "검사",
+        "8e44409da0": "Gitea 풀 리퀘스트",
+        "0a432f2c1a": "파일, 검사, 대화를 검토한 후 병합하거나 작업을 시작합니다.",
+        "5fa5ec9fff": "닫기",
+        "f88c7cf08c": "워크스페이스 시작",
+        "9813b44d73": "Gitea에서 열기",
+        "ddc99ed766": "댓글 추가…",
+        "d646ddef48": "댓글",
+        "c2d3e4f5a6": "PR 검사를 불러오지 못했습니다."
+      },
+      "gitea": {
+        "issue": {
+          "comments": {
+            "8608602d16": "댓글",
+            "ea3f6f14a1": "아직 댓글이 없습니다.",
+            "6a519bdb1c": "알 수 없음"
+          },
+          "meta": {
+            "controls": {
+              "ba343731c0": "이슈를 업데이트하지 못했습니다.",
+              "63f46a8d86": "제목",
+              "8cc407607b": "라벨",
+              "11fac85e07": "이 저장소에는 라벨이 없습니다.",
+              "401f7dc7a2": "담당자",
+              "3cd6f5acbd": "할당 가능한 사용자가 없습니다."
+            }
+          }
+        },
+        "pr": {
+          "checks": {
+            "bed82a55cd": "이 PR에 보고된 상태 검사가 없습니다.",
+            "448c6113a4": "검사 세부 정보 열기"
+          },
+          "file": {
+            "diff": {
+              "f1a2b3c4d5": "파일 차이를 불러오지 못했습니다.",
+              "e6f7a8b9c0": "재시도",
+              "81e07de6a5": "바이너리 파일은 표시되지 않습니다."
+            }
+          },
+          "line": {
+            "comments": {
+              "489b36633a": "라인 {{value0}}",
+              "c01a062b92": "알 수 없음",
+              "4e59b0c4f8": "줄 번호",
+              "a43b5cc38b": "차이에서 새 파일의 줄 번호",
+              "02339776da": "리뷰 댓글…",
+              "317313f8af": "댓글",
+              "6cbd906d88": "줄에 댓글 달기"
+            }
+          },
+          "merge": {
+            "button": {
+              "2378ab4908": "충돌",
+              "8e662b9b6b": "병합"
+            }
+          },
+          "tab": {
+            "body": {
+              "1fe3a05742": "설명이 제공되지 않았습니다.",
+              "413feaa83a": "인라인",
+              "5372c28376": "나란히",
+              "53ab0c5a49": "변경된 파일이 없습니다."
+            }
+          }
+        },
+        "connect": {
+          "dialog": {
+            "d2823a1de0": "Gitea 서버 연결",
+            "d076a10ae3": "Gitea 서버 URL과 개인 액세스 토큰으로 이슈를 탐색하고 풀 리퀘스트를 검토합니다.",
+            "690c1da1bb": "Gitea 서버 URL",
+            "83b75fa9b7": "https://gitea.example.com",
+            "062ae1ea05": "액세스 토큰",
+            "79c04f358b": "Gitea 개인 액세스 토큰",
+            "3ecb3e1153": "Gitea 설정 → 애플리케이션에서 read:user, write:issue, write:repository 범위의 토큰을 만드세요. 필요한 저장소로 접근을 제한하세요.",
+            "4d1f2d9f21": "토큰은 로컬에 저장되며 런타임 저장소가 지원하면 암호화됩니다.",
+            "7acfed1da5": "취소",
+            "f5d526570f": "확인 중…",
+            "f68c3d011f": "연결"
+          }
+        },
+        "new": {
+          "issue": {
+            "dialog": {
+              "db951c3a29": "{{value0}}의 새 이슈",
+              "b42f72cfc5": "선택한 Gitea 프로젝트에 이슈를 만듭니다.",
+              "becfadf1df": "제목",
+              "6c8b731fb2": "설명",
+              "032fd2ed27": "취소",
+              "5e1d23a112": "이슈 생성"
+            }
+          }
+        }
+      },
+      "GiteaTaskList": {
+        "c07dd13940": "열린 항목 전체",
+        "ab2a229e50": "나에게 할당됨",
+        "74f30cd767": "생성됨",
+        "031c70d963": "닫힘",
+        "bf66fad935": "모두",
+        "65a3bffe7a": "이슈",
+        "9b21aab4c9": "PR",
+        "9986e0e679": "병합됨",
+        "747423c0f8": "초안",
+        "980519b0c8": "열림",
+        "5997067bee": "새 이슈",
+        "e3db16e7c7": "Gitea 작업 새로 고침"
       }
     },
     "i18n": {
@@ -31376,6 +31533,31 @@
       "badAddCommand": "mcp add 명령을 확인하세요. 이름과 함께 URL이나 명령이 있어야 합니다.",
       "badJson": "붙여넣은 JSON을 확인하세요. 해석할 수 없습니다.",
       "none": "Orca가 추가할 수 있는 서버를 찾지 못했습니다. SSE 서버, 자체 OAuth 클라이언트나 도구 필터가 있는 서버, 환경에서 읽는 값(${VAR})은 지원하지 않습니다."
+    }
+  },
+  "gitea": {
+    "status": {
+      "added": "추가됨",
+      "modified": "수정됨",
+      "deleted": "삭제됨",
+      "renamed": "이름 변경됨",
+      "copied": "복사됨",
+      "changed": "변경됨",
+      "open": "열림",
+      "closed": "닫힘",
+      "merged": "병합됨",
+      "draft": "초안",
+      "pending": "보류 중",
+      "success": "성공",
+      "failure": "실패",
+      "error": "오류",
+      "warning": "경고",
+      "merge": "병합",
+      "squash": "스쿼시 및 병합",
+      "rebase": "리베이스 후 병합"
+    },
+    "errors": {
+      "loadPullRequest": "일부 풀 리퀘스트 데이터를 불러오지 못했습니다."
     }
   }
 }

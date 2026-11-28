@@ -18,6 +18,8 @@ export function useIntegrationProviderStatusRefresh(): void {
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const giteaStatusLoaded = useAppStore((s) => s.giteaStatusLoaded)
+  const refreshGiteaStatus = useAppStore((s) => s.refreshGiteaStatus)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
@@ -29,6 +31,13 @@ export function useIntegrationProviderStatusRefresh(): void {
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+
+  // Gitea servers live on this client's own runtime, so the first load is the only one needed here.
+  useEffect(() => {
+    if (!giteaStatusLoaded) {
+      void refreshGiteaStatus()
+    }
+  }, [giteaStatusLoaded, refreshGiteaStatus])
 
   useEffect(() => {
     if (!linearStatusCurrent || !linearStatusChecked) {

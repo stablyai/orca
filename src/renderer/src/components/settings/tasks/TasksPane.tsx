@@ -8,12 +8,14 @@ import {
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
 } from '../../../../../shared/work-items/task-providers'
+import { GiteaIcon } from '@/components/icons/GiteaIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { CodeHostSetupSteps } from './TaskSourceCodeHostSetup'
+import { GiteaSetupSteps } from './TaskSourceGiteaSetup'
 import { JiraSetupSteps } from './TaskSourceJiraSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
@@ -31,6 +33,7 @@ import { useTaskSourceProviderReadiness } from './use-task-source-provider-readi
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { INTEGRATION_SETTING_TARGET_IDS } from '../integrations/integrations-search'
 
 type TasksPaneProps = {
   settings: GlobalSettings
@@ -92,6 +95,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  gitea: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.giteaLabel', 'Gitea')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.giteaDescription',
+        'Connect a Gitea or Forgejo server and show its issues and pull requests in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <GiteaIcon className={className} />
   }
 }
 
@@ -101,6 +116,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const refreshGiteaStatus = useAppStore((s) => s.refreshGiteaStatus)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const readinessByProvider = useTaskSourceProviderReadiness(visibleProviders)
   useIntegrationProviderStatusRefresh()
@@ -219,6 +235,16 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                   onToggleVisible={() => toggleProvider('jira')}
                   onConnected={() => void checkJiraConnection()}
                   onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                />
+              ) : provider === 'gitea' ? (
+                <GiteaSetupSteps
+                  connected={readiness.connected}
+                  checking={readiness.checking}
+                  visible={visible}
+                  canHide={canHide}
+                  onToggleVisible={() => toggleProvider('gitea')}
+                  onConnected={() => void refreshGiteaStatus()}
+                  onOpenIntegrations={() => openIntegrations(INTEGRATION_SETTING_TARGET_IDS.gitea)}
                 />
               ) : (
                 <CodeHostSetupSteps

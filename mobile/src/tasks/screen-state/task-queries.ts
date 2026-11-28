@@ -209,6 +209,9 @@ export function taskListParams(input: TaskListInput, repoKey: string): HostQuery
         : null
     case 'gitlab':
       return { provider, view: input.gitlabView, filter: input.gitlabFilter, query, repos: repoKey }
+    // Gitea has no phone list yet; mobileTaskProviders keeps it out of the source switch.
+    case 'gitea':
+      return null
     case 'jira':
       return input.jiraConnection.connected
         ? {

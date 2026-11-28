@@ -9,6 +9,7 @@ import { GOOGLE_WRITE_METHODS } from './google-write'
 import { SPEECH_METHODS } from './speech/speech'
 import { EMULATOR_METHODS } from './emulator/emulator'
 import { GITLAB_METHODS } from './source-control/gitlab/gitlab'
+import { GITEA_METHODS } from './source-control/gitea/gitea'
 import { BITBUCKET_METHODS } from './source-control/bitbucket/bitbucket'
 import { HOSTED_REVIEW_METHODS } from './source-control/reviews/hosted-review'
 import { LINEAR_METHODS } from './integrations/linear/linear'
@@ -119,6 +120,7 @@ const SERVICE_RPC_METHODS = [
   ...SPEECH_METHODS,
   ...EMULATOR_METHODS,
   ...GITLAB_METHODS,
+  ...GITEA_METHODS,
   ...BITBUCKET_METHODS,
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,

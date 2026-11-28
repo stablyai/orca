@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
+import { TASK_PROVIDERS } from '../../work-items/task-providers'
 import {
   OptionalBoolean,
   OptionalPositiveInt,
@@ -113,6 +114,15 @@ export const TaskProviderIdentity = lazyZodSchema(() =>
           siteUrl: z.string().nullable().optional(),
           projectKey: z.string().nullable().optional()
         })
+        .passthrough(),
+      z
+        .object({
+          provider: z.literal('gitea'),
+          serverId: z.string().nullable().optional(),
+          baseUrl: z.string().nullable().optional(),
+          owner: z.string().nullable().optional(),
+          repo: z.string().nullable().optional()
+        })
         .passthrough()
     ])
     .optional()
@@ -123,7 +133,7 @@ export const TaskSourceContext = lazyZodSchema(() =>
   z
     .object({
       kind: z.literal('task-source'),
-      provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
+      provider: z.enum(TASK_PROVIDERS),
       projectId: requiredString('Missing source project id'),
       hostId: ExecutionHostId,
       projectHostSetupId: OptionalNullablePlainString,

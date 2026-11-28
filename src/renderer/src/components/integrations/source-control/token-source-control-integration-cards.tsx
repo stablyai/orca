@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { ExternalLink, GitPullRequestArrow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -8,6 +9,9 @@ import { usePreflightCardStatuses } from './source-control-preflight-card-status
 import { useTranslate } from '@/i18n/use-translate'
 import { tokenProviderStatusLabel } from './token-source-control-status'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { useAppStore } from '@/store'
+import { GiteaConnectDialog } from './gitea-connect-dialog'
+import { GiteaConnectedServers } from './gitea-connected-servers'
 
 export function AzureDevOpsIntegrationCard(): React.JSX.Element {
   const t = useTranslate()
@@ -140,8 +144,18 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
 export function GiteaIntegrationCard(): React.JSX.Element {
   const t = useTranslate()
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('gitea')
+  const refreshGiteaStatus = useAppStore((s) => s.refreshGiteaStatus)
+  const hasSavedServers = useAppStore((s) => (s.giteaStatus?.servers?.length ?? 0) > 0)
+  const [connectOpen, setConnectOpen] = useState(false)
   const status = unavailable ? 'unavailable' : statuses.giteaStatus
   const configured = status === 'configured'
+  useEffect(() => {
+    void refreshGiteaStatus()
+  }, [refreshGiteaStatus])
+  const refreshAll = (): void => {
+    void refreshGiteaStatus()
+    refresh()
+  }
 
   return (
     <IntegrationCardShell
@@ -171,6 +185,19 @@ export function GiteaIntegrationCard(): React.JSX.Element {
             )
       }
       checking={status === 'checking'}
+      actions={
+        status === 'checking' || status === 'unavailable' ? null : (
+          <Button
+            variant={configured ? 'outline' : 'default'}
+            size="sm"
+            onClick={() => setConnectOpen(true)}
+          >
+            {hasSavedServers
+              ? t('auto.components.settings.gitea.integration.card.bdcb1e773f', 'Add server')
+              : t('auto.components.settings.gitea.integration.card.9ce5f12a0d', 'Connect Gitea')}
+          </Button>
+        )
+      }
       statusTone={configured ? 'connected' : 'attention'}
       statusLabel={tokenProviderStatusLabel(
         {
@@ -247,6 +274,12 @@ export function GiteaIntegrationCard(): React.JSX.Element {
           </div>
         </IntegrationCardDetails>
       ) : null}
+      <GiteaConnectedServers onChanged={refreshAll} />
+      <GiteaConnectDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        onConnected={refreshAll}
+      />
     </IntegrationCardShell>
   )
 }

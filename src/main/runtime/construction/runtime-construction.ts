@@ -172,14 +172,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
       repositoryHooks: this.repositoryHooks,
       repositoryIssueCommand: this.repositoryIssueCommand
     })
-    installRuntimeReviewCommandSurface(this, {
-      gitLabQueries: this.gitLabQueryCommands,
-      gitLabMutations: this.gitLabMutationCommands,
-      gitHubReviewQueries: this.gitHubReviewQueries,
-      gitHubReviewMutations: this.gitHubReviewMutations,
-      gitHubIssueComments: this.gitHubIssueComments,
-      gitHubProjects: this.gitHubProjectCommands
-    })
+    installRuntimeReviewCommandSurface(this, this.reviewCommandOwners())
     installRuntimeServiceCommandSurface(this, {
       aiVault: this.aiVault,
       sessionSearchSettings: new RuntimeSessionSearchSettingsController(

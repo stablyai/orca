@@ -1,6 +1,6 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export const TASK_PROVIDERS = ['github', 'gitlab', 'linear', 'jira', 'gitea'] as const
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export type TaskProvider = (typeof TASK_PROVIDERS)[number]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -98,6 +98,10 @@ function isTaskProviderAvailable(
   }
   // Disconnected Jira must remain visible as its own first-time setup entry point.
   if (provider === 'jira') {
+    return true
+  }
+  // Why: Gitea connects from the Tasks surface too, same entry-point argument as Jira.
+  if (provider === 'gitea') {
     return true
   }
   return availability.linearConnected

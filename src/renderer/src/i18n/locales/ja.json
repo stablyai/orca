@@ -3858,7 +3858,8 @@
           "linearProjectRestoreFailed": "保存された Linear プロジェクトを復元できませんでした。",
           "linearViewNotFound": "保存された Linear ビューが見つかりませんでした。",
           "linearViewRestoreFailed": "保存された Linear ビューを復元できませんでした。"
-        }
+        },
+        "giteaSourceLabel": "Gitea"
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -9915,7 +9916,13 @@
           "integrationsLink": "連携",
           "skillHint": "。Linear の接続後、使用例は設定 → Linear で確認できます。",
           "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。",
-          "30255b39dc": "タスクプロバイダー"
+          "30255b39dc": "タスクプロバイダー",
+          "connectGiteaTitle": "Giteaに接続",
+          "connectGiteaDescription": "個人アクセストークンでGiteaまたはForgejoサーバーを追加します。",
+          "manageGitea": "サーバーを管理",
+          "addGitea": "Giteaサーバーを追加",
+          "giteaLabel": "Gitea",
+          "giteaDescription": "GiteaまたはForgejoサーバーに接続し、タスクにIssueとプルリクエストを表示します。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
@@ -11701,7 +11708,8 @@
             "apiKey": "APIキー",
             "skill": "スキル",
             "connect": "接続",
-            "12d2fdff3c": "タスクプロバイダー"
+            "12d2fdff3c": "タスクプロバイダー",
+            "gitea": "Gitea"
           }
         },
         "terminal": {
@@ -14369,6 +14377,20 @@
           "shownPluginCount_one": "これを含む {{count}} 件の一致するプラグインを表示",
           "shownPluginCount_other": "これを含む {{count}} 件の一致するプラグインを表示",
           "samePublisher": "{{value0}} として掲載された他のプラグイン"
+        },
+        "gitea": {
+          "integration": {
+            "card": {
+              "d4e5f6a7b8": "接続に失敗しました。",
+              "bdcb1e773f": "サーバーを追加",
+              "9ce5f12a0d": "Giteaに接続",
+              "3852b1fd6f": "確認済み",
+              "09bde44485": "テスト中…",
+              "2bf28d5929": "テスト",
+              "d0b31b4845": "{{value0}} の接続を解除",
+              "f47924e554": "各サーバーのトークンはローカルに保存され、実行環境のストレージが対応している場合は暗号化されます。"
+            }
+          }
         }
       },
       "right": {
@@ -20052,6 +20074,141 @@
         "notAttachedShort": "再接続できませんでした。",
         "dispatchRejectedShort": "Agent が続行を拒否しました。",
         "unsupportedShort": "Orca はこの Agent を再開できません。"
+      },
+      "GiteaIssueWorkspace": {
+        "47b064c003": "{{value0}} をコピーしました",
+        "927222e135": "コピーに失敗しました。",
+        "b7c8d9e0f1": "Issueを読み込めませんでした。",
+        "2d2e69fe70": "Issueを更新できませんでした。",
+        "565680a39b": "コメントの追加に失敗しました。",
+        "a792c22414": "Gitea項目",
+        "01b6ea43ca": "選択したGitea項目を確認し、作業を開始します。",
+        "ce513e3ca2": "閉じる",
+        "e849a4c80f": "ワークスペースを開始",
+        "c0d4f97901": "クローズ",
+        "ab08895bb5": "オープン",
+        "1ab551635b": "再度開く",
+        "6b3c5a3144": "Issue を閉じる",
+        "63cbb99973": "Giteaで開く",
+        "c29b657be3": "URLをコピー",
+        "ca242eaf5d": "説明はありません。",
+        "0fee3f06ff": "コメントを追加…",
+        "d3e0033e0f": "コメント"
+      },
+      "GiteaPullRequestWorkspace": {
+        "f5cf34ed40": "コメントの追加に失敗しました。",
+        "22f9c29c9b": "プルリクエストをマージしました。",
+        "d93415a77d": "マージに失敗しました。",
+        "c7c84081fc": "レビューコメントの追加に失敗しました。",
+        "f51240a59a": "会話",
+        "4f4abe43ab": "ファイル",
+        "95a6c97ba6": "チェック",
+        "8e44409da0": "Giteaプルリクエスト",
+        "0a432f2c1a": "ファイル、チェック、会話を確認し、マージまたは作業を開始します。",
+        "5fa5ec9fff": "閉じる",
+        "f88c7cf08c": "ワークスペースを開始",
+        "9813b44d73": "Giteaで開く",
+        "ddc99ed766": "コメントを追加…",
+        "d646ddef48": "コメント",
+        "c2d3e4f5a6": "PRのチェックを読み込めませんでした。"
+      },
+      "gitea": {
+        "issue": {
+          "comments": {
+            "8608602d16": "コメント",
+            "ea3f6f14a1": "コメントはまだありません。",
+            "6a519bdb1c": "不明"
+          },
+          "meta": {
+            "controls": {
+              "ba343731c0": "Issueを更新できませんでした。",
+              "63f46a8d86": "タイトル",
+              "8cc407607b": "ラベル",
+              "11fac85e07": "このリポジトリにはラベルがありません。",
+              "401f7dc7a2": "担当者",
+              "3cd6f5acbd": "割り当て可能なユーザーがいません。"
+            }
+          }
+        },
+        "pr": {
+          "checks": {
+            "bed82a55cd": "このPRのステータスチェックはありません。",
+            "448c6113a4": "オープンチェックの詳細"
+          },
+          "file": {
+            "diff": {
+              "f1a2b3c4d5": "ファイルの差分を読み込めませんでした。",
+              "e6f7a8b9c0": "再試行",
+              "81e07de6a5": "バイナリファイルは表示されません。"
+            }
+          },
+          "line": {
+            "comments": {
+              "489b36633a": "{{value0}} 行目",
+              "c01a062b92": "不明",
+              "4e59b0c4f8": "行番号",
+              "a43b5cc38b": "差分の新しいファイルの行番号",
+              "02339776da": "レビューコメント…",
+              "317313f8af": "コメント",
+              "6cbd906d88": "行にコメント"
+            }
+          },
+          "merge": {
+            "button": {
+              "2378ab4908": "競合",
+              "8e662b9b6b": "マージ"
+            }
+          },
+          "tab": {
+            "body": {
+              "1fe3a05742": "説明はありません。",
+              "413feaa83a": "インライン",
+              "5372c28376": "左右に並べる",
+              "53ab0c5a49": "変更されたファイルはありません。"
+            }
+          }
+        },
+        "connect": {
+          "dialog": {
+            "d2823a1de0": "Giteaサーバーに接続",
+            "d076a10ae3": "GiteaサーバーのURLと個人アクセストークンで、Issueの閲覧とプルリクエストのレビューを行います。",
+            "690c1da1bb": "GiteaサーバーのURL",
+            "83b75fa9b7": "https://gitea.example.com",
+            "062ae1ea05": "アクセストークン",
+            "79c04f358b": "Gitea個人アクセストークン",
+            "3ecb3e1153": "Giteaの設定 → アプリケーションで、read:user、write:issue、write:repositoryスコープのトークンを作成します。アクセスを必要なリポジトリに制限してください。",
+            "4d1f2d9f21": "トークンはローカルに保存され、実行環境のストレージが対応している場合は暗号化されます。",
+            "7acfed1da5": "キャンセル",
+            "f5d526570f": "確認中…",
+            "f68c3d011f": "接続"
+          }
+        },
+        "new": {
+          "issue": {
+            "dialog": {
+              "db951c3a29": "{{value0}}に新しいIssue",
+              "b42f72cfc5": "選択したGiteaプロジェクトにIssueを作成します。",
+              "becfadf1df": "タイトル",
+              "6c8b731fb2": "説明",
+              "032fd2ed27": "キャンセル",
+              "5e1d23a112": "Issue の作成"
+            }
+          }
+        }
+      },
+      "GiteaTaskList": {
+        "c07dd13940": "すべての未完了項目",
+        "ab2a229e50": "私に割り当てられた Issue",
+        "74f30cd767": "作成日時",
+        "031c70d963": "クローズ",
+        "bf66fad935": "全て",
+        "65a3bffe7a": "Issue",
+        "9b21aab4c9": "PR",
+        "9986e0e679": "マージ済み",
+        "747423c0f8": "下書き",
+        "980519b0c8": "オープン",
+        "5997067bee": "新しいIssue",
+        "e3db16e7c7": "Giteaタスクを更新"
       }
     },
     "i18n": {
@@ -30641,6 +30798,31 @@
       "badAddCommand": "mcp add コマンドを確認してください。名前と、URL またはコマンドが必要です。",
       "badJson": "貼り付けた JSON を確認してください。解析できません。",
       "none": "Orca は追加できるサーバーを見つけられませんでした。SSE サーバー、独自の OAuth クライアントやツールフィルターを持つサーバー、環境から読み取る値（${VAR}）には対応していません。"
+    }
+  },
+  "gitea": {
+    "status": {
+      "added": "追加済み",
+      "modified": "修正済み",
+      "deleted": "削除済み",
+      "renamed": "名前変更済み",
+      "copied": "コピー済み",
+      "changed": "変更済み",
+      "open": "オープン",
+      "closed": "クローズ",
+      "merged": "マージ済み",
+      "draft": "下書き",
+      "pending": "保留中",
+      "success": "成功",
+      "failure": "失敗",
+      "error": "エラー",
+      "warning": "警告",
+      "merge": "マージ",
+      "squash": "スカッシュしてマージする",
+      "rebase": "リベースしてマージ"
+    },
+    "errors": {
+      "loadPullRequest": "プルリクエストの一部のデータを読み込めませんでした。"
     }
   }
 }

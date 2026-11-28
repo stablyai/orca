@@ -6,10 +6,13 @@ import {
 } from '../../../../shared/work-items/task-source-context'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
+/** Where a Gitea item lives: the server's web origin plus owner/repo, read from the item itself. */
+export type GiteaItemRepoRef = { url: string; repoOwner: string; repoName: string }
+
 export function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
-  provider: 'github' | 'gitlab',
-  gitlabProjectRef?: GitLabProjectRef | null
+  provider: 'github' | 'gitlab' | 'gitea',
+  providerRef?: GitLabProjectRef | GiteaItemRepoRef | null
 ): TaskSourceContext | null {
   if (!repo) {
     return null
@@ -20,9 +23,11 @@ export function getTaskPageRepoSourceContext(
   const providerIdentity =
     provider === 'github' && project?.providerIdentity?.provider === 'github'
       ? project.providerIdentity
-      : provider === 'gitlab' && gitlabProjectRef
-        ? buildGitLabProviderIdentity(gitlabProjectRef)
-        : null
+      : provider === 'gitlab' && providerRef && 'path' in providerRef
+        ? buildGitLabProviderIdentity(providerRef)
+        : provider === 'gitea' && providerRef && 'repoOwner' in providerRef
+          ? buildGiteaProviderIdentity(providerRef)
+          : null
   return normalizeTaskSourceContext({
     provider,
     projectId: setup?.projectId ?? project?.id ?? repo.id,
@@ -31,6 +36,16 @@ export function getTaskPageRepoSourceContext(
     repoId: repo.id,
     providerIdentity
   })
+}
+export function buildGiteaProviderIdentity(ref: GiteaItemRepoRef) {
+  const marker = `/${ref.repoOwner}/${ref.repoName}/`
+  const index = ref.url.toLowerCase().indexOf(marker.toLowerCase())
+  return {
+    provider: 'gitea' as const,
+    baseUrl: index > 0 ? ref.url.slice(0, index) : null,
+    owner: ref.repoOwner,
+    repo: ref.repoName
+  }
 }
 export function buildGitLabProviderIdentity(projectRef: GitLabProjectRef) {
   const pathParts = projectRef.path

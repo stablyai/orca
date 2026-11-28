@@ -13,18 +13,19 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
-import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import {
+  getEnvGiteaAuth,
+  giteaGetJsonAtBase,
+  resolveGiteaAuth,
+  type GiteaReadOptions
+} from './requests/gitea-request'
+import { getServerTokens } from './servers/gitea-server-store'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Forgejo may spend several seconds loading reviewers for one pulls page.
 const PULL_REQUEST_LIST_TIMEOUT_MS = 15_000
 const PULL_REQUEST_PAGE_LIMIT = 50
 const MAX_PULL_REQUEST_PAGES = 5
-
-type GiteaAuthConfig = {
-  apiBaseUrl: string | null
-  token: string | null
-}
 
 export type GiteaAuthStatus = {
   configured: boolean
@@ -34,97 +35,32 @@ export type GiteaAuthStatus = {
   tokenConfigured: boolean
 }
 
-type RequestOptions = {
-  searchParams?: Record<string, string | number>
-  timeoutMs?: number
-  // Why: only a single-resource fetch may read 404 as "absent". See requestJsonAtBase.
-  allowNotFound?: boolean
-}
+type RequestOptions = Omit<GiteaReadOptions, 'token'>
 
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
-
-export function normalizeGiteaApiBaseUrl(value: string): string {
-  const trimmed = value.trim().replace(/\/+$/, '')
-  return /\/api\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/api/v1`
-}
-
-function getAuthConfig(): GiteaAuthConfig {
-  const apiBaseUrl = envValue('ORCA_GITEA_API_BASE_URL')
-  return {
-    apiBaseUrl: apiBaseUrl ? normalizeGiteaApiBaseUrl(apiBaseUrl) : null,
-    token: envValue('ORCA_GITEA_TOKEN')
-  }
-}
-
-function authHeaders(config: Pick<GiteaAuthConfig, 'token'>): Record<string, string> {
-  return config.token ? { Authorization: `token ${config.token}` } : {}
-}
-
-function configuredApiBaseUrl(repo: GiteaRepoRef): string {
-  return getAuthConfig().apiBaseUrl ?? repo.apiBaseUrl
-}
-
-function apiUrl(baseUrl: string, path: string, searchParams?: RequestOptions['searchParams']): URL {
-  const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
-  if (searchParams) {
-    for (const [key, value] of Object.entries(searchParams)) {
-      url.searchParams.set(key, String(value))
-    }
-  }
-  return url
-}
-
-async function requestJsonAtBase<T>(
-  baseUrl: string,
+// Reads go through the shared Gitea reader: env credentials first, then a server saved for this host.
+async function requestJson<T>(
+  repo: GiteaRepoRef,
   path: string,
   options: RequestOptions = {},
   // Creation needs transport/auth failures distinguished from confirmed absence.
   throwOnFailure = false
 ): Promise<T | null> {
-  const config = getAuthConfig()
-  try {
-    const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
-      headers: {
-        Accept: 'application/json',
-        ...authHeaders(config)
-      },
-      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
-    })
-    if (!response.ok) {
-      await cancelUnreadResponseBody(response)
-      // Why: listing 404s still signal repository or access failures.
-      if (throwOnFailure && !(options.allowNotFound && response.status === 404)) {
-        throw new Error(`Gitea request failed: HTTP ${response.status}`)
-      }
-      return null
-    }
-    return (await response.json()) as T
-  } catch (error) {
-    if (throwOnFailure) {
-      throw error
-    }
-    return null
-  }
-}
-
-function requestJson<T>(
-  repo: GiteaRepoRef,
-  path: string,
-  options: RequestOptions = {},
-  throwOnFailure = false
-): Promise<T | null> {
-  return requestJsonAtBase(configuredApiBaseUrl(repo), path, options, throwOnFailure)
+  const auth = await resolveGiteaAuth(repo)
+  return giteaGetJsonAtBase<T>(
+    auth.apiBaseUrl,
+    path,
+    { timeoutMs: REQUEST_TIMEOUT_MS, ...options, token: auth.token },
+    throwOnFailure
+  )
 }
 
 function encodedRepoPath(repo: GiteaRepoRef): string {
   return `${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.repo)}`
 }
 
+// Keyed by the remote's own host, so same-named repos on two servers never share a scan.
 function giteaPullRequestScanKey(repo: GiteaRepoRef): string {
-  return `${configuredApiBaseUrl(repo)}/${encodedRepoPath(repo)}`
+  return `${repo.host}/${encodedRepoPath(repo)}`
 }
 
 /** Invalidate after creation so card refreshes cannot reuse a cached miss. */
@@ -166,52 +102,59 @@ function matchesBranch(raw: RawGiteaPullRequest, branchName: string): boolean {
 }
 
 export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
-  const config = getAuthConfig()
-  const tokenConfigured = config.token !== null
-  if (!config.apiBaseUrl && !tokenConfigured) {
-    return {
-      configured: false,
-      authenticated: false,
-      account: null,
-      baseUrl: null,
-      tokenConfigured: false
-    }
+  const env = getEnvGiteaAuth()
+  const tokenConfigured = env.token !== null
+  if (!env.apiBaseUrl && !tokenConfigured) {
+    return savedServerAuthStatus()
   }
-  if (!config.apiBaseUrl) {
-    return {
-      configured: true,
-      authenticated: true,
-      account: null,
-      baseUrl: null,
-      tokenConfigured
-    }
+  if (!env.apiBaseUrl) {
+    return { configured: true, authenticated: true, account: null, baseUrl: null, tokenConfigured }
   }
-
   if (!tokenConfigured) {
-    const version = await requestJsonAtBase<{ version?: string }>(config.apiBaseUrl, '/version', {
+    const version = await giteaGetJsonAtBase<{ version?: string }>(env.apiBaseUrl, '/version', {
       timeoutMs: 4000
     })
     return {
       configured: version !== null,
       authenticated: false,
       account: null,
-      baseUrl: config.apiBaseUrl,
+      baseUrl: env.apiBaseUrl,
       tokenConfigured
     }
   }
-
-  const user = await requestJsonAtBase<{
+  const user = await giteaGetJsonAtBase<{
     login?: string | null
     username?: string | null
     full_name?: string | null
-  }>(config.apiBaseUrl, '/user', { timeoutMs: 4000 })
+  }>(env.apiBaseUrl, '/user', { timeoutMs: 4000, token: env.token })
   return {
     configured: true,
     authenticated: user !== null,
     account: user?.login ?? user?.username ?? user?.full_name ?? null,
-    baseUrl: config.apiBaseUrl,
+    baseUrl: env.apiBaseUrl,
     tokenConfigured
   }
+}
+
+// Servers connected in Settings authenticate when their token was verified at connect time.
+async function savedServerAuthStatus(): Promise<GiteaAuthStatus> {
+  const saved = await getServerTokens().catch(() => [])
+  const first = saved[0]?.server
+  return first
+    ? {
+        configured: true,
+        authenticated: true,
+        account: first.account,
+        baseUrl: first.baseUrl,
+        tokenConfigured: true
+      }
+    : {
+        configured: false,
+        authenticated: false,
+        account: null,
+        baseUrl: null,
+        tokenConfigured: false
+      }
 }
 
 export async function getGiteaPullRequest(

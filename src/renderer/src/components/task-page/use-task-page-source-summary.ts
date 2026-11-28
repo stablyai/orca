@@ -82,6 +82,22 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
               .filter((context): context is TaskSourceContext => context !== null)
           )
         }) ?? undefined,
+      gitea:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('gitea'),
+          sourceCount: selectedRepos.length,
+          hostLabelById,
+          hostAvailability: selectedRepos.flatMap((repo) => {
+            const context = getTaskPageRepoSourceContext(repo, 'gitea')
+            const availability = context
+              ? getTaskSourceHostAvailabilityForHost(
+                  hostRegistryById.get(context.hostId),
+                  context.hostId
+                )
+              : null
+            return availability ? [availability] : []
+          })
+        }) ?? undefined,
       linear:
         getTaskSourceAvailabilityNotice({
           providerLabel: labelFor('linear'),

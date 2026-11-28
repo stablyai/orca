@@ -42,7 +42,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   } = model
   const getTaskPickerRepoHostLabel = useCallback(
     (repo: Repo): string | null => {
-      const provider = taskSource === 'gitlab' ? 'gitlab' : 'github'
+      const provider = taskSource === 'gitlab' || taskSource === 'gitea' ? taskSource : 'github'
       const context = getTaskPageRepoSourceContext(repo, provider)
       const hostId = context?.hostId ?? repo.executionHostId ?? 'local'
       return hostRegistryById.get(hostId)?.label ?? null
@@ -50,15 +50,20 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     [hostRegistryById, taskSource]
   )
   const taskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'github' && taskSource !== 'gitlab') {
+    if (taskSource !== 'github' && taskSource !== 'gitlab' && taskSource !== 'gitea') {
       return []
     }
+    const hostAvailability = taskSourceRepoContexts.flatMap((context) => {
+      const host = hostRegistryById.get(context.hostId)
+      const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
+      return availability ? [availability] : []
+    })
+    // Gitea talks to its REST API from the owning host, so no CLI preflight gates it.
+    if (taskSource === 'gitea') {
+      return hostAvailability
+    }
     return [
-      ...taskSourceRepoContexts.flatMap((context) => {
-        const host = hostRegistryById.get(context.hostId)
-        const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
-        return availability ? [availability] : []
-      }),
+      ...hostAvailability,
       ...getRepoBackedProviderAvailability({
         provider: taskSource,
         contexts: taskSourceRepoContexts,
