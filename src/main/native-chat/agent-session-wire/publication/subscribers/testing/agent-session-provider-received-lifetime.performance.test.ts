@@ -4,6 +4,8 @@ import {
   dispatchClaudeTurn,
   retireClaudeDispatchWaiters
 } from '../../../../../claude/structured/dispatch/claude-structured-dispatch'
+import { claudeUnwrittenUserMessageError } from '../../../../../claude/sdk-transport/claude-agent-sdk-user-message-queue'
+import { observeClaudeCommandLifecycle } from '../../../../../claude/structured/turns/claude-command-lifecycle'
 import { retireWaiter } from '../../../../../claude/structured/dispatch/claude-structured-dispatch-waiters'
 import type { ClaudeSession } from '../../../../../claude/structured/claude-structured-session-state'
 import { claudeProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -259,5 +261,112 @@ it.each(['phone-only', 'headless local', 'ssh', 'wsl'])(
     expect(commits).toEqual([undefined, undefined])
     expect(attempt.dispatchCursor).toBeUndefined()
     expect(attempt.firstHandover).toBe(false)
+  }
+)
+
+it.each([true, false])(
+  'stamps a Claude replacement write only when prior write is known unwritten (%s)',
+  async (unwritten) => {
+    const journal = await openJournal()
+    const subscribers = new AgentSessionSubscribers()
+    journal.observeCommits((commit) => subscribers.providerReceipts.observe(journal, commit))
+    const frames: number[] = []
+    const close = subscribers.open({
+      id: 'desktop',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      readsProviderReceived: true,
+      emit: (event) => {
+        if (event.type === 'batch' && event.providerReceived) {
+          frames.push(...event.providerReceived)
+        }
+      }
+    })
+    const idle = async () => {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      await vi.waitFor(() => expect(subscribers.retention(new Set())).toEqual([]))
+    }
+    const clientMessageId = 'retry'
+    const child = (send: () => Promise<void>) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch and lifecycle only use waiter state and this connection.
+      ({
+        providerSessionId: 'provider-1',
+        dispatchSequence: 0,
+        dispatchWaiters: [],
+        retiredDispatchWaiters: [],
+        connection: { send }
+      }) as unknown as ClaudeSession
+    try {
+      await idle()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: receipt ownership reads only the lease fence.
+      const record = { lease: { runtimeFence: 1 } } as AgentSessionRecord
+      const receipt = providerHandoverReceipt(
+        {
+          sessionId: SESSION,
+          journal,
+          providerReceipts: subscribers.providerReceipts,
+          fence: 1,
+          record: () => record,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: receipt eligibility never consults adapters or catalogs.
+          adapter: {} as Parameters<typeof providerHandoverReceipt>[0]['adapter'],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: receipt eligibility never consults adapters or catalogs.
+          agents: {} as Parameters<typeof providerHandoverReceipt>[0]['agents'],
+          childWork: () => [],
+          childWorkOpen: () => false,
+          now: () => 100
+        },
+        clientMessageId,
+        () => true
+      )!
+      await journal.appendSubmission({
+        clientMessageId,
+        payloadFingerprint: clientMessageId,
+        body,
+        fence: 1,
+        handoverRecorded: true
+      })
+      const handover = async () => {
+        const result = await journal.prepareHandover({
+          clientMessageId,
+          fence: 1,
+          body,
+          turnScope: scope,
+          captureProviderReceipt: true
+        })
+        receipt.committed(result)
+        return result.dispatchCursor!.sequence
+      }
+      const first = await handover()
+      const providerInput = {
+        clientMessageId,
+        sessionId: SESSION,
+        body,
+        beginProviderReceipt: receipt.begin
+      }
+      const previous = child(async () => {
+        const cause = new Error('write failed')
+        throw unwritten ? claudeUnwrittenUserMessageError(cause) : cause
+      })
+      await expect(dispatchClaudeTurn(previous, providerInput)).resolves.toMatchObject({
+        state: unwritten ? 'rejected' : 'unknown'
+      })
+      const second = await handover()
+      expect(second).toBeGreaterThan(first)
+      const replacement = child(async () => {})
+      await dispatchClaudeTurn(replacement, providerInput)
+      const waiter = replacement.dispatchWaiters[0]!
+      observeClaudeCommandLifecycle(replacement, {
+        session_id: 'provider-1',
+        command_uuid: waiter.sentUuid,
+        state: 'queued'
+      })
+      subscribers.deliverFrames(SESSION, journal)
+      await idle()
+      expect(frames).toEqual(unwritten ? [second] : [])
+      retireClaudeDispatchWaiters(replacement)
+    } finally {
+      close()
+    }
   }
 )
