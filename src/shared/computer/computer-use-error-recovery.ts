@@ -142,7 +142,7 @@ export function computerUseErrorRecoveryData(
       }
       return recoverWith(
         'Run `orca computer get-app-state --app <app> --json` before retrying so you know whether the UI changed.',
-        'Retry with a simpler semantic action or `--no-screenshot` if observation is slow; do not repeat the same timed-out action blindly.'
+        'Retry with a simpler semantic action, or without screenshots if observation is slow (drop the `--screenshot*` flags from an action, or add `--no-screenshot` to `get-app-state`); do not repeat the same timed-out action blindly.'
       )
     case 'verification_failed':
       return recoverWith(
@@ -151,9 +151,9 @@ export function computerUseErrorRecoveryData(
       )
     case 'screenshot_failed':
       return recoverWith(
-        'If the accessibility tree is sufficient, rerun the command with `--no-screenshot` instead of retrying the same screenshot capture.',
+        'If the accessibility tree is sufficient, rerun without screenshots instead of retrying the same capture: drop `--screenshot`, `--screenshot-format`, `--screenshot-scale` and `--screenshot-max-edge` from an action command, or add `--no-screenshot` to `get-app-state`.',
         'If the message mentions Screen Recording or screenshots permission, run `orca computer permissions --id screenshots --json` and grant access before retrying.',
-        'If the message mentions the payload cap, target a smaller/current window or use `--no-screenshot`.'
+        'If the message mentions the payload cap, target a smaller/current window or rerun without screenshots as above.'
       )
     case 'accessibility_error':
       // Why: an Orca server installed before it bundled computer use reports only this exit (#31777).

@@ -74,8 +74,23 @@ function getComputerScreenshotFlags(flags: Map<string, string | boolean>): {
 export function getComputerActionObserveFlags(
   flags: Map<string, string | boolean>
 ): ReturnType<typeof getComputerObserveFlags> & { treeDiff?: boolean } {
+  if (flags.has('screenshot') && flags.has('no-screenshot')) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Pass either --screenshot or --no-screenshot, not both'
+    )
+  }
+  const observeFlags = getComputerObserveFlags(flags)
+  const wantsScreenshot =
+    !observeFlags.noScreenshot &&
+    (flags.has('screenshot') ||
+      observeFlags.screenshotFormat !== undefined ||
+      observeFlags.screenshotScale !== undefined ||
+      observeFlags.screenshotMaxEdge !== undefined)
   return {
-    ...getComputerObserveFlags(flags),
+    ...observeFlags,
+    // Why: sent explicitly so runtimes that capture by default skip the screenshot too.
+    noScreenshot: wantsScreenshot ? undefined : true,
     ...(flags.has('full-tree') ? {} : { treeDiff: true })
   }
 }
