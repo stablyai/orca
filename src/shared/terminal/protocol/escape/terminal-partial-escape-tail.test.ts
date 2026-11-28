@@ -63,6 +63,33 @@ describe('extractPartialEscapeTail', () => {
     const pending = advancePartialEscapeTail('', '\x1bPq\x1b')
     expect(advancePartialEscapeTail(pending, '\x1b[3')).toBe('\x1b[3')
   })
+
+  it('tracks split ST, CAN/SUB, and ESC aborts across Kitty APC chunks identically to unsplit input', () => {
+    const kittyBurst =
+      '\x1b_Ga=T,f=100;AAAA\x1b\\\x1b_Gm=1;BBBB\x1b\x1b[31mok\x1b_Gm=0;CCCC\x18next\x1b_Gopen\x1b'
+    expect(extractPartialEscapeTail(kittyBurst)).toBe('\x1b')
+
+    let tail = ''
+    for (let i = 0; i < kittyBurst.length; i += 3) {
+      tail = advancePartialEscapeTail(tail, kittyBurst.slice(i, i + 3))
+    }
+    expect(tail).toBe('\x1b')
+    expect(advancePartialEscapeTail(tail, '\\done')).toBe('')
+  })
+
+  it('handles OSC BEL/ST, un-aborted string fast path, and CAN/SUB string aborts consistently', () => {
+    const stream =
+      '\x1b_Ga=T,m=1;PAYLOAD1\x1b\\\x1b]0;title-bel\x07\x1b]2;title-st\x1b\\\x1b_Gm=0;PAYLOAD2\x1b\\\x1b]52;open'
+    expect(extractPartialEscapeTail(stream)).toBe('\x1b]52;open')
+    let state = ''
+    for (let i = 0; i < stream.length; i += 7) {
+      state = advanceTerminalEscapeBoundary(state, stream.slice(i, i + 7))
+    }
+    expect(state).toBe('\x1b]')
+    expect(advanceTerminalEscapeBoundary(state, 'rest\x07after')).toBe('')
+    expect(advanceTerminalEscapeBoundary('\x1bP', 'abc\x1b\\next')).toBe('')
+    expect(advanceTerminalEscapeBoundary('\x1bP', 'abc\x18next\x1b[3')).toBe('\x1b[')
+  })
 })
 
 describe('advancePartialEscapeTail past the length cap', () => {

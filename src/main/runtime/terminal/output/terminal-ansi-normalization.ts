@@ -5,6 +5,9 @@ import {
 } from '../../../../shared/terminal/protocol/escape/terminal-escape-introducer'
 import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 
+// oxlint-disable-next-line no-control-regex -- OSC sequences terminate at BEL or ST (ESC \).
+const OSC_TERMINATOR_SCAN = /\x07|\x1b\\/g
+
 export function parseAnsiControlSequence(
   value: string,
   escapeIndex: number
@@ -54,17 +57,17 @@ function findTerminalEscapeSequenceEnd(
     }
     return -1
   }
-  if (introducer === 'osc' || introducer === 'string') {
-    for (let index = escapeIndex + 2; index < value.length; index += 1) {
-      const code = value.charCodeAt(index)
-      if (code === 0x07 && introducer === 'osc') {
-        return index
-      }
-      if (code === 0x1b && value.charCodeAt(index + 1) === 0x5c) {
-        return index + 1
-      }
+  if (introducer === 'string') {
+    const st = value.indexOf('\x1b\\', escapeIndex + 2)
+    return st === -1 ? -1 : st + 1
+  }
+  if (introducer === 'osc') {
+    OSC_TERMINATOR_SCAN.lastIndex = escapeIndex + 2
+    const match = OSC_TERMINATOR_SCAN.exec(value)
+    if (!match) {
+      return -1
     }
-    return -1
+    return match[0].length === 1 ? match.index : match.index + 1
   }
   return escapeIndex + 1
 }

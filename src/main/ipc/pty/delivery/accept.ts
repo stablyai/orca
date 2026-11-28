@@ -3,9 +3,9 @@ import {
   shouldDropHiddenRendererPtyData
 } from './pty-hidden-delivery-gate'
 import {
+  isPrioritizedRendererPty,
   rendererVisibilityKnownPtys,
-  visibleRendererPtys,
-  activeRendererPtys
+  visibleRendererPtys
 } from './visibility-state'
 import { PTY_BATCH_INTERVAL_MS } from './constants'
 import { appendPendingPtyData, makeDroppedOutputPayload, toDroppedOutputSentinel } from './pending'
@@ -17,7 +17,11 @@ import {
 import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
-import { clearFlushTimerIfIdle } from './flush'
+import {
+  clearFlushTimerIfIdle,
+  clearScheduledPendingDataFlush,
+  scheduleImmediatePendingDataFlush
+} from './flush'
 import { advancePtyEscapeBoundary, escapeBoundaryFields } from './pty-escape-boundary'
 import type { PtyIpcSession } from '../session'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
@@ -77,10 +81,7 @@ export function acceptPtyDataForRenderer(
   const isQueryCopy = payload.sequenceChars === 0
   const startEscapeBoundary = isQueryCopy ? '' : advancePtyEscapeBoundary(payload.id, payload.data)
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
-    if (session.flushTimer) {
-      clearTimeout(session.flushTimer)
-      session.flushTimer = null
-    }
+    clearScheduledPendingDataFlush(session)
     session.producerFlowControl.releaseAll()
     session.clearDeliveryResyncProbe()
     session.clearPendingPtyData()
@@ -196,12 +197,20 @@ export function acceptPtyDataForRenderer(
   session.updateProducerFlowControl(payload.id)
   if (
     !session.canSendPtyDataToRenderer(payload.id, {
-      interactive: activeRendererPtys.has(payload.id)
+      interactive: isPrioritizedRendererPty(payload.id)
     })
   ) {
     requestDeliveryResyncForGatedPty(session)
   }
-  if (!session.flushTimer) {
-    session.schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
+  if (!session.flushTimer && !session.flushImmediate) {
+    if (
+      isPrioritizedRendererPty(payload.id) &&
+      pending.data.length >= 16 * 1024 &&
+      typeof session.flushPendingData === 'function'
+    ) {
+      scheduleImmediatePendingDataFlush(session)
+    } else {
+      session.schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
+    }
   }
 }

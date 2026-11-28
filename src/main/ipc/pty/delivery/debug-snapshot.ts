@@ -102,7 +102,7 @@ export function readCurrentPtyRendererDeliveryDebugSnapshot(
     rendererInFlightChars: session.rendererInFlightTotalChars,
     maxRendererInFlightCharsByPty,
     activeRendererPtyCount: activeRendererPtys.size,
-    flushScheduled: session.flushTimer !== null,
+    flushScheduled: session.flushTimer !== null || session.flushImmediate !== null,
     peakPendingChars: session.peakPendingChars,
     peakMaxPendingCharsByPty: session.peakMaxPendingCharsByPty,
     peakRendererInFlightChars: session.peakRendererInFlightChars,

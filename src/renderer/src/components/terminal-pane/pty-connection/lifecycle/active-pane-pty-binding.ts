@@ -7,6 +7,13 @@ import { setRendererPtyVisibilityClaim } from '../../pty-transport/delivery/pty-
 import { shouldIgnoreStalePanePtyLayoutBinding } from '../reattach/pane-pty-layout-binding'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
+const reportPanePtyActive = (ptyId: string | null | undefined, active: boolean): void => {
+  if (!ptyId || isRemoteRuntimePtyId(ptyId) || typeof window === 'undefined') {
+    return
+  }
+  window.api?.pty?.setActiveRendererPty?.(ptyId, active)
+}
+
 export function installActivePanePtyBinding(session: ConnectPanePtySession): void {
   session.observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
   session.reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
@@ -65,11 +72,15 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
     session.bindProcessExitState(ptyId, options.replacePtyId)
     if (session.activePanePtyBinding && session.activePanePtyBinding !== ptyId) {
       session.reportPanePtyVisibility(session.activePanePtyBinding, false)
+      reportPanePtyActive(session.activePanePtyBinding, false)
     }
     session.windowsPtyModel.apply()
     session.setPanePtyFitBinding(ptyId)
     session.activePanePtyBinding = ptyId
     session.reportPanePtyVisibility(ptyId, session.deps.isVisibleRef.current)
+    if (session.deps.isVisibleRef.current && session.isActiveSplitPane?.() === true) {
+      reportPanePtyActive(ptyId, true)
+    }
     // Why: record bind time on the spawn/attach chokepoint so the reconcile
     // guard knows this binding is newer than any pre-bind snapshot.
     session.activePanePtyBindingBoundAt = performance.now()

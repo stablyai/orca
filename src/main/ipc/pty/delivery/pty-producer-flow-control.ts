@@ -2,6 +2,10 @@
 
 export const PRODUCER_FLOW_HIGH_WATERMARK_CHARS = 256 * 1024
 export const PRODUCER_FLOW_LOW_WATERMARK_CHARS = 32 * 1024
+// Prioritized active panes carry single large media frames (e.g. clipped Kitty PNGs >500KB) without
+// pausing the daemon socket while staying safely below the active pending backlog drop cap.
+export const PRODUCER_FLOW_ACTIVE_HIGH_WATERMARK_CHARS = 1536 * 1024
+export const PRODUCER_FLOW_ACTIVE_LOW_WATERMARK_CHARS = 1024 * 1024
 // Reassert sustained backpressure after the daemon's lost-resume failsafe auto-resumes reads.
 export const PRODUCER_PAUSE_REASSERT_INTERVAL_MS = 5_000
 
@@ -31,24 +35,27 @@ export class PtyProducerFlowController {
     this.reassertIntervalMs = opts.reassertIntervalMs ?? PRODUCER_PAUSE_REASSERT_INTERVAL_MS
   }
 
-  update(id: string, pendingChars: number): void {
+  update(
+    id: string,
+    pendingChars: number,
+    watermarks?: { highWatermarkChars?: number; lowWatermarkChars?: number }
+  ): void {
+    const highWatermarkChars = watermarks?.highWatermarkChars ?? this.highWatermarkChars
+    const lowWatermarkChars = watermarks?.lowWatermarkChars ?? this.lowWatermarkChars
     const pausedAt = this.pausedAtByPty.get(id)
     if (pausedAt === undefined) {
-      if (pendingChars > this.highWatermarkChars) {
+      if (pendingChars > highWatermarkChars) {
         this.pausedAtByPty.set(id, Date.now())
         this.safePause(id)
       }
       return
     }
-    if (pendingChars < this.lowWatermarkChars) {
+    if (pendingChars < lowWatermarkChars) {
       this.pausedAtByPty.delete(id)
       this.safeResume(id)
       return
     }
-    if (
-      pendingChars > this.highWatermarkChars &&
-      Date.now() - pausedAt >= this.reassertIntervalMs
-    ) {
+    if (pendingChars > highWatermarkChars && Date.now() - pausedAt >= this.reassertIntervalMs) {
       this.pausedAtByPty.set(id, Date.now())
       this.safePause(id)
     }

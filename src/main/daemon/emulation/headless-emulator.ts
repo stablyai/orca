@@ -23,6 +23,7 @@ import {
   type TerminalViewAttributeResponder
 } from './terminal-view-attribute-responder'
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
+import { HeadlessKittyApcFilter } from './headless-kitty-apc-filter'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
 import type { TerminalOscLinkRange } from '../../../shared/terminal/links/terminal-osc-link-ranges'
 import { readTerminalCursorLineContext } from '../../../shared/terminal/input/terminal-cursor-line-context'
@@ -76,6 +77,7 @@ export class HeadlessEmulator {
   private queryReplyForwardingDepth = 0
   // serialize() omits parser state, so preserve an incomplete escape for the next live chunk.
   private partialEscapeTail = ''
+  private readonly kittyApcFilter = new HeadlessKittyApcFilter()
 
   constructor(opts: HeadlessEmulatorOptions) {
     this.pathFlavor = opts.pathFlavor
@@ -171,26 +173,21 @@ export class HeadlessEmulator {
   }
 
   write(data: string, opts: HeadlessEmulatorWriteOptions = {}): Promise<void> {
-    if (this.disposed) {
-      return Promise.resolve()
-    }
-
-    const forwardQueryReplies = opts.forwardQueryReplies === true
-    if (this.tryWriteSync(data, { forwardQueryReplies })) {
+    if (this.disposed || this.tryWriteSync(data, opts)) {
       return Promise.resolve()
     }
     this.oscText.scan(data)
+    const emulatorData = this.kittyApcFilter.filter(data)
+    const trackQueries = opts.forwardQueryReplies === true && emulatorData.length > 0
     // The empty-write callback opens forwarding at this chunk’s position in xterm’s async FIFO.
-    if (forwardQueryReplies) {
+    if (trackQueries) {
       this.terminal.write('', () => {
         this.queryReplyForwardingDepth += 1
       })
     }
     return new Promise<void>((resolve) => {
-      this.terminal.write(data, () => {
-        if (forwardQueryReplies) {
-          this.queryReplyForwardingDepth -= 1
-        }
+      this.terminal.write(emulatorData, () => {
+        this.queryReplyForwardingDepth -= trackQueries ? 1 : 0
         this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
         resolve()
       })
@@ -199,10 +196,7 @@ export class HeadlessEmulator {
 
   /** Apply cold-restore bytes before snapshotting; return false if the private sync API is unavailable. */
   writeSync(data: string): boolean {
-    if (this.disposed) {
-      return false
-    }
-    return this.tryWriteSync(data)
+    return !this.disposed && this.tryWriteSync(data)
   }
 
   private tryWriteSync(data: string, opts: HeadlessEmulatorWriteOptions = {}): boolean {
@@ -211,16 +205,15 @@ export class HeadlessEmulator {
       return false
     }
     this.oscText.scan(data)
-    const forwardQueryReplies = opts.forwardQueryReplies === true
-    if (forwardQueryReplies) {
-      this.queryReplyForwardingDepth += 1
-    }
-    // Queued PTY writes could leave a snapshot with half-cleared TUI rows.
-    try {
-      writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
-    } finally {
-      if (forwardQueryReplies) {
-        this.queryReplyForwardingDepth -= 1
+    const emulatorData = this.kittyApcFilter.filter(data)
+    const trackQueries = opts.forwardQueryReplies === true && emulatorData.length > 0
+    if (emulatorData.length > 0) {
+      this.queryReplyForwardingDepth += trackQueries ? 1 : 0
+      // Queued PTY writes could leave a snapshot with half-cleared TUI rows.
+      try {
+        writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, emulatorData)
+      } finally {
+        this.queryReplyForwardingDepth -= trackQueries ? 1 : 0
       }
     }
     this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)

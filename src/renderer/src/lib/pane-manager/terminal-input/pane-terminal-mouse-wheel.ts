@@ -1,4 +1,3 @@
-import type { Terminal } from '@xterm/xterm'
 import {
   createTerminalTuiMouseWheelDistanceState,
   normalizeTerminalTuiMouseWheelMultiplier,
@@ -6,21 +5,20 @@ import {
   resolveTerminalWheelDirection
 } from './pane-terminal-tui-wheel-reports'
 import type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
+import {
+  emitCoalescedCoreWheelReports,
+  measureScreenRect,
+  resolveScreenElement,
+  resolveTerminalWheelCellHeight
+} from './pane-terminal-core-wheel-encoder'
+import type { CachedScreenRect, TerminalWheelTarget } from './pane-terminal-core-wheel-encoder'
 
 const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
 const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
 const DOM_DELTA_LINE = 1
 
-type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'> & {
-  modes: Pick<Terminal['modes'], 'mouseTrackingMode'>
-}
-
 type TerminalMouseWheelMultiplierOptions = {
   getTuiMouseWheelMultiplier?: () => number | undefined
-}
-
-type ReplayedWheelEvent = WheelEvent & {
-  [REPLAYED_WHEEL_EVENT_PROPERTY]?: boolean
 }
 
 type TerminalTuiMouseWheelReplayState = {
@@ -30,6 +28,9 @@ type TerminalTuiMouseWheelReplayState = {
   pendingEvent: WheelEvent | null
   pendingReports: number
   pendingTarget: EventTarget | null
+  cachedScreenRect: CachedScreenRect | null
+  observedScreenElement: HTMLElement | null
+  screenResizeObserver: ResizeObserver | null
 }
 
 function createTerminalTuiMouseWheelReplayState(): TerminalTuiMouseWheelReplayState {
@@ -39,12 +40,15 @@ function createTerminalTuiMouseWheelReplayState(): TerminalTuiMouseWheelReplaySt
     pendingDirection: 0,
     pendingEvent: null,
     pendingReports: 0,
-    pendingTarget: null
+    pendingTarget: null,
+    cachedScreenRect: null,
+    observedScreenElement: null,
+    screenResizeObserver: null
   }
 }
 
 function isReplayedWheelEvent(event: WheelEvent): boolean {
-  return (event as ReplayedWheelEvent)[REPLAYED_WHEEL_EVENT_PROPERTY] === true
+  return Object.getOwnPropertyDescriptor(event, REPLAYED_WHEEL_EVENT_PROPERTY)?.value === true
 }
 
 function markReplayedWheelEvent(event: WheelEvent): void {
@@ -81,16 +85,23 @@ function cloneWheelReportEvent(event: WheelEvent): WheelEvent {
   return clone
 }
 
-function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number | undefined {
-  if (typeof terminal.element?.querySelector !== 'function') {
-    return undefined
+function refreshCachedScreenOrigin(
+  state: TerminalTuiMouseWheelReplayState,
+  terminal: TerminalWheelTarget
+): CachedScreenRect | null {
+  const measured = measureScreenRect(terminal)
+  if (!measured) {
+    return state.cachedScreenRect
   }
-  const screen = terminal.element?.querySelector<HTMLElement>('.xterm-screen')
-  const rect = screen?.getBoundingClientRect()
-  if (!rect || rect.height <= 0 || terminal.rows <= 0) {
-    return undefined
-  }
-  return rect.height / terminal.rows
+  state.cachedScreenRect = state.cachedScreenRect
+    ? {
+        left: measured.left,
+        top: measured.top,
+        width: state.cachedScreenRect.width,
+        height: state.cachedScreenRect.height
+      }
+    : measured
+  return state.cachedScreenRect
 }
 
 export function shouldMultiplyTerminalMouseWheel(
@@ -105,7 +116,6 @@ export function shouldMultiplyTerminalMouseWheel(
   ) {
     return false
   }
-
   return true
 }
 
@@ -115,29 +125,27 @@ function drainTerminalTuiWheelReports(
 ): void {
   const target = state.pendingTarget
   const event = state.pendingEvent
-  if (!target || !event || state.pendingReports <= 0) {
-    state.drainScheduled = false
-    return
-  }
-
-  if (terminal.modes.mouseTrackingMode === 'none') {
-    state.pendingReports = 0
-    state.drainScheduled = false
-    state.pendingDirection = 0
-    state.pendingEvent = null
-    state.pendingTarget = null
-    return
-  }
-
+  const direction = state.pendingDirection
   const reportsToDispatch = state.pendingReports
-  for (let i = 0; i < reportsToDispatch; i += 1) {
-    target.dispatchEvent(cloneWheelReportEvent(event))
-  }
   state.pendingReports = 0
   state.drainScheduled = false
   state.pendingDirection = 0
   state.pendingEvent = null
   state.pendingTarget = null
+
+  if (!target || !event || reportsToDispatch <= 0 || direction === 0) {
+    return
+  }
+  if (terminal.modes.mouseTrackingMode === 'none') {
+    return
+  }
+  const rect = refreshCachedScreenOrigin(state, terminal)
+  if (emitCoalescedCoreWheelReports(terminal, rect, event, direction, reportsToDispatch)) {
+    return
+  }
+  for (let i = 0; i < reportsToDispatch; i += 1) {
+    target.dispatchEvent(cloneWheelReportEvent(event))
+  }
 }
 
 function queueTerminalTuiWheelReports(
@@ -150,12 +158,10 @@ function queueTerminalTuiWheelReports(
   if (reportCount <= 0) {
     return
   }
-
   const direction = resolveTerminalWheelDirection(event)
   if (state.pendingDirection !== 0 && state.pendingDirection !== direction) {
     state.pendingReports = 0
   }
-
   state.pendingDirection = direction
   state.pendingEvent = event
   state.pendingTarget = target
@@ -164,9 +170,8 @@ function queueTerminalTuiWheelReports(
   if (state.drainScheduled) {
     return
   }
-
   state.drainScheduled = true
-  // Report after xterm’s wheel handler, without frame caps that lose fullscreen-TUI scroll distance.
+  // Report after xterm's wheel handler, without frame caps that lose fullscreen-TUI scroll distance.
   queueMicrotask(() => {
     drainTerminalTuiWheelReports(state, terminal)
   })
@@ -175,8 +180,50 @@ function queueTerminalTuiWheelReports(
 export function attachTerminalMouseWheelMultiplier(
   terminal: TerminalWheelTarget,
   options: TerminalMouseWheelMultiplierOptions = {}
-): void {
+): () => void {
   const replayState = createTerminalTuiMouseWheelReplayState()
+  let disposed = false
+  const invalidateScreenRect = (): void => {
+    replayState.cachedScreenRect = null
+  }
+  const syncScreenObserver = (): void => {
+    if (disposed) {
+      return
+    }
+    const screenElement = resolveScreenElement(terminal)
+    if (!screenElement || screenElement === replayState.observedScreenElement) {
+      return
+    }
+    replayState.screenResizeObserver?.disconnect()
+    replayState.screenResizeObserver = null
+    replayState.observedScreenElement = screenElement
+    invalidateScreenRect()
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(invalidateScreenRect)
+      observer.observe(screenElement)
+      replayState.screenResizeObserver = observer
+    }
+  }
+
+  syncScreenObserver()
+  const resizeSubscription = terminal.onResize?.(invalidateScreenRect)
+  const cleanup = (): void => {
+    if (disposed) {
+      return
+    }
+    disposed = true
+    replayState.screenResizeObserver?.disconnect()
+    replayState.screenResizeObserver = null
+    replayState.observedScreenElement = null
+    replayState.cachedScreenRect = null
+    resizeSubscription?.dispose()
+  }
+  if (typeof terminal._core?._register === 'function') {
+    terminal._core._register({ dispose: cleanup })
+  } else if (typeof terminal._core?.register === 'function') {
+    terminal._core.register({ dispose: cleanup })
+  }
+
   terminal.attachCustomWheelEventHandler((event) => {
     if (
       terminal.modes.mouseTrackingMode === 'none' ||
@@ -185,24 +232,30 @@ export function attachTerminalMouseWheelMultiplier(
       return true
     }
 
+    syncScreenObserver()
     const target =
       event.currentTarget instanceof EventTarget ? event.currentTarget : terminal.element
     if (!target) {
       return true
     }
 
-    // Replay resolved rows in line mode; xterm dampens small pixel deltas before emitting reports.
     const reportCount = resolveTerminalTuiMouseWheelReportCount(
       event,
       normalizeTerminalTuiMouseWheelMultiplier(options.getTuiMouseWheelMultiplier?.()),
       replayState.distance,
       {
-        cellHeight: resolveTerminalWheelCellHeight(terminal),
+        cellHeight: resolveTerminalWheelCellHeight(
+          terminal,
+          replayState.cachedScreenRect,
+          (rect) => {
+            replayState.cachedScreenRect = rect
+          }
+        ),
         rows: terminal.rows
       }
     )
     queueTerminalTuiWheelReports(replayState, terminal, target, event, reportCount)
-
     return false
   })
+  return cleanup
 }

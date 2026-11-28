@@ -35,6 +35,10 @@ const INERT_PREFIX_BY_STATE_PREFIX: Record<string, string> = {
 const INERT_STRING_PREFIXES = new Set([INERT_OSC_PREFIX, INERT_DCS_PREFIX])
 // oxlint-disable-next-line no-control-regex -- the C0 bytes that can end an open OSC/DCS string.
 const STRING_END_BYTE = /[\x07\x18\x1a\x1b]/
+// oxlint-disable-next-line no-control-regex -- the C0 bytes that can end an open string sequence.
+const STRING_CONTROL_SCAN = /[\x18\x1a\x1b]/g
+// oxlint-disable-next-line no-control-regex -- BEL and C0 bytes that can end an open OSC sequence.
+const OSC_CONTROL_SCAN = /[\x07\x18\x1a\x1b]/g
 
 /** ESC-state transition shared by the fresh-ESC and abort-reprocess paths. */
 function stateAfterEscByte(code: number): ScanState {
@@ -79,6 +83,8 @@ export function advanceTerminalEscapeBoundary(statePrefix: string, chunk: string
 }
 
 function scanPartialEscapeTail(stream: string, stateOnly: boolean): string {
+  const hasCanOrSub = stream.includes('\x18') || stream.includes('\x1a')
+  let hasBel: boolean | undefined
   let state: ScanState = 'ground'
   let start = 0
   for (let i = 0; i < stream.length; i++) {
@@ -93,14 +99,63 @@ function scanPartialEscapeTail(stream: string, stateOnly: boolean): string {
       state = 'esc'
       continue
     }
+    if (state === 'string') {
+      if (!hasCanOrSub) {
+        const esc = stream.indexOf('\x1b', i)
+        if (esc === -1) {
+          break
+        }
+        if (esc + 1 < stream.length && stream.charCodeAt(esc + 1) === 0x5c) {
+          i = esc + 1
+          state = 'ground'
+          continue
+        }
+        i = esc
+        state = 'stringEsc'
+        continue
+      }
+      STRING_CONTROL_SCAN.lastIndex = i
+      const match = STRING_CONTROL_SCAN.exec(stream)
+      if (!match) {
+        break
+      }
+      i = match.index
+      state = stream.charCodeAt(i) === ESC ? 'stringEsc' : 'ground'
+      continue
+    }
+    if (state === 'osc') {
+      if (!hasCanOrSub) {
+        hasBel ??= stream.includes('\x07', i)
+        const esc = stream.indexOf('\x1b', i)
+        const bel = hasBel ? stream.indexOf('\x07', i) : -1
+        if (esc === -1 && bel === -1) {
+          break
+        }
+        if (bel !== -1 && (esc === -1 || bel < esc)) {
+          i = bel
+          state = 'ground'
+          continue
+        }
+        if (esc + 1 < stream.length && stream.charCodeAt(esc + 1) === 0x5c) {
+          i = esc + 1
+          state = 'ground'
+          continue
+        }
+        i = esc
+        state = 'oscEsc'
+        continue
+      }
+      OSC_CONTROL_SCAN.lastIndex = i
+      const match = OSC_CONTROL_SCAN.exec(stream)
+      if (!match) {
+        break
+      }
+      i = match.index
+      state = stream.charCodeAt(i) === ESC ? 'oscEsc' : 'ground'
+      continue
+    }
     const code = stream.charCodeAt(i)
-    if (
-      code === ESC &&
-      state !== 'osc' &&
-      state !== 'string' &&
-      state !== 'oscEsc' &&
-      state !== 'stringEsc'
-    ) {
+    if (code === ESC && state !== 'oscEsc' && state !== 'stringEsc') {
       // ESC aborts a pending ESC/CSI sequence and starts a new one.
       start = i
       state = 'esc'
@@ -129,13 +184,6 @@ function scanPartialEscapeTail(stream: string, stateOnly: boolean): string {
         }
         // params/intermediates (0x20–0x3f), C0, DEL stay in-sequence.
         break
-      case 'osc':
-        if (code === BEL || code === CAN || code === SUB) {
-          state = 'ground'
-        } else if (code === ESC) {
-          state = 'oscEsc'
-        }
-        break
       case 'oscEsc':
         if (code === 0x5c) {
           state = 'ground' // ESC \ = ST terminates the OSC
@@ -145,13 +193,6 @@ function scanPartialEscapeTail(stream: string, stateOnly: boolean): string {
           start = code === ESC ? i : i - 1
           state =
             code === ESC ? 'esc' : code === CAN || code === SUB ? 'ground' : stateAfterEscByte(code)
-        }
-        break
-      case 'string':
-        if (code === CAN || code === SUB) {
-          state = 'ground'
-        } else if (code === ESC) {
-          state = 'stringEsc'
         }
         break
       case 'stringEsc':
@@ -182,10 +223,44 @@ const STATE_BY_PREFIX: Record<string, ScanState> = {
 
 /** Chars of chunk that finish the escape left open by advanceTerminalEscapeBoundary's statePrefix; a new ESC ends it unconsumed. -1 when it stays open. */
 export function openEscapeContinuationLength(statePrefix: string, chunk: string): number {
+  const hasCanOrSub = chunk.includes('\x18') || chunk.includes('\x1a')
   let state: ScanState = STATE_BY_PREFIX[statePrefix] ?? 'ground'
   for (let i = 0; i < chunk.length; i++) {
     if (state === 'ground') {
       return i
+    }
+    if (state === 'string') {
+      if (!hasCanOrSub) {
+        const idx = chunk.indexOf('\x1b', i)
+        if (idx === -1) {
+          return -1
+        }
+        return chunk.charCodeAt(idx + 1) === 0x5c ? idx + 2 : idx
+      }
+      STRING_CONTROL_SCAN.lastIndex = i
+      const match = STRING_CONTROL_SCAN.exec(chunk)
+      if (!match) {
+        return -1
+      }
+      const idx = match.index
+      const found = chunk.charCodeAt(idx)
+      if (found === CAN || found === SUB) {
+        return idx + 1
+      }
+      return chunk.charCodeAt(idx + 1) === 0x5c ? idx + 2 : idx
+    }
+    if (state === 'osc') {
+      OSC_CONTROL_SCAN.lastIndex = i
+      const match = OSC_CONTROL_SCAN.exec(chunk)
+      if (!match) {
+        return -1
+      }
+      const idx = match.index
+      const found = chunk.charCodeAt(idx)
+      if (found === BEL || found === CAN || found === SUB) {
+        return idx + 1
+      }
+      return chunk.charCodeAt(idx + 1) === 0x5c ? idx + 2 : idx
     }
     const code = chunk.charCodeAt(i)
     if (code === CAN || code === SUB) {
@@ -215,16 +290,6 @@ export function openEscapeContinuationLength(statePrefix: string, chunk: string)
         }
         if (code >= 0x40 && code <= 0x7e) {
           return i + 1
-        }
-        break
-      case 'osc':
-      case 'string':
-        if (code === BEL && state === 'osc') {
-          return i + 1
-        }
-        // Keep an ESC that may start a new sequence; if it was a split ST, its backslash later completes a no-op ST.
-        if (code === ESC) {
-          return chunk.charCodeAt(i + 1) === 0x5c ? i + 2 : i
         }
         break
       // Unreachable from a statePrefix (both map to 'esc'); an ESC inside a string either finishes ST or starts a kept sequence.

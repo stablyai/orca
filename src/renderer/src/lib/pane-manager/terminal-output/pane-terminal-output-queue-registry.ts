@@ -95,6 +95,8 @@ export const BACKGROUND_FLUSH_DELAY_MS = 50
 export const BACKGROUND_DRAIN_INTERVAL_MS = 16
 export const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 4
 export const BACKGROUND_CHUNK_CHARS = 16 * 1024
+// Match main's active-PTY flush slice so large foreground frames aren't re-chopped into 16KB writes; DRAIN_TIME_BUDGET_MS still yields cooperatively.
+export const HIGH_PRIORITY_CHUNK_CHARS = 256 * 1024
 export const MAX_WRITES_PER_DRAIN = 2
 // Eight × 16KB gives ~1.3ms parse/tick (~30MB/s) within the time budget; two writes limited the ~100MB/s parser to ~8MB/s.
 export const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 8

@@ -1,5 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { findIndicClusterRanges } from './terminal-indic-cluster-ranges'
+import { TerminalKittyApcFilter } from '../../../../../shared/terminal/protocol/escape/terminal-kitty-apc-filter'
 
 type ArabicShapingTerminal = Pick<Terminal, 'registerCharacterJoiner' | 'deregisterCharacterJoiner'>
 
@@ -8,6 +9,7 @@ type LazyArabicShapingJoinerState = {
   isShapingActive: () => boolean
   registrationAttempted: boolean
   trailingChunkTail: string
+  kittyApcFilter: TerminalKittyApcFilter
 }
 
 const lazyArabicShapingJoinerByTerminal = new WeakMap<
@@ -189,7 +191,8 @@ export function configureLazyArabicShapingJoiner(
     cleanup: null,
     isShapingActive,
     registrationAttempted: false,
-    trailingChunkTail: ''
+    trailingChunkTail: '',
+    kittyApcFilter: new TerminalKittyApcFilter()
   }
   lazyArabicShapingJoinerByTerminal.set(terminal, state)
 
@@ -238,12 +241,13 @@ export function ensureArabicShapingJoinerForText(
   }
 
   // Below U+0590 a chunk has no RTL, Indic or surrogate units, so it can neither register nor leave a tail.
-  if (state.trailingChunkTail === '' && !hasCodeUnitAtOrAbove(text, RTL_SCAN_FLOOR)) {
+  const scanCandidate = state.kittyApcFilter.filter(text)
+  if (state.trailingChunkTail === '' && !hasCodeUnitAtOrAbove(scanCandidate, RTL_SCAN_FLOOR)) {
     return
   }
 
   // Why: PTY/replay chunks can split a supplementary-plane RTL code point or an Indic cluster; keep the boundary tail.
-  const scanText = state.trailingChunkTail + text
+  const scanText = state.trailingChunkTail + scanCandidate
   state.trailingChunkTail = getChunkTail(scanText)
   if (!containsStrongRtlText(scanText) && findIndicClusterRanges(scanText).length === 0) {
     return

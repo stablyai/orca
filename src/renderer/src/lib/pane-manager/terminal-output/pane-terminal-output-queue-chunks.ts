@@ -34,20 +34,6 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       break
     }
     foreground ??= chunk.foreground
-    forceForegroundRefresh ||= chunk.forceForegroundRefresh
-    followupForegroundRefresh ||= chunk.followupForegroundRefresh
-    // Why: one drained write can combine chunks from different renderer states or producers; preserve every forced policy and prep hook.
-    if (chunk.forceForegroundRefresh) {
-      if (shouldRefreshForegroundSynchronously === null) {
-        shouldRefreshForegroundSynchronously = chunk.shouldRefreshForegroundSynchronously
-      } else if (
-        chunk.shouldRefreshForegroundSynchronously !== shouldRefreshForegroundSynchronously &&
-        !additionalRefreshSyncResolvers?.includes(chunk.shouldRefreshForegroundSynchronously)
-      ) {
-        additionalRefreshSyncResolvers ??= []
-        additionalRefreshSyncResolvers.push(chunk.shouldRefreshForegroundSynchronously)
-      }
-    }
     stripTransientCursorShows ||= chunk.stripTransientCursorShows
     if (!beforeWrite) {
       beforeWrite = chunk.beforeWrite
@@ -60,6 +46,20 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       additionalBeforeWriteCallbacks.push(chunk.beforeWrite)
     }
     if (chunk.data.length <= remaining) {
+      forceForegroundRefresh ||= chunk.forceForegroundRefresh
+      followupForegroundRefresh ||= chunk.followupForegroundRefresh
+      // Why: one drained write can combine chunks from different renderer states or producers; preserve every forced policy and prep hook.
+      if (chunk.forceForegroundRefresh) {
+        if (shouldRefreshForegroundSynchronously === null) {
+          shouldRefreshForegroundSynchronously = chunk.shouldRefreshForegroundSynchronously
+        } else if (
+          chunk.shouldRefreshForegroundSynchronously !== shouldRefreshForegroundSynchronously &&
+          !additionalRefreshSyncResolvers?.includes(chunk.shouldRefreshForegroundSynchronously)
+        ) {
+          additionalRefreshSyncResolvers ??= []
+          additionalRefreshSyncResolvers.push(chunk.shouldRefreshForegroundSynchronously)
+        }
+      }
       if (dataParts) {
         dataParts.push(chunk.data)
       } else if (dataLength === 0) {

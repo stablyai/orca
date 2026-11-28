@@ -10,6 +10,7 @@ const boundaryByPty = new Map<string, PtyEscapeBoundary>()
 const CAN = 0x18
 const SUB = 0x1a
 const ESC = 0x1b
+const C1_CONTROL_PATTERN = /[\x80-\x9f]/
 
 // ESC starts a sequence and CAN/SUB abort one from any parser state, so the boundary after one is known again.
 function firstResyncIndex(data: string): number {
@@ -24,6 +25,9 @@ function firstResyncIndex(data: string): number {
 
 // xterm also parses 8-bit C1 controls (CSI U+009B, ST U+009C, ...), which the scanner does not follow.
 function lastC1Index(data: string): number {
+  if (!C1_CONTROL_PATTERN.test(data)) {
+    return -1
+  }
   for (let i = data.length - 1; i >= 0; i--) {
     const code = data.charCodeAt(i)
     if (code >= 0x80 && code <= 0x9f) {

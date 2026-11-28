@@ -3,16 +3,24 @@ const ESC = '\x1b'
 const MAX_CARRIED_ESCAPE_CHARS = 512
 
 /* oxlint-disable no-control-regex -- these match terminal escape sequences, which start with ESC */
-const CSI_RE = /^\x1b\[([?>=<]?)([0-9;]*)([ -/]*[@-~])/
+const CSI_STICKY_RE = /\x1b\[([?>=<]?)([0-9;]*)([ -/]*[@-~])/y
 const UNFINISHED_CSI_RE = /^\x1b\[[?>=<]?[0-9;]*[ -/]*$/
-// Terminal control strings (titles, graphics, queries) never paint their payload text.
-const STRING_RE = /^\x1b[\]PX^_][\s\S]*?(?:\x07|\x1b\\)/
-const STRING_START_RE = /^\x1b[\]PX^_]/
-const STRING_END_RE = /\x07|\x1b\\/
+const CONTROL_STRING_END_RE = /\x07|\x1b\\/g
 
 type TerminalEscapeObserver = {
   onCsi: (privateMarker: string, params: string, final: string) => void
   onText: (text: string) => void
+}
+
+function isControlStringIntroducer(code: number): boolean {
+  // OSC (]), DCS (P), SOS (X), PM (^), APC (_); none paint payload text.
+  return code === 0x5d || code === 0x50 || code === 0x58 || code === 0x5e || code === 0x5f
+}
+
+function findControlStringEnd(input: string, from: number): number {
+  CONTROL_STRING_END_RE.lastIndex = from
+  const match = CONTROL_STRING_END_RE.exec(input)
+  return match ? match.index + match[0].length : -1
 }
 
 /** Incremental painted-text/CSI reader; terminal string payloads are never painted text. */
@@ -23,17 +31,17 @@ export function createTerminalEscapeScanner(observer: TerminalEscapeObserver): {
   let stringPending = false
   return {
     observe(data: string): void {
-      const input = carry + data
+      const input = carry ? carry + data : data
       carry = ''
       let index = 0
       if (stringPending) {
-        const end = STRING_END_RE.exec(input)
-        if (!end) {
+        const end = findControlStringEnd(input, 0)
+        if (end === -1) {
           carry = input.endsWith(ESC) ? ESC : ''
           return
         }
         stringPending = false
-        index = end.index + end[0].length
+        index = end
       }
       while (index < input.length) {
         const escapeAt = input.indexOf(ESC, index)
@@ -42,37 +50,39 @@ export function createTerminalEscapeScanner(observer: TerminalEscapeObserver): {
           break
         }
         observer.onText(input.slice(index, escapeAt))
-        const rest = input.slice(escapeAt)
-        const sequence = CSI_RE.exec(rest) ?? STRING_RE.exec(rest)
-        if (sequence) {
-          if (sequence[0][1] === '[') {
-            observer.onCsi(sequence[1], sequence[2], sequence[3])
+        if (escapeAt + 1 >= input.length) {
+          carry = ESC
+          break
+        }
+        const next = input.charCodeAt(escapeAt + 1)
+        if (isControlStringIntroducer(next)) {
+          const end = findControlStringEnd(input, escapeAt + 2)
+          if (end !== -1) {
+            index = end
+            continue
           }
-          index = escapeAt + sequence[0].length
-          continue
-        }
-        if (STRING_START_RE.test(rest)) {
           stringPending = true
-          carry = rest.endsWith(ESC) ? ESC : ''
+          carry = input.endsWith(ESC) ? ESC : ''
           break
         }
-        if (isUnfinishedEscape(rest)) {
-          carry = rest
-          break
+        if (next === 0x5b) {
+          CSI_STICKY_RE.lastIndex = escapeAt
+          const sequence = CSI_STICKY_RE.exec(input)
+          if (sequence) {
+            observer.onCsi(sequence[1], sequence[2], sequence[3])
+            index = CSI_STICKY_RE.lastIndex
+            continue
+          }
+          if (input.length - escapeAt <= MAX_CARRIED_ESCAPE_CHARS) {
+            const rest = input.slice(escapeAt)
+            if (UNFINISHED_CSI_RE.test(rest)) {
+              carry = rest
+              break
+            }
+          }
         }
         index = escapeAt + 2
       }
     }
   }
-}
-
-function isUnfinishedEscape(rest: string): boolean {
-  if (rest.length > MAX_CARRIED_ESCAPE_CHARS) {
-    return false
-  }
-  return (
-    rest === ESC ||
-    UNFINISHED_CSI_RE.test(rest) ||
-    (STRING_START_RE.test(rest) && !STRING_END_RE.test(rest))
-  )
 }

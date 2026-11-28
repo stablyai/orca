@@ -21,6 +21,7 @@ import {
 } from './pty-output-side-effect-queue'
 import { createPtyOutputTitleObserver } from './pty-output-title-observer'
 import { advancePartialEscapeTail } from '../../../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
+import { TerminalKittyApcFilter } from '../../../../../../shared/terminal/protocol/escape/terminal-kitty-apc-filter'
 import type { IpcPtyTransportOptions, PtyTransport } from '../pty-transport-types'
 
 type PtyOutputCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
@@ -63,6 +64,7 @@ export function createPtyOutputProcessor({
   initialAgentTitle
 }: PtyOutputProcessorOptions) {
   const bellDetector = createBellDetector()
+  const kittyApcFilter = new TerminalKittyApcFilter()
   let processAgentStatusChunk = createAgentStatusOscProcessor()
   let scanProgramStatus = createProgramStatusSideEffectScanner()
   let partialEscapeTail = ''
@@ -191,7 +193,8 @@ export function createPtyOutputProcessor({
     }
     const processed = processAgentStatusChunk(data)
     data = processed.cleanData
-    const programStatus = scanProgramStatus(data)
+    const scanData = kittyApcFilter.filter(data)
+    const programStatus = scanProgramStatus(scanData)
     if (options.replayingBufferedData && callbacks.onReplayData) {
       const replayMeta = {
         ...(options.clearBeforeReplay === false ? { clearBeforeReplay: false } : {}),
@@ -224,7 +227,12 @@ export function createPtyOutputProcessor({
       callbacks.onData?.(data)
     }
     // Why only activity: the execution host owns OSC 7501 rows, their lifetime and hook precedence.
-    enqueueSideEffects(data, processed.payloads, suppressAttentionEvents, programStatus.activity)
+    enqueueSideEffects(
+      scanData,
+      processed.payloads,
+      suppressAttentionEvents,
+      programStatus.activity
+    )
   }
 
   return {
@@ -235,6 +243,7 @@ export function createPtyOutputProcessor({
       // Reset together: the scanner only reports changes against the activity the tracker held.
       scanProgramStatus = createProgramStatusSideEffectScanner()
       bellDetector.reset()
+      kittyApcFilter.reset()
       partialEscapeTail = ''
     },
     pausePendingSideEffects: () => {
@@ -245,6 +254,7 @@ export function createPtyOutputProcessor({
     flushPendingSideEffects: sideEffects.flush,
     resetBellDetector: () => bellDetector.reset(),
     resetAgentStatusCarry: () => {
+      kittyApcFilter.reset()
       processAgentStatusChunk = createAgentStatusOscProcessor()
       scanProgramStatus = createProgramStatusSideEffectScanner()
     },

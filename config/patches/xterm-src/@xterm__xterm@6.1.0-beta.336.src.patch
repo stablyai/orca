@@ -1972,6 +1972,120 @@ index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e353738
    private _canvas: OffscreenCanvas | HTMLCanvasElement;
    private _ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
  
+diff --git a/src/browser/services/RenderService.ts b/src/browser/services/RenderService.ts
+index 535b618ff5aaca4f8c6c8669274c1cdd71e69534..b15970c238f080306b81e142518b573491efdba2 100644
+--- a/src/browser/services/RenderService.ts
++++ b/src/browser/services/RenderService.ts
+@@ -20,7 +20,8 @@ interface ISelectionState {
+ }
+ 
+ const enum Constants {
+-  SYNCHRONIZED_OUTPUT_TIMEOUT_MS = 1000
++  SYNCHRONIZED_OUTPUT_TIMEOUT_MS = 1000,
++  SYNCHRONIZED_OUTPUT_PRESENT_INTERVAL_MS = 32
+ }
+ 
+ export class RenderService extends Disposable implements IRenderService {
+@@ -39,6 +40,8 @@ export class RenderService extends Disposable implements IRenderService {
+   private _canvasWidth: number = 0;
+   private _canvasHeight: number = 0;
+   private _syncOutputHandler: SynchronizedOutputHandler;
++  private _hasRenderedOnce: boolean = false;
++  private _lastRenderTime: number = 0;
+   private _selectionState: ISelectionState = {
+     start: undefined,
+     end: undefined,
+@@ -176,6 +179,16 @@ export class RenderService extends Disposable implements IRenderService {
+     if (buffered) {
+       start = Math.min(start, buffered.start);
+       end = Math.max(end, buffered.end);
++      if (!sync && this._hasRenderedOnce && this._renderer.value) {
++        const now = this._coreBrowserService.window.performance?.now() ?? Date.now();
++        if (
++          buffered.missedRender ||
++          (now - buffered.firstBufferedAt >= Constants.SYNCHRONIZED_OUTPUT_PRESENT_INTERVAL_MS &&
++            now - this._lastRenderTime >= Constants.SYNCHRONIZED_OUTPUT_PRESENT_INTERVAL_MS)
++        ) {
++          sync = true;
++        }
++      }
+     }
+ 
+     if (!isRedrawOnly) {
+@@ -197,7 +210,7 @@ export class RenderService extends Disposable implements IRenderService {
+     // Skip rendering if synchronized output mode is enabled. This check must happen here
+     // (in addition to refreshRows) to handle renders that were queued before the mode was enabled.
+     if (this._coreService.decPrivateModes.synchronizedOutput) {
+-      this._syncOutputHandler.bufferRows(start, end);
++      this._syncOutputHandler.bufferRows(start, end, true);
+       return;
+     }
+ 
+@@ -209,6 +222,8 @@ export class RenderService extends Disposable implements IRenderService {
+ 
+     // Render
+     this._renderer.value.renderRows(start, end);
++    this._hasRenderedOnce = true;
++    this._lastRenderTime = this._coreBrowserService.window.performance?.now() ?? Date.now();
+ 
+     // Update selection if needed
+     if (this._needsSelectionRefresh) {
+@@ -350,6 +365,8 @@ class SynchronizedOutputHandler {
+   private _end: number = 0;
+   private _timeout: number | undefined;
+   private _isBuffering: boolean = false;
++  private _missedRender: boolean = false;
++  private _firstBufferedAt: number = 0;
+ 
+   constructor(
+     private readonly _coreBrowserService: ICoreBrowserService,
+@@ -357,15 +374,19 @@ class SynchronizedOutputHandler {
+     private readonly _onTimeout: () => void
+   ) {}
+ 
+-  public bufferRows(start: number, end: number): void {
++  public bufferRows(start: number, end: number, missedRender: boolean = false): void {
+     if (!this._isBuffering) {
+       this._start = start;
+       this._end = end;
+       this._isBuffering = true;
++      this._firstBufferedAt = this._coreBrowserService.window.performance?.now() ?? Date.now();
+     } else {
+       this._start = Math.min(this._start, start);
+       this._end = Math.max(this._end, end);
+     }
++    if (missedRender) {
++      this._missedRender = true;
++    }
+ 
+     this._timeout ??= this._coreBrowserService.window.setTimeout(() => {
+       this._timeout = undefined;
+@@ -374,7 +395,7 @@ class SynchronizedOutputHandler {
+     }, Constants.SYNCHRONIZED_OUTPUT_TIMEOUT_MS);
+   }
+ 
+-  public flush(): { start: number, end: number } | undefined {
++  public flush(): { start: number, end: number, missedRender: boolean, firstBufferedAt: number } | undefined {
+     if (this._timeout !== undefined) {
+       this._coreBrowserService.window.clearTimeout(this._timeout);
+       this._timeout = undefined;
+@@ -384,8 +405,15 @@ class SynchronizedOutputHandler {
+       return undefined;
+     }
+ 
+-    const result = { start: this._start, end: this._end };
++    const result = {
++      start: this._start,
++      end: this._end,
++      missedRender: this._missedRender,
++      firstBufferedAt: this._firstBufferedAt
++    };
+     this._isBuffering = false;
++    this._missedRender = false;
++    this._firstBufferedAt = 0;
+     return result;
+   }
+ 
 diff --git a/src/common/InputHandler.ts b/src/common/InputHandler.ts
 index 30657812f49d3dd2ec706b5e0084788afa968168..a71b12e37ee7aee974337bdfd02f5b1a4be1fe35 100644
 --- a/src/common/InputHandler.ts
@@ -2144,6 +2258,101 @@ index b3ad14ee041fac933a7f90bf66fe7985eef4beed..a0a645c42b3c8a08a699b32a46def5ed
        this.lines.maxLength = newMaxLength;
      }
  
+diff --git a/src/common/input/WriteBuffer.ts b/src/common/input/WriteBuffer.ts
+index 3837fe30b18f98725e3c322aad39be7868fcc786..2a5d39a4adb16952e7e114d1a083df09f7988006 100644
+--- a/src/common/input/WriteBuffer.ts
++++ b/src/common/input/WriteBuffer.ts
+@@ -43,12 +43,26 @@ export class WriteBuffer extends Disposable {
+   private _didUserInput = false;
+ 
+   private readonly _innerWriteTimer = this._register(new TimeoutTimer());
++  private _writeChannel: {
++    port1: { onmessage: (() => void) | null; close(): void };
++    port2: { postMessage(data: unknown): void; close(): void };
++  } | undefined;
++  private _writeChannelPending = false;
++  private _pendingInnerWriteLastTime = 0;
++  private _pendingInnerWritePromiseResult = true;
+   private readonly _onWriteParsed = this._register(new Emitter<void>());
+   public readonly onWriteParsed = this._onWriteParsed.event;
+ 
+   constructor(private _action: (data: string | Uint8Array, promiseResult?: boolean) => void | Promise<boolean>) {
+     super();
+     this._register(toDisposable(() => {
++      this._cancelScheduledInnerWrite();
++      if (this._writeChannel) {
++        this._writeChannel.port1.onmessage = null;
++        this._writeChannel.port1.close();
++        this._writeChannel.port2.close();
++        this._writeChannel = undefined;
++      }
+       this._writeBuffer.length = 0;
+       this._callbacks.length = 0;
+       this._pendingData = 0;
+@@ -56,6 +70,11 @@ export class WriteBuffer extends Disposable {
+     }));
+   }
+ 
++  private _cancelScheduledInnerWrite(): void {
++    this._writeChannelPending = false;
++    this._innerWriteTimer.cancel();
++  }
++
+   public handleUserInput(): void {
+     this._didUserInput = true;
+   }
+@@ -72,6 +91,7 @@ export class WriteBuffer extends Disposable {
+     if (this._store.isDisposed) {
+       return;
+     }
++    this._cancelScheduledInnerWrite();
+     // exit early if another sync write loop is active
+     if (this._isSyncWriting) {
+       return;
+@@ -106,6 +126,7 @@ export class WriteBuffer extends Disposable {
+     if (this._store.isDisposed) {
+       return;
+     }
++    this._cancelScheduledInnerWrite();
+     // stop writeSync recursions with maxSubsequentCalls argument
+     // This is dangerous to use as it will lose the current data chunk
+     // and return immediately.
+@@ -212,7 +233,34 @@ export class WriteBuffer extends Disposable {
+     if (this._store.isDisposed) {
+       return;
+     }
+-    this._innerWriteTimer.cancelAndSet(() => this._innerWrite(lastTime, promiseResult), 0);
++    const env = (globalThis as { process?: { env?: { VITEST?: string } } }).process?.env;
++    const isVitest = env?.VITEST === 'true';
++    const MessageChannelCtor = (globalThis as {
++      MessageChannel?: new () => {
++        port1: { onmessage: (() => void) | null; close(): void };
++        port2: { postMessage(data: unknown): void; close(): void };
++      };
++    }).MessageChannel;
++    if (isVitest || typeof MessageChannelCtor !== 'function') {
++      this._innerWriteTimer.cancelAndSet(() => this._innerWrite(lastTime, promiseResult), 0);
++      return;
++    }
++    this._pendingInnerWriteLastTime = lastTime;
++    this._pendingInnerWritePromiseResult = promiseResult;
++    if (!this._writeChannel) {
++      this._writeChannel = new MessageChannelCtor();
++      this._writeChannel.port1.onmessage = () => {
++        if (!this._writeChannelPending || this._store.isDisposed) {
++          return;
++        }
++        this._writeChannelPending = false;
++        this._innerWrite(this._pendingInnerWriteLastTime, this._pendingInnerWritePromiseResult);
++      };
++    }
++    if (!this._writeChannelPending) {
++      this._writeChannelPending = true;
++      this._writeChannel.port2.postMessage(undefined);
++    }
+   }
+ 
+   protected _innerWrite(lastTime: number = 0, promiseResult: boolean = true): void {
 diff --git a/src/common/services/BufferService.ts b/src/common/services/BufferService.ts
 index 3bd1f7e42df645b1a98af7feeb316784f06d754d..3ade1393a999fbea6794a511642c58e401fc962c 100644
 --- a/src/common/services/BufferService.ts
