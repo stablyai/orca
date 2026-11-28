@@ -9,18 +9,15 @@ function countedRevisions(count: number): {
   let reads = 0
   const revisions = Array.from({ length: count }, (_, i): DiffCommentDeliverySnapshot => {
     const id = `n${i}`
-    return Object.defineProperties(
-      { body: 'Sample', filePath: 'sample.ts', lineNumber: 1 } as never,
-      {
-        id: {
-          enumerable: true,
-          get: () => {
-            reads += 1
-            return id
-          }
-        }
-      }
-    )
+    return {
+      get id() {
+        reads += 1
+        return id
+      },
+      body: 'Sample',
+      filePath: 'sample.ts',
+      lineNumber: 1
+    }
   })
   return { revisions, idReads: () => reads }
 }
