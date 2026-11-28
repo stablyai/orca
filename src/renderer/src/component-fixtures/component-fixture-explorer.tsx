@@ -37,6 +37,7 @@ Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
 const defaultSettings = getDefaultSettings('/home/fixture')
 useAppStore.setState({ settings: { ...defaultSettings, theme: pageTheme } })
 const baseStoreState = useAppStore.getState()
+const baseRootStyle = document.documentElement.style.cssText
 document.body.classList.add('bg-background')
 installBodyOverlayAttributes()
 
@@ -99,6 +100,8 @@ async function renderFixture(id: string, theme: ComponentFixtureTheme): Promise<
   // Why replace: each fixture starts from the same seeded store, even in a reused page.
   useAppStore.setState(baseStoreState, true)
   useAppStore.setState({ settings: { ...defaultSettings, theme } })
+  // Why: fixtures may paint theme tokens on the root, which a reused page would carry over.
+  document.documentElement.style.cssText = baseRootStyle
   applyTheme(theme)
   try {
     const entry = await loadComponentFixture(id)
