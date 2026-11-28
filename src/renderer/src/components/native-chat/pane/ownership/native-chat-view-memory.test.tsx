@@ -42,18 +42,14 @@ it('keeps a write made before any layer registered the tab, and drops writes onc
 })
 
 it('a chat remounted after a /clear finds its conversation once its epoch loads', () => {
-  const conversation = (props: { epoch: string | null; clears: number }) =>
-    useNativeChatConversationKey(props.epoch, props.clears)
-  const first = renderHook(conversation, {
-    wrapper: inTab,
-    initialProps: { epoch: 'e1', clears: 1 }
-  })
+  type Props = { epoch: string | null; clears: number }
+  const useConversation = (props: Props) => useNativeChatConversationKey(props.epoch, props.clears)
+  const atClear: Props = { epoch: 'e1', clears: 1 }
+  const remounted: Props = { epoch: null, clears: 0 }
+  const first = renderHook(useConversation, { wrapper: inTab, initialProps: atClear })
   expect(first.result.current).toBe('e1:1')
   first.unmount()
-  const again = renderHook(conversation, {
-    wrapper: inTab,
-    initialProps: { epoch: null, clears: 0 }
-  })
+  const again = renderHook(useConversation, { wrapper: inTab, initialProps: remounted })
   again.rerender({ epoch: 'e1', clears: 0 })
   expect(again.result.current).toBe('e1:1')
 })
