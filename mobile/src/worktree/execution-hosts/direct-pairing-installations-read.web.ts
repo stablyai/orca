@@ -1,3 +1,4 @@
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { BridgeRpcClient } from '../../mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
 import {
   BRIDGE_DIRECT_PAIRINGS_VERB,
@@ -7,8 +8,8 @@ import {
 const NONE: ReadonlySet<string> = new Set()
 
 function isPageBridge(
-  client: object
-): client is Pick<BridgeRpcClient, 'callNativeVerb' | 'getShellSession'> {
+  client: RpcClient
+): client is RpcClient & Pick<BridgeRpcClient, 'callNativeVerb' | 'getShellSession'> {
   return (
     'callNativeVerb' in client &&
     typeof client.callNativeVerb === 'function' &&
@@ -19,7 +20,9 @@ function isPageBridge(
 
 /** The installations this phone pairs with directly, asked of the shell. An older shell offers no
  *  such verb, so nothing is hidden, as before. */
-export async function readDirectPairingInstallations(client: object): Promise<ReadonlySet<string>> {
+export async function readDirectPairingInstallations(
+  client: RpcClient
+): Promise<ReadonlySet<string>> {
   if (
     !isPageBridge(client) ||
     client.getShellSession()?.grants.native.includes(BRIDGE_DIRECT_PAIRINGS_VERB) !== true
