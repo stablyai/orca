@@ -106,7 +106,7 @@ export function getRemoteServerManualUpdateHelp(
     return headless
       ? t(
           'auto.components.settings.RemoteServerUpdateStatus.nodeServerHelp',
-          'Remote updates are off: this server runs Orca without its built-in updater, as Orca’s Node server (orcad) does. Install the newer Orca release on the server, then restart `orca serve`.'
+          'Remote updates are off: this server runs Orca without its built-in updater, as Orca’s Node server (orcad) does. Install the newer Orca release on the server, then restart orca serve.'
         )
       : t(
           'auto.components.settings.RemoteServerUpdateStatus.updaterNotStartedHelp',
@@ -117,7 +117,7 @@ export function getRemoteServerManualUpdateHelp(
     return headless
       ? t(
           'auto.components.settings.RemoteServerUpdateStatus.headlessServeHelp',
-          'Remote updates are off: this server runs `orca serve` without an update supervisor, so it cannot restart itself into a new version. Update Orca on the server, then restart its service.'
+          'Remote updates are off: this server runs orca serve without an update supervisor, so it cannot restart itself into a new version. Update Orca on the server, then restart its service.'
         )
       : t(
           'auto.components.settings.RemoteServerUpdateStatus.systemPackageHelp',
