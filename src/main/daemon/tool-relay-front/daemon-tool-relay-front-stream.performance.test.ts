@@ -110,13 +110,33 @@ describe.skipIf(process.platform === 'win32')('front notices on a stalled app st
     const idleChecks = vi.spyOn(DaemonServerLifecycle.prototype, 'reevaluateIdleShutdown')
     cleanups.push(() => idleChecks.mockRestore())
     const { socket: app } = await openDaemonToolRelayConnection(client, id)
-    const answered = new Promise((resolve) => agent.once('close', resolve))
-    app.resume()
+    cleanups.push(() => {
+      app.destroy()
+    })
+    // The held request reaches the app's connection, and its answer reaches the agent.
+    await new Promise<void>((resolve) => {
+      let seen = ''
+      app.on('data', (chunk) => {
+        seen += chunk.toString('utf8')
+        if (seen.includes('\r\n\r\n')) {
+          resolve()
+        }
+      })
+      app.resume()
+    })
+    const answered = new Promise<void>((resolve) => {
+      let read = ''
+      agent.on('data', (chunk) => {
+        read += chunk.toString('utf8')
+        if (read.includes('200 OK')) {
+          resolve()
+        }
+      })
+    })
     app.end('HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}')
     await answered
-    if (!app.destroyed) {
-      await new Promise((resolve) => app.once('close', resolve))
-    }
+    agent.destroy()
+    app.destroy()
     // The daemon's end closes a moment after this one, with nothing outside it to wait on.
     // ast-grep-ignore: test-no-real-time-wait -- the daemon-side close has no observable signal here
     await new Promise((resolve) => setTimeout(resolve, 100))
