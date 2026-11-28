@@ -26,6 +26,9 @@ import {
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
 import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
+import { quitKeepsStructuredAgent } from '../termination/structured-agent-session-quit-keeps-agent'
+import { agentSessionRecordShownName } from '../../../runtime/agent-session/records/agent-session-record-shown-name'
+import type { RemoteServerUpdateStoppedChat } from '../../../../shared/remote-runtime/host-catalog/remote-server-update'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
@@ -211,6 +214,29 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     agentStarting: (id: string): boolean => {
       const { runtimeState, sessions } = context()
       return runtimeState.startFlights.has(id) || sessions.get(id)?.child?.phase === 'starting'
+    },
+    /** Its agent is attached, or a start is under way. */
+    agentRunning: (id: string): boolean => {
+      const { runtimeState, sessions } = context()
+      return runtimeState.startFlights.has(id) || sessions.get(id)?.child != null
+    },
+    /** Chats whose running agent an app quit would stop rather than hand to the terminal daemon. */
+    agentsStoppedByQuit: (): RemoteServerUpdateStoppedChat[] => {
+      const { sessions, deps } = context()
+      return [...sessions].flatMap(([sessionId, { child }]) => {
+        if (!child || quitKeepsStructuredAgent(sessionId, child)) {
+          return []
+        }
+        const record = deps.store.getConversation(sessionId)
+        return [
+          {
+            sessionId,
+            agent: record?.provider ?? null,
+            worktreeId: record?.location.workspaceId ?? null,
+            title: record ? agentSessionRecordShownName(deps.store, record) : null
+          }
+        ]
+      })
     },
     /** A decided start's acquire is still out, and no later start's child is attached. */
     startWindingDown: (id: string): boolean => {

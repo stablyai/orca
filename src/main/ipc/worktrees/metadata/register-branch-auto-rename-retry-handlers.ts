@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
@@ -39,12 +40,15 @@ function localWorktreeId(args: RetryArgs | undefined): string | null {
   return hostId === LOCAL_EXECUTION_HOST_ID ? args.worktreeId : null
 }
 
-export function registerBranchAutoRenameRetryHandlers(context: WorktreeIpcContext): void {
+export function registerBranchAutoRenameRetryHandlers(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store, runtime } = context
   installFirstWorkAttemptNotifier((event) =>
     sendToTrustedUIRenderer('worktrees:branchAutoRenameAttempt', event)
   )
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:getBranchAutoRenameRetryAvailability',
     (_event, args: RetryArgs): Promise<BranchAutoRenameRetryAvailability> => {
       const worktreeId = localWorktreeId(args)
@@ -57,7 +61,7 @@ export function registerBranchAutoRenameRetryHandlers(context: WorktreeIpcContex
         : Promise.resolve({ available: false, runningAttemptId: null })
     }
   )
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:retryBranchAutoRename',
     (_event, args: RetryArgs): Promise<BranchAutoRenameRetryResult> => {
       const worktreeId = localWorktreeId(args)
@@ -70,7 +74,7 @@ export function registerBranchAutoRenameRetryHandlers(context: WorktreeIpcContex
           })
     }
   )
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:waitBranchAutoRenameAttempt',
     async (
       _event,
@@ -82,7 +86,7 @@ export function registerBranchAutoRenameRetryHandlers(context: WorktreeIpcContex
         : null
     }
   )
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:dismissBranchAutoRename',
     (_event, args: RetryArgs): BranchAutoRenameDismissResult => {
       const worktreeId = localWorktreeId(args)

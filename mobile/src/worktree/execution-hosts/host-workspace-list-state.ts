@@ -17,7 +17,7 @@ export type HostWorkspaceListStateInput = {
 // A failed catalog must not appear as a healthy empty host (STA-3123).
 export function selectHostWorkspaceListState(
   input: HostWorkspaceListStateInput
-): 'loading' | 'unreachable' | 'catalog-error' | 'empty' | null {
+): 'loading' | 'unreachable' | 'catalog-error' | 'empty' | 'auth-failed' | null {
   const {
     connState,
     connectionVerdict,
@@ -26,9 +26,9 @@ export function selectHostWorkspaceListState(
     sectionCount,
     catalogError
   } = input
-  // The auth banner owns refused pairings.
+  // A refused pairing replaces the list: nothing on it can be opened until the phone pairs again.
   if (connectionVerdict.kind === 'auth-failed') {
-    return null
+    return 'auth-failed'
   }
   // An outage with nothing cached must say so; a spinner there never ends (STA-11382).
   if (

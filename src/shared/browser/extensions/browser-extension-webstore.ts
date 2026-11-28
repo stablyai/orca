@@ -1,4 +1,5 @@
 import { isChromeExtensionId } from './browser-extension-url'
+import type { BrowserExtensionFailure } from './browser-extension-types'
 
 /** Exact origin only: a prefix match would hand install rights to look-alike hosts. */
 export const CHROME_WEB_STORE_ORIGIN = 'https://chromewebstore.google.com'
@@ -73,4 +74,4 @@ export type BrowserExtensionInstallPromptResponse = { requestId: string; accepte
 export type BrowserExtensionWebStoreInstallResult =
   | { status: 'installed'; name: string }
   | { status: 'cancelled' }
-  | { status: 'failed'; error: string }
+  | { status: 'failed'; error: string; failure?: BrowserExtensionFailure }

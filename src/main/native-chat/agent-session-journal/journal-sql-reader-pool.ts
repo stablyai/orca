@@ -34,8 +34,7 @@ import {
   type JournalReaderRetention
 } from './journal-sql-reader-retention'
 import {
-  JournalSqlReaderBurstShrink,
-  MIN_WARM_JOURNAL_SQL_READERS,
+  JournalSqlReaderIdleShrink,
   retireJournalReaderSlot,
   shrinkIdleBurstReaders
 } from './journal-sql-reader-burst-shrink'
@@ -44,16 +43,23 @@ import {
 export class JournalSqlReaderPool {
   private readonly slots: ReaderSlot[] = []
   private readonly retiring = new Set<Promise<void>>()
-  private readonly burstShrink = new JournalSqlReaderBurstShrink(
-    () =>
+  private readonly idleShrink = new JournalSqlReaderIdleShrink({
+    onBurstShrink: () =>
       !this.closed &&
       shrinkIdleBurstReaders(
         this.slots,
         [this.forkSlot, this.conversionSlot],
         this.replaced,
         this.retiring
-      )
-  )
+      ),
+    onWarmShrink: () =>
+      !this.closed &&
+      shrinkIdleBurstReaders(this.slots, [this.forkSlot], this.replaced, this.retiring, 0, (r) => {
+        if (this.conversionSlot === r) {
+          this.conversionSlot = undefined
+        }
+      })
+  })
   private closed = false
   private closing?: Promise<void>
   private conversionSlot?: ReaderSlot
@@ -206,7 +212,7 @@ export class JournalSqlReaderPool {
     const lease = new AbortController()
     this.sourceLease = lease
     this.sourceRelease = Promise.withResolvers<void>()
-    this.burstShrink.clear()
+    this.idleShrink.clear()
     const retired = this.slots.splice(0)
     this.conversionSlot = undefined
     try {
@@ -296,14 +302,12 @@ export class JournalSqlReaderPool {
       )
       this.slots.push(slot)
     }
-    if (this.slots.length > MIN_WARM_JOURNAL_SQL_READERS) {
-      this.burstShrink.schedule()
-    }
+    this.idleShrink.onSlotUsed(this.slots.length, this.slots.indexOf(slot!))
     return slot!
   }
 
   close(): Promise<void> {
-    this.burstShrink.clear()
+    this.idleShrink.clear()
     this.sourceLease?.abort()
     this.closed = true
     this.forkRelease?.resolve()

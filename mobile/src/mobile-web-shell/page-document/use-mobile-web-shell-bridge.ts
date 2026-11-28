@@ -5,7 +5,7 @@ import type {
   BridgeTerminalKeyRail
 } from '../bridge/native-capabilities/bridge-terminal-key'
 import type { BridgePageGeometry } from '../bridge/page-geometry/bridge-page-geometry'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
@@ -31,6 +31,7 @@ import type { MobileWebShellSessionState } from '../session/mobile-web-shell-ses
 import type { PageHostSnapshot } from '../host-gates/use-page-host-snapshot'
 import type { PageStorageForInit } from '../page-storage/page-storage-keys'
 import { createPageFramesWithoutHost } from './page-frames-without-host'
+import { recomputeOn } from '../../hooks/recompute-on'
 
 class BridgeViewGoneError extends Error {
   constructor() {
@@ -232,6 +233,64 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     }
   })
 
+  // Fenced on the session the same way inbound frames are: a host left over from a session this
+  // render has moved past must not be handed this one's route.
+  //
+  // Keyed on everything the host is built from, not on the session alone: a caller that holds a
+  // route the host was not there to take retries when this identity changes, and the host's own
+  // effect is a layout effect, so by the time a passive effect sees the new identity the host
+  // behind it exists.
+  const hostPublishers = useMemo(
+    () =>
+      recomputeOn([buildId, client, snapshot], () => ({
+        publishStorage: () => {
+          const mounted = hostRef.current
+          if (mounted !== null && mounted.sessionId === sessionId) {
+            mounted.host.publishStorage()
+          }
+        },
+        publishRoute: (route: BridgeInitRoute) => {
+          const mounted = hostRef.current
+          if (mounted !== null && mounted.sessionId === sessionId) {
+            mounted.host.publishRoute(route)
+          }
+        },
+        publishSafeAreaInsets: (insets: BridgeSafeAreaInsets) => {
+          const mounted = hostRef.current
+          if (mounted !== null && mounted.sessionId === sessionId) {
+            mounted.host.publishSafeAreaInsets(insets)
+          }
+        },
+        publishKeyboardInset: (height: number) => {
+          const mounted = hostRef.current
+          if (mounted !== null && mounted.sessionId === sessionId) {
+            mounted.host.publishKeyboardInset(height)
+          }
+        },
+        publishFoldDivision: (division: BridgeFoldDivision | null) => {
+          const mounted = hostRef.current
+          if (mounted !== null && mounted.sessionId === sessionId) {
+            mounted.host.publishFoldDivision(division)
+          }
+        },
+        publishTerminalKeyRail: (keys: BridgeTerminalKeyRail) => {
+          const mounted = hostRef.current
+          if (mounted !== null && mounted.sessionId === sessionId) {
+            mounted.host.publishTerminalKeyRail(keys)
+          }
+        },
+        sendTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => {
+          const mounted = hostRef.current
+          return (
+            mounted !== null &&
+            mounted.sessionId === sessionId &&
+            mounted.host.sendTerminalKey(key, inputOwner)
+          )
+        }
+      })),
+    [buildId, client, sessionId, snapshot]
+  )
+
   return {
     bridgeEnabled: ready !== null,
     viewRef: useCallback(
@@ -263,75 +322,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       },
       [framesWithoutHost, sessionId]
     ),
-    // Fenced on the session the same way inbound frames are: a host left over from a session this
-    // render has moved past must not be handed this one's route.
-    //
-    // Keyed on everything the host is built from, not on the session alone: a caller that holds a
-    // route the host was not there to take retries when this identity changes, and the host's own
-    // effect is a layout effect, so by the time a passive effect sees the new identity the host
-    // behind it exists.
-    publishStorage: useCallback(() => {
-      const mounted = hostRef.current
-      if (mounted !== null && mounted.sessionId === sessionId) {
-        mounted.host.publishStorage()
-      }
-    }, [buildId, client, sessionId, snapshot]),
-    publishRoute: useCallback(
-      (route: BridgeInitRoute) => {
-        const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
-          mounted.host.publishRoute(route)
-        }
-      },
-      [buildId, client, sessionId, snapshot]
-    ),
-    publishSafeAreaInsets: useCallback(
-      (insets: BridgeSafeAreaInsets) => {
-        const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
-          mounted.host.publishSafeAreaInsets(insets)
-        }
-      },
-      [buildId, client, sessionId, snapshot]
-    ),
-    publishKeyboardInset: useCallback(
-      (height: number) => {
-        const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
-          mounted.host.publishKeyboardInset(height)
-        }
-      },
-      [buildId, client, sessionId, snapshot]
-    ),
-    publishFoldDivision: useCallback(
-      (division: BridgeFoldDivision | null) => {
-        const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
-          mounted.host.publishFoldDivision(division)
-        }
-      },
-      [buildId, client, sessionId, snapshot]
-    ),
-    publishTerminalKeyRail: useCallback(
-      (keys: BridgeTerminalKeyRail) => {
-        const mounted = hostRef.current
-        if (mounted !== null && mounted.sessionId === sessionId) {
-          mounted.host.publishTerminalKeyRail(keys)
-        }
-      },
-      [buildId, client, sessionId, snapshot]
-    ),
-    sendTerminalKey: useCallback(
-      (key: BridgeTerminalKeyId, inputOwner?: string) => {
-        const mounted = hostRef.current
-        return (
-          mounted !== null &&
-          mounted.sessionId === sessionId &&
-          mounted.host.sendTerminalKey(key, inputOwner)
-        )
-      },
-      [buildId, client, sessionId, snapshot]
-    ),
+    ...hostPublishers,
     // Fenced on the session the way inbound frames are, and answering false rather than throwing
     // when there is no host: the caller is a hardware key handler, and a press it cannot forward
     // is one the navigator has to be left to answer.

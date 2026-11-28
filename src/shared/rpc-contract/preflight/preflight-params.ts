@@ -32,9 +32,15 @@ export const PreflightAgentDetection = lazyZodSchema(() =>
     .object({
       worktreeId: z.string().min(1).optional(),
       repoId: z.string().min(1).optional(),
-      worktreeHostId: OptionalExecutionHostId
+      worktreeHostId: OptionalExecutionHostId,
+      // Host-scoped lists (MCP agents) probe the configured Windows Agent runtime, as desktop
+      // does with nothing focused; without it, no identity keeps meaning the native host.
+      configuredWindowsRuntime: z.literal(true).optional()
     })
     .superRefine((params, ctx) => {
+      if (params.configuredWindowsRuntime && (params.worktreeId || params.repoId)) {
+        ctx.addIssue({ code: 'custom', message: 'A workspace already names its runtime.' })
+      }
       if (
         params.worktreeHostId !== undefined &&
         (!parseRoutableExecutionHostId(params.worktreeHostId) ||
@@ -56,7 +62,12 @@ export const PreflightProjectAgentDetection = lazyZodSchema(() =>
       .strict()
       .optional()
   }).refine(
-    (value) => !value.project || (!value.worktreeId && !value.repoId && !value.worktreeHostId),
+    (value) =>
+      !value.project ||
+      (!value.worktreeId &&
+        !value.repoId &&
+        !value.worktreeHostId &&
+        !value.configuredWindowsRuntime),
     'Choose project, repository or worktree'
   )
 )

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../../../shared/schema/lazy-zod-schema'
 import { isInBotHome } from '../../../../../../bots/bot-home-membership'
 import {
   sessionCallerOf,
@@ -103,8 +104,10 @@ export async function noteTerminalFallbackOnItem(
 }
 
 // A failed start reports a terminal mode too, but started nothing to note.
-const TerminalFallbackReceipt = z.object({
-  dispatchId: z.string(),
-  state: z.enum(['ready', 'starting']),
-  mode: z.object({ mode: z.string(), detail: z.string() })
-})
+const TerminalFallbackReceipt = lazyZodSchema(() =>
+  z.object({
+    dispatchId: z.string(),
+    state: z.enum(['ready', 'starting']),
+    mode: z.object({ mode: z.string(), detail: z.string() })
+  })
+)

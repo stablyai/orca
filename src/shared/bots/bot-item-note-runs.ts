@@ -7,10 +7,8 @@ import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { isNativeChatOrcaCard } from '../native-chat/native-chat-orca-card'
 import { nativeChatRowRendersContent } from '../native-chat/transcript/row-content/native-chat-row-content'
 import { nativeChatRowRendersProse } from '../native-chat/transcript/folding/native-chat-trailing-run'
+import { BOT_ITEM_MAIL_SENDER } from './bot-item-mail-sender'
 import type { BotItemNoteItem, BotItemNoteView } from './bot-item-note'
-
-/** The sender item mail names. */
-export const BOT_ITEM_MAIL_SENDER = 'orca:items'
 
 /** Item mail ids: only Orca's item code mints one, as no send, ask or reply takes a caller's message id. */
 export const BOT_ITEM_MAIL_ID_PREFIX = 'msg_item_'

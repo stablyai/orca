@@ -29,8 +29,10 @@ export function federatedFailedReceipt(
     setup?: { state: string }
     effects?: unknown[]
     residualResources?: unknown[]
+    warning?: string
   }
 ): unknown {
+  const { warning, ...rest } = outcome
   return {
     ...ids,
     dispatchId: worker.dispatch_id,
@@ -39,9 +41,10 @@ export function federatedFailedReceipt(
     server: { environmentId: server.environmentId, name: server.name },
     failedStage: worker.stage,
     lastError: worker.last_error,
-    ...outcome,
-    effects: outcome.effects ?? [],
-    residualResources: outcome.residualResources ?? []
+    ...rest,
+    effects: rest.effects ?? [],
+    residualResources: rest.residualResources ?? [],
+    ...(warning ? { warning } : {})
   }
 }
 
@@ -49,7 +52,8 @@ export function federatedUnknownReceipt(
   worker: FederatedStartWorker,
   taskId: string,
   serverName: string,
-  launch: OrchestrationWorkerLaunchReceipt
+  launch: OrchestrationWorkerLaunchReceipt,
+  warning?: string
 ): unknown {
   return {
     taskId,
@@ -62,6 +66,7 @@ export function federatedUnknownReceipt(
     lastError: worker.last_error,
     effects: [],
     residualResources: [],
+    ...(warning ? { warning } : {}),
     nextCommands: [
       `orca orchestration worker-show --dispatch ${worker.dispatch_id} --json`,
       `orca orchestration worker-abandon --dispatch ${worker.dispatch_id} --json`

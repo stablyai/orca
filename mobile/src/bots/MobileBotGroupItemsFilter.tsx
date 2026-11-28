@@ -5,9 +5,8 @@ import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import type { MobileBotGroupItemsRead } from './use-mobile-bot-group-items'
@@ -19,7 +18,7 @@ export function MobileBotGroupItemsFilter({
   read: MobileBotGroupItemsRead
   onDone: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { members, botIds, setBotIds, needsYouOnly, setNeedsYouOnly, clearFilter } = read
   return (
@@ -74,7 +73,7 @@ export function MobileBotGroupItemsFilter({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: { flex: 1 },
   page: { flex: 1, backgroundColor: colors.sheetSurface },
   scrollContent: { paddingBottom: spacing.lg },

@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../ipc/lazy-ipc-handle-group'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/feature-education/star-nag/star-nag-threshold'
 import { checkOrcaStarred } from '../github/client/fetch/orca-star'
 import type { Store } from '../persistence/loading-store/store'
@@ -65,17 +66,17 @@ export class StarNagService {
     this.disposeStatsListener = null
   }
 
-  registerIpcHandlers(): void {
-    ipcMain.handle('star-nag:dismiss', () => this.dismiss())
-    ipcMain.handle('star-nag:later', () => this.defer('later'))
-    ipcMain.handle('star-nag:complete', () => this.markCompleted())
-    ipcMain.handle('star-nag:disable', () => this.disable())
-    ipcMain.handle('star-nag:openWeb', () => this.openWeb())
-    ipcMain.handle('star-nag:starOrca', () => this.starOrcaFromNag())
-    ipcMain.handle('star-nag:forceShow', () => this.forceShow())
-    ipcMain.handle('star-nag:agentValueMoment', () => this.prepareAgentValueMoment())
-    ipcMain.handle('star-nag:showAgentValueMoment', () => this.showPreparedAgentValueMoment())
-    ipcMain.handle('star-nag:onboardingCompleted', () => this.onboardingCompleted())
+  registerIpcHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+    ipc.handle('star-nag:dismiss', () => this.dismiss())
+    ipc.handle('star-nag:later', () => this.defer('later'))
+    ipc.handle('star-nag:complete', () => this.markCompleted())
+    ipc.handle('star-nag:disable', () => this.disable())
+    ipc.handle('star-nag:openWeb', () => this.openWeb())
+    ipc.handle('star-nag:starOrca', () => this.starOrcaFromNag())
+    ipc.handle('star-nag:forceShow', () => this.forceShow())
+    ipc.handle('star-nag:agentValueMoment', () => this.prepareAgentValueMoment())
+    ipc.handle('star-nag:showAgentValueMoment', () => this.showPreparedAgentValueMoment())
+    ipc.handle('star-nag:onboardingCompleted', () => this.onboardingCompleted())
   }
 
   private handleAgentSpawned(total: number): void {

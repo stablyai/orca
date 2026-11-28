@@ -1,21 +1,26 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../../../shared/schema/lazy-zod-schema'
 import { ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY } from '../../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import {
   HelperStopOutcome,
   type WorkerStopReceipt
 } from '../../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 
-export const RemoteCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
+export const RemoteCapabilities = lazyZodSchema(() =>
+  z.object({ capabilities: z.array(z.string()).optional() })
+)
 
-export const RemoteStopReceipt = z.object({
-  state: z.string(),
-  alreadySettled: z.boolean(),
-  processAction: z.string(),
-  close: z.unknown().optional(),
-  reason: z.string().optional(),
-  lastError: z.string().nullable().optional(),
-  helpers: z.unknown().optional()
-})
+export const RemoteStopReceipt = lazyZodSchema(() =>
+  z.object({
+    state: z.string(),
+    alreadySettled: z.boolean(),
+    processAction: z.string(),
+    close: z.unknown().optional(),
+    reason: z.string().optional(),
+    lastError: z.string().nullable().optional(),
+    helpers: z.unknown().optional()
+  })
+)
 export type RemoteStopReceipt = z.infer<typeof RemoteStopReceipt>
 
 /** Helpers the worker's host stopped under it; an older host stops none, so say so. */

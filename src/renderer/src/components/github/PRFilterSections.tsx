@@ -20,7 +20,7 @@ export type PRFilterChange = {
   draft?: boolean
 }
 
-export type SectionKey = 'status' | 'author' | 'label' | 'reviewer' | 'assignee'
+export type SectionKey = 'author' | 'label' | 'reviewer' | 'assignee'
 
 export function filterStateLabel(
   state: 'open' | 'closed' | 'merged',
@@ -39,125 +39,6 @@ export function filterDraftLabel(t: Translate = translate): string {
   return t('auto.components.github.PRFilterSections.draft', 'Draft')
 }
 
-function statusLabel(parsed: ParsedTaskQuery, t: Translate = translate): string {
-  const parts: string[] = []
-  if (parsed.state === 'all') {
-    parts.push(t('auto.components.github.PRFilterSections.allStates', 'All'))
-  } else if (parsed.state) {
-    parts.push(filterStateLabel(parsed.state, t))
-  }
-  if (parsed.draft) {
-    parts.push(filterDraftLabel(t))
-  }
-  return parts.join(' · ')
-}
-
-function StatusSection({
-  parsed,
-  kind,
-  onSelect
-}: {
-  parsed: ParsedTaskQuery
-  kind: 'prs' | 'issues'
-  onSelect: (change: PRFilterChange) => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const states: { key: 'open' | 'closed' | 'merged' | 'all'; label: string }[] =
-    kind === 'prs'
-      ? [
-          {
-            key: 'open',
-            label: filterStateLabel('open', t)
-          },
-          {
-            key: 'closed',
-            label: filterStateLabel('closed', t)
-          },
-          {
-            key: 'merged',
-            label: filterStateLabel('merged', t)
-          },
-          {
-            key: 'all',
-            label: t('auto.components.github.PRFilterSections.2b2f019091', 'Any state')
-          }
-        ]
-      : [
-          {
-            key: 'open',
-            label: filterStateLabel('open', t)
-          },
-          {
-            key: 'closed',
-            label: filterStateLabel('closed', t)
-          },
-          {
-            key: 'all',
-            label: t('auto.components.github.PRFilterSections.2b2f019091', 'Any state')
-          }
-        ]
-  return (
-    <div className="py-1 text-xs">
-      {states.map((s) => {
-        const active = parsed.state === s.key
-        return (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => onSelect({ state: s.key })}
-            className={cn(
-              'flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left transition hover:bg-muted/50',
-              active && 'bg-muted/40 font-medium'
-            )}
-          >
-            <span>{s.label}</span>
-            {active ? (
-              <span className="text-[10px] text-muted-foreground">
-                {t('auto.components.github.PRFilterSections.e0002f1eba', 'selected')}
-              </span>
-            ) : null}
-          </button>
-        )
-      })}
-      {kind !== 'prs' ? null : <DraftToggle parsed={parsed} onSelect={onSelect} />}
-    </div>
-  )
-}
-
-function DraftToggle({
-  parsed,
-  onSelect
-}: {
-  parsed: ParsedTaskQuery
-  onSelect: (change: PRFilterChange) => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <>
-      <div className="my-1 h-px bg-border" />
-      <button
-        type="button"
-        onClick={() => onSelect({ draft: !parsed.draft })}
-        className={cn(
-          'flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left transition hover:bg-muted/50',
-          parsed.draft && 'bg-muted/40 font-medium'
-        )}
-      >
-        <span>{t('auto.components.github.PRFilterSections.b930de7194', 'Draft only')}</span>
-        {parsed.draft ? (
-          <span className="text-[10px] text-muted-foreground">
-            {t('auto.components.github.PRFilterSections.1e9b5244f2', 'on')}
-          </span>
-        ) : (
-          <span className="text-[10px] text-muted-foreground">
-            {t('auto.components.github.PRFilterSections.f0cf6dd591', 'off')}
-          </span>
-        )}
-      </button>
-    </>
-  )
-}
-
 function UserOptionRow({ option }: { option: PickerOption }): React.JSX.Element {
   return (
     <div className="flex min-w-0 flex-col">
@@ -169,29 +50,14 @@ function UserOptionRow({ option }: { option: PickerOption }): React.JSX.Element 
   )
 }
 
-export function SectionMenu({
-  parsed,
-  kind,
-  reviewerActive,
-  reviewerKind,
-  onPick,
-  onClearAll
-}: {
-  parsed: ParsedTaskQuery
-  kind: 'prs' | 'issues'
-  reviewerActive: string | null
-  reviewerKind: 'requested' | 'reviewed-by'
-  onPick: (s: SectionKey) => void
-  onClearAll: (() => void) | null
-}): React.JSX.Element {
-  const t = useTranslate()
-  const status = statusLabel(parsed, t)
-  const rows: { key: SectionKey; label: string; value: string | null }[] = [
-    {
-      key: 'status',
-      label: t('auto.components.github.PRFilterSections.764a0b4ce1', 'Status'),
-      value: status || null
-    },
+export function buildSectionRows(
+  parsed: ParsedTaskQuery,
+  kind: 'prs' | 'issues',
+  reviewerActive: string | null,
+  reviewerKind: 'requested' | 'reviewed-by',
+  t: Translate
+): { key: SectionKey; label: string; value: string | null }[] {
+  return [
     {
       key: 'author',
       label: t('auto.components.github.PRFilterSections.24754c44ad', 'Author'),
@@ -220,6 +86,25 @@ export function SectionMenu({
       value: parsed.assignee
     }
   ]
+}
+
+export function SectionMenu({
+  parsed,
+  kind,
+  reviewerActive,
+  reviewerKind,
+  onPick,
+  onClearAll
+}: {
+  parsed: ParsedTaskQuery
+  kind: 'prs' | 'issues'
+  reviewerActive: string | null
+  reviewerKind: 'requested' | 'reviewed-by'
+  onPick: (s: SectionKey) => void
+  onClearAll: (() => void) | null
+}): React.JSX.Element {
+  const t = useTranslate()
+  const rows = buildSectionRows(parsed, kind, reviewerActive, reviewerKind, t)
   return (
     <div className="py-1 text-xs">
       <div className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -260,7 +145,6 @@ export function SectionMenu({
 export function SectionDetail({
   section,
   parsed,
-  kind,
   authorOpts,
   userOpts,
   labelOpts,
@@ -275,7 +159,6 @@ export function SectionDetail({
 }: {
   section: SectionKey
   parsed: ParsedTaskQuery
-  kind: 'prs' | 'issues'
   authorOpts: PickerOption[]
   userOpts: PickerOption[]
   labelOpts: PickerOption[]
@@ -299,9 +182,6 @@ export function SectionDetail({
         <ChevronRight className="size-3 rotate-180" />
         {t('auto.components.github.PRFilterSections.b69fa4fa20', 'Back')}
       </button>
-      {section === 'status' ? (
-        <StatusSection parsed={parsed} kind={kind} onSelect={onSelect} />
-      ) : null}
       {section === 'author' ? (
         <MultiSelectList
           options={authorOpts}

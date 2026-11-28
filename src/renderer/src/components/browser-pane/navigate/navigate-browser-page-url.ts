@@ -1,4 +1,5 @@
 import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
+import { queueKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
@@ -84,8 +85,8 @@ export function navigateBrowserPageToUrl({
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
       : null
     if (webview.dataset.orcaAttachWaiting) {
-      // No page yet: it opens with this once its profile's extensions are ready (unredacted).
-      webview.dataset.orcaAttachRequestedUrl = targetUrl
+      queueKagiPrivateInitialNavigation(browserTabId, targetUrl)
+      webview.dataset.orcaAttachRequestedUrl = normalizedBrowserModelUrl
     }
     issueBrowserGuestNavigation(webview, () => {
       webview.src = targetUrl

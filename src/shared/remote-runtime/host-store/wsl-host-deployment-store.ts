@@ -35,18 +35,20 @@ export const WslHostPendingStopSchema = lazyZodSchema(() =>
 
 export type WslHostPendingStop = z.infer<typeof WslHostPendingStopSchema>
 
-export const WslHostDeploymentRecordSchema = OrcadWslDeploymentLinkSchema.extend({
-  environmentId: z.string().min(1),
-  createdAt: z.number().finite(),
-  /**
-   * The paired orcad's host key, so a stale record cannot claim a server re-paired under the same
-   * id and bridge port. Optional: records written before it are bound by port only until refreshed.
-   */
-  pairingPublicKeyB64: z.string().min(1).optional(),
-  /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
-  previousPairingPublicKeyB64: z.string().min(1).optional(),
-  pendingStop: WslHostPendingStopSchema.optional()
-})
+export const WslHostDeploymentRecordSchema = lazyZodSchema(() =>
+  OrcadWslDeploymentLinkSchema.extend({
+    environmentId: z.string().min(1),
+    createdAt: z.number().finite(),
+    /**
+     * The paired orcad's host key, so a stale record cannot claim a server re-paired under the same
+     * id and bridge port. Optional: records written before it are bound by port only until refreshed.
+     */
+    pairingPublicKeyB64: z.string().min(1).optional(),
+    /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
+    previousPairingPublicKeyB64: z.string().min(1).optional(),
+    pendingStop: WslHostPendingStopSchema.optional()
+  })
+)
 
 export type WslHostDeploymentRecord = z.infer<typeof WslHostDeploymentRecordSchema>
 

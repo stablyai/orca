@@ -51,7 +51,7 @@ export function TaskPageLinearIssueTable({
                   return next
                 })
               }}
-              className="flex h-9 w-full cursor-pointer items-center justify-start gap-2 rounded-md bg-muted/35 px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition-all hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:hover:bg-accent/50"
+              className="flex h-9 w-full cursor-pointer items-center justify-start gap-2 rounded-md bg-muted/35 rail-page-row-gutter py-2 text-left text-sm font-medium whitespace-nowrap transition-all hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:hover:bg-accent/50"
             >
               <ChevronDown
                 className={cn('size-3 shrink-0 text-muted-foreground', collapsed && '-rotate-90')}
@@ -100,7 +100,7 @@ export function TaskPageLinearIssueTable({
               }
             }}
             className={cn(
-              'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring lg:grid-cols-[var(--linear-grid-template)]',
+              'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rail-page-row-gutter py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring lg:grid-cols-[var(--linear-grid-template)]',
               selected && 'bg-accent'
             )}
             style={linearIssueGridStyle}

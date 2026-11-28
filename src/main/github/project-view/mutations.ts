@@ -61,7 +61,7 @@ export async function updateIssueBySlug(
     }
     try {
       if (body !== undefined && result.data?.body === body) {
-        bodyImageUrls = githubBodyImageUrls(body, result.data.body_html)
+        bodyImageUrls = await githubBodyImageUrls(body, result.data.body_html)
       }
     } catch {
       // Optional display data cannot turn an accepted edit into a failed write.

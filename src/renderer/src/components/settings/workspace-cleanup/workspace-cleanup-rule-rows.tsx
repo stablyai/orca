@@ -303,8 +303,14 @@ function RuleMatchesLine({
           'Matches {{count}} workspaces now',
           { count: matches.rows.length, defaultValue_one: 'Matches 1 workspace now' }
         )}
-        {matches.sizeBytes > 0 ? ` · ${formatBytes(matches.sizeBytes)}` : null}
-        {' · '}
+        {/* A no-break space keeps each "·" ending its line, so wrapped lines never start with one. */}
+        {matches.sizeBytes > 0 ? (
+          <>
+            {'\u00a0· '}
+            <span className="whitespace-nowrap">{formatBytes(matches.sizeBytes)}</span>
+          </>
+        ) : null}
+        {'\u00a0· '}
         <button
           type="button"
           aria-expanded={open}

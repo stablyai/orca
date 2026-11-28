@@ -7,11 +7,11 @@ import {
   formatBotGroupAudience
 } from '../../../src/shared/bots/bot-group-mentions'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useBotDraftImages } from './use-bot-draft-images'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 /** The group composer's `@` members, the room's faces, who the draft reaches, the one bot that would answer, and its photos. */
 export function useMobileBotGroupComposer(
@@ -23,6 +23,7 @@ export function useMobileBotGroupComposer(
   takesPhotos: boolean,
   onError: (message: string) => void
 ) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const draft = composerDraft.text
   // Photos upload to a member's session, as the desktop's do.
@@ -52,7 +53,7 @@ export function useMobileBotGroupComposer(
       })),
       { name: 'everyone', icon: <Users size={20} color={colors.textSecondary} strokeWidth={2} /> }
     ],
-    [memberBots, group?.remoteMembers]
+    [memberBots, group?.remoteMembers, colors]
   )
   // Who is in the room, in the same order, for its picture; a paired computer's upload shows as letters.
   const faces = useMemo(

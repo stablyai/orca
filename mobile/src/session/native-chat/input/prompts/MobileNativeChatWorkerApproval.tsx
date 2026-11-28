@@ -5,13 +5,14 @@ import { approvalRecordTool } from '../../../../../../src/shared/agent-session/r
 import { workerApprovalTimeLeft } from '../../../../../../src/shared/orchestration/approvals/worker-approval-time-left'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { MobileAgentMessageOpenContext } from '../../transcript/agent-messages/mobile-agent-message-context'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileNativeChatCollapsedPrompt } from './MobileNativeChatPromptStrip'
 import type { MobileWorkerApproval, MobileWorkerApprovals } from './use-mobile-worker-approvals'
 import { pairedServerAskSlot } from './MobilePairedServerAsk'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 /** A coordinator's oldest open worker prompt, on the chat's approval card, while the chat has no
  *  prompt of its own, with how many wait behind it and Claude's countdown; folding it gives the
@@ -21,6 +22,7 @@ export function useMobileNativeChatWorkerApprovalSlot(
   chatHasPrompt: boolean,
   notice?: string | null
 ): { card: React.JSX.Element | null; strip: MobileNativeChatCollapsedPrompt | null } {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [folded, setFolded] = useState<string | null>(null)
   // The chat's own sender opener, as an agent message's name opens its sender.
@@ -118,6 +120,8 @@ export function dispatchOpener(
 
 /** Claude's own deadline, ticking each second here alone; gone once it passes. */
 function WorkerApprovalCountdown({ expiresAt }: { expiresAt: string }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const timeLeft = workerApprovalTimeLeft(expiresAt, useNow(1_000))
   return timeLeft ? (
@@ -134,7 +138,7 @@ function WorkerApprovalCountdown({ expiresAt }: { expiresAt: string }) {
   ) : null
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   notes: { gap: spacing.xs },
   countdown: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   noteText: {

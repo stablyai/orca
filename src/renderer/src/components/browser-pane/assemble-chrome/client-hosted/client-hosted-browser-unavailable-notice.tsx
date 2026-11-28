@@ -1,19 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Globe } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  useAppStoreWithHostStatuses,
-  useRuntimeHostStatusSelector
-} from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useAppStore } from '@/store'
 import { readBrowserClientHostId } from '@/runtime/browser/client-hosting/browser-client-host-identity'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
-import {
-  isRuntimeHostContactRevokedVerdict,
-  runtimeHostContactForEntry
-} from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import {
   ReopenBrowserPageOnServerButton,
   reopenOnServerCaveat
@@ -36,18 +28,8 @@ export function ClientHostedBrowserUnavailableNotice({
   placementHostClientId: string | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const offlineHostName = useAppStoreWithHostStatuses((s, statuses) => {
-    const entry = statuses.get(runtimeEnvironmentId)
-    const state = runtimeHostConnectionStateForEntry(entry)
-    // Revoked/refused pairings also read disconnected but cannot reconnect.
-    const offline =
-      (state === 'reconnecting' || state === 'disconnected') &&
-      !isRuntimeHostContactRevokedVerdict(runtimeHostContactForEntry(entry))
-    return offline
-      ? (s.runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)
-          ?.name ?? null)
-      : null
-  })
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const detailsId = useId()
   // Why: a runtime known to have no browser of its own (orcad) cannot take the page back.
   const runtimeCanHostPage = useRuntimeHostStatusSelector(runtimeEnvironmentId, (entry) => {
     const capabilities = entry?.status?.capabilities
@@ -64,38 +46,52 @@ export function ClientHostedBrowserUnavailableNotice({
       void ensureBrowserClientHostOnRuntimeContact(state, runtimeEnvironmentId)
     }
   }, [onOtherDesktop, runtimeEnvironmentId])
-  const description = onOtherDesktop
-    ? t(
-        'browser.clientHosted.unavailableOtherDesktopDescription',
-        'This page is open on another desktop.'
-      )
-    : offlineHostName
-      ? t(
-          'browser.clientHosted.unavailableHostOfflineDescription',
-          '{{host}} is offline. This page will reload here once it reconnects.',
-          { host: offlineHostName }
-        )
-      : t(
-          'browser.clientHosted.unavailableDescription',
-          "This page isn't available on this desktop right now."
-        )
   return (
-    <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
-      <div className="flex max-w-sm flex-col items-center gap-2">
+    <div className="absolute inset-0 scrollbar-sleek flex overflow-y-auto p-4 text-center">
+      {/* m-auto (not justify-center) keeps a tall block scrollable from the top in short panes.
+          Relative so the Details box hangs below without re-centering the block under the pointer. */}
+      <div className="relative m-auto flex max-w-sm flex-col items-center">
         <Globe className="size-5 text-muted-foreground" />
-        <div className="text-sm font-medium text-foreground">
-          {t('browser.clientHosted.unavailableTitle', 'Client-hosted browser unavailable')}
+        <div className="mt-3 text-balance text-[15px] font-semibold leading-5 text-foreground">
+          {runtimeCanHostPage
+            ? t('browser.clientHosted.runsOnServerTitle', 'This tab runs on your server')
+            : t('browser.clientHosted.noBrowserTitle', 'Can’t open this tab here')}
         </div>
-        <div className="text-xs leading-5 text-muted-foreground">{description}</div>
+        {!runtimeCanHostPage ? (
+          <div className="mt-1 text-[13px] leading-5 text-muted-foreground">
+            {t('browser.clientHosted.noBrowserBody', 'This server has no browser.')}
+          </div>
+        ) : null}
         {runtimeCanHostPage ? (
           <>
-            <div className="text-xs leading-5 text-muted-foreground">{reopenOnServerCaveat(t)}</div>
+            <div className="mt-1 text-[13px] leading-5 text-muted-foreground">
+              {t('browser.clientHosted.runsOnServerBody', 'Open it there to keep going.')}
+            </div>
             <ReopenBrowserPageOnServerButton
+              className="mt-4"
+              variant="default"
+              caveatTooltip={false}
               browserPageId={browserPageId}
               environmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
               reopenUrl={reopenUrl}
             />
+            <button
+              type="button"
+              className="mt-2 min-h-6 cursor-pointer rounded-sm px-2 text-xs leading-5 text-muted-foreground hover:text-foreground aria-expanded:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-expanded={detailsOpen}
+              aria-controls={detailsId}
+              onClick={() => setDetailsOpen((open) => !open)}
+            >
+              {t('browser.clientHosted.details', 'Details')}
+            </button>
+            <div
+              id={detailsId}
+              hidden={!detailsOpen}
+              className="absolute inset-x-0 top-full mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-balance text-xs leading-5 text-muted-foreground"
+            >
+              {reopenOnServerCaveat(t)}
+            </div>
           </>
         ) : null}
       </div>

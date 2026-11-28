@@ -22,7 +22,6 @@ import {
   isSshHostKeptForBridgedTerminals
 } from '../../ssh/host-server/ssh-host-server-status'
 import { connectTarget } from './ssh-connect-flow'
-import { installDesktopBrowserBridge } from '../browser/desktop-browser-bridge-wiring'
 import { SSH_APPLICATION_REQUESTS } from '../../ssh/application/ssh-application-requests'
 import { startSshApplication } from '../../ssh/application/ssh-application'
 import { setSshDesktopHost } from '../../ssh/application/ssh-desktop-host'
@@ -87,6 +86,7 @@ export async function registerSshHandlers(
 
   const result = await started
   if (runtime) {
+    const { installDesktopBrowserBridge } = await import('../browser/desktop-browser-bridge-wiring')
     installDesktopBrowserBridge({
       userDataPath: getAppEnvironment().getPath('userData'),
       runtime,

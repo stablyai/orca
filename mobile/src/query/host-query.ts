@@ -23,6 +23,7 @@ import {
 } from './host-query-key'
 import { holdsRestoredHostQueryData, type HostQueryPersist } from './host-query-persistence'
 import { hostReadClient } from './host-read-client'
+import { useKeptByKey } from '../hooks/use-kept-by-key'
 
 export type HostQuery<TInput extends HostQueryParams, TData> = {
   family: string
@@ -239,13 +240,13 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   // A screen alone on its page has no host list to keep the router; its signalled reads hold one.
   useHostEventRouter(hostId, enabled && query.signal ? client : null)
   // Same options object while nothing changed (target and input count by value), so TanStack's per-render setOptions is a no-op.
-  const keyHash = hashKey([target, input])
+  const keyed = useKeptByKey(hashKey([target, input]), { target, input })
   const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
-    const observer = hostObserverOptions(query, client, hostId, target, input)
+    const observer = hostObserverOptions(query, client, hostId, keyed.target, keyed.input)
     // Disable through the observer, not skipToken: observers share the query's options, so a disabled
     // screen's skipToken would leave an enabled one's key with no fetch for invalidation or intervals.
     return enabled ? observer : { ...observer, enabled: false }
-  }, [query, client, hostId, keyHash, enabled])
+  }, [query, client, hostId, keyed, enabled])
   return useQuery({
     ...queryOptions,
     ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
@@ -268,10 +269,11 @@ export function useHostQueries<TInput extends HostQueryParams, TData, TCombined>
   const { hostId, client } = host
   useHostConnectionInvalidation(hostId, client)
   useHostEventRouter(hostId, query.signal ? client : null)
-  const keyHash = hashKey([target, inputs])
+  const keyed = useKeptByKey(hashKey([target, inputs]), { target, inputs })
   const queries = useMemo(
-    () => inputs.map((input) => hostObserverOptions(query, client, hostId, target, input)),
-    [query, client, hostId, keyHash]
+    () =>
+      keyed.inputs.map((input) => hostObserverOptions(query, client, hostId, keyed.target, input)),
+    [query, client, hostId, keyed]
   )
   return useQueries({ queries, combine })
 }

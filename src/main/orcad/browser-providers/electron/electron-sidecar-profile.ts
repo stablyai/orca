@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { isSafeOwnedDirectory } from '../../../../shared/secure-storage/owned-private-directory'
 import { isProcessAlive } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
@@ -21,7 +22,7 @@ const ORPHAN_PROBE_TIMEOUT_MS = 2_000
 const PROFILE_PREFIX = 'orcad-browser-'
 // Lives in orcad's private data root, so only this instance can name a profile for removal.
 const PROFILE_RECORD_FILE = 'browser-sidecar-profile.json'
-const ProfileRecord = z.object({ profilePath: z.string() })
+const ProfileRecord = lazyZodSchema(() => z.object({ profilePath: z.string() }))
 // In orcad's private data root, so the engine keeps its logins across restarts like a desktop profile.
 const PERSISTENT_PROFILE_DIRECTORY = 'browser-sidecar-profile'
 // Linux's largest pid plus the 4-character runtime suffix: the longest socket name a sidecar binds.

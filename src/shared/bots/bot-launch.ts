@@ -1,37 +1,42 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { readAgentSessionExecutionOptions } from '../agent-session/options/protocol/agent-session-execution-options'
 import { OptionKey } from '../rpc-contract/agent-launch/agent-launch-settings-params'
 import { parseStructuredLaunchSeedOptions } from '../native-chat/input/session-options/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../agent-launch/permissions/agent-chat-permission-mode'
 import { encodeStructuredAgentSessionOptionValue } from '../agent-session/options/selection/structured-agent-session-option-codec'
 
-const ChoiceValue = z
-  .string()
-  .min(1)
-  .max(512)
-  .refine((value) => !value.includes('\0'))
+const ChoiceValue = lazyZodSchema(() =>
+  z
+    .string()
+    .min(1)
+    .max(512)
+    .refine((value) => !value.includes('\0'))
+)
 
 /** The model and session options (effort, fast mode…) the owner picked for the bot's agent; each of its
  *  new chats starts on them. Absent, its chats start on the native chat defaults. Belongs to `agent`:
  *  changing the agent drops it. Permission stays in the bot's own `permissionMode`. */
-export const BotLaunchSchema = z
-  .object({
-    model: ChoiceValue.optional(),
-    options: z
-      .record(OptionKey, ChoiceValue)
-      .refine((value) => Object.keys(value).length <= 32)
-      .optional()
-  })
-  .strict()
-  // Values a chat's send would refuse never save, so a saved launch cannot refuse every chat it starts.
-  .refine(
-    (launch) =>
-      readAgentSessionExecutionOptions({
-        ...launch.options,
-        ...(launch.model ? { model: launch.model } : {})
-      }) !== null,
-    'Invalid launch choice'
-  )
+export const BotLaunchSchema = lazyZodSchema(() =>
+  z
+    .object({
+      model: ChoiceValue.optional(),
+      options: z
+        .record(OptionKey, ChoiceValue)
+        .refine((value) => Object.keys(value).length <= 32)
+        .optional()
+    })
+    .strict()
+    // Values a chat's send would refuse never save, so a saved launch cannot refuse every chat it starts.
+    .refine(
+      (launch) =>
+        readAgentSessionExecutionOptions({
+          ...launch.options,
+          ...(launch.model ? { model: launch.model } : {})
+        }) !== null,
+      'Invalid launch choice'
+    )
+)
 
 export type BotLaunch = z.infer<typeof BotLaunchSchema>
 

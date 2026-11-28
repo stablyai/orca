@@ -1,23 +1,28 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { PLUGIN_HOST_ID_MAX_LENGTH } from './plugin-host-api-workspace-methods'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
 /** Host API 1.9: hide a project from Orca's sidebar, or show it again, as its project menu does. */
 
-const projectSetHiddenParams = z.strictObject({
-  /** The project, as `project.list` gives its id. */
-  projectId: z.string().min(1).max(PLUGIN_HOST_ID_MAX_LENGTH),
-  /** The project's host, as `project.list` gives it; needed only when two hosts have it. */
-  hostId: z.string().min(1).max(PLUGIN_HOST_ID_MAX_LENGTH).optional(),
-  /** True hides it; false shows it again. */
-  hidden: z.boolean()
-})
-const projectSetHiddenResult = z.object({
-  /** The host whose copy changed, as `project.list` names it. */
-  hostId: z.string().min(1).max(PLUGIN_HOST_ID_MAX_LENGTH),
-  /** Whether that copy is hidden now. */
-  hidden: z.boolean()
-})
+const projectSetHiddenParams = lazyZodSchema(() =>
+  z.strictObject({
+    /** The project, as `project.list` gives its id. */
+    projectId: z.string().min(1).max(PLUGIN_HOST_ID_MAX_LENGTH),
+    /** The project's host, as `project.list` gives it; needed only when two hosts have it. */
+    hostId: z.string().min(1).max(PLUGIN_HOST_ID_MAX_LENGTH).optional(),
+    /** True hides it; false shows it again. */
+    hidden: z.boolean()
+  })
+)
+const projectSetHiddenResult = lazyZodSchema(() =>
+  z.object({
+    /** The host whose copy changed, as `project.list` names it. */
+    hostId: z.string().min(1).max(PLUGIN_HOST_ID_MAX_LENGTH),
+    /** Whether that copy is hidden now. */
+    hidden: z.boolean()
+  })
+)
 
 export const PLUGIN_PROJECT_VISIBILITY_API = {
   'project.setHidden': spec({

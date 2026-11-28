@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
-import { ChevronDown, CircleCheck, CircleMinus, LoaderCircle } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { ChevronDown, CircleCheck, CircleMinus, LoaderCircle, RotateCw } from 'lucide-react-native'
+import { NavBarButton } from '../../../../components/nav-bar/NavBarButton'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
@@ -29,7 +30,8 @@ import { PrCheckFailureRow } from './PrCheckFailureRow'
 const PREFETCHED_FAILURES = 3
 
 export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const data = readyPrData(tab)
   const { checkDetails: cache, ensureCheckDetail: ensure } = tab
@@ -80,12 +82,24 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
     }
   }
   const notice = tab.triage.noticeFor('fix-checks')
+  // The host reruns every failed check at once, so that is one action for the screen, not one per row.
+  const rerunnable = [...failing, ...cancelled].some(isBrokenCheck)
 
   return (
     <ScreenFrame
       title={t('pullRequest.checksSection.title', 'Checks')}
       subtitle={data ? `#${data.pr.number}` : undefined}
       onBack={onBack}
+      trailing={
+        data && rerunnable ? (
+          <NavBarButton
+            icon={RotateCw}
+            onPress={tab.actions.rerunFailingChecks}
+            disabled={tab.actions.isBusy({ kind: 'rerun' })}
+            accessibilityLabel={t('pullRequest.screens.rerunFailed', 'Rerun failed checks')}
+          />
+        ) : undefined
+      }
     >
       {!data ? (
         <NotReady tab={tab} />
@@ -124,8 +138,6 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
                       onFix={() => fixChecks([check])}
                       fixBusy={tab.triage.isBusy('fix-checks')}
                       fixAvailable={tab.triage.availability === 'available'}
-                      onRerun={tab.actions.rerunFailingChecks}
-                      rerunBusy={tab.actions.isBusy({ kind: 'rerun' })}
                     />
                   ))}
                 </ListGroup>
@@ -234,7 +246,7 @@ function ChecksSummary({
   live: boolean
   t: Translate
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   if (failing + cancelled + running + passed === 0) {
     return null
   }
@@ -289,7 +301,7 @@ function CheckRow({
   tone: 'running' | 'passed' | 'other'
   subtitle?: string
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const Icon = tone === 'running' ? LoaderCircle : tone === 'passed' ? CircleCheck : CircleMinus
   const color =
@@ -318,7 +330,7 @@ function CheckRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   plain: { backgroundColor: 'transparent', borderRadius: 0 },
   summary: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.sm },
   bar: { flexDirection: 'row', gap: 3, height: 4 },

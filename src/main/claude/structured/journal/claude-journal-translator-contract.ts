@@ -1,4 +1,5 @@
 import type { ClaudeFullAccessRefusalNotice } from '../permissions/claude-full-access-refusal-notice'
+import type { ClaudeBackgroundTaskRow } from '../../background-tasks/claude-background-task-row-lifecycle'
 import type { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type { AgentSessionContextReport } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
@@ -16,6 +17,8 @@ import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import type { ClaudeCommandStart } from '../turns/claude-command-turn'
 import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
+import type { ClaudeCurrentTurn } from '../turns/claude-turn-lifecycle-item'
+import type { ClaudeToolUse } from './claude-structured-item-translation'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from '../../background-tasks/claude-background-task-tracker'
@@ -32,6 +35,8 @@ export type ClaudeJournalTranslatorDeps = {
   account?: () => AgentSessionAccountKind | undefined
   model?: () => string | undefined
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
+  /** The agent was handed to the terminal host at quit: its open tasks aren't settled. */
+  handedOff?: () => boolean
   /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
   /** True while a send written with priority `now` has not been echoed. */
@@ -83,5 +88,13 @@ export type ClaudeJournalTranslator = {
   modelMayHaveChanged: () => void
   /** Size interim estimates with the applied model until its window is measured. */
   modelWritten: (model: string) => void
+  /** Continue what a kept agent was running when the last app quit: its turn and tool calls. */
+  adoptKept: (kept: {
+    turn: ClaudeCurrentTurn | null
+    tools: readonly ClaudeToolUse[]
+    backgroundTasks: readonly ClaudeBackgroundTaskRow[]
+    /** Each saved subagent's launching call, by its task id. */
+    subagentLaunches: ReadonlyMap<string, string>
+  }) => void
   dispose: () => void
 }

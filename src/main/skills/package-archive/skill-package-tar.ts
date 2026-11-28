@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { once } from 'node:events'
-import type { Readable, Writable } from 'node:stream'
+import type { Readable } from 'node:stream'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip } from 'node:zlib'
@@ -35,12 +34,6 @@ function tarHeader(entry: SkillTarWriteEntry): Buffer {
   )
 }
 
-async function writeWithBackpressure(stream: Writable, bytes: Buffer): Promise<void> {
-  if (!stream.write(bytes)) {
-    await once(stream, 'drain')
-  }
-}
-
 export async function writeSkillTarGzip(
   archivePath: string,
   entries: readonly SkillTarWriteEntry[]
@@ -59,19 +52,14 @@ export async function writeSkillTarGzip(
       callback(null, chunk)
     }
   })
-  const sink = pipeline(
-    gzip,
-    hashTransform,
-    createWriteStream(archivePath, { flags: 'wx', mode: 0o600 })
-  )
-  try {
+  async function* tarChunks(): AsyncGenerator<Buffer> {
     for (const entry of entries) {
-      await writeWithBackpressure(gzip, tarHeader(entry))
+      yield tarHeader(entry)
       if (entry.bytes) {
         if (entry.bytes.length !== entry.size) {
           throw new Error('skill-package-source-size-mismatch')
         }
-        await writeWithBackpressure(gzip, entry.bytes)
+        yield entry.bytes
       } else if (entry.sourcePath) {
         let written = 0
         for await (const chunk of createReadStream(entry.sourcePath)) {
@@ -79,7 +67,7 @@ export async function writeSkillTarGzip(
           if (written > entry.size) {
             throw new Error('skill-package-source-size-mismatch')
           }
-          await writeWithBackpressure(gzip, chunk)
+          yield chunk
         }
         if (written !== entry.size) {
           throw new Error('skill-package-source-size-mismatch')
@@ -89,18 +77,18 @@ export async function writeSkillTarGzip(
       }
       const padding = ustarPaddingBytes(entry.size)
       if (padding > 0) {
-        await writeWithBackpressure(gzip, Buffer.alloc(padding))
+        yield Buffer.alloc(padding)
       }
     }
-    await writeWithBackpressure(gzip, Buffer.alloc(USTAR_BLOCK_BYTES * 2))
-    gzip.end()
-    await sink
-    return { archiveSha256: archiveHash.digest('hex'), compressedBytes }
-  } catch (error) {
-    gzip.destroy(error instanceof Error ? error : new Error(String(error)))
-    await sink.catch(() => undefined)
-    throw error
+    yield Buffer.alloc(USTAR_BLOCK_BYTES * 2)
   }
+  await pipeline(
+    tarChunks(),
+    gzip,
+    hashTransform,
+    createWriteStream(archivePath, { flags: 'wx', mode: 0o600 })
+  )
+  return { archiveSha256: archiveHash.digest('hex'), compressedBytes }
 }
 
 export class TarByteReader {

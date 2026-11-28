@@ -26,7 +26,7 @@ import { noWindowAnswersGoogleCards } from '../../../google/google-card-reach'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { requireSetupPageInAgentWorkspace } from '../../../google/google-setup-page-binding'
 import { reconcileGoogleSetupFinishedOutside } from '../../../google/google-setup-finished-outside'
-import { postConnectorOffer } from './bots-connector-offer'
+import { offerConnectorCard } from './bots-connector-offer'
 import { isAgentRpcCaller } from '../callers/rpc-caller-identity'
 import {
   applied,
@@ -164,9 +164,20 @@ async function routeBotStart(
     if (!sessionId) {
       throw new InvalidArgumentError("Run this from a bot's chat.")
     }
-    await postConnectorOffer(sessionId, bot, { botId, source: 'google' }, context.runtime)
+    const card = await offerConnectorCard(
+      context.runtime,
+      sessionId,
+      bot,
+      { botId, source: 'google' },
+      ask.message
+    )
+    if (!card.shown) {
+      // No card to wait on: an error, so nothing reads this as an offer the owner can answer.
+      throw new InvalidArgumentError(card.message)
+    }
+    return { routed: 'offer', message: card.message }
   }
-  return { routed: ask.kind === 'card' ? 'offer' : ask.kind, message: ask.message }
+  return { routed: ask.kind, message: ask.message }
 }
 
 export const GOOGLE_SETUP_METHODS = [

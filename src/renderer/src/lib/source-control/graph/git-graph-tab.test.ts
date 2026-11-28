@@ -63,3 +63,24 @@ it('shows a graph already open in the child as its own tab in the folder', async
   expect(editorTabWorkspace(state.unifiedTabsByWorktree, folderTab.id)).toBe('folder:F')
   expect(editorTabWorkspace(state.unifiedTabsByWorktree, childTab.id)).toBe(CHILD)
 })
+
+it('places a child graph in the split target when the folder does not show it yet', async () => {
+  seedFolder()
+  await openGitGraph(OTHER_CHILD, undefined, 'folder:F')
+  await openGitGraph(CHILD)
+  const [sourceGroup] = store.getState().groupsByWorktree['folder:F']
+  const splitTarget = vi.fn(
+    () => store.getState().createEmptySplitGroup('folder:F', sourceGroup.id, 'right') ?? undefined
+  )
+
+  await openGitGraph(CHILD, splitTarget, 'folder:F')
+  await openGitGraph(CHILD, splitTarget, 'folder:F')
+
+  const state = store.getState()
+  const splitGroupId = splitTarget.mock.results[0]?.value
+  expect(splitTarget).toHaveBeenCalledTimes(1)
+  expect(splitGroupId).toBeDefined()
+  expect(
+    state.unifiedTabsByWorktree['folder:F'].find((tab) => tab.entityId === `${CHILD}::git-graph`)
+  ).toMatchObject({ groupId: splitGroupId })
+})

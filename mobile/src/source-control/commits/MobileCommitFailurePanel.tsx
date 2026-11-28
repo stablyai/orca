@@ -1,92 +1,65 @@
 import { useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { Text, View } from 'react-native'
+import { Sparkles } from 'lucide-react-native'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { AgentLaunchNotice } from '../../agents/presentation/AgentLaunchNotice'
+import { PrTextLink } from '../review/pull-request/PrTextLink'
 import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
 import type { MobileCommitFailureRecoveryAction } from './use-mobile-commit-failure-recovery'
-import { styles } from '../mobile-source-control-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type Props = {
   failure: MobileCommitFailureRecovery
   action: MobileCommitFailureRecoveryAction
 }
 
+// A failed commit as one red line, like any other error here; Fix and Details are text actions on it.
 export function MobileCommitFailurePanel({ failure, action }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
-  const Chevron = expanded ? ChevronDown : ChevronRight
   const detailsText = failure.error.trim()
+  const summary = action.summary?.trim()
 
   return (
-    <View style={styles.commitFailurePanel}>
-      <View style={styles.commitFailureHeader}>
-        <View style={styles.commitFailureTextBlock}>
-          <Text style={styles.commitFailureTitle}>
-            {t('sourceControl.commitFailurePanel.title', 'Commit failed')}
-          </Text>
-          <Text style={styles.commitFailureSummary} numberOfLines={2}>
-            {action.summary ?? t('sourceControl.commitFailurePanel.summary', 'Commit failed.')}
-          </Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [
-            styles.commitFailureFixButton,
-            (action.launching || action.availability !== 'available') &&
-              styles.commitFailureFixButtonDisabled,
-            pressed && styles.commitFailureFixButtonPressed
-          ]}
+    <View style={styles.commitFailure}>
+      <Text style={[styles.feedbackText, styles.feedbackError]}>
+        {!summary
+          ? t('sourceControl.commitFailurePanel.title', 'Commit failed')
+          : // Most summaries already say the commit failed ("Commit failed.", "Lint failed during commit.").
+            /commit/i.test(summary)
+            ? summary
+            : t('sourceControl.commitFailurePanel.failedWith', 'Commit failed: {{reason}}', {
+                reason: summary
+              })}
+      </Text>
+      <View style={styles.commitFailureLinks}>
+        <PrTextLink
+          accent
+          icon={<Sparkles size={14} color={colors.accentBlue} strokeWidth={2.2} />}
+          label={t('sourceControl.commitFailurePanel.fix', 'Fix')}
           onPress={() => void action.launch()}
-          disabled={action.launching || action.availability !== 'available'}
-          accessibilityRole="button"
-          accessibilityLabel={t(
-            'sourceControl.commitFailurePanel.fixWithAi',
-            'Fix commit failure with AI'
-          )}
-        >
-          {action.launching ? (
-            <ActivityIndicator color={colors.bgBase} />
-          ) : (
-            <Sparkles size={14} color={colors.bgBase} strokeWidth={2.2} />
-          )}
-          <Text style={styles.commitFailureFixButtonText}>
-            {t('sourceControl.commitFailurePanel.fix', 'Fix')}
-          </Text>
-        </Pressable>
-      </View>
-      {action.hasDetails && detailsText ? (
-        <>
-          <Pressable
-            style={({ pressed }) => [
-              styles.commitFailureDetailsButton,
-              pressed && styles.commitFailureDetailsButtonPressed
-            ]}
-            onPress={() => setExpanded((current) => !current)}
-            accessibilityRole="button"
-            accessibilityLabel={
+          busy={action.launching}
+          disabled={action.availability !== 'available'}
+        />
+        {action.hasDetails && detailsText ? (
+          <PrTextLink
+            label={
               expanded
-                ? t(
-                    'sourceControl.commitFailurePanel.hideFailureDetails',
-                    'Hide commit failure details'
-                  )
-                : t(
-                    'sourceControl.commitFailurePanel.showFailureDetails',
-                    'Show commit failure details'
-                  )
-            }
-          >
-            <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={styles.commitFailureDetailsButtonText}>
-              {expanded
                 ? t('sourceControl.commitFailurePanel.hideDetails', 'Hide details')
-                : t('sourceControl.commitFailurePanel.showDetails', 'Show details')}
-            </Text>
-          </Pressable>
-          {expanded ? <Text style={styles.commitFailureDetailsText}>{detailsText}</Text> : null}
-        </>
+                : t('sourceControl.commitFailurePanel.details', 'Details')
+            }
+            onPress={() => setExpanded((current) => !current)}
+          />
+        ) : null}
+      </View>
+      {expanded && detailsText ? (
+        <Text style={styles.commitFailureDetailsText} selectable>
+          {detailsText}
+        </Text>
       ) : null}
       <AgentLaunchNotice
         availability={action.availability}

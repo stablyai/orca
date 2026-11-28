@@ -36,7 +36,7 @@ export function getWorktreeDragUnitGroups(
   // A folder workspace row joins no unit, so the rows nested under it start their own units; within
   // them, a unit is a row plus the deeper rows below it.
   let folderChildUnit: { units: WorktreeDragUnitGroup['units']; depth: number } | null = null
-  const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
+  let naturalWorktreeKeys: Set<string> | undefined
 
   for (const row of rows) {
     if (row.type === 'header') {
@@ -62,8 +62,11 @@ export function getWorktreeDragUnitGroups(
       continue
     }
     const worktreeKey = composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id)
-    if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeKeys.has(worktreeKey)) {
-      continue
+    if (row.sectionKey === PINNED_GROUP_KEY) {
+      naturalWorktreeKeys ??= getNaturalWorktreeKeys(rows)
+      if (naturalWorktreeKeys.has(worktreeKey)) {
+        continue
+      }
     }
     let target = current
     if (isFolderLaneSectionKey(row.sectionKey)) {

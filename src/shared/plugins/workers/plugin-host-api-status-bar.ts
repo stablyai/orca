@@ -2,12 +2,15 @@ import { z } from 'zod'
 import { pluginIdSchema } from '../manifest/plugin-manifest-fields'
 import { pluginStatusBarItemPatchSchema } from '../contributions/plugin-status-bar-item-contribution'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-const statusBarUpdateParams = z.strictObject({
-  id: pluginIdSchema,
-  ...pluginStatusBarItemPatchSchema.shape
-})
-const statusBarUpdateResult = z.object({ ok: z.literal(true) })
+const statusBarUpdateParams = lazyZodSchema(() =>
+  z.strictObject({
+    id: pluginIdSchema,
+    ...pluginStatusBarItemPatchSchema.shape
+  })
+)
+const statusBarUpdateResult = lazyZodSchema(() => z.object({ ok: z.literal(true) }))
 
 /** The plugin's own status bar items; spread into PLUGIN_HOST_API. */
 export const PLUGIN_STATUS_BAR_API = {

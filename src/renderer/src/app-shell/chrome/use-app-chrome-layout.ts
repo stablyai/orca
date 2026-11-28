@@ -1,5 +1,4 @@
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { getExplorerTreeView } from '@/store/slices/right-sidebar/right-sidebar-route'
 import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
@@ -31,7 +30,7 @@ export function useAppChromeLayout() {
   const sidebarOpen = savedSidebarOpen && !listHiddenByRailPage
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const rightSidebarExplorerView = useAppStore(getExplorerTreeView)
+  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const appRailVisible = useAppStore(selectAppRailVisible)

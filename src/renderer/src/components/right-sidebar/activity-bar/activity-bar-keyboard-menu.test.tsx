@@ -9,7 +9,7 @@ import type { ActivityBarItem } from './activity-bar-buttons'
 const item: ActivityBarItem = { id: 'explorer', title: 'Explorer', icon: () => null, shortcut: '' }
 afterEach(cleanup)
 
-it.each(['ContextMenu', 'F10'])('opens the tab menu with %s', (key) => {
+it.each(['ContextMenu', 'F10'])('opens the tab menu with %s', async (key) => {
   render(
     <DndContext>
       <RightSidebarTopActivityBar
@@ -29,7 +29,7 @@ it.each(['ContextMenu', 'F10'])('opens the tab menu with %s', (key) => {
   const button = screen.getByRole('button', { name: 'Explorer' })
   button.focus()
   fireEvent.keyDown(button, { key, shiftKey: key === 'F10' })
-  expect(screen.getByRole('menuitem', { name: 'Reset tab order' })).toBeTruthy()
+  expect(await screen.findByRole('menuitem', { name: 'Reset tab order' })).toBeTruthy()
 })
 
 it('focuses the neighbouring tab after hiding with the keyboard', async () => {
@@ -61,14 +61,17 @@ it('focuses the neighbouring tab after hiding with the keyboard', async () => {
   const button = screen.getByRole('button', { name: 'Plugin' })
   button.focus()
   fireEvent.keyDown(button, { key: 'F10', shiftKey: true })
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Hide' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide' }))
   await waitFor(() =>
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Explorer' }))
   )
   useAppStore.setState({ activityBarHidden: [], rightSidebarEffectiveTab: null })
 })
 
-function renderHideWithDelayedFrames(): { flushFrames: () => void; restore: () => void } {
+async function renderHideWithDelayedFrames(): Promise<{
+  flushFrames: () => void
+  restore: () => void
+}> {
   const frames: FrameRequestCallback[] = []
   const spy = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
     frames.push(cb)
@@ -105,7 +108,7 @@ function renderHideWithDelayedFrames(): { flushFrames: () => void; restore: () =
   const button = screen.getByRole('button', { name: 'Plugin' })
   button.focus()
   fireEvent.keyDown(button, { key: 'F10', shiftKey: true })
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Hide' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide' }))
   return {
     flushFrames: () => {
       while (frames.length > 0) {
@@ -119,8 +122,8 @@ function renderHideWithDelayedFrames(): { flushFrames: () => void; restore: () =
   }
 }
 
-it('keeps composer focus taken between hiding and the pending focus handoff', () => {
-  const { flushFrames, restore } = renderHideWithDelayedFrames()
+it('keeps composer focus taken between hiding and the pending focus handoff', async () => {
+  const { flushFrames, restore } = await renderHideWithDelayedFrames()
   const composer = screen.getByRole('textbox', { name: 'Composer' })
   composer.focus()
   flushFrames()
@@ -129,15 +132,15 @@ it('keeps composer focus taken between hiding and the pending focus handoff', ()
   restore()
 })
 
-it('lands the pending hide handoff on the neighbour when focus is not taken', () => {
-  const { flushFrames, restore } = renderHideWithDelayedFrames()
+it('lands the pending hide handoff on the neighbour when focus is not taken', async () => {
+  const { flushFrames, restore } = await renderHideWithDelayedFrames()
   flushFrames()
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Explorer' }))
   cleanup()
   restore()
 })
 
-it('disables Move right on the last strip tab while More holds the rest', () => {
+it('disables Move right on the last strip tab while More holds the rest', async () => {
   const checks: ActivityBarItem = { id: 'checks', title: 'Checks', icon: () => null, shortcut: '' }
   const overflowed: ActivityBarItem = {
     id: 'plugin:test/panel',
@@ -170,13 +173,13 @@ it('disables Move right on the last strip tab while More holds the rest', () => 
   const button = screen.getByRole('button', { name: 'Checks' })
   button.focus()
   fireEvent.keyDown(button, { key: 'F10', shiftKey: true })
-  expect(screen.getByRole('menuitem', { name: 'Move right' }).getAttribute('aria-disabled')).toBe(
-    'true'
-  )
+  expect(
+    (await screen.findByRole('menuitem', { name: 'Move right' })).getAttribute('aria-disabled')
+  ).toBe('true')
 })
 
-it('keeps focus moved into an unrelated menu before the pending handoff runs', () => {
-  const { flushFrames, restore } = renderHideWithDelayedFrames()
+it('keeps focus moved into an unrelated menu before the pending handoff runs', async () => {
+  const { flushFrames, restore } = await renderHideWithDelayedFrames()
   const unrelatedMenu = document.createElement('div')
   unrelatedMenu.setAttribute('role', 'menu')
   const search = document.createElement('input')

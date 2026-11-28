@@ -13,7 +13,6 @@ import { useForceReconnect } from '../../transport/connection/host-client-hooks'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
 import { useHostDisplay } from '../../host-descriptors/use-host-display'
 import { useHostProfile } from '../../host-catalog/use-host-profile'
-import { translate } from '../../i18n/mobile-i18n'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { clearMobileTasksSearch } from '../screen/mobile-tasks-search-control'
 
@@ -44,11 +43,12 @@ export function renderMobileTasksListState(
   itemCount: number,
   bottomBarHeight: number
 ) {
+  const { t } = model
   if (model.loading) {
     return (
       <MobileStateView
         loading
-        title={translate('tasks.listState.loading', 'Loading tasks…')}
+        title={t('tasks.listState.loading', 'Loading tasks…')}
         bottomInset={bottomBarHeight}
       />
     )
@@ -83,12 +83,13 @@ export function renderMobileTasksSupportState(
   model: ConnectionPresentationModel,
   bottomBarHeight: number
 ) {
+  const { t } = model
   if (model.tasksUnsupported) {
     return (
       <MobileStateView
         icon={CircleAlert}
-        title={translate('tasks.listSurface.updateDesktopTitle', 'Update Orca on this host')}
-        message={translate(
+        title={t('tasks.listSurface.updateDesktopTitle', 'Update Orca on this host')}
+        message={t(
           'tasks.listSurface.updateDesktopMessage',
           'This mobile Tasks view needs a newer Orca on this host.'
         )}
@@ -111,7 +112,7 @@ export function renderMobileTasksSupportState(
   return (
     <MobileStateView
       loading
-      title={translate('tasks.listState.loading', 'Loading tasks…')}
+      title={t('tasks.listState.loading', 'Loading tasks…')}
       bottomInset={bottomBarHeight}
     />
   )

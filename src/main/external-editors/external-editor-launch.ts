@@ -39,6 +39,7 @@ export type ExternalEditorShellLaunchSpec = {
   hideWindowsConsole: boolean
   spawnCmd: string
   spawnArgs: string[]
+  windowsVerbatimArguments?: boolean
 }
 
 export type ExternalEditorLaunchSpec =
@@ -180,7 +181,9 @@ function buildShellLaunchSpec(
       kind: 'shell',
       hideWindowsConsole: !shouldShowWindowsConsole(command, platform, { shellCommand: true }),
       spawnCmd: getCmdExePath(),
-      spawnArgs: ['/d', '/s', '/c', shellCommand]
+      // cmd does not understand Node's backslash quote escaping; /s strips only these outer quotes.
+      spawnArgs: ['/d', '/s', '/c', `"${shellCommand}"`],
+      windowsVerbatimArguments: true
     }
   }
   return {
@@ -244,10 +247,19 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
     env: process.platform === 'linux' ? envWithoutAppImageRuntime(process.env) : undefined
   } as const
   if (launchSpec.kind === 'shell') {
-    const { spawnCmd, spawnArgs, hideWindowsConsole } = launchSpec
+    const { spawnCmd, spawnArgs, hideWindowsConsole, windowsVerbatimArguments } = launchSpec
     return hideWindowsConsole
-      ? spawnProcess({ program: spawnCmd, args: spawnArgs, ...detachedOptions })
-      : spawn(spawnCmd, spawnArgs, { ...detachedOptions, windowsHide: false })
+      ? spawnProcess({
+          program: spawnCmd,
+          args: spawnArgs,
+          windowsVerbatimArguments,
+          ...detachedOptions
+        })
+      : spawn(spawnCmd, spawnArgs, {
+          ...detachedOptions,
+          windowsHide: false,
+          windowsVerbatimArguments
+        })
   }
   if (launchSpec.hideWindowsConsole && !launchSpec.detachedGui) {
     // process-host preserves quoting for batch launchers and arguments containing spaces.

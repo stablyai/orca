@@ -1,3 +1,4 @@
+import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import { buildRuntimeClientBrowserTabs } from './build-runtime-client-browser-tabs'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/restoration/mobile-session-publication-preservation'
@@ -93,17 +94,15 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
       getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
       getBrowserHostLeaseRegistry(this)
     )
-    return [...publishedServerTabs, ...publishedClientTabs]
+    return [...publishedServerTabs, ...publishedClientTabs].map(redactBrowserMetadata)
   }
 
   protected getPersistedUnifiedSessionTabProps(
     worktreeId: string,
     tabId: string
   ): Pick<Tab, 'color' | 'isPinned'> | null {
-    const tab =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-        (candidate) => candidate.id === tabId || candidate.entityId === tabId
-      ) ?? null
+    const tabs = this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]
+    const tab = tabs?.find((candidate) => candidate.id === tabId || candidate.entityId === tabId)
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
