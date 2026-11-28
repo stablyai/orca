@@ -257,12 +257,20 @@
 
 /* CSS highlights paint search Ranges without DOM mutation; only color/background are supported (markdown-preview-search.ts). */
 ::highlight(markdown-preview-search-match) {
-  background-color: color-mix(in srgb, var(--markdown-search-match) 50%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--text-link, var(--callout-note)) var(--search-match-mix),
+    transparent
+  );
   color: inherit;
 }
 
 ::highlight(markdown-preview-search-active-match) {
-  background-color: color-mix(in srgb, var(--markdown-search-match-active) 60%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--text-link, var(--callout-note)) var(--search-match-active-mix),
+    transparent
+  );
   color: inherit;
 }
 
