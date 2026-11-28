@@ -127,6 +127,9 @@ export function AntigravityAccountSection({
       <ListGroup style={styles.group}>
         {state.accounts.map((account) => {
           const active = state.activeAccountId === account.id
+          // agy on a saved login other than the selection can still be picked, which selects it.
+          const current =
+            active && (state.selectedAccountId === null || state.selectedAccountId === account.id)
           return (
             <ListRow
               key={account.id}
@@ -144,7 +147,7 @@ export function AntigravityAccountSection({
                 ) : undefined
               }
               selected={active}
-              onPress={switchBlocked || active ? undefined : () => onSelect(account.id)}
+              onPress={switchBlocked || current ? undefined : () => onSelect(account.id)}
             />
           )
         })}
