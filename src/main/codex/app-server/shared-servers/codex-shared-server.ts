@@ -211,7 +211,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         this.physicalConnection,
         lease,
         this.turns,
-        RELEASE_REQUEST_TIMEOUT_MS
+        RELEASE_REQUEST_TIMEOUT_MS,
+        this.keep.limited(this.physicalConnection)
       ))
     if (!writerStopped && !this.hasExited) {
       await this.stopIfAlone(lease)

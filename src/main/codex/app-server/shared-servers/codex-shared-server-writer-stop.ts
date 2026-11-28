@@ -1,9 +1,39 @@
+import { mapSettledWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
+import { readRecord } from '../codex-item-field-readers'
+import { readCodexTurnStatus } from '../codex-structured-thread-facts'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexSharedServerTurns } from './codex-shared-server-turns'
 
 /** How long an interrupted turn has to report turn/completed before Stop counts it unproven. */
 const TURN_STOP_PROOF_MS = 10_000
+
+type Reads = Pick<CodexAppServerConnection, 'request'>
+
+/** A restored chat's turns may have started before this app attached, so no notification named
+ *  them: each thread with none known is read. False when a read failed (its stop is unproven). */
+async function seedRecoveredTurns(
+  reads: Reads,
+  lease: CodexSharedServerLease,
+  turns: CodexSharedServerTurns,
+  timeoutMs: number
+): Promise<boolean> {
+  const unknown = [...lease.threads].filter((threadId) => turns.runningOn(threadId) === undefined)
+  const settled = await mapSettledWithConcurrency(unknown, 4, async (threadId) => {
+    const page = readRecord(
+      await reads.request(
+        'thread/turns/list',
+        { threadId, sortDirection: 'desc', limit: 1 },
+        { timeoutMs }
+      )
+    )
+    const turn = readRecord(Array.isArray(page.data) ? page.data[0] : null)
+    if (typeof turn.id === 'string' && readCodexTurnStatus(turn) === 'inProgress') {
+      turns.noteStarted(threadId, turn.id)
+    }
+  })
+  return settled.every((read) => read.status === 'fulfilled')
+}
 
 /** Interrupts every turn on the chat's threads, the helpers it announces meanwhile included;
  *  the chat keeps routing them until each turn is proven over. */
@@ -11,9 +41,13 @@ export async function stopCodexLeaseWriter(
   physical: Pick<CodexAppServerConnection, 'request'>,
   lease: CodexSharedServerLease,
   turns: CodexSharedServerTurns,
-  requestTimeoutMs: number
+  requestTimeoutMs: number,
+  /** The server's shared, limited reads, for a restored chat's turns. */
+  reads: Reads = physical
 ): Promise<boolean> {
   const options = { timeoutMs: requestTimeoutMs }
+  const seeded =
+    lease.restored === null || (await seedRecoveredTurns(reads, lease, turns, requestTimeoutMs))
   // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
   await turns.waitUntil(
     () => lease.pendingOpens.size === 0 && !turns.anyStartPending([...lease.threads]),
@@ -47,6 +81,7 @@ export async function stopCodexLeaseWriter(
   }
   const threads = [...lease.threads, ...lease.abandonedThreads]
   return (
+    seeded &&
     lease.pendingOpens.size === 0 &&
     !turns.anyStartPending(threads) &&
     threads.every((threadId) => turns.runningOn(threadId) === undefined)

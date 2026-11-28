@@ -10,7 +10,10 @@ import {
   SOFT_READ_TIMEOUT_MS
 } from '../../structured/threads/codex-kept-loaded-threads'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
-import { endCodexSharedThreads } from './codex-shared-server-thread-end'
+import {
+  endCodexSharedThreads,
+  type CodexSharedThreadsEnded
+} from './codex-shared-server-thread-end'
 import { CODEX_SHARED_REATTACH_READS } from './codex-shared-server-reattach'
 import { mapSettledWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
@@ -31,6 +34,8 @@ export type CodexKeptServer = {
   readonly physicalConnection: CodexAppServerConnection | null
   readonly relayed?: { chatKey: string } | undefined
   readonly exited: boolean
+  /** Takes no new chats; once its chats leave it stops, and its exit reaps what's left. */
+  draining: boolean
   readonly pid: number | undefined
   readonly sweep?: CodexSharedServerProcessSweep | undefined
   /** Re-judges the server once a chat or its held threads left. */
@@ -233,9 +238,12 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
       if (threads.length === 0) {
         break
       }
-      if (!(await this.endThreads(threads, workload))) {
+      const result = await this.endThreads(threads, workload)
+      if (!result.interrupted) {
         return false
       }
+      // As a chat's own close does: commands not proven gone are reaped with the server.
+      this.server.draining ||= !result.workloadGone
       threads.forEach((threadId) => ended.add(threadId))
     }
     recovery.drop(recovery.release(sessionId))
@@ -278,10 +286,13 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   }
 
   /** Threads no chat will take back: their turns and commands end, and Codex lets them go. */
-  async endThreads(threads: readonly string[], workload: string | null): Promise<boolean> {
+  async endThreads(
+    threads: readonly string[],
+    workload: string | null
+  ): Promise<CodexSharedThreadsEnded> {
     const connection = this.server.physicalConnection
     if (!connection) {
-      return threads.length === 0
+      return { interrupted: threads.length === 0, workloadGone: threads.length === 0 }
     }
     return endCodexSharedThreads({
       connection,
@@ -290,7 +301,7 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
       workload,
       serverPid: this.server.pid,
       ...(this.server.sweep ? { sweep: this.server.sweep } : {})
-    }).catch(() => false)
+    }).catch(() => ({ interrupted: false, workloadGone: false }))
   }
 
   private async letGo(released: CodexRecoveredGroup | null): Promise<void> {
