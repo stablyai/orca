@@ -10,14 +10,33 @@ import {
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { StructuredAgentListedSelection } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
-import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
+import {
+  pendingAcpResolution,
+  type AcpAdvertisedEfforts,
+  type AcpDialect,
+  type AcpRequestPresentation
+} from './acp-dialect'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
 import { antigravityExecutorErrorWords } from './antigravity-executor-error'
 import { antigravityQuotaFailure, isAntigravityQuotaNotice } from './antigravity-quota-notice'
 import {
+  ANTIGRAVITY_EFFORT_CHOICES,
   ANTIGRAVITY_EFFORT_LEVELS,
   ANTIGRAVITY_LEVEL_SUFFIX
 } from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
+
+/** agy accepts --effort for these ids even though their model names carry no level suffix (#50508). */
+const ANTIGRAVITY_ORCHESTRATOR_MODEL = /^gemini-pro-orchestrator(?:-|$)/
+
+function antigravityModelEfforts(model: Pick<ModelInfo, 'modelId'>): AcpAdvertisedEfforts {
+  if (!ANTIGRAVITY_ORCHESTRATOR_MODEL.test(model.modelId)) {
+    return { efforts: [], effortsKnown: false }
+  }
+  return {
+    efforts: ANTIGRAVITY_EFFORT_CHOICES.map((choice) => ({ ...choice })),
+    defaultEffort: 'high'
+  }
+}
 
 // The server's question forms open with only a count; each field's title is the real question.
 const QUESTION_FORM_MESSAGE = /^The agent has (?:a question|\d+ questions)\.$/
@@ -277,6 +296,9 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
   familyEfforts,
+  modelEfforts: antigravityModelEfforts,
+  // agy accepts --effort independently of the model; the CLI clamps levels a model does not support.
+  clampsUnlistedEffort: true,
   listedSelection: antigravityListedFamilySelection
 }
 
