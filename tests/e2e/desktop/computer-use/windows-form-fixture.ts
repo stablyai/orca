@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
@@ -9,7 +8,7 @@ import { quotePowerShellLiteral } from '../../../../src/shared/shell/launch/powe
 export type WindowFixture = { pid: number; dir: string }
 
 // Test-owned WinForms window; `onShown` runs on its UI thread once the window is visible.
-export async function launchWindowFixture(formSetup: string, onShown = ''): Promise<WindowFixture> {
+export async function launchWindowFixture(formSetup: string, onShown = '') {
   const dir = await mkdtemp(join(tmpdir(), 'orca-computer-windows-fixture-'))
   const readyPath = join(dir, 'ready')
   const scriptPath = join(dir, 'fixture.ps1')
@@ -21,7 +20,7 @@ export async function launchWindowFixture(formSetup: string, onShown = ''): Prom
       'Add-Type -AssemblyName System.Drawing',
       '$form = New-Object System.Windows.Forms.Form',
       formSetup,
-      `$form.Add_Shown({ $form.Refresh(); [IO.File]::WriteAllText(${quotePowerShellLiteral(readyPath)}, 'ready'); ${onShown} })`,
+      `$form.Add_Shown({ $form.Refresh(); [IO.File]::WriteAllText(${quotePowerShellLiteral(readyPath)}, [string][int64]$form.Handle); ${onShown} })`,
       '[System.Windows.Forms.Application]::Run($form)'
     ].join('\n')}`,
     'utf8'
@@ -46,15 +45,19 @@ export async function launchWindowFixture(formSetup: string, onShown = ''): Prom
   }
   const fixture = { pid: child.pid, dir }
   try {
-    await vi.waitFor(() => expect(existsSync(readyPath)).toBe(true), {
-      timeout: 15_000,
-      interval: 100
-    })
+    const windowId = await vi.waitFor(
+      async () => {
+        const handle = Number(await readFile(readyPath, 'utf8'))
+        expect(handle).toBeGreaterThan(0)
+        return handle
+      },
+      { timeout: 15_000, interval: 100 }
+    )
+    return { ...fixture, windowId }
   } catch (error) {
     await closeWindowFixture(fixture)
     throw error
   }
-  return fixture
 }
 
 // A window whose UI thread stops pumping once shown. Win32 Sleep, because Start-Sleep waits on an STA
