@@ -160,6 +160,11 @@ export class ProviderRelayWorkReader {
     } catch {
       return []
     }
+    return this.readValue(value)
+  }
+
+  /** A message already parsed (a reader that has it needn't parse its line again). */
+  readValue(value: unknown): ProviderRelayWorkChange[] {
     if (typeof value !== 'object' || value === null) {
       return []
     }

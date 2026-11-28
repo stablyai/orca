@@ -34,6 +34,7 @@ export async function startCodexSharedServer(
   const connection = await connect(server.spec.launch, {
     onNotification: (method, params) => {
       server.turns.observe(method, params)
+      server.keep.work.observe(method, params)
       server.router.onNotification(method, params)
     },
     onServerRequest: (request) => server.router.onServerRequest(request),

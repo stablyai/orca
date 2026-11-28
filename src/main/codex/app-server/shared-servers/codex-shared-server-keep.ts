@@ -73,7 +73,6 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
   readonly work = new CodexSharedServerOpenWork()
   /** Handed to its daemon while the app runs: held requests wait there, never answered here. */
   toDaemon = false
-  observe = (line: string): void => this.work.observe(line)
 
   /** Every metadata read on this server (reattach, retries, cleanup) shares these four permits. */
   private readonly readPermits = new PrioritySemaphore(CODEX_SHARED_REATTACH_READS)

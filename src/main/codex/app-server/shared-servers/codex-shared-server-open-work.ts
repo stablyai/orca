@@ -8,8 +8,8 @@ import type { CodexSharedServerTurns } from './codex-shared-server-turns'
 type OpenWork = Record<string, string[][]>
 
 /**
- * Every chat's open work on one relayed shared server, held chats' included, read from each line
- * with Codex's work markers (starts and ends) as the daemon reads a detached relay's. Seeded with
+ * Every chat's open work on one relayed shared server, held chats' included, read from each
+ * notification with Codex's work markers (starts and ends) as the daemon reads a detached relay's. Seeded with
  * what the daemon carried at the attach; handed to the daemon when the app lets the server go.
  */
 export class CodexSharedServerOpenWork {
@@ -23,8 +23,9 @@ export class CodexSharedServerOpenWork {
     }
   }
 
-  observe(line: string): void {
-    for (const change of this.reader.read(line)) {
+  /** Each notification the server read, as it parsed it: its line is never parsed again. */
+  observe(method: string, params: unknown): void {
+    for (const change of this.reader.readValue({ method, params })) {
       this.work.apply(change)
     }
   }
