@@ -97,7 +97,11 @@ export function rewriteSliceRecords(
     if (scope === 'selection') {
       if (typeof kept === 'string' && sliceRows.has(kept) && kept !== saved) {
         next ??= { ...storedFields }
-        next[field] = saved
+        if (saved === undefined) {
+          delete next[field]
+        } else {
+          next[field] = saved
+        }
       }
       continue
     }

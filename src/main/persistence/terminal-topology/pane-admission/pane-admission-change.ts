@@ -35,12 +35,7 @@ export function patchSlicedSession(
   const workspaces = [
     ...new Set([...Object.keys(from.tabsByWorktree ?? {}), ...Object.keys(to.tabsByWorktree ?? {})])
   ]
-  const patched = withoutHiddenCopies(
-    patchStoredSession(stored, from, to, undefined, workspaces),
-    from,
-    to,
-    workspaces
-  )
+  const patched = patchStoredSession(stored, from, to, undefined, workspaces)
   // The whole save drops an emptied map only once no workspace holds an entry.
   const fields: Record<string, unknown> = patched
   const dropped = emptied.filter((field) => {
@@ -54,36 +49,6 @@ export function patchSlicedSession(
   dropped.forEach((field) => delete trimmed[field])
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the patched session minus empty maps.
   return trimmed as unknown as WorkspaceSessionState
-}
-
-const rowIds = (session: WorkspaceSessionState): Set<string> =>
-  new Set(Object.values(session.tabsByWorktree ?? {}).flatMap((rows) => rows.map((row) => row.id)))
-
-/** Window-owned builds rewrote the partition, which also dropped copies of a removed row the Loader had hidden in other workspaces; a kept copy would bring the row back on the next load. */
-function withoutHiddenCopies(
-  patched: WorkspaceSessionState,
-  before: WorkspaceSessionState,
-  after: WorkspaceSessionState,
-  workspaces: readonly string[]
-): WorkspaceSessionState {
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    return patched
-  }
-  const kept = rowIds(after)
-  const removed = [...rowIds(before)].filter((id) => !kept.has(id))
-  if (removed.length === 0) {
-    return patched
-  }
-  let tabsByWorktree = patched.tabsByWorktree
-  for (const key of workspaces) {
-    const rows = tabsByWorktree[key] ?? []
-    const visible = new Set((before.tabsByWorktree?.[key] ?? []).map((row) => row.id))
-    const left = rows.filter((row) => visible.has(row.id) || !removed.includes(row.id))
-    if (left.length !== rows.length) {
-      tabsByWorktree = { ...tabsByWorktree, [key]: left }
-    }
-  }
-  return tabsByWorktree === patched.tabsByWorktree ? patched : { ...patched, tabsByWorktree }
 }
 
 /**
@@ -111,17 +76,7 @@ export function loadPaneChange(
         ? patchStoredSession(session, before, after)
         : ORCA_LAYOUT_OWNER_IS_MAIN
           ? patchSlicedSession(session, before, after)
-          : withoutHiddenCopies(
-              rewriteSliceRecords(patchSlicedSession(session, before, after), slice, after),
-              before,
-              after,
-              [
-                ...new Set([
-                  ...Object.keys(before.tabsByWorktree),
-                  ...Object.keys(after.tabsByWorktree)
-                ])
-              ]
-            )
+          : rewriteSliceRecords(patchSlicedSession(session, before, after), slice, after)
       return patched === session ? null : patched
     }
   }

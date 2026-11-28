@@ -3,19 +3,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import {
+  loadWorkspaceLayoutWithoutReport,
+  workspaceKeys
+} from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import type { CommandOf } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type * as Crypto from 'node:crypto'
 import type * as SliceLoad from './pane-admission-slice-load'
+import { SLICE_FIELD_SCOPES } from './pane-admission-slice-records'
 import {
   admitPaneToSession,
   withdrawPaneFromSession,
   type TerminalPaneAdmission
 } from './terminal-pane-admission'
 
-const mode = vi.hoisted(() => ({ main: true, slice: true, sliced: 0, minted: 0 }))
+const mode = vi.hoisted(() => ({
+  main: true,
+  slice: true,
+  sliced: 0,
+  minted: 0,
+  lastSlice: undefined as WorkspaceSessionState | undefined
+}))
 
 // Both runs must mint the same ids for a new group to compare.
 vi.mock('node:crypto', async (importOriginal) => ({
@@ -41,6 +51,7 @@ vi.mock('./pane-admission-slice-load', async (importOriginal) => {
       }
       const load = actual.loadPaneCommandLayout(...args)
       mode.sliced += load.slice ? 1 : 0
+      mode.lastSlice = load.slice
       return load
     }
   }
@@ -293,6 +304,31 @@ function rewritten(
   return records
 }
 
+/** Whether a `field.key` record is one the slice loaded: its own workspaces' entries and its rows' and panes' records. */
+function loadedBy(slice: WorkspaceSessionState): (record: string) => boolean {
+  const workspaces = new Set(workspaceKeys(slice))
+  const fields: Record<string, unknown> = slice
+  return (record) => {
+    const dot = record.indexOf('.')
+    if (dot === -1) {
+      return false
+    }
+    const [field, key] = [record.slice(0, dot), record.slice(dot + 1)]
+    const map = fields[field]
+    const scope: unknown = Object.hasOwn(SLICE_FIELD_SCOPES, field)
+      ? Object.entries(SLICE_FIELD_SCOPES).find(([name]) => name === field)?.[1]
+      : undefined
+    if (scope === 'workspace' || scope === 'workspace-selection') {
+      return workspaces.has(key)
+    }
+    return isRecord(map) && Object.hasOwn(map, key)
+  }
+}
+
+function pick(records: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(keys.map((key) => [key, records[key]]))
+}
+
 function loadedLayout(session: WorkspaceSessionState) {
   return loadWorkspaceLayoutWithoutReport(LOCAL_EXECUTION_HOST_ID, session, nameBasedLoadContext())
     .layout
@@ -331,6 +367,12 @@ describe.each([
       expect(loadedLayout(sliced.session)).toEqual(loadedLayout(whole.session))
       expect(rewritten(session, sliced.session, whole.session)).toEqual(
         rewritten(session, sliced.session, sliced.session)
+      )
+      // And every record the whole rewrite changed among those the slice loaded, so none is left stale.
+      const inSlice = loadedBy(mode.lastSlice!)
+      const fixed = Object.keys(rewritten(session, whole.session, whole.session)).filter(inSlice)
+      expect(pick(rewritten(session, whole.session, sliced.session), fixed)).toEqual(
+        pick(rewritten(session, whole.session, whole.session), fixed)
       )
     }
   })
