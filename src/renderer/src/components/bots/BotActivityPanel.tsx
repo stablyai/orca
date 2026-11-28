@@ -14,6 +14,7 @@ import { useBotNeedsYouCount, useBotNow } from './use-bot-now'
 import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotPanelHeader } from './BotPanelHeader'
+import { BOT_PANEL_STICKY_HEADER_CLEARANCE, BotPanelStickyHeader } from './BotPanelStickyHeader'
 import {
   botAutomationCardRows,
   botNextRun,
@@ -196,23 +197,26 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
       // The bot row's hover card moves focus here when it opens the bot's Home.
       data-bot-home-panel=""
       // The wider left padding is the sidebar's resize grab area, 4 px clear of every row.
-      className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto pl-3.5 pr-2 py-3 outline-none"
+      // `relative`: the pinned header's sentinel sits at the scroller's top.
+      className="@container scrollbar-sleek relative flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto pl-3.5 pr-2 py-3 outline-none"
       {...gutterResize}
     >
       {/* Outside the fieldset, so its settings open offline too and say what's unavailable. */}
-      <BotPanelHeader
-        bot={bot}
-        now={{ needsYou, working: now.working }}
-        quiet={quiet}
-        picture={picture}
-        offline={offline}
-        filter={
-          read && read.items.length > 0 ? (
-            <BotItemsFilterButton items={read.items} filter={filter} onFilter={setFilter} />
-          ) : null
-        }
-      />
-      <fieldset disabled={offline} className="contents">
+      <BotPanelStickyHeader>
+        <BotPanelHeader
+          bot={bot}
+          now={{ needsYou, working: now.working }}
+          quiet={quiet}
+          picture={picture}
+          offline={offline}
+          filter={
+            read && read.items.length > 0 ? (
+              <BotItemsFilterButton items={read.items} filter={filter} onFilter={setFilter} />
+            ) : null
+          }
+        />
+      </BotPanelStickyHeader>
+      <fieldset disabled={offline} className={`contents ${BOT_PANEL_STICKY_HEADER_CLEARANCE}`}>
         {read ? <BotItemsFilterChips filter={filter} onFilter={setFilter} /> : null}
         {read && items.refreshFailed ? <BotItemsReadFailed stale onRetry={items.retry} /> : null}
         {/* Asks lead Needs you in every item-read state: loading, failed or empty. */}
