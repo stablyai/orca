@@ -1,6 +1,7 @@
 import type * as pty from 'node-pty'
 import type { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
 import { readPtySlavePath } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
+import { holdStartupInputWhileShellInitializes } from '../../pty/shell-startup/shell-startup-deadline-hold'
 import {
   createShellPromptReadinessProbe,
   type ShellPromptReadinessProbe
@@ -36,6 +37,7 @@ export function createLocalPtyShellReadinessSession(args: {
   const { id, spawn, plan, env, proc, startupIngress } = args
   let resolveShellReady: ((signal: ShellReadySignal) => void) | null = null
   let shellReadyTimeout: ReturnType<typeof setTimeout> | null = null
+  let cancelDeadlineHold: (() => void) | null = null
   let shellStartupPid: number | null = null
   let shellPromptReadinessProbe: ShellPromptReadinessProbe | null = null
   let shellStartupOutputScanState = plan.shellReadyLaunch?.supportsReadyMarker
@@ -54,6 +56,8 @@ export function createLocalPtyShellReadinessSession(args: {
       clearTimeout(shellReadyTimeout)
       shellReadyTimeout = null
     }
+    cancelDeadlineHold?.()
+    cancelDeadlineHold = null
     shellPromptReadinessProbe?.dispose()
     shellPromptReadinessProbe = null
     const resolve = resolveShellReady
@@ -90,8 +94,14 @@ export function createLocalPtyShellReadinessSession(args: {
   if (spawn.command) {
     if (plan.shellReadyLaunch?.supportsReadyMarker) {
       shellReadyTimeout = setTimeout(() => {
-        releaseHeldShellReadyBytes()
-        finishShellReady({ postMarkerBytesObserved: false })
+        shellReadyTimeout = null
+        cancelDeadlineHold = holdStartupInputWhileShellInitializes(
+          { slavePath: readPtySlavePath(proc), shellPid: shellStartupPid },
+          () => {
+            releaseHeldShellReadyBytes()
+            finishShellReady({ postMarkerBytesObserved: false })
+          }
+        )
       }, STARTUP_COMMAND_READY_MAX_WAIT_MS)
     } else {
       finishShellReady({ postMarkerBytesObserved: false })
@@ -104,6 +114,8 @@ export function createLocalPtyShellReadinessSession(args: {
         clearTimeout(shellReadyTimeout)
         shellReadyTimeout = null
       }
+      cancelDeadlineHold?.()
+      cancelDeadlineHold = null
       releaseHeldShellReadyBytes()
       startupCommandCleanup?.()
       startupCommandCleanup = null
@@ -140,6 +152,8 @@ export function createLocalPtyShellReadinessSession(args: {
         clearTimeout(shellReadyTimeout)
         shellReadyTimeout = null
       }
+      cancelDeadlineHold?.()
+      cancelDeadlineHold = null
       startupCommandCleanup?.()
       shellPromptReadinessProbe?.dispose()
       shellPromptReadinessProbe = null
