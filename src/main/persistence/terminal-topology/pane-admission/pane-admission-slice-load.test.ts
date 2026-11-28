@@ -142,12 +142,31 @@ function fleet(): WorkspaceSessionState {
   session.terminalLayoutsByTabId.tC!.ptyIdsByLeafId = { [leaf(271)]: 'pty-27' }
   session.terminalLayoutsByTabId.tD!.ptyIdsByLeafId = { [leaf(272)]: 'pty-27' }
   session.activeTabId = 'tD'
-  session.activeTabIdByWorktree = { ...session.activeTabIdByWorktree, [key(27)]: 'tD' }
+  session.activeTabIdByWorktree = {
+    ...session.activeTabIdByWorktree,
+    [key(27)]: 'tD',
+    // A legacy selection under a key no workspace uses.
+    'legacy-key': 'tD'
+  }
   // The withdrawn pane holds the slice's only incarnation; another workspace's must survive.
   session.terminalPtyIncarnationsByPaneKey = {
     [`t22:${leaf(122)}`]: 'incarnation-22',
-    [`t3:${leaf(3)}`]: 'incarnation-3'
+    [`t3:${leaf(3)}`]: 'incarnation-3',
+    // A legacy recovery record for a pane no longer in t3's tree; whole loads carry it.
+    't3:0': 'legacy-incarnation'
   }
+  // A layout no terminal row owns, named only by a tab-bar entry; whole loads carry it.
+  session.terminalLayoutsByTabId.orphan = {
+    root: { type: 'leaf', leafId: leaf(30) },
+    activeLeafId: leaf(30),
+    expandedLeafId: null,
+    ptyIdsByLeafId: {}
+  }
+  session.unifiedTabs![key(3)]!.push({
+    ...session.unifiedTabs![key(3)]![0]!,
+    id: 'orphan',
+    entityId: 'orphan'
+  })
   session.closedTerminalTabTombstonesByTabId = {
     'closed-tab': { closedAt: Date.now(), worktreeId: key(5) }
   }
@@ -334,4 +353,30 @@ it('keeps the redirect to the tab-bar terminal when a sliced window-owned write 
     whole.session?.activeTabIdByWorktree?.[key(27)]
   )
   expect(sliced.session?.activeTabId).toBe(whole.session?.activeTabId)
+  expect(whole.session?.activeTabIdByWorktree?.['legacy-key']).not.toBe('tD')
+  expect(sliced.session?.activeTabIdByWorktree?.['legacy-key']).toBe(
+    whole.session?.activeTabIdByWorktree?.['legacy-key']
+  )
+})
+
+it('keeps records the slice never loaded when a sliced window-owned write rewrites its own', () => {
+  mode.main = false
+  vi.useFakeTimers({ now: 1_800_000_000_000, toFake: ['Date'] })
+  const session = fleet()
+  mode.slice = false
+  mode.minted = 0
+  const whole = admit(session, create(key(3), 'new-tab'))()
+  mode.slice = true
+  mode.minted = 0
+  mode.sliced = 0
+  const sliced = admit(session, create(key(3), 'new-tab'))()
+  vi.useRealTimers()
+
+  expect(mode.sliced).toBe(1)
+  expect(whole.session?.terminalPtyIncarnationsByPaneKey?.['t3:0']).toBe('legacy-incarnation')
+  expect(sliced.session?.terminalPtyIncarnationsByPaneKey?.['t3:0']).toBe('legacy-incarnation')
+  expect(whole.session?.terminalLayoutsByTabId.orphan).toBeDefined()
+  expect(sliced.session?.terminalLayoutsByTabId.orphan).toEqual(
+    whole.session?.terminalLayoutsByTabId.orphan
+  )
 })

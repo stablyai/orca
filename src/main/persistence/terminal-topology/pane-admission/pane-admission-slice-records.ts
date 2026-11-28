@@ -7,6 +7,8 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 /** How a field's records are keyed; `partition` fields hold no record a slice owns, with the reason. */
 export type SliceFieldScope =
   | 'workspace'
+  /** Keyed by workspace, with values naming tabs: the Loader follows a dropped row under any key. */
+  | 'workspace-selection'
   | 'row'
   | 'pane'
   | 'closed-tab'
@@ -39,7 +41,7 @@ export const SLICE_FIELD_SCOPES = {
   activeTabTypeByWorktree: 'workspace',
   browserUrlHistory: CARRIED,
   workspaceDocHistory: CARRIED,
-  activeTabIdByWorktree: 'workspace',
+  activeTabIdByWorktree: 'workspace-selection',
   unifiedTabs: 'workspace',
   tabGroups: 'workspace',
   tabGroupLayouts: 'workspace',
@@ -68,47 +70,23 @@ function rowIdsOf(session: WorkspaceSessionState): Set<string> {
   for (const rows of Object.values(session.tabsByWorktree ?? {})) {
     rows.forEach((row) => ids.add(row.id))
   }
-  for (const tabs of Object.values(session.unifiedTabs ?? {})) {
-    tabs.forEach((tab) => ids.add(tab.id).add(tab.entityId))
-  }
   return ids
 }
 
-/** The keys of `field` the slice owns: its workspaces', rows' and panes' entries and its closed tabs. */
-function ownedKeys(
-  scope: Exclude<SliceFieldScope, 'selection' | { partition: string }>,
-  candidates: Iterable<string>,
-  owned: { workspaces: Set<string>; rows: Set<string>; closed: Set<string> }
-): string[] {
-  return [...candidates].filter((key) => {
-    switch (scope) {
-      case 'workspace':
-        return owned.workspaces.has(key)
-      case 'row':
-        return owned.rows.has(key)
-      case 'pane':
-        return owned.rows.has(key.slice(0, key.lastIndexOf(':')))
-      case 'closed-tab':
-        return owned.closed.has(key)
-    }
-  })
-}
-
-/** Window-owned builds rewrote the partition from its load; rewrite the slice's own records from its save the same way and keep every other record as stored. */
+/**
+ * Window-owned builds rewrote the partition from its load; rewrite the slice's own records from its save the same way
+ * and keep every other record as stored. Invariant: the rewrite owns only keys the slice loaded or its save produced,
+ * never by prefix, so it cannot delete a record it never loaded.
+ */
 export function rewriteSliceRecords(
   stored: WorkspaceSessionState,
   slice: WorkspaceSessionState,
   after: WorkspaceSessionState
 ): WorkspaceSessionState {
-  const owned = {
-    workspaces: new Set([...workspaceKeys(slice), ...workspaceKeys(after)]),
-    rows: new Set([...rowIdsOf(slice), ...rowIdsOf(after)]),
-    closed: new Set([
-      ...Object.keys(slice.closedTerminalTabTombstonesByTabId ?? {}),
-      ...Object.keys(after.closedTerminalTabTombstonesByTabId ?? {})
-    ])
-  }
-  const [storedFields, savedFields]: Json[] = [stored, after]
+  const workspaces = new Set([...workspaceKeys(slice), ...workspaceKeys(after)])
+  const sliceRows = rowIdsOf(slice)
+  const savedRows = rowIdsOf(after)
+  const [storedFields, sliceFields, savedFields]: Json[] = [stored, slice, after]
   let next: Json | null = null
   for (const [field, scope] of Object.entries(SLICE_FIELD_SCOPES)) {
     if (typeof scope !== 'string') {
@@ -117,7 +95,7 @@ export function rewriteSliceRecords(
     const kept = storedFields[field]
     const saved = savedFields[field]
     if (scope === 'selection') {
-      if (typeof kept === 'string' && owned.rows.has(kept) && kept !== saved) {
+      if (typeof kept === 'string' && sliceRows.has(kept) && kept !== saved) {
         next ??= { ...storedFields }
         next[field] = saved
       }
@@ -125,12 +103,26 @@ export function rewriteSliceRecords(
     }
     const keptMap = isRecord(kept) ? kept : undefined
     const savedMap = isRecord(saved) ? saved : undefined
+    const loaded = isRecord(sliceFields[field]) ? sliceFields[field] : {}
+    const owns = (key: string): boolean => {
+      if (scope === 'workspace' || scope === 'workspace-selection') {
+        const value = keptMap?.[key]
+        // A selection naming a row the slice loaded and dropped follows the save under any key.
+        return (
+          workspaces.has(key) ||
+          (scope === 'workspace-selection' &&
+            typeof value === 'string' &&
+            sliceRows.has(value) &&
+            !savedRows.has(value))
+        )
+      }
+      return Object.hasOwn(loaded, key) || (savedMap !== undefined && Object.hasOwn(savedMap, key))
+    }
     let map: Json | null = null
-    for (const key of ownedKeys(
-      scope,
-      new Set([...Object.keys(keptMap ?? {}), ...Object.keys(savedMap ?? {})]),
-      owned
-    )) {
+    for (const key of new Set([...Object.keys(keptMap ?? {}), ...Object.keys(savedMap ?? {})])) {
+      if (!owns(key)) {
+        continue
+      }
       const value = savedMap?.[key]
       if (stableJson(value) !== stableJson(keptMap?.[key])) {
         map ??= { ...keptMap }

@@ -12,7 +12,7 @@ it('places every stored field, and every keyed record field is slice-owned or pa
       continue
     }
     if (/By(Worktree|WorktreeId|Workspace)$/.test(field)) {
-      expect(scope, field).toBe('workspace')
+      expect(['workspace', 'workspace-selection'], field).toContain(scope)
     } else if (field.endsWith('ByTabId')) {
       expect(['row', 'closed-tab'], field).toContain(scope)
     } else if (field.endsWith('ByPaneKey')) {
