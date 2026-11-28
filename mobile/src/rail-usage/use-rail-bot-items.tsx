@@ -150,12 +150,19 @@ export function useRailBotItems({
     if (!visible || uniqueClients.length === 0) {
       return
     }
-    const unsubscribes = uniqueClients.map((client) =>
-      subscribeRuntimeClientEvents(client, {
-        onReady: (replayed) => {
-          if (replayed) {
-            setReads((count) => count + 1)
+    const unsubscribes = uniqueClients.map((client) => {
+      // The subscription reports a reconnect's ready as a first ready, so remember the loss here.
+      let lost = false
+      return subscribeRuntimeClientEvents(client, {
+        onReady: () => {
+          if (!lost) {
+            return
           }
+          lost = false
+          setReads((count) => count + 1)
+        },
+        onLost: () => {
+          lost = true
         },
         onEvent: (event) => {
           if (event.type === 'botsChanged') {
@@ -163,7 +170,7 @@ export function useRailBotItems({
           }
         }
       })
-    )
+    })
     return () => {
       unsubscribes.forEach((unsubscribe) => unsubscribe())
     }

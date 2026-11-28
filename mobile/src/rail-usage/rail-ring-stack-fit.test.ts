@@ -69,6 +69,8 @@ describe('railRingStackFit', () => {
     const laid = rings(fit, 5)
     expect(laid[1].top - laid[0].labelBottom).toBe(8)
     expect(fit.height!).toBeLessThanOrEqual(200)
+    // An exact multiple of the pitch still has to reserve the extra point, or the stack is 1px past the band.
+    expect(railRingStackFit({ ...base, count: 5, room: 178 }).height).toBe(125)
     // The fade starts below the third label and above the fourth ring's top.
     expect(fit.height! - base.peek).toBeGreaterThanOrEqual(laid[2].labelBottom)
     expect(fit.height! - base.peek).toBeLessThanOrEqual(laid[3].top)
@@ -116,7 +118,7 @@ describe('railRingStackFit', () => {
       paddingTop: 12,
       clearGap: 8,
       gap: 13,
-      paddingBottom: 7,
+      paddingBottom: 17,
       height: 113,
       pitch: 54
     })

@@ -34,7 +34,11 @@ export function useRailBotItemOpeners({
     }
     const place = { pairedHostId: target.pairedHostId, executionHost: target.executionHost }
     if (home) {
-      openBotHome(place, target.bot)
+      let live = true
+      cancelRef.current = () => {
+        live = false
+      }
+      openBotHome(place, target.bot, { current: () => live })
       return
     }
     const opener = botCardChatOpener({
@@ -59,7 +63,7 @@ export function useRailBotItemOpeners({
             ? {}
             : { executionHost: target.executionHost })
         }),
-      home: (bot) => openBotHome(place, bot)
+      home: (bot, current) => openBotHome(place, bot, { current })
     })
     cancelRef.current = opener.cancel
     opener.open(target.bot, chatId)

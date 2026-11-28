@@ -222,6 +222,7 @@ export function RailBotItemsSheet({
                 })
               }}
               client={shownTargets[0]?.client ?? null}
+              clientOf={(ask) => askTargets.get(ask.key)?.client ?? null}
               onSkipFailed={showToast}
             />
           ) : (

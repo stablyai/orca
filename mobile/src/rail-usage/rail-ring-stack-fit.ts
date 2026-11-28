@@ -85,6 +85,7 @@ export function railRingStackFit(args: {
     return layout(paddingTop, gap, paddingBottom, null)
   }
   const tightBottom = Math.min(paddingBottom, 2)
+  const effectiveTop = tightenTop ? Math.min(paddingTop, minGap) : paddingTop
   if (gapCount > 0) {
     const tightGap = tightenTop
       ? Math.floor((room - items - tightBottom) / (gapCount + 1))
@@ -93,10 +94,9 @@ export function railRingStackFit(args: {
       const clear = Math.min(gap, tightGap)
       return layout(tightenTop ? Math.min(paddingTop, clear) : paddingTop, clear, tightBottom, null)
     }
-  } else if (paddingTop + items + tightBottom <= room) {
-    return layout(paddingTop, gap, tightBottom, null)
+  } else if (effectiveTop + items + tightBottom <= room) {
+    return layout(effectiveTop, gap, tightBottom, null)
   }
-  const effectiveTop = tightenTop ? Math.min(paddingTop, minGap) : paddingTop
   // Scale the ring and its label together. The leading control stays full size.
   const diameter = Math.floor(
     (room - effectiveTop - leadingHeight - gapCount * minGap - tightBottom) /
@@ -114,14 +114,13 @@ export function railRingStackFit(args: {
     }
   }
   const pitch = item + minGap
-  // The leading control stays put; only the rings below it scroll, and their end gap stays tight.
+  // The leading control stays put; only the rings below it scroll.
   const scrollPaddingTop = hasLeading ? 0 : effectiveTop
   const scrollRoom = hasLeading ? room - (effectiveTop + leadingHeight + minGap) : room
-  const scrollSlack = tightenTop && !hasLeading ? 1 : 0
-  const endClear = hasLeading ? tightBottom : peek
+  const endClear = peek
   const shown = Math.max(
     1,
-    Math.floor((scrollRoom - peek - scrollPaddingTop - item - scrollSlack) / pitch) + 1
+    Math.floor((scrollRoom - peek - scrollPaddingTop - item - 1) / pitch) + 1
   )
   // The fade covers `peek` at the bottom; the last label has to finish above it once the stack is scrolled to the end.
   return layout(
