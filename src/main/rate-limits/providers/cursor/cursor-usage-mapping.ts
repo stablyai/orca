@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   CURSOR_MODELS_BUCKET_NAME,
   CURSOR_ON_DEMAND_BUCKET_NAME,
@@ -11,44 +12,50 @@ import type {
 
 const MONTHLY_WINDOW_MINUTES = 43_200
 
-const cursorPoolSchema = z
-  .object({
-    enabled: z.unknown(),
-    used: z.unknown(),
-    limit: z.unknown(),
-    totalPercentUsed: z.unknown(),
-    autoPercentUsed: z.unknown(),
-    apiPercentUsed: z.unknown()
-  })
-  .partial()
+const cursorPoolSchema = lazyZodSchema(() =>
+  z
+    .object({
+      enabled: z.unknown(),
+      used: z.unknown(),
+      limit: z.unknown(),
+      totalPercentUsed: z.unknown(),
+      autoPercentUsed: z.unknown(),
+      apiPercentUsed: z.unknown()
+    })
+    .partial()
+)
 
-const cursorUsageSummarySchema = z
-  .object({
-    billingCycleStart: z.unknown(),
-    billingCycleEnd: z.unknown(),
-    membershipType: z.unknown(),
-    isUnlimited: z.unknown(),
-    // The dashboard sends null for absent pools; optional-only schemas would reject the entire valid response.
-    individualUsage: z
-      .object({
-        plan: cursorPoolSchema.nullish(),
-        // Team-limited accounts report the member's included allowance as `overall`.
-        overall: cursorPoolSchema.nullish(),
-        onDemand: cursorPoolSchema.nullish()
-      })
-      .partial()
-      .nullish()
-  })
-  .partial()
+const cursorUsageSummarySchema = lazyZodSchema(() =>
+  z
+    .object({
+      billingCycleStart: z.unknown(),
+      billingCycleEnd: z.unknown(),
+      membershipType: z.unknown(),
+      isUnlimited: z.unknown(),
+      // The dashboard sends null for absent pools; optional-only schemas would reject the entire valid response.
+      individualUsage: z
+        .object({
+          plan: cursorPoolSchema.nullish(),
+          // Team-limited accounts report the member's included allowance as `overall`.
+          overall: cursorPoolSchema.nullish(),
+          onDemand: cursorPoolSchema.nullish()
+        })
+        .partial()
+        .nullish()
+    })
+    .partial()
+)
 
 type CursorPool = z.infer<typeof cursorPoolSchema>
 export type CursorUsageSummary = z.infer<typeof cursorUsageSummarySchema>
 
-const cursorCurrentPeriodSchema = z.object({
-  billingCycleStart: z.unknown(),
-  billingCycleEnd: z.unknown(),
-  planUsage: cursorPoolSchema
-})
+const cursorCurrentPeriodSchema = lazyZodSchema(() =>
+  z.object({
+    billingCycleStart: z.unknown(),
+    billingCycleEnd: z.unknown(),
+    planUsage: cursorPoolSchema
+  })
+)
 
 /** Accepts the raw dashboard body; an unrecognised shape maps to "nothing reported". */
 export function parseCursorUsageSummary(data: unknown): CursorUsageSummary {
@@ -227,11 +234,13 @@ function addOneMonthUtc(startMs: number): number {
   )
 }
 
-const legacyBucketSchema = z
-  .object({ numRequests: z.unknown(), maxRequestUsage: z.unknown() })
-  .partial()
+const legacyBucketSchema = lazyZodSchema(() =>
+  z.object({ numRequests: z.unknown(), maxRequestUsage: z.unknown() }).partial()
+)
 
-const legacyQuotaSchema = z.record(z.string(), z.union([legacyBucketSchema, z.unknown()]))
+const legacyQuotaSchema = lazyZodSchema(() =>
+  z.record(z.string(), z.union([legacyBucketSchema, z.unknown()]))
+)
 
 /** Older plans meter per-model requests instead of currency allowance. */
 export function mapCursorLegacyRequestQuota(payload: unknown): RateLimitWindow | null {

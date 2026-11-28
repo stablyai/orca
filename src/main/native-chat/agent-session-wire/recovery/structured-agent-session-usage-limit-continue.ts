@@ -14,9 +14,8 @@ import { usageLimitContinueMutation } from './structured-agent-session-usage-lim
 import {
   cancelsCut,
   usageLimitCutContinuable,
-  isUsageLimitChatOpen,
   openUsageLimitChats,
-  usageLimitCutDisposition,
+  readUsageLimitCutDisposition,
   type UsageLimitCutDisposition
 } from './structured-agent-session-usage-limit-disposition'
 
@@ -50,8 +49,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   constructor(private readonly deps: UsageLimitContinueDeps) {
-    const switchReset = (id: string, cut: HostUsageLimitCut) =>
-      this.holds.withSwitchReset(id, cut, deps.now())
+    const switchReset = (id: string, cut: HostUsageLimitCut) => this.holds.withSwitchReset(id, cut)
     this.cold = new UsageLimitColdCuts({ ...deps, logger: deps.host.logger, switchReset })
   }
 
@@ -126,7 +124,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     const backup = read
       ? this.deps.host.usageLimitAutoContinue?.botBackupFailover?.readCutState(id, read.turnItemId)
       : undefined
-    const cut = read && this.holds.withSwitchReset(id, read, this.deps.now())
+    const cut = read && this.holds.withSwitchReset(id, read)
     const sched = cut && this.holds.schedulable(id, cut, this.deps.now()) ? cut : null
     const attempt = this.attempts.get(id)
     const cancel = this.deps.host.store.getRecord(id)?.usageLimitContinueCancel
@@ -144,34 +142,30 @@ export class StructuredAgentSessionUsageLimitContinue {
     })
   }
 
-  /** See usageLimitCutDisposition; the cut read as the journal stands now. */
-  disposition = async (id: string, turnItemId: string): Promise<UsageLimitCutDisposition> => {
-    if (this.deps.host.usageLimitAutoContinue?.botBackupFailover?.isSwitching(id, turnItemId)) {
-      return 'pending'
-    }
-    const cut = await this.cold.read(id, true)
-    const record = this.deps.host.store.getRecord(id)
-    const attempt = this.attempts.get(id)
-    return usageLimitCutDisposition({
-      cut,
+  disposition = (id: string, turnItemId: string): Promise<UsageLimitCutDisposition> =>
+    readUsageLimitCutDisposition({
+      host: this.deps.host,
+      sessionId: id,
       turnItemId,
-      continuable:
-        cut !== null &&
-        this.enabled() &&
-        this.holds.schedulable(id, cut, this.deps.now()) &&
-        record?.location.executionHostId === this.deps.host.store.hostId &&
-        isUsageLimitChatOpen(this.deps.host.store, id),
-      cancel: record?.usageLimitContinueCancel,
-      attempt: cut && attempt?.identity === attemptIdentity(cut) ? attempt : undefined
+      readCut: () => this.cold.read(id, true),
+      isEnabled: () => this.enabled(),
+      schedulable: (cut) => this.holds.schedulable(id, cut, this.deps.now()),
+      attempt: () => this.attempts.get(id)
     })
-  }
 
   private eligible(id: string, cut: HostUsageLimitCut): cut is Cut {
     return this.continuable(id, cut) && this.holds.schedulable(id, cut, this.deps.now())
   }
 
-  private continuable = (id: string, cut: HostUsageLimitCut): boolean =>
-    !this.disposed && usageLimitCutContinuable(this.deps.host, id, cut)
+  private continuable = (id: string, cut: HostUsageLimitCut): boolean => {
+    const backup = this.deps.host.usageLimitAutoContinue?.botBackupFailover
+    return (
+      !this.disposed &&
+      !backup?.isSwitching(id, cut.turnItemId) &&
+      !backup?.isSuperseded(id, cut.turnItemId) &&
+      usageLimitCutContinuable(this.deps.host, id, cut)
+    )
+  }
 
   cancel = (input: { sessionId: string; turnItemId: string; resetsAt: number }): Promise<void> =>
     this.deps.serialize(input.sessionId, async () => {
@@ -198,7 +192,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       // Visibility and workspace sleep can change without a journal or settings commit.
       await this.publishScheduled()
       await this.cold.readUnread(visible)
-      this.holds.beginPass()
+      this.holds.beginPass(this.deps.now())
       const due: { id: string; cut: Cut; at: number }[] = []
       for (const id of visible) {
         if (!this.deps.sessions.has(id) && !this.cold.has(id)) {
@@ -215,7 +209,7 @@ export class StructuredAgentSessionUsageLimitContinue {
           this.deps.host.usageLimitAutoContinue?.botBackupFailover?.onCutObserved(id, read)
           await this.holds.attribute(id, this.deps.host, read, this.deps.now())
         }
-        const cut = read && this.holds.withSwitchReset(id, read, this.deps.now())
+        const cut = read && this.holds.withSwitchReset(id, read)
         const previous = this.attempts.get(id)
         if (!cut || previous?.identity !== attemptIdentity(cut)) {
           this.attempts.delete(id)
@@ -229,8 +223,8 @@ export class StructuredAgentSessionUsageLimitContinue {
         ) {
           continue
         }
+        this.holds.askForRelaunchRoom(id, cut, this.deps.now())
         if (!this.eligible(id, cut)) {
-          this.holds.askForRelaunchRoom(id, cut)
           continue
         }
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
@@ -266,8 +260,11 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   private async send(id: string, cut: Cut): Promise<void> {
+    if (!this.continuable(id, cut)) {
+      return
+    }
     // Earlier sends take time; moved sources resolve again, once per new witness for every chat.
-    if (!this.holds.attributionCurrent(id, this.deps.host)) {
+    if (!this.holds.bindingHolds(id, this.deps.host, this.holds.attributionBinding(id))) {
       await this.holds.attribute(id, this.deps.host, cut, this.deps.now())
     }
     // Still moving: yield without spending an attempt; a later pass resolves on settled sources.
@@ -301,10 +298,11 @@ export class StructuredAgentSessionUsageLimitContinue {
         })),
         expectedContinuationLaunch: { runtimeFence, launchFence },
         beforeRun: async () => {
-          const current = await this.cold.read(id)
+          const read = await this.cold.read(id)
+          const current = read && this.holds.withSwitchReset(id, read)
           if (
             !current ||
-            identity(current) !== identity(cut) ||
+            attemptIdentity(current) !== attemptIdentity(cut) ||
             !this.eligible(id, current) ||
             !this.holds.bindingHolds(id, this.deps.host, binding) ||
             !this.holds.ready(id, current, this.deps.now())

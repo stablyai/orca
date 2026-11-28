@@ -20,6 +20,7 @@ const CTRL_C = '\x03'
 export function useSessionTerminalKeyRail(controller: MobileSessionController): {
   keysInRail: boolean
   moreKeysVisible: boolean
+  openMoreKeys: () => void
   closeMoreKeys: () => void
 } {
   const { activeHandle, activeSessionTab, terminalModes, canSend, directionPadEnabled, dockKeys } =
@@ -94,6 +95,7 @@ export function useSessionTerminalKeyRail(controller: MobileSessionController): 
   return {
     keysInRail: railKeys.length > 0,
     moreKeysVisible,
+    openMoreKeys: () => setMoreKeysVisible(true),
     closeMoreKeys: () => setMoreKeysVisible(false)
   }
 }

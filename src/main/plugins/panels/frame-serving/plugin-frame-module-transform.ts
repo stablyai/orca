@@ -14,10 +14,13 @@ import {
 } from '../source-transpilation/plugin-source-transpile-protocol'
 import { parsePluginTranspileFailure } from '../source-transpilation/plugin-source-transpile-failure'
 import { pluginSourceMapPrelude } from '../../../../shared/plugins/frames/plugin-frame-source-map-prelude'
+import { nextRetryDelayMs } from '../../../sqlite/row-cache/row-cache-failure'
 import { PLUGIN_SOURCE_MODULE_MAX_BYTES } from '../../../../shared/plugins/frames/plugin-frame-entry-limits'
 
 const CACHE_MAX_ENTRIES = 512
 const CACHE_MAX_CHARS = 64 * 1024 * 1024
+// A transient failure is served from cache until a retry delay that doubles while it repeats.
+const TRANSIENT_RETRY = { minMs: 1_000, maxMs: 60_000 }
 
 /** A module whose evaluation throws, so the error names the file (and line) in the guest and logs. */
 export function pluginErrorModule(
@@ -53,12 +56,26 @@ export function createPluginSourceModuleCompiler(
 ): PluginSourceModuleCompiler {
   let transpile = options.transpile
   const transpilerId = options.transpilerId ?? PLUGIN_SOURCE_TRANSPILER_ID
-  const cache = new Map<string, { value: PluginSourceTranspiled; chars: number }>()
+  const cache = new Map<
+    string,
+    { value: PluginSourceTranspiled; chars: number; retryDelayMs: number; retryAt: number }
+  >()
+  const inFlight = new Map<string, Promise<PluginSourceTranspiled>>()
   let cachedChars = 0
 
-  const remember = (key: string, value: PluginSourceTranspiled): PluginSourceTranspiled => {
+  const remember = (
+    key: string,
+    value: PluginSourceTranspiled,
+    retryDelayMs: number
+  ): PluginSourceTranspiled => {
+    const previous = cache.get(key)
+    if (previous) {
+      cache.delete(key)
+      cachedChars -= previous.chars
+    }
     const chars = value.ok ? value.code.length + value.mappings.length : value.message.length
-    cache.set(key, { value, chars })
+    const retryAt = retryDelayMs ? performance.now() + retryDelayMs : Infinity
+    cache.set(key, { value, chars, retryDelayMs, retryAt })
     cachedChars += chars
     for (const [oldest, entry] of cache) {
       if (cache.size <= CACHE_MAX_ENTRIES && cachedChars <= CACHE_MAX_CHARS) {
@@ -80,15 +97,32 @@ export function createPluginSourceModuleCompiler(
       .update(source)
       .digest('hex')
     const hit = cache.get(key)
-    if (hit) {
+    if (hit && performance.now() < hit.retryAt) {
       // Re-insert so the map's order stays least recently used first.
       cache.delete(key)
       cache.set(key, hit)
       return hit.value
     }
+    // Why shared: panels loading the same file at once wait on one transpile, not one each.
+    const running = inFlight.get(key)
+    if (running) {
+      return running
+    }
     // Why lazy: the worker starts only once a plugin frame loads a source module.
     transpile ??= createPluginSourceTranspileClient()
-    return remember(key, await transpile(relativePath, source))
+    const started = transpile(relativePath, source)
+      .then((value) =>
+        remember(
+          key,
+          value,
+          !value.ok && value.transient
+            ? nextRetryDelayMs(hit?.retryDelayMs ?? 0, TRANSIENT_RETRY)
+            : 0
+        )
+      )
+      .finally(() => inFlight.delete(key))
+    inFlight.set(key, started)
+    return started
   }
 
   return async ({ relativePath, bytes, exists }) => {

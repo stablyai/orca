@@ -1,7 +1,11 @@
 import type React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, Gauge, Lightbulb } from 'lucide-react-native'
+import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
+import {
+  splitBotSearchText,
+  type BotSearchRange
+} from '../../../src/shared/bots/bot-sidebar-search'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
 import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import {
@@ -11,19 +15,23 @@ import {
   mobileBotRowNeedsYou
 } from './mobile-bot-row-line'
 import { useMobileBotUsageLimitStop } from './use-mobile-bot-usage-limit-stop'
-import { colors, feedback, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { feedback, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { AgentSpinner } from '../agents/presentation/AgentSpinner'
-import { MobileBotItemStatusIcon } from './items/MobileBotItemStatusIcon'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useSharedNow } from '../hooks/use-now'
 import { HostContextPill } from '../worktree/row-presentation/HostContextPill'
-import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotFaceStack } from './MobileBotFaceStack'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
-import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
-import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
-import type { MobileBotAvatarSource, MobileBotGroupRowFacts } from './host-bot-row-facts'
+import {
+  MobileBotNeedsYouCount,
+  MobileBotRowAvatar,
+  MobileBotRowStatus,
+  MobileBotUpNextCount
+} from './MobileBotRowBadges'
+import type { MobileBotGroupRowFacts } from './host-bot-row-facts'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 /** The bot's home opens through the same workspace control as every other row. */
 export function MobileBotHomeRow({
@@ -44,12 +52,15 @@ export function MobileBotHomeRow({
   onLongPress?: () => void
   onToggle?: () => void
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const now = useSharedNow(30_000)
   const bot = view.botFacts!
   // The desktop row's line, from its Chat's and threads' agent rows; waits while nothing works. A
   // search that found the bot by what it's for shows that in its place.
-  const line = bot.searchPurpose ? null : mobileBotRowLine(bot, item.agents ?? [], now)
+  const line = bot.searchPurpose ? null : mobileBotRowLine(bot, item.agents ?? [], now, t)
   // The line's count, so the badge never disagrees with it; a down host's row keeps its last, greyed.
   const needsYou = mobileBotRowNeedsYou(bot.line, item.agents ?? [], now)
   // A down server's bot shows only where it runs and that computer's word: its last activity isn't live.
@@ -58,9 +69,17 @@ export function MobileBotHomeRow({
   // A server's sessions aren't on its paired computer's feed; a search's purpose line keeps its place.
   const feedHost = down || bot.host || bot.searchPurpose ? null : pairedHostId
   const stop = useMobileBotUsageLimitStop(feedHost, bot.workspaceIds, now)
-  const limitText = mobileBotRowLimitText(stop, line, { ...bot.line, dot: bot.dot })
+  const limitText = mobileBotRowLimitText(
+    stop,
+    line,
+    { ...bot.line, dot: bot.dot },
+    now,
+    t,
+    intlLocale
+  )
   const lineText =
-    limitText ?? (line ? mobileBotRowLineText(line, now) : (bot.searchPurpose ?? bot.statusLine))
+    limitText ??
+    (line ? mobileBotRowLineText(line, now, t) : (bot.searchPurpose?.text ?? bot.statusLine))
   // The line names who waits on an access answer, since nothing else on the row says it.
   const preview = down
     ? ''
@@ -68,7 +87,9 @@ export function MobileBotHomeRow({
       ? `${lineText} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
       : lineText
   const age =
-    !down && line?.kind === 'activity' && line.at !== null ? formatTimeAgo(line.at, now) : null
+    !down && !limitText && line?.kind === 'activity' && line.at !== null
+      ? formatTimeAgo(line.at, now, t)
+      : null
   // The desktop's mark before a thread's label, which leads an activity line.
   const placeSource =
     !down && !limitText && line?.kind === 'activity' ? (line.place?.source ?? null) : null
@@ -86,6 +107,7 @@ export function MobileBotHomeRow({
       title={item.displayName}
       unread={item.unread}
       preview={preview}
+      previewBold={down ? undefined : bot.searchPurpose?.ranges}
       asking={asking}
       previewLeading={
         <>
@@ -108,11 +130,14 @@ export function MobileBotHomeRow({
       onLongPress={onLongPress}
       titleTrailing={
         <>
-          {needsYou > 0 ? <MobileBotNeedsYouCount count={needsYou} /> : null}
+          {/* The line already says "N need you": the count once. */}
+          {needsYou > 0 && !(asking && limitText === null) ? (
+            <MobileBotNeedsYouCount count={needsYou} />
+          ) : null}
           {bot.upNext ? <MobileBotUpNextCount count={bot.upNext} /> : null}
-          {/* A folded bot always keeps its chevron, so it can unfold before its chats are read; a
-              down host's bot is its row alone. */}
-          {!down && (count > 0 || bot.foldsChats || view.lineageCollapsed) && onToggle ? (
+          {/* Its live chats list under it unfolded, so only a folded bot, or one whose chats this host
+              can't list, keeps a chevron; a down host's bot is its row alone. */}
+          {!down && (view.lineageCollapsed || (!bot.listsChats && count > 0)) && onToggle ? (
             <Pressable
               onPress={(event) => {
                 event.stopPropagation()
@@ -178,7 +203,7 @@ export function MobileBotGroupRow({
       title={item.displayName}
       unread={item.unread}
       preview={line.text}
-      age={line.at === null ? null : formatTimeAgo(line.at, now)}
+      age={line.at === null ? null : formatTimeAgo(line.at, now, t)}
       active={item.isActive}
       divider={divider}
       disabled={isReadOnly}
@@ -188,89 +213,13 @@ export function MobileBotGroupRow({
   )
 }
 
-/** A bot's 32 pt picture with its status at the corner, or the amber gauge on a usage limit. */
-export function MobileBotRowAvatar({
-  avatar,
-  dot,
-  stopped = false,
-  surface
-}: {
-  avatar: MobileBotAvatarSource
-  dot: BotRowStatus | null
-  stopped?: boolean
-  surface?: string
-}) {
-  return (
-    <>
-      <MobileBotAvatar avatar={avatar} size={32} />
-      {stopped ? (
-        <View style={[styles.status, surface ? { backgroundColor: surface } : null]}>
-          <Gauge size={12} color={colors.statusAmber} />
-        </View>
-      ) : (
-        <MobileBotRowStatus dot={dot} surface={surface} />
-      )}
-    </>
-  )
-}
-
-/** A row picture's status at its corner, ringed in the surface it sits on; none draws nothing. */
-export function MobileBotRowStatus({
-  dot,
-  surface
-}: {
-  dot: WorktreeStatus | null
-  /** The row's background, when it isn't the page's (a grouped panel). */
-  surface?: string
-}) {
-  return dot && dot !== 'active' && dot !== 'done' ? (
-    <View style={[styles.status, surface ? { backgroundColor: surface } : null]}>
-      <AgentSpinner status={dot} />
-    </View>
-  ) : null
-}
-
-/** A bot's items that need you: an orange dot and the count, in the Up next count's muted style. */
-export function MobileBotNeedsYouCount({ count }: { count: number }) {
-  const t = useMobileTranslation()
-  return (
-    <View
-      style={styles.upNext}
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={t('bots.items.needYouCount', '{{count}} items need you', {
-        count,
-        defaultValue_one: '{{count}} item needs you'
-      })}
-    >
-      <MobileBotItemStatusIcon status="needs_you" size={6} />
-      <Text style={styles.count}>{count}</Text>
-    </View>
-  )
-}
-
-/** A bot's new Up next suggestions, in the fold's muted count style, as the desktop's lightbulb. */
-function MobileBotUpNextCount({ count }: { count: number }) {
-  const t = useMobileTranslation()
-  return (
-    <View
-      style={styles.upNext}
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={t('bots.upNext.newInUpNext', '{{count}} new in Suggestions', { count })}
-    >
-      <Lightbulb size={12} color={colors.textMuted} />
-      <Text style={styles.count}>{count}</Text>
-    </View>
-  )
-}
-
 /** The Bots list's row, a bot's or a group's: picture, name, then its newest line and how long ago. */
 export function MobileBotRowView({
   avatar,
   title,
   unread,
   preview,
+  previewBold,
   asking = false,
   previewLeading = null,
   age,
@@ -286,6 +235,8 @@ export function MobileBotRowView({
   title: string
   unread: boolean
   preview: string
+  /** Search's matched words in the preview, drawn bold. */
+  previewBold?: readonly BotSearchRange[]
   /** The line says what waits on the owner, in the asking colour. */
   asking?: boolean
   /** Drawn before the preview, e.g. a server bot's computer. */
@@ -301,6 +252,7 @@ export function MobileBotRowView({
   onLongPress?: () => void
   titleTrailing?: React.ReactNode
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <Pressable
@@ -334,7 +286,7 @@ export function MobileBotRowView({
             numberOfLines={1}
             style={[styles.preview, unread && styles.previewUnread, asking && styles.previewAsking]}
           >
-            {preview}
+            {previewBold ? <BoldMatches text={preview} ranges={previewBold} /> : preview}
           </Text>
           {age ? <Text style={styles.age}>{age}</Text> : null}
         </View>
@@ -343,7 +295,29 @@ export function MobileBotRowView({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+/** A search's matched words drawn bold within the line, keyed by where each starts. */
+function BoldMatches({ text, ranges }: { text: string; ranges: readonly BotSearchRange[] }) {
+  const styles = useThemedStyles(stylesSheet)
+  const parts = splitBotSearchText(text, ranges)
+  const starts = parts.map((_, at) =>
+    parts.slice(0, at).reduce((length, part) => length + part.text.length, 0)
+  )
+  return (
+    <>
+      {parts.map((part, at) =>
+        part.marked ? (
+          <Text key={starts[at]} style={styles.previewMatch}>
+            {part.text}
+          </Text>
+        ) : (
+          part.text
+        )
+      )}
+    </>
+  )
+}
+
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -362,18 +336,10 @@ const styles = themedStyleSheet(() => ({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle
   },
-  status: {
-    position: 'absolute',
-    right: -5,
-    bottom: -5,
-    borderRadius: 12,
-    backgroundColor: colors.bgBase,
-    padding: 1
-  },
   main: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  title: { flex: 1, fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
-  unread: { color: colors.textPrimary, fontWeight: '700' },
+  title: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
+  unread: { fontWeight: '700' },
   fold: {
     minWidth: 44,
     minHeight: 44,
@@ -384,11 +350,11 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'flex-end'
   },
   count: { fontSize: 13, color: colors.textMuted },
-  upNext: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   activity: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 3 },
   preview: { flex: 1, fontSize: 13, color: colors.textMuted },
   previewUnread: { color: colors.textSecondary },
   previewAsking: { color: colors.agentQuestion },
+  previewMatch: { fontWeight: '600', color: colors.textPrimary },
   age: { fontSize: 11, color: colors.textMuted },
   active: { backgroundColor: colors.bgPanel },
   dimmed: { opacity: 0.6 },

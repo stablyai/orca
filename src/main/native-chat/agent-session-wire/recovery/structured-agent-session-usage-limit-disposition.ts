@@ -1,10 +1,45 @@
 import type { HostUsageLimitCut, SwitchReset } from './structured-agent-session-usage-limit-chain'
 import { USAGE_LIMIT_CONTINUE_CHAIN_LIMIT } from './structured-agent-session-usage-limit-chain'
+import { switchFreeIdentity } from './structured-agent-session-usage-limit-chain'
 import type { UsageLimitContinueDeps } from './structured-agent-session-usage-limit-continue-deps'
 
 /** Whether the connector requests a usage-limit cut owes still wait for its automatic continue
  *  (Phase 1 §1.5). */
 export type UsageLimitCutDisposition = 'pending' | 'ended' | 'ambiguous'
+
+export async function readUsageLimitCutDisposition(input: {
+  host: UsageLimitContinueDeps['host']
+  sessionId: string
+  turnItemId: string
+  readCut: () => Promise<HostUsageLimitCut | null>
+  isEnabled: () => boolean
+  schedulable: (cut: HostUsageLimitCut) => boolean
+  attempt: () => { identity: string; count: number; unconfirmed?: boolean } | undefined
+}): Promise<UsageLimitCutDisposition> {
+  const { host, sessionId, turnItemId } = input
+  const backup = host.usageLimitAutoContinue?.botBackupFailover
+  if (backup?.isSwitching(sessionId, turnItemId)) {
+    return 'pending'
+  }
+  if (backup?.isSuperseded(sessionId, turnItemId)) {
+    return 'ended'
+  }
+  const cut = await input.readCut()
+  const record = host.store.getRecord(sessionId)
+  const attempt = input.attempt()
+  return usageLimitCutDisposition({
+    cut,
+    turnItemId,
+    continuable:
+      cut !== null &&
+      input.isEnabled() &&
+      input.schedulable(cut) &&
+      record?.location.executionHostId === host.store.hostId &&
+      isUsageLimitChatOpen(host.store, sessionId),
+    cancel: record?.usageLimitContinueCancel,
+    attempt: cut && attempt?.identity === switchFreeIdentity(cut) ? attempt : undefined
+  })
+}
 
 type OpenChats = {
   listVisibleSessionIds(): string[]

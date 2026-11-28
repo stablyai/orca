@@ -7,11 +7,12 @@ import {
   MobileOfflineState,
   MobileStateView
 } from '../components/feedback/MobileStateView'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { MobileBotUpNext, type UpNextActions } from './MobileBotUpNext'
 import { MobileBotChatTree, type BotChatTreeActions } from './MobileBotChatTree'
 import type { PhoneBotChatTree } from './use-phone-bot-chat-tree'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 /** The desktop's Activity panel: Up next, then the bot's chats with their workers. */
 export function MobileBotActivityTab({
@@ -43,6 +44,8 @@ export function MobileBotActivityTab({
   /** The bot panel shows Up next at the end of Items instead, as the desktop does. */
   withoutUpNext?: boolean
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const botName = bot.name
   const t = useMobileTranslation()
   if (!activity) {
@@ -104,6 +107,6 @@ export function MobileBotActivityTab({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   loading: { paddingTop: spacing.xl }
 }))

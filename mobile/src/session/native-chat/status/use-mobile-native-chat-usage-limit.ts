@@ -43,6 +43,7 @@ export type MobileNativeChatUsageLimit = {
   backupSwitchLabel?: string
   backupSwitching?: boolean
   backupSwitchFailed?: boolean
+  backupContinuationFailed?: boolean
   switchToBackup?: (() => void) | null
 }
 

@@ -3,7 +3,6 @@ import {
   resolveWorkerLineage,
   type WorkerLineage
 } from '../runtime/orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import { sessionWorkerIsWorking } from '../../shared/orchestration-session-workers'
 import { readServerOwnedWorker } from './bot-work-server-owned-worker'
 import type { BotWorkRuntime } from './bot-work-runtime'
@@ -13,7 +12,9 @@ import type { BotWorkWorker } from './bot-work-types'
  *  this Orca's record of it. Null when its records are gone; left out when it can't be read. */
 export async function readWorkers(
   runtime: BotWorkRuntime,
-  dispatchIds: readonly string[]
+  dispatchIds: readonly string[],
+  /** Filled with each read Dispatch's lineage (its newest Dispatch and resource). */
+  lineageOf?: Map<string, WorkerLineage>
 ): Promise<Map<string, BotWorkWorker | null>> {
   const db = runtime.getOrchestrationDb()
   // One walk per lineage, shared by links to a worker's first Dispatch and its follow-ups. Null: its
@@ -22,7 +23,11 @@ export async function readWorkers(
   const latestOf = new Map(
     dispatchIds.flatMap((id) => {
       try {
-        const latest = resolveWorkerLineage(db, id, undefined, lineages)?.latest
+        const lineage = resolveWorkerLineage(db, id, undefined, lineages)
+        if (lineage) {
+          lineageOf?.set(id, lineage)
+        }
+        const latest = lineage?.latest
         return [[id, latest && (db.getTask(latest.task_id) ? latest : null)] as const]
       } catch {
         return []
@@ -30,6 +35,8 @@ export async function readWorkers(
     })
   )
   const readable = [...new Set([...latestOf.values()].flatMap((latest) => latest?.id ?? []))]
+  const { readDispatchWorkers } =
+    await import('../runtime/rpc/methods/orchestration/worker/session-workers-method')
   const workerReads = await readDispatchWorkers(runtime, readable, { lostTerminalsEnded: true })
   const reads = new Map(workerReads.map((entry) => [entry.dispatchId, entry]))
   const workers = new Map<string, BotWorkWorker | null>()
@@ -54,6 +61,7 @@ export async function readWorkers(
       agent: read?.agent ?? null,
       state: read?.state ?? 'unverifiable',
       idle: read ? read.state === 'working' && !sessionWorkerIsWorking(read) : false,
+      ...(read?.progressNote ? { progressNote: read.progressNote } : {}),
       stopped: durable?.state === 'stopped' || durable?.state === 'abandoned',
       // Only the start itself: a continued worker ran, whatever its newest follow-up did.
       startFailed:

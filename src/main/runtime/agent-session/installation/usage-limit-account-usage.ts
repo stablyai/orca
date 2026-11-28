@@ -46,7 +46,7 @@ function readingIdentity(
 /** One comparable spelling per folder: `~`, dot segments and symlinks (`/var` → `/private/var`)
  *  name the same home. Comparison only; credential reads keep the raw spelling. Read afresh on
  *  each call, which the sweep makes once per account per pass, so a retargeted link is followed. */
-async function canonicalHome(raw: string): Promise<string> {
+export async function canonicalUsageLimitAccountHome(raw: string): Promise<string> {
   const expanded = /^~(?=$|[\\/])/.test(raw) ? join(homedir(), raw.slice(1)) : raw
   const absolute = resolve(expanded)
   return normalizeRuntimePathForComparison((await realpath(absolute).catch(() => null)) ?? absolute)
@@ -121,7 +121,7 @@ export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
       }
       const settings = deps.settings()
       const reading = service.usageReadingAccount(provider)
-      const home = await canonicalHome(path)
+      const home = await canonicalUsageLimitAccountHome(path)
       if (provider === 'claude') {
         // Billing follows the env a launch computes now, through the launch's own composition.
         const environment = createStructuredAgentEnvironmentResolvers({
@@ -145,7 +145,7 @@ export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
             service.requestUsageReading(provider, notWithinMs === undefined ? {} : { notWithinMs })
         }
       }
-      if ((await canonicalHome(reading.home)) !== home) {
+      if ((await canonicalUsageLimitAccountHome(reading.home)) !== home) {
         return { scope }
       }
       const identity = readingIdentity(provider, reading, settings)

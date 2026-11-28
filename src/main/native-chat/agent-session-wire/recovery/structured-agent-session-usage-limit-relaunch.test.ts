@@ -22,7 +22,7 @@ const spent = (at: number) => weekly(100, at)
 /** A cut at fence 1 whose chat has since launched at fence 2 on home B, first seen at T. */
 function relaunched() {
   const cuts = new UsageLimitRelaunchedCuts()
-  cuts.note('chat', 'cut', HOME_B, 2, T)
+  cuts.note('chat', 'cut', HOME_B, 2, T, T - 1_000)
   return cuts
 }
 
@@ -31,6 +31,18 @@ it('never counts a reading the live session reported as room', () => {
   const live = { ...room(T + 1_000), usageMetadata: { source: 'live-session' as const } }
   expect(cuts.roomAt('chat', 'cut', 'account-b', live, T + 1_000)).toBeUndefined()
   expect(cuts.roomAt('chat', 'cut', 'account-b', room(T + 2_000), T + 2_000)).toBe(T + 2_000)
+})
+
+it('counts picker room that arrived after the cut before the relaunch was observed', () => {
+  const cuts = new UsageLimitRelaunchedCuts()
+  cuts.note('chat', 'cut', HOME_B, 2, T + 1_000, T - 1_000)
+  expect(cuts.roomAt('chat', 'cut', 'account-b', room(T), T + 1_000)).toBe(T)
+})
+
+it('rejects room from before the cut even when it arrives after the switch', () => {
+  const cuts = new UsageLimitRelaunchedCuts()
+  cuts.note('chat', 'cut', HOME_B, 2, T + 1_000, T)
+  expect(cuts.roomAt('chat', 'cut', 'account-b', room(T - 1), T + 1_000)).toBeUndefined()
 })
 
 it('stops counting room once it is older than the overdue window', () => {

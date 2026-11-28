@@ -94,6 +94,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   spawnHostTerminalUsage?: HostTerminalUsage
   /** The ORCA_PANE_KEY the execution host reports this PTY's env exported; absent when unreported. */
   spawnPaneKey?: string | null
+  /** The line count its released transcript reached, where a slept agent's cursors continue from. */
+  releasedLinesTotal?: number
+  /** The stopped process whose handle (and line cursors) this one took over, counted once. */
+  linesContinuedFrom?: string
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
@@ -185,6 +189,8 @@ export type RuntimeHeadlessTerminal = {
   outputSequence: number
   writeChain: Promise<void>
   ownership: PtyShellOwnershipMirror
+  /** True when the owning daemon holds authoritative scrollback, so main mirrors only the viewport. */
+  providerOwnsScrollback?: boolean
   /** Output seq a renderer hydration seed already painted; queued live chunks at/below it are not rewritten. */
   rendererSeedSeq?: number
   /** Unfinished escape from skipped seed-covered chunks, written before the next uncovered chunk. */

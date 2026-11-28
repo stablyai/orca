@@ -10,6 +10,7 @@ import type {
   GoogleSetupFoundKey
 } from '../../shared/google/google-setup-ipc-types'
 import { parseGoogleClientFile } from './google-client-file'
+import { watchedDirectoryDeletionCheck } from '../../shared/file-watch/windows-deleted-directory-watch'
 
 // Google names the key client_secret_<id>.json; a repeat download adds " (1)" before .json.
 export const GOOGLE_KEY_FILE_NAME = /^client_secret_.+\.json$/
@@ -59,15 +60,22 @@ export function watchFolderForGoogleKey(
         once: true
       }
     )
+    const settleUnwatchable = (): void =>
+      settle({ ok: false, message: UNWATCHABLE, unwatchable: true })
+    const isFolderDeleted = watchedDirectoryDeletionCheck(folder)
     try {
-      watcher = watch(folder, (_kind, name) => {
+      watcher = watch(folder, (kind, name) => {
+        if (isFolderDeleted(kind, name)) {
+          settleUnwatchable()
+          return
+        }
         if (name) {
           void check(String(name)).catch(() => {})
         }
       })
-      watcher.on('error', () => settle({ ok: false, message: UNWATCHABLE, unwatchable: true }))
+      watcher.on('error', settleUnwatchable)
     } catch {
-      settle({ ok: false, message: UNWATCHABLE, unwatchable: true })
+      settleUnwatchable()
     }
   })
 }

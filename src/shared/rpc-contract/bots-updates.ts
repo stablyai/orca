@@ -47,9 +47,21 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     tidyUp,
     offerAnswer,
     cancelledWait,
+    lookAtRevision,
+    lookAtEpoch,
     ...rest
   } = updates
   const next: Bot = { ...bot, ...rest }
+  if (
+    bot.generatedOverMascot &&
+    lookAtRevision !== undefined &&
+    lookAtEpoch === bot.avatarRevisionEpoch &&
+    lookAtRevision === (bot.avatarRevision ?? 0) - 1 &&
+    updates.avatar === undefined &&
+    (updates.avatarColor !== undefined || updates.avatarOutfit !== undefined)
+  ) {
+    next.avatar = bot.generatedOverMascot
+  }
   if (offerAnswer) {
     next.offerAnswers = withBotOfferAnswer(bot.offerAnswers, offerAnswer)
   }

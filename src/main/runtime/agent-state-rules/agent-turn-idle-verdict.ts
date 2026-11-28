@@ -1,8 +1,7 @@
 // A shell prompt can look complete even after command-not-found; require fresh agent completion.
 // Status-free panes may finish after startup grace if the shell did not refuse the command.
-// A shell prompt can look complete even after command-not-found; require fresh agent completion.
-// Status-free panes may finish after startup grace if the shell did not refuse the command.
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { STAGED_STARTUP_COMMAND_PREFIX } from '../../../shared/shell/launch/startup-command-staging'
 
 /** Covers agent spin-up over SSH before an idle pane without agent status is believed. */
 export const AGENT_START_GRACE_MS = 2 * 60 * 1000
@@ -16,6 +15,15 @@ const MISSING_COMMAND_PATTERNS = [
   /unknown command/i,
   /is not recognized as (?:the name of a cmdlet|an internal or external command)/i
 ]
+
+// An rc file's startup `read` can eat the `.` of `. '<staged script>'`, so the shell runs the 0600 script and refuses it.
+// bash/sh print `<script>: Permission denied`, zsh `permission denied: <script>`; errors from inside the script do not.
+const STAGED_SCRIPT = `${STAGED_STARTUP_COMMAND_PREFIX}[0-9a-f]+\\.sh`
+const REFUSAL = '(?:permission denied|no such file or directory)'
+const STAGED_SCRIPT_REFUSAL = new RegExp(
+  `${STAGED_SCRIPT}: ${REFUSAL}$|${REFUSAL}: [^:]*${STAGED_SCRIPT}$`,
+  'i'
+)
 
 export type AgentTurnStatusRow = Pick<
   AgentStatusIpcPayload,
@@ -38,7 +46,7 @@ export type IdleAgentTurnVerdict =
   /** An idle shell that may not have started the agent yet. */
   | { kind: 'wait' }
 
-/** Match shell refusals of the agent command, excluding commands run by its tools. */
+/** Match shell refusals of the agent command or its staged launch script, excluding commands run by its tools. */
 export function findMissingCommandLine(
   tail: readonly string[],
   commands: readonly string[]
@@ -51,8 +59,9 @@ export function findMissingCommandLine(
   return (
     recent.find(
       (line) =>
-        MISSING_COMMAND_PATTERNS.some((pattern) => pattern.test(line)) &&
-        names.some((name) => line.includes(name))
+        (MISSING_COMMAND_PATTERNS.some((pattern) => pattern.test(line)) &&
+          names.some((name) => line.includes(name))) ||
+        STAGED_SCRIPT_REFUSAL.test(line)
     ) ?? null
   )
 }

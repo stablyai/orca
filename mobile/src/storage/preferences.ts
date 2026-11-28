@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { persistMirrored } from './mirrored-storage-keys'
+import { persistMirrored, subscribeMirroredKey } from './mirrored-storage-keys'
 import { snapTerminalTextScale } from '../terminal/preferences/terminal-text-scales'
 import {
   readTerminalFontStyle,
@@ -74,11 +74,25 @@ const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 const FONT_STYLE_KEY = 'orca:terminalFontStyle'
 
 // Older builds stored 50–200% presets; snap those to the nearest whole point. The fallback is the device default.
+function parseTerminalTextScale(raw: string | null, fallback: number): number {
+  const parsed = raw === null ? Number.NaN : Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? snapTerminalTextScale(parsed) : fallback
+}
+
+function parseTerminalFontStyle(
+  raw: string | null,
+  fallback: TerminalFontStyle
+): TerminalFontStyle {
+  try {
+    return raw === null ? fallback : readTerminalFontStyle(JSON.parse(raw), fallback)
+  } catch {
+    return fallback
+  }
+}
+
 export async function loadTerminalTextScale(fallback: number): Promise<number> {
   try {
-    const raw = await AsyncStorage.getItem(TEXT_SCALE_KEY)
-    const parsed = raw === null ? Number.NaN : Number(raw)
-    return Number.isFinite(parsed) && parsed > 0 ? snapTerminalTextScale(parsed) : fallback
+    return parseTerminalTextScale(await AsyncStorage.getItem(TEXT_SCALE_KEY), fallback)
   } catch {
     return fallback
   }
@@ -93,8 +107,7 @@ export async function loadTerminalFontStyle(
   fallback: TerminalFontStyle
 ): Promise<TerminalFontStyle> {
   try {
-    const raw = await AsyncStorage.getItem(FONT_STYLE_KEY)
-    return raw === null ? fallback : readTerminalFontStyle(JSON.parse(raw), fallback)
+    return parseTerminalFontStyle(await AsyncStorage.getItem(FONT_STYLE_KEY), fallback)
   } catch {
     return fallback
   }
@@ -102,6 +115,23 @@ export async function loadTerminalFontStyle(
 
 export async function saveTerminalFontStyle(style: TerminalFontStyle): Promise<void> {
   await persistMirrored(FONT_STYLE_KEY, JSON.stringify(style))
+}
+
+/** Saved terminal font changes from any screen, so a screen below the one editing them keeps up. */
+export function subscribeTerminalFontSettings(
+  fallback: { textScale: number; fontStyle: TerminalFontStyle },
+  listener: (change: { textScale: number } | { fontStyle: TerminalFontStyle }) => void
+): () => void {
+  const offScale = subscribeMirroredKey(TEXT_SCALE_KEY, (raw) =>
+    listener({ textScale: parseTerminalTextScale(raw, fallback.textScale) })
+  )
+  const offStyle = subscribeMirroredKey(FONT_STYLE_KEY, (raw) =>
+    listener({ fontStyle: parseTerminalFontStyle(raw, fallback.fontStyle) })
+  )
+  return () => {
+    offScale()
+    offStyle()
+  }
 }
 
 const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'

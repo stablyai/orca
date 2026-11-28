@@ -1,3 +1,4 @@
+import { sleepingMailUiApi } from './ui-sleeping-mail-api'
 import type { AgentSessionAttachmentClipboardTarget } from '../../../shared/agent-session/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
 import {
@@ -11,6 +12,10 @@ import type { RuntimeNavigationTarget } from '../../../shared/remote-runtime/ses
 import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../../shared/clipboard/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../../shared/clipboard/clipboard-text'
+import type {
+  ClipboardPasteContent,
+  ReadClipboardPasteContentOptions
+} from '../../../shared/clipboard/clipboard-paste-content'
 import type {
   AgentPaneActivityReply,
   AgentPaneActivityRequest
@@ -83,12 +88,7 @@ export const uiClipboardAndWindowControlsApi = {
   respondProjectMovePause: (response) => {
     ipcRenderer.send('ui:projectMovePauseResponse', response)
   },
-  onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
-      callback(data)
-    ipcRenderer.on('ui:resumeSleepingAgents', listener)
-    return () => ipcRenderer.removeListener('ui:resumeSleepingAgents', listener)
-  },
+  ...sleepingMailUiApi,
   onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: AgentPaneActivityRequest) =>
       callback(data)
@@ -106,7 +106,9 @@ export const uiClipboardAndWindowControlsApi = {
   },
   readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readText', options),
-  readClipboardLinkHtml: (): Promise<string> => ipcRenderer.invoke('clipboard:readLinkHtml'),
+  readClipboardPasteContent: (
+    options?: ReadClipboardPasteContentOptions
+  ): Promise<ClipboardPasteContent> => ipcRenderer.invoke('clipboard:readPasteContent', options),
   readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readSelectionText', options),
   saveClipboardImageAsTempFile: (args?: {
@@ -122,7 +124,6 @@ export const uiClipboardAndWindowControlsApi = {
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
   }): Promise<string> => ipcRenderer.invoke('clipboard:savePastedTextAsFile', args),
   clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
-  readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   restoreNativeChatPastes: (
     paths: string[]
   ): Promise<{ path: string; kept: boolean; exists: boolean }[]> =>

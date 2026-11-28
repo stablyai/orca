@@ -9,8 +9,9 @@ import {
   useMobileNativeChatPacedText,
   type MobileNativeChatPacedText
 } from './use-mobile-native-chat-paced-text'
-import { styles } from '../messages/mobile-native-chat-message-styles'
+import { stylesSheet } from '../messages/mobile-native-chat-message-styles'
 import { NATIVE_CHAT_QUOTE_SOURCE_DATASET } from '../../../../../../src/shared/native-chat/input/quotes/native-chat-quote-selection'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 const QUOTE_SOURCE_PROPS = { dataSet: NATIVE_CHAT_QUOTE_SOURCE_DATASET }
 
@@ -28,6 +29,7 @@ export function MobileNativeChatPacedProse({
   paced: boolean
   children: (block: NativeChatBlock, index: number, shown: MobileNativeChatPacedText) => ReactNode
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const source = useMemo(() => nativeChatProseToMarkdown(blocks), [blocks])
   const shown = useMobileNativeChatPacedText(rowKey, source, growingBlock?.type === 'text', paced)
   let end = 0

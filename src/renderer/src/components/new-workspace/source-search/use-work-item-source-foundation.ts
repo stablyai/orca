@@ -1,4 +1,8 @@
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import {
+  getProviderRuntimeContextKey,
+  useProviderRuntimeSessionGeneration
+} from '@/runtime/hosts/observations/provider-runtime-context'
+import { recomputeOn } from '@/lib/recompute-on'
 import { useLinearIssueResult } from '@/lib/work-items/linear/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { getSelectedWorkspaceId } from '@/store/slices/linear/linear-cache'
@@ -157,7 +161,10 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     enabled: hasLinearSearchSource && !disabled && !textOnly,
     sourceContext: linearSourceContext
   })
-  const defaultStatusCurrent = linearStatusContextKey === getProviderRuntimeContextKey(settings)
+  const providerRuntimeSessionGeneration = useProviderRuntimeSessionGeneration()
+  const defaultStatusCurrent =
+    linearStatusContextKey ===
+    recomputeOn([providerRuntimeSessionGeneration], () => getProviderRuntimeContextKey(settings))
   const linearStatus = hasLinearSearchSource
     ? (linearConnection.status ?? { connected: false, viewer: null })
     : defaultStatusCurrent
@@ -241,7 +248,7 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
   const linearIssueResult = useLinearIssueResult<LinearIssue[]>(
     JSON.stringify([linearResultScope, query]),
     [],
-    getLinearSourceScope(source),
+    recomputeOn([providerRuntimeSessionGeneration], () => getLinearSourceScope(source)),
     (previousData, previousTarget) => {
       const previous: unknown = JSON.parse(previousTarget)
       return ordinaryLinearQuery &&

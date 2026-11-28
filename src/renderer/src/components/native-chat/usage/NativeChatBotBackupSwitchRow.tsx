@@ -116,14 +116,32 @@ export function NativeChatBotBackupSwitchRow({
 
   const handleSwitch = (): void => {
     setSwitching(true)
-    void callBotRpc<{ switched: boolean }>(bot, 'bots.backup.switch', {
+    void callBotRpc<{ switched: boolean; continued?: boolean }>(bot, 'bots.backup.switch', {
       botId: bot.id,
       sessionId,
       turnItemId,
       target: activeChoice,
       ...(remember ? { remember: true } : {})
     })
-      .then(() => refreshBotHost(bot.hostId))
+      .then(({ switched, continued }) => {
+        if (!switched) {
+          toast.error(
+            t(
+              'components.native-chat.usageLimitActions.backupSwitchFailed',
+              'Could not switch to the backup model.'
+            )
+          )
+        }
+        if (continued === false) {
+          toast.error(
+            t(
+              'components.native-chat.usageLimitActions.backupContinuationFailed',
+              'Switched to the backup model. Continue the interrupted turn manually.'
+            )
+          )
+        }
+        return refreshBotHost(bot.hostId)
+      })
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setSwitching(false))
   }

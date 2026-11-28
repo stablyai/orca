@@ -87,7 +87,7 @@ export function useSshWorkspaceBrowserRoute(
     count: 0,
     skipProbe: false
   })
-  // Persist “Try anyway”: forwarding may work while the loopback probe is forbidden; do not re-prompt every launch.
+  // Persist “Try anyway”: an allowlist may still forward some sites the probe could not reach; do not re-prompt every launch.
   const skipProbe = attempt.skipProbe || probeSkippedTargetIds?.includes(targetId ?? '') === true
   const routeKey = sshWorkspaceBrowserRouteKey(
     targetId,

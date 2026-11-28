@@ -107,6 +107,12 @@ export const sshApi = {
     label?: string
   }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:addPortForward', args),
 
+  ensurePortForward: (args: {
+    targetId: string
+    remotePort: number
+  }): Promise<{ entry: PortForwardEntry; created: boolean }> =>
+    ipcRenderer.invoke('ssh:ensurePortForward', args),
+
   updatePortForward: (args: {
     id: string
     targetId: string

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../schema/lazy-zod-schema'
 
 export const CLAUDE_AGENT_VIEW_PATH = '/claude/agent-view'
 export const CLAUDE_AGENT_VIEW_RELAY_METHOD = 'agent_hook.claudeAgentView'
@@ -6,16 +7,20 @@ export const CLAUDE_AGENT_VIEW_COMMAND = 'orca-agent-view'
 export const CLAUDE_AGENT_VIEW_PLUGIN = 'orca-agent-view'
 export const CLAUDE_AGENT_VIEW_SUBSCRIBE = 'terminal.subscribeClaudeAgentViews'
 
-export const ClaudeAgentViewObservation = z.object({
-  agentId: z.string().min(1).max(256).optional(),
-  revision: z.number().int().nonnegative()
-})
-export const ClaudeAgentViewSnapshot = z.array(
+export const ClaudeAgentViewObservation = lazyZodSchema(() =>
   z.object({
-    paneKey: z.string(),
-    sessionId: z.string(),
-    agentId: z.string().optional()
+    agentId: z.string().min(1).max(256).optional(),
+    revision: z.number().int().nonnegative()
   })
+)
+export const ClaudeAgentViewSnapshot = lazyZodSchema(() =>
+  z.array(
+    z.object({
+      paneKey: z.string(),
+      sessionId: z.string(),
+      agentId: z.string().optional()
+    })
+  )
 )
 export type ClaudeAgentViewSnapshot = z.infer<typeof ClaudeAgentViewSnapshot>
 

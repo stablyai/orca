@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { isBotAgent } from '../../../src/shared/bot-types'
 import { AppState } from 'react-native'
 import {
   reduceBotGroupTranscript,
@@ -198,6 +199,28 @@ export function useMobileBotGroupTranscript(
       setError(String(error))
     }
   }, [apply, client, groupId, threadId, data, setError])
+  // The members' sessions the room reads its turns from.
+  const readers = useMemo(
+    () =>
+      data?.group.members.flatMap((member) => {
+        const bot = bots.find((bot) => bot.id === member.botId)
+        return bot && isBotAgent(bot.agent)
+          ? [
+              {
+                sessionId: member.sessionId,
+                agent: bot.agent,
+                operationIds:
+                  data?.messages.flatMap((message) =>
+                    message.turns
+                      .filter((turn) => turn.sessionId === member.sessionId && !turn.revoked)
+                      .map((turn) => turn.operationId)
+                  ) ?? []
+              }
+            ]
+          : []
+      }) ?? [],
+    [data?.group.members, bots, data?.messages]
+  )
   return {
     data,
     group: room.data?.group,
@@ -206,6 +229,7 @@ export function useMobileBotGroupTranscript(
     needsYou,
     itemReads,
     itemMemberIds,
-    loadEarlier
+    loadEarlier,
+    readers
   }
 }

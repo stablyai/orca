@@ -143,7 +143,7 @@ export function MobileBotBackupModelsPage(props: {
 
   const order = bot.backupModels?.order ?? []
   const automatic = bot.backupModels?.automatic ?? true
-  const activeBackup = status?.activeBackup ?? bot.activeBackup ?? null
+  const activeBackup = status ? status.activeBackup : (bot.activeBackup ?? null)
 
   const excludedKeys = useMemo(() => {
     const keys = new Set<string>()

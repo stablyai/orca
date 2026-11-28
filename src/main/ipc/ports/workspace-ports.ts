@@ -16,6 +16,7 @@ import {
   scanWorkspacePortProbes
 } from '../../ports/workspace-port-ownership'
 import { probeWorkspacePortPage } from '../../ports/workspace-port-page-probe'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 
 type WorkspacePortHandlersOptions = {
   advertisedUrlEvents?: Pick<AdvertisedUrlWatcher, 'onDidChange'>
@@ -24,27 +25,13 @@ type WorkspacePortHandlersOptions = {
 
 let unsubscribeAdvertisedUrlChanges: (() => void) | null = null
 
-export function registerWorkspacePortHandlers(
+export function registerWorkspacePortIpcHandlers(
   store: Store,
-  options: WorkspacePortHandlersOptions = {}
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   const inFlightScans = new Map<string, Promise<WorkspacePortScanResult>>()
-  const advertisedUrlEvents = options.advertisedUrlEvents ?? advertisedUrlWatcher
-  const getWindows = options.getWindows ?? (() => BrowserWindow.getAllWindows())
 
-  unsubscribeAdvertisedUrlChanges?.()
-  unsubscribeAdvertisedUrlChanges = advertisedUrlEvents.onDidChange((event) => {
-    const localWorktrees = getStoreWorkspacePortProbes(store)
-    if (!localWorktrees.some((worktree) => worktree.id === event.worktreeId)) {
-      return
-    }
-    broadcastWorkspacePortAdvertisedUrlChanged(getWindows, event)
-  })
-
-  ipcMain.removeHandler('workspacePorts:scan')
-  ipcMain.removeHandler('workspacePorts:kill')
-  ipcMain.removeHandler('workspacePorts:probePage')
-  ipcMain.handle(
+  ipc.handle(
     'workspacePorts:scan',
     (_event, rawArgs?: unknown): Promise<WorkspacePortScanResult> => {
       const args = parseScanRequest(rawArgs)
@@ -69,7 +56,7 @@ export function registerWorkspacePortHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'workspacePorts:kill',
     async (_event, rawArgs?: unknown): Promise<WorkspacePortKillResult> => {
       const args = parseKillRequest(rawArgs)
@@ -81,13 +68,35 @@ export function registerWorkspacePortHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'workspacePorts:probePage',
     async (_event, rawArgs?: unknown): Promise<WorkspacePortPageProbeResult> => {
       const args = parseProbePageRequest(rawArgs)
       return args ? probeWorkspacePortPage(args) : { kind: 'not-page' }
     }
   )
+}
+
+export function registerWorkspacePortHandlers(
+  store: Store,
+  options: WorkspacePortHandlersOptions = {}
+): void {
+  const advertisedUrlEvents = options.advertisedUrlEvents ?? advertisedUrlWatcher
+  const getWindows = options.getWindows ?? (() => BrowserWindow.getAllWindows())
+
+  unsubscribeAdvertisedUrlChanges?.()
+  unsubscribeAdvertisedUrlChanges = advertisedUrlEvents.onDidChange((event) => {
+    const localWorktrees = getStoreWorkspacePortProbes(store)
+    if (!localWorktrees.some((worktree) => worktree.id === event.worktreeId)) {
+      return
+    }
+    broadcastWorkspacePortAdvertisedUrlChanged(getWindows, event)
+  })
+
+  ipcMain.removeHandler('workspacePorts:scan')
+  ipcMain.removeHandler('workspacePorts:kill')
+  ipcMain.removeHandler('workspacePorts:probePage')
+  registerWorkspacePortIpcHandlers(store)
 }
 
 function broadcastWorkspacePortAdvertisedUrlChanged(

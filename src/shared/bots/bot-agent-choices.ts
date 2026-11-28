@@ -1,6 +1,7 @@
 // Which agents a bot can run on a host, and whether each can start; the desktop's New bot and the
 // host's own answer to a phone read it the same way.
 import {
+  agentMenuRowReady,
   agentMenuRowSupportsChat,
   type ChatUnavailableReason,
   type NewTabAgentMenuRow
@@ -64,14 +65,41 @@ export function botNewChatAgents(
 }
 
 /** The agents a bot can be set to here: the installed ones, and `current` always; empty while the
- *  menu is still learning the host. */
-export function botAgentChoices(model: BotAgentMenuModel, current?: BotAgent): BotAgent[] {
+ *  menu is still learning the host. `installedOnly` drops chats that would install their agent first,
+ *  so the first choice (a new bot's default) is never an agent the host lacks. */
+export function botAgentChoices(
+  model: BotAgentMenuModel,
+  current?: BotAgent,
+  installedOnly = false
+): BotAgent[] {
   if (model.state === 'loading') {
     return current ? [current] : []
   }
   return BOT_AGENTS.filter(
     (agent) =>
       agent === current ||
-      model.rows.some((row) => row.agent === agent && agentMenuRowSupportsChat(row))
+      model.rows.some(
+        (row) =>
+          row.agent === agent &&
+          agentMenuRowSupportsChat(row) &&
+          (!installedOnly || agentMenuRowReady(row))
+      )
   )
+}
+
+/** The host's default agent when a bot can start it there as it is now, not by installing it first:
+ *  the menu leads with chats the host runs now, so an install-first default doesn't beat a ready one. */
+export function readyBotDefaultAgent(
+  model: BotAgentMenuModel,
+  defaultAgent: string | null | undefined
+): BotAgent | undefined {
+  return botAgentChoices(model, undefined, true).find((agent) => agent === defaultAgent)
+}
+
+/** A new bot's agent from `choices`: the host's default agent when a bot can run it, else the first. */
+export function newBotAgent(
+  choices: readonly BotAgent[],
+  defaultAgent: string | null | undefined
+): BotAgent | undefined {
+  return choices.find((agent) => agent === defaultAgent) ?? choices[0]
 }

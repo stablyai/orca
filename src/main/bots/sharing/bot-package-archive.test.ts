@@ -267,6 +267,29 @@ describe('bot package export and archive', () => {
     expect(candidate.blocked).toBe(true)
     expect(candidate.flags).toContainEqual({ where: 'SOUL.md', line: 3, kind: 'secret' })
   })
+
+  it('shares the rest when a memory note is gone after listing', async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    await writeFile(join(home, 'memory/release-dates.md'), 'Thursdays\n')
+    const shareable = await readBotShareable({ bot, home, automations: [] })
+    await rm(join(home, 'memory/area-owners.md'))
+    await rm(join(home, 'memory/release-dates.md'))
+    const candidates = new BotShareCandidates(join(root, 'candidates'))
+    const candidate = await candidates.prepare({
+      bot,
+      shareable,
+      selection: { memory: ['area-owners'] },
+      packageId: 'pkg-1'
+    })
+    expect(candidate.leftOut).toContainEqual({
+      kind: 'memory',
+      name: 'area-owners',
+      why: 'unreadable'
+    })
+    expect(candidates.get(candidate.candidateId)?.content.bot.memory).toEqual([])
+    expect(candidate.available.memory).toEqual([])
+  })
 })
 
 describe('what a bot export may read', () => {

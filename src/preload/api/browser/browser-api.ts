@@ -1,3 +1,4 @@
+import type { CopyBrowserServerDownload } from '../../../shared/browser/downloads/browser-server-download-copy'
 import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserGuestDiscardApi } from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
@@ -42,18 +43,7 @@ import type {
   BrowserSitePermissionDecision,
   BrowserSitePermissionEntry
 } from '../../../shared/browser/site-settings/browser-site-permission'
-import type {
-  BrowserSetGrabModeArgs,
-  BrowserSetGrabModeResult,
-  BrowserAwaitGrabSelectionArgs,
-  BrowserGrabResult,
-  BrowserCancelGrabArgs,
-  BrowserCaptureSelectionScreenshotArgs,
-  BrowserCaptureSelectionScreenshotResult,
-  BrowserExtractHoverArgs,
-  BrowserExtractHoverResult,
-  GrabIntent
-} from '../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserGrabApi } from './browser-grab-api'
 import type {
   BrowserContextMenuDismissedEvent,
   BrowserContextMenuRequestedEvent,
@@ -206,17 +196,9 @@ export type BrowserApi = {
     callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
   ) => () => void
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>
-  setGrabMode: (args: BrowserSetGrabModeArgs) => Promise<BrowserSetGrabModeResult>
-  awaitGrabSelection: (args: BrowserAwaitGrabSelectionArgs) => Promise<BrowserGrabResult>
-  cancelGrab: (args: BrowserCancelGrabArgs) => Promise<boolean>
-  captureSelectionScreenshot: (
-    args: BrowserCaptureSelectionScreenshotArgs
-  ) => Promise<BrowserCaptureSelectionScreenshotResult>
-  extractHoverPayload: (args: BrowserExtractHoverArgs) => Promise<BrowserExtractHoverResult>
-  onGrabModeToggle: (callback: (browserPageId: string, intent: GrabIntent) => void) => () => void
-  onGrabActionShortcut: (
-    callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
-  ) => () => void
+  /** Copies a download a paired server saved into this computer's Downloads; `canceled` only if Cancel stopped it, rejects on failure. */
+  copyServerDownload: CopyBrowserServerDownload
+  cancelServerDownloadCopy: (args: { copyId: string }) => Promise<boolean>
   /** Escape pressed in a focused page; the page also receives it unless a grab pick is running. */
   onGuestEscape: (callback: (args: { browserPageId: string }) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
@@ -296,7 +278,8 @@ export type BrowserApi = {
   }) => Promise<BrowserExtensionActionResult>
   /** Installs, updates, removals, load errors or held updates changed; refetch the list. */
   onExtensionsChanged: (callback: () => void) => () => void
-} & BrowserGuestDiscardApi &
+} & BrowserGrabApi &
+  BrowserGuestDiscardApi &
   BrowserExtensionToolbarApi &
   BrowserExtensionSidePanelApi &
   BrowserExtensionWebStoreApi &

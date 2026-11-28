@@ -45,9 +45,17 @@ export function getLineagePlacementRows<Row>(args: {
   duplicatePinned: boolean
 }): LineagePlacementRows<Row> {
   const { rows, childrenByParentIdentity, identityOf } = args
+  const pinnedRoots = rows.filter(args.isPinned)
+  if (pinnedRoots.length === 0) {
+    return {
+      pinned: [],
+      natural: rows,
+      displayRootByIdentity: getTopVisibleLineageRoots(rows, childrenByParentIdentity, identityOf)
+    }
+  }
   const pinnedPlacement = getVisibleLineagePlacement(
     rows,
-    rows.filter(args.isPinned),
+    pinnedRoots,
     childrenByParentIdentity,
     identityOf,
     true
@@ -75,38 +83,82 @@ export function buildWorktreeOccurrencePlan<
   duplicatePinned: boolean
   sectionsOf: (placement: LineagePlacementRows<Row>) => readonly Section[]
   owningSectionOf?: (row: Row) => { key: string; label: string }
+  owningSectionKeyOf?: (row: Row) => string
   projectIdOf?: (row: Row) => string
 }): WorktreeOccurrencePlan<Row> & { sections: readonly Section[] } {
-  const { identityOf, childrenByParentIdentity } = args
-  const ownerByIdentity = new Map(
-    args.rows.map((row) => [identityOf(row), args.owningSectionOf?.(row)])
-  )
+  const { identityOf, childrenByParentIdentity, owningSectionOf } = args
+  const owningSectionKeyOf =
+    args.owningSectionKeyOf ??
+    (owningSectionOf ? (row: Row): string => owningSectionOf(row).key : undefined)
   const sections = args.sectionsOf(getLineagePlacementRows(args))
-  const parentByIdentity = new Map<string, string>()
-  for (const [parent, children] of childrenByParentIdentity) {
-    for (const child of children) {
-      parentByIdentity.set(identityOf(child), parent)
+  const hasLineage = childrenByParentIdentity.size > 0
+  let parentByIdentity: Map<string, string> | undefined
+  if (hasLineage) {
+    parentByIdentity = new Map<string, string>()
+    for (const [parent, children] of childrenByParentIdentity) {
+      for (const child of children) {
+        parentByIdentity.set(identityOf(child), parent)
+      }
     }
   }
   const bySection = new Map<string, WorktreeOccurrence<Row>[]>()
   const preferredByIdentity = new Map<string, WorktreeOccurrence<Row>>()
   for (const section of sections) {
     const sectionPath = section.revealPath ?? { key: section.key }
-    const members = new Set(section.items.map(identityOf))
+    const placement = section.placement ?? 'natural'
+    const isPinnedSection = section.placement === 'pinned'
+    const occurrences: WorktreeOccurrence<Row>[] = []
+    const emitted = new Set<string>()
+    if (!parentByIdentity) {
+      const items = section.items
+      const lastIndex = items.length - 1
+      for (let i = 0; i < items.length; i += 1) {
+        const row = items[i]
+        const identity = identityOf(row)
+        if (emitted.has(identity)) {
+          continue
+        }
+        emitted.add(identity)
+        const occurrence: WorktreeOccurrence<Row> = {
+          key: `${section.key}:${identity}`,
+          row,
+          owningSectionKey: owningSectionKeyOf?.(row),
+          sectionKey: section.key,
+          placement,
+          sectionPath,
+          parent: undefined,
+          depth: 0,
+          childCount: 0,
+          isLastChild: i === lastIndex,
+          showProjectName: false
+        }
+        occurrences.push(occurrence)
+        if (!isPinnedSection || !preferredByIdentity.has(identity)) {
+          preferredByIdentity.set(identity, occurrence)
+        }
+      }
+      bySection.set(section.key, occurrences)
+      continue
+    }
+    const members = new Set<string>()
+    for (const row of section.items) {
+      members.add(identityOf(row))
+    }
     const children = new Map<string, Row[]>()
     const roots: Row[] = []
     for (const row of section.items) {
       const parent = parentByIdentity.get(identityOf(row))
       if (parent !== undefined && members.has(parent)) {
-        const siblings = children.get(parent) ?? []
-        siblings.push(row)
-        children.set(parent, siblings)
+        const siblings = children.get(parent)
+        if (siblings) {
+          siblings.push(row)
+        } else {
+          children.set(parent, [row])
+        }
       } else {
         roots.push(row)
       }
     }
-    const occurrences: WorktreeOccurrence<Row>[] = []
-    const emitted = new Set<string>()
     const pending: { row: Row; parent?: WorktreeOccurrence<Row>; isLastChild: boolean }[] = []
     const emit = (): void => {
       while (pending.length > 0) {
@@ -119,18 +171,17 @@ export function buildWorktreeOccurrencePlan<
           continue
         }
         emitted.add(identity)
-        const descendants = children.get(identity) ?? []
-        const owner = ownerByIdentity.get(identity)
+        const descendants = children.get(identity)
         const occurrence: WorktreeOccurrence<Row> = {
           key: `${section.key}:${identity}`,
           row: next.row,
-          owningSectionKey: owner?.key,
+          owningSectionKey: owningSectionKeyOf?.(next.row),
           sectionKey: section.key,
-          placement: section.placement ?? 'natural',
+          placement,
           sectionPath,
           parent: next.parent,
           depth: next.parent ? next.parent.depth + 1 : 0,
-          childCount: descendants.length,
+          childCount: descendants ? descendants.length : 0,
           isLastChild: next.isLastChild,
           showProjectName:
             next.parent !== undefined &&
@@ -138,22 +189,52 @@ export function buildWorktreeOccurrencePlan<
             args.projectIdOf(next.row) !== args.projectIdOf(next.parent.row)
         }
         occurrences.push(occurrence)
-        if (section.placement !== 'pinned' || !preferredByIdentity.has(identity)) {
+        if (!isPinnedSection || !preferredByIdentity.has(identity)) {
           preferredByIdentity.set(identity, occurrence)
         }
-        for (let i = descendants.length - 1; i >= 0; i -= 1) {
-          pending.push({
-            row: descendants[i],
-            parent: occurrence,
-            isLastChild: i === descendants.length - 1
-          })
+        if (descendants) {
+          for (let i = descendants.length - 1; i >= 0; i -= 1) {
+            pending.push({
+              row: descendants[i],
+              parent: occurrence,
+              isLastChild: i === descendants.length - 1
+            })
+          }
         }
       }
     }
-    roots.forEach((row, i) => {
-      pending.push({ row, isLastChild: i === roots.length - 1 })
+    const lastRootIndex = roots.length - 1
+    for (let i = 0; i < roots.length; i += 1) {
+      const row = roots[i]
+      const identity = identityOf(row)
+      if (emitted.has(identity)) {
+        continue
+      }
+      const descendants = children.get(identity)
+      if (!descendants || descendants.length === 0) {
+        emitted.add(identity)
+        const occurrence: WorktreeOccurrence<Row> = {
+          key: `${section.key}:${identity}`,
+          row,
+          owningSectionKey: owningSectionKeyOf?.(row),
+          sectionKey: section.key,
+          placement,
+          sectionPath,
+          parent: undefined,
+          depth: 0,
+          childCount: 0,
+          isLastChild: i === lastRootIndex,
+          showProjectName: false
+        }
+        occurrences.push(occurrence)
+        if (!isPinnedSection || !preferredByIdentity.has(identity)) {
+          preferredByIdentity.set(identity, occurrence)
+        }
+        continue
+      }
+      pending.push({ row, isLastChild: i === lastRootIndex })
       emit()
-    })
+    }
     // Why: malformed older-peer cycles must not erase the entire list.
     for (const row of section.items) {
       if (!emitted.has(identityOf(row))) {

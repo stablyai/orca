@@ -7,7 +7,7 @@ import {
   resolveStepOutcome,
   summarizeJobSteps
 } from '../../../../../../src/shared/source-control/checks/pr-check-step-status'
-import { translate } from '../../../../i18n/mobile-i18n'
+import type { Translate } from '../../../../i18n/mobile-i18n'
 
 // Map check payload to desktop-equivalent summary/annotations/failed jobs without React/RN imports for Node tests.
 
@@ -43,9 +43,8 @@ export type CheckDetailContent = {
   jobsTruncated: boolean
 }
 
-function mapAnnotation(annotation: PRCheckAnnotation): CheckDetailAnnotation {
-  const path =
-    annotation.path ?? translate('pullRequest.prCheckDetailContent.annotation', 'Annotation')
+function mapAnnotation(annotation: PRCheckAnnotation, t: Translate): CheckDetailAnnotation {
+  const path = annotation.path ?? t('pullRequest.prCheckDetailContent.annotation', 'Annotation')
   const locator = annotation.startLine ? `${path}:${annotation.startLine}` : path
   return {
     locator,
@@ -55,26 +54,21 @@ function mapAnnotation(annotation: PRCheckAnnotation): CheckDetailAnnotation {
   }
 }
 
-function mapJob(job: PRCheckJob): CheckDetailJob {
+function mapJob(job: PRCheckJob, t: Translate): CheckDetailJob {
   const failedSteps = summarizeJobSteps(job).failed.map((step) => ({
     name: step.name,
     state:
-      step.conclusion ??
-      step.status ??
-      translate('pullRequest.prCheckDetailContent.unknown', 'unknown')
+      step.conclusion ?? step.status ?? t('pullRequest.prCheckDetailContent.unknown', 'unknown')
   }))
   return {
     name: job.name,
-    state:
-      job.conclusion ??
-      job.status ??
-      translate('pullRequest.prCheckDetailContent.unknown', 'unknown'),
+    state: job.conclusion ?? job.status ?? t('pullRequest.prCheckDetailContent.unknown', 'unknown'),
     failedSteps,
     logTail: job.logTail
   }
 }
 
-export function presentCheckDetail(details: PRCheckRunDetails): CheckDetailContent {
+export function presentCheckDetail(details: PRCheckRunDetails, t: Translate): CheckDetailContent {
   const summaryLines = [
     details.conclusion ?? details.status,
     details.title,
@@ -87,13 +81,15 @@ export function presentCheckDetail(details: PRCheckRunDetails): CheckDetailConte
 
   return {
     summaryLines,
-    annotations: details.annotations.slice(0, MAX_ANNOTATIONS).map(mapAnnotation),
+    annotations: details.annotations
+      .slice(0, MAX_ANNOTATIONS)
+      .map((annotation) => mapAnnotation(annotation, t)),
     annotationsTruncated: details.annotations.length > MAX_ANNOTATIONS,
     jobsLabel:
       failedJobs.length > 0
-        ? translate('pullRequest.prCheckDetailContent.failedJobs', 'Failed jobs')
-        : translate('pullRequest.prCheckDetailContent.jobs', 'Jobs'),
-    jobs: visibleJobs.slice(0, MAX_JOBS).map(mapJob),
+        ? t('pullRequest.prCheckDetailContent.failedJobs', 'Failed jobs')
+        : t('pullRequest.prCheckDetailContent.jobs', 'Jobs'),
+    jobs: visibleJobs.slice(0, MAX_JOBS).map((job) => mapJob(job, t)),
     jobsTruncated: details.jobs.length > MAX_JOBS
   }
 }

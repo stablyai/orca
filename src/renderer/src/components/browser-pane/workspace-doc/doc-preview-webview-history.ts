@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
 
 export type DocPreviewHistory = {
+  currentUrl: string
   canGoBack: boolean
   canGoForward: boolean
   goBack: () => void
@@ -15,14 +16,14 @@ export type DocPreviewHistory = {
 export function useDocPreviewWebviewHistory(
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
 ): DocPreviewHistory {
-  const [depth, setDepth] = useState({ canGoBack: false, canGoForward: false })
-  // Compare against a ref so navigation events re-render only when history button availability changes.
+  const [depth, setDepth] = useState({ canGoBack: false, canGoForward: false, currentUrl: '' })
   const depthRef = useRef(depth)
 
-  const apply = useCallback((next: { canGoBack: boolean; canGoForward: boolean }): void => {
+  const apply = useCallback((next: typeof depth): void => {
     if (
       depthRef.current.canGoBack === next.canGoBack &&
-      depthRef.current.canGoForward === next.canGoForward
+      depthRef.current.canGoForward === next.canGoForward &&
+      depthRef.current.currentUrl === next.currentUrl
     ) {
       return
     }
@@ -33,19 +34,23 @@ export function useDocPreviewWebviewHistory(
   const sync = useCallback((): void => {
     const webview = webviewRef.current
     if (!webview) {
-      apply({ canGoBack: false, canGoForward: false })
+      apply({ canGoBack: false, canGoForward: false, currentUrl: '' })
       return
     }
     try {
-      apply({ canGoBack: webview.canGoBack(), canGoForward: webview.canGoForward() })
+      apply({
+        canGoBack: webview.canGoBack(),
+        canGoForward: webview.canGoForward(),
+        currentUrl: webview.getURL()
+      })
     } catch {
       // The guest can detach between the event and this read; treat it as no history.
-      apply({ canGoBack: false, canGoForward: false })
+      apply({ canGoBack: false, canGoForward: false, currentUrl: '' })
     }
   }, [apply, webviewRef])
 
   const reset = useCallback((): void => {
-    apply({ canGoBack: false, canGoForward: false })
+    apply({ canGoBack: false, canGoForward: false, currentUrl: '' })
   }, [apply])
 
   const goBack = useCallback((): void => {
@@ -65,6 +70,7 @@ export function useDocPreviewWebviewHistory(
   }, [webviewRef])
 
   return {
+    currentUrl: depth.currentUrl,
     canGoBack: depth.canGoBack,
     canGoForward: depth.canGoForward,
     goBack,

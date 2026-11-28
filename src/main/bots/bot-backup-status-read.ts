@@ -235,7 +235,9 @@ export function createBotBackupFailoverHostHook(
         : undefined
     },
     isSwitching: (sessionId, turnItemId) =>
-      peekFailover()?.failover.isFailoverSwitching(sessionId, turnItemId) === true
+      peekFailover()?.failover.isFailoverSwitching(sessionId, turnItemId) === true,
+    isSuperseded: (sessionId, turnItemId) =>
+      peekFailover()?.failover.isSupersededCut(sessionId, turnItemId) === true
   }
 }
 

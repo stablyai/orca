@@ -11,11 +11,14 @@ import type { AgentJournalBotBackupModelSwitchItem } from '../../shared/agent-jo
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import type { ExternalConversationLinkStore } from '../external-conversations/external-conversation-links'
 import {
+  findLink,
   findLinksForSession,
-  writeLink
+  writeLink,
+  type LinkedConversation
 } from '../external-conversations/external-conversation-links'
 import type { AgentSessionContinuationContext } from '../../shared/agent-session/agent-session-wire'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
+import type { BotQueuedCarry } from './bot-chat-queued-carry'
 
 const MAX_HANDOFF_EXCERPT_CHARS = 24_000
 
@@ -59,10 +62,11 @@ export type BotCrossAgentHandoffDeps = {
       actsFor?: BotConversationActsFor
       text: string
       clientMessageId: string
+      beforeFirstMessage?: () => Promise<void>
     }
   ) => Promise<string>
-  setHomeChatSession: (botId: string, sessionId: string) => Promise<void>
-  carryQueuedMessages: (fromSessionId: string, toSessionId: string) => Promise<void>
+  setHomeChatSession: (botId: string, sessionId: string, expected: string) => Promise<void>
+  carryQueuedMessages: (fromSessionId: string, toSessionId: string) => Promise<BotQueuedCarry>
   closeOldHomeChat: (sessionId: string) => Promise<void>
   showTab: (bot: Bot, sessionId: string) => Promise<void>
   nameSession: (sessionId: string, name: string) => Promise<void>
@@ -75,7 +79,8 @@ export type BotCrossAgentHandoffDeps = {
   onSessionHandedOff?: (
     fromSessionId: string,
     toSessionId: string,
-    handoffSend?: BotCrossAgentHandoffSend
+    handoffSend: BotCrossAgentHandoffSend | undefined,
+    carried: BotQueuedCarry['messages']
   ) => void
 }
 
@@ -160,49 +165,80 @@ export async function executeCrossAgentBotHandoff(
         (linked) => linked.link.bot?.kind !== 'bot-chat'
       )
     : []
-  if (store) {
-    for (const linked of reboundLinks) {
-      writeLink(store, linked.workspace, {
-        ...linked.link,
-        sessionId: newSessionId,
-        agent: target.agent,
-        paneKey: `chat:${newSessionId}`
-      })
-    }
-  }
-
+  const attemptedRebinds: LinkedConversation[] = []
+  let homeRebound = false
   try {
+    if (store) {
+      for (const linked of reboundLinks) {
+        attemptedRebinds.push(linked)
+        writeLink(store, linked.workspace, {
+          ...linked.link,
+          sessionId: newSessionId,
+          agent: target.agent,
+          paneKey: `chat:${newSessionId}`
+        })
+      }
+    }
     await deps.startSession(botOnTarget, {
       sessionId: newSessionId,
       ...(background ? { background: true as const } : {}),
       ...(actsFor ? { actsFor } : {}),
       text: prompt,
-      clientMessageId
+      clientMessageId,
+      ...(isHomeChat
+        ? {
+            beforeFirstMessage: async () => {
+              await deps.setHomeChatSession(bot.id, newSessionId, sourceSessionId)
+              homeRebound = true
+            }
+          }
+        : {})
     })
   } catch (error) {
+    const rollbackErrors: unknown[] = []
+    if (homeRebound) {
+      await deps.setHomeChatSession(bot.id, sourceSessionId, newSessionId).catch((failure) => {
+        rollbackErrors.push(failure)
+      })
+    }
     if (store) {
-      for (const linked of reboundLinks) {
-        writeLink(store, linked.workspace, linked.link)
+      for (const linked of attemptedRebinds.toReversed()) {
+        try {
+          if (findLink(store, linked.link)?.link.sessionId === newSessionId) {
+            writeLink(store, linked.workspace, linked.link)
+          }
+        } catch (failure) {
+          rollbackErrors.push(failure)
+        }
       }
+    }
+    if (rollbackErrors.length > 0) {
+      throw new BotHandoffRollbackError([error, ...rollbackErrors], 'Could not restore bot routing')
     }
     throw error
   }
 
+  const carry = await deps
+    .carryQueuedMessages(sourceSessionId, newSessionId)
+    .catch((error: unknown) => {
+      console.warn('[bots] could not move queued messages during backup handoff', error)
+      return { complete: false, messages: new Map<string, never>() }
+    })
+  deps.onSessionHandedOff?.(
+    sourceSessionId,
+    newSessionId,
+    direction === 'to-backup' ? handoffSend : undefined,
+    carry.messages
+  )
   if (conversationName) {
     await deps.nameSession(newSessionId, conversationName).catch(() => {})
   }
 
-  // Migrate queued messages before switching or closing the source so failed migration stays recoverable.
-  await deps.carryQueuedMessages(sourceSessionId, newSessionId)
-
-  if (isHomeChat) {
-    await deps.setHomeChatSession(bot.id, newSessionId)
-    if (wasVisible) {
-      await deps.showTab(botOnTarget, newSessionId).catch(() => {})
-    }
-    await deps.closeOldHomeChat(sourceSessionId).catch(() => {})
-  } else if (wasVisible) {
+  if (wasVisible) {
     await deps.showTab(botOnTarget, newSessionId).catch(() => {})
+  }
+  if (isHomeChat && carry.complete) {
+    await deps.closeOldHomeChat(sourceSessionId).catch(() => {})
   }
 
   const baseCard: Omit<AgentJournalBotBackupModelSwitchItem, 'linkedSessionId'> = {
@@ -223,6 +259,7 @@ export async function executeCrossAgentBotHandoff(
     deps.appendSwitchCard(newSessionId, { ...baseCard, linkedSessionId: sourceSessionId }, now)
   ])
 
-  deps.onSessionHandedOff?.(sourceSessionId, newSessionId, handoffSend)
   return { newSessionId, switchId }
 }
+
+export class BotHandoffRollbackError extends AggregateError {}

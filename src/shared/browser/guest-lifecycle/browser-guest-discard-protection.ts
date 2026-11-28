@@ -36,6 +36,8 @@ export type BrowserGuestDiscardApi = {
     browserPageId: string
     partition: string
     url: string
+    /** Its wait for the profile's extensions already ended; another would outlast its deadline. */
+    waited?: boolean
   }) => Promise<string>
   reserveGuestDiscard: (args: {
     browserPageId: string

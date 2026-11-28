@@ -22,7 +22,6 @@ export const BOT_AGENTS = [
   'goose',
   'kilo',
   'mimo-code',
-  'gemini',
   'droid',
   'qwen-code',
   'cline',
@@ -31,7 +30,3 @@ export const BOT_AGENTS = [
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 export type BotAgent = (typeof BOT_AGENTS)[number]
-
-export function isBotAgent(agent: string): agent is BotAgent {
-  return BOT_AGENTS.some((entry) => entry === agent)
-}

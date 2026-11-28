@@ -5,6 +5,10 @@ import {
   type QueuedMessageRow
 } from '../native-chat/agent-session-journal/queued-messages/queued-message-table'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+
+export type BotCarriedMessage = { from: string; to: string }
+export type BotQueuedCarry = { complete: boolean; messages: Map<string, BotCarriedMessage> }
 
 export type QueuedCarryHost = Pick<StructuredAgentSessionHost, 'conversation' | 'serialize'> & {
   deps: Pick<StructuredAgentSessionHost['deps'], 'agents'> & {
@@ -52,11 +56,11 @@ function carriedOptions(
 export async function carryQueuedMessages(
   host: QueuedCarryHost,
   from: string | null,
-  to: string,
-  options?: { rethrow?: boolean }
-): Promise<void> {
+  to: string
+): Promise<BotQueuedCarry> {
+  const messages = new Map<string, BotCarriedMessage>()
   if (!from || !host.deps.store.getConversation(from)) {
-    return
+    return { complete: true, messages }
   }
   try {
     const source = (await host.conversation(from)).journal.queuedMessages
@@ -83,13 +87,16 @@ export async function carryQueuedMessages(
           ...(hold ? { holdReason: hold } : {}),
           ...(card.unattended !== undefined ? { unattended: card.unattended } : {})
         })
+        messages.set(messageId, {
+          from: card.fingerprint,
+          to: agentSessionSendBodyFingerprint(to, card.body)
+        })
         await source.withdraw([messageId])
       })
     }
   } catch (error) {
     console.warn('[bots] could not move queued messages to the new Chat', error)
-    if (options?.rethrow) {
-      throw error
-    }
+    return { complete: false, messages }
   }
+  return { complete: true, messages }
 }

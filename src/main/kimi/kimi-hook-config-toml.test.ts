@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { applyManagedKimiHooks, removeManagedKimiHooks } from './kimi-hook-config-toml'
+import {
+  applyManagedKimiHooks,
+  buildManagedKimiHooksBlock,
+  removeManagedKimiHooks
+} from './kimi-hook-config-toml'
 
 const COMMAND =
   "if [ -x '/home/u/.orca/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/home/u/.orca/agent-hooks/kimi-hook.sh'; fi"
 const isManaged = (command: string | undefined): boolean =>
   typeof command === 'string' && command.includes('agent-hooks/kimi-hook.sh')
 const START_MARKER = '# >>> orca-managed-kimi-hooks (managed by Orca; do not edit) >>>'
+
+function install(configText: string): string {
+  const next = applyManagedKimiHooks(configText, COMMAND, isManaged)
+  if (!next?.installed) {
+    throw new Error('install produced TOML Kimi cannot load')
+  }
+  return next.text
+}
 
 /** Drops only the `# <<< ... <<<` line, the hand-edit that orphans the block. */
 function deleteEndMarker(text: string): string {
@@ -25,7 +37,7 @@ describe('orphaned managed block ownership (#18861)', () => {
   ].join('\n')
 
   function orphanedWithUserTail(): string {
-    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND, isManaged)
+    const installed = install('default_model = "x"\n')
     return `${deleteEndMarker(installed)}\n${USER_TAIL}\n`
   }
 
@@ -99,12 +111,34 @@ describe('CRLF configs', () => {
   const userConfig = 'default_model = "kimi-k2.6"\r\n'
 
   it('keeps CRLF user bytes after an orphaned block', () => {
-    const installed = applyManagedKimiHooks(userConfig, COMMAND, isManaged)
+    const installed = install(userConfig)
     const orphaned = `${deleteEndMarker(installed)}\r\n[providers."mine"]\r\napi_key = "sk-secret"\r\n`
     const { text, changed } = removeManagedKimiHooks(orphaned, isManaged)
     expect(changed).toBe(true)
     expect(text).toContain('api_key = "sk-secret"')
     expect(text).not.toContain('agent-hooks/kimi-hook.sh')
     expect(text).not.toMatch(/[^\r]\n/)
+  })
+})
+
+// #49505: Kimi drops its whole config when hooks is defined twice.
+describe('inline hooks array', () => {
+  const inline = [
+    'default_model = "kimi-code/k3.1-pro"',
+    `hooks = [{ event = "SessionStart", matcher = "^resume$", command = "${COMMAND}", timeout = 10 }]`,
+    ''
+  ].join('\n')
+
+  it('refuses to append [[hooks]] tables Kimi would reject', () => {
+    expect(applyManagedKimiHooks(inline, COMMAND, isManaged)).toBeNull()
+    expect(applyManagedKimiHooks('[hooks]\nx = 1\n', COMMAND, isManaged)).toBeNull()
+  })
+
+  it('drops the block older installs appended beside the inline array', () => {
+    const broken = `${inline}\n${buildManagedKimiHooksBlock(COMMAND)}\n`
+    expect(applyManagedKimiHooks(broken, COMMAND, isManaged)).toEqual({
+      text: inline,
+      installed: false
+    })
   })
 })

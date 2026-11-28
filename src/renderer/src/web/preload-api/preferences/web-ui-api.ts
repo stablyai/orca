@@ -4,8 +4,10 @@ import { createWebExplorerRootSync } from '../workspaces/web-explorer-root-sync'
 import { createWebJiraFilterStateApi } from '../jira/web-jira-filter-state-api'
 import { WEB_PENDING_LINK_API } from './web-pending-link-api'
 import type { PreloadApi } from '../../../../../preload/api-types'
-import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
-import type { ReadClipboardTextOptions } from '../../../../../shared/clipboard/clipboard-text'
+import {
+  readWebClipboardPasteContent,
+  readWebClipboardText
+} from '../clipboard/web-clipboard-paste-content'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import { omitPairingLocalUiFields } from '../../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
@@ -144,20 +146,13 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         return optimistic
       }
     },
-    readClipboardText: async (options?: ReadClipboardTextOptions) =>
-      assertClipboardTextWithinLimitWithYield(
-        await (navigator.clipboard?.readText?.() ?? ''),
-        options
-      ),
-    // Browser paste events carry their own HTML; a programmatic read would prompt.
-    readClipboardLinkHtml: async () => '',
+    readClipboardText: readWebClipboardText,
+    readClipboardPasteContent: readWebClipboardPasteContent,
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: saveWebClipboardImageAsTempFile,
     savePastedTextAsFile: savePastedTextAsWebAgentSessionAttachment,
     clipboardHasImage,
-    // Browsers expose copied files only inside a paste event.
-    readClipboardFilePaths: async () => [],
     // Why empty: a browser has no local paste folder, so restored pastes stay to attach again.
     restoreNativeChatPastes: async () => [],
     onAgentSessionUploadRemoved: () => noopUnsubscribe,
@@ -271,6 +266,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onWorkspaceSleep: subscribeWebWorkspaceSleep,
     // Why: paired web is a full renderer that wakes on activation; mobile wake is desktop-host-scoped and never reaches web.
     onResumeSleepingAgents: () => noopUnsubscribe,
+    onSleepingMailChanged: () => noopUnsubscribe,
+    replySleepingAgentWake: () => {},
+    notifySleepingMailAvailability: () => {},
+    requestSleepingMailSnapshot: () => {},
     onTerminalZoom: () => noopUnsubscribe,
     // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.
     onSystemResumed: () => noopUnsubscribe,

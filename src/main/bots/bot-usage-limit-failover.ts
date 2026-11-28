@@ -3,7 +3,6 @@ import type { Bot, BotAgent } from '../../shared/bot-types'
 import {
   botModelTargetKey,
   botPrimaryTarget,
-  rememberedBotBackupModels,
   type BotBackupSwitchParams
 } from '../../shared/bots/bot-backup-models'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
@@ -13,25 +12,44 @@ import {
   executeBotBackupSwitch,
   pickReadyBotBackup,
   resolveBotLaunchSetup,
-  returnHomeChatToPrimary,
+  type BotBackupSwitchResult,
   type BotCutBackupState,
   type BotFailoverSessionInfo,
   type BotUsageLimitFailoverDeps
 } from './bot-usage-limit-failover-execution'
+import { BotHandoffRollbackError } from './bot-cross-agent-handoff'
+import {
+  reconsiderReleasedLimit,
+  returnBackupToPrimary,
+  switchBackupManually,
+  type BotBackupActions
+} from './bot-usage-limit-failover-actions'
 
 export type { BotCutBackupState, BotFailoverSessionInfo, BotUsageLimitFailoverDeps }
 
 export class BotUsageLimitFailover {
   private readonly botQueues = new Map<string, Promise<void>>()
   private readonly cutStates = new Map<string, BotCutBackupState>()
-  private readonly attemptedByCut = new Map<string, Set<string>>()
+  private readonly attemptedByCut = new Map<string, { turnItemId: string; targets: Set<string> }>()
   private readonly inFlightCuts = new Set<string>()
+  private readonly switchingCuts = new Set<string>()
+  private readonly observedCuts = new Map<
+    string,
+    { cut: HostUsageLimitCut; key: BotUsageLimitKey }
+  >()
+  private readonly handledCuts = new Map<string, { turnItemId: string; superseded: boolean }>()
   private readonly pendingForcedReturns = new Set<string>()
   private readonly programmaticOptionSessions = new Set<string>()
   private readonly now: () => number
+  private readonly actions: BotBackupActions
 
   constructor(private readonly deps: BotUsageLimitFailoverDeps) {
     this.now = deps.now ?? Date.now
+    this.actions = {
+      deps: this.deps,
+      withProgrammaticOptions: (id, run) => this.withProgrammaticOptions(id, run),
+      now: this.now
+    }
   }
 
   /** True while failover itself is mutating options on `sessionId` (not a manual owner pick). */
@@ -45,7 +63,12 @@ export class BotUsageLimitFailover {
   }
 
   isFailoverSwitching(sessionId: string, turnItemId: string): boolean {
-    return this.readCutBackupState(sessionId, turnItemId)?.backupState === 'switching'
+    return this.switchingCuts.has(`${sessionId}:${turnItemId}`)
+  }
+
+  isSupersededCut(sessionId: string, turnItemId: string): boolean {
+    const handled = this.handledCuts.get(sessionId)
+    return handled?.turnItemId === turnItemId && handled.superseded
   }
 
   /** Resolves the setup a new bot session or automation run should launch with. */
@@ -54,102 +77,54 @@ export class BotUsageLimitFailover {
   }
 
   /** Called when a structured session observes a usage-limit cut. */
-  async onUsageLimitCut(sessionId: string, cut: HostUsageLimitCut): Promise<void> {
+  async onUsageLimitCut(sessionId: string, cut: HostUsageLimitCut, recheck = false): Promise<void> {
     const bot = this.deps.botOfSession(sessionId)
-    if (!bot || bot.paused) {
+    if (!bot || bot.paused || this.handledCuts.get(sessionId)?.turnItemId === cut.turnItemId) {
       return
     }
     const dedupeKey = `${sessionId}:${cut.turnItemId}`
     if (this.inFlightCuts.has(dedupeKey)) {
       return
     }
+    const state = this.readCutBackupState(sessionId, cut.turnItemId)
+    if (
+      !recheck &&
+      (state?.backupState === 'backups-exhausted' || state?.backupState === 'ask-backup') &&
+      this.observedCuts.get(sessionId)?.cut.resetsAt === cut.resetsAt
+    ) {
+      return
+    }
     this.inFlightCuts.add(dedupeKey)
+    const automatic = bot.backupModels?.automatic && bot.backupModels.order.length > 0
+    if (automatic) {
+      this.switchingCuts.add(dedupeKey)
+    }
+    const releaseWatch = automatic ? this.deps.holdTurnWatch?.(sessionId) : undefined
     try {
       await runKeyedSerializedOperation(this.botQueues, bot.id, async () => {
         await this.handleCutSerialized(bot.id, sessionId, cut)
       })
     } finally {
       this.inFlightCuts.delete(dedupeKey)
+      this.switchingCuts.delete(dedupeKey)
+      releaseWatch?.()
     }
   }
 
-  /** Manual owner action from the inline usage-limit card (`bots.backup.switch`). */
-  async switchSessionManually(
-    params: BotBackupSwitchParams
-  ): Promise<{ switched: boolean; newSessionId?: string }> {
-    return runKeyedSerializedOperation(this.botQueues, params.botId, async () => {
-      const bot = this.deps.listBots().find((entry) => entry.id === params.botId)
-      if (!bot) {
-        throw new Error('bot_not_found')
-      }
-      const session = await this.deps.getSessionInfo(params.sessionId)
-      if (!session) {
-        throw new Error('session_not_found')
-      }
-      if (this.deps.botOfSession(params.sessionId)?.id !== bot.id) {
-        throw new Error('session_bot_mismatch')
-      }
-      if (params.remember) {
-        await this.deps.updateBot(bot.id, (latest) => ({
-          backupModels:
-            rememberedBotBackupModels(
-              params.target,
-              latest.backupModels,
-              botPrimaryTarget(latest)
-            ) ?? null
-        }))
-      }
-      const readCut = await this.deps.readSessionCut?.(params.sessionId)
-      const cut: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt'> = {
-        turnItemId: params.turnItemId,
-        ...(readCut?.resetsAt !== undefined ? { resetsAt: readCut.resetsAt } : {})
-      }
-      const latestBot = this.deps.listBots().find((entry) => entry.id === bot.id) ?? bot
-      const result = await executeBotBackupSwitch(
-        this.deps,
-        (sid, run) => this.withProgrammaticOptions(sid, run),
-        { bot: latestBot, session, cut, target: params.target, now: this.now() }
-      )
-      this.clearCutState(session.sessionId)
-      return result
-    })
+  switchSessionManually(params: BotBackupSwitchParams): Promise<BotBackupSwitchResult> {
+    return runKeyedSerializedOperation(this.botQueues, params.botId, () =>
+      switchBackupManually(this.actions, params, {
+        isHandled: (id, turn) => this.handledCuts.get(id)?.turnItemId === turn,
+        complete: (id, cut, superseded) => this.completeCut(id, cut, superseded),
+        switching: this.switchingCuts
+      })
+    )
   }
 
-  /** Returns a bot on an active backup back to its primary model once verified ready (or forced). */
-  async returnToPrimary(botId: string, options: { force?: boolean } = {}): Promise<boolean> {
-    return runKeyedSerializedOperation(this.botQueues, botId, async () => {
-      const bot = this.deps.listBots().find((entry) => entry.id === botId)
-      if (!bot?.activeBackup) {
-        return false
-      }
-      const primaryModel = bot.launch?.model ?? bot.activeBackup.primaryModel
-      const primaryKey = await this.limitKeyFor(bot.agent, primaryModel)
-      if (!options.force && !(await this.deps.gate.verifyReturnReady(primaryKey))) {
-        return false
-      }
-      const home = bot.chatSessionId ? await this.deps.getSessionInfo(bot.chatSessionId) : null
-      // Never interrupt an active Home Chat turn; remember forced requests so onTurnSucceeded completes them.
-      if (home && !home.isIdle) {
-        if (options.force) {
-          this.pendingForcedReturns.add(bot.id)
-        }
-        return false
-      }
-      const fromTarget = bot.activeBackup.target
-      if (home) {
-        const returned = await returnHomeChatToPrimary(
-          this.deps,
-          (sid, run) => this.withProgrammaticOptions(sid, run),
-          { bot, home, fromTarget, primaryModel, manual: options.force === true, now: this.now() }
-        )
-        if (!returned) {
-          return false
-        }
-      }
-      this.pendingForcedReturns.delete(bot.id)
-      await this.deps.updateBot(bot.id, () => ({ activeBackup: null }))
-      return true
-    })
+  returnToPrimary(botId: string, options: { force?: boolean } = {}): Promise<boolean> {
+    return runKeyedSerializedOperation(this.botQueues, botId, () =>
+      returnBackupToPrimary(this.actions, botId, options.force === true, this.pendingForcedReturns)
+    )
   }
 
   /** Re-evaluates held sessions when a bot's backup config changes (e.g., automatic enabled). */
@@ -158,22 +133,18 @@ export class BotUsageLimitFailover {
     for (const sessionId of sessions) {
       const cut = await this.deps.readSessionCut?.(sessionId)
       if (cut) {
-        await this.onUsageLimitCut(sessionId, cut)
+        await this.onUsageLimitCut(sessionId, cut, true)
       }
     }
   }
 
-  /** Called by BotUsageLimitGate when a held limit releases; returns any waiting bots to primary. */
-  async onLimitReleased(released: BotUsageLimitKey): Promise<void> {
-    for (const bot of this.deps.listBots()) {
-      if (!bot.activeBackup || bot.agent !== released.agent) {
-        continue
-      }
-      const primaryModel = bot.launch?.model ?? bot.activeBackup.primaryModel ?? ''
-      if (primaryModel === released.model) {
-        await this.returnToPrimary(bot.id).catch(() => {})
-      }
-    }
+  onLimitReleased(released: BotUsageLimitKey): Promise<void> {
+    return reconsiderReleasedLimit(this.deps, released, {
+      cuts: this.cutStates,
+      observedKey: (id) => this.observedCuts.get(id)?.key,
+      returnToPrimary: (id) => this.returnToPrimary(id),
+      reconsider: (id, cut) => this.onUsageLimitCut(id, cut, true)
+    })
   }
 
   /** Clears limit holds and cut retry guards when a session completes a turn normally. */
@@ -187,13 +158,10 @@ export class BotUsageLimitFailover {
         model: session.model ?? ''
       })
     }
+    this.observedCuts.delete(sessionId)
+    this.handledCuts.delete(sessionId)
     this.clearCutState(sessionId)
-    const prefix = `${sessionId}:`
-    for (const key of this.attemptedByCut.keys()) {
-      if (key.startsWith(prefix)) {
-        this.attemptedByCut.delete(key)
-      }
-    }
+    this.attemptedByCut.delete(sessionId)
     const bot = this.deps.botOfSession(sessionId)
     if (bot?.activeBackup && bot.chatSessionId === sessionId) {
       if (this.pendingForcedReturns.has(bot.id)) {
@@ -208,6 +176,13 @@ export class BotUsageLimitFailover {
     }
   }
 
+  async onTurnCancelled(sessionId: string): Promise<void> {
+    const bot = this.deps.botOfSession(sessionId)
+    if (bot?.chatSessionId === sessionId && this.pendingForcedReturns.has(bot.id)) {
+      await this.returnToPrimary(bot.id, { force: true })
+    }
+  }
+
   private async handleCutSerialized(
     botId: string,
     sessionId: string,
@@ -215,16 +190,32 @@ export class BotUsageLimitFailover {
   ): Promise<void> {
     const bot = this.deps.listBots().find((entry) => entry.id === botId)
     const session = bot && !bot.paused ? await this.deps.getSessionInfo(sessionId) : null
-    if (!bot || !session) {
+    if (!bot || !session || this.handledCuts.get(sessionId)?.turnItemId === cut.turnItemId) {
       return
     }
     const accountHomeKey = await this.deps.resolveAccountHomeKey(session.provider, sessionId)
-    this.deps.gate.recordLimit({
+    const key = {
       agent: session.provider,
       accountHomeKey,
-      model: session.model ?? '',
-      ...(cut.resetsAt !== undefined ? { resetsAt: cut.resetsAt } : {})
-    })
+      model: session.model ?? ''
+    }
+    const observed = this.observedCuts.get(sessionId)
+    if (
+      observed?.cut.turnItemId !== cut.turnItemId ||
+      observed.cut.resetsAt !== cut.resetsAt ||
+      observed.key.accountHomeKey !== key.accountHomeKey ||
+      observed.key.model !== key.model
+    ) {
+      this.observedCuts.set(sessionId, { cut, key })
+      this.deps.gate.recordLimit({ ...key, resetsAt: cut.resetsAt })
+      const setup = bot.activeBackup?.target ?? botPrimaryTarget(bot)
+      if (key.model && setup.agent === key.agent && !setup.model) {
+        this.deps.gate.recordLimit({ ...key, model: '', resetsAt: cut.resetsAt })
+      }
+    } else if (!this.deps.gate.isLimited(key)) {
+      this.clearCutState(sessionId)
+      return
+    }
 
     const backups = bot.backupModels
     if (!backups || backups.order.length === 0) {
@@ -234,13 +225,14 @@ export class BotUsageLimitFailover {
 
     const available = await this.deps.availableAgents()
     const currentChoice = {
+      sessionId,
       agent: session.provider,
       ...(session.model ? { model: session.model } : {})
     }
-    const cutKey = `${sessionId}:${cut.turnItemId}`
-    const attempted = this.attemptedByCut.get(cutKey) ?? new Set<string>()
+    const previous = this.attemptedByCut.get(sessionId)
+    const attempted = previous?.turnItemId === cut.turnItemId ? previous.targets : new Set<string>()
     attempted.add(botModelTargetKey(currentChoice))
-    this.attemptedByCut.set(cutKey, attempted)
+    this.attemptedByCut.set(sessionId, { turnItemId: cut.turnItemId, targets: attempted })
 
     const ready = await pickReadyBotBackup(this.deps, bot, currentChoice, available, attempted)
     if (!backups.automatic) {
@@ -261,24 +253,32 @@ export class BotUsageLimitFailover {
     let candidate: typeof ready | undefined = ready
     while (candidate) {
       attempted.add(botModelTargetKey(candidate))
-      let switched = false
       try {
         const result = await executeBotBackupSwitch(
           this.deps,
           (sid, run) => this.withProgrammaticOptions(sid, run),
           { bot, session, cut, target: candidate, now: this.now() }
         )
-        switched = result.switched
-      } catch {
-        switched = false
-      }
-      if (switched) {
-        this.clearCutState(sessionId)
-        return
+        if (result.switched) {
+          this.completeCut(sessionId, cut, result.newSessionId !== undefined)
+          return
+        }
+      } catch (error) {
+        if (error instanceof BotHandoffRollbackError) {
+          console.warn('[bots] could not restore routing after backup handoff', error)
+          break
+        }
       }
       candidate = await pickReadyBotBackup(this.deps, bot, currentChoice, available, attempted)
     }
     await this.markBackupsExhausted(bot, sessionId, cut)
+  }
+
+  private completeCut(sessionId: string, cut: HostUsageLimitCut, superseded: boolean): void {
+    this.handledCuts.set(sessionId, { turnItemId: cut.turnItemId, superseded })
+    this.observedCuts.delete(sessionId)
+    this.attemptedByCut.delete(sessionId)
+    this.clearCutState(sessionId)
   }
 
   private async markBackupsExhausted(

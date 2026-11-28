@@ -36,7 +36,8 @@ export function buildRestoredRemoteBrowserPageHandles(
         environmentId: page.browserRuntimeEnvironmentId,
         remotePageId: page.remoteBrowserPageId,
         restoredFromSession: true,
-        restoredClientHosted: true
+        restoredClientHosted: true,
+        ...(page.remoteBrowserPagePlacedHere ? { placedHere: true as const } : {})
       }
     }
   }

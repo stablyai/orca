@@ -17,10 +17,11 @@ import {
 } from '../../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../../components/tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { useAppStore } from '../../store/index'
+import { showWorkspaceListThen } from '../../components/app-rail/app-rail-navigation'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
-import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
+import { openPluginsFromShortcut } from '@/components/app-rail/open-plugins-shortcut'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
@@ -148,7 +149,15 @@ export function createAppCommandHandlers(
         return claim('worktree.history.forward', () => useAppStore.getState().goForwardWorktree())
       }
     ],
-    ['sidebar.left.toggle', () => claim('sidebar.left.toggle', () => actions.toggleSidebar())],
+    [
+      'sidebar.left.toggle',
+      () =>
+        claim('sidebar.left.toggle', () => {
+          if (!showWorkspaceListThen(useAppStore)) {
+            actions.toggleSidebar()
+          }
+        })
+    ],
     [
       'sidebar.sleepingWorkspaces.toggle',
       () =>
@@ -240,8 +249,14 @@ export function createAppCommandHandlers(
           return false
         }
         return claim('workspace.openBoard', () => {
+          const toggleBoard = (): void => {
+            window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+          }
+          if (showWorkspaceListThen(useAppStore, toggleBoard)) {
+            return
+          }
           useAppStore.getState().setSidebarOpen(true)
-          window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+          toggleBoard()
         })
       }
     ],
@@ -258,7 +273,7 @@ export function createAppCommandHandlers(
     [
       'view.plugins',
       createPluginsSettingsShortcutHandler(input?.target, () =>
-        claim('view.plugins', openPluginsSettings)
+        claim('view.plugins', openPluginsFromShortcut)
       )
     ],
     [

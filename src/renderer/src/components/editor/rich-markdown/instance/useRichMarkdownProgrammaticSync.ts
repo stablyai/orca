@@ -46,6 +46,15 @@ type RichMarkdownEditorStorage = {
   }
 }
 
+function withProgrammaticUpdateFlag(flagRef: MutableRefObject<boolean>, run: () => void): void {
+  flagRef.current = true
+  try {
+    run()
+  } finally {
+    flagRef.current = false
+  }
+}
+
 export function useRichMarkdownProgrammaticSync({
   codec,
   content,
@@ -72,8 +81,7 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor) {
       return
     }
-    isApplyingProgrammaticUpdateRef.current = true
-    try {
+    withProgrammaticUpdateFlag(isApplyingProgrammaticUpdateRef, () => {
       setRichMarkdownImageResolverContext(
         editor,
         createRichMarkdownImageResolverContext({
@@ -84,9 +92,7 @@ export function useRichMarkdownProgrammaticSync({
           worktreeRoot
         })
       )
-    } finally {
-      isApplyingProgrammaticUpdateRef.current = false
-    }
+    })
   }, [
     editor,
     externalSshTargetId,
@@ -101,14 +107,11 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor || !markdownDocuments) {
       return
     }
-    isApplyingProgrammaticUpdateRef.current = true
-    try {
+    withProgrammaticUpdateFlag(isApplyingProgrammaticUpdateRef, () => {
       const storage = editor.storage as unknown as RichMarkdownEditorStorage
       storage.markdownDocLink.documents = markdownDocuments
       editor.view.dispatch(editor.state.tr.setMeta('docLinksUpdated', true))
-    } finally {
-      isApplyingProgrammaticUpdateRef.current = false
-    }
+    })
   }, [editor, isApplyingProgrammaticUpdateRef, markdownDocuments])
 
   useEffect(() => {
@@ -139,8 +142,7 @@ export function useRichMarkdownProgrammaticSync({
       }
       return
     }
-    isApplyingProgrammaticUpdateRef.current = true
-    try {
+    withProgrammaticUpdateFlag(isApplyingProgrammaticUpdateRef, () => {
       applyExternalRichMarkdownContent(
         editor,
         content,
@@ -149,9 +151,7 @@ export function useRichMarkdownProgrammaticSync({
         baseCanonicalRef,
         codec
       )
-    } finally {
-      isApplyingProgrammaticUpdateRef.current = false
-    }
+    })
     if (pendingTimer !== null) {
       // Why: republishing the shared text recomputes the dirty flag this view's typing raised.
       onContentChangeRef.current(content)

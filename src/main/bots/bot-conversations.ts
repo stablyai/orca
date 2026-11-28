@@ -1,6 +1,5 @@
 // Where a connector conversation for a bot runs: a native chat in the bot's home, while the bot takes conversations.
 import type { Bot } from '../../shared/bot-types'
-import { effectiveBotSetup } from '../../shared/bots/bot-backup-models'
 import {
   CONNECTOR_MAX_WORK_LINKS,
   ConnectorWorkLink
@@ -8,7 +7,8 @@ import {
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { ConversationBots } from '../external-conversations/external-conversation-bots'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { runtimeBotChats, startBotSession } from './bot-chat-session'
+import { requireStructuredHost, runtimeBotChats, startBotSession } from './bot-chat-session'
+import { isBotAgent } from '../../shared/bot-types'
 import type { BotController } from './bot-controller'
 import type { BotWorkRecord } from './bot-work-record'
 
@@ -18,6 +18,7 @@ export function botConversations(deps: {
   ensureChat: (botId: string) => Promise<string>
   /** A new native chat in the bot's home. */
   startSession: (bot: Bot) => Promise<string>
+  sessionAgent: (sessionId: string) => Promise<Bot['agent']>
   botWork: Pick<BotWorkRecord, 'pullRequests'>
 }): ConversationBots {
   const find = (botId: string) => deps.bots.list().find((entry) => entry.id === botId)
@@ -34,11 +35,10 @@ export function botConversations(deps: {
       }
       const sessionId =
         kind === 'bot-chat' ? await deps.ensureChat(botId) : await deps.startSession(bot)
-      const latest = find(botId) ?? bot
       return {
-        worktreeId: folderWorkspaceKey(latest.folderWorkspaceId),
+        worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
         sessionId,
-        agent: effectiveBotSetup(latest).agent
+        agent: await deps.sessionAgent(sessionId)
       }
     },
     workLinks: async ({ bot, source, externalId }) =>
@@ -67,6 +67,14 @@ export function runtimeBotConversations(runtime: OrcaRuntimeService): Conversati
     bots: runtime.bots,
     ensureChat: chats.ensure,
     startSession: (bot) => startBotSession(runtime, bot, { background: true }),
+    sessionAgent: async (sessionId) => {
+      const host = await requireStructuredHost(runtime)
+      const provider = host.deps.store.getConversation(sessionId)?.provider
+      if (!provider || !isBotAgent(provider)) {
+        throw new Error('session_not_found')
+      }
+      return provider
+    },
     botWork: runtime.botWork
   })
 }

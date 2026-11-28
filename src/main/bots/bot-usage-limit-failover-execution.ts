@@ -2,7 +2,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Bot, BotAgent } from '../../shared/bot-types'
 import {
-  backupEntryToLaunch,
   botModelTargetKey,
   botPrimaryTarget,
   effectiveBotSetup,
@@ -30,6 +29,12 @@ export type BotFailoverSessionInfo = {
   model?: string
   isIdle: boolean
   runtimeFence: number
+}
+
+export type BotBackupSwitchResult = {
+  switched: boolean
+  continued?: boolean
+  newSessionId?: string
 }
 
 export type BotUsageLimitFailoverDeps = {
@@ -64,6 +69,7 @@ export type BotUsageLimitFailoverDeps = {
   ) => Promise<void>
   /** Notifies status subscribers for `sessionId` when cut backup state changes. */
   publishSessionStatus: (sessionId: string) => void
+  holdTurnWatch?: (sessionId: string) => () => void
   /** Lists active session ids for `botId` so config edits can re-evaluate held cuts. */
   listBotSessionIds?: (botId: string) => readonly string[]
   /** Reads the latest usage-limit cut for a session if still sitting at one. */
@@ -74,7 +80,7 @@ export type BotUsageLimitFailoverDeps = {
 export async function pickReadyBotBackup(
   deps: BotUsageLimitFailoverDeps,
   bot: Bot,
-  current: Pick<BotBackupModelEntry, 'agent' | 'model'>,
+  current: Pick<BotBackupModelEntry, 'agent' | 'model'> & { sessionId?: string },
   available: ReadonlySet<BotAgent>,
   attempted?: ReadonlySet<string>
 ): Promise<BotBackupModelEntry | undefined> {
@@ -93,10 +99,13 @@ export async function pickReadyBotBackup(
     }
     const key: BotUsageLimitKey = {
       agent: candidate.agent,
-      accountHomeKey: await deps.resolveAccountHomeKey(candidate.agent),
+      accountHomeKey: await deps.resolveAccountHomeKey(
+        candidate.agent,
+        candidate.agent === current.agent ? current.sessionId : undefined
+      ),
       model: candidate.model ?? ''
     }
-    if (!deps.gate.isLimited(key)) {
+    if (await deps.gate.verifyReturnReady(key)) {
       return candidate
     }
   }
@@ -113,10 +122,13 @@ export async function executeBotBackupSwitch(
     target: BotBackupModelEntry
     now: number
   }
-): Promise<{ switched: boolean; newSessionId?: string }> {
+): Promise<BotBackupSwitchResult> {
   const { bot, session, cut, target, now } = input
-  const primaryModel = bot.activeBackup?.primaryModel ?? bot.launch?.model ?? session.model
-  const primaryResetsAt = bot.activeBackup?.primaryResetsAt ?? cut.resetsAt
+  const primaryModel =
+    bot.activeBackup?.primaryModel ??
+    bot.launch?.model ??
+    (session.provider === bot.agent && !bot.activeBackup ? session.model : undefined)
+  const primaryResetsAt = bot.activeBackup ? bot.activeBackup.primaryResetsAt : cut.resetsAt
   const commitActiveBackup = async (): Promise<void> => {
     await deps.updateBot(bot.id, (latest) => ({
       activeBackup: {
@@ -161,12 +173,10 @@ export async function executeBotBackupSwitch(
         now
       )
       .catch(() => {})
-    const continued = await deps.sendSameAgentContinuation(
-      session.sessionId,
-      cut,
-      session.runtimeFence
-    )
-    return { switched: continued }
+    const continued = await deps
+      .sendSameAgentContinuation(session.sessionId, cut, session.runtimeFence)
+      .catch(() => false)
+    return { switched: true, continued }
   }
 
   const latestBot = deps.listBots().find((entry) => entry.id === bot.id) ?? bot
@@ -199,8 +209,12 @@ export async function returnHomeChatToPrimary(
   const { bot, home, fromTarget, primaryModel, manual, now } = input
   const returnReason = manual ? ('manual' as const) : ('limit-reset' as const)
   const primaryTarget = botPrimaryTarget(bot)
-  if (home.provider === bot.agent) {
-    const restoreTarget = primaryModel ? { ...primaryTarget, model: primaryModel } : primaryTarget
+  const canRestoreInPlace =
+    home.provider === bot.agent &&
+    primaryModel &&
+    Object.keys(fromTarget.options ?? {}).every((key) => key in (primaryTarget.options ?? {}))
+  if (canRestoreInPlace) {
+    const restoreTarget = { ...primaryTarget, model: primaryModel }
     const applied = await withProgrammaticOptions(home.sessionId, () =>
       deps.applySameAgentOptions(home.sessionId, restoreTarget)
     ).catch(() => false)
@@ -251,31 +265,43 @@ export async function resolveBotLaunchSetup(
   bot: Bot,
   now: number
 ): Promise<{ agent: BotAgent; launch?: Bot['launch'] }> {
-  const effective = effectiveBotSetup(bot)
   const accountHomeKey = await deps.resolveAccountHomeKey(bot.agent)
   const primaryKey: BotUsageLimitKey = {
     agent: bot.agent,
     accountHomeKey,
     model: bot.launch?.model ?? ''
   }
-  if (!effective.onBackup && deps.gate.isLimited(primaryKey) && bot.backupModels?.automatic) {
+  if (!bot.activeBackup && deps.gate.isLimited(primaryKey) && bot.backupModels?.automatic) {
     const available = await deps.availableAgents()
     const ready = await pickReadyBotBackup(deps, bot, botPrimaryTarget(bot), available)
     if (ready) {
-      const launch = backupEntryToLaunch(ready)
       const resetsAt = deps.gate.limitResetAt(primaryKey)
-      await deps
-        .updateBot(bot.id, () => ({
-          activeBackup: {
-            target: ready,
-            switchedAt: now,
-            ...(bot.launch?.model ? { primaryModel: bot.launch.model } : {}),
-            ...(resetsAt !== undefined ? { primaryResetsAt: resetsAt } : {})
+      bot = await deps
+        .updateBot(bot.id, (latest) => {
+          const candidate = latest.backupModels?.order.find((entry) =>
+            sameBotModelTarget(entry, ready)
+          )
+          if (
+            latest.activeBackup ||
+            !latest.backupModels?.automatic ||
+            !candidate ||
+            !sameBotModelTarget(botPrimaryTarget(latest), primaryKey) ||
+            !deps.gate.isLimited(primaryKey)
+          ) {
+            return {}
           }
-        }))
-        .catch(() => {})
-      return { agent: ready.agent, ...(launch ? { launch } : {}) }
+          return {
+            activeBackup: {
+              target: candidate,
+              switchedAt: now,
+              ...(bot.launch?.model ? { primaryModel: bot.launch.model } : {}),
+              ...(resetsAt !== undefined ? { primaryResetsAt: resetsAt } : {})
+            }
+          }
+        })
+        .catch(() => deps.listBots().find((entry) => entry.id === bot.id) ?? bot)
     }
   }
+  const effective = effectiveBotSetup(deps.listBots().find((entry) => entry.id === bot.id) ?? bot)
   return { agent: effective.agent, ...(effective.launch ? { launch: effective.launch } : {}) }
 }

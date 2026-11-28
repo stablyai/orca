@@ -25,6 +25,7 @@ export function useMobileBotBackupUsageLimit(input: {
   const [backupOffer, setBackupOffer] = useState<BackupOffer | null>(null)
   const [backupSwitchingCut, setBackupSwitchingCut] = useState<string | null>(null)
   const [backupSwitchFailedCut, setBackupSwitchFailedCut] = useState<string | null>(null)
+  const [backupContinueFailedCut, setBackupContinueFailedCut] = useState<string | null>(null)
 
   useEffect(() => {
     if (!live || !client || !sessionId || !turnItemId || backupState !== 'ask-backup') {
@@ -78,6 +79,7 @@ export function useMobileBotBackupUsageLimit(input: {
     const cutId = activeOffer.turnItemId
     setBackupSwitchingCut(cutId)
     setBackupSwitchFailedCut(null)
+    setBackupContinueFailedCut(null)
     void botBackupSwitch
       .request(
         client,
@@ -90,20 +92,28 @@ export function useMobileBotBackupUsageLimit(input: {
         { failWhenDisconnected: true }
       )
       .then((res) => {
-        if (!botBackupSwitch.interpret(res).switched) {
+        const { switched, continued } = botBackupSwitch.interpret(res)
+        if (!switched) {
           setBackupSwitchFailedCut(cutId)
+        }
+        if (continued === false) {
+          setBackupContinueFailedCut(cutId)
         }
       })
       .catch(() => setBackupSwitchFailedCut(cutId))
       .finally(() => setBackupSwitchingCut((current) => (current === cutId ? null : current)))
   }, [client, sessionId, activeOffer, backupSwitching])
 
-  return activeOffer
+  return activeOffer || backupContinueFailedCut === turnItemId
     ? {
-        backupSwitchLabel: activeOffer.target.model ?? botAgentLabel(activeOffer.target.agent),
+        backupSwitchLabel: activeOffer
+          ? (activeOffer.target.model ?? botAgentLabel(activeOffer.target.agent))
+          : undefined,
         backupSwitching,
         backupSwitchFailed: backupSwitchFailedCut === turnItemId,
-        switchToBackup
+        backupContinuationFailed:
+          backupContinueFailedCut !== null && backupContinueFailedCut === turnItemId,
+        switchToBackup: activeOffer ? switchToBackup : null
       }
     : null
 }

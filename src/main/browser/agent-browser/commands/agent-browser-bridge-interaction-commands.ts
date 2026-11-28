@@ -10,6 +10,7 @@ import type {
   BrowserPdfResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import {
   FILE_INPUT_FRAME_URL_FUNCTION,
   FILE_UPLOAD_TARGET_FUNCTION,
@@ -110,7 +111,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           )
           return {
             uploaded: filePaths.length,
-            ...(typeof frameUrl === 'string' ? { frameUrl } : {})
+            ...(typeof frameUrl === 'string' ? { frameUrl: redactKagiSessionToken(frameUrl) } : {})
           }
         } finally {
           await chooser.release()

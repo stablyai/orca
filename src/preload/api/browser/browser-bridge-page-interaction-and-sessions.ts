@@ -1,5 +1,13 @@
 import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
+import type {
+  BrowserCaptureCleanPageArgs,
+  BrowserCleanPageCapture
+} from '../../../shared/browser/element-grab/browser-grab-clean-capture'
 import { ipcRenderer } from 'electron'
+import type {
+  BrowserServerDownloadCopyArgs,
+  BrowserServerDownloadCopyResult
+} from '../../../shared/browser/downloads/browser-server-download-copy'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
@@ -12,7 +20,14 @@ import {
 import type { PreloadApi } from '../../api-types'
 import type { BrowserUserAgentMode } from '../../../shared/browser/identity/browser-user-agent-mode'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
-import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
+import type {
+  BrowserGrabActionShortcutArgs,
+  BrowserSetGrabModeArgs,
+  BrowserAwaitGrabSelectionArgs,
+  BrowserCancelGrabArgs,
+  BrowserCaptureSelectionScreenshotArgs,
+  GrabIntent
+} from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserClientHostCookieImportArgs,
   BrowserProfileCookieImportArgs
@@ -133,18 +148,39 @@ export const browserPageInteractionAndSessionsApi = {
   },
   cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelDownload', args),
-  setGrabMode: (args: { browserPageId: string; enabled: boolean }) =>
-    ipcRenderer.invoke('browser:setGrabMode', args),
-  awaitGrabSelection: (args: { browserPageId: string; opId: string }) =>
+  copyServerDownload: (
+    args: BrowserServerDownloadCopyArgs
+  ): Promise<BrowserServerDownloadCopyResult> =>
+    ipcRenderer.invoke('browser:copyServerDownload', args),
+  cancelServerDownloadCopy: (args: { copyId: string }): Promise<boolean> =>
+    ipcRenderer.invoke('browser:cancelServerDownloadCopy', args),
+  setGrabMode: (args: BrowserSetGrabModeArgs) => ipcRenderer.invoke('browser:setGrabMode', args),
+  awaitGrabSelection: (args: BrowserAwaitGrabSelectionArgs) =>
     ipcRenderer.invoke('browser:awaitGrabSelection', args),
-  cancelGrab: (args: { browserPageId: string }): Promise<boolean> =>
+  cancelGrab: (args: BrowserCancelGrabArgs): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelGrab', args),
-  captureSelectionScreenshot: (args: {
+  setGrabLabelAvoidArea: (args: {
     browserPageId: string
-    rect: { x: number; y: number; width: number; height: number }
-  }) => ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
+    area: {
+      x: number
+      y: number
+      width: number
+      height: number
+      frameWidth: number
+      frameHeight: number
+    } | null
+  }): Promise<boolean> => ipcRenderer.invoke('browser:setGrabLabelAvoidArea', args),
+  grabPickedElementPresent: (args: {
+    browserPageId: string
+    selectionId: string
+    interactive?: boolean
+  }): Promise<boolean | null> => ipcRenderer.invoke('browser:grabPickedElementPresent', args),
+  captureSelectionScreenshot: (args: BrowserCaptureSelectionScreenshotArgs) =>
+    ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
   extractHoverPayload: (args: { browserPageId: string }) =>
     ipcRenderer.invoke('browser:extractHoverPayload', args),
+  captureCleanPage: (args: BrowserCaptureCleanPageArgs): Promise<BrowserCleanPageCapture | null> =>
+    ipcRenderer.invoke('browser:captureCleanPage', args),
   onGrabModeToggle: (
     callback: (browserPageId: string, intent: GrabIntent) => void
   ): (() => void) => {
@@ -156,13 +192,19 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:grabModeToggle', listener)
     return () => ipcRenderer.removeListener('browser:grabModeToggle', listener)
   },
-  onGrabActionShortcut: (
-    callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
+  onGrabPolicyRetired: (
+    callback: (args: { browserPageId: string; requestId?: string }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { browserPageId: string; key: 'c' | 's' }
-    ) => callback(data)
+      args: { browserPageId: string; requestId?: string }
+    ): void => callback(args)
+    ipcRenderer.on('browser:grabPolicyRetired', listener)
+    return () => ipcRenderer.removeListener('browser:grabPolicyRetired', listener)
+  },
+  onGrabActionShortcut: (callback: (args: BrowserGrabActionShortcutArgs) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserGrabActionShortcutArgs) =>
+      callback(data)
     ipcRenderer.on('browser:grabActionShortcut', listener)
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
   },

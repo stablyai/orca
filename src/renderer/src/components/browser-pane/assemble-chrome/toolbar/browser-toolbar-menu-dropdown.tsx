@@ -57,6 +57,8 @@ export type BrowserToolbarPageActions = {
   onOpenDevTools: (() => void) | null
   /** Null when the page has no address another browser could open. */
   onOpenExternal: (() => void) | null
+  /** "Open on this computer" / "Open on {host}" for a server's page; absent on local pages. */
+  deviceMoveItem?: React.ReactNode
 }
 
 type BrowserToolbarMenuDropdownProps = {
@@ -207,6 +209,7 @@ export function BrowserToolbarMenuDropdown({
               {t('auto.components.browser.pane.BrowserPane.ec75d0c412', 'Open browser devtools')}
             </DropdownMenuItem>
           ) : null}
+          {pageActions.deviceMoveItem}
           <DropdownMenuItem
             disabled={!pageActions.onOpenExternal}
             onSelect={() => pageActions.onOpenExternal?.()}

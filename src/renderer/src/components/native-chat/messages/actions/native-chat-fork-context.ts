@@ -10,9 +10,6 @@ export const NativeChatForkedFromContext = createContext<
   ((sourceSessionId: string) => void) | undefined
 >(undefined)
 
-/** The pane draws fork actions, so a root response's action row keeps a Fork slot whatever its support. */
-export const NativeChatForkSlotContext = createContext(false)
-
 /** Hears the newest response the drawn transcript offers Fork on, for `/btw`; absent without `/btw`. */
 export const NativeChatSideChatForkPointContext = createContext<
   ((point: NativeChatSideChatForkPoint) => void) | undefined

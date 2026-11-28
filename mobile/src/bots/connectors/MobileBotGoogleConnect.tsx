@@ -1,7 +1,7 @@
 // Connect Google as a page inside the bot's settings: the desktop's Add connector › Google. With the
 // host signed in, Google turns on (confirmed when others can ask). With no Google app there, the
 // desktop's GoogleHostChoiceDialog: Continue starts the setup in the bot's chat, where its cards carry
-// on. With an app but no sign-in, the setup starts at its sign-in card, which the computer finishes.
+// on. With an app but no sign-in, Google's sign-in opens here, then Google turns on.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { FileUp } from 'lucide-react-native'
 import {
@@ -17,9 +17,7 @@ import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useMediaPicker } from '../../platform/media-picking/media-picker'
-import { googleSetupAnswer } from '../../session/native-chat/transcript/bot-cards/mobile-bot-card-operations'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import { decodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
@@ -28,7 +26,12 @@ import {
   googleClientImport,
   googleSetupStart
 } from './bot-connector-account-operations'
+import { googleSetupAnswer } from '../../session/native-chat/transcript/bot-cards/mobile-bot-card-operations'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
+import { BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
+import type { GoogleSignInAsk } from './connector-pages'
 import type { PhoneGoogle } from './phone-google-accounts'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileBotGoogleConnect(props: {
   client: RpcClient | null
@@ -42,9 +45,13 @@ export function MobileBotGoogleConnect(props: {
   onOn: () => void
   /** The setup carries on in the bot's chat; null while no chat shows. */
   onOpenChat: (() => void) | null
+  /** An app but no sign-in: Google's sign-in, then this page again to turn Google on; null once back. */
+  onSignIn: ((ask: GoogleSignInAsk) => void) | null
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, client } = props
+  const signsIn = useRouteCapability(BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY)
   const [busy, setBusy] = useState(false)
   const picker = useMediaPicker()
   useBackClaim(() => {
@@ -83,6 +90,7 @@ export function MobileBotGoogleConnect(props: {
       .then(props.onOn, fail)
       .finally(() => setBusy(false))
   }
+  // `signIn`: an older host's app is here, so the setup starts at its own sign-in card.
   const startInChat = (signIn: boolean) => {
     if (!client) {
       return
@@ -96,7 +104,6 @@ export function MobileBotGoogleConnect(props: {
           { failWhenDisconnected: true }
         )
       )
-      // The app is here: only the owner's sign-in is left, on the setup's own sign-in card.
       if (signIn) {
         googleSetupAnswer.interpret(
           await googleSetupAnswer.request(
@@ -159,7 +166,16 @@ export function MobileBotGoogleConnect(props: {
       turnOn()
     } else if (host === 'signed-out' || host === 'reconnect') {
       started.current = true
-      startInChat(true)
+      // Only Google ended the sign-in: the one account signs in again.
+      const accounts = status?.accounts ?? []
+      const only = accounts.length === 1 ? accounts[0]?.email : undefined
+      if (!signsIn) {
+        startInChat(true)
+      } else if (props.onSignIn) {
+        props.onSignIn(only ? { account: only } : {})
+      } else {
+        setFailed(true)
+      }
     }
   })
 

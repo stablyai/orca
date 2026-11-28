@@ -45,7 +45,7 @@ export function useMobileSourceControlActionSheet(
           // Create intent may publish or push before review creation.
           prAvailable: upstreamKnown,
           prHint: upstreamKnown ? undefined : mobileCommitDropdownCopy(t).checkingBranchStatus,
-          forcePushBlockedReason: getMobileForcePushBlockedReason(review),
+          forcePushBlockedReason: getMobileForcePushBlockedReason(review, t),
           handlers: {
             commit: () => void runActionSheetCommit(),
             commitPush: (forceWithLease) =>
@@ -77,7 +77,10 @@ export function useMobileSourceControlActionSheet(
           }
         },
         t
-      ).map((action) => ({ ...action, icon: SOURCE_CONTROL_ACTION_ICONS[action.iconKey] })),
+      )
+        // The menu lists only what can run now, as iOS pull-down menus do.
+        .filter((action) => !action.inapplicable)
+        .map((action) => ({ ...action, icon: SOURCE_CONTROL_ACTION_ICONS[action.iconKey] })),
     [
       busyAction,
       createPr,

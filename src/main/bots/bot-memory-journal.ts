@@ -1,5 +1,5 @@
 // The journal Orca keeps for a bot: one line in memory/journal/YYYY-MM.md each time one of its items
-// closes, with its PRs' states, taken from Items and the desktop's PR cache. No model writes it and
+// closes, with its PRs by number (no cached state, which goes stale), taken from Items. No model writes it and
 // no bot needs to, so finished work stays findable after status leaves MEMORY.md.
 import { join } from 'node:path'
 import { botMemoryDate } from '../../shared/bot-memory-lines'
@@ -9,9 +9,6 @@ import { CONNECTOR_SOURCE_NAMES } from '../../shared/connectors/external-convers
 import type { BotHomeFilesystem } from './bot-home'
 import type { BotItemClose } from './bot-items-reads'
 import { cleanBotWorkText } from './bot-work-turn-note'
-
-/** PRs read per item; the rest are named without a state. */
-export const JOURNAL_PRS_PER_ITEM = 5
 
 export type JournalItem = Pick<BotItem, 'number' | 'title' | 'status' | 'links'> & {
   closedAt: number
@@ -57,13 +54,13 @@ export function journalLines(item: JournalItem): string[] {
   const title = cleanBotWorkText(item.title)
   // Each PR once by its full ref ("o/r#7"), so two repos' #7 stay two PRs.
   const prs = [
-    ...new Map(
+    ...new Set(
       item.links.flatMap((link) => {
         if (link.kind !== 'pr' && !(link.kind === 'dispatch' && link.pr)) {
           return []
         }
         const ref = (link.pr?.shown ? link.pr.ref : link.ref).replace(/^pr:/, '')
-        return [[ref, link.pr] as const]
+        return [ref]
       })
     )
   ]
@@ -74,26 +71,17 @@ export function journalLines(item: JournalItem): string[] {
   }
   const numberOf = (ref: string): string | undefined => /#(\d+)$/.exec(ref)?.[1]
   const shared = (ref: string): boolean =>
-    prs.filter(([other]) => numberOf(other) === numberOf(ref)).length > 1
-  return prs.map(([ref, pr], index) => {
-    // Named by number (an unread one too, so it reads the same once the cache learns it), with
-    // its repo when another linked PR has the same number.
+    prs.filter((other) => numberOf(other) === numberOf(ref)).length > 1
+  return prs.map((ref) => {
+    // Named by number, with its repo when another linked PR has the same number.
     const number = numberOf(ref)
     const name = number === undefined || shared(ref) ? `PR ${ref}` : `PR #${number}`
-    const state =
-      index >= JOURNAL_PRS_PER_ITEM
-        ? 'state not read'
-        : pr?.shown
-          ? pr.state === 'open' || pr.state === 'draft'
-            ? 'open at close'
-            : pr.state
-          : 'state unknown'
-    return `${head} | ${name} ${state} | ${title}${tail}`
+    return `${head} | ${item.status} | ${name} | ${title}${tail}`
   })
 }
 
 /** The close a line belongs to: its date and item. A close is journaled once, all its lines in
- *  one append, so a pass that sees it again (a PR's state or links changed since) adds nothing. */
+ *  one append, so a pass that sees it again (its links changed since) adds nothing. */
 function closeKey(line: string): string {
   const [date = '', item = ''] = line.split(' | ')
   return `${date} | ${item}`

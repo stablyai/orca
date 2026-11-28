@@ -15,6 +15,7 @@ import type { RuntimePairingReach } from '../../../../shared/remote-runtime/pair
 import { resolveAdvertisedPairingEndpoint } from './pairing/network/pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
+import { RelayedPhoneServers } from '../../mobile-desktop-relay/relayed-phone-servers'
 import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { OnDemandServerWorktreeRows } from '../../mobile-desktop-relay/on-demand-server-worktree-rows'
@@ -109,10 +110,15 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       ? new MobileDesktopRelay({
           hosts,
           listPhones: () => this.listRelayedPhones(),
+          relayedPhoneServers: new RelayedPhoneServers(this.userDataPath),
           // Share local stream allocator so relayed ids cannot collide on phone sockets.
           allocateStreamId: allocateTerminalSubscriptionStreamId,
           nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent),
           sourceControlAiSettings: () => this.runtime.requireStore().getSettings(),
+          phoneConnectionMode: (deviceId) =>
+            this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
+              ? 'local-only'
+              : 'automatic',
           prepareBrowserHost: async (host) => {
             if (this.runtime.getStatus().capabilities?.includes('browser.screencast.v1')) {
               const placement = await hosts.prepareBrowserHost?.(
@@ -147,6 +153,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           this.runtime.onClientEvent(listener, { consumesTerminalSideEffects: false }),
         changed: () => this.runtime.notifyRelayHostsChanged()
       }) ?? null
+    const detachRowChanges =
+      this.mobileRelayHostCatalog?.publishRowChanges((hostId) =>
+        this.runtime.notifyRelayHostRowsChanged(hostId)
+      ) ?? null
     // Phones filter pending VM checkouts when they read; a change makes them read again.
     const detachPendingVmChanges = this.mobileRelayHostCatalog
       ? publishPendingVmCheckoutRepoChanges(pendingVmCheckouts, (repoId) =>
@@ -154,18 +164,25 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
         )
       : null
     this.detachRelayHostsChanges =
-      detachListChanges || detachPendingVmChanges
+      detachListChanges || detachRowChanges || detachPendingVmChanges
         ? () => {
             detachListChanges?.()
+            detachRowChanges?.()
             detachPendingVmChanges?.()
           }
         : null
     this.runtime.setPairedWorkspaceContextSource(this.mobileRelayHostCatalog)
   }
 
-  private listRelayedPhones(): { phoneKey: string; name: string }[] {
+  // Null when the registry is missing or unreadable: an empty list would revoke every phone.
+  private listRelayedPhones(): { phoneKey: string; name: string }[] | null {
+    const registry = this.deviceRegistry
+    if (!registry?.isReadable()) {
+      return null
+    }
     const computerName = this.runtime.readMachineName()
-    return (this.deviceRegistry?.listDevices() ?? [])
+    return registry
+      .listDevices()
       .filter(
         // Phones delegated by another desktop remain that desktop's relay responsibility.
         (device) =>

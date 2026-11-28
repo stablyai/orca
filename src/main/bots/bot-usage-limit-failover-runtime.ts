@@ -13,13 +13,14 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { usageLimitContinueMutation } from '../native-chat/agent-session-wire/recovery/structured-agent-session-usage-limit-continue-message'
 import { mintAgentSessionOperationId } from '../runtime/orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
+import { canonicalUsageLimitAccountHome } from '../runtime/agent-session/installation/usage-limit-account-usage'
 import { hostReadyBotAgents } from '../runtime/rpc/methods/bots-agent-choices'
 import { botOfSession } from './bot-session-tabs'
 import { startBotSession } from './bot-chat-session'
 import { closeReplacedBotChat } from './bot-chat-replacement'
 import { carryQueuedMessages } from './bot-chat-queued-carry'
 import { showBotSessionTab } from './bot-session-tab-show'
-import { notifyBotTurnWatchRebind } from './bot-run-turn-watch'
+import { holdBotTurnWatch, notifyBotTurnWatchRebind } from './bot-run-turn-watch'
 import { checkStartupBackupReturns, readBotBackupStatus } from './bot-backup-status-read'
 import { BotUsageLimitGate, type BotUsageLimitKey } from './bot-usage-limit-gate'
 import { BotUsageLimitFailover } from './bot-usage-limit-failover'
@@ -99,18 +100,32 @@ export function createRuntimeBotUsageLimitFailover(
       if (record) {
         const home =
           (await host.deps.launchAccountHome?.(record).catch(() => null)) ?? record.accountHome
-        return agentSessionAccountHomePath(home) ?? 'default'
+        const path = agentSessionAccountHomePath(home)
+        return path ? canonicalUsageLimitAccountHome(path) : 'default'
       }
     }
     const home = await runtime.resolveStructuredAgentAccountHome(agent, 'catalog').catch(() => null)
-    return (home && agentSessionAccountHomePath(home)) || 'default'
+    const path = home && agentSessionAccountHomePath(home)
+    return path ? canonicalUsageLimitAccountHome(path) : 'default'
   }
 
   const readSpentUntil = async (key: BotUsageLimitKey): Promise<number | null | undefined> => {
     if (key.agent !== 'claude' && key.agent !== 'codex') {
       return undefined
     }
-    const reading = runtime.getUsageRateLimits()?.usageReading(key.agent)
+    const service = runtime.getUsageRateLimits()
+    const source = service?.usageReadingAccount(key.agent)
+    if (
+      !service ||
+      !source ||
+      (await canonicalUsageLimitAccountHome(source.home)) !== key.accountHomeKey
+    ) {
+      return undefined
+    }
+    if (service.usageReadingAccount(key.agent) !== source) {
+      return undefined
+    }
+    const reading = service.usageReading(key.agent)
     return reading?.status === 'ok' ? rateLimitSpentUntil(reading) : undefined
   }
 
@@ -158,6 +173,7 @@ export function createRuntimeBotUsageLimitFailover(
       }
     },
     resolveAccountHomeKey,
+    holdTurnWatch: holdBotTurnWatch,
     availableAgents,
     applySameAgentOptions: applySameAgentOptionsOnHost,
     sendSameAgentContinuation: async (sessionId, cut, runtimeFence) => {
@@ -230,16 +246,17 @@ export function createRuntimeBotUsageLimitFailover(
           background: input.background,
           actsFor: input.actsFor,
           message: { text: input.text, clientMessageId: input.clientMessageId },
+          beforeFirstMessage: input.beforeFirstMessage,
           skipBackupResolve: true
         }),
-      setHomeChatSession: async (botId, sessionId) => {
-        await runtime.bots.setChatSession(botId, sessionId)
+      setHomeChatSession: async (botId, sessionId, expected) => {
+        await runtime.bots.setChatSession(botId, sessionId, expected)
       },
-      carryQueuedMessages: async (fromSessionId, toSessionId) => {
+      carryQueuedMessages: (fromSessionId, toSessionId) => {
         const host = getStructuredAgentSessionHost()
-        if (host) {
-          await carryQueuedMessages(host, fromSessionId, toSessionId, { rethrow: true })
-        }
+        return host
+          ? carryQueuedMessages(host, fromSessionId, toSessionId)
+          : Promise.resolve({ complete: false, messages: new Map<string, never>() })
       },
       closeOldHomeChat: async (sessionId) => {
         await closeReplacedBotChat(runtime, sessionId)
@@ -256,9 +273,9 @@ export function createRuntimeBotUsageLimitFailover(
           return null
         }
       },
-      onSessionHandedOff: (fromSessionId, toSessionId, handoffSend) => {
+      onSessionHandedOff: (fromSessionId, toSessionId, handoffSend, carried) => {
         runtime.lookAround.rebindSession(fromSessionId, toSessionId)
-        notifyBotTurnWatchRebind(fromSessionId, toSessionId, handoffSend)
+        notifyBotTurnWatchRebind(fromSessionId, toSessionId, handoffSend, carried)
         runtime.notifyBotsChanged({ kinds: ['chats', 'bot'] })
       }
     }

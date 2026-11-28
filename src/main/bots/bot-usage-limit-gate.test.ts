@@ -143,9 +143,11 @@ describe('BotUsageLimitGate', () => {
 
     mode = 'reject'
     await vi.advanceTimersByTimeAsync(135_000)
+    expect(raceGate.isLimited(CLAUDE_SONNET)).toBe(true)
     // Replace the hold while the old timer's readSpentUntil is in flight, then reject the old read.
     raceGate.recordLimit({ ...CLAUDE_SONNET, resetsAt: Date.now() + 300_000 })
-    pending.reject?.(new Error('network_error'))
+    expect(pending.reject).toBeTypeOf('function')
+    pending.reject!(new Error('network_error'))
     await Promise.resolve()
     await Promise.resolve()
     expect(raceGate.isLimited(CLAUDE_SONNET)).toBe(true)

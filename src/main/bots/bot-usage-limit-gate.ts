@@ -108,14 +108,7 @@ export class BotUsageLimitGate {
   }
 
   isLimited(key: BotUsageLimitKey): boolean {
-    const held = this.holds.get(serializeKey(key))
-    if (!held) {
-      return false
-    }
-    if (held.resetsAt !== null && held.resetsAt + BOT_USAGE_LIMIT_RESET_GRACE_MS <= this.now()) {
-      return false
-    }
-    return true
+    return this.holds.has(serializeKey(key))
   }
 
   limitResetAt(key: BotUsageLimitKey): number | undefined {

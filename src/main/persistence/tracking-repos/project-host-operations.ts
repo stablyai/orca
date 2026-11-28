@@ -260,6 +260,11 @@ export class ProjectHostPersistenceOperations {
     return this.state.repos.length
   }
 
+  /** Every registration under `id`, by key: never a pass over every registration. */
+  getRepoRegistrations(id: string): readonly RepoHostTarget[] {
+    return this.repoLookup().rowsFor(id)
+  }
+
   /** The first registration under `id`, by key. */
   getRepo(id: string): Repo | undefined {
     const repo = this.repoLookup().rowsFor(id)[0]

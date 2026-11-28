@@ -19,15 +19,32 @@ export const EMPTY_WSL_DISTROS: string[] = []
 export function getCodexSystemDefaultSubtitle(
   identity: CodexSystemDefaultIdentity | undefined,
   runtimeSentenceLabel: string,
-  t: Translate = translate
+  t: Translate = translate,
+  includesWsl = false
 ): string {
+  // Keep the identity and note that the click also resets the remote WSL lanes it clears.
+  const withWsl = (subtitle: string): string =>
+    includesWsl
+      ? t('accounts.selection.systemDefaultIncludingWsl', '{{value0}} · including WSL', {
+          value0: subtitle
+        })
+      : subtitle
   if (identity?.authKind === 'oauth' && identity.email) {
-    return identity.email
+    return withWsl(identity.email)
   }
   if (identity?.authKind === 'api-key') {
+    return withWsl(
+      t(
+        'auto.components.settings.AccountsPane.codexSystemDefaultCustomProvider',
+        'Custom provider — no usage tracked.'
+      )
+    )
+  }
+  if (includesWsl) {
     return t(
-      'auto.components.settings.AccountsPane.codexSystemDefaultCustomProvider',
-      'Custom provider — no usage tracked.'
+      'accounts.selection.codexSystemDefaultIncludingWsl',
+      'Use your current {{value0}} Codex login, including WSL.',
+      { value0: runtimeSentenceLabel }
     )
   }
   return t(

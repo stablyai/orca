@@ -1,0 +1,309 @@
+// Whether a tool call may have changed something outside the chat: a write, edit, send, spawn or a
+// shell command not known to only read. Unknown tools and commands count as acting, so a person
+// is told to check rather than left to assume nothing happened.
+import { isCommandToolName } from '../../native-chat/tools/native-chat-tool-activity'
+
+/** Tools that only read or look things up, by lowercased name across providers. */
+const READ_TOOLS: ReadonlySet<string> = new Set([
+  'read',
+  'grep',
+  'glob',
+  'ls',
+  'list',
+  'search',
+  'websearch',
+  'web_search',
+  'webfetch',
+  'web_fetch',
+  'todowrite',
+  'toolsearch',
+  'notebookread',
+  'bashoutput',
+  'listmcpresourcestool',
+  'readmcpresourcetool',
+  'todoread',
+  'read_file',
+  'read_many_files',
+  'list_directory',
+  'search_file_content',
+  'google_web_search',
+  'view_image',
+  'taskoutput',
+  'exitplanmode',
+  'askuserquestion'
+])
+
+/** Programs that only read, each with the arguments that would make it write or run something. */
+const READ_PROGRAMS: Record<string, (args: readonly string[]) => boolean> = {
+  cat: () => true,
+  head: () => true,
+  tail: () => true,
+  ls: () => true,
+  pwd: () => true,
+  echo: () => true,
+  printf: () => true,
+  wc: () => true,
+  grep: () => true,
+  egrep: () => true,
+  rg: (args) => !args.some((word) => /^--(pre|hostname-bin)/.test(word)),
+  find: (args) => !args.some((word) => /^-(exec|execdir|ok|okdir|delete|fprint|fls)/.test(word)),
+  tree: (args) => !args.some((word) => /^-[^-]*[oR]/.test(word)),
+  file: (args) => !args.some((word) => /^-[^-]*C/.test(word) || namesOption(word, ['--compile'])),
+  stat: () => true,
+  du: () => true,
+  df: () => true,
+  which: () => true,
+  // Only formats and plain flags: `-s`, `--set` or a bare time sets the clock.
+  date: (args) => args.every((word) => word.startsWith('+') || /^-[uR]$/.test(word)),
+  whoami: () => true,
+  sort: (args) =>
+    !args.some(
+      (word) => /^-[^-]*o/.test(word) || namesOption(word, ['--output', '--compress-program'])
+    ),
+  uniq: (args) => args.length <= 1,
+  cut: () => true,
+  tr: () => true,
+  jq: () => true,
+  // Only `sed -n '<lines>p'`: a sed script can write files (w) or run commands (e).
+  sed: ([flag, script, ...files]) =>
+    flag === '-n' &&
+    /^\$?\d*(,\$?\d*)?p$/.test(script ?? '') &&
+    !files.some((word) => word.startsWith('-')),
+  diff: () => true,
+  cmp: () => true,
+  basename: () => true,
+  dirname: () => true,
+  realpath: () => true,
+  nl: () => true,
+  true: () => true,
+  cd: () => true,
+  git: (args) => gitReads(args),
+  gh: (args) => ghReads(args),
+  orca: (args) => orcaReads(args)
+}
+
+const GIT_READS = new Set([
+  'log',
+  'show',
+  'diff',
+  'status',
+  'rev-parse',
+  'ls-files',
+  'ls-tree',
+  'blame',
+  'grep',
+  'describe',
+  'shortlog',
+  'cat-file',
+  'merge-base',
+  'rev-list'
+])
+
+const GIT_REFUSED = [
+  '--output',
+  '--exec',
+  '--ext-diff',
+  '--textconv',
+  '--open-files-in-pager',
+  '--upload-pack',
+  '--receive-pack'
+]
+
+function gitReads(given: readonly string[]): boolean {
+  // `git -C <dir>` and `--no-pager` come before the subcommand and change nothing it does.
+  let args = given
+  while (args[0] === '--no-pager' || (args[0] === '-C' && args[1] !== undefined)) {
+    args = args.slice(args[0] === '-C' ? 2 : 1)
+  }
+  const [sub, ...rest] = args
+  if (
+    args.some(
+      (word) => word.startsWith('-c') || /^-[^-]*[oO]/.test(word) || namesOption(word, GIT_REFUSED)
+    )
+  ) {
+    return false
+  }
+  if (sub === 'branch' || sub === 'remote') {
+    return rest.every((word) => /^(-a|-r|-v|-vv|--all|--remotes|--list|--verbose)$/.test(word))
+  }
+  return sub !== undefined && GIT_READS.has(sub)
+}
+
+const GH_READS: ReadonlySet<string> = new Set(['view', 'list', 'checks', 'diff', 'status'])
+
+/** gh's own command groups: any other first word runs an extension or an alias, which may be anything. */
+const GH_GROUPS: ReadonlySet<string> = new Set([
+  'pr',
+  'issue',
+  'run',
+  'repo',
+  'release',
+  'workflow',
+  'label',
+  'cache',
+  'gist',
+  'project',
+  'ruleset',
+  'search',
+  'api'
+])
+
+function ghReads(args: readonly string[]): boolean {
+  const [group, sub] = args
+  if (
+    group === undefined ||
+    !GH_GROUPS.has(group) ||
+    args.some((word) => /^-[^-]*w/.test(word) || namesOption(word, ['--web']))
+  ) {
+    return false
+  }
+  if (group === 'api') {
+    return !args.some(
+      (word) =>
+        /^-[^-]*[XfF]/.test(word) ||
+        namesOption(word, ['--method', '--field', '--raw-field', '--input'])
+    )
+  }
+  return group === 'search' || (sub !== undefined && GH_READS.has(sub))
+}
+
+/** Orca's own commands that only read, by their leading words. */
+const ORCA_READS: readonly (readonly string[])[] = [
+  ['slack', 'find'],
+  ['slack', 'read'],
+  ['slack', 'check'],
+  ['bot', 'connectors'],
+  ['bot', 'list'],
+  ['bot', 'chats'],
+  ['bot', 'item', 'list'],
+  ['bot', 'item', 'show'],
+  ['bot', 'work', 'list'],
+  ['linear', 'issue'],
+  ['linear', 'search'],
+  ['linear', 'list-issues'],
+  ['automations', 'list'],
+  ['automations', 'show'],
+  ['repo', 'list'],
+  ['worktree', 'ps'],
+  ['worktree', 'list'],
+  ['orchestration', 'inbox'],
+  ['orchestration', 'task-list'],
+  ['orchestration', 'worker-list'],
+  ['orchestration', 'worker-show'],
+  ['orchestration', 'worker-read'],
+  ['orchestration', 'run-show'],
+  ['orchestration', 'run-list']
+]
+
+function orcaReads(args: readonly string[]): boolean {
+  return (
+    !args.some((word) => /^--(join|download|out|offer)/.test(word)) &&
+    ORCA_READS.some((path) => path.every((word, index) => args[index] === word))
+  )
+}
+
+/** Whether a long option names one of `options`: programs take any unique prefix (`--o=x`). */
+function namesOption(word: string, options: readonly string[]): boolean {
+  const name = word.split('=')[0]!
+  return (
+    name.startsWith('--') && name.length > 2 && options.some((option) => option.startsWith(name))
+  )
+}
+
+/** `bash -lc '<command>'` as Codex wraps it: the inner command is what runs. */
+function unwrapShell(command: string): string {
+  // A bare shell or a system shell path, and nothing before it: a prefix could run something itself.
+  const wrapped =
+    /^(?:(?:\/usr|\/usr\/local|\/opt\/homebrew)?\/bin\/)?(?:ba|z)?sh[ \t]+-l?c[ \t]+'((?:[^']|'\\'')*)'$/.exec(
+      command.trim()
+    )
+  return wrapped ? wrapped[1]!.replace(/'\\''/g, "'") : command.trim()
+}
+
+/** Whether every command in a shell line only reads. Anything this can't read plainly acts. */
+export function shellCommandOnlyReads(command: string): boolean {
+  const line = unwrapShell(command)
+    .replaceAll('"${ORCA_CLI_COMMAND:-orca}"', 'orca')
+    .replace(/\s2>&1(?=\s|$)/g, ' ')
+    .replace(/\s2?>\s*\/dev\/null(?=\s|$)/g, ' ')
+  // Redirection, substitution, background jobs and here-docs can write or run anything.
+  if (/[>`]|\$\(|<<|<\(|(?<!&)&(?!&)/.test(line)) {
+    return false
+  }
+  const commands = line.split(/&&|\|\||[;|\n]/)
+  return commands.every((part) => {
+    const parsed = plainWords(part)
+    if (parsed === null || parsed.words.length === 0) {
+      return parsed !== null
+    }
+    const [program, ...args] = parsed.words
+    const reads = program !== undefined && Object.hasOwn(READ_PROGRAMS, program)
+    // A glob can expand to a file named like a writing flag (`-delete`, `-i`), which the checks never see.
+    return reads && (!parsed.globbed || GLOB_SAFE.has(program!)) && READ_PROGRAMS[program!]!(args)
+  })
+}
+
+// A word the shell passes through as written: plain characters, or one whole quoted string with
+// nothing the shell would expand inside. Any other text (inner quotes, `\\`, `$`, braces) is unread.
+const WORD = /(?<=^|\s)(?:'([^']*)'|"([^"$`\\]*)"|([A-Za-z0-9._/:=@,+%^*?-]+))(?=\s|$)/g
+
+/** A command's words as the program gets them, or null when the shell would change one. */
+function plainWords(part: string): { words: string[]; globbed: boolean } | null {
+  const words: string[] = []
+  let consumed = ''
+  let globbed = false
+  for (const match of part.matchAll(WORD)) {
+    words.push(match[1] ?? match[2] ?? match[3] ?? '')
+    globbed ||= /[*?^]/.test(match[3] ?? '')
+    consumed += match[0]
+  }
+  const bare = (text: string) => text.replace(/\s/g, '')
+  return bare(consumed) === bare(part) ? { words, globbed } : null
+}
+
+/** Programs no flag can make write or run something, so a glob that expands to one is still a read. */
+const GLOB_SAFE: ReadonlySet<string> = new Set([
+  'cat',
+  'head',
+  'tail',
+  'ls',
+  'wc',
+  'grep',
+  'egrep',
+  'diff',
+  'cmp',
+  'stat',
+  'du',
+  'nl',
+  'basename',
+  'dirname',
+  'realpath',
+  'echo',
+  'printf'
+])
+
+/** Whether a journal item is work that may have changed something: an edit recorded as a diff
+ *  (Codex and Pi file changes), or a tool call not known to only read. */
+export function journalItemHasSideEffects(body: {
+  kind: string
+  name?: string
+  input?: unknown
+}): boolean {
+  return (
+    body.kind === 'diff' ||
+    (body.kind === 'tool-call' && toolCallHasSideEffects(body.name ?? '', body.input))
+  )
+}
+
+/** Whether a tool call may have changed something: false only for a call known to only read. */
+export function toolCallHasSideEffects(name: string, input: unknown): boolean {
+  const command =
+    typeof input === 'object' && input !== null && 'command' in input ? input.command : undefined
+  if (
+    typeof command === 'string' &&
+    (isCommandToolName(name) || READ_TOOLS.has(name.toLowerCase()))
+  ) {
+    return !shellCommandOnlyReads(command)
+  }
+  return !READ_TOOLS.has(name.toLowerCase())
+}

@@ -23,7 +23,7 @@ function requireBotFlag(flags: Map<string, string | boolean>): string {
   return selector
 }
 
-function parsePositiveIndex(value: string | undefined, flagName: string): number {
+function parseBackupIndex(value: string | undefined, flagName: string, count: number): number {
   if (!value || !/^[1-9]\d*$/.test(value)) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -35,6 +35,12 @@ function parsePositiveIndex(value: string | undefined, flagName: string): number
     throw new RuntimeClientError(
       'invalid_argument',
       `Invalid ${flagName}: expected a 1-based integer.`
+    )
+  }
+  if (parsed > count) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Invalid ${flagName}: backup model #${parsed} is not configured.`
     )
   }
   return parsed - 1
@@ -107,7 +113,11 @@ export const BOT_BACKUP_HANDLERS: Record<string, CommandHandler> = {
   },
   'bot backup remove': async ({ flags, client, json }) => {
     const bot = await findBot(client, requireBotFlag(flags))
-    const index = parsePositiveIndex(getOptionalStringFlag(flags, 'index'), '--index')
+    const index = parseBackupIndex(
+      getOptionalStringFlag(flags, 'index'),
+      '--index',
+      bot.backupModels?.order.length ?? 0
+    )
     const next = removeBotBackupModel(bot.backupModels, index)
     const result = await callBots(client, 'bots.update', {
       botId: bot.id,
@@ -117,8 +127,9 @@ export const BOT_BACKUP_HANDLERS: Record<string, CommandHandler> = {
   },
   'bot backup reorder': async ({ flags, client, json }) => {
     const bot = await findBot(client, requireBotFlag(flags))
-    const from = parsePositiveIndex(getOptionalStringFlag(flags, 'from'), '--from')
-    const to = parsePositiveIndex(getOptionalStringFlag(flags, 'to'), '--to')
+    const count = bot.backupModels?.order.length ?? 0
+    const from = parseBackupIndex(getOptionalStringFlag(flags, 'from'), '--from', count)
+    const to = parseBackupIndex(getOptionalStringFlag(flags, 'to'), '--to', count)
     const next = reorderBotBackupModels(bot.backupModels, from, to)
     const result = await callBots(client, 'bots.update', {
       botId: bot.id,
@@ -162,7 +173,7 @@ export const BOT_BACKUP_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) =>
       value.returned
         ? 'Returned bot to its primary model.'
-        : 'Bot is already running on its primary model.'
+        : 'The primary model was not restored yet.'
     )
   }
 }

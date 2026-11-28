@@ -2,13 +2,17 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, Plus } from 'lucide-react-native'
 import { summarizeBotPreview } from '../../../src/shared/bots/bot-collapsed-preview'
 import type { BotsListEndLine, Section } from '../worktree/workspace-list/workspace-list-types'
-import { colors, pressedStyle, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
-import { hostScreenStyles } from '../host-screen/host-screen-styles'
-import { MobileCollapsedBotPreview } from './MobileCollapsedBotPreview'
+import { hostScreenStylesSheet } from '../host-screen/host-screen-styles'
+import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-row-layout'
+import { AgentSpinner } from '../agents/presentation/AgentSpinner'
+import { useSharedNow } from '../hooks/use-now'
+import { MobileBotNeedsYouCount } from './MobileBotRowBadges'
+import { mobileBotRowNeedsYou } from './mobile-bot-row-line'
 
 export function MobileBotsSectionHeader({
   section,
@@ -23,20 +27,25 @@ export function MobileBotsSectionHeader({
   onToggle: () => void
   onNew: (() => void) | null
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const hostScreenStyles = useThemedStyles(hostScreenStylesSheet)
   const t = useMobileTranslation()
+  const now = useSharedNow(30_000)
   const facts = section.botPreview ?? []
-  const canCollapse = (section.count ?? facts.length) > 0
+  const count = section.count ?? facts.length
+  const canCollapse = count > 0
   const collapsed = canCollapse && savedCollapsed
-  const showAvatars = collapsed && facts.length > 0
   const preview = summarizeBotPreview(facts)
-  const label = t('bots.section.title', 'Bots')
-  const pendingSpinner = pending ? (
-    <ActivityIndicator
-      size="small"
-      color={colors.textMuted}
-      style={hostScreenStyles.sectionPendingSpinner}
-    />
+  // Folded, the rows' own Needs you counts add up here; else whether any works. Unfolded, the rows say it.
+  const needsYou = facts.reduce(
+    (sum, bot) => sum + mobileBotRowNeedsYou(bot.needs.line, bot.needs.agents, now),
+    0
+  )
+  const mark = !collapsed ? null : needsYou > 0 ? (
+    <MobileBotNeedsYouCount count={needsYou} />
+  ) : preview.working > 0 ? (
+    <AgentSpinner status="working" />
   ) : null
   return (
     <View style={styles.header}>
@@ -52,14 +61,14 @@ export function MobileBotsSectionHeader({
           {
             title: section.title,
             total: preview.total,
-            attention: preview.attention,
+            attention: needsYou,
             unread: preview.unread,
             working: preview.working
           }
         )}
         style={({ pressed }) => [
           hostScreenStyles.sectionHeader,
-          showAvatars ? styles.previewToggle : styles.toggle,
+          styles.toggle,
           pressed && styles.togglePressed
         ]}
       >
@@ -70,27 +79,24 @@ export function MobileBotsSectionHeader({
             </DisclosureChevron>
           ) : null}
         </View>
-        <Text style={hostScreenStyles.sectionTitle}>{label}</Text>
-        {showAvatars ? null : (
-          <>
-            <View
-              style={styles.countSlot}
-              pointerEvents="none"
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-            >
-              <Text style={styles.count}>{section.count ?? facts.length}</Text>
-            </View>
-            {pendingSpinner}
-          </>
-        )}
-      </Pressable>
-      {showAvatars ? (
-        <View style={[hostScreenStyles.sectionHeader, styles.previewLane]}>
-          <MobileCollapsedBotPreview bots={facts} />
-          {pendingSpinner}
+        <Text style={hostScreenStyles.sectionTitle}>{t('bots.section.title', 'Bots')}</Text>
+        <View
+          style={styles.countSlot}
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          {count > 0 ? <Text style={hostScreenStyles.sectionCount}>{count}</Text> : null}
         </View>
-      ) : null}
+        {pending ? (
+          <ActivityIndicator
+            size="small"
+            color={colors.textMuted}
+            style={hostScreenStyles.sectionPendingSpinner}
+          />
+        ) : null}
+        {mark ? <View style={styles.mark}>{mark}</View> : null}
+      </Pressable>
       {onNew ? (
         <Pressable
           onPress={onNew}
@@ -112,10 +118,10 @@ export function MobileBotsListEnd({
   underRows
 }: {
   lines: readonly BotsListEndLine[]
-  /** Under bot rows, the lines start where their names do. */
+  /** Under bot rows, the lines start where their names do; else where the header's title does. */
   underRows: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={[styles.end, underRows && styles.endUnderRows]}>
       {lines.map((line) => (
@@ -127,14 +133,12 @@ export function MobileBotsListEnd({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   header: { flexDirection: 'row', alignItems: 'center' },
   toggle: { flex: 1, minWidth: 0 },
-  previewToggle: { maxWidth: '60%', paddingRight: 0 },
   togglePressed: { backgroundColor: colors.translucentFill },
-  previewLane: { flex: 1, minWidth: 0, paddingLeft: 6 },
-  countSlot: { flex: 1, marginLeft: 6 },
-  count: { fontSize: 13, color: colors.textMuted },
+  countSlot: { flex: 1 },
+  mark: { marginLeft: spacing.sm },
   // The section header's vertical padding puts + on the title's line; 44 pt wide from the edge.
   add: {
     paddingTop: spacing.lg,
@@ -142,7 +146,12 @@ const styles = themedStyleSheet(() => ({
     paddingLeft: spacing.md,
     paddingRight: spacing.lg
   },
-  end: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.md },
+  end: {
+    paddingLeft: WORKTREE_ROW_LAYOUT.textInset,
+    paddingRight: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.md
+  },
   // A bot row's picture (32) and its gap.
   endUnderRows: { paddingLeft: spacing.lg + 32 + spacing.md },
   endLine: { fontSize: 13, color: colors.textMuted }

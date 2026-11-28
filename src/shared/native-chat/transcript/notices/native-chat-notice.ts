@@ -57,13 +57,19 @@ export type NativeChatNoticeLook =
   /** A boxed line with its icon when it has a tone; plain text when it has none. */
   | { kind: 'line'; tone: NativeChatNoticeTone | null }
 
-/** The block a system row draws as its notice. A system row without one reads as a faint aside. */
+/** An agent's advisor card (OMP): an aside about the work that ends the reply it directly follows. */
+export const NATIVE_CHAT_ADVISOR_PRESENTATION = 'advisor'
+
+/** The block a system row draws as its notice. A system row without one, or an advisor card, reads as a faint aside. */
 export function nativeChatNoticeBlock(
   blocks: readonly NativeChatBlock[]
 ): NativeChatTextBlock | undefined {
   return blocks.find(
     (block): block is NativeChatTextBlock =>
-      block.type === 'text' && (block.presentation !== undefined || block.tone !== undefined)
+      block.type === 'text' &&
+      ((block.presentation !== undefined &&
+        block.presentation !== NATIVE_CHAT_ADVISOR_PRESENTATION) ||
+        block.tone !== undefined)
   )
 }
 

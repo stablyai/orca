@@ -72,7 +72,11 @@ type Harness = {
   actsForBySession: Map<string, BotConversationActsFor>
 }
 
-function createHarness(initialBot: Bot, initialLinks: ExternalConversationLink[] = []): Harness {
+function createHarness(
+  initialBot: Bot,
+  initialLinks: ExternalConversationLink[] = [],
+  overrides: Partial<BotUsageLimitFailoverDeps> = {}
+): Harness {
   let bot = initialBot
   const sessions = new Map<string, BotFailoverSessionInfo>([
     [
@@ -108,7 +112,7 @@ function createHarness(initialBot: Bot, initialLinks: ExternalConversationLink[]
     },
     getSessionInfo: async (sessionId) => sessions.get(sessionId) ?? null,
     resolveAccountHomeKey: async () => 'acct-a',
-    availableAgents: async () => new Set<BotAgent>(['claude', 'codex', 'gemini']),
+    availableAgents: async () => new Set<BotAgent>(['claude', 'codex', 'antigravity']),
     applySameAgentOptions: async (sessionId, target) => {
       const current = sessions.get(sessionId)
       if (!current) {
@@ -127,7 +131,7 @@ function createHarness(initialBot: Bot, initialLinks: ExternalConversationLink[]
     },
     publishSessionStatus: () => {},
     listBotSessionIds: () => [...sessions.keys()],
-    readSessionCut: async () => null,
+    readSessionCut: async () => ({ turnItemId: 'turn-ask', resetsAt: NOW + 600_000, chain: 1 }),
     crossAgentHandoff: {
       readContinuationContext: async () => ({
         status: 'current',
@@ -139,6 +143,7 @@ function createHarness(initialBot: Bot, initialLinks: ExternalConversationLink[]
       isTabVisible: () => true,
       readActsFor: (sessionId) => actsForBySession.get(sessionId) ?? null,
       startSession: async (botOnTarget, input) => {
+        await input.beforeFirstMessage?.()
         startedSessions.push({
           bot: botOnTarget,
           sessionId: input.sessionId,
@@ -162,6 +167,7 @@ function createHarness(initialBot: Bot, initialLinks: ExternalConversationLink[]
       },
       carryQueuedMessages: async (from, to) => {
         queuedCarries.push({ from, to })
+        return { complete: true, messages: new Map() }
       },
       closeOldHomeChat: async (sessionId) => {
         closedHomeChats.push(sessionId)
@@ -185,7 +191,8 @@ function createHarness(initialBot: Bot, initialLinks: ExternalConversationLink[]
       onSessionHandedOff: (from, to) => {
         handedOff.push({ from, to })
       }
-    }
+    },
+    ...overrides
   }
 
   return {
@@ -349,6 +356,17 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
       backupState: 'ask-backup'
     })
 
+    await expect(
+      h.failover.switchSessionManually({
+        botId: 'bot-1',
+        sessionId: 'session-home',
+        turnItemId: 'old-turn',
+        target: { agent: 'codex' },
+        remember: true
+      })
+    ).rejects.toThrow('usage_limit_cut_changed')
+    expect(h.getBot().backupModels?.automatic).toBe(false)
+
     const result = await h.failover.switchSessionManually({
       botId: 'bot-1',
       sessionId: 'session-home',
@@ -379,6 +397,18 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     const resolved = await h.failover.resolveLaunchSetup(h.getBot())
     expect(resolved.agent).toBe('claude')
     expect(resolved.launch?.model).toBe('claude-haiku-4-5')
+    h.gate.dispose()
+  })
+
+  it('keeps the applied backup when its continuation is refused', async () => {
+    const h = createHarness(createBot(), [], { sendSameAgentContinuation: async () => false })
+    await h.failover.onUsageLimitCut('session-home', {
+      turnItemId: 'turn-1',
+      resetsAt: NOW + 600_000,
+      chain: 1
+    })
+    expect(h.getBot().activeBackup?.target).toEqual({ agent: 'claude', model: 'claude-haiku-4-5' })
+    expect(h.startedSessions).toEqual([])
     h.gate.dispose()
   })
 

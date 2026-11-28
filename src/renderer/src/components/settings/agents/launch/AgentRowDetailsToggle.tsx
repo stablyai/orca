@@ -7,13 +7,13 @@ import { Button } from '../../../ui/button'
 export function AgentRowDetailsToggle({
   open,
   panelId,
-  nameId,
+  agentLabel,
   onToggle
 }: {
   open: boolean
   panelId: string
-  /** The agent name, so each row's chevron is announced with its agent. */
-  nameId: string
+  /** Named in the label so each row's chevron is distinct in a list of buttons. */
+  agentLabel: string
   onToggle: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -25,11 +25,10 @@ export function AgentRowDetailsToggle({
       onClick={onToggle}
       aria-expanded={open}
       aria-controls={panelId}
-      aria-describedby={nameId}
       aria-label={
         open
-          ? t('settings.agents.hideDetails', 'Hide details')
-          : t('settings.agents.showDetails', 'Show details')
+          ? t('settings.agents.hideAgentDetails', 'Hide {{agent}} details', { agent: agentLabel })
+          : t('settings.agents.showAgentDetails', 'Show {{agent}} details', { agent: agentLabel })
       }
     >
       <ChevronRight

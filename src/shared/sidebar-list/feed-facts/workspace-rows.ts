@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
@@ -32,90 +33,95 @@ import { getWorkspaceRowKindFacts } from '../../worktree/visibility/workspace-ki
 import { SMART_TIERS } from '../sorting/sort-stamps'
 
 /** A row's parent in another Orca store; a missing or unreadable record leaves the row standalone. */
-export const CrossStoreParentRecordSchema = z
-  .custom<CrossStoreWorkspaceLineage>(isCrossStoreWorkspaceLineage)
-  .optional()
-  .catch(undefined)
+export const CrossStoreParentRecordSchema = lazyZodSchema(() =>
+  z.custom<CrossStoreWorkspaceLineage>(isCrossStoreWorkspaceLineage).optional().catch(undefined)
+)
 
 /** A row's folder workspace parent (folder-lineage-parents.ts); unreadable reads as none. */
-export const WorkspaceLineageEdgeSchema = z
-  .object({
-    parentWorkspaceKey: z.custom<WorkspaceKey>(
-      (value) => typeof value === 'string' && parseWorkspaceKey(value) !== null
-    ),
-    parentInstanceId: z.string().nullable().optional(),
-    childInstanceId: z.string().nullable().optional()
-  })
-  .nullable()
-  .optional()
-  .catch(undefined)
+export const WorkspaceLineageEdgeSchema = lazyZodSchema(() =>
+  z
+    .object({
+      parentWorkspaceKey: z.custom<WorkspaceKey>(
+        (value) => typeof value === 'string' && parseWorkspaceKey(value) !== null
+      ),
+      parentInstanceId: z.string().nullable().optional(),
+      childInstanceId: z.string().nullable().optional()
+    })
+    .nullable()
+    .optional()
+    .catch(undefined)
+)
 
 /** Catalog/metadata/sort stamps only; separate activity and review domains keep terminal output from invalidating rows. */
-export const WorkspaceRowSchema = z.object({
-  id: z.string(),
-  hostId: z.string(),
-  kind: z.enum(['git', 'folder']),
-  repoId: z.string(),
-  path: z.string(),
-  branch: z.string(),
-  displayName: z.string(),
-  isMainWorktree: z.boolean(),
-  instanceId: z.string().optional(),
-  /** Stored lineage edge; the builder validates it. */
-  lineage: z
-    .object({
-      parentWorktreeId: z.string(),
-      worktreeInstanceId: z.string(),
-      parentWorktreeInstanceId: z.string()
-    })
-    .nullable(),
-  /** Saved parent in another Orca store; the reader resolves it (cross-store-lineage-resolution.ts). */
-  crossStoreParent: CrossStoreParentRecordSchema,
-  /** Folder workspace parent in this store; null for none, absent from older hosts. */
-  workspaceLineage: WorkspaceLineageEdgeSchema,
-  isPinned: z.boolean(),
-  isArchived: z.boolean(),
-  removing: z.literal(true).optional(),
-  removalRecorded: z.literal(true).optional(),
-  removalError: z.string().optional(),
-  isUnread: z.boolean(),
-  workspaceStatus: z.string(),
-  comment: z.string(),
-  manualOrder: z.number().optional(),
-  /** Manual fallback for rows lacking manualOrder; old hosts omit it. */
-  sortOrder: z.number().optional(),
-  createdAt: z.number().optional(),
-  creatorProvenance: z
-    .union([
-      z.object({ kind: z.literal('host') }),
-      z.object({ kind: z.literal('paired-device'), deviceId: z.string() })
-    ])
-    .optional(),
-  linkedIssue: z.number().nullable(),
-  /** Metadata link only; cached branch PR belongs to the review domain. */
-  linkedPR: z.number().nullable(),
-  linkedLinearIssue: z.string().nullable(),
-  linkedGitLabMR: z.number().nullable(),
-  linkedGitLabIssue: z.number().nullable(),
-  linkedItems: WorkspaceAttachmentsSchema,
-  defaultBranch: z.boolean(),
-  automationCreated: z.literal(true).optional(),
-  automationName: z.string().optional(),
-  cliCreated: z.literal(true).optional(),
-  detachedHead: z.literal(true).optional(),
-  /** Main-owned terminal platform. */
-  terminalPlatform: z.string().optional(),
-  /** Host-owned sort stamps (sort-stamps.ts); old hosts omit tiers. */
-  recentAt: z.number().optional(),
-  smartTier: z.enum(SMART_TIERS).optional(),
-  smartAt: z.number().optional()
-})
+export const WorkspaceRowSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    hostId: z.string(),
+    kind: z.enum(['git', 'folder']),
+    repoId: z.string(),
+    path: z.string(),
+    branch: z.string(),
+    displayName: z.string(),
+    isMainWorktree: z.boolean(),
+    instanceId: z.string().optional(),
+    /** Stored lineage edge; the builder validates it. */
+    lineage: z
+      .object({
+        parentWorktreeId: z.string(),
+        worktreeInstanceId: z.string(),
+        parentWorktreeInstanceId: z.string()
+      })
+      .nullable(),
+    /** Saved parent in another Orca store; the reader resolves it (cross-store-lineage-resolution.ts). */
+    crossStoreParent: CrossStoreParentRecordSchema,
+    /** Folder workspace parent in this store; null for none, absent from older hosts. */
+    workspaceLineage: WorkspaceLineageEdgeSchema,
+    isPinned: z.boolean(),
+    isArchived: z.boolean(),
+    removing: z.literal(true).optional(),
+    removalRecorded: z.literal(true).optional(),
+    removalError: z.string().optional(),
+    isUnread: z.boolean(),
+    workspaceStatus: z.string(),
+    comment: z.string(),
+    manualOrder: z.number().optional(),
+    /** Manual fallback for rows lacking manualOrder; old hosts omit it. */
+    sortOrder: z.number().optional(),
+    createdAt: z.number().optional(),
+    creatorProvenance: z
+      .union([
+        z.object({ kind: z.literal('host') }),
+        z.object({ kind: z.literal('paired-device'), deviceId: z.string() })
+      ])
+      .optional(),
+    linkedIssue: z.number().nullable(),
+    /** Metadata link only; cached branch PR belongs to the review domain. */
+    linkedPR: z.number().nullable(),
+    linkedLinearIssue: z.string().nullable(),
+    linkedGitLabMR: z.number().nullable(),
+    linkedGitLabIssue: z.number().nullable(),
+    linkedItems: WorkspaceAttachmentsSchema,
+    defaultBranch: z.boolean(),
+    automationCreated: z.literal(true).optional(),
+    automationName: z.string().optional(),
+    cliCreated: z.literal(true).optional(),
+    detachedHead: z.literal(true).optional(),
+    /** Main-owned terminal platform. */
+    terminalPlatform: z.string().optional(),
+    /** Host-owned sort stamps (sort-stamps.ts); old hosts omit tiers. */
+    recentAt: z.number().optional(),
+    smartTier: z.enum(SMART_TIERS).optional(),
+    smartAt: z.number().optional()
+  })
+)
 
 /** Legacy local rows without metadata host retain `|id` keys even when hostId names their owner. */
-export const WorkspaceRowsSnapshotSchema = z.object({
-  revision: z.number(),
-  rows: z.record(z.string(), WorkspaceRowSchema)
-})
+export const WorkspaceRowsSnapshotSchema = lazyZodSchema(() =>
+  z.object({
+    revision: z.number(),
+    rows: z.record(z.string(), WorkspaceRowSchema)
+  })
+)
 
 export type WorkspaceRow = z.infer<typeof WorkspaceRowSchema>
 export type WorkspaceRowsSnapshot = z.infer<typeof WorkspaceRowsSnapshotSchema>

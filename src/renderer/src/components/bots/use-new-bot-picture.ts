@@ -20,6 +20,9 @@ import {
   keepSavedPictureDescription
 } from './generated-avatar-descriptions'
 import { pictureMascotIndex, type BotPictureCustom, type BotPictureValue } from './BotPicturePicker'
+import { noteBotPictureChoice } from './bot-picture-ops'
+import { newAvatarDraftKey } from './use-avatar-generation'
+import type { GenerateFaceDraft } from './AvatarGenerateFace'
 
 // Opens on a random mascot, or the one a proposal chose, so no bot is created without a picture.
 function firstMascot(chosen: string | undefined): BotPictureValue {
@@ -37,6 +40,7 @@ export type NewBotPicture = {
   /** For BotPicturePicker. */
   value: BotPictureValue
   custom: BotPictureCustom | null
+  descriptionDraft: GenerateFaceDraft
   onChange: (value: BotPictureValue) => void
   onUpload: (png: string, after: number) => void
   /** A picture taken by paste, drop or upload: it replaces the custom one in place, or lands beside the
@@ -66,6 +70,9 @@ export type NewBotPicture = {
   /** Saves an upload to the bot just made; the bot as it is afterwards. */
   saveUpload: (bot: Bot) => Promise<Bot>
   reset: () => void
+  /** Names the mascot, color and outfit choices in the picture ledger, so a picture still being generated
+   *  doesn't land on top of a newer one. */
+  choiceKey: string
 }
 
 /** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `look` opens
@@ -85,10 +92,12 @@ export function useNewBotPicture(
   look?: { color?: string; outfit?: string }
 ): NewBotPicture {
   const t = useTranslate()
+  const [choiceKey] = useState(newAvatarDraftKey)
   const [value, setValue] = useState<BotPictureValue>(() =>
     initialUpload ? { kind: 'custom' } : firstMascot(mascot)
   )
   const [picked, setColor] = useState<string | null>(look?.color ?? null)
+  const [description, setDescription] = useState('')
   const color = host.colors ? picked : null
   const [pickedOutfit, setOutfit] = useState<string | null>(look?.outfit ?? null)
   const outfit = host.outfits ? wornBotOutfit(pickedOutfit) : null
@@ -109,7 +118,11 @@ export function useNewBotPicture(
   return {
     value,
     custom,
-    onChange: setValue,
+    descriptionDraft: { value: description, onChange: setDescription },
+    onChange: (next) => {
+      noteBotPictureChoice(choiceKey)
+      setValue(next)
+    },
     onUpload: (png, after) => {
       setUpload({ png, after })
       setValue({ kind: 'custom' })
@@ -122,9 +135,19 @@ export function useNewBotPicture(
       setValue({ kind: 'custom' })
     },
     color,
-    onColorChange: host.colors ? setColor : undefined,
+    onColorChange: host.colors
+      ? (next) => {
+          noteBotPictureChoice(choiceKey)
+          setColor(next)
+        }
+      : undefined,
     outfit,
-    onOutfitChange: host.outfits ? setOutfit : undefined,
+    onOutfitChange: host.outfits
+      ? (next) => {
+          noteBotPictureChoice(choiceKey)
+          setOutfit(next)
+        }
+      : undefined,
     src: showingUpload && custom ? custom.src : mascotLook.src,
     outfitArt: showingUpload ? null : mascotLook.outfit,
     avatar: mascotAvatar(mascotId),
@@ -146,10 +169,12 @@ export function useNewBotPicture(
           )
         : bot,
     reset: () => {
+      setDescription('')
       setColor(look?.color ?? null)
       setOutfit(look?.outfit ?? null)
       setValue(initialUpload ? { kind: 'custom' } : firstMascot(mascot))
       setUpload(initialUpload ? { png: initialUpload, after: -1 } : null)
-    }
+    },
+    choiceKey
   }
 }

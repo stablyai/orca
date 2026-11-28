@@ -33,7 +33,7 @@ export function runLocalPlanForAgent(input: {
   /** How long the agent may run; the source-control default when absent. */
   timeoutMs?: number
 }): Promise<InternalTextGenerationResult> {
-  const needsPolicy = ['codex', 'kimi', 'dsh', 'antigravity', 'amp', 'muse'].includes(input.agentId)
+  const needsPolicy = ['codex', 'kimi', 'dsh', 'amp', 'muse'].includes(input.agentId)
   const wslDistro =
     input.plan.promptFile || input.plan.taskFiles?.length || needsPolicy
       ? (wslDistroForCommand(input.target.cwd, input.target.wslDistro) ?? undefined)

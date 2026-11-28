@@ -247,7 +247,7 @@ function BotItemGroup({
   // into another): they measure again before it's painted. A folded group's count changes nothing;
   // other height changes reach them through the list's resize, a frame later.
   const drawnRows = open ? (id === 'needs_you' ? items.length : Math.min(shown, items.length)) : -1
-  const present = items.length > 0 || (id === 'needs_you' && owner.outside.count > 0)
+  const present = items.length > 0
   const hasAllClear = allClear != null
   useLayoutEffect(() => viewport.flush(), [drawnRows, present, hasAllClear, viewport])
   // Only an open window draws rows: a folded group, or Needs you, copies none.
@@ -272,8 +272,7 @@ function BotItemGroup({
   // Needs you counts the rows it lists, asks first; runs a sign-in stopped are context, not counted.
   const count = needsYou ? botNeedsYouCount(asks.needs.length, items.length) : total
   // A group's Needs you also says what its bots need elsewhere, which its count leaves out.
-  const outside = needsYou ? owner.outside.count : 0
-  if (count === 0 && outside === 0) {
+  if (count === 0) {
     return null
   }
   const row = (item: BotItem, tabbable?: boolean): React.JSX.Element => (
@@ -403,24 +402,6 @@ function BotItemGroup({
             </button>
           ) : null}
         </>
-      ) : null}
-      {open && outside > 0 ? (
-        <p className="py-0.5 pl-8 pr-2 text-xs text-muted-foreground">
-          {owner.outside.of === 'room'
-            ? t('bots.groups.items.outsideRoom', '{{count}} more outside this room', {
-                count: outside,
-                defaultValue_one: '{{count}} more outside this room'
-              })
-            : owner.outside.of === 'thread'
-              ? t('bots.groups.items.outsideThread', '{{count}} more outside this thread', {
-                  count: outside,
-                  defaultValue_one: '{{count}} more outside this thread'
-                })
-              : t('bots.groups.items.outside', '{{count}} more outside this group', {
-                  count: outside,
-                  defaultValue_one: '{{count}} more outside this group'
-                })}
-        </p>
       ) : null}
     </section>
   )

@@ -8,11 +8,16 @@ import {
 } from './messages/disclosure/native-chat-disclosure-store'
 import type { ReaderGesture } from './viewport/scroll/native-chat-autoscroll'
 import { NativeChatForwardedGestureContext } from './viewport/scroll/native-chat-reader-scroll-input'
+import {
+  NativeChatTranscriptScrollContext,
+  type NativeChatToolRunScroll
+} from './viewport/scroll/native-chat-transcript-scroll-context'
 
 /** Every transcript's scroller: disclosures, forwarded visual gestures, math copy, and Jump to latest. */
 export function NativeChatTranscriptViewport({
   scrollRef,
   scrollerProps,
+  toolRunScroll,
   forwardedGesture,
   showJump,
   onJump,
@@ -22,6 +27,7 @@ export function NativeChatTranscriptViewport({
 }: {
   scrollRef: Ref<HTMLDivElement>
   scrollerProps: HTMLAttributes<HTMLDivElement>
+  toolRunScroll: NativeChatToolRunScroll
   /** A reader gesture a row's visual frame took before the transcript could see it. */
   forwardedGesture: (gesture: ReaderGesture) => void
   showJump: boolean
@@ -37,7 +43,8 @@ export function NativeChatTranscriptViewport({
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
       <NativeChatForwardedGestureContext.Provider value={forwardedGesture}>
-        <div className="relative min-h-0 flex-1">
+        {/* Never shorter than the worker chip that sits on its end (0 without one). */}
+        <div className="relative min-h-[var(--native-chat-worker-chip-room,0px)] flex-1">
           <div
             ref={scrollRef}
             {...scrollerProps}
@@ -48,7 +55,9 @@ export function NativeChatTranscriptViewport({
             // Browser anchoring would add unattributed movement beside the follow policy's anchor.
             className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
           >
-            {children}
+            <NativeChatTranscriptScrollContext.Provider value={toolRunScroll}>
+              {children}
+            </NativeChatTranscriptScrollContext.Provider>
           </div>
           {overlays}
           <NativeChatJumpToLatest visible={showJump} onJump={onJump} />

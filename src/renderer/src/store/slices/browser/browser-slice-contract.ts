@@ -103,6 +103,8 @@ export type RemoteBrowserPageHandle = {
   restoredFromSession?: true
   /** The restored page was hosted by this desktop, so it must not restore as a streamed pane. */
   restoredClientHosted?: true
+  /** This desktop itself asked the server to place the page here. Set locally, kept across republishes, never read from a snapshot. */
+  placedHere?: true
 }
 
 export type RemovedBrowserHistory = {

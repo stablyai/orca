@@ -26,12 +26,12 @@ export function useSourceControlPanelState() {
 
   const notes = useSourceControlDiffCommentNotes({
     activeWorktreeId,
-    clearDiffComments: storeActions.clearDiffComments,
-    clearDiffCommentsForFile: storeActions.clearDiffCommentsForFile
+    deleteDiffCommentsByIds: storeActions.deleteDiffCommentsByIds
   })
   const viewState = useSourceControlPanelViewState({
     activeWorktreeId,
     settings,
+    owner: JSON.stringify([activeRepoTarget, activeConnectionId, activeWorktreeInstanceId]),
     updateSettings: storeActions.updateSettings
   })
   const operationState = useSourceControlWorktreeOperationState({

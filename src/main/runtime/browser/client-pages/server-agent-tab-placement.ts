@@ -3,6 +3,8 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank
 import {
   assertClientOpenableUrl,
   canPlacePairedPage,
+  createBrowserPageOnPairedHost,
+  DEFAULT_BROWSER_PROFILE_ID,
   type BrowserClientPageOpeningHost
 } from './browser-client-page-opening'
 
@@ -58,4 +60,21 @@ function isDesktopOpenableUrl(url: string | undefined): boolean {
   } catch {
     return false
   }
+}
+
+/** `serverPage` opens it in this server's own browser, which phones stream, when no desktop takes it. */
+export function openBrowserUrlOnClient(
+  host: BrowserClientPageOpeningHost,
+  params: { url: string; worktree: string },
+  signal?: AbortSignal,
+  serverPage?: () => Promise<{ browserPageId: string }>
+): Promise<{ browserPageId: string }> {
+  assertClientOpenableUrl(params.url)
+  return createBrowserPageOnPairedHost(
+    host,
+    { url: params.url, worktree: params.worktree, activate: true, navigation: 'caller' },
+    DEFAULT_BROWSER_PROFILE_ID,
+    serverPage,
+    signal
+  )
 }

@@ -1,6 +1,8 @@
 // Hand to bot…, on the desktop and the phone alike: what a new bot for a workspace is called, and the
 // move-then-tell sequence that leaves no half-done hand-over.
 import { BOT_NAME_MAX_LENGTH, isBotAgent, type BotAgent } from '../bot-types'
+import { sliceAtCodeUnitLimit } from '../text/surrogate-safe-text-slice'
+import { BOT_PURPOSE_MAX_LENGTH } from './bot-proposal'
 import { LINEAGE_PARENT_CHANGED } from '../worktree/lineage-parent-changed'
 
 // A branch's kind of change, which says nothing about what the bot is for.
@@ -26,15 +28,18 @@ export function suggestedBotPurpose(worktree: { comment?: string; branch: string
     .map((line) => line.trim())
     .find(Boolean)
   if (note) {
-    return note.slice(0, 200)
+    return sliceAtCodeUnitLimit(note, BOT_PURPOSE_MAX_LENGTH)
   }
   const branch = words(worktree.branch.replace(/^refs\/heads\//, '')).join(' ')
-  return branch ? (branch.charAt(0).toUpperCase() + branch.slice(1)).slice(0, 200) : ''
+  return sliceAtCodeUnitLimit(
+    branch.charAt(0).toUpperCase() + branch.slice(1),
+    BOT_PURPOSE_MAX_LENGTH
+  )
 }
 
-/** The workspace's agent when a bot can run on it, else Claude. */
-export function suggestedBotAgent(agentTypes: readonly string[]): BotAgent {
-  return agentTypes.find(isBotAgent) ?? 'claude'
+/** The workspace's agent when a bot can run on it; else none, so New bot starts on the host's default. */
+export function suggestedBotAgent(agentTypes: readonly string[]): BotAgent | undefined {
+  return agentTypes.find(isBotAgent)
 }
 
 /** The owning store refused a conditional move back: the owner moved the workspace since. */

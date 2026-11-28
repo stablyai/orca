@@ -1,5 +1,5 @@
-// One call's trip to the tool's server: the agent's request headers that go along, a deadline for
-// the server's response headers, and the response streamed back at the agent's pace.
+// One call's trip to the tool's server: every agent header but its relay credentials goes along,
+// a deadline for the server's response headers, and the response streamed back at the agent's pace.
 import { once } from 'node:events'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { BotToolCredentialAnswer } from '../tool-oauth/bot-tool-credential-source'
@@ -12,20 +12,32 @@ export type ReadyAnswer = Extract<BotToolCredentialAnswer, { kind: 'ready' }>
 const POST_HEADERS_DEADLINE_MS = 5 * 60_000
 const OTHER_HEADERS_DEADLINE_MS = 30_000
 const HEADERS_LATE = Symbol('headers late')
-const FORWARDED_REQUEST_HEADERS = [
-  'content-type',
-  'accept',
-  'mcp-session-id',
-  'mcp-protocol-version',
-  'last-event-id'
+// Belong to one connection, not the request; RFC 9110 §7.6.1.
+const HOP_BY_HOP_HEADERS = [
+  'connection',
+  'keep-alive',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade'
 ]
-const FORWARDED_RESPONSE_HEADERS = [
-  'content-type',
-  'mcp-session-id',
-  'mcp-protocol-version',
-  'cache-control',
-  'retry-after'
-]
+// fetch sets these itself; authorization and cookie are the agent's credentials for the relay.
+const DROPPED_REQUEST_HEADERS = new Set([
+  ...HOP_BY_HOP_HEADERS,
+  'host',
+  'content-length',
+  'expect',
+  'accept-encoding',
+  'authorization',
+  'cookie'
+])
+// fetch already decoded the body; www-authenticate would start a sign-in against the relay.
+const DROPPED_RESPONSE_HEADERS = new Set([
+  ...HOP_BY_HOP_HEADERS,
+  'content-length',
+  'content-encoding',
+  'www-authenticate'
+])
 
 /** Sends the call with the credential's headers; the 504 deadline covers only the wait for headers. */
 export async function sendUpstream(
@@ -36,9 +48,18 @@ export async function sendUpstream(
   signal: AbortSignal
 ): Promise<Response> {
   const headers: Record<string, string> = {}
-  for (const name of FORWARDED_REQUEST_HEADERS) {
+  const named = connectionHeaders(header(req, 'connection'))
+  // Saved headers win whatever their case; fetch would otherwise join both values.
+  const saved = new Set(Object.keys(answer.headers).map((name) => name.toLowerCase()))
+  for (const name of Object.keys(req.headers)) {
     const value = header(req, name)
-    if (value !== undefined) {
+    if (
+      value !== undefined &&
+      !DROPPED_REQUEST_HEADERS.has(name) &&
+      !name.startsWith('proxy-') &&
+      !named.has(name) &&
+      !saved.has(name)
+    ) {
       headers[name] = value
     }
   }
@@ -73,13 +94,13 @@ export async function streamUpstreamResponse(
   upstream: Response,
   signal: AbortSignal
 ): Promise<void> {
-  const out: Record<string, string> = {}
-  for (const name of FORWARDED_RESPONSE_HEADERS) {
-    const value = upstream.headers.get(name)
-    if (value !== null) {
-      out[name] = value
+  const out: Record<string, string | string[]> = {}
+  const named = connectionHeaders(upstream.headers.get('connection') ?? undefined)
+  upstream.headers.forEach((value, name) => {
+    if (!DROPPED_RESPONSE_HEADERS.has(name) && !name.startsWith('proxy-') && !named.has(name)) {
+      out[name] = name === 'set-cookie' ? upstream.headers.getSetCookie() : value
     }
-  }
+  })
   // A refusal is passed on as 403 so neither CLI starts a sign-in against the relay.
   res.writeHead(upstream.status === 401 ? 403 : upstream.status, out)
   // Sent now, so an event stream that stays quiet still reaches the agent as open.
@@ -105,6 +126,16 @@ export async function streamUpstreamResponse(
     throw error
   }
   res.end()
+}
+
+/** Headers a Connection header names are hop-by-hop too. */
+function connectionHeaders(connection: string | undefined): Set<string> {
+  return new Set(
+    (connection ?? '')
+      .split(',')
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean)
+  )
 }
 
 /** Why the tool's server refused, for the Tools row. */

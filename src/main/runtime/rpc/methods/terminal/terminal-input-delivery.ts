@@ -80,6 +80,7 @@ export async function sendTerminalStreamInput(
     text: string
     client: TerminalViewportClient | undefined
     isMobile: boolean
+    arrivedAt?: number
     /** Waits for the provider's handoff; one that may have written is `failed`, not `rejected`. */
     requireWriteSettlement?: boolean
   }
@@ -93,6 +94,7 @@ export async function sendTerminalStreamInput(
     const result = await runtime.sendTerminal(args.terminal, action, {
       inputKind: 'driving',
       inputSource,
+      arrivedAt: args.arrivedAt,
       ...settlement,
       ...(clientId
         ? {

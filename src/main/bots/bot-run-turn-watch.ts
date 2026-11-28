@@ -12,6 +12,7 @@ import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycl
 import { pendingStructuredAgentSessionPrompt } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createKeyedTrailingEdgeCoalescer } from '../runtime/client/events/keyed-trailing-edge-coalescer'
+import type { BotCarriedMessage } from './bot-chat-queued-carry'
 
 /** Why a run has no result of its own (result_unavailable). */
 export type BotRunUnavailable =
@@ -57,17 +58,34 @@ const JOURNAL_WAKE = { flushMs: 300, maxWaitMs: 2_000 }
 type SessionRebindListener = (
   fromSessionId: string,
   toSessionId: string,
-  handoffSend?: BotRunSend
+  handoffSend: BotRunSend | undefined,
+  carried: ReadonlyMap<string, BotCarriedMessage>
 ) => void
 const rebindListeners = new Set<SessionRebindListener>()
+const handoffsInFlight = new Map<string, Set<Promise<void>>>()
+
+export function holdBotTurnWatch(sessionId: string): () => void {
+  const holds = handoffsInFlight.get(sessionId) ?? new Set<Promise<void>>()
+  const hold = Promise.withResolvers<void>()
+  holds.add(hold.promise)
+  handoffsInFlight.set(sessionId, holds)
+  return () => {
+    holds.delete(hold.promise)
+    if (holds.size === 0) {
+      handoffsInFlight.delete(sessionId)
+    }
+    hold.resolve()
+  }
+}
 
 /** Notifies active bot run watches that `fromSessionId` handed off cross-agent to `toSessionId`. */
 export function notifyBotTurnWatchRebind(
   fromSessionId: string,
   toSessionId: string,
-  handoffSend?: BotRunSend
+  handoffSend: BotRunSend | undefined,
+  carried: ReadonlyMap<string, BotCarriedMessage>
 ): void {
-  rebindListeners.forEach((listener) => listener(fromSessionId, toSessionId, handoffSend))
+  rebindListeners.forEach((listener) => listener(fromSessionId, toSessionId, handoffSend, carried))
 }
 
 const unavailable = (reason: BotRunUnavailable): BotTurnEnd => ({ unavailable: reason })
@@ -169,7 +187,7 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
     dispose,
     next: async (initialSend) => {
       let current = initialSend
-      let handoffOpener: BotRunSend | null = null
+      let handoffOpener: BotRunSend | undefined
       let active = true
       let subscribeSeq = 0
       let unsubscribe = (): void => {}
@@ -202,14 +220,27 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
           unsubscribe = nextUnsub
         })
       }
-      const onRebind: SessionRebindListener = (fromSessionId, toSessionId, replacementOpener) => {
+      const onRebind: SessionRebindListener = (
+        fromSessionId,
+        toSessionId,
+        replacementOpener,
+        carried
+      ) => {
         if (current.sessionId !== fromSessionId) {
           return
         }
-        current = { ...current, sessionId: toSessionId }
-        handoffOpener = replacementOpener ?? null
         changes += 1
-        void attachSubscription(toSessionId)
+        const moved = carried.get(current.clientMessageId)
+        if (moved) {
+          current = {
+            ...current,
+            sessionId: toSessionId,
+            fingerprint: moved.from === current.fingerprint ? moved.to : current.fingerprint
+          }
+          void attachSubscription(toSessionId)
+        } else {
+          handoffOpener = replacementOpener
+        }
         wake()
       }
       // Register before awaiting initial subscription so an intervening handoff is never missed.
@@ -222,16 +253,20 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
           const readSend = current
           // A journal that can't be read can't tell which turn was the run's.
           const end = await readRunTurn(host, readSend).catch(() => unavailable('unread'))
+          const holds = handoffsInFlight.get(readSend.sessionId)
+          if (end && holds) {
+            await Promise.all(holds)
+            continue
+          }
           // Discard any read that completed after a cross-agent handoff replaced the watched send.
           if (current !== readSend) {
             continue
           }
           if (end) {
-            // An already-delivered turn has no copy of its original message id in the replacement session;
-            // switch to the handoff opener turn while keeping transferred queued messages on their own id.
-            if ('unavailable' in end && end.unavailable === 'removed' && handoffOpener) {
+            if ('outcome' in end && end.outcome === 'failure' && handoffOpener) {
               current = handoffOpener
-              handoffOpener = null
+              handoffOpener = undefined
+              void attachSubscription(current.sessionId)
               continue
             }
             return end

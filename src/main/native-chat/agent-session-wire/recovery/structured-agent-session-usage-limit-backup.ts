@@ -9,14 +9,14 @@ import {
 export function projectUsageLimitContinueSummary(input: {
   read: HostUsageLimitCut | null
   cut: { turnItemId: string; resetsAt: number; chain: number } | null
-  hold: { unknownReset: boolean; resetsAt: number } | null
+  hold: { awaitingRoom?: boolean; unknownReset: boolean; resetsAt: number } | null
   cancels: boolean
   attemptFailed: boolean
   eligible: boolean
   backup: StructuredAgentSessionBotBackupState | undefined
 }): AgentSessionStatusSummary['usageLimitContinue'] {
   const { read, cut, hold, cancels, attemptFailed, eligible, backup } = input
-  if (!cut || !hold) {
+  if (!cut || !hold || hold.awaitingRoom) {
     if (!read || !backup) {
       return undefined
     }

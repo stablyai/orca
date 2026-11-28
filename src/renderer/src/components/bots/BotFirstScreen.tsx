@@ -228,7 +228,7 @@ export function BotFirstScreen({
   }
   const reading = rows.some((row) => row.state === 'running')
   return (
-    <div className="scrollbar-sleek absolute inset-0 flex flex-col items-center justify-center overflow-y-auto px-6 pb-10">
+    <div className="scrollbar-sleek absolute inset-0 flex flex-col items-center justify-center-safe overflow-y-auto px-6 pb-10">
       <BotAvatar
         bot={bot}
         size="large"

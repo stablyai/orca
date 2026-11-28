@@ -1,6 +1,6 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { workerDockKindLabel } from './dock/worker-dock-labels'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentChildRowContext,
@@ -18,43 +18,25 @@ import { useWorkerDockStructuralValue } from './dock/NativeChatWorkerDockFrame'
 import { WorkerDockRoster } from './dock/WorkerDockRoster'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 
-/** Use strip width in rem so narrow splits behave like narrow windows even on wide monitors. */
-const NARROW_STRIP_REM = 27.5
-
-function rootFontSizePx(): number {
-  const parsed = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 16
-}
-
-/** Measure the strip itself; viewport width is only the initial fallback. */
-function useStripLayout(ref: React.RefObject<HTMLDivElement | null>) {
-  const [layout, setLayout] = useState(() => ({
-    narrow: window.innerWidth < NARROW_STRIP_REM * 16,
-    compact: window.innerHeight < 520
-  }))
-  useEffect(() => {
-    const root = ref.current
-    const element = root?.closest('[data-native-chat-worker-dock]') ?? root
-    const pane = root?.closest('[data-native-chat-root]')
-    if (!element || typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const measure = () => {
-      const narrow = element.getBoundingClientRect().width < NARROW_STRIP_REM * rootFontSizePx()
-      const compact = (pane?.getBoundingClientRect().height ?? window.innerHeight) < 520
-      setLayout((previous) =>
-        previous.narrow === narrow && previous.compact === compact ? previous : { narrow, compact }
-      )
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    if (pane) {
-      observer.observe(pane)
-    }
-    measure()
-    return () => observer.disconnect()
-  }, [ref])
-  return layout
+/** A provider row's dock state, one projection for its row and the chip's count alike. */
+function providerRowState(row: AgentChildRowModel): WorkerDockRowView['state'] {
+  switch (row.displayState) {
+    case 'failed':
+      return 'failed'
+    case 'interrupted':
+      return 'unexpected'
+    case 'idle':
+    case 'done':
+      return 'idle'
+    case 'unverifiable':
+      return 'unavailable'
+    case 'waiting':
+    case 'blocked':
+      return 'coordinator'
+    case 'monitoring':
+    case 'working':
+      return 'running'
+  }
 }
 
 function workerChildren(row: AgentChildRowModel): AgentChildRowModel[] {
@@ -73,6 +55,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   offersStopAll: boolean
   /** Some running work is not listed, so the rows are not the whole roster. */
   incomplete?: boolean
+  /** The worker read failed. */
+  unavailable?: boolean
   stoppingTaskIds: ReadonlySet<string>
   stoppingAll: boolean
   /** Let monitoring speak only when idle; a running turn owns the indicator. */
@@ -90,6 +74,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   workerRows?: ReadonlyMap<string, WorkerDockRowView>
   workerIdentities?: readonly {
     id: string
+    /** Absent on an orchestration worker's identity. */
+    kind?: string
     state: WorkerDockRowView['state']
     changedAt: number | null
     settlement: string | null
@@ -103,8 +89,6 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
 }): React.JSX.Element {
   const t = useTranslate()
   const props = useWorkerDockStructuralValue(liveProps)
-  const root = useRef<HTMLDivElement>(null)
-  const { narrow, compact } = useStripLayout(root)
   const groups = useMemo(
     () =>
       structuredSessionBackgroundTaskGroups(
@@ -144,14 +128,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
           .map((row) => ({
             id: `${row.kind}:${row.id}`,
             kind: row.kind,
-            state:
-              row.displayState === 'failed'
-                ? ('failed' as const)
-                : row.displayState === 'interrupted'
-                  ? ('unexpected' as const)
-                  : row.displayState === 'unverifiable'
-                    ? ('unavailable' as const)
-                    : ('running' as const)
+            state: providerRowState(row)
           }))
       )
     ],
@@ -164,18 +141,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
         .flatMap(({ row }) => workerChildren(row))
         .map((row): WorkerDockRowView => {
           const view = views.get(row.id)
-          const state =
-            row.displayState === 'failed'
-              ? 'failed'
-              : row.displayState === 'interrupted'
-                ? 'unexpected'
-                : row.displayState === 'idle'
-                  ? 'idle'
-                  : row.displayState === 'unverifiable'
-                    ? 'unavailable'
-                    : row.displayState === 'waiting' || row.displayState === 'blocked'
-                      ? 'coordinator'
-                      : 'running'
+          const state = providerRowState(row)
           return {
             id: JSON.stringify([
               props.sessionId ?? '',
@@ -219,51 +185,49 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
     [props.workerIdentities, providerRows]
   )
   return (
-    <div ref={root} className="min-h-0">
-      <WorkerDockRoster
-        rows={rows}
-        identities={identities}
-        countIdentities={countIdentities}
-        narrow={narrow}
-        compact={compact}
-        visible={props.isVisible}
-        incomplete={props.incomplete}
-        stopAll={
-          props.offersStopAll
-            ? { pending: props.stoppingAll, onStop: () => props.onStop() }
-            : undefined
+    <WorkerDockRoster
+      rows={rows}
+      identities={identities}
+      countIdentities={countIdentities}
+      visible={props.isVisible}
+      incomplete={props.incomplete}
+      unavailable={props.unavailable}
+      stopAll={
+        props.offersStopAll
+          ? { pending: props.stoppingAll, onStop: () => props.onStop() }
+          : undefined
+      }
+      // Open or closed is the user's own choice, never part of the structure a gesture holds:
+      // the toggle always reads and sets the live value.
+      expanded={liveProps.expanded}
+      onExpandedChange={liveProps.onExpandedChange}
+      pending={
+        new Set([
+          ...props.stoppingTaskIds,
+          ...[...rows.values()]
+            .filter((row) => row.providerId && props.stoppingTaskIds.has(row.providerId))
+            .map((row) => row.id)
+        ])
+      }
+      onOpen={(row, opener) => {
+        if (row.kind === 'worker') {
+          props.onOpenWorker?.(row, opener)
+        } else if (row.kind !== 'agent' || row.settlement) {
+          // Only an agent's activity streams into the conversation, filed under the provider's id.
+          props.onShowProviderDetails?.(row, opener)
+        } else if (row.providerId) {
+          props.onShowAgent?.(row.providerId)
         }
-        // Open or closed is the user's own choice, never part of the structure a gesture holds:
-        // the toggle always reads and sets the live value.
-        expanded={liveProps.expanded}
-        onExpandedChange={liveProps.onExpandedChange}
-        pending={
-          new Set([
-            ...props.stoppingTaskIds,
-            ...[...rows.values()]
-              .filter((row) => row.providerId && props.stoppingTaskIds.has(row.providerId))
-              .map((row) => row.id)
-          ])
+      }}
+      onAction={(row, action) => {
+        if (row.kind === 'worker' || action === 'clear') {
+          props.onWorkerAction?.(row, action)
+        } else if (action === 'stop' && row.providerId) {
+          props.onStop(row.providerId)
         }
-        onOpen={(row, opener) => {
-          if (row.kind === 'worker') {
-            props.onOpenWorker?.(row, opener)
-          } else if (row.kind === 'command' || row.settlement) {
-            props.onShowProviderDetails?.(row, opener)
-          } else if (row.providerId) {
-            props.onShowAgent?.(row.providerId)
-          }
-        }}
-        onAction={(row, action) => {
-          if (row.kind === 'worker' || action === 'clear') {
-            props.onWorkerAction?.(row, action)
-          } else if (action === 'stop' && row.providerId) {
-            props.onStop(row.providerId)
-          }
-        }}
-        onClearAll={() => props.onClearAll?.()}
-        loadWindow={props.loadWindow}
-      />
-    </div>
+      }}
+      onClearAll={() => props.onClearAll?.()}
+      loadWindow={props.loadWindow}
+    />
   )
 }

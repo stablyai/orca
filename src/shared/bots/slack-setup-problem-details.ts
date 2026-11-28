@@ -6,7 +6,7 @@ export type SlackSetupProblem =
   /** `mine`: this desktop's own token was refused, so the new one is saved here. */
   | { kind: 'token-rejected'; code: string; teamId?: string; mine?: true }
 
-function problemCode(problem: SlackSetupProblem): string {
+export function slackSetupProblemCode(problem: SlackSetupProblem): string {
   switch (problem.kind) {
     case 'other-user':
       return 'other_user'
@@ -26,7 +26,7 @@ export function slackSetupProblemDetails(
 ): string {
   const teamId = 'teamId' in problem ? problem.teamId : undefined
   return [
-    `code: ${problemCode(problem)}`,
+    `code: ${slackSetupProblemCode(problem)}`,
     `computer: ${where.hostName ?? 'this computer'}`,
     `bot: ${where.botName}`,
     ...(problem.kind === 'reconnecting' || problem.kind === 'offline'

@@ -33,6 +33,7 @@ import { noopUnsubscribe } from '../web-storage'
 import { runApprovedSetupOnWebHost } from './web-approved-setup'
 import { emitWebWorkspaceSleep } from './web-workspace-sleep-notices'
 import { translate } from '@/i18n/i18n'
+import { webWorktreeAutoNameCalls } from './web-worktree-auto-name-calls'
 import type { WorkspaceSleepOutcome } from '../../../../../shared/workspace/lifecycle/workspace-sleep'
 
 // Past the host's two-minute chat stop, so a slow stop answers rather than timing out.
@@ -267,16 +268,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     },
     // Why: the capture lives in desktop main memory, unexposed over pairing; the dialog falls back to the persisted excerpt.
     getBranchRenameFailureOutput: async () => null,
-    // Why: retry runs in desktop main against local history and Git; paired clients only dismiss.
-    getBranchAutoRenameRetryAvailability: async () => ({
-      available: false,
-      runningAttemptId: null
-    }),
-    retryBranchAutoRename: async () => ({
-      attemptId: null,
-      outcome: { kind: 'ineligible', reason: 'unavailable' },
-      finishedAt: Date.now()
-    }),
+    ...webWorktreeAutoNameCalls,
     onBranchAutoRenameAttempt: () => noopUnsubscribe,
     onChanged: () => noopUnsubscribe,
     onGitStatusMetadataChanged: () => noopUnsubscribe,

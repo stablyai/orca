@@ -1,5 +1,5 @@
 // Bot backup models subpage: ordered failover list, ask-before-switching toggle and live host status.
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeftRight, Loader2, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { callBotRpc } from '@/lib/bot-hosts'
 import { refreshBotHost } from '@/lib/bot-catalog'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import type { Bot, BotAgent } from '../../../../../shared/bot-types'
+import { BOTS_BACKUP_MODELS_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
 import {
   BOT_BACKUP_MODEL_LIMIT,
   addBotBackupModel,
@@ -26,6 +27,7 @@ import {
 import { formatUsageLimitResetClock } from '../../../../../shared/agent-session/failures/agent-session-usage-limit'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { botAgentLabel, botErrorMessage } from '../bot-presentation'
+import { botHostTakes } from '../bot-host-capability'
 import { BotBackupModelOrderRow, formatBackupEntryLabel } from './BotBackupModelOrderRow'
 import { BotBackupModelPickerPopover } from './BotBackupModelPickerPopover'
 import { SettingsControlsOffContext, SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
@@ -34,7 +36,7 @@ const EMPTY_BACKUP_ORDER: readonly BotBackupModelEntry[] = []
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 
-export function botBackupModelsSummary(
+function botBackupModelsSummary(
   bot: Pick<Bot, 'backupModels' | 'activeBackup'>,
   t: ReturnType<typeof useTranslate>
 ): string {
@@ -50,6 +52,19 @@ export function botBackupModelsSummary(
     ? t('settings.bots.backupModels.modeAuto', 'Auto')
     : t('settings.bots.backupModels.modeAsk', 'Ask')
   return t('settings.bots.backupModels.summaryCount', '{{count}} · {{mode}}', { count, mode })
+}
+
+export function BotBackupSettingsRow({ bot, onOpen }: { bot: Bot; onOpen: () => void }) {
+  const t = useTranslate()
+  return botHostTakes(bot, BOTS_BACKUP_MODELS_RUNTIME_CAPABILITY) ? (
+    <SettingsInsetRow
+      icon={<ArrowLeftRight />}
+      title={t('settings.bots.backupModels.title', 'Backup models')}
+      value={botBackupModelsSummary(bot, t)}
+      page="backup-models"
+      onOpen={onOpen}
+    />
+  ) : null
 }
 
 export type BotBackupModelsContentProps = {
@@ -290,19 +305,28 @@ export function BotBackupModelsPage({
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [returning, setReturning] = useState(false)
+  const statusRequest = useRef(0)
 
   const readStatus = useCallback(async () => {
+    const request = ++statusRequest.current
     setLoading(true)
     setLoadError(false)
     try {
       const next = await callBotRpc<BotBackupStatusResult>(bot, 'bots.backup.status', {
         botId: bot.id
       })
-      setStatus(next)
+      if (request === statusRequest.current) {
+        setStatus(next)
+      }
     } catch {
-      setLoadError(true)
+      if (request === statusRequest.current) {
+        setLoadError(true)
+      }
+    } finally {
+      if (request === statusRequest.current) {
+        setLoading(false)
+      }
     }
-    setLoading(false)
   }, [bot])
 
   useEffect(() => {
@@ -311,7 +335,11 @@ export function BotBackupModelsPage({
       return
     }
     void readStatus()
-    return onBotsChanged(() => void readStatus(), bot.hostId, { kinds: ['settings'] })
+    const unsubscribe = onBotsChanged(() => void readStatus(), bot.hostId, { kinds: ['settings'] })
+    return () => {
+      statusRequest.current += 1
+      unsubscribe()
+    }
   }, [
     controlsOff,
     readStatus,
