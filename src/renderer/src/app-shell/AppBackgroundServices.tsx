@@ -7,6 +7,7 @@ import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
 import { SavedHostScopeWidenGate } from '../components/sidebar/worktree-list/listing/SavedHostScopeWidenGate'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
 import { RemoteHostBrowserControlNoticeHost } from '../components/browser-pane/remote-host-control/RemoteHostBrowserControlNoticeHost'
+import { SshConnectLinkPromptHost } from '../components/ssh-connect-link/SshConnectLinkPrompt'
 import { useAppStore } from '../store/index'
 import { ActiveWorkspaceSyncGate } from './ActiveWorkspaceSyncGate'
 import { StructuredAgentSessionAttentionBridge } from '../components/native-chat/session/attention/StructuredAgentSessionAttentionBridge'
@@ -42,6 +43,7 @@ export function AppBackgroundServices(): React.JSX.Element {
       {/* Keep permission notices available across app surfaces. */}
       <MacosTccPromptNoticeHost />
       <RemoteHostBrowserControlNoticeHost />
+      <SshConnectLinkPromptHost />
       {/* Keep agent-status retention subscriptions out of the App render tree. */}
       <AiVaultTabTitleSyncGate />
       <TerminalSessionNameSyncGate />

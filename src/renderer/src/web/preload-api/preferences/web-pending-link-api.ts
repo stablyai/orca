@@ -7,5 +7,7 @@ export const WEB_PENDING_LINK_API = {
   onBotLinkPending: () => noopUnsubscribe,
   consumePendingBotLink: () => Promise.resolve(null),
   onOpenPluginInstallLink: () => noopUnsubscribe,
-  consumePendingPluginInstallLink: () => Promise.resolve(null)
+  consumePendingPluginInstallLink: () => Promise.resolve(null),
+  onOpenSshConnectLink: () => noopUnsubscribe,
+  consumePendingSshConnectLink: () => Promise.resolve(null)
 }

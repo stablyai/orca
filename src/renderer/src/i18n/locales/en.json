@@ -31491,5 +31491,16 @@
       "badJson": "Check the pasted JSON: it doesn’t parse.",
       "none": "Orca found no server it can add. SSE servers, servers with their own OAuth client or tool filters, and values read from the environment (${VAR}) aren’t supported."
     }
+  },
+  "sshConnectLink": {
+    "host": "Host",
+    "address": "Address",
+    "title": "Connect to {{alias}}?",
+    "description": "A link asked Orca to connect to this SSH host. Only connect if you opened the link.",
+    "connect": "Connect",
+    "invalid": "That SSH link isn’t valid.",
+    "notFound": "No SSH host named {{alias}}",
+    "notFoundDetail": "It isn’t in ~/.ssh/config, or it was removed from Orca. Removed hosts can be restored in SSH settings.",
+    "openSettings": "Open SSH settings"
   }
 }

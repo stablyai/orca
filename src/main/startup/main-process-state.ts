@@ -14,7 +14,10 @@ import type { ServeOptions } from './serve-launch/serve-options'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { DeepLinkState } from './deep-link-state'
 import { DesktopCore } from '../core-desktop/desktop-core'
-import { PluginInstallLinkState } from './open-routing/skill-share-deep-link-state'
+import {
+  PluginInstallLinkState,
+  SshConnectLinkState
+} from './open-routing/skill-share-deep-link-state'
 import { OsOpenedDocumentState } from './open-routing/os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
@@ -78,6 +81,7 @@ export const mainProcessState = {
   pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
   deepLinks: new DeepLinkState(),
   pluginInstallLinks: new PluginInstallLinkState(),
+  sshConnectLinks: new SshConnectLinkState(),
   // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),
   // Window existence does not prove listener readiness; only the renderer pull does, otherwise pushes silently vanish.

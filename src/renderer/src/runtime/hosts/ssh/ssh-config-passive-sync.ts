@@ -8,13 +8,15 @@ let lastStartedAt = Number.NEGATIVE_INFINITY
 // An import persists hosts before they are listed; a failed listing must be retried next time.
 let metadataRefreshPending = false
 
-/** Sync ~/.ssh/config without reAdopt so deleted hosts stay deleted; passive triggers keep menus fresh without opening SSH settings. */
-export function syncSshConfigTargetsPassively(): Promise<void> {
+/** Sync ~/.ssh/config without reAdopt so deleted hosts stay deleted; passive triggers keep menus fresh without opening SSH settings.
+ *  `fresh` skips the rate limit for a caller that needs a host written just now. */
+export function syncSshConfigTargetsPassively(options: { fresh?: boolean } = {}): Promise<void> {
   if (inFlight) {
-    return inFlight
+    // A running sync may have read the config before the caller's host was written.
+    return options.fresh ? inFlight.then(() => syncSshConfigTargetsPassively(options)) : inFlight
   }
   const now = Date.now()
-  if (now - lastStartedAt < SSH_CONFIG_SYNC_MIN_INTERVAL_MS) {
+  if (!options.fresh && now - lastStartedAt < SSH_CONFIG_SYNC_MIN_INTERVAL_MS) {
     return Promise.resolve()
   }
   lastStartedAt = now

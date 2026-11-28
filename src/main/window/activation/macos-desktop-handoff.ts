@@ -74,12 +74,15 @@ export function createDesktopHandoff(options: {
 export function desktopHandoffArguments(pending: {
   deepLinks: { drainArguments: () => string[] }
   pluginInstallLinks: { consume: () => string | null }
+  sshConnectLinks: { consume: () => string | null }
   osOpenedDocuments: { consume: () => string[] }
 }): string[] {
   const pluginLink = pending.pluginInstallLinks.consume()
+  const sshLink = pending.sshConnectLinks.consume()
   return [
     ...pending.deepLinks.drainArguments(),
     ...(pluginLink ? [pluginLink] : []),
+    ...(sshLink ? [sshLink] : []),
     ...pending.osOpenedDocuments.consume()
   ]
 }
