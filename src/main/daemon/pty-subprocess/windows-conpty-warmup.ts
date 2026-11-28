@@ -1,6 +1,7 @@
 import os from 'node:os'
 import type * as pty from 'node-pty'
 import { createRequire } from 'node:module'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 import { spawnWithSystemConptyFallback } from '../../windows/bundled-conpty-fallback'
 
@@ -23,7 +24,10 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = spawnWarmupPt
     try {
       // Warm-up children must die with the daemon, even before its first real terminal.
       assignHostProcessToKillOnCloseJob()
-      const shell = process.env.COMSPEC || 'cmd.exe'
+      const shell =
+        process.env.ComSpec?.trim() ||
+        process.env.COMSPEC?.trim() ||
+        windowsSystem32Binary('cmd.exe')
       // Warm the bundled ConPTY binaries used by real terminal spawns, falling back as they do.
       const proc = spawnWithSystemConptyFallback(
         (useConptyDll) =>
