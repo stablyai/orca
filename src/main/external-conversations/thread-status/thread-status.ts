@@ -244,7 +244,10 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       ...withArmed(current.fact, current.armed, { seq }),
       pending
     })
-    this.waits.saved(id, pending.replyId)
+    // Marked unsent only once on the link: a failed write leaves the line before it as it was.
+    if (read()?.fact.pending?.replyId === pending.replyId) {
+      this.waits.saved(id, pending.replyId)
+    }
     await this.send(current.link)
   }
 
@@ -287,7 +290,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     // A refusal stops the thread's lines; a conflict drops the line, and a second in a row stops them.
     if (sent.kind === 'never' || this.conflicted.has(id)) {
-      return this.disarm(current, after)
+      return this.disarm(current, withoutPending(after))
     }
     this.conflicted.add(id)
     this.write(current, withoutPending(after))
@@ -327,9 +330,12 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     return threadStatusHeldNow(this.deps, this.waits, link, lastTurnId, this.now())
   }
 
+  /** A saved line that may have posted counts for the day, so a later run keeps to the cap. */
   private disarm(link: ExternalConversationLink, fact: ThreadStatusFact): void {
-    this.forget(idOf(link))
-    this.write(link, disarmedFact(fact))
+    const id = idOf(link)
+    const mayHavePosted = this.waits.mayHavePosted(id, fact.pending?.replyId)
+    this.forget(id)
+    this.write(link, disarmedFact(withoutSavedLine(fact, this.now(), mayHavePosted)))
   }
 
   // What this process kept for one thread's run; a later run starts clean.
