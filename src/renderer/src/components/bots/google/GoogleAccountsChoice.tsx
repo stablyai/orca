@@ -20,7 +20,10 @@ import { googleAccountChoiceSave, initialGoogleAccountChoice } from './google-ac
 import { refreshGoogle, useGoogleHost } from './google-connect-client'
 import { googleBotRead, setBotGoogle, type GoogleBotRead } from './set-bot-google'
 import { GoogleAccountPicker, type GoogleAccountPickerBot } from './GoogleAccountPicker'
-import { useNativeChatViewGuard } from '../../native-chat/pane/ownership/native-chat-view-memory'
+import {
+  useNativeChatViewGuard,
+  useNativeChatViewState
+} from '../../native-chat/pane/ownership/native-chat-view-memory'
 
 export type GoogleAccountChoiceBot = GoogleAccountPickerBot & Pick<Bot, 'google' | 'googleAccounts'>
 
@@ -46,11 +49,12 @@ export function useGoogleAccountChoice(
       : bot
   // When the owner started ticking: the bot's Google, so saving can't undo a newer edit, and the
   // accounts shown, so an older host's every-account save still covers one declined then signed out.
-  const [picked, setPicked] = useState<{
+  // Kept with the chat tab in a chat, so an unfinished choice survives a switch; back to none, it keeps nothing.
+  const [picked, setPicked] = useNativeChatViewState<{
     chosen: string[]
     basedOn: GoogleBotRead
     shown: string[]
-  } | null>(null)
+  } | null>(`google-accounts-picked:${bot.id}`, null)
   // Kept with the chat tab: a card released mid-save returns still saving.
   const [saving, setSaving] = useNativeChatViewGuard(`google-accounts-save:${bot.id}`, false)
   const initial =

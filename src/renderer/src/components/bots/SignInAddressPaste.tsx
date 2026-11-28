@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
+import { useNativeChatViewGuard } from '../native-chat/pane/ownership/native-chat-view-memory'
 
 /**
  * A sign-in finished in a browser that can't reach the computer it signs in to ends on a page that
@@ -19,7 +20,8 @@ export function SignInAddressPaste({
 }): React.JSX.Element {
   const t = useTranslate()
   const [address, setAddress] = useState('')
-  const [busy, setBusy] = useState(false)
+  // Kept with the chat tab when shown in a chat: a card released mid-finish returns still finishing.
+  const [busy, setBusy] = useNativeChatViewGuard(`sign-in-address:${hint}`, false)
   const [refused, setRefused] = useState<string | null>(null)
   const finish = () => {
     setBusy(true)

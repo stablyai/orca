@@ -7,7 +7,9 @@ import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/t
 import {
   NativeChatViewTabContext,
   readNativeChatViewMemory,
+  onNativeChatViewTabRelease,
   releaseNativeChatViewTabs,
+  useNativeChatViewGuardRef,
   useNativeChatViewState,
   writeNativeChatViewMemory
 } from './native-chat-view-memory'
@@ -129,4 +131,26 @@ it('the newest-few cap drops settled entries, never one still in flight', () => 
   expect(readNativeChatViewMemory(TAB, 'answer:0')).toEqual({ inFlight: true })
   expect(readNativeChatViewMemory(TAB, 'answer:1')).toBeUndefined()
   expect(readNativeChatViewMemory(TAB, 'answer:4')).toEqual({ inFlight: false })
+})
+
+it('a view leaving open work on a switch checks only its own workspace, not every tab', () => {
+  const walk = vi.spyOn(Object, 'values')
+  const cancel = onNativeChatViewTabRelease(TAB, () => {})
+  expect(walk).not.toHaveBeenCalled()
+  walk.mockRestore()
+  cancel()
+})
+
+it('a guard kept as a ref keeps nothing once it settles', () => {
+  const view = renderHook(() => useNativeChatViewGuardRef('command-pending', false), {
+    wrapper: inTab
+  })
+  act(() => {
+    view.result.current.current = true
+  })
+  expect(view.result.current.current).toBe(true)
+  act(() => {
+    view.result.current.current = false
+  })
+  expect(readNativeChatViewMemory(TAB, 'command-pending')).toBeUndefined()
 })

@@ -64,6 +64,10 @@ export function useGoogleSignIn(
       account?: string,
       options?: Pick<GoogleSignInAsk, 'currentApp'>
     ) => {
+      // One run per surface: a same-frame second press would orphan the first.
+      if (readRun() !== null) {
+        return null
+      }
       const run = Symbol('google-sign-in')
       setRun(run)
       setState({ kind: 'waiting', prompt: null, inFlight: true })
@@ -82,10 +86,12 @@ export function useGoogleSignIn(
             }
           }
         )
-        if (readRun() === run) {
-          setRun(null)
-          setState(IDLE)
+        if (readRun() !== run) {
+          // Cancelled meanwhile: what it signed in isn't this card's to act on.
+          return null
         }
+        setRun(null)
+        setState(IDLE)
         return connected
       } catch (error) {
         if (readRun() === run) {

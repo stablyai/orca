@@ -44,11 +44,16 @@ export function releaseNativeChatViewTabs(tabIds: Iterable<string>): void {
   }
 }
 
-/** Open in any workspace: a tab a rename or drag moved still counts. Walks the tabs, so only for rare events. */
-function isTabIdOpen(tabId: string): boolean {
-  return Object.values(useAppStore.getState().unifiedTabsByWorktree).some((tabs) =>
-    tabs.some((entry) => entry.id === tabId)
-  )
+/**
+ * Open in any workspace: a tab a rename or drag moved still counts. Its own workspace answers on a switch; only a
+ * tab that left it (moved or closed, both rare) walks the others.
+ */
+function isTabIdOpen(tab: NativeChatViewTab): boolean {
+  const byWorktree = useAppStore.getState().unifiedTabsByWorktree
+  if (byWorktree[tab.worktreeId]?.some((entry) => entry.id === tab.tabId)) {
+    return true
+  }
+  return Object.values(byWorktree).some((tabs) => tabs.some((entry) => entry.id === tab.tabId))
 }
 
 let pageHideInstalled = false
@@ -73,7 +78,7 @@ export function onNativeChatViewTabRelease(
   tab: NativeChatViewTab,
   release: () => void
 ): () => void {
-  if (!isTabIdOpen(tab.tabId)) {
+  if (!isTabIdOpen(tab)) {
     release()
     return () => {}
   }
@@ -277,6 +282,22 @@ export function useNativeChatViewGuard<T>(
     [read, setValue]
   )
   return [value, set, read]
+}
+
+/** `useNativeChatViewGuard` as a mutable ref, for code that sets `.current`; back at `initial`, nothing is kept. */
+export function useNativeChatViewGuardRef<T>(key: string, initial: T): { current: T } {
+  const [, set, read] = useNativeChatViewGuard(key, initial)
+  return useMemo(
+    () => ({
+      get current(): T {
+        return read()
+      },
+      set current(value: T) {
+        set(value)
+      }
+    }),
+    [read, set]
+  )
 }
 
 /** A mutable ref kept with the tab, so a guard a released view set still holds in the view that replaces it. */
