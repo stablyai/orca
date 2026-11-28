@@ -24,6 +24,7 @@ import {
   joinStructuredAgentSessionStop,
   structuredAgentSessionStopIsJoinable
 } from '../../../../../../../shared/agent-session/requests/structured-agent-session-stop-join'
+import { useNativeChatViewRef } from '../../../pane/ownership/native-chat-view-memory'
 
 export type StructuredAgentSessionWriteOutcome<T> =
   | { kind: 'done'; value: T }
@@ -87,7 +88,11 @@ export function useStructuredAgentSessionMutate(args: {
   capturePresentation: CaptureStructuredAgentSessionPresentation
 } {
   const { agentName, enabled = true, sessionId, stateRef, target } = args
-  const inFlightStops = useRef(new Map<string, Promise<ExecutionResult<unknown>>>())
+  // Kept with the chat tab: a view released mid-Stop joins the Stop already sent rather than sending another.
+  const inFlightStops = useNativeChatViewRef(
+    'inflight-stops',
+    new Map<string, Promise<ExecutionResult<unknown>>>()
+  )
   const presentation = useRef<object | null>(null)
   const hostKey = structuredAgentSessionHostKey(target)
   useNativeChatPaneLifetimeEffect(
@@ -177,8 +182,9 @@ export function useStructuredAgentSessionMutate(args: {
       ) {
         return send<T>(method, fingerprintMethod, fields, pressedFence)
       }
-      // Older hosts lack quiet repeated Stops; retain joining until none remain supported.
-      const key = `${hostKey}:${sessionId}:${method}:${JSON.stringify(fields)}`
+      // Older hosts lack quiet repeated Stops; retain joining until none remain supported. Only within one fence: a
+      // Stop pressed after the runtime moved on must reach the new runtime.
+      const key = `${hostKey}:${sessionId}:${pressedFence}:${method}:${JSON.stringify(fields)}`
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key names the method and fields, so the joined promise is this very call and settles to its T.
       return joinStructuredAgentSessionStop(inFlightStops.current, key, () =>
         send<T>(method, fingerprintMethod, fields, pressedFence)
@@ -194,7 +200,7 @@ export function useStructuredAgentSessionMutate(args: {
       return outcome.kind === 'done' ? outcome.value : null
     }
     return { target, write: execute, mutate }
-  }, [capturePresentation, enabled, hostKey, send, sessionId, stateRef, target])
+  }, [capturePresentation, enabled, hostKey, inFlightStops, send, sessionId, stateRef, target])
 
   const write = useCallback(
     async <T>(...writeArgs: WriteArgs): Promise<StructuredAgentSessionWriteOutcome<T>> =>
