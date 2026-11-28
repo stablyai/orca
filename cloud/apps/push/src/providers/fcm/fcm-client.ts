@@ -43,6 +43,7 @@ export function fcmMessageBody(input: {
           ? {}
           : {
               title: delivery.title,
+              ...(delivery.orca.category ? { categoryId: delivery.orca.category } : {}),
               message: delivery.body,
               tag: delivery.collapseId,
               channelId: delivery.sound === false ? `${input.channelId}-silent` : input.channelId,

@@ -1,3 +1,7 @@
+import {
+  readNotificationReplyTarget,
+  type NotificationReplyTarget
+} from '../../../../src/shared/notifications/notification-reply'
 // APNs nests custom fields under orca; FCM data is flat/string-valued. Read both and coerce numeric fields.
 export type OrcaPushPayload = {
   readonly kind?: 'alert' | 'dismiss'
@@ -10,6 +14,7 @@ export type OrcaPushPayload = {
   readonly executionHost?: string
   readonly source?: string
   readonly agentState?: string
+  readonly replyTarget?: NotificationReplyTarget
 }
 
 function readString(value: unknown): string | undefined {
@@ -34,6 +39,7 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
   }
   return {
     hostFingerprint,
+    replyTarget: readNotificationReplyTarget(record.replyTarget) ?? undefined,
     ...(record.kind === 'dismiss' || record.kind === 'alert' ? { kind: record.kind } : {}),
     notificationId: readString(record.notificationId),
     notificationSeq: readSeq(record.notificationSeq),

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
-import { Platform } from 'react-native'
+import { AppState, Platform } from 'react-native'
+import { pairingCredentialAvailableWhileLocked } from './pairing-keychain-accessibility'
 
 // Why: WHEN_UNLOCKED_THIS_DEVICE_ONLY keeps pairing credentials off iCloud Keychain and backup restores.
 const BASE_OPTIONS: SecureStore.SecureStoreOptions = {
@@ -19,9 +20,12 @@ function serviceForGeneration(generation: number): string | undefined {
   return generation <= 0 ? undefined : `${SERVICE_PREFIX}${generation}`
 }
 
-function optionsForGeneration(generation: number): SecureStore.SecureStoreOptions {
+function optionsForGeneration(generation: number, key: string): SecureStore.SecureStoreOptions {
   const keychainService = serviceForGeneration(generation)
-  return keychainService ? { ...BASE_OPTIONS, keychainService } : BASE_OPTIONS
+  const options = pairingCredentialAvailableWhileLocked(key, Platform.OS)
+    ? { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY }
+    : BASE_OPTIONS
+  return keychainService ? { ...options, keychainService } : options
 }
 
 type LoadedGeneration =
@@ -143,7 +147,7 @@ async function restorePresence(change: PresenceChange | null): Promise<void> {
 async function setItemAtGeneration(key: string, value: string, generation: number): Promise<void> {
   const presenceChange = await preparePresenceWrite(key, generation)
   try {
-    await SecureStore.setItemAsync(key, value, optionsForGeneration(generation))
+    await SecureStore.setItemAsync(key, value, optionsForGeneration(generation, key))
   } catch (error) {
     // Why: a failed rollback leaves reads fail-closed at the attempted generation.
     await restorePresence(presenceChange).catch(() => {})
@@ -155,7 +159,7 @@ export async function readPairingKeychainItem(key: string): Promise<string | nul
   await keychainMutation
   const presenceGeneration = await loadPresenceGeneration(key)
   if (presenceGeneration !== null) {
-    const value = await SecureStore.getItemAsync(key, optionsForGeneration(presenceGeneration))
+    const value = await SecureStore.getItemAsync(key, optionsForGeneration(presenceGeneration, key))
     if (value === null) {
       // Treat Android’s absent/undecryptable null as absent so orphan cleanup remains reachable.
       // Keep presence to prevent resurrecting an older secret; delete or re-pair clears it.
@@ -166,12 +170,34 @@ export async function readPairingKeychainItem(key: string): Promise<string | nul
   const loaded = await loadGeneration()
   const firstCandidate = loaded.reliable ? loaded.generation : MAX_GENERATION
   for (let candidate = firstCandidate; candidate >= 0; candidate -= 1) {
-    const value = await SecureStore.getItemAsync(key, optionsForGeneration(candidate))
+    const value = await SecureStore.getItemAsync(key, optionsForGeneration(candidate, key))
     if (value !== null) {
+      await migrateBackgroundCredential(key, candidate)
       return value
     }
   }
   return null
+}
+
+const migratedBackgroundCredentials = new Set<string>()
+
+async function migrateBackgroundCredential(key: string, generation: number): Promise<void> {
+  if (
+    !pairingCredentialAvailableWhileLocked(key, Platform.OS) ||
+    AppState.currentState !== 'active' ||
+    migratedBackgroundCredentials.has(key)
+  ) {
+    return
+  }
+  await enqueueKeychainMutation(async () => {
+    const options = optionsForGeneration(generation, key)
+    // Re-read under the write queue so migration cannot replace a rotated credential with an old value.
+    const current = await SecureStore.getItemAsync(key, options)
+    if (current !== null) {
+      await SecureStore.setItemAsync(key, current, options)
+      migratedBackgroundCredentials.add(key)
+    }
+  }).catch(() => {})
 }
 
 async function writePairingKeychainItemImpl(key: string, value: string): Promise<void> {
@@ -230,7 +256,7 @@ async function deletePairingKeychainItemImpl(key: string): Promise<void> {
   let firstError: unknown
   for (let candidate = firstCandidate; candidate >= 0; candidate -= 1) {
     try {
-      await SecureStore.deleteItemAsync(key, optionsForGeneration(candidate))
+      await SecureStore.deleteItemAsync(key, optionsForGeneration(candidate, key))
     } catch (error) {
       firstError ??= error
     }

@@ -29,6 +29,13 @@ export const PushNotificationSchema = z
     worktreeId: z.string().min(1).max(2048).optional(),
     paneKey: z.string().min(1).max(2048).optional(),
     // The workspace's server; mirrors the app's runtime host id (cannot import src/shared).
+    category: z.literal('orca.reply').optional(),
+    replyTarget: z.discriminatedUnion('type', [
+      z.object({ type: z.literal('terminal'), terminal: z.string().min(1).max(2048), expectedIncarnationId: z.string().min(1).max(2048) }).strict(),
+      z.object({ type: z.literal('chat'), sessionId: z.string().min(1).max(256) }).strict(),
+        z.object({ type: z.literal('bot-item'), itemUid: z.string().min(1).max(256) }).strict(),
+        z.object({ type: z.literal('group'), groupId: z.string().min(1).max(256) }).strict()
+    ]).optional(),
     executionHost: z
       .string()
       .max(2048)
@@ -36,6 +43,11 @@ export const PushNotificationSchema = z
       .optional()
   })
   .strict()
+  .refine((n) => n.replyTarget === undefined ||
+    ((n.kind === undefined || n.kind === 'alert') && Boolean(n.worktreeId && n.paneKey) && n.category === 'orca.reply'),
+    { message: 'reply requires a chat alert and category' })
+  .refine((n) => n.category !== 'orca.reply' || n.replyTarget !== undefined,
+    { message: 'reply category requires a target' })
   .refine(
     (notification) => notification.kind !== 'dismiss' || Boolean(notification.notificationId),
     { message: 'dismiss requires notificationId' }

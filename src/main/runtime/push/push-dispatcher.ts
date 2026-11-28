@@ -17,6 +17,11 @@ import {
   type NotificationPushCoverageRequest
 } from '../../../shared/rpc-contract/notifications/notifications-params'
 import type { MobilePushDeliveryMode } from './mobile-push-delivery-policy'
+import {
+  notificationReplyFields,
+  type NotificationReplyTarget
+} from '../../../shared/notifications/notification-reply'
+import type { PushReplyCategoryGate } from './push-reply-category-gate'
 
 const PUSH_RETRY_DELAY_MS = 2_000
 // Split requests at the gateway's per-send limit so extra paired phones still receive notifications.
@@ -34,6 +39,8 @@ type PushDispatcherOptions = {
   /** Test seam: lets a suite drive the single retry without real time. */
   scheduleRetry?: (run: () => void, delayMs: number) => void
   coverage?: ExecutionHostPushCoverage
+  replyFor?: (event: MobileNotificationEvent) => NotificationReplyTarget | null
+  replyCategory?: Pick<PushReplyCategoryGate, 'allows' | 'refresh'>
 }
 
 export type PushCoverageRequest = NotificationPushCoverageRequest
@@ -57,9 +64,13 @@ export class PushDispatcher {
   private readonly deliveryMode: MobilePushDeliveryMode
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
   private readonly coverage: ExecutionHostPushCoverage | undefined
+  private readonly replyFor: PushDispatcherOptions['replyFor']
+  private readonly replyCategory: PushDispatcherOptions['replyCategory']
 
   constructor(options: PushDispatcherOptions) {
     this.coverage = options.coverage
+    this.replyFor = options.replyFor
+    this.replyCategory = options.replyCategory
     this.client = options.client
     this.registry = options.registry
     this.deliveryMode = options.deliveryMode ?? 'full'
@@ -211,16 +222,19 @@ export class PushDispatcher {
     if (targets.length === 0) {
       return null
     }
+    this.replyCategory?.refresh()
+    const replyTarget = this.replyCategory?.allows() ? this.replyFor?.(event) : null
+    const notification: PushSendNotification = {
+      expiresAt: Date.now() + 300_000,
+      ...(event.notificationId ? { notificationId: event.notificationId } : {}),
+      ...content,
+      ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
+      ...(event.paneKey ? { paneKey: event.paneKey } : {}),
+      ...(event.executionHost ? { executionHost: event.executionHost } : {})
+    }
     return {
       targets,
-      notification: {
-        expiresAt: Date.now() + 300_000,
-        ...(event.notificationId ? { notificationId: event.notificationId } : {}),
-        ...content,
-        ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
-        ...(event.paneKey ? { paneKey: event.paneKey } : {}),
-        ...(event.executionHost ? { executionHost: event.executionHost } : {})
-      }
+      notification: { ...notification, ...notificationReplyFields(notification, replyTarget) }
     }
   }
 

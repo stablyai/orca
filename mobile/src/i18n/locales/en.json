@@ -1045,6 +1045,13 @@
     }
   },
   "notifications": {
+    "reply": {
+      "action": "Reply",
+      "send": "Send",
+      "placeholder": "Message",
+      "failed": "Reply not sent",
+      "failedReason": "Reply not sent: {{reason}}"
+    },
     "notificationDeliverySection": {
       "sound": "Notification sound",
       "onlyWhenAgentNeedsInput": "Only when an agent needs me",

@@ -1,5 +1,9 @@
 import { startAndroidForegroundPushPresentation } from '../src/notifications/foreground-delivery/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/dismissal/push-background-dismissal'
+import {
+  handleNotificationReply,
+  restoreNotificationReplyDraft
+} from '../src/notifications/reply/notification-reply-response'
 import { readNativeNotificationData } from '../src/notifications/payload-identity/native-notification-data'
 import {
   notificationViewingOfRoute,
@@ -140,6 +144,10 @@ export default function RootLayout() {
     }
 
     async function handleNotificationResponse(response: Notifications.NotificationResponse) {
+      if (await handleNotificationReply(response)) {
+        clearLastNotificationResponse()
+        return
+      }
       if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
         clearLastNotificationResponse()
         return
@@ -159,6 +167,7 @@ export default function RootLayout() {
       }
 
       const target = await getNavigationTarget(response.notification)
+      await restoreNotificationReplyDraft(readNativeNotificationData(response.notification.request))
       clearLastNotificationResponse()
       if (disposed) {
         return

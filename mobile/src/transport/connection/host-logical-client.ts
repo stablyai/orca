@@ -12,7 +12,11 @@ import { watchHostRevocation } from './host-revocation-watch'
 import { createUndialableDirectClient, skipsDirectEndpoint } from './undialable-direct-endpoint'
 import { readvertiseOnPageChange } from './mobile-runtime-capability-negotiation'
 
-export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
+export function openHostLogicalClient(
+  host: HostProfile,
+  onLog: ConnectionLogSink,
+  options?: { backgroundSend?: boolean }
+): RpcClient {
   // Keep app-visible RPC/subscription identity stable while replacing physical sockets.
   // Web runs no relay supervisor, so it must keep dialing whatever endpoint it has.
   const logical = createStableLogicalRpcClient(
@@ -26,9 +30,11 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   }
 
   const endpointLifecycle = startMobileEndpointLifecycle(logical, host, onLog)
-  endpointLifecycle.setForeground(AppState.currentState === 'active')
+  endpointLifecycle.setForeground(
+    options?.backgroundSend === true || AppState.currentState === 'active'
+  )
   const appStateSubscription = AppState.addEventListener('change', (state) => {
-    endpointLifecycle.setForeground(state === 'active')
+    endpointLifecycle.setForeground(options?.backgroundSend === true || state === 'active')
   })
   // A definite revocation (K6): cached screens go at once and stay gone until the desktop accepts this
   // phone again; drafts stay until the host is removed.

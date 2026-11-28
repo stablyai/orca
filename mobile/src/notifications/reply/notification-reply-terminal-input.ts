@@ -1,0 +1,3 @@
+export function notificationReplyInputIsEmpty(terminal: { draft?: string } | undefined): boolean {
+  return terminal !== undefined && !terminal.draft?.trim()
+}
