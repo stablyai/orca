@@ -25,3 +25,15 @@ export function envSelectsAgyAdcAuth(env: Readonly<Record<string, string>>): boo
   const value = envValue(env, 'AGY_ADC_AUTH')?.trim().toLowerCase()
   return Boolean(value) && value !== '0' && value !== 'false'
 }
+
+/** agy's environment for signing it in to Google: gcloud mode (AGY_ADC_AUTH) would bypass that. */
+export function agyGoogleSignInEnv(
+  env: Readonly<Record<string, string>>,
+  envToDelete: readonly string[]
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      ([key]) => !envToDelete.includes(key) && key.toUpperCase() !== 'AGY_ADC_AUTH'
+    )
+  )
+}

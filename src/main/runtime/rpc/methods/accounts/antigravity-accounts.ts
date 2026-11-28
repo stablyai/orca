@@ -55,6 +55,7 @@ import { ANTIGRAVITY_LAUNCH_SPEC } from '../../../../antigravity/antigravity-acp
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import type { AntigravityChatSignInHost } from '../../../../antigravity/antigravity-chat-sign-in'
 import { watchAgyLoginChanges } from '../../../../antigravity/agy-login-change-watch'
+import { agyGoogleSignInEnv } from '../../../../antigravity/antigravity-chat-credential'
 
 const stopLiveChats = () => stopStructuredAgentChats('antigravity', 'Antigravity')
 
@@ -104,20 +105,12 @@ const agySignInHost = (runtime: OrcaRuntimeService): AntigravityChatSignInHost =
     if (!input || !isAbsolute(input.command)) {
       throw new Error('agy is not installed on this host. Install it, then sign in again.')
     }
-    const env = { ...input.env }
-    // This flow signs agy in to Google, which gcloud mode (AGY_ADC_AUTH) would bypass.
-    for (const key of Object.keys(env)) {
-      if (input.envToDelete.includes(key) || key.toUpperCase() === 'AGY_ADC_AUTH') {
-        delete env[key]
-      }
-    }
-    return { command: input.command, env }
+    return { command: input.command, env: agyGoogleSignInEnv(input.env, input.envToDelete) }
   },
   signedIn: async (intent) => {
     forgetAgyLogin(runtime)
     // A new login with no new selection: idle chats start again on it.
     restartIdleAgyChats({ runtime: 'host' })
-    // Signing in may have created the store agy keeps its login in.
     watchAgyLoginChanges()
     if (intent === 'changeAccount') {
       await saveCurrentAgyLogin()
