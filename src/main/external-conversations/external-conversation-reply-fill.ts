@@ -175,7 +175,7 @@ export function conversationReplyFill(
       }
       const ownerDm =
         row.quietRule === undefined &&
-        isSlackDirectMessage(row.conversation) &&
+        (isSlackDirectMessage(row.conversation) || row.conversation.source === 'feishu-local') &&
         (ownerAsked.has(keyOf(row.account, row.deliveryId)) ||
           (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false)) === true)
       silencedWhole.set(conversation, row.quietRule === undefined && !ownerDm)

@@ -50,6 +50,29 @@ import {
   type ConnectorCloudFeature
 } from '../../shared/connector-cloud-features'
 
+type ExternalConversationRuntime = {
+  feishuLocal?: { repliesFilled(): void } | null
+  getOrchestrationDb: () => DeliveryReceiptDb & OrchestrationDb
+  listAutomationRuns: BotConversationActsForSources['listAutomationRuns']
+  showAutomation: BotConversationActsForSources['showAutomation']
+  onWorktreeLifecycle: (listener: (event: RuntimeWorktreeLifecycleEvent) => void) => () => void
+  agentTransitions: Pick<AgentTransitionDetector, 'latestRow' | 'subscribe'>
+  onConversationLinked?: () => void
+  ensureStructuredAgentSessionHost?: () => Promise<unknown>
+  /** Settles once this start continued what the last run cut, naming what it did not. */
+  structuredAgentSessionLaunchContinuation?: {
+    continued: Promise<{ cutByLastRun: ReadonlySet<string> }>
+  }
+  getConnectorCloud?: () =>
+    | (SlackMirrorCloud & {
+        refResolver(): ConnectorRefResolver | null
+        orcaAccountName(): string
+        repliesFilled(): void
+        reply: LeaveLinesCloud['reply']
+      })
+    | null
+}
+
 /** The seam is local and subscribes to nothing until watched, so it lives for the process, built on first use. */
 export function installExternalConversations(
   store:
@@ -58,27 +81,7 @@ export function installExternalConversations(
         flushPendingOrThrowAsync?: RuntimeStore['flushPendingOrThrowAsync']
       })
     | null,
-  runtime: {
-    getOrchestrationDb: () => DeliveryReceiptDb & OrchestrationDb
-    listAutomationRuns: BotConversationActsForSources['listAutomationRuns']
-    showAutomation: BotConversationActsForSources['showAutomation']
-    onWorktreeLifecycle: (listener: (event: RuntimeWorktreeLifecycleEvent) => void) => () => void
-    agentTransitions: Pick<AgentTransitionDetector, 'latestRow' | 'subscribe'>
-    onConversationLinked?: () => void
-    ensureStructuredAgentSessionHost?: () => Promise<unknown>
-    /** Settles once this start continued what the last run cut, naming what it did not. */
-    structuredAgentSessionLaunchContinuation?: {
-      continued: Promise<{ cutByLastRun: ReadonlySet<string> }>
-    }
-    getConnectorCloud?: () =>
-      | (SlackMirrorCloud & {
-          refResolver(): ConnectorRefResolver | null
-          orcaAccountName(): string
-          repliesFilled(): void
-          reply: LeaveLinesCloud['reply']
-        })
-      | null
-  }
+  runtime: ExternalConversationRuntime
 ): {
   current(): ExternalConversationSeam | null
   /** Posts the owner's Orca-typed messages to their bot chats' Slack threads; lives with the seam. */
@@ -229,14 +232,14 @@ export function installExternalConversations(
 /** The reply outbox's fill, boot recovery and watch (design item 125), for one enabled seam. */
 function connectorReplyOutbox(
   store: ExternalConversationLinkStore,
-  runtime: {
-    getConnectorCloud?: () => { repliesFilled(): void } | null
-    structuredAgentSessionLaunchContinuation?: { continued: Promise<unknown> }
-  },
+  runtime: ExternalConversationRuntime,
   signal: AbortSignal
 ): { fill: ConversationReplyFill; admitted: (sessionId: string) => void } {
   const journal = () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null
-  const filled = () => runtime.getConnectorCloud?.()?.repliesFilled()
+  const filled = () => {
+    runtime.getConnectorCloud?.()?.repliesFilled()
+    runtime.feishuLocal?.repliesFilled()
+  }
   const usageLimitDisposition = async (sessionId: string, turnItemId: string) =>
     getStructuredAgentSessionHost()?.usageLimitContinue.disposition(sessionId, turnItemId)
   const { retry, settleWith } = liveEmptyTurnRetry(journal, getStructuredAgentSessionHost, signal)

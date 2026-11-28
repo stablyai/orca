@@ -1,7 +1,7 @@
 // Electron-free: shared by the bots DB worker and its client. Requests are namespaced by store, so
 // another bot store joins by adding its name and op table.
 
-export const BOTS_DB_STORES = ['items', 'work'] as const
+export const BOTS_DB_STORES = ['items', 'work', 'feishu'] as const
 
 export type BotsDbStoreName = (typeof BOTS_DB_STORES)[number]
 

@@ -8159,6 +8159,8 @@
       "fromClosedChatInline": "来自已关闭的聊天",
       "statusUnknown": "状态未知",
       "kindSlack": "Slack 话题",
+      "kindFeishuDm": "飞书私聊",
+      "kindFeishuGroup": "飞书群话题",
       "kindLinear": "Linear 议题",
       "kindGithub": "GitHub 话题",
       "kindAutomation": "自动化运行",

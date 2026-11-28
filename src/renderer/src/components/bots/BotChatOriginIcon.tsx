@@ -6,6 +6,7 @@ import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorT
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BotChatOrigin, BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import { FeishuIcon } from '../icons/FeishuIcon'
 import { GitHubIcon } from '../icons/GitHubIcon'
 import { LinearIcon } from '../icons/LinearIcon'
 import { usageLimitStopTip } from './BotUsageLimitMark'
@@ -14,6 +15,8 @@ import { SlackIcon } from '../icons/SlackIcon'
 
 const ORIGIN_ICONS = {
   home: House,
+  'feishu-local': FeishuIcon,
+  'feishu-group': FeishuIcon,
   slack: SlackIcon,
   linear: LinearIcon,
   github: GitHubIcon,
@@ -26,6 +29,10 @@ function useChatKindLabel(origin: BotChatOrigin): string {
   switch (origin) {
     case 'home':
       return t('bots.chats.home', 'Home Chat')
+    case 'feishu-local':
+      return t('bots.feishu.chat', 'Feishu DM')
+    case 'feishu-group':
+      return t('bots.feishu.groupChat', 'Feishu group topic')
     case 'slack':
       return t('bots.chats.kindSlack', 'Slack thread')
     case 'linear':

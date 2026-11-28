@@ -17,6 +17,9 @@ import { handOffConnectorSetup } from './connector-setup-handoff'
 import type { Bot } from '../../../../shared/bot-types'
 import { googleBotConnectState } from '../../../../shared/google/google-bot-connect-state'
 
+const BotFeishuSetup = lazy(() =>
+  import('./feishu/BotFeishuSetup').then((module) => ({ default: module.BotFeishuSetup }))
+)
 const BotLinearSetupDialog = lazy(() =>
   import('./linear/BotLinearSetupDialog').then((module) => ({
     default: module.BotLinearSetupDialog
@@ -93,6 +96,9 @@ export function useConnectorSetup(bot: Bot): {
   }
   const dialogs = (
     <Suspense fallback={null}>
+      {setupOpen === 'feishu-local' ? (
+        <BotFeishuSetup key={bot.id} bot={bot} onClose={() => setSetupOpen(null)} />
+      ) : null}
       {setupOpen === 'slack' ? (
         <BotSlackSetupDialog
           bot={bot}

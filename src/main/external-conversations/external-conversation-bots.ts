@@ -4,12 +4,15 @@ import type {
   ExternalConversationBot,
   ExternalConversationLink
 } from '../../shared/connectors/external-conversation-link'
+import { refusalOf } from './external-conversation-chain'
 import { linkedChat, type LinkableChat } from './external-conversation-chat-delivery'
 import { findLink, type ExternalConversationLinkStore } from './external-conversation-links'
-import type { Bot } from '../../shared/bot-types'
+import { writeChatLink } from './external-conversation-link-writes'
+import { isBotAgent, type Bot } from '../../shared/bot-types'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import {
   refused,
+  type ConnectorStartInput,
   type ConversationKey,
   type Delivery,
   type ReplyTarget
@@ -19,9 +22,29 @@ export type ConversationBots = {
   /** Why the bot takes no conversation now; null when it does. */
   refusal(botId: string): 'bot_not_found' | 'bot_paused' | null
   /** A new chat for a thread, or the bot's current Chat. */
-  open(target: ExternalConversationBot): Promise<LinkableChat>
+  open(target: ExternalConversationBot, key?: ConversationKey): Promise<LinkableChat>
   /** The pull requests a bot conversation's work opened. */
   workLinks(link: ExternalConversationLink): Promise<ConnectorWorkLink[]>
+}
+
+export async function startBotChat(
+  store: ExternalConversationLinkStore,
+  bots: ConversationBots | undefined,
+  key: ConversationKey,
+  input: ConnectorStartInput
+): Promise<LinkableChat | Delivery> {
+  if (input.transportSignal?.aborted) {
+    return refused(refusalOf(input.transportSignal))
+  }
+  if (!isBotAgent(input.agent)) {
+    return refused('unsupported_agent')
+  }
+  const chat = await botChatFor(store, bots, key, input.target)
+  if (key.source === 'feishu-group' && !('outcome' in chat)) {
+    // The first launch reads the durable link to pick the group's reply-only policy.
+    writeChatLink(store, key, chat, input.prompt)
+  }
+  return chat
 }
 
 /**
@@ -46,7 +69,7 @@ export async function botChatFor(
   if (bot.kind === 'bot' && linked && linked.link.bot?.kind !== 'bot-chat') {
     return linkedChat(linked.workspace.worktreeId, linked.link)
   }
-  return { ...(await bots.open(bot)), bot }
+  return { ...(await (key.source === 'feishu-group' ? bots.open(bot, key) : bots.open(bot))), bot }
 }
 
 /**

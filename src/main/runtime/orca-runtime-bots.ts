@@ -1,6 +1,10 @@
+import type { FeishuLocalHost } from '../feishu-local/feishu-local-host'
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
 import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
-import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
+import {
+  findLinksForSession,
+  sessionRepliesInSlack
+} from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
 import type { Bot } from '../../shared/bot-types'
 import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
@@ -206,8 +210,10 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     linkStore: () => this.store
   }
 
+  feishuLocal: FeishuLocalHost | null = null
+
   /** The runtime's one bots DB worker: every bot store's SQL runs in it, off this thread. */
-  private readonly botsDb = new BotsDbWorkerClient()
+  readonly botsDb = new BotsDbWorkerClient()
 
   /** Which worker each bot conversation's code work went to. */
   readonly botWork = runtimeBotWork(this.botWorkRuntime, this.botsDb)
@@ -251,6 +257,13 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     return this.store?.getBots?.() ?? []
   }
 
+  isFeishuGroupSession(sessionId: string): boolean {
+    return (
+      this.store !== null &&
+      findLinksForSession(this.store, sessionId).some(({ link }) => link.source === 'feishu-group')
+    )
+  }
+
   /** The structured host's bot side: their sessions' tools and memory, Look around, and the queued-message gate. */
   protected botStructuredSessionHostDeps(store: () => RuntimeStore) {
     return {
@@ -263,6 +276,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         chats: botChatJournal(),
         work: this.botWork,
         lookAround: this.lookAround,
+        isFeishuGroupSession: (sessionId) => this.isFeishuGroupSession(sessionId),
         requestTurnEnded: (sessionId, turnId, ended) =>
           this.botSessions.turnEnded(sessionId, turnId, ended),
         recentChats: (botId, sessionId) => this.botSessions.recentChats(botId, sessionId),
