@@ -13,6 +13,7 @@ import type {
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
+import { touchMobileSessionStatus } from './mobile-session-status-touch'
 
 export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
   protected abstract createMobileSessionTabsDelivery(): ReturnType<
@@ -69,20 +70,18 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     if (!snapshot) {
       return
     }
-    this.mobileSessionTabsAgentStatusHeartbeat.observeWorktreeRefresh(worktreeId)
     if (!options.immediate && snapshot.worktree === worktreeId) {
-      // Status bursts bump once per client frame, and only build one when someone listens.
       const listened = options.statusPaneKeys
         ? options.statusPaneKeys.some((paneKey) => this.hasPaneStatusListeners(paneKey))
         : this.mobileSessionTabListeners.size > 0
-      if (listened) {
-        this.mobileSessionTabsByWorktree.oweVersion(worktreeId)
-        this.scheduleMobileSessionTabsChanged(worktreeId)
-      } else {
-        this.mobileSessionTabsByWorktree.oweUnpublishedVersion(worktreeId)
-      }
+      touchMobileSessionStatus(worktreeId, listened, {
+        heartbeat: this.mobileSessionTabsAgentStatusHeartbeat,
+        snapshots: this.mobileSessionTabsByWorktree,
+        schedule: (id) => this.scheduleMobileSessionTabsChanged(id)
+      })
       return
     }
+    this.mobileSessionTabsAgentStatusHeartbeat.observeWorktreeRefresh(worktreeId)
     this.storeMobileSessionSnapshot(worktreeId, {
       ...snapshot,
       snapshotVersion: snapshot.snapshotVersion + 1
