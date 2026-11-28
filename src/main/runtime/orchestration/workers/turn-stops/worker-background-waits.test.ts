@@ -15,8 +15,10 @@ import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../shared/agent-session/identity/orca-session-address'
-import { structuredAgentSessionStatusPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
-import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  chatPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const PANE = 'tab_worker:11111111-1111-4111-8111-111111111111'
 const HANDLE = 'term_worker'
@@ -340,7 +342,7 @@ describe('a worker waiting on its own background task', () => {
 
   describe('a chat worker whose background task ends while its chat is idle', () => {
     const SESSION = '22222222-2222-4222-8222-222222222222'
-    const CHAT_PANE = structuredAgentSessionStatusPaneKey(SESSION)
+    const CHAT_PANE = chatPaneKey(SESSION)
     let chatDispatch: string
 
     beforeEach(() => {
