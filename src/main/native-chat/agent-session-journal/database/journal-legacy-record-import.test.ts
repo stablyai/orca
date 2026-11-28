@@ -392,6 +392,7 @@ it('keeps the clear chain’s original tab id across competing bootstrap snapsho
   const { root, primary } = profile()
   const clear = (replacementSessionId: string) => ({
     command: 'clear',
+    state: 'completed',
     phase: 'committed',
     operationId: 'clear-op',
     callerKey: 'clear-caller',
