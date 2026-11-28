@@ -10,7 +10,7 @@ const t = (_key: string, fallback: string, values?: Record<string, unknown>) =>
 
 function managedView(state: Partial<ManagedRuntimeInstallState>) {
   const full: ManagedRuntimeInstallState = {
-    agent: 'antigravity',
+    agent: 'opencode',
     program: 'server',
     revision: 1,
     available: true,
@@ -21,12 +21,12 @@ function managedView(state: Partial<ManagedRuntimeInstallState>) {
     operation: null,
     ...state
   }
-  return managedRuntimeInstallView({ kind: 'known', state: full }, 'Antigravity', false, t)
+  return managedRuntimeInstallView({ kind: 'known', state: full }, 'OpenCode', false, t)
 }
 
 function external(installedVersion: string | null): ManagedRuntimeInstallState {
   return {
-    agent: 'antigravity',
+    agent: 'opencode',
     revision: 1,
     available: true,
     version: '1.5.0',
@@ -51,7 +51,7 @@ function installing(
 }
 
 const viewOf = (state: ManagedRuntimeInstallState) =>
-  managedRuntimeInstallView({ kind: 'known', state }, 'Antigravity')
+  managedRuntimeInstallView({ kind: 'known', state }, 'OpenCode')
 
 describe('managedRuntimeInstallView with a host copy that runs', () => {
   it('offers no Install while Orca has no copy', () => {
@@ -71,8 +71,8 @@ describe('managedRuntimeInstallView with a host copy that runs', () => {
 
   it('names the agent only for screen readers, since the row sits under it', () => {
     const view = viewOf(external(null))
-    expect(view.status).not.toContain('Antigravity')
-    expect(view.spokenStatus).toContain('Antigravity')
+    expect(view.status).not.toContain('OpenCode')
+    expect(view.spokenStatus).toContain('OpenCode')
   })
 
   it("hides a failed install of Orca's copy, which wouldn't run anyway", () => {
@@ -141,8 +141,8 @@ describe('managedRuntimeInstallView while installing', () => {
     'names the agent only for screen readers while %s',
     (phase) => {
       const view = viewOf(installing(phase))
-      expect(view.status).not.toContain('Antigravity')
-      expect(view.spokenStatus).toContain('Antigravity')
+      expect(view.status).not.toContain('OpenCode')
+      expect(view.spokenStatus).toContain('OpenCode')
     }
   )
 
@@ -194,6 +194,6 @@ describe("managedRuntimeInstallView with Orca's copy", () => {
       installedVersion: '1.5.2',
       installedCurrent: true
     })
-    expect(current.menuAction).toMatchObject({ label: 'Reinstall Antigravity' })
+    expect(current.menuAction).toMatchObject({ label: 'Reinstall OpenCode' })
   })
 })
