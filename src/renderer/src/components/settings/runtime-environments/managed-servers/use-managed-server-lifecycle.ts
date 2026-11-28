@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   isOrcadUncountedTerminalsDeferral,
@@ -11,6 +11,8 @@ import {
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { managedServerOutcomeLabel } from './managed-server-copy'
 
 export type ManagedServerAction =
@@ -62,6 +64,19 @@ function outcomeMessage(result: Parameters<typeof managedServerOutcomeLabel>[0])
     : null
 }
 
+// The runtime the host answers as now, verified; null while it is unreachable, revoked or replaced.
+export const selectCurrentVerifiedRuntimeId = (
+  entry: RuntimeEnvironmentStatus | undefined
+): string | null => entry?.status?.runtimeId ?? null
+
+type StatusRead = {
+  environmentId: string
+  /** The verified runtime current when the read began. */
+  runtimeId: string | null
+  /** A failed read covers nothing: the next contact change reads again. */
+  failed: boolean
+}
+
 export function useManagedServerLifecycle({
   api,
   environment,
@@ -74,7 +89,9 @@ export function useManagedServerLifecycle({
   const mountedRef = useMountedRef()
   const [status, setStatus] = useState<OrcadManagedRuntimeStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
-  const [busy, setBusy] = useState<ManagedServerAction | 'status' | null>(null)
+  // Why separate: a status read settling mid-action must not end the action's busy state.
+  const [actionBusy, setActionBusy] = useState<ManagedServerAction | null>(null)
+  const [statusLoading, setStatusLoading] = useState(false)
   const [confirmingStop, setStopConfirmation] = useState(false)
   const [confirmingForget, setForgetConfirmation] = useState(false)
   const [confirmingRestore, setRestoreConfirmation] = useState(false)
@@ -105,37 +122,72 @@ export function useManagedServerLifecycle({
       ? forceUpdateRequest
       : null
 
+  // Why: an update can land outside this row (a deferred one retried on reconnect), and its
+  // restarted server must not keep showing the deferral or the old version.
+  const runtimeId = useRuntimeHostStatusSelector(environment.id, selectCurrentVerifiedRuntimeId)
+  const runtimeIdRef = useRef(runtimeId)
+  useEffect(() => {
+    runtimeIdRef.current = runtimeId
+  }, [runtimeId])
+  // The newest read: only it may publish, and it records the verified runtime it started under.
+  const latestReadRef = useRef<StatusRead | null>(null)
+  const actionRef = useRef<object | null>(null)
+
   const loadStatus = useCallback(async () => {
-    setBusy('status')
+    const read: StatusRead = {
+      environmentId: environment.id,
+      runtimeId: runtimeIdRef.current,
+      failed: false
+    }
+    latestReadRef.current = read
+    const current = (): boolean => mountedRef.current && latestReadRef.current === read
+    setStatusLoading(true)
     try {
-      const next = await api.getStatus({ selector: environment.id })
-      if (mountedRef.current) {
+      const next = await api.getStatus({ selector: read.environmentId })
+      if (current()) {
         setStatus(next)
         setStatusError(null)
       }
     } catch (error) {
-      if (mountedRef.current) {
+      read.failed = true
+      if (current()) {
         setStatusError(error instanceof Error ? error.message : String(error))
       }
     } finally {
-      if (mountedRef.current) {
-        setBusy(null)
+      if (current()) {
+        setStatusLoading(false)
       }
     }
   }, [api, environment.id, mountedRef])
 
   useEffect(() => {
+    const latest = latestReadRef.current
+    // A successful read begun under this runtime covers it; losing contact proves nothing new.
+    const covered =
+      latest !== null &&
+      latest.environmentId === environment.id &&
+      (runtimeId === null || (!latest.failed && latest.runtimeId === runtimeId))
+    if (covered) {
+      return
+    }
+    if (actionRef.current !== null) {
+      // A read begun under the old runtime must not publish; the action reads when it ends.
+      latestReadRef.current = null
+      return
+    }
     void loadStatus()
-  }, [loadStatus])
+  }, [environment.id, runtimeId, loadStatus])
 
   const run = async (action: ManagedServerAction): Promise<void> => {
     const pastLiveTerminals = action === 'forceUpdate' ? confirmingForceUpdate : null
     if (action === 'forceUpdate' && !pastLiveTerminals) {
       return
     }
+    const owner = {}
+    actionRef.current = owner
     // The build the operator saw running; Update anyway is refused if the host moved past it.
     const incumbentVersion = status?.activeVersion ?? null
-    setBusy(action)
+    setActionBusy(action)
     try {
       const selector = { selector: environment.id }
       const result =
@@ -181,10 +233,15 @@ export function useManagedServerLifecycle({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
     } finally {
-      if (mountedRef.current) {
-        setBusy(null)
+      if (actionRef.current === owner) {
+        actionRef.current = null
+        if (mountedRef.current) {
+          setActionBusy(null)
+        }
       }
-      void loadStatus()
+      if (mountedRef.current) {
+        void loadStatus()
+      }
     }
   }
 
@@ -192,7 +249,7 @@ export function useManagedServerLifecycle({
     status,
     statusError,
     recovery: status?.recovery ?? null,
-    busy,
+    busy: actionBusy ?? (statusLoading ? 'status' : null),
     confirmingStop,
     confirmingForget,
     confirmingRestore,
