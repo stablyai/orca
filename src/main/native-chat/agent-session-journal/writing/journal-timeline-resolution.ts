@@ -92,11 +92,13 @@ type TimelineItemResolution =
       failureItemId: string
       write: AgentJournalTurnRowWrite
     }
-  /** A person's Stop at the write position picks one of a provider result's two readings. */
+  /** A person's Stop at the write position picks one of a provider result's two readings.
+   *  `failure`: the row reports the turn's failure, which a Stop decides only within its window. */
   | {
       kind: 'stop-decided'
       turnId: string
       endedAt: number
+      failure?: true
       ran: JournalTimelineItemResolution | null
       stopped: JournalTimelineItemResolution | null
     }
@@ -229,7 +231,9 @@ function resolveTimelineItem(
         )
       )
     case 'stop-decided': {
-      const stopped = view.stopDecidesTurn(resolution.turnId, resolution.endedAt)
+      const stopped = resolution.failure
+        ? view.stopDecidesFailure(resolution.turnId, resolution.endedAt)
+        : view.stopDecidesTurn(resolution.turnId, resolution.endedAt)
       const chosen = stopped ? resolution.stopped : resolution.ran
       const result = chosen
         ? resolveJournalTimelineItem(view, chosen, placement, reservedBytes)

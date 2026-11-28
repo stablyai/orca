@@ -135,13 +135,19 @@ export function turnEndStopMayDecide(body: AgentJournalItemBody): boolean {
   )
 }
 
-/** A failure the person's Stop for this turn caused: it ended within the window after that Stop. */
-function stopCausedFailure(state: TurnEndState, completedAt: number | undefined): boolean {
+/** A failure the person's Stop owning this turn caused: it ended at or after that Stop and within
+ *  the window after it. The one rule for a turn's failed end and for its error rows. */
+export function personStopDecidesFailure(
+  state: TurnEndState,
+  turnId: string,
+  endedAt: number | undefined
+): boolean {
   const stop = state.queuePauseMarks.latestStop
   return (
     stop !== null &&
-    completedAt !== undefined &&
-    completedAt - stop.event.at <= STOP_DECIDES_FAILURE_MS
+    endedAt !== undefined &&
+    endedAt - stop.event.at <= STOP_DECIDES_FAILURE_MS &&
+    stopEndsTurnAsCancellation(state, turnId, endedAt)
   )
 }
 
@@ -164,10 +170,9 @@ export function turnEndAfterStop(
     // An already-written end predates this Stop.
     return body
   }
-  if (body.outcome === 'failure' && !stopCausedFailure(state, body.completedAt)) {
-    return body
-  }
-  return stopEndsTurnAsCancellation(state, body.turnId, body.completedAt)
-    ? { ...body, state: 'interrupted', outcome: 'cancellation' }
-    : body
+  const stopped =
+    body.outcome === 'failure'
+      ? personStopDecidesFailure(state, body.turnId, body.completedAt)
+      : stopEndsTurnAsCancellation(state, body.turnId, body.completedAt)
+  return stopped ? { ...body, state: 'interrupted', outcome: 'cancellation' } : body
 }

@@ -6,6 +6,7 @@ import type {
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import {
+  personStopDecidesFailure,
   personStopDecidesTurn,
   turnEndAfterStop,
   turnEndStopMayDecide
@@ -31,22 +32,29 @@ export function journalDomainLatestStop(
   return stopSettle?.sequence === stop.sequence ? { ...saved, settle: stopSettle.settle } : saved
 }
 
+// The pure Stop policy reads only this mark; collection members are never consulted.
+const stopOnly = (stop: JournalLatestStop | null) => ({
+  items: new Map(),
+  submissions: new Map(),
+  aliases: new Map(),
+  queuePauseMarks: { latestStop: stop, resumedSequence: 0, reopenedSequence: 0 }
+})
+
 export function journalDomainStopDecidesTurn(
   stop: JournalLatestStop | null,
   turnId: string | null,
   endedAt?: number
 ): boolean {
-  // The pure Stop policy reads only this mark; collection members are never consulted.
-  return personStopDecidesTurn(
-    {
-      items: new Map(),
-      submissions: new Map(),
-      aliases: new Map(),
-      queuePauseMarks: { latestStop: stop, resumedSequence: 0, reopenedSequence: 0 }
-    },
-    turnId,
-    endedAt
-  )
+  return personStopDecidesTurn(stopOnly(stop), turnId, endedAt)
+}
+
+/** personStopDecidesFailure over the saved Stop alone. */
+export function journalDomainStopDecidesFailure(
+  stop: JournalLatestStop | null,
+  turnId: string,
+  endedAt: number
+): boolean {
+  return personStopDecidesFailure(stopOnly(stop), turnId, endedAt)
 }
 
 /** Every current-item owner applies the same bounded body and write-time Stop policy. */

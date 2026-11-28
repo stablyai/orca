@@ -3,6 +3,7 @@ import {
   type UnhandledProviderFrameJournalItem
 } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import {
   type CodexJournalTranslationAdmission,
   type CodexJournalTranslatorDeps,
@@ -151,20 +152,37 @@ export class CodexJournalGenericFrames {
       }
     }
     this.fallbackSequence += 1
+    const terminalTurnId =
+      translated.body.failure && translated.body.failure.kind !== 'providerRetrying'
+        ? frameTurnId
+        : null
     const identity = {
       provider: 'orca' as const,
-      clientMessageId:
-        translated.body.failure &&
-        translated.body.failure.kind !== 'providerRetrying' &&
-        frameTurnId
-          ? `terminal-failure:codex:${JSON.stringify([threadId, frameTurnId])}`
-          : `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
+      clientMessageId: terminalTurnId
+        ? `terminal-failure:codex:${JSON.stringify([threadId, terminalTurnId])}`
+        : `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
     }
     const attribution = this.deps.attributionFor(threadId, frameTurnId)
     attribution.turnScope = translated.turnScope ?? attribution.turnScope
-    const admission = this.deps.sink.tryAppendItem
-      ? this.deps.sink.tryAppendItem(identity, translated.body, attribution)
-      : (this.deps.sink.appendItem(identity, translated.body, attribution), CODEX_JOURNAL_ADMITTED)
+    const { sink } = this.deps
+    const admission =
+      terminalTurnId && sink.tryReviseResolvedItem
+        ? // A failure a person's Stop of this turn caused is the Stop's, so it shows no error row.
+          sink.tryReviseResolvedItem(
+            estimateStructuredAgentSessionItemBytes(identity, translated.body),
+            {
+              kind: 'stop-decided',
+              failure: true,
+              turnId: terminalTurnId,
+              endedAt: Date.now(),
+              ran: { kind: 'literal', identity, body: translated.body },
+              stopped: null
+            },
+            attribution
+          )
+        : sink.tryAppendItem
+          ? sink.tryAppendItem(identity, translated.body, attribution)
+          : (sink.appendItem(identity, translated.body, attribution), CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
       this.fallbackSequence -= 1
       return admission
