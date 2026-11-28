@@ -6,10 +6,14 @@ import type {
   RuntimeTerminalSetPaneTitle
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
+import type {
+  LayoutCommandRunOptions,
+  WindowLayoutCommand
+} from '../../terminal/layout/runtime-layout-apply'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { paneTitlesForDesktopWindow } from '../publication/desktop-pane-title-forwarding'
+import { manualTitleAdmission } from '../../terminal/title/manual-title-admission'
 
 type MainOwnedPane = {
   worktreeId: string
@@ -61,9 +65,18 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
     return panes.length > 0 ? panes : null
   }
 
-  private async applyMainRename(command: WindowLayoutCommand): Promise<void> {
-    const reply = await this.applyLayoutCommand(command)
+  private async applyMainRename(
+    command: WindowLayoutCommand,
+    run?: Pick<LayoutCommandRunOptions, 'admit'>,
+    /** The code an admit refusal stands for; the store reports every admit refusal as tab_not_found. */
+    admitRefusal?: () => string | null
+  ): Promise<void> {
+    const reply = await this.applyLayoutCommand(command, run)
     if (!reply.ok) {
+      const refusal = admitRefusal?.()
+      if (refusal) {
+        throw new Error(refusal)
+      }
       // A pane a concurrent close took is a stale handle, as today's rename of it is.
       throw new Error(
         reply.code === 'tab_not_found' || reply.code === 'pane_not_found'
@@ -82,10 +95,13 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
     this.touchMobileSessionSnapshotsForPty(pty.ptyId)
   }
 
-  /** `terminal.rename` of a terminal main owns: names its tab in main's layout. */
+  /** `terminal.rename` of a terminal main owns: names its tab in main's layout.
+   * With `ifManualTitle`, the tab's saved manual name is compared inside the queued durable write that renames it,
+   * so a rename queued earlier is seen; a mismatch writes nothing and fails with terminal_title_changed. */
   protected async renameTerminalInMainLayout(
     handle: string,
-    title: string | null
+    title: string | null,
+    ifManualTitle?: string
   ): Promise<RuntimeTerminalRename | null> {
     const pane = this.mainOwnedPaneOfHandle(handle)
     if (!pane) {
@@ -93,16 +109,37 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
     }
     // As today's rename: the name stored, set on the terminal and answered is the one asked for.
     const written = title || null
-    if (pane.pty) {
-      this.stampManualTitle(pane.pty, written)
+    const stamp = (): void => {
+      if (pane.pty) {
+        this.stampManualTitle(pane.pty, written)
+      }
     }
-    await this.applyMainRename({
-      type: 'renameTab',
-      workspace: pane.worktreeId,
-      tabId: pane.tabId,
-      kind: 'custom',
-      title: written
-    })
+    if (ifManualTitle === undefined) {
+      stamp()
+    }
+    let titleChanged = false
+    await this.applyMainRename(
+      {
+        type: 'renameTab',
+        workspace: pane.worktreeId,
+        tabId: pane.tabId,
+        kind: 'custom',
+        title: written
+      },
+      ifManualTitle === undefined
+        ? undefined
+        : {
+            admit: (partitions) => {
+              const admission = manualTitleAdmission(partitions, pane, ifManualTitle)
+              titleChanged = admission === 'terminal_title_changed'
+              if (admission === true) {
+                stamp()
+              }
+              return admission === true
+            }
+          },
+      () => (titleChanged ? 'terminal_title_changed' : null)
+    )
     return { handle, tabId: pane.tabId, title: written }
   }
 

@@ -33,6 +33,9 @@ export const TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY = 'terminal.split-retry.v1'
 // Why: an older host's send guard lets a mid-turn agent whose hooks hide approvals take Enter, so clients refuse those sends there.
 export const TERMINAL_SEND_APPROVAL_GUARD_RUNTIME_CAPABILITY =
   'terminal.send-approval-guard.v1' as const
+// Why: an older host strips terminal.rename's `ifManualTitle` and renames over the user's manual name.
+export const TERMINAL_RENAME_IF_MANUAL_TITLE_RUNTIME_CAPABILITY =
+  'terminal.rename-if-manual-title.v1' as const
 
 export const TERMINAL_RUNTIME_CAPABILITIES = [
   TERMINAL_ORDERED_INPUT_CAPABILITY,
@@ -49,5 +52,6 @@ export const TERMINAL_RUNTIME_CAPABILITIES = [
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
   TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY,
-  TERMINAL_SEND_APPROVAL_GUARD_RUNTIME_CAPABILITY
+  TERMINAL_SEND_APPROVAL_GUARD_RUNTIME_CAPABILITY,
+  TERMINAL_RENAME_IF_MANUAL_TITLE_RUNTIME_CAPABILITY
 ] as const

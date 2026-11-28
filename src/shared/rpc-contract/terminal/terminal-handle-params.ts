@@ -177,7 +177,9 @@ export const TerminalRename = lazyZodSchema(() =>
   TerminalHandle.extend({
     title: z.custom<string | null>((value) => value === null || typeof value === 'string', {
       message: 'Missing --title (pass empty string or null to reset)'
-    })
+    }),
+    // Compare-and-set on the tab's manual name ('' = none), so an automatic namer never overwrites a name the user typed.
+    ifManualTitle: z.string().optional()
   })
 )
 

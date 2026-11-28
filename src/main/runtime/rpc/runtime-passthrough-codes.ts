@@ -28,6 +28,7 @@ export const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_tab_close_timeout',
   'terminal_tab_not_found',
   'terminal_tab_pinned',
+  'terminal_title_changed',
   'agent_prompt_blocked',
   'agent_prompt_stalled',
   'no_active_terminal',

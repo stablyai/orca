@@ -120,6 +120,33 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     return tab ? tab.customTitle?.trim() || null : (pty.manualTitle ?? null)
   }
 
+  /**
+   * The tab's manual name, as `terminal.show` would prefer it, read without yielding so a conditional rename can compare and write at once.
+   * `owner` names what holds that name (the tab, or the PTY while no saved tab does), so every handle of one tab shares it.
+   */
+  protected getTerminalManualTitle(handle: string): { title: string | null; owner: string } {
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      const recorded = this.paneOfPty(pty.pty)
+      const orphaned = !ptyHoldsRecordedSurface(pty.pty.ptyId, recorded, this.ptySurfaceTopology())
+      return {
+        title: this.getPtyManualTitle(pty.pty, orphaned),
+        owner:
+          orphaned || !recorded.tabId
+            ? `pty:${pty.pty.ptyId}`
+            : `tab:${pty.pty.worktreeId}:${recorded.tabId}`
+      }
+    }
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    const tab = this.getWorkspaceSessionForWorktree(leaf.worktreeId)?.tabsByWorktree[
+      leaf.worktreeId
+    ]?.find((candidate) => candidate.id === leaf.tabId)
+    return {
+      title: tab?.customTitle?.trim() || null,
+      owner: `tab:${leaf.worktreeId}:${leaf.tabId}`
+    }
+  }
+
   protected getLiveLeafForHandle(handle: string): {
     record: TerminalHandleRecord
     leaf: RuntimeLeafRecord

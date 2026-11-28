@@ -74,3 +74,27 @@ it('publishes a rename and reset for a live terminal the open host window holds 
     setRuntimeDesktopSurface(null)
   }
 })
+
+it('refuses a conditional rename through one handle while a rename sent through another handle of the same tab is unsaved', async () => {
+  const { runtime, renameTerminal } = setupLayoutOwnerRuntime()
+  const tabId = 'tab_shared'
+  const leafByHandle: Record<string, string> = { term_left: 'leaf_left', term_right: 'leaf_right' }
+  // The window saves renames later, so the saved tab keeps no manual name throughout.
+  Object.assign(runtime, {
+    getLivePtyForHandle: () => null,
+    assertGraphReady: () => undefined,
+    getLiveLeafForHandle: (handle: string) => ({
+      record: { handle },
+      leaf: { worktreeId: WORKTREE_ID, tabId, leafId: leafByHandle[handle] }
+    }),
+    getWorkspaceSessionForWorktree: () => ({
+      tabsByWorktree: { [WORKTREE_ID]: [{ id: tabId, customTitle: null }] }
+    })
+  })
+
+  await runtime.renameTerminal('term_left', 'Typed by user')
+  await expect(
+    runtime.renameTerminal('term_right', 'Automatic name', { ifManualTitle: '' })
+  ).rejects.toThrow('terminal_title_changed')
+  expect(renameTerminal).toHaveBeenCalledTimes(1)
+})

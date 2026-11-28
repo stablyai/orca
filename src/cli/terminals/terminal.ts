@@ -27,6 +27,7 @@ import { printResult } from '../output/command-result-output'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
 } from '../arguments/flags'
@@ -42,6 +43,7 @@ import {
 import '../../shared/remote-runtime/protocol/protocol-version'
 import {
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+  TERMINAL_RENAME_IF_MANUAL_TITLE_RUNTIME_CAPABILITY,
   TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY
 } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
@@ -148,9 +150,31 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) => `Stopped ${value.stopped} terminals.`)
   },
   'terminal rename': async ({ flags, client, cwd, json }) => {
+    const ifManualTitle = getOptionalStringFlagAllowingEmpty(flags, 'if-manual-title')
+    // Why refused rather than sent: an older host strips ifManualTitle and renames over the user's name.
+    if (ifManualTitle !== undefined) {
+      const status = await client.getCliStatus()
+      if (!status.result.runtime.reachable) {
+        throw new RuntimeClientError(
+          'runtime_unavailable',
+          'Orca could not verify --if-manual-title support on the execution host, so nothing was renamed. Wait for the execution host to become reachable and retry.'
+        )
+      }
+      if (
+        status.result.runtime.capabilities?.includes(
+          TERMINAL_RENAME_IF_MANUAL_TITLE_RUNTIME_CAPABILITY
+        ) !== true
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host does not support --if-manual-title and would rename over a manual name. Nothing was renamed; update Orca on the execution host.'
+        )
+      }
+    }
     const result = await client.call<{ rename: RuntimeTerminalRename }>('terminal.rename', {
       terminal: await getTerminalHandle(flags, cwd, client),
-      title: getOptionalStringFlag(flags, 'title') ?? null
+      title: getOptionalStringFlag(flags, 'title') ?? null,
+      ...(ifManualTitle !== undefined ? { ifManualTitle } : {})
     })
     printResult(result, json, formatTerminalRename)
   },
