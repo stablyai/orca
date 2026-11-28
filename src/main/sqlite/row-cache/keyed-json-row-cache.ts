@@ -304,7 +304,8 @@ export class KeyedJsonRowCache {
       // Rows can hold prompts, PR titles and notification ids; keep them user-only.
       directoryMode: 0o700,
       sql: SCHEMA_SQL,
-      walAutocheckpoint: offMain ? 0 : undefined
+      walAutocheckpoint: offMain ? 0 : undefined,
+      synchronous: this.options.durable ? 'FULL' : undefined
     })
     this.db = db
     this.walRegistration = this.walCheckpoints.attach(this.path, () => (this.reopen = true))

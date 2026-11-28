@@ -1,5 +1,6 @@
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { hookLeadTurnState } from '../../../shared/agent-status/lifecycle/hook-lead-turn-state'
+import { turnFactsChanged } from './server-turn-persist-urgency'
 
 const leadTurn = (row: AgentHookEventPayload | undefined) =>
   row ? hookLeadTurnState(row.payload) : null
@@ -13,7 +14,9 @@ function restoredStateEdge(
   if (before?.launchToken !== after?.launchToken) {
     return 'authority'
   }
-  return leadTurn(before) !== leadTurn(after) ? 'turn' : null
+  return leadTurn(before) !== leadTurn(after) || (after && turnFactsChanged(before, after))
+    ? 'turn'
+    : null
 }
 
 /** Authority edges as a revision (they save everything at once) and the panes whose lead turn
