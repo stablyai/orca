@@ -371,6 +371,51 @@ it('keeps a hook status from a teammate’s terminal or chat out of the owner’
   expect(await ownersSide(r)).toBe(before)
 })
 
+it('still republishes a hook status from the owner’s restored terminal and legacy pane', async () => {
+  const first = await rig()
+  startTerminalsOnTheHost(first)
+  const ownersTerminal = await openTerminal(first, 'owner-desk')
+  await chatTabCommandsSettled()
+  // Restored after a restart: the host's list keeps its tab, with no process or window pane yet.
+  const r = await rig({ opened: await physicalReload(first) })
+  await r.list('owner-desk')
+  const snapshot = r.runtime['mobileSessionTabsByWorktree'].get(r.workspace)!
+  const restored = snapshot.tabs.find((tab) => tab.id === ownersTerminal.id)
+  expect(r.runtime['ptysById'].get(ownersTerminal.ptyId)).toBeUndefined()
+  if (restored?.type !== 'terminal') {
+    throw new Error('the owner’s restored terminal is not in the host’s list')
+  }
+  // A tab an older window saved with a numeric pane id.
+  r.runtime['storeMobileSessionSnapshot'](r.workspace, {
+    ...snapshot,
+    tabs: [
+      ...snapshot.tabs,
+      { ...restored, id: 'legacy-tab::pane:1', parentTabId: 'legacy-tab', leafId: 'pane:1' }
+    ]
+  })
+  const hooks = hookStatusRows(r)
+  const ownersFrames = await r.subscribe('owner-phone')
+  const [tabId, leafId] = ownersTerminal.id.split('::')
+  for (const paneKey of [makePaneKey(tabId!, leafId!), 'legacy-tab:1']) {
+    const before = ownersFrames.length
+    hooks.report({ paneKey, worktreeId: r.workspace })
+    await vi.waitFor(() => expect(ownersFrames.length, paneKey).toBeGreaterThan(before))
+  }
+  hooks.uninstall()
+})
+
+it('shows the name a teammate gives their terminal in their own list', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r)
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
+  await r.call('mate-desk', 'terminal.rename', { terminal: matesTerminal.terminal, title: 'Build' })
+  await chatTabCommandsSettled()
+  expect(
+    (await r.list('mate-phone')).tabs.find((tab) => tab.id === matesTerminal.id)
+  ).toMatchObject({ customTitle: 'Build' })
+})
+
 it('redraws a teammate’s list alone when their terminal’s title changes', async () => {
   const r = await rig()
   startTerminalsOnTheHost(r)
@@ -382,7 +427,7 @@ it('redraws a teammate’s list alone when their terminal’s title changes', as
   const framesBefore = ownersFrames.length
   const matesFrames = await r.subscribe('mate-phone')
 
-  r.runtime.onPtyData(matesTerminal.ptyId, '\x1b]0;Mate build\x07', Date.now())
+  r.runtime.onPtyData(matesTerminal.ptyId, '\x1b]0;Mate build\x07', 1)
   await vi.waitFor(() =>
     expect(matesFrames.at(-1)?.tabs.find((tab) => tab.id === matesTerminal.id)).toMatchObject({
       title: 'Mate build'

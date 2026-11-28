@@ -46,6 +46,8 @@ export function personSurfaceRow(
     type: 'terminal',
     id: personTabId(surface),
     title: pty.title || 'Terminal',
+    // A name someone gave it (`terminal.rename`) shows over the program's title, as on host tabs.
+    ...(pty.manualTitle ? { customTitle: pty.manualTitle } : {}),
     parentTabId: surface.parentTabId,
     leafId: surface.leafId,
     ptyId: pty.ptyId,

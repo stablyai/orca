@@ -106,10 +106,7 @@ export function projectRuntimeMobileSessionTabs(
       }
       claimedLivePtyIds.add(resolvedLivePtyId)
     }
-    const legacyPaneId = /^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? null
-    const paneKey = isTerminalLeafId(tab.leafId)
-      ? makePaneKey(tab.parentTabId, tab.leafId)
-      : `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
+    const paneKey = mobileTerminalTabPaneKey(tab)
     const replicaStatus = host.getRendererStatus?.(paneKey)
     if (replicaStatus) {
       tab = { ...tab, agentStatus: replicaStatus.row }
@@ -313,4 +310,13 @@ export function projectRuntimeMobileSessionTabs(
     })
   }
   return finalizeRuntimeMobileSessionTabsResult({ snapshot, tabs }, host)
+}
+
+/** The pane key hooks and status rows name a terminal tab of a session snapshot by: its stable pane
+ *  id, or a legacy numeric pane (`pane:1`) as `<tabId>:1`. */
+export function mobileTerminalTabPaneKey(tab: { parentTabId: string; leafId: string }): string {
+  const legacyPaneId = /^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? null
+  return isTerminalLeafId(tab.leafId)
+    ? makePaneKey(tab.parentTabId, tab.leafId)
+    : `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
 }
