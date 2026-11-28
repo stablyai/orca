@@ -21,7 +21,7 @@ on:
         type: string
         default: main
       dry_run:
-        description: Validate an RC release cut without creating a tag
+        description: Validate a cut without pushing anything. Builds and verifies a placeholder release commit on ref, and from main also mints the release App token and checks its access read-only.
         required: false
         default: false
         type: boolean
@@ -54,11 +54,12 @@ jobs:
       contents: write
     outputs:
       new_tag: ${{ steps.tag.outputs.tag }}
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.version.outputs.version || steps.dry-run-version.outputs.version }}
+      dry_run: ${{ steps.dry-run-version.outputs.version != '' }}
       push_main: ${{ steps.resolve.outputs.push_main }}
       release_sha: ${{ steps.release-commit.outputs.sha }}
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
-      should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
+      should_release: ${{ (steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '') && steps.dry-run-version.outputs.version == '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
       # Why: downstream SignPath Slack pings need the cut source (not only the
       # new tag) so approvers know what they're signing and who cut it.
@@ -577,13 +578,19 @@ jobs:
           echo "version=$new" >>"$GITHUB_OUTPUT"
           echo "Next version: $new"
 
+      # Dry runs build and verify a local-only placeholder release commit; nothing is pushed.
+      - name: Pick the dry-run placeholder version
+        id: dry-run-version
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: echo "version=0.0.0-rc.$GITHUB_RUN_ID" >>"$GITHUB_OUTPUT"
+
       - name: Bump package.json and tag
         id: tag
-        if: steps.version.outputs.version != '' && steps.version.outputs.recovered != 'true'
+        if: (steps.version.outputs.version != '' && steps.version.outputs.recovered != 'true') || steps.dry-run-version.outputs.version != ''
         env:
           EVENT_NAME: ${{ github.event_name }}
           SLOT: ${{ steps.slot.outputs.value }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version || steps.dry-run-version.outputs.version }}
         run: |
           set -euo pipefail
           # Update package.json directly with Node rather than invoking npm version on a blobless checkout.
@@ -675,7 +682,8 @@ jobs:
   # Why the App: GITHUB_TOKEN can't push a tag whose commit carries .github/workflows changes versus main.
   cut:
     needs: prepare
-    if: needs.prepare.outputs.should_release == 'true'
+    # Dry runs from other branches stop at prepare: only main may enter the release environment.
+    if: needs.prepare.outputs.should_release == 'true' || (needs.prepare.outputs.dry_run == 'true' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release
@@ -738,7 +746,7 @@ jobs:
             fail "package.json differs from the source beyond its version"
 
       - name: Fast-forward main to the release commit
-        if: needs.prepare.outputs.new_tag != '' && needs.prepare.outputs.push_main == 'true'
+        if: needs.prepare.outputs.new_tag != '' && needs.prepare.outputs.push_main == 'true' && needs.prepare.outputs.dry_run != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -767,8 +775,26 @@ jobs:
           permission-contents: write
           permission-workflows: write
 
+      # Read-only proof of the token: repo scope, plus a write-access handshake that sends no refs or objects.
+      - name: Check release App token access (dry run)
+        if: needs.prepare.outputs.dry_run == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          repos="$(gh api installation/repositories --jq '[.repositories[].full_name] | join(",")')"
+          if [[ "$repos" != "$GITHUB_REPOSITORY" ]]; then
+            echo "::error::Release App token reaches '$repos'; expected exactly $GITHUB_REPOSITORY."
+            exit 1
+          fi
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+            git push --dry-run origin "refs/tags/$TAG:refs/tags/$TAG"
+          echo "Dry run: the release App token can reach $GITHUB_REPOSITORY with push access; nothing was pushed."
+
       - name: Push release tag with the release App
-        if: needs.prepare.outputs.new_tag != ''
+        if: needs.prepare.outputs.new_tag != '' && needs.prepare.outputs.dry_run != 'true'
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -783,6 +809,7 @@ jobs:
 
       - name: Confirm the remote tag resolves to the release commit
         id: remote-tag
+        if: needs.prepare.outputs.dry_run != 'true'
         run: |
           set -euo pipefail
           git fetch -q --no-tags --depth=1 origin "+refs/tags/$TAG:refs/remotes/origin-tags/$TAG"
