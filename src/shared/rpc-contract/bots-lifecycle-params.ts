@@ -123,7 +123,7 @@ const BotMemberKeySchema = lazyZodSchema(() =>
   })
 )
 
-// Bound raw UTF-16 input without rejecting 32 supplementary code points.
+// Bound raw input to 64 code points, including supplementary characters.
 // Storage normalization trims and caps the cleaned tag at 32 code points.
 const BotTag = lazyZodSchema(() => z.string().max(BOT_TAG_LENGTH * 2))
 const BotTagList = lazyZodSchema(() => z.array(BotTag).max(BOT_TAG_LIMIT))

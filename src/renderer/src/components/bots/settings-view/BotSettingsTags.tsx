@@ -1,5 +1,6 @@
 import { useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import { Tag, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +24,10 @@ function limitDraft(
   field: HTMLInputElement,
   suffixStart = field.selectionEnd ?? field.value.length
 ) {
+  // A pasted list restored after a failed save is limited per tag at submission.
+  if (field.value.includes(',')) {
+    return
+  }
   const limited = limitBotTagDraft(field.value, suffixStart)
   if (limited !== field.value) {
     const caret = limited.length - (field.value.length - suffixStart)
@@ -43,12 +48,14 @@ export function BotSettingsTags({
   const supportsTagEdits = useBotHostHas(bot.hostId, BOTS_TAG_EDIT_RUNTIME_CAPABILITY)
   const input = useRef<HTMLInputElement>(null)
   const compositionSuffix = useRef<string | null>(null)
+  const draftRevision = useRef(0)
   if (!supported) {
     return null
   }
   const tags = bot.tags ?? []
   const atLimit = tags.length >= BOT_TAG_LIMIT
   const label = t('bots.settingsView.tags.label', 'Tags')
+  const limitMessage = t('bots.settingsView.tags.limit', 'Tag limit reached')
   const readTags = (): readonly string[] => {
     // A second key press can arrive before React renders the optimistic edit.
     const current = readHostBots(bot.hostId).find(({ id }) => id === bot.id) ?? bot
@@ -60,14 +67,32 @@ export function BotSettingsTags({
     })
   }
   const commitDraft = (field: HTMLInputElement): void => {
-    if (!field.value) {
+    const draft = field.value
+    if (!draft) {
       return
     }
     const current = readTags()
-    const next = normalizeBotTags([...current, ...field.value.split(',')])
+    const candidates = normalizeBotTags([...current, ...draft.split(',')], BOT_TAG_LIMIT + 1)
+    if (current.length >= BOT_TAG_LIMIT && candidates.length > BOT_TAG_LIMIT) {
+      toast.error(limitMessage)
+      return
+    }
+    const revision = ++draftRevision.current
     field.value = ''
-    if (next.length > current.length) {
-      void update({ tags: supportsTagEdits ? { add: next.slice(current.length) } : next })
+    if (candidates.length > current.length) {
+      const next = candidates.slice(0, BOT_TAG_LIMIT)
+      void update({ tags: supportsTagEdits ? { add: next.slice(current.length) } : next }).then(
+        (saved) => {
+          if (
+            !saved &&
+            input.current === field &&
+            draftRevision.current === revision &&
+            !field.value
+          ) {
+            field.value = draft
+          }
+        }
+      )
     }
   }
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
@@ -92,15 +117,22 @@ export function BotSettingsTags({
     )
     if (!field.readOnly && compositionSuffix.current === null && text.includes(',')) {
       event.preventDefault()
+      draftRevision.current++
       const start = field.selectionStart ?? field.value.length
       const end = field.selectionEnd ?? start
-      const suffix = field.value.slice(end)
+      const suffixDelimiter = field.value.indexOf(',', end)
+      const suffix = field.value.slice(end, suffixDelimiter === -1 ? undefined : suffixDelimiter)
       field.setRangeText(text, start, end, 'end')
       if (suffix) {
         const lastTagStart = start + text.lastIndexOf(',') + 1
+        const lastTagEnd = start + text.length + suffix.length
         field.value =
           field.value.slice(0, lastTagStart) +
-          limitBotTagDraft(field.value.slice(lastTagStart), start + text.length - lastTagStart)
+          limitBotTagDraft(
+            field.value.slice(lastTagStart, lastTagEnd),
+            start + text.length - lastTagStart
+          ) +
+          field.value.slice(lastTagEnd)
       }
       commitDraft(field)
     }
@@ -138,13 +170,10 @@ export function BotSettingsTags({
               density="compact"
               className="w-24 flex-1 basis-24"
               aria-label={label}
-              placeholder={
-                atLimit
-                  ? t('bots.settingsView.tags.limit', 'Tag limit reached')
-                  : t('bots.settingsView.tags.add', 'Add a tag')
-              }
+              placeholder={atLimit ? limitMessage : t('bots.settingsView.tags.add', 'Add a tag')}
               readOnly={atLimit}
               onChange={({ currentTarget }) => {
+                draftRevision.current++
                 if (compositionSuffix.current === null) {
                   limitDraft(currentTarget)
                 }
@@ -152,6 +181,7 @@ export function BotSettingsTags({
               onPaste={onTransfer}
               onDrop={onTransfer}
               onCompositionStart={({ currentTarget }) => {
+                draftRevision.current++
                 compositionSuffix.current = currentTarget.value.slice(
                   currentTarget.selectionEnd ?? currentTarget.value.length
                 )
