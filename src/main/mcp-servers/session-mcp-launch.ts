@@ -1,6 +1,6 @@
 // Which MCP servers a new chat session gets from Orca, decided on the host that runs it: a bot's own
 // tools in its home folder, and the host's list for every session (a bot only when it opts in),
-// filtered by the session's agent and workspace. With the host's switch off, only a bot's own.
+// filtered by the session's agent and workspace.
 import { mcpServerWorkspaceKeyOf } from '../../shared/mcp-servers/mcp-servers'
 import type { Bot } from '../../shared/bot-types'
 import { currentBotToolsRevision, readBotLaunchServers } from '../bots/bot-tools-file'
@@ -18,7 +18,6 @@ import {
 } from './mcp-host-list-launch'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { botHostMcpAccess } from './bot-host-mcp-access'
-import { isMcpServersFeatureEnabled } from './mcp-servers-feature'
 import { SessionMcpTools, type SessionHostMcpServers } from './session-mcp-tools'
 
 // An Orca sign-in to a host-list server is a list change its chats compare: only one whose server
@@ -44,17 +43,13 @@ export type SessionLaunchedTools = { bot: BotLaunchedTools | null; host: HostLau
 
 type HostRead = { host: SessionHostMcpServers; launched: HostLaunchedTools }
 
-/** The host list's servers for this launch, maybe none; undefined with the switch off, or when the
- *  list can't be read. */
+/** The host list's servers for this launch, maybe none; undefined when the list can't be read. */
 async function hostServersFor(
   agent: string,
   workspace: HostWorkspace,
   given: string | undefined,
   read?: (folder: string, epoch: number) => ReturnType<McpHostListRead>
 ): Promise<HostRead | undefined> {
-  if (!isMcpServersFeatureEnabled()) {
-    return undefined
-  }
   const folder = given ?? mcpHostListFolder()
   // Read before the list: a write in between makes this launch look stale, never current.
   const epoch = botToolsEpoch(folder)
@@ -82,7 +77,7 @@ async function hostServersFor(
 /**
  * The session's servers. `bot` is the bot whose home the session runs in, or null. `launched` is
  * what the session's next turns compare against to pick up a change to the servers it got; null
- * when it got none from Orca (a chat with the switch off, or no server on for it).
+ * when the host list couldn't be read.
  */
 export async function sessionMcpLaunchTools(
   bot: Pick<Bot, 'id' | 'hostMcpServers'> | null,
@@ -157,7 +152,7 @@ export async function sessionLaunchToolsChanged(
     return false
   }
   const now = await hostServersFor(host.agent, host.workspace, host.folder, mcpHostListAtEpoch)
-  if (!now && isMcpServersFeatureEnabled()) {
+  if (!now) {
     // The list can't be read now: the next turn compares again, so a change isn't lost.
     return false
   }

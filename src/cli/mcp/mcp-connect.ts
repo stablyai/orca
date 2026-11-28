@@ -16,7 +16,7 @@ import { mcpCallerWorkspace } from './mcp-caller-workspace'
 import { readOrcaCliVersion } from '../cli-version'
 import { bridgeMcpServer } from '../../main/mcp-servers/agent-files/mcp-connect-bridge'
 
-/** The host's answer; any refusal (switch off, a Look around, an older host) is a server with no tools. */
+/** The host's answer; any refusal (a Look around, an older host) is a server with no tools. */
 async function readConnection(
   client: RuntimeClient,
   params: {

@@ -71,7 +71,7 @@ export function startOrcadManagedAgentHooks(
       shouldHydrateShellPath
     })
   )
-  // Grok's, Cursor's and Droid's own MCP files follow this host's list; off with its switch.
+  // Grok's, Cursor's and Droid's own MCP files follow this host's list.
   void published.promise.then(() => registerCleanup(startMcpAgentFileSync()))
   try {
     refreshInstalledOpenCodeStatusPlugins(getSettings())

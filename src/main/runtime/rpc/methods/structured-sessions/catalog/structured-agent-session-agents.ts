@@ -11,7 +11,6 @@ import {
 } from '../../../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../../../agent-session/installation/structured-agent-runtime-metadata'
 import { defineMethod, defineStreamingMethod } from '../../../core'
-import { isMcpServersFeatureEnabled } from '../../../../../mcp-servers/mcp-servers-feature'
 import { requireStructuredCapability } from '../creation/structured-agent-session-gate'
 import {
   AgentsParams,
@@ -40,7 +39,7 @@ export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
           capabilities: {
             ...definition.capabilities,
             // Orca lists the servers of an agent with no `/mcp` of its own.
-            ...(isMcpServersFeatureEnabled() ? { mcpServers: true } : {})
+            mcpServers: true
           },
           ...(definition.managedRuntime?.() ? { managedRuntime: true as const } : {})
         }))

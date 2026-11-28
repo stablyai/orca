@@ -1,5 +1,5 @@
-// mcpServers.*: the host's own MCP server list, for any of the user's clients. Every method refuses
-// while the host's switch is off; every change tells the other clients to re-read.
+// mcpServers.*: the host's own MCP server list, for any of the user's clients. Every change tells
+// the other clients to re-read.
 import { join } from 'node:path'
 import type { McpServer } from '../../../../shared/mcp-servers/mcp-servers'
 import {
@@ -39,7 +39,6 @@ import {
   updateMcpServer
 } from '../../../mcp-servers/mcp-host-list'
 import { addMcpServers } from '../../../mcp-servers/mcp-host-list-add'
-import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
 import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
 import { mcpServerConnection } from '../../../mcp-servers/mcp-server-connection'
@@ -69,7 +68,6 @@ export async function onHost<T>(
   work: () => Promise<T>,
   changes: boolean | 'written' = false
 ): Promise<T> {
-  assertMcpServersFeatureEnabled()
   const folder = mcpHostListFolder()
   const epoch = botToolsEpoch(folder)
   let done = false

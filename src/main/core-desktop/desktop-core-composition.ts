@@ -252,7 +252,7 @@ export async function composeDesktopCore(
       ])
     startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   })
-  // Grok's, Cursor's and Droid's own MCP files follow the host list; off with the MCP servers switch.
+  // Grok's, Cursor's and Droid's own MCP files follow the host list.
   void providerMaintenanceReady.then(async () => {
     const { startMcpAgentFileSync } = await import('../mcp-servers/agent-files/mcp-agent-file-sync')
     deps.registerCleanup(startMcpAgentFileSync())

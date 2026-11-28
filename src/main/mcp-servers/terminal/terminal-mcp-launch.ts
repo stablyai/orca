@@ -1,5 +1,5 @@
-// The host list's servers for an agent's terminal, added at spawn on the host that runs it. With the
-// host's switch off, or for a launch that starts no agent of a known CLI afresh, nothing changes.
+// The host list's servers for an agent's terminal, added at spawn on the host that runs it. For a
+// launch that starts no agent of a known CLI afresh, nothing changes.
 import { createHash } from 'node:crypto'
 import type { BotToolServer } from '../../../shared/bot-tools'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -15,7 +15,6 @@ import { mcpHostListFolder } from '../mcp-host-list-folder'
 import { agentOwnMcpServerNames } from '../agent-own-mcp-server-names'
 import { codexArgsMcpServerNames } from '../../codex/structured/launch/codex-structured-launch-args'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { isMcpServersFeatureEnabled } from '../mcp-servers-feature'
 import { SessionMcpTools, withSessionMcpToolsEnv } from '../session-mcp-tools'
 import { noteTerminalMcpDelivery } from '../mcp-agent-problems'
 import {
@@ -95,7 +94,7 @@ type FingerprintedPane = Pick<TerminalMcpPaneLaunch, 'agent' | 'workspaceId' | '
 
 /**
  * The fingerprint each pane launched with these settings would have now, from one read of the host
- * list, shared by panes with the same settings; null with the switch off or the list unreadable.
+ * list, shared by panes with the same settings; null when the list can't be read.
  */
 export async function currentTerminalMcpFingerprints<Pane extends FingerprintedPane>(
   panes: readonly Pane[],
@@ -107,9 +106,7 @@ export async function currentTerminalMcpFingerprints<Pane extends FingerprintedP
   }
   const hostFolder = deps.hostFolder ?? mcpHostListFolder()
   // Fresh for each count: an edit made outside Orca moves no epoch, and a restart stops agents on it.
-  const snapshot = !isMcpServersFeatureEnabled()
-    ? null
-    : await readBotToolsSnapshot(hostFolder).catch(() => null)
+  const snapshot = await readBotToolsSnapshot(hostFolder).catch(() => null)
   const bySettings = new Map<string, Promise<string | null>>()
   for (const pane of panes) {
     const wsl = pane.wsl ? { distro: pane.wslDistro ?? null } : null
@@ -134,13 +131,7 @@ export async function currentTerminalMcpFingerprints<Pane extends FingerprintedP
 function adapterAndExecutable(
   input: TerminalMcpLaunchInput
 ): { adapter: TerminalMcpAdapter; executable: string } | null {
-  if (
-    !input.isFreshLaunch ||
-    input.connectionId ||
-    !input.command ||
-    !input.launchAgent ||
-    !isMcpServersFeatureEnabled()
-  ) {
+  if (!input.isFreshLaunch || input.connectionId || !input.command || !input.launchAgent) {
     return null
   }
   const adapter = terminalMcpAdapterFor(input.launchAgent)
@@ -161,7 +152,7 @@ function adapterAndExecutable(
 /**
  * Adds the host list's servers to an agent's fresh terminal launch: the command it runs and the
  * variables it gets. Answers the command and what the pane got, or none for a launch it leaves as
- * main would (switch off, a restore, an SSH relay, an agent or command it doesn't know).
+ * main would (a restore, an SSH relay, an agent or command it doesn't know).
  */
 export async function withTerminalMcpServers(
   input: TerminalMcpLaunchInput,

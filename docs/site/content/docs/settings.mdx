@@ -66,6 +66,10 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Keep computer awake** — **On** (stay awake continuously), **Agent** (stay awake while an agent is working), or **Off**. The same control lives on the desktop status bar as **Caffeinate** (coffee icon). Hidden on paired web clients.
 - **Skill freshness** — the Agents pane and skill cards still show full status. Sidebar navigation only badges skills that need action (**Update available**, **Needs attention** / review); healthy, loading, and optional not-installed rows stay quiet. Use **Update** in the dialog to refresh global skills in the background (no terminal). Progress appears on the status bar; closing the dialog does not cancel the run. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
 
+## MCP servers
+
+- One list of MCP servers per host: add a server once, sign in once, and choose which agents and workspaces get it. Changes apply to new sessions. See [MCP servers](/docs/agents/mcp-servers).
+
 ## AI Provider Accounts
 
 - Optional saved accounts per provider. Without any, Orca uses your existing logins.
@@ -159,6 +163,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Auto-run commands on worktree create.
 - Repo icons for the sidebar: choose an icon, full searchable emoji picker, uploaded image, website favicon, or GitHub avatar, then pick a preset or custom hex badge color.
 - Source Control AI overrides for commit messages, pull request details, and branch names.
+- **MCP servers** — turn each of the host's servers on or off for this repo, and see the servers the repo's own `.mcp.json` defines. See [MCP servers](/docs/agents/mcp-servers#in-a-repository-and-for-bots).
 - **Worktree Shared Paths** — gitignored paths to materialize from the primary checkout into each new worktree (APFS clone-copy on macOS when possible, otherwise symlink). Complements repo-checked-in `worktree.sharedDirectories` in `orca.yaml` and `.worktreeinclude` (see [Worktrees](/docs/model/worktrees)).
 
 ## Floating Workspace

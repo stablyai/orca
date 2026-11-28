@@ -7,8 +7,7 @@ import { isFloatingWorkspaceId } from '../workspace/identity/floating-workspace-
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../worktree/id'
 
-// Host advertises mcpServers.* only while its MCP servers switch is on; clients hide the feature otherwise.
-export const MCP_SERVERS_RUNTIME_CAPABILITY = 'mcp-servers.v1' as const
+export { MCP_SERVERS_RUNTIME_CAPABILITY } from './mcp-servers-capability'
 
 /** An agent's id as the host names it (claude, codex…); loose, so a newer client's agents pass. */
 export const MCP_SERVER_AGENT_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -135,8 +134,6 @@ export function mcpMoveRemovesFrom(server: {
 }
 
 export type McpServerTypedFailureCode =
-  /** The host's MCP servers switch is off. */
-  | 'mcp_servers_off'
   /** No server with that id on this host. */
   | 'mcp_server_gone'
   | 'mcp_server_name_taken'

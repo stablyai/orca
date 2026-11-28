@@ -15,7 +15,6 @@ import { botHomeFolder } from '../../../bots/bot-home'
 import { forgetBotToolCredentials } from '../../../bots/bot-tool-credentials'
 import { revokeBotToolSignIns } from '../../../bots/tool-oauth/bot-tool-oauth-revoke'
 import { botOwnTool, readBotToolServers } from '../../../bots/bot-tools-file'
-import { isMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import {
   addSortedBotTool,
   BOT_TOOL_SIGN_IN_NEEDS_UPDATE,
@@ -157,9 +156,7 @@ export const BOT_TOOLS_METHODS = [
     handler: async (params, context) => {
       const bot = targetBot(params, context)
       const tools = await listBotTools(await botToolsHome(context.runtime, bot))
-      return isMcpServersFeatureEnabled()
-        ? { ...tools, hostMcpServers: bot.hostMcpServers === true }
-        : tools
+      return { ...tools, hostMcpServers: bot.hostMcpServers === true }
     }
   }),
   defineMethod({

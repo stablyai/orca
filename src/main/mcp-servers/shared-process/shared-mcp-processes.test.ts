@@ -48,7 +48,6 @@ describe('SharedMcpProcesses', () => {
     writeFileSync(join(dir, 'server.cjs'), SERVER)
     const args = [join(dir, 'server.cjs'), join(dir, 'pids')]
     stored = { name: 'pid', command: 'node', args, env: { MARK: 'one' } }
-    vi.stubEnv('ORCA_MCP_SERVERS', '1')
     spawned = 0
     started = Promise.resolve()
     processes = new SharedMcpProcesses({
@@ -210,11 +209,5 @@ describe('SharedMcpProcesses', () => {
     await expect
       .poll(readSubs, POLL)
       .toEqual(['resources/subscribe file:///x', 'resources/unsubscribe file:///x'])
-  })
-
-  it('starts nothing while the MCP servers switch is off', async () => {
-    vi.stubEnv('ORCA_MCP_SERVERS', '')
-    await expect(connect()).rejects.toThrow()
-    expect(spawned).toBe(0)
   })
 })

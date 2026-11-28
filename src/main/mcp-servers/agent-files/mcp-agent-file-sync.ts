@@ -1,8 +1,7 @@
 // Grok's, Cursor's and Droid's terminal CLIs read MCP servers only from their own file, so once the
 // user allows it per agent, Orca keeps one `orca mcp connect` entry per server there (on for that
 // agent), and takes them back out when the server goes, is turned off for the agent, or the consent
-// is withdrawn. Entries another Orca or the user owns are never touched. With the switch off, nothing
-// is written; entries left from before answer as servers with no tools.
+// is withdrawn. Entries another Orca or the user owns are never touched.
 import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -24,7 +23,6 @@ import {
 import { readMcpHostList } from '../mcp-host-list'
 import { mcpHostListFolder } from '../mcp-host-list-folder'
 import { onMcpHostListChanged } from '../mcp-host-list-changes'
-import { isMcpServersFeatureEnabled } from '../mcp-servers-feature'
 import {
   mcpAgentFileEntry,
   mcpAgentFileEntryName,
@@ -60,9 +58,6 @@ export type McpAgentFileSyncDeps = {
 }
 
 export async function syncMcpAgentFiles(deps: McpAgentFileSyncDeps): Promise<void> {
-  if (!isMcpServersFeatureEnabled()) {
-    return
-  }
   const { servers, agentFiles } = await readMcpHostList(deps.folder)
   for (const agent of MCP_FILE_AGENTS) {
     if (agentFiles[agent] && deps.launcher === null) {

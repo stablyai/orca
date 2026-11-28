@@ -38,7 +38,7 @@ type RowStatus = 'not-started' | 'unreported'
 /**
  * The agent's answer with the rows Orca knows. An agent at rest answers `not-running` (Claude) or
  * lists only its own (Codex); one with no `/mcp` of its own lists nothing, so Orca lists what it
- * launched with, none reported. Call only with the host's MCP servers switch on.
+ * launched with, none reported.
  */
 export async function withKnownSessionMcpServers(
   answer: AgentSessionMcpResult,

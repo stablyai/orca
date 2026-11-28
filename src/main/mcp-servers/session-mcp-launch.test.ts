@@ -30,7 +30,6 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
-  delete process.env.ORCA_MCP_SERVERS
   useBotToolCredentialsRoot(null)
   _resetSecretStoreForTests()
   for (const dir of dirs.splice(0)) {
@@ -64,34 +63,7 @@ const session = (provider: string, workspaceId: string) => ({
 })
 
 describe('the MCP servers a chat launches with', () => {
-  it('adds nothing from the host list while the switch is off, even to a bot that opted in', async () => {
-    const hostFolder = await hostList()
-    const botFolder = tempDir('bot-home-')
-    await writeBotToolServers(botFolder, [{ name: 'notion', command: 'npx', args: ['bot-notion'] }])
-    const chat = await sessionMcpLaunchTools(null, session('claude', 'repo-1::/r'), '/r', {
-      relay,
-      hostFolder
-    })
-    expect(chat.tools.servers).toEqual([])
-    expect(chat.tools.env).toEqual({})
-    expect(chat.launched).toBeNull()
-
-    const bot = await sessionMcpLaunchTools(
-      { id: 'scout', hostMcpServers: true },
-      session('claude', 'folder:h'),
-      botFolder,
-      {
-        relay,
-        hostFolder
-      }
-    )
-    expect(bot.tools.servers).toEqual([{ name: 'notion', command: 'npx', args: ['bot-notion'] }])
-    expect(bot.tools.env).toEqual({ ORCA_BOT_TOOLS_TOKEN: 'the-token' })
-    expect(bot.launched?.host).toBeNull()
-  })
-
   it('gives each session the servers on for its agent and workspace, and a bot its own first', async () => {
-    process.env.ORCA_MCP_SERVERS = '1'
     const hostFolder = await hostList()
     const names = async (provider: string, workspaceId: string) =>
       (
@@ -156,7 +128,6 @@ describe('the MCP servers a chat launches with', () => {
   })
 
   it('restarts a running chat only when a server it got, or would get now, changes', async () => {
-    process.env.ORCA_MCP_SERVERS = '1'
     const hostFolder = await hostList()
     const { launched } = await sessionMcpLaunchTools(null, session('claude', 'repo-2::/d'), '/d', {
       relay,

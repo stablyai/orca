@@ -1,5 +1,5 @@
 // The RPCs the phone's MCP servers screens use, all on the phone's allowlist and run on the host the
-// screen names. Every one is refused while the host's switch is off, which the screen never reaches.
+// screen names.
 import * as z from 'zod'
 import type { McpFileAgent } from '../../../src/shared/mcp-servers/mcp-servers'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'

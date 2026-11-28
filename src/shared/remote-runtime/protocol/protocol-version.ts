@@ -15,6 +15,7 @@ import {
   AUTOMATION_RUNTIME_CLIENT_CAPABILITIES
 } from '../../automations/automation-runtime-capabilities'
 import { BOT_RUNTIME_CAPABILITIES } from '../../bot-runtime-capabilities'
+import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../mcp-servers/mcp-servers-capability'
 import { BROWSER_RUNTIME_CAPABILITIES } from '../../browser/runtime/browser-runtime-capabilities'
 import {
   DEVICE_KEY_RUNTIME_CAPABILITIES,
@@ -101,7 +102,8 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...SOURCE_CONTROL_RUNTIME_CAPABILITIES,
     ...TASK_SOURCE_RUNTIME_CAPABILITIES,
     ...AI_VAULT_RUNTIME_CAPABILITIES,
-    ...BOT_RUNTIME_CAPABILITIES
+    ...BOT_RUNTIME_CAPABILITIES,
+    MCP_SERVERS_RUNTIME_CAPABILITY
   ] as const)()
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

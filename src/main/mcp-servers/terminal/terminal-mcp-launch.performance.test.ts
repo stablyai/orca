@@ -31,7 +31,6 @@ const tempDir = (prefix: string): string => {
 const relay = { grant: async () => ({ origin: 'http://127.0.0.1:4100', token: 'relay-token' }) }
 
 beforeEach(() => {
-  process.env.ORCA_MCP_SERVERS = '1'
   const userData = tempDir('mcp-terminal-user-data-')
   setAppEnvironment({
     getPath: () => userData,
@@ -45,7 +44,6 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
-  delete process.env.ORCA_MCP_SERVERS
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
