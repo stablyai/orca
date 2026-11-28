@@ -2,7 +2,7 @@ import type { DaemonPtyRouterDataEvent } from '../../protocol/daemon-pty-router-
 import { removeDaemonListener } from '../../observability/daemon-listener-registry'
 import { emitPtyListeners } from './daemon-pty-listener-emission'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
-import { DaemonPtySessionInventory } from './daemon-pty-session-inventory'
+import { DaemonPtyRetireWhenIdle } from './daemon-pty-retire-when-idle'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import {
   countLiveDaemonSessions,
@@ -13,7 +13,7 @@ import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import { readDaemonWslQuitCwds } from '../wsl/daemon-wsl-sleep-cwd'
 
-export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
+export abstract class DaemonPtyEventSubscriptions extends DaemonPtyRetireWhenIdle {
   onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
     this.dataListeners.push(callback)
     return () => removeDaemonListener(this.dataListeners, callback)
@@ -74,6 +74,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.identityChangeListeners.length = 0
     this.removeEventListener?.()
     this.removeEventListener = null
+    this.stopRetireWhenIdleWatch()
     // Daemon-side teardown writes final checkpoints; adapter disposal marks history ended to prevent false restores.
     if (this.historyManager) {
       void this.historyManager
@@ -131,7 +132,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     try {
       const result = await this.client.request<ShutdownIfIdleResult>('shutdownIfIdle', undefined)
       if (result.retiring) {
-        this.idleRetirementState = 'retiring'
+        this.markRetiredForIdle()
         return { state: 'retiring' }
       }
       let liveSessions: number | null = null
@@ -240,7 +241,11 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.producerResumesOwedOnReconnect.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
-    if (this.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
+    // A daemon that already accepted idle retirement is leaving; asking again would only reconnect.
+    if (
+      this.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION &&
+      this.idleRetirementState !== 'retiring'
+    ) {
       try {
         // Only the authenticated daemon can prove emptiness atomically; share a short quit-time budget.
         const deadlineMs = Date.now() + 250

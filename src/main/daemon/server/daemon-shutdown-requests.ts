@@ -26,6 +26,20 @@ export function answerShutdownIfIdle(
   return { retiring }
 }
 
+/** Both finish before shutdown goes on, even when one of them fails. */
+export async function disposeTerminalsAndRelays(
+  options: Pick<ShutdownOptions, 'host' | 'relays' | 'log'>
+): Promise<void> {
+  const disposed = await Promise.allSettled([options.host.dispose(), options.relays.dispose()])
+  const failure = disposed.find((result) => result.status === 'rejected')
+  if (failure) {
+    const error: unknown = failure.reason
+    options.log.log('shutdown-dispose-failed', {
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
+}
+
 export async function answerShutdown(
   options: ShutdownOptions,
   clientId: string,
@@ -38,15 +52,7 @@ export async function answerShutdown(
   })
   const serverClose = options.lifecycle.beginOrdinaryShutdownFence()
   if (killSessions) {
-    // Both finish before shutdown goes on, even when one of them fails.
-    const disposed = await Promise.allSettled([options.host.dispose(), options.relays.dispose()])
-    const failure = disposed.find((result) => result.status === 'rejected')
-    if (failure) {
-      const error: unknown = failure.reason
-      options.log.log('shutdown-dispose-failed', {
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
+    await disposeTerminalsAndRelays(options)
   }
   const controlSocket = options.connections.get(clientId)?.controlSocket
   if (controlSocket) {

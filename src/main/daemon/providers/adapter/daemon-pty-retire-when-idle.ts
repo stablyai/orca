@@ -1,0 +1,157 @@
+import { DaemonPtySessionInventory } from './daemon-pty-session-inventory'
+import { RETIRE_WHEN_IDLE_REQUEST } from '../../server/daemon-superseded-clients'
+import { isDaemonEndpointGoneError } from '../../protocol/daemon-errors'
+import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
+import { preservedDaemonProcessExited } from './daemon-preserved-endpoint-loss'
+import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protocol'
+import { sameEndpointIdentity } from '../../endpoint/identity/daemon-endpoint-incarnation'
+
+/** An older generation asked to retire by itself once it owns nothing (`retireWhenIdle`). */
+export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory {
+  /** The live connection asked the daemon to retire when idle. */
+  private heldForRetirement = false
+  /** A held connection dropped and nothing has reconnected since: the daemon may have retired. */
+  private heldConnectionDropped = false
+  /** The newer protocol that asked; every new connection is asked again. */
+  private retireWhenIdleFor: number | null = null
+  private stopHeldWatch: (() => void) | null = null
+  /** Bridge exits awaiting classification: their sessions may already be gone from `activeSessionIds`. */
+  protected exitsClassifying = 0
+  /** Counts a bridge exit as owed until it is emitted; returns when classification began. */
+  protected startExitClassification(): number {
+    this.exitsClassifying++
+    return performance.now()
+  }
+  protected readonly exitClassificationFailed = (error: unknown): never => {
+    this.exitsClassifying--
+    throw error
+  }
+
+  /** Asks an older generation to retire by itself once it owns nothing; 'unsupported' predates the request. */
+  async askRetireWhenIdle(
+    currentProtocolVersion: number
+  ): Promise<'held' | 'unsupported' | 'unanswered'> {
+    this.retireWhenIdleFor = currentProtocolVersion
+    this.stopHeldWatch ??= this.watchHeldConnection()
+    try {
+      await this.ensureConnected()
+      await this.sendRetireWhenIdle()
+      return 'held'
+    } catch (error) {
+      if (!isUnknownRequestTypeError(error)) {
+        return 'unanswered'
+      }
+      this.retireWhenIdleFor = null
+      return 'unsupported'
+    }
+  }
+
+  private async sendRetireWhenIdle(): Promise<void> {
+    const currentProtocolVersion = this.retireWhenIdleFor
+    await this.client.request(RETIRE_WHEN_IDLE_REQUEST, { currentProtocolVersion })
+    this.heldForRetirement = true
+    this.heldConnectionDropped = false
+  }
+
+  // Any reconnection, including one relay code makes on this client, is asked again.
+  private watchHeldConnection(): () => void {
+    const stopDropped = this.client.onDisconnected(() => {
+      this.heldConnectionDropped ||= this.heldForRetirement
+      this.heldForRetirement = false
+    })
+    const stopConnected = this.client.connectedListeners.add(() => {
+      if (this.retireWhenIdleFor !== null) {
+        this.sendRetireWhenIdle().catch(() => {})
+      }
+    })
+    return () => {
+      stopDropped()
+      stopConnected()
+    }
+  }
+
+  /** After contact with a generation asked to retire is lost: retired only with its endpoint and process gone. */
+  async confirmRetiredWhenIdle(): Promise<'retired' | 'connected' | 'reconnected' | 'unknown'> {
+    if (this.idleRetirementState === 'retiring') {
+      return 'retired'
+    }
+    if (this.client.isConnected()) {
+      return 'connected'
+    }
+    const asked = this.heldConnectionDropped || this.idleRetirementState === 'unverifiable'
+    if (!asked || this.hasWatchedSessions()) {
+      return 'unknown'
+    }
+    try {
+      await this.ensureConnected()
+      this.heldConnectionDropped = false
+      return 'reconnected'
+    } catch (error) {
+      // A missing name alone proves nothing on POSIX, where something else may have unlinked it.
+      if (
+        !isDaemonEndpointGoneError(error) ||
+        this.hasWatchedSessions() ||
+        !this.daemonProcessExited(this.lastAuthenticatedIdentity?.pid)
+      ) {
+        return 'unknown'
+      }
+      this.markRetiredForIdle()
+      this.idleRetirementAdmissionClosed = true
+      this.respawnAdoptionClosed = true
+      return 'retired'
+    }
+  }
+
+  /** Asked to retire on the live connection; the daemon may decide at any moment. */
+  isHeldForRetirement(): boolean {
+    return this.heldForRetirement
+  }
+
+  /** Asked to retire, on the live connection or on one that dropped since. */
+  wasAskedToRetireWhenIdle(): boolean {
+    return this.heldForRetirement || this.heldConnectionDropped
+  }
+
+  onConnectionLost(listener: () => void): () => void {
+    return this.client.onDisconnected(listener)
+  }
+
+  /** The incarnation that accepted retirement; a successor on the same endpoint is not covered by it. */
+  private retiredIncarnation: DaemonEndpointIdentity | null = null
+
+  protected markRetiredForIdle(): void {
+    this.idleRetirementState = 'retiring'
+    this.retiredIncarnation = this.lastAuthenticatedIdentity
+  }
+
+  /** Retired, and nothing else has since answered on this endpoint as this adapter's daemon. */
+  retiredIncarnationIsCurrent(): boolean {
+    const retired = this.retiredIncarnation
+    const last = this.lastAuthenticatedIdentity
+    return (
+      this.idleRetirementState === 'retiring' &&
+      retired !== null &&
+      last !== null &&
+      sameEndpointIdentity(retired, last)
+    )
+  }
+
+  /** This app holds a live attachment to at least one of its terminals, or one's exit is still being classified. */
+  hasWatchedSessions(): boolean {
+    return this.activeSessionIds.size > 0 || this.exitsClassifying > 0
+  }
+
+  /** Nothing watched, and its connection closed after delivering every event it had buffered. */
+  hasDeliveredOwedEvents(): boolean {
+    return !this.hasWatchedSessions() && !this.client.isConnected()
+  }
+
+  protected daemonProcessExited(pid: number | undefined): boolean {
+    return preservedDaemonProcessExited(pid)
+  }
+
+  protected stopRetireWhenIdleWatch(): void {
+    this.stopHeldWatch?.()
+    this.stopHeldWatch = null
+  }
+}
