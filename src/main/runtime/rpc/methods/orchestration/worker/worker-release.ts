@@ -75,7 +75,8 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           runtime,
           db,
           dispatchId: params.dispatch,
-          resource
+          resource,
+          expectedAttempt: requested.attempt
         })
         if (exited) {
           await closeWorkerBoundTerminals(runtime, db, exited.origin_dispatch_id)
@@ -91,7 +92,8 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           db,
           params.dispatch,
           resource,
-          requested.reason
+          requested.reason,
+          requested.attempt
         )
         if (current.disposition === 'already_released') {
           return {

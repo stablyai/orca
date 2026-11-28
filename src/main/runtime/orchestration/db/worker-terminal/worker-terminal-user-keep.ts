@@ -13,7 +13,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import type { WorkerAutoCloseState } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import { exposeUtcTimestamp, toSqliteUtcTimestamp } from '../utc-timestamp'
 import { OrchestrationError } from '../../orchestration-error'
-import { retainTerminalResourceInTransaction } from './worker-terminal-archive'
+import { retainTerminalResourceInTransaction } from './worker-terminal-retain'
 import { OWNER_RELEASABLE_SQL } from './worker-terminal-auto-release'
 import { WORKER_AUTO_CLOSE_GRACE_MS } from '../../../../../shared/orchestration/workers/worker-auto-close'
 

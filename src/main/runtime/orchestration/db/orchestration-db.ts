@@ -24,8 +24,9 @@ import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
 import { revokeAgentSessionPublicationFences } from '../../agent-session/agent-session-publication-fence'
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 import { installWorkerTerminalPriorOwnerIndex } from './worker-terminal/worker-terminal-prior-owner-index'
+import { installWorkerTerminalReleaseAttempts } from './worker-terminal/worker-terminal-release-attempt'
 import { STARTING_WORKER_TERMINAL_INDEX_SQL } from './worker-dispatch/worker-terminal-claim'
-import { UNRELEASED_MINTED_WORKER_TERMINAL_SQL } from './worker-terminal/worker-terminal-release'
+import { UNRELEASED_MINTED_WORKER_TERMINAL_SQL } from './worker-terminal/worker-terminal-still-owned-listing'
 import { installWorkerDockSchema } from './schema/worker-dock-schema'
 import { WorkerDockSourcePresence } from './worker-dock-source-presence'
 
@@ -86,6 +87,7 @@ class OrchestrationDbCore {
     this.workerDockSources = new WorkerDockSourcePresence(this.db)
     refreshOutstandingDeliveryTrigger(this.db)
     installWorkerTerminalPriorOwnerIndex(this)
+    installWorkerTerminalReleaseAttempts(this)
     for (const [table, columns] of [
       // reply_to: the message a reply answers, when its sender named one.
       ['messages', ['answer_sender_snapshot', 'reply_to']],

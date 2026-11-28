@@ -9,7 +9,7 @@ import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { WORKER_SETTLED_STATES } from '../../terminal-authority/release/worker-terminal-ownership'
 import { isStopStrandedByAnotherRuntime } from './worker-dispatch-stop'
-import { retainTerminalResourceInTransaction } from '../worker-terminal/worker-terminal-archive'
+import { retainTerminalResourceInTransaction } from '../worker-terminal/worker-terminal-retain'
 
 export function abandonWorkerDispatch(
   this: OrchestrationDb,
