@@ -139,7 +139,10 @@ export function listWslDistros(): string[] {
   try {
     const probeSequence = ++wslDistroProbeSequence
     const output = wslExeStdout(
-      runProcessSync(wslExeProcessSpec(['--list', '--quiet'], WSL_PROBE_TIMEOUT_MS))
+      runProcessSync({
+        ...wslExeProcessSpec(['--list', '--quiet'], WSL_PROBE_TIMEOUT_MS),
+        captureStdoutAsBytes: true
+      })
     )
     const listed = parseWslDistros(output)
     if (listed.length === 0) {

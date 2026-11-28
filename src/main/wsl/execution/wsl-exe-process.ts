@@ -10,7 +10,9 @@ export async function runWslExe(
   env?: NodeJS.ProcessEnv,
   timeoutMs = WSL_PROBE_TIMEOUT_MS
 ): Promise<string> {
-  return wslExeStdout(await runProcess(wslExeProcessSpec(args, timeoutMs, env)))
+  return wslExeStdout(
+    await runProcess({ ...wslExeProcessSpec(args, timeoutMs, env), captureStdoutAsBytes: true })
+  )
 }
 
 export function wslExeProcessSpec(
@@ -37,10 +39,15 @@ export function wslExeFailure(result: ProcessResult): string | null {
     : `wsl.exe exited with ${result.code ?? result.signal}`
 }
 
+/** wsl.exe writes its lists as UTF-16LE even with WSL_UTF8 set; as UTF-8 they keep NUL bytes and lose names outside ASCII. */
+export function decodeWslExeOutput(bytes: Buffer): string {
+  return bytes.includes(0) ? bytes.toString('utf16le') : bytes.toString('utf8')
+}
+
 export function wslExeStdout(result: ProcessResult): string {
   const failure = wslExeFailure(result)
   if (failure) {
     throw new Error(failure)
   }
-  return result.stdout
+  return result.stdoutBytes ? decodeWslExeOutput(result.stdoutBytes) : result.stdout
 }
