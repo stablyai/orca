@@ -15,6 +15,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { buildGitHubRepoUrl } from '../../../../../shared/github/repositories/links'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../shared/repository/appearance/repo-badge-color'
 import type { RepoAppearanceUpdate } from '../../settings/repository/identity/use-repository-icon-actions'
 import { RepoMarkTile, useRepoAutoMarkColor, useRepoMarkAppearance } from '../RepoMark'
@@ -206,11 +207,27 @@ export function ProjectPeek({
   const hostId = getRepoExecutionHostId(repo)
   const remote = getProjectRemoteDisplay(repo)
   // Same-ID repos can exist on several hosts; write to the owner of this card's repo.
+  // Why: the repo prop lags queued writes on a slow host. Every icon write from this card passes
+  // here, so tab switches read the icon it last asked for until that write settles.
+  const queuedIconRef = React.useRef<{ icon: RepoIcon | null } | null>(null)
   const updateRepo = React.useCallback(
-    (repoId: string, updates: RepoAppearanceUpdate): Promise<boolean> =>
-      storeUpdateRepo(repoId, updates, { hostId }),
+    (repoId: string, updates: RepoAppearanceUpdate): Promise<boolean> => {
+      const sent = storeUpdateRepo(repoId, updates, { hostId })
+      if (!('repoIcon' in updates)) {
+        return sent
+      }
+      const write = { icon: updates.repoIcon ?? null }
+      queuedIconRef.current = write
+      return sent.finally(() => {
+        if (queuedIconRef.current === write) {
+          queuedIconRef.current = null
+        }
+      })
+    },
     [storeUpdateRepo, hostId]
   )
+  const intendedIcon = (): RepoIcon | null =>
+    queuedIconRef.current ? queuedIconRef.current.icon : (repo.repoIcon ?? null)
   const openRepoSettings = React.useCallback(() => {
     onRequestClose()
     openSettingsTarget({ pane: 'repo', repoId: repo.id })
@@ -246,6 +263,7 @@ export function ProjectPeek({
         remote={remote}
         autoColor={autoColor}
         appearanceEpoch={appearanceEpoch}
+        intendedIcon={intendedIcon}
         updateRepo={updateRepo}
       />
     </div>

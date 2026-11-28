@@ -37,6 +37,7 @@ export function ProjectAppearanceEditor({
   remote,
   autoColor,
   appearanceEpoch,
+  intendedIcon,
   updateRepo
 }: {
   repo: Repo
@@ -44,30 +45,26 @@ export function ProjectAppearanceEditor({
   autoColor: string
   /** Changes on Reset and Undo, which supersede any preview or fetch still pending. */
   appearanceEpoch: number
+  /** The icon this card last asked for, or the saved one once its writes have landed. */
+  intendedIcon: () => RepoIcon | null
   /** Settles once the write is applied; writes for one repo apply in order. */
   updateRepo: (repoId: string, updates: RepoAppearanceUpdate) => Promise<unknown>
 }): React.JSX.Element {
   const t = useTranslate()
-  const actions = useRepositoryIconActions(repo, updateRepo)
-  const [style, setStyle] = React.useState<IconStyle>(() => iconStyleOf(repo.repoIcon))
-  const suggestedLetters = useSuggestedMonogram(repo)
   // Why: opening Letters previews a suggestion; browsing away untouched must give the old icon back.
   const previewedFromRef = React.useRef<{ icon: RepoIcon | null; epoch: number } | null>(null)
-  // Why: the repo prop lags queued writes, so tab switches read the icon this card last wrote.
-  const queuedIconRef = React.useRef<{ icon: RepoIcon | null; epoch: number } | null>(null)
-  const intendedIcon = (): RepoIcon | null => {
-    const queued = queuedIconRef.current
-    return queued && queued.epoch === appearanceEpoch ? queued.icon : (repo.repoIcon ?? null)
+  // Any icon write from this editor, the GitHub action included, ends the preview.
+  const writeAppearance = (repoId: string, updates: RepoAppearanceUpdate): Promise<unknown> => {
+    if ('repoIcon' in updates) {
+      previewedFromRef.current = null
+    }
+    return updateRepo(repoId, updates)
   }
+  const actions = useRepositoryIconActions(repo, writeAppearance)
+  const [style, setStyle] = React.useState<IconStyle>(() => iconStyleOf(repo.repoIcon))
+  const suggestedLetters = useSuggestedMonogram(repo)
   const setIcon = (repoIcon: RepoIcon | null): void => {
-    previewedFromRef.current = null
-    const write = { icon: repoIcon, epoch: appearanceEpoch }
-    queuedIconRef.current = write
-    void updateRepo(repo.id, { repoIcon }).finally(() => {
-      if (queuedIconRef.current === write) {
-        queuedIconRef.current = null
-      }
-    })
+    void writeAppearance(repo.id, { repoIcon })
   }
 
   const chooseStyle = (next: IconStyle): void => {

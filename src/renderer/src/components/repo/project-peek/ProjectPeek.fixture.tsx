@@ -94,10 +94,30 @@ const lettersRepo: Repo = {
   addedAt: 6
 }
 
+const uploadRepo: Repo = {
+  ...githubRepo,
+  id: 'orca-upload',
+  repoIcon: {
+    type: 'image',
+    src: 'https://github.com/github.png?size=64',
+    source: 'upload',
+    label: 'logo.png'
+  }
+}
+
 /** No icon chosen, but a picked color, so Reset is available. */
 const noneRepo: Repo = { ...githubRepo, id: 'orca-none', repoIcon: null }
 
-const REPOS = [githubRepo, forkRepo, gitlabRepo, folderRepo, longRepo, lettersRepo, noneRepo]
+const REPOS = [
+  githubRepo,
+  forkRepo,
+  gitlabRepo,
+  folderRepo,
+  longRepo,
+  lettersRepo,
+  noneRepo,
+  uploadRepo
+]
 
 /** Only the card's appearance fields are applied; that is all it writes. */
 function applyAppearance(repoId: string, updates: RepoUpdate): void {
@@ -234,17 +254,6 @@ const faviconRepo: Repo = {
     src: 'https://www.google.com/s2/favicons?domain=linear.app&sz=64',
     source: 'favicon',
     label: 'Website favicon'
-  }
-}
-
-const uploadRepo: Repo = {
-  ...githubRepo,
-  id: 'orca-upload',
-  repoIcon: {
-    type: 'image',
-    src: 'https://github.com/github.png?size=64',
-    source: 'upload',
-    label: 'logo.png'
   }
 }
 
@@ -385,5 +394,17 @@ export const slowHost = defineFixture({
   width: 380,
   store: SLOW_HOST_STORE,
   render: () => <Peek repo={githubRepo} />,
+  interact: openImageTab
+})
+
+/** A slow host with an uploaded image, where the GitHub avatar resolves without a runtime. */
+export const slowHostUpload = defineFixture({
+  width: 380,
+  store: SLOW_HOST_STORE,
+  setup: () => {
+    window.api.gh.repoSlug = async () => ({ owner: 'stablyai', repo: 'orca' })
+    window.api.gh.repoUpstream = async () => null
+  },
+  render: () => <Peek repo={uploadRepo} />,
   interact: openImageTab
 })
