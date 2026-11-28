@@ -49,7 +49,7 @@ export class StructuredAgentSessionHost {
     (sessionId) => this.background.read(sessionId),
     (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false,
     this.sessions,
-    (sessionId, cut) => this.usageLimitContinue?.readState(sessionId, cut),
+    (sessionId, cut) => usageLimit.published(this, sessionId, cut),
     (sessionId, readers) => this.runtimeState?.currentEventSink(sessionId)?.liveText(readers) ?? []
   )
   private readonly tasks = new StructuredAgentSessionTaskQueue()
@@ -153,6 +153,7 @@ export class StructuredAgentSessionHost {
   attentionReads = this.reads.attentionReads
   readModelCatalog = this.reads.readModelCatalog
   childAccountHome = this.reads.childAccountHome
+  agentRunning = this.reads.agentRunning
   releaseOffAccount = (...a: [string, () => boolean]) => this.conversationDelivery.offAccount(...a)
 
   handleAdapterEvent = (e: Parameters<EventRecovery['handle']>[0]) => this.eventRecovery.handle(e)

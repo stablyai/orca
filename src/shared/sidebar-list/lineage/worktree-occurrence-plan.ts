@@ -1,4 +1,9 @@
-import { getTopVisibleLineageRoots, getVisibleLineagePlacement } from './worktree-lineage-placement'
+import {
+  getVisibleLineageAncestorRoots,
+  getVisibleLineagePlacement
+} from './worktree-lineage-placement'
+
+const EMPTY_OCCURRENCES: readonly never[] = []
 
 export type OccurrenceSectionPath = {
   key: string
@@ -45,12 +50,22 @@ export function getLineagePlacementRows<Row>(args: {
   duplicatePinned: boolean
 }): LineagePlacementRows<Row> {
   const { rows, childrenByParentIdentity, identityOf } = args
-  const pinnedRoots = rows.filter(args.isPinned)
-  if (pinnedRoots.length === 0) {
+  let pinnedRoots: Row[] | undefined
+  for (const row of rows) {
+    if (args.isPinned(row)) {
+      pinnedRoots ??= []
+      pinnedRoots.push(row)
+    }
+  }
+  if (!pinnedRoots) {
     return {
       pinned: [],
       natural: rows,
-      displayRootByIdentity: getTopVisibleLineageRoots(rows, childrenByParentIdentity, identityOf)
+      displayRootByIdentity: getVisibleLineageAncestorRoots(
+        rows,
+        childrenByParentIdentity,
+        identityOf
+      )
     }
   }
   const pinnedPlacement = getVisibleLineagePlacement(
@@ -67,7 +82,11 @@ export function getLineagePlacementRows<Row>(args: {
   return {
     pinned,
     natural,
-    displayRootByIdentity: getTopVisibleLineageRoots(natural, childrenByParentIdentity, identityOf)
+    displayRootByIdentity: getVisibleLineageAncestorRoots(
+      natural,
+      childrenByParentIdentity,
+      identityOf
+    )
   }
 }
 
@@ -83,16 +102,13 @@ export function buildWorktreeOccurrencePlan<
   duplicatePinned: boolean
   sectionsOf: (placement: LineagePlacementRows<Row>) => readonly Section[]
   owningSectionOf?: (row: Row) => { key: string; label: string }
+  owningSectionKeyOf?: (row: Row) => string
   projectIdOf?: (row: Row) => string
 }): WorktreeOccurrencePlan<Row> & { sections: readonly Section[] } {
   const { identityOf, childrenByParentIdentity, owningSectionOf } = args
-  let ownerByIdentity: Map<string, { key: string; label: string }> | undefined
-  if (owningSectionOf) {
-    ownerByIdentity = new Map()
-    for (const row of args.rows) {
-      ownerByIdentity.set(identityOf(row), owningSectionOf(row))
-    }
-  }
+  const owningSectionKeyOf =
+    args.owningSectionKeyOf ??
+    (owningSectionOf ? (row: Row): string => owningSectionOf(row).key : undefined)
   const sections = args.sectionsOf(getLineagePlacementRows(args))
   const hasLineage = childrenByParentIdentity.size > 0
   let parentByIdentity: Map<string, string> | undefined
@@ -104,16 +120,57 @@ export function buildWorktreeOccurrencePlan<
       }
     }
   }
-  const bySection = new Map<string, WorktreeOccurrence<Row>[]>()
+  const bySection = new Map<string, readonly WorktreeOccurrence<Row>[]>()
   const preferredByIdentity = new Map<string, WorktreeOccurrence<Row>>()
   for (const section of sections) {
+    const items = section.items
+    if (items.length === 0) {
+      bySection.set(section.key, EMPTY_OCCURRENCES)
+      continue
+    }
     const sectionPath = section.revealPath ?? { key: section.key }
     const placement = section.placement ?? 'natural'
     const isPinnedSection = section.placement === 'pinned'
-    const occurrences: WorktreeOccurrence<Row>[] = []
-    const emitted = new Set<string>()
-    if (!parentByIdentity) {
-      const items = section.items
+    const makeFlatOccurrence = (
+      row: Row,
+      identity: string,
+      isLastChild: boolean
+    ): WorktreeOccurrence<Row> => {
+      const occurrence: WorktreeOccurrence<Row> = {
+        key: `${section.key}:${identity}`,
+        row,
+        owningSectionKey: owningSectionKeyOf?.(row),
+        sectionKey: section.key,
+        placement,
+        sectionPath,
+        parent: undefined,
+        depth: 0,
+        childCount: 0,
+        isLastChild,
+        showProjectName: false
+      }
+      if (!isPinnedSection || !preferredByIdentity.has(identity)) {
+        preferredByIdentity.set(identity, occurrence)
+      }
+      return occurrence
+    }
+    let sectionHasLineageChild = false
+    if (parentByIdentity) {
+      for (const row of items) {
+        if (parentByIdentity.has(identityOf(row))) {
+          sectionHasLineageChild = true
+          break
+        }
+      }
+    }
+    if (!parentByIdentity || !sectionHasLineageChild) {
+      if (items.length === 1) {
+        const row = items[0]
+        bySection.set(section.key, [makeFlatOccurrence(row, identityOf(row), true)])
+        continue
+      }
+      const occurrences: WorktreeOccurrence<Row>[] = []
+      const emitted = new Set<string>()
       const lastIndex = items.length - 1
       for (let i = 0; i < items.length; i += 1) {
         const row = items[i]
@@ -122,27 +179,13 @@ export function buildWorktreeOccurrencePlan<
           continue
         }
         emitted.add(identity)
-        const occurrence: WorktreeOccurrence<Row> = {
-          key: `${section.key}:${identity}`,
-          row,
-          owningSectionKey: ownerByIdentity?.get(identity)?.key,
-          sectionKey: section.key,
-          placement,
-          sectionPath,
-          parent: undefined,
-          depth: 0,
-          childCount: 0,
-          isLastChild: i === lastIndex,
-          showProjectName: false
-        }
-        occurrences.push(occurrence)
-        if (!isPinnedSection || !preferredByIdentity.has(identity)) {
-          preferredByIdentity.set(identity, occurrence)
-        }
+        occurrences.push(makeFlatOccurrence(row, identity, i === lastIndex))
       }
       bySection.set(section.key, occurrences)
       continue
     }
+    const occurrences: WorktreeOccurrence<Row>[] = []
+    const emitted = new Set<string>()
     const members = new Set<string>()
     for (const row of section.items) {
       members.add(identityOf(row))
@@ -175,11 +218,10 @@ export function buildWorktreeOccurrencePlan<
         }
         emitted.add(identity)
         const descendants = children.get(identity)
-        const owner = ownerByIdentity?.get(identity)
         const occurrence: WorktreeOccurrence<Row> = {
           key: `${section.key}:${identity}`,
           row: next.row,
-          owningSectionKey: owner?.key,
+          owningSectionKey: owningSectionKeyOf?.(next.row),
           sectionKey: section.key,
           placement,
           sectionPath,
@@ -217,23 +259,7 @@ export function buildWorktreeOccurrencePlan<
       const descendants = children.get(identity)
       if (!descendants || descendants.length === 0) {
         emitted.add(identity)
-        const occurrence: WorktreeOccurrence<Row> = {
-          key: `${section.key}:${identity}`,
-          row,
-          owningSectionKey: ownerByIdentity?.get(identity)?.key,
-          sectionKey: section.key,
-          placement,
-          sectionPath,
-          parent: undefined,
-          depth: 0,
-          childCount: 0,
-          isLastChild: i === lastRootIndex,
-          showProjectName: false
-        }
-        occurrences.push(occurrence)
-        if (!isPinnedSection || !preferredByIdentity.has(identity)) {
-          preferredByIdentity.set(identity, occurrence)
-        }
+        occurrences.push(makeFlatOccurrence(row, identity, i === lastRootIndex))
         continue
       }
       pending.push({ row, isLastChild: i === lastRootIndex })

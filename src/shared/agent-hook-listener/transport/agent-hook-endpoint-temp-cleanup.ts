@@ -1,13 +1,14 @@
-import { opendirSync, statSync, unlinkSync } from 'node:fs'
+import { statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+import { openDirectorySync, type DirectoryHandle } from '../../open-directory'
 
 export const AGENT_HOOK_ENDPOINT_SWEEP_MAX_ENTRIES = 1024
 const AGENT_HOOK_ENDPOINT_STALE_MS = 5 * 60 * 1000
 
 export function sweepStaleAgentHookEndpointTemps(endpointDir: string, now = Date.now()): void {
-  let directory: ReturnType<typeof opendirSync> | undefined
+  let directory: DirectoryHandle | undefined
   try {
-    directory = opendirSync(endpointDir, { bufferSize: 32 })
+    directory = openDirectorySync(endpointDir, { bufferSize: 32 })
     const cutoff = now - AGENT_HOOK_ENDPOINT_STALE_MS
     for (let scanned = 0; scanned < AGENT_HOOK_ENDPOINT_SWEEP_MAX_ENTRIES; scanned += 1) {
       const entry = directory.readSync()

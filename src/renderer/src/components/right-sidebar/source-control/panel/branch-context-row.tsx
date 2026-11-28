@@ -14,7 +14,6 @@ import {
   resolveSourceControlDisplayedBaseRef,
   type SourceControlBranchContextStat
 } from './branch-context-stats'
-import { RebasePausedStrip, type BaseRebaseActions } from './base-rebase-control'
 
 function ContextStat({ stat }: { stat: SourceControlBranchContextStat }): React.JSX.Element {
   // Make stats focusable so screen readers announce their base and keyboard users can open the tooltip.
@@ -61,7 +60,7 @@ export function SourceControlBranchContextRow({
   headControl,
   branchLineTotal,
   reviewControl,
-  rebase,
+  operationRow = null,
   onRetry
 }: {
   summary: GitBranchCompareSummary | null
@@ -70,7 +69,8 @@ export function SourceControlBranchContextRow({
   headControl?: React.ReactNode
   branchLineTotal?: GitBranchLineTotal | null
   reviewControl?: React.ReactNode
-  rebase?: BaseRebaseActions | null
+  /** A paused rebase, merge, cherry-pick or revert; it replaces the HEAD row and status line. */
+  operationRow?: React.ReactNode
   onRetry: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -88,49 +88,49 @@ export function SourceControlBranchContextRow({
   const failed = baseLabel != null && summary != null && !loading && summary.status !== 'ready'
   const ready = baseLabel != null && summary?.status === 'ready'
 
-  // A paused rebase owns the status line whatever the compare summary says; HEAD is detached mid-rebase.
-  const statusLine =
-    rebase?.state.kind === 'rebase_paused' ? (
-      <RebasePausedStrip
-        actions={rebase}
-        unresolvedCount={rebase.state.unresolvedCount}
-        continueState={rebase.state.continueState}
-        inspectFailureMessage={rebase.state.inspectFailureMessage}
+  const statusLine = loading ? (
+    // aria-busy stays on the compare row, never on the whole header.
+    <div className="flex h-5 min-w-0 items-center" aria-busy="true">
+      <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />
+      <span className="sr-only">
+        {t(
+          'auto.components.right.sidebar.SourceControl.compareLoadingAgainst',
+          'Comparing against {{base}}',
+          { base: baseLabel }
+        )}
+      </span>
+    </div>
+  ) : failed ? (
+    <div className="flex min-h-5 min-w-0 items-center gap-1.5">
+      <span className="min-w-0 flex-1 truncate" title={summary?.errorMessage ?? undefined}>
+        {summary?.errorMessage ??
+          t('auto.components.right.sidebar.SourceControl.715d229c86', 'Branch compare unavailable')}
+      </span>
+      <SourceControlHeaderIconButton
+        icon={RefreshCw}
+        label={t('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+        onClick={onRetry}
       />
-    ) : loading ? (
-      // aria-busy stays on the compare row so a paused-rebase strip is never muted by it.
-      <div className="flex h-5 min-w-0 items-center" aria-busy="true">
-        <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />
-        <span className="sr-only">
-          {t(
-            'auto.components.right.sidebar.SourceControl.compareLoadingAgainst',
-            'Comparing against {{base}}',
-            { base: baseLabel }
-          )}
-        </span>
-      </div>
-    ) : failed ? (
-      <div className="flex min-h-5 min-w-0 items-center gap-1.5">
-        <span className="min-w-0 flex-1 truncate" title={summary?.errorMessage ?? undefined}>
-          {summary?.errorMessage ??
-            t(
-              'auto.components.right.sidebar.SourceControl.715d229c86',
-              'Branch compare unavailable'
-            )}
-        </span>
-        <SourceControlHeaderIconButton
-          icon={RefreshCw}
-          label={t('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
-          onClick={onRetry}
-        />
-      </div>
-    ) : ready ? (
-      <ReadyStatusLine
-        stats={buildSourceControlCompareBaseStats(summary, displayedBaseRef ?? '', t)}
-        branchLineTotal={branchLineTotal}
-      />
-    ) : null
+    </div>
+  ) : ready ? (
+    <ReadyStatusLine
+      stats={buildSourceControlCompareBaseStats(summary, displayedBaseRef ?? '', t)}
+      branchLineTotal={branchLineTotal}
+    />
+  ) : null
 
+  // A paused operation owns the header: its row says what HEAD is doing, so the HEAD pill,
+  // review action and compare stats wait until it ends.
+  if (operationRow) {
+    return (
+      <div
+        className="flex min-w-0 flex-col text-[11px] text-muted-foreground"
+        data-testid="source-control-branch-context"
+      >
+        {operationRow}
+      </div>
+    )
+  }
   const headRowShown = headDisplay != null || reviewControl != null
   if (!headRowShown && !statusLine) {
     return null

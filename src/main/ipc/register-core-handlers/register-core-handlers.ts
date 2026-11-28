@@ -13,14 +13,14 @@ import { registerGitHubHandlers } from '../source-control/github'
 import { registerLazyGitLabHandlers } from '../source-control/lazy-gitlab-handlers'
 import { registerLazyLinearHandlers } from '../linear/lazy-linear-handlers'
 import { registerLazyJiraHandlers } from '../jira/lazy-jira-handlers'
-import { registerCrashReportingHandlers } from '../crash-reporting/crash-reporting'
+import { registerLazyCrashReportingHandlers } from '../crash-reporting/lazy-crash-reporting-handlers'
 import { registerStatsHandlers } from '../stats'
-import { registerRateLimitHandlers } from '../rate-limits'
+import { registerLazyRateLimitHandlers } from '../lazy-rate-limits-handlers'
 import { registerRuntimeHandlers } from '../runtime'
 import { registerRuntimeHostHandlers } from './runtime-host-handler-registration'
 import { registerLazyEphemeralVmHandlers } from '../ephemeral-vm/lazy-ephemeral-vm-handlers'
 import { registerLazyAiVaultHandlers } from '../ai-vault/lazy-ai-vault-handlers'
-import { registerNativeChatHandlers } from '../native-chat'
+import { registerLazyNativeChatHandlers } from '../lazy-native-chat-handlers'
 import { registerNotificationHandlers } from '../notifications/notifications'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
@@ -30,21 +30,21 @@ import {
   registerLazySkillDeleteIpcHandlers,
   registerLazySkillsHandlers
 } from '../skills/lazy-skills-handlers'
-import { registerWorkspacePortHandlers } from '../ports/workspace-ports'
-import { registerAutomationHandlers } from '../automations'
-import { registerKeybindingHandlers } from '../keybindings'
+import { registerLazyWorkspacePortHandlers } from '../ports/lazy-workspace-ports-handlers'
+import { registerLazyAutomationHandlers } from '../lazy-automations-handlers'
+import { registerLazyKeybindingHandlers } from '../lazy-keybindings-handlers'
 import { registerTelemetryHandlers } from '../telemetry'
 import { registerPluginHandlers } from '../plugins/plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerLazyEmulatorHandlers } from '../emulator/lazy-emulator-handlers'
 import { registerLazySpeechHandlers } from '../lazy-speech-handlers'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
-import { registerCodexAccountHandlers } from '../accounts/codex-accounts'
+import { registerLazyCodexAccountHandlers } from '../accounts/lazy-codex-accounts-handlers'
 import { registerAgentHookHandlers } from '../agent-hooks/agent-hooks'
 import { getPtyIdForPaneKey } from '../pty/pane/key-state'
-import { registerClaudeAccountHandlers } from '../accounts/claude-accounts'
-import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
-import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
+import { registerLazyClaudeAccountHandlers } from '../accounts/lazy-claude-accounts-handlers'
+import { registerUpdaterHandlers } from '../../updater/lifecycle/updater-ipc-handlers'
+import { registerLazyClipboardHandlers } from '../../window/clipboard/lazy-clipboard-ipc-handlers'
 import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
@@ -54,11 +54,6 @@ import type { AutomationService } from '../../automations/automation-service'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
-import {
-  ensurePersistedStructuredAgentSessionHostUnlessRefused,
-  ensureStructuredAgentSessionHostUnlessRefused
-} from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
-import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugins/plugin-marketplaces'
 import {
@@ -108,20 +103,20 @@ export async function registerCoreHandlers(
     })
     registerLazyRareIpcHandlers(store)
     registerLazySetupIpcHandlers(store, codexAccounts, keybindings)
-    registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
+    registerLazyCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
-    registerClaudeAccountHandlers(claudeAccounts, (change, held) =>
+    registerLazyClaudeAccountHandlers(claudeAccounts, (change, held) =>
       runtime.moveRunningClaudePanes(change, held)
     )
     registerLazyAccountAndDiagnosticIpcHandlers(rateLimits)
-    registerRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
+    registerLazyRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
     registerGitHubHandlers(store, stats, runtime)
     registerLazyGitLabHandlers(store)
     registerLazySecondaryIpcHandlers(store, stats, runtime)
     registerLazyLinearHandlers()
     registerLazyJiraHandlers(store, commitMessageAgentEnv)
     if (crashReports) {
-      registerCrashReportingHandlers(crashReports)
+      registerLazyCrashReportingHandlers(crashReports)
     }
     registerStatsHandlers(stats)
     registerNotificationHandlers(store, runtime)
@@ -129,10 +124,10 @@ export async function registerCoreHandlers(
     registerLazySkillsHandlers(store, runtime)
     registerLazySkillDeleteIpcHandlers(store, runtime)
     if (automations) {
-      registerAutomationHandlers(store, automations)
+      registerLazyAutomationHandlers(store, automations)
     }
     if (keybindings) {
-      registerKeybindingHandlers(keybindings, () => {
+      registerLazyKeybindingHandlers(keybindings, () => {
         void pluginService?.reconcileActivationState()
       })
     }
@@ -150,7 +145,7 @@ export async function registerCoreHandlers(
     registerSessionHandlers(store, runtime)
     registerUIHandlers(store, { isDashboardPopoutRenderer })
     registerLazyEmulatorHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
-    registerWorkspacePortHandlers(store)
+    registerLazyWorkspacePortHandlers(store)
     registerFilesystemHandlers(store, commitMessageAgentEnv)
     registerFilesystemWatcherHandlers()
     registerRuntimeHandlers(runtime)
@@ -168,18 +163,28 @@ export async function registerCoreHandlers(
     installProjectRuntimeGitRouter(store)
     registerLazyEphemeralVmHandlers(store, pluginService)
     // Session history and terminal resume are not chats; skip booting an empty chat journal host.
-    const ensureStructuredSessionOwnership = () =>
-      ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
+    const ensureStructuredSessionOwnership = async () => {
+      const { ensurePersistedStructuredAgentSessionHostUnlessRefused } =
+        await import('../../runtime/agent-session/installation/structured-agent-session-host-refusal')
+      return ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
         runtime.ensureStructuredAgentSessionHost()
       )
+    }
     registerLazyAiVaultHandlers({
       ensureStructuredSessionOwnership,
       getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
       prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume
     })
-    registerNativeChatHandlers()
-    registerClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
+    registerLazyNativeChatHandlers()
+    registerLazyClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
       localChatAttachmentStore: async () => {
+        const [
+          { ensureStructuredAgentSessionHostUnlessRefused },
+          { getAgentSessionAttachmentStore }
+        ] = await Promise.all([
+          import('../../runtime/agent-session/installation/structured-agent-session-host-refusal'),
+          import('../../native-chat/agent-session-attachments/agent-session-attachment-store-registry')
+        ])
         await ensureStructuredAgentSessionHostUnlessRefused(() =>
           runtime.ensureStructuredAgentSessionHost()
         )

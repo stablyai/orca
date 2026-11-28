@@ -1,11 +1,4 @@
-import { useEffect, useState } from 'react'
-import type {
-  ArtifactCloudOperation,
-  ArtifactListItem
-} from '../../../../shared/artifacts/artifacts'
-import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
-import { persistConfirmationSkipPreference } from '@/components/dismiss/confirmation/confirmation-skip-preference'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
@@ -20,9 +13,8 @@ import {
   ArtifactsPageEmptyState,
   ArtifactsPageErrorBanner
 } from './ArtifactsPageStates'
-import { artifactAccountIdentity, useArtifactPagination } from './useArtifactPagination'
-
-const LOCAL_RUNTIME = { kind: 'local' } as const
+import { useArtifactPagination } from './useArtifactPagination'
+import { useArtifactDeletion } from './use-artifact-deletion'
 
 export default function ArtifactsPage(): React.JSX.Element {
   const t = useTranslate()
@@ -32,14 +24,11 @@ export default function ArtifactsPage(): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const settings = useAppStore((state) => state.settings)
-  const updateSettings = useAppStore((state) => state.updateSettings)
-  const confirm = useConfirmationDialog()
   // Claim publishing is blocked only after settings load; sharing requires explicit capability opt-in.
   const publishingBlockedByTeam = useOrcaTeamFeatureBlocked(
     ORCA_CLOUD_TEAM_POLICY_FLAGS.artifactSharing
   )
   const publishingBlocked = settings ? settings.artifactSharingEnabled !== true : false
-  const [deleting, setDeleting] = useState<{ identity: string; slug: string } | null>(null)
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
   const signedIn = authStatus?.state === 'connected'
   const needsReconnect = authStatus?.state === 'reconnect-required'
@@ -60,7 +49,13 @@ export default function ArtifactsPage(): React.JSX.Element {
     removeArtifact,
     setError
   } = useArtifactPagination(authStatus, refreshAuth)
-  const deletingId = deleting?.identity === accountIdentity ? deleting.slug : null
+  const { deletingSlugs, deleteArtifacts } = useArtifactDeletion({
+    accountIdentity,
+    refreshAuth,
+    removeArtifact,
+    setError
+  })
+  const clearSelectionRef = useRef<(() => boolean) | null>(null)
   const selectedArtifact =
     selectedSlug === null
       ? null
@@ -98,82 +93,16 @@ export default function ArtifactsPage(): React.JSX.Element {
         setSelectedSlug(null)
         return
       }
+      if (clearSelectionRef.current?.()) {
+        event.preventDefault()
+        return
+      }
       event.preventDefault()
       closePage()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [closePage, selectedSlug])
-
-  const deleteArtifact = async (item: ArtifactListItem): Promise<void> => {
-    const name = item.artifact.title || item.artifact.originalFileName || item.artifact.slug
-    if (!settings?.skipDeleteArtifactConfirm) {
-      const accepted = await confirm({
-        title: t('common.delete', 'Delete'),
-        description: t(
-          'auto.components.artifacts.ArtifactsPage.deleteDescription',
-          '“{{name}}” will no longer be available at its public link.',
-          { name }
-        ),
-        confirmLabel: t('auto.components.artifacts.ArtifactsPage.delete', 'Delete'),
-        confirmVariant: 'destructive',
-        dontAskAgain: {
-          onConfirmed: () =>
-            persistConfirmationSkipPreference({
-              updates: { skipDeleteArtifactConfirm: true },
-              settingsSectionId: 'general-skip-delete-artifact-confirm',
-              updateSettings,
-              openSettingsPage,
-              openSettingsTarget
-            })
-        }
-      })
-      if (!accepted) {
-        return
-      }
-    }
-    const requestedIdentity = accountIdentity
-    if (!requestedIdentity) {
-      return
-    }
-    const requestedAccountIsCurrent = (): boolean =>
-      artifactAccountIdentity(useAppStore.getState().orcaProfileAuthStatus) === requestedIdentity
-    if (!requestedAccountIsCurrent()) {
-      return
-    }
-    setDeleting({ identity: requestedIdentity, slug: item.artifact.slug })
-    try {
-      const result = await callRuntimeRpc<ArtifactCloudOperation<void>>(
-        LOCAL_RUNTIME,
-        'artifacts.delete',
-        { id: item.artifact.slug }
-      )
-      if (!requestedAccountIsCurrent()) {
-        return
-      }
-      if (result.status !== 'ok') {
-        await refreshAuth()
-        throw new Error(result.status)
-      }
-      removeArtifact(requestedIdentity, item.artifact.slug)
-    } catch (deleteError) {
-      console.error('Failed to delete artifact:', deleteError)
-      if (requestedAccountIsCurrent()) {
-        setError(
-          t(
-            'auto.components.artifacts.ArtifactsPage.deleteFailed',
-            'Could not delete the artifact.'
-          )
-        )
-      }
-    } finally {
-      setDeleting((current) =>
-        current?.identity === requestedIdentity && current.slug === item.artifact.slug
-          ? null
-          : current
-      )
-    }
-  }
 
   // A true total only (D1 R6): every page is loaded, nothing is loading and the last load did not fail.
   const artifactCount =
@@ -233,10 +162,11 @@ export default function ArtifactsPage(): React.JSX.Element {
       ) : (
         <ArtifactCollection
           artifacts={artifacts}
-          deletingId={deletingId}
+          deletingSlugs={deletingSlugs}
           selectedSlug={selectedSlug}
           selectArtifact={setSelectedSlug}
-          deleteArtifact={(target) => void deleteArtifact(target)}
+          deleteArtifacts={deleteArtifacts}
+          clearSelectionRef={clearSelectionRef}
           hasMore={Boolean(nextCursor)}
           loadingMore={loadingMore}
           loadMore={() => void loadMoreArtifacts()}
@@ -246,9 +176,9 @@ export default function ArtifactsPage(): React.JSX.Element {
 
       <ArtifactDetailDrawer
         item={selectedArtifact}
-        deleting={deletingId === selectedArtifact?.artifact.slug}
+        deleting={selectedArtifact ? deletingSlugs.has(selectedArtifact.artifact.slug) : false}
         onClose={() => setSelectedSlug(null)}
-        onDelete={(target) => void deleteArtifact(target)}
+        onDelete={(target) => void deleteArtifacts([target])}
       />
     </RailPage>
   )

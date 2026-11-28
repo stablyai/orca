@@ -14,6 +14,8 @@ export type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
   activeTabId: string | null
   groupId?: string
+  /** Reveals this group's selected tab when focus moves into a split. */
+  isFocused?: boolean
   worktreeId: string
   expandedPaneByTabId: Record<string, boolean>
   onActivate: (tabId: string) => void

@@ -190,11 +190,11 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
 
   protected abstract isRequiredTeamUpdate(version: string): boolean
 
-  protected async prepareAutomaticInstall(version: string): Promise<boolean> {
+  protected async prepareRendererForInstall(version: string): Promise<boolean> {
     const window = this.getMainWindow()
     if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
-      this.cancelAutomaticInstallPreparation = await prepareRendererForUpdate(window.webContents)
-      if (!this.cancelAutomaticInstallPreparation) {
+      this.cancelRendererInstallPreparation = await prepareRendererForUpdate(window.webContents)
+      if (!this.cancelRendererInstallPreparation) {
         this.resetQuitForUpdateState()
         this.sendInstallFailureStatus({
           state: 'error',
@@ -215,8 +215,8 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
   }
 
   protected resetQuitForUpdateState(): void {
-    this.cancelAutomaticInstallPreparation?.()
-    this.cancelAutomaticInstallPreparation = null
+    this.cancelRendererInstallPreparation?.()
+    this.cancelRendererInstallPreparation = null
     this.quitAndInstallInProgress = false
     this.quittingForUpdate = false
     this.updateInstallCommitted = false

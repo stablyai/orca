@@ -28,6 +28,8 @@ export type ClaudeStructuredSpawnOptions = {
   options: Map<string, string>
   /** Saved Fast must be applied before input when launch settings cannot carry it. */
   fastModeAtStart: boolean
+  /** The chat was saved in Plan; a kept agent may still be in it. */
+  savedPlan: boolean
 } & Partial<Pick<ClaudeSession, 'cliFlag' | 'flagSettingsControl'>>
 
 /** Pass SDK-valid saved choices through; let the installed CLI reject unsupported values. */
@@ -72,7 +74,12 @@ export function claudeStructuredSpawnOptions(input: {
       }
     }
   }
-  return { sdkOptions, options, fastModeAtStart }
+  return {
+    sdkOptions,
+    options,
+    fastModeAtStart,
+    savedPlan: input.saved?.interactionMode === 'plan'
+  }
 }
 
 /** Orca passes this flag only for a Full access chat; the agent's own arguments cannot carry it. */
@@ -88,6 +95,7 @@ export function adoptClaudeStructuredSpawnOptions(
     | 'translator'
     | 'launchIntent'
     | 'fastModeAtStart'
+    | 'savedPlan'
     | 'appliedInputOptions'
     | 'cliFlag'
     | 'flagSettingsControl'
@@ -105,6 +113,7 @@ export function adoptClaudeStructuredSpawnOptions(
       : permissionMode
   }
   session.fastModeAtStart = spawn.fastModeAtStart
+  session.savedPlan = spawn.savedPlan
   session.cliFlag = spawn.cliFlag
   session.flagSettingsControl = spawn.flagSettingsControl
   session.promptSuggestionPause = spawn.sdkOptions.promptSuggestions

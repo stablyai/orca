@@ -7,7 +7,7 @@ const SHELL_FAILURE_LINE = /^Error: Command failed \(exit code: -?\d+\)(?:\n|$)/
 const SHELL_SILENT_SUCCESS = 'Command completed successfully'
 
 // Execute's result is one string: output, then an exit line; a failure also opens with an error line.
-function shellResult(output: string): { stdout: string; exitCode: number } | null {
+export function droidShellResult(output: string): { stdout: string; exitCode: number } | null {
   const exit = SHELL_EXIT_LINE.exec(output)
   if (!exit) {
     return null
@@ -26,7 +26,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   const output = update.rawOutput
   const shell =
     typeof output === 'string' && (update.status === 'completed' || update.status === 'failed')
-      ? shellResult(output)
+      ? droidShellResult(output)
       : null
   if (!shell) {
     return update

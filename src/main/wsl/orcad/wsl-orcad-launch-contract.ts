@@ -18,12 +18,18 @@ export type WslOrcadLaunch =
       distro: string
       /** The Lxss registration GUID for the deployment record's `distroId`; null if unreadable. */
       distroId: string | null
+      /** The Linux account orcad runs as, which the host's record pins; null if unreadable. */
+      linuxUser: string | null
+      /** The distro's default account when it isn't `linuxUser`, for the host's "runs as" note. */
+      defaultLinuxUser: string | null
       /** The loopback port orcad bound inside the distro (another one when the preferred was taken). */
       port: number
       fullVersion: string
       pid: number | null
       readiness: ServeReadiness
       holder: 'adopted' | 'spawned' | 'unverifiable'
+      /** The pinned account's readable key differed from the paired one before launch. */
+      pairedKeyChanged?: true
       /** An orcad the record did not name (e.g. left by a failed Remove), now recorded. */
       adoptedInstance?: { version: string; pid: number }
       /** Set when `fullVersion` is the incumbent because the update must wait. */

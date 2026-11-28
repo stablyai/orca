@@ -15,7 +15,6 @@ import {
   type SessionOptionValue
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
-  nativeChatSessionChoiceLabel,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionLabel
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
@@ -24,6 +23,7 @@ import {
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
 import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
+import { mobileSessionOptionChoiceCopy } from './mobile-native-chat-session-option-labels'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 
@@ -303,11 +303,12 @@ export function selectItemRow(
     (descriptor.category === 'thought_level' && descriptor.valueSource === 'unknown')
       ? undefined
       : (descriptor.fallbackModel ?? kind.currentValue)
+  const copy = mobileSessionOptionChoiceCopy(descriptor, item, t)
   return (
     <ListRow
       key={item.value}
-      title={nativeChatSessionChoiceLabel(item, mobileNativeChatSessionOptionSay(t), descriptor.id)}
-      subtitle={item.description}
+      title={copy.label}
+      subtitle={copy.description}
       leading={choiceLeading ? (choiceLeading(item.value) ?? null) : undefined}
       selected={item.value === marked}
       disabled={disabled || !descriptor.settable}

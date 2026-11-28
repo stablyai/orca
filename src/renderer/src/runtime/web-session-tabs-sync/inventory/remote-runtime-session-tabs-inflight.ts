@@ -70,7 +70,10 @@ export function waitForChatLinkSessionTabs(args: {
   scope: ChatLinkReadScope
   minimumReceivedFrame?: number
   signal: AbortSignal
-  load: (admission: SharedRuntimeRpcAdmission) => ReturnType<RemoteRuntimeSessionTabsLoad['load']>
+  load: (
+    admission: SharedRuntimeRpcAdmission,
+    receivedFrame: number
+  ) => ReturnType<RemoteRuntimeSessionTabsLoad['load']>
 }): Promise<RemoteRuntimeSessionTabsAnswer> {
   const { scope } = args
   // A short, chat-only read must not set the deadline or browser receipt of a full refresh.
@@ -86,7 +89,7 @@ export function waitForChatLinkSessionTabs(args: {
       const request: Promise<RemoteRuntimeSessionTabsAnswer> = Promise.resolve()
         .then(async () => {
           admission.check()
-          return { ...(await args.load(admission)), receivedFrame }
+          return { ...(await args.load(admission, receivedFrame)), receivedFrame }
         })
         .finally(forget)
       return { request, receivedFrame, scope, admission }

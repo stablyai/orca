@@ -16,6 +16,8 @@ export type ClaudeStatusLineWindow = {
 export type ClaudeStatusLineRateLimits = {
   /** CLAUDE_CONFIG_DIR of the reporting session; null for system-default sessions. */
   configDir: string | null
+  /** Reporting Orca pane (form paneKey); null when the form omits it. */
+  paneKey?: string | null
   /** Reporting Claude session (payload session_id); null when the payload omits it. */
   sessionId?: string | null
   fiveHour: ClaudeStatusLineWindow | null
@@ -89,10 +91,13 @@ export function readClaudeStatusLineRateLimits({
   }
   const configDir =
     'configDir' in fields && typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
+  const paneKey =
+    'paneKey' in fields && typeof fields.paneKey === 'string' ? fields.paneKey.trim() : ''
   const sessionId =
     'session_id' in payload && typeof payload.session_id === 'string' ? payload.session_id : ''
   return {
     configDir: configDir || null,
+    paneKey: paneKey || null,
     sessionId: sessionId || null,
     fiveHour,
     sevenDay

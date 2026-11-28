@@ -8,7 +8,7 @@ import { useAppStore } from '@/store'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   clearWorktreeAgentExpansionStateForTests,
@@ -40,7 +40,7 @@ function renderAgentCard(mode: 'compact' | 'full') {
     sortOrder: 0,
     createdAt: 1
   }
-  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const paneKey = chatPaneKey(tab.entityId)
   seedWorktreeAgentExpansionStateForTests(worktree.id, {
     expandedLineageParents: new Set(),
     expandedIdleChildGroups: new Set(),
@@ -79,12 +79,12 @@ function renderAgentCard(mode: 'compact' | 'full') {
 
 it.each(['compact', 'full'] as const)(
   'keeps Delete and its shortcut on the card header after opening the menu from a %s agent row',
-  (mode) => {
+  async (mode) => {
     const { container } = renderAgentCard(mode)
     const agentRowChild = container.querySelector('.agent-disclosure-row span')
     expect(agentRowChild).not.toBeNull()
     fireEvent.contextMenu(agentRowChild!)
-    const rowMenu = within(screen.getByRole('menu'))
+    const rowMenu = within(await screen.findByRole('menu'))
     expect(
       rowMenu.queryByRole('menuitem', { name: /^(Delet|Remove (Workspace|Project))/ })
     ).toBeNull()
@@ -94,7 +94,7 @@ it.each(['compact', 'full'] as const)(
     const title = container.querySelector('[data-worktree-title-inline-rename]')
     expect(title).not.toBeNull()
     fireEvent.contextMenu(title!)
-    const headerMenu = within(screen.getByRole('menu'))
+    const headerMenu = within(await screen.findByRole('menu'))
     const deleteItem = headerMenu.getByRole('menuitem', { name: /^Delete/ })
     expect(deleteItem.querySelector('[data-slot="dropdown-menu-shortcut"]')?.textContent).toMatch(
       /^(⌘⇧⌫|Ctrl\+⇧\+Backspace)$/

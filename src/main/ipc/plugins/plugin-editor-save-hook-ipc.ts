@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { PLUGIN_HOOK_SPECS } from '../../../shared/plugins/events/plugin-hook-payloads'
 import type { EditorSaveHookDecision } from '../../../shared/plugins/events/plugin-editor-save-hook'
 import { PluginHookDeniedError, runPluginHook } from '../../plugins/hooks/plugin-hook-dispatch'
@@ -8,8 +9,8 @@ import { PluginHookDeniedError, runPluginHook } from '../../plugins/hooks/plugin
  * the hook, and writes what this answers. SSH, WSL and folder files all save through that one
  * renderer path, so they are decided here, on the desktop, before the write leaves it.
  */
-export function registerPluginEditorSaveHookHandler(): void {
-  ipcMain.handle(
+export function registerPluginEditorSaveHookHandler(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'plugins:editorSaveHook',
     async (_event, payload: unknown): Promise<EditorSaveHookDecision> => {
       const schema = PLUGIN_HOOK_SPECS['editor.save.before'].payload

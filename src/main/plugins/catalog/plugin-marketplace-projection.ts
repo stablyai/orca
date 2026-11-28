@@ -43,6 +43,8 @@ export type PluginMarketplaceSourceState = {
 
 export type PluginMarketplaceListing = {
   marketplaceSourceId: string
+  /** The Git URL Orca reads the catalog from, never the catalog's own claim. */
+  marketplaceUrl: string
   marketplaceName: string
   marketplaceOwner: string
   marketplaceCommit: string
@@ -164,6 +166,7 @@ export function pluginMarketplaceListing(input: {
   const addedAt = estimatePluginAddedAt(entry.releases, official)
   return {
     marketplaceSourceId: source.id,
+    marketplaceUrl: source.source.url,
     marketplaceName: snapshot.marketplace.name,
     marketplaceOwner: snapshot.marketplace.owner,
     marketplaceCommit: snapshot.marketplaceCommit,

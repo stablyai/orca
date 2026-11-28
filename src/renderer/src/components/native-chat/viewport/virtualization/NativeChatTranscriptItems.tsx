@@ -74,6 +74,7 @@ export function NativeChatTranscriptItems({
                     {/* A leaving row's negative top margin passes through to close the gap before it. */}
                     <div
                       data-index={item.index}
+                      data-native-chat-row-key={rowKeys[item.index]}
                       ref={measureRow}
                       className={leavesWhole ? 'w-full' : 'flow-root w-full'}
                     >
@@ -132,20 +133,30 @@ export function NativeChatWaitingTranscriptItems({
 }): React.JSX.Element {
   return (
     <>
-      {slots.map((slot, index) => (
-        <NativeChatTranscriptRow
-          key={nativeChatSlotKey(slot)}
-          slot={slot}
-          context={context}
-          joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
-            slot,
-            previous: slots[index - 1],
-            timedRowsAfter: context.timedRows,
-            markerKey: undefined,
-            leavesWhole: nativeChatSlotLeavesWhole(slot)
-          })}
-        />
-      ))}
+      {slots.map((slot, index) => {
+        const leavesWhole = nativeChatSlotLeavesWhole(slot)
+        return (
+          // Wrapped as windowed rows are, and indexed so a returning reader's place names this message.
+          <div
+            key={nativeChatSlotKey(slot)}
+            data-native-chat-waiting-index={index}
+            data-native-chat-row-key={nativeChatSlotKey(slot)}
+            className={leavesWhole ? 'w-full' : 'flow-root w-full'}
+          >
+            <NativeChatTranscriptRow
+              slot={slot}
+              context={context}
+              joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
+                slot,
+                previous: slots[index - 1],
+                timedRowsAfter: context.timedRows,
+                markerKey: undefined,
+                leavesWhole
+              })}
+            />
+          </div>
+        )
+      })}
       {agentMail ? <NativeChatWaitingAgentMailRows /> : null}
     </>
   )

@@ -1,6 +1,6 @@
 import { runWithFinally } from '@/lib/run-with-finally'
 import type { AgentSessionGoalDisplay } from '../../../../../../shared/agent-session/thread-goals/agent-session-goal-check-display'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentOwnedThreadGoalCommand,
@@ -14,6 +14,7 @@ import type {
 import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import type { StructuredAgentSessionMutate } from '../structured/writes/use-structured-agent-session-mutate'
 import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import { useNativeChatViewGuard } from '../../pane/ownership/native-chat-view-memory'
 
 export type StructuredAgentSessionThreadGoal = {
   goal: AgentSessionGoalDisplay | null
@@ -39,7 +40,8 @@ export function useStructuredAgentSessionThreadGoal(args: {
 }): StructuredAgentSessionThreadGoal | null {
   const { journalItems, mutate, support, reported, journalEpoch, send } = args
   const agentResumes = getNativeChatAgentProfile(args.agent)?.resumesOwnGoal === true
-  const [pendingCount, setPendingCount] = useState(0)
+  // Kept with the chat tab: a view released mid-change returns still pending.
+  const [pendingCount, setPendingCount] = useNativeChatViewGuard('thread-goal-pending', 0)
   const goalRows = rowsBesideStreamedText(journalItems)
   const report = useMemo(
     // Goal rows never carry reply text, so a streaming reply keeps the memo.
@@ -68,7 +70,7 @@ export function useStructuredAgentSessionThreadGoal(args: {
         }
       )
     },
-    [agentResumes, hostChanges, mutate, send]
+    [agentResumes, hostChanges, mutate, send, setPendingCount]
   )
   if (report === null) {
     return null

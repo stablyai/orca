@@ -1,6 +1,7 @@
 // Window-only: generate avatar options with a local image-capable agent. Desktop only, so no
 // paired client or runtime RPC reaches this; the picked image saves through the normal upload.
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../ipc/lazy-ipc-handle-group'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
@@ -34,7 +35,8 @@ const CancelArgs = lazyZodSchema(() => z.object({ requestId: z.string().min(1).m
 const CAPABILITY_TTL_MS = 30_000
 
 export function registerAvatarGenerationHandlers(
-  agentEnvironment: () => CommitMessageAgentEnvironmentResolvers | undefined
+  agentEnvironment: () => CommitMessageAgentEnvironmentResolvers | undefined,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   const runs = new Map<string, AbortController>()
   let cached: { at: number; value: Promise<AvatarGenerationCapability> } | null = null
@@ -55,16 +57,19 @@ export function registerAvatarGenerationHandlers(
     return cached.value
   }
 
-  ipcMain.removeHandler('avatarGeneration:capability')
-  ipcMain.handle('avatarGeneration:capability', () =>
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('avatarGeneration:capability')
+    ipcMain.removeHandler('avatarGeneration:generate')
+    ipcMain.removeHandler('avatarGeneration:cancel')
+  }
+  ipc.handle('avatarGeneration:capability', () =>
     capability().catch((error: unknown) => {
       console.error('[avatar-generation] Capability probe failed:', error)
       return { agents: [] } satisfies AvatarGenerationCapability
     })
   )
 
-  ipcMain.removeHandler('avatarGeneration:generate')
-  ipcMain.handle(
+  ipc.handle(
     'avatarGeneration:generate',
     async (event, raw: unknown): Promise<AvatarGenerationResult> => {
       const { requestId, description, agent } = GenerateArgs.parse(raw)
@@ -123,8 +128,7 @@ export function registerAvatarGenerationHandlers(
     }
   )
 
-  ipcMain.removeHandler('avatarGeneration:cancel')
-  ipcMain.handle('avatarGeneration:cancel', (_event, raw: unknown): void => {
+  ipc.handle('avatarGeneration:cancel', (_event, raw: unknown): void => {
     const { requestId } = CancelArgs.parse(raw)
     runs.get(requestId)?.abort()
   })

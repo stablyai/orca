@@ -152,7 +152,7 @@ export async function enrollWebRuntimeSubscription({
   return {
     unsubscribe: () => {
       subscriptions.delete(subscription.id)
-      const teardown = options?.buildUnsubscribe?.(params)
+      const teardown = options?.buildUnsubscribe?.(params, subscription.id)
       if (teardown) {
         sendEncrypted({
           id: nextId(),

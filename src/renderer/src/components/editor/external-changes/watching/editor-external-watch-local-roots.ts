@@ -1,6 +1,16 @@
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
+import {
+  forgetLocalWatchRoot,
+  noteLocalWatchRootHeld,
+  setLocalWatchRequestFailed
+} from '../reload-from-disk/editor-watch-pause-store'
 
 export type WatchRootArgs = { worktreePath: string; connectionId: string | undefined }
+
+export function localWatchRoot(path: string): WatchRootArgs {
+  return { worktreePath: path, connectionId: undefined }
+}
 
 /** 'deferred': main will install it when watcher capacity frees; 'failed': nothing is watching it. */
 export type WatchRootStatus = 'pending' | 'watching' | 'deferred' | 'failed'
@@ -10,6 +20,8 @@ type HeldWatchRoot = {
   consumers: number
   installed: Promise<void>
   status: WatchRootStatus
+  /** Bumped by each request and by release, so a superseded completion can't touch pause state. */
+  requestGeneration: number
 }
 
 /** Local and SSH watch roots held by this renderer, counted per physical root. */
@@ -40,9 +52,13 @@ export function acquireWatchRoot(
     args: { worktreePath: target.worktreePath, connectionId: target.connectionId },
     consumers: 1,
     installed: Promise.resolve(),
-    status: 'pending'
+    status: 'pending',
+    requestGeneration: 0
   }
   roots.set(key, root)
+  if (root.args.connectionId === undefined) {
+    noteLocalWatchRootHeld(root.args.worktreePath)
+  }
   requestWatch(root, onError)
   return root.installed
 }
@@ -98,20 +114,37 @@ export function refreshDeferredWatchRoot(
 
 function requestWatch(root: HeldWatchRoot, onError: (error: unknown) => void): void {
   root.status = 'pending'
+  const generation = ++root.requestGeneration
+  // Only the latest request of a still-held root speaks for this renderer's pause state.
+  const isLocal = () =>
+    root.args.connectionId === undefined && root.requestGeneration === generation
   root.installed = window.api.fs.watchWorktree(root.args).then(
     (result) => {
       // Why undefined is watching: remote roots and older mains resolve without an outcome.
       root.status =
         result === 'unavailable' ? 'failed' : result === 'deferred' ? 'deferred' : 'watching'
+      // Main pushes deferred/unwatchable pauses itself; only a rejected request is ours to report.
+      if (isLocal()) {
+        setLocalWatchRequestFailed(root.args.worktreePath, false)
+      }
     },
     (error: unknown) => {
       root.status = 'failed'
+      // An unwatched local root has no auto-reload; the editor's reload control says so.
+      if (isLocal()) {
+        setLocalWatchRequestFailed(root.args.worktreePath, true)
+      }
       onError(error)
     }
   )
 }
 
-export function releaseWatchRoot(roots: HeldWatchRoots, target: WatchRootArgs): void {
+/** With `onHandOver`, main returns the events it had queued for this window on that root, so a successor watch loses none. */
+export function releaseWatchRoot(
+  roots: HeldWatchRoots,
+  target: WatchRootArgs,
+  onHandOver?: (payload: FsChangedPayload) => void
+): void {
   const key = getWatchRootKey(target)
   const held = roots.get(key)
   if (!held) {
@@ -122,11 +155,24 @@ export function releaseWatchRoot(roots: HeldWatchRoots, target: WatchRootArgs): 
     return
   }
   roots.delete(key)
-  void window.api.fs.unwatchWorktree(held.args)
+  forgetHeldLocalRoot(held)
+  void window.api.fs.unwatchWorktree({ ...held.args, handOver: onHandOver !== undefined }).then(
+    (undelivered) => undelivered && onHandOver?.(undelivered),
+    // Why: a failed unwatch has nothing to hand over.
+    () => undefined
+  )
+}
+
+function forgetHeldLocalRoot(held: HeldWatchRoot): void {
+  held.requestGeneration += 1
+  if (held.args.connectionId === undefined) {
+    forgetLocalWatchRoot(held.args.worktreePath)
+  }
 }
 
 export function releaseAllWatchRoots(roots: HeldWatchRoots): void {
   for (const held of roots.values()) {
+    forgetHeldLocalRoot(held)
     void window.api.fs.unwatchWorktree(held.args)
   }
   roots.clear()

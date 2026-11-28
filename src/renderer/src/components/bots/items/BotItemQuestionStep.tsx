@@ -1,7 +1,7 @@
 // The waiting ask of several questions, every open line at once, a hairline between them. A quick reply
 // picks the line's answer (solid, with a check) and folds it to "✓ Question… → answer", which reopens
-// on click: the box then answers it, and its pick again folds it back. Nothing posts until Send, which
-// posts the picks as one comment. A line answered, or sent and on its way, folds the same and stays.
+// on click: the box then answers it, and its pick again folds it back. The answer that fills the last
+// open line posts them all as one comment; Send posts a partial set. A line answered, or sent and on its way, folds the same and stays.
 // The comment box below is the one place to type: its Enter holds the words, with their images, files
 // and skills, as the answer of the line its "Replying to" names, like a pick.
 import { Check, LoaderCircle, Pencil } from 'lucide-react'
@@ -76,26 +76,27 @@ export function BotItemChipWords({ reply }: { reply: BotItemQuickReply }): React
   )
 }
 
-/** "Question → answer", muted: an answered line, or answers held for an ask the agent no longer waits
- *  on ("not sent yet"), which go into the comment box on click. */
+/** An answer's Markdown on its line: its first paragraph runs on after the arrow. */
+const ANSWER_MARKDOWN = 'contents text-foreground/72 [&>p:first-child]:inline'
+
+/** "Question → answer", muted: an answered line, its own words drawn as a comment is (`markdown`), or
+ *  answers held for an ask the agent no longer waits on ("not sent yet"), which go into the comment
+ *  box on click. */
 export function BotItemAnswerLine({
   question,
   words,
+  markdown,
   onClick
 }: {
   question: string
   words: string
+  markdown?: boolean
   onClick?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const content = (
-    <>
-      {botItemQuestionLine(question)} →{' '}
-      <span className="text-foreground/72 [overflow-wrap:anywhere]">{words}</span>
-      {onClick ? <> · {t('bots.items.ask.notSentYet', 'not sent yet')}</> : null}
-    </>
-  )
   const line = 'block w-full text-left text-[13px] leading-[19px] text-muted-foreground'
+  const lead = `${botItemQuestionLine(question)} → `
+  const answerClass = 'text-foreground/72 [overflow-wrap:anywhere]'
   return onClick ? (
     <button
       type="button"
@@ -105,10 +106,20 @@ export function BotItemAnswerLine({
       )}
       onClick={onClick}
     >
-      {content}
+      {lead}
+      <span className={answerClass}>{words}</span>
+      {' · '}
+      {t('bots.items.ask.notSentYet', 'not sent yet')}
     </button>
   ) : (
-    <p className={cn(line, 'whitespace-pre-line')}>{content}</p>
+    <div className={line}>
+      {lead}
+      {markdown ? (
+        <BotItemMarkdown text={words} className={ANSWER_MARKDOWN} />
+      ) : (
+        <span className={cn(answerClass, 'whitespace-pre-line')}>{words}</span>
+      )}
+    </div>
   )
 }
 

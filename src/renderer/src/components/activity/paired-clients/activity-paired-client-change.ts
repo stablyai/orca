@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { latestAgentTurnTimestamp } from '@/store/slices/ui/ui-slice-agent-notification-acknowledgement'
 import type {
   AgentListPublication,
   AgentPaneActivityChange
@@ -17,7 +18,22 @@ export function applyPairedClientActivityChange(
     throw new Error('agent_activity_not_ready')
   }
   if (change.kind === 'read') {
-    state.acknowledgeAgents(change.paneKeys, undefined, 'explicit')
+    const upTo = change.upToTimestamp
+    const paneKeys =
+      upTo === undefined
+        ? change.paneKeys
+        : change.paneKeys.filter((paneKey) => {
+            const thread = threads.find((candidate) => candidate.paneKey === paneKey)
+            const liveEntry = state.agentStatusByPaneKey.get(paneKey)
+            const latest = Math.max(
+              thread?.latestTimestamp ?? 0,
+              liveEntry ? latestAgentTurnTimestamp(liveEntry) : 0
+            )
+            return latest <= upTo
+          })
+    if (paneKeys.length > 0) {
+      state.acknowledgeAgents(paneKeys, undefined, 'explicit')
+    }
   } else if (change.kind === 'unread') {
     state.unacknowledgeAgents(change.paneKeys)
   } else {

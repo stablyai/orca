@@ -3,6 +3,7 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { canAutoSaveOpenFile } from '../autosave/editor-autosave'
 import { editorModelSiblingTabs } from '../save/queue/editor-save-disk-precondition'
 import { trackExternalChangeConflictShown } from './editor-external-change-telemetry'
+import { noteEditorConflictReport } from './editor-conflict-report-count'
 
 // Share dirty-record/banner/first-surfacing rules across watcher, notification and restore paths; callers retain their echo/eligibility guards.
 export function markFileChangedOnDisk(
@@ -10,6 +11,7 @@ export function markFileChangedOnDisk(
   file: OpenFile,
   options: { connectionId: string | undefined; origin: 'live' | 'restore' }
 ): void {
+  noteEditorConflictReport(file.filePath)
   const tabs = state.openFiles.some((tab) => tab.id === file.id)
     ? editorModelSiblingTabs(state, file)
     : [file]
