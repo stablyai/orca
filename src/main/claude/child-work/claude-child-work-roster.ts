@@ -1,9 +1,4 @@
-import {
-  liveClaudeTaskRunState,
-  record,
-  taskAliasId,
-  taskId
-} from '../background-tasks/claude-background-task-frames'
+import { record, taskAliasId, taskId } from '../background-tasks/claude-background-task-frames'
 import type { DecodedClaudeTask } from './claude-child-work-evidence'
 
 /** The roster entries a background-tasks frame starts or refreshes: a subagent's task, or one already
@@ -45,14 +40,12 @@ export function claudeRosterStart(
 export function claudeRunningFrame(
   message: Record<string, unknown>
 ): Record<string, unknown> | null {
+  // Only `running` proves a resume: a pending or paused task may never run again.
   const patch = record(message.patch)
-  if (liveClaudeTaskRunState(patch?.status) !== null) {
-    return patch!
+  if (patch?.status === 'running') {
+    return patch
   }
-  if (liveClaudeTaskRunState(message.status) !== null || message.subtype === 'task_progress') {
-    return message
-  }
-  return null
+  return message.status === 'running' || message.subtype === 'task_progress' ? message : null
 }
 
 /** Whether this frame ends the lead's turn (`result`). A tool result instead marks the live tasks whose

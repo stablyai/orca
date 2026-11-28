@@ -111,10 +111,17 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
     expect(decoder.drain(Date.now())).toEqual([])
   })
 
-  it('keeps the lease for a frame from an older run or a roster that merely lists the owner', () => {
+  it('keeps the lease for a frame from an older run, a pending update, or a roster that merely lists the owner', () => {
     const decoder = new ClaudeChildWorkDecoder()
     finishOwnerThenChildEnds(decoder)
     observe(decoder, { ...progress(OWNER, 'toolu_parent_stale'), status: 'running' })
+    observe(decoder, {
+      type: 'system',
+      subtype: 'task_updated',
+      task_id: OWNER,
+      tool_use_id: PARENT,
+      patch: { status: 'pending' }
+    })
     observe(decoder, {
       type: 'system',
       subtype: 'background_tasks_changed',
