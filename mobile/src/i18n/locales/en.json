@@ -3865,7 +3865,9 @@
         "disabled": "Disabled",
         "notStarted": "Not started",
         "commandNotFound": "Command not found",
-        "unreachable": "Can’t reach {{host}}"
+        "unreachable": "Can’t reach {{host}}",
+        "orcaRemoved": "Removed: restarts on next message",
+        "orcaChanged": "Changed: restarts on next message"
       },
       "title": "MCP servers",
       "notRunning": "MCP servers connect when you send your next message.",
@@ -3891,7 +3893,8 @@
         "failed": "{{count}} failed"
       },
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here.",
-      "manage": "Manage MCP servers"
+      "manage": "Manage MCP servers",
+      "stillFailing": "Still failing after reconnecting."
     },
     "selectionQuote": {
       "action": "Quote",
@@ -8545,6 +8548,7 @@
     "workspacesCount": "{{count}} workspaces",
     "workspacesAllButCount": "All but {{count}}",
     "headerMissing": "Fill in {{header}} to add this server.",
-    "servers": "Servers"
+    "servers": "Servers",
+    "unreadable": "Saved sign-in or key can’t be opened. Sign in again."
   }
 }
