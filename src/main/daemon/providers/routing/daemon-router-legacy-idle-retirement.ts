@@ -49,14 +49,17 @@ export class DaemonRouterLegacyIdleRetirement {
     return this.preRpc.admitReattach()
   }
 
-  /** An exit, discovery or reattach on the generation. */
+  /** An exit or discovery on the generation. */
   noteActivity(adapter: DaemonPtyAdapter): void {
     if (this.disposed || !this.isRetirableLegacy(adapter)) {
       return
     }
     // Accepted under another router (a restart carries adapters over): it is already leaving.
     if (adapter.hasRetiredForIdle()) {
-      this.forget(adapter)
+      // Each exit still owed to a watched terminal (a WSL pane's comes late) must reach the app first.
+      if (!adapter.hasWatchedSessions()) {
+        this.forget(adapter)
+      }
       return
     }
     const mode = this.modes.get(adapter)

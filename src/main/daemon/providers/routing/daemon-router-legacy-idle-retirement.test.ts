@@ -299,9 +299,8 @@ describe.skipIf(process.platform === 'win32')(
       // The reattach lands after its terminal ended and starts it again there: work the old generation keeps.
       held.release()
       const result = await reattach
-      // Its terminal is watched again, so the deferred check reads nothing and asks nothing.
+      // Its terminal is watched again, so the generation stays.
       expect(app.legacyAdapter.hasWatchedSessions()).toBe(true)
-      expect(inventory).not.toHaveBeenCalled()
       expect(decision).not.toHaveBeenCalled()
       expect(legacy.retired).toBe(false)
       expect(legacy.server.host.listSessions().map((s) => s.sessionId)).toEqual([result.id])
@@ -323,6 +322,7 @@ describe('the transitional recheck timer', () => {
       sessions: [],
       liveRelays: 1
     }
+    const state = { watched: false, admissionClosed: false, retired: false }
     const base = {
       hasRetiredForIdle: () => false,
       wasAskedToRetireWhenIdle: () => false,
@@ -340,12 +340,16 @@ describe('the transitional recheck timer', () => {
       protocolVersion: LEGACY - 1,
       askRetireWhenIdle: vi.fn(async () => 'unsupported'),
       listSessionsAndRelays: vi.fn(async () => inventory),
+      hasRetiredForIdle: () => state.retired,
       getActiveSessionIds: () => [],
-      hasWatchedSessions: () => false,
-      isIdleRetirementAdmissionClosed: () => false,
-      requestIdleRetirement: vi.fn(async () => ({ state: 'retiring' }))
+      hasWatchedSessions: () => state.watched,
+      isIdleRetirementAdmissionClosed: () => state.admissionClosed,
+      requestIdleRetirement: vi.fn(async () => {
+        state.retired = true
+        return { state: 'retiring' }
+      })
     })
-    return { current, held, preRpc, inventory }
+    return { current, held, preRpc, inventory, state }
   }
 
   afterEach(() => {
@@ -409,6 +413,79 @@ describe('the transitional recheck timer', () => {
     await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
     // The first read and six rechecks (1 to 30 minutes apart), then nothing until the next exit.
     expect(vi.mocked(preRpc.listSessionsAndRelays)).toHaveBeenCalledTimes(7)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  function track(preRpc: DaemonPtyAdapter, current: DaemonPtyAdapter) {
+    const legacy = [preRpc]
+    const retirement = new DaemonRouterLegacyIdleRetirement({
+      current: () => current,
+      legacy: () => legacy,
+      drop: (adapter) => legacy.splice(legacy.indexOf(adapter), 1)
+    })
+    return { legacy, retirement }
+  }
+
+  it('reads nothing while a terminal it still watches is alive', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, state } = stubs()
+    state.watched = true
+    const { retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(1_000)
+    // Another watched terminal's exit, with one still alive.
+    retirement.noteActivity(preRpc)
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(vi.mocked(preRpc.listSessionsAndRelays)).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps a generation that retired with a watched terminal until that exit is delivered', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, inventory, state } = stubs()
+    // Fenced by an unanswered decision, so it is asked even while a terminal is watched.
+    Object.assign(state, { watched: true, admissionClosed: true })
+    inventory.liveRelays = 0
+    const { legacy, retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(state.retired).toBe(true)
+    retirement.noteActivity(preRpc)
+    expect(legacy).toEqual([preRpc])
+    state.watched = false
+    retirement.noteActivity(preRpc)
+    expect(legacy).toEqual([])
+  })
+
+  it('forgets a retired generation whose last exit never arrives', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, inventory, state } = stubs()
+    Object.assign(state, { watched: true, admissionClosed: true })
+    inventory.liveRelays = 0
+    const { legacy, retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(29_000)
+    expect(legacy).toEqual([preRpc])
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(legacy).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps asking a generation fenced by an unanswered decision past the recheck cap', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, state } = stubs()
+    state.admissionClosed = true
+    vi.mocked(preRpc.requestIdleRetirement).mockImplementation(async () => ({
+      state: 'unverifiable'
+    }))
+    const { retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
+    const asked = vi.mocked(preRpc.requestIdleRetirement).mock.calls.length
+    expect(asked).toBeGreaterThan(7)
+    // Once it answers, admission reopens and the ordinary cap applies again.
+    state.admissionClosed = false
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
     expect(vi.getTimerCount()).toBe(0)
   })
 })

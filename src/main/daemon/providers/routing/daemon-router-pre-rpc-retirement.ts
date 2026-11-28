@@ -10,6 +10,8 @@ const RECHECK_MAX_MS = 30 * 60_000
 const RECHECK_LIMIT = 6
 /** A hung decision must not hold reattaches; the generation's own fence still refuses them. */
 const DECISION_FENCE_MAX_MS = 2_000
+/** Past a WSL pane's exit classification (up to ~10s), so its exit still reaches the app. */
+const EXIT_DELIVERY_MAX_MS = 30_000
 
 type Timer = ReturnType<typeof setTimeout>
 
@@ -18,6 +20,7 @@ export type PreRpcRetirementTiming = {
   recheckMs?: number
   recheckMaxMs?: number
   fenceMaxMs?: number
+  exitDeliveryMaxMs?: number
 }
 
 /** Asks an older generation that predates `retireWhenIdle` to retire after its exits; reattaches never overlap that decision. */
@@ -32,6 +35,7 @@ export class DaemonRouterPreRpcRetirement {
   private readonly recheckDelays = new WeakMap<DaemonPtyAdapter, number>()
   private readonly rechecks = new WeakMap<DaemonPtyAdapter, number>()
   private readonly decisions = new Map<DaemonPtyAdapter, Promise<unknown>>()
+  private readonly awaitingExits = new WeakSet<DaemonPtyAdapter>()
   private reattachesInFlight = 0
   private reattachEpoch = 0
   private disposed = false
@@ -124,7 +128,7 @@ export class DaemonRouterPreRpcRetirement {
     }
     // Accepted under another router (a restart carries adapters over): it is already leaving.
     if (adapter.hasRetiredForIdle()) {
-      this.forget(adapter)
+      this.forgetOnceExited(adapter)
       return
     }
     // A terminal this app still watches keeps it busy; that terminal's own exit checks again.
@@ -156,7 +160,8 @@ export class DaemonRouterPreRpcRetirement {
 
   private checkAgainLater(adapter: DaemonPtyAdapter): void {
     const rechecks = this.rechecks.get(adapter) ?? 0
-    if (rechecks >= RECHECK_LIMIT) {
+    // A generation fenced by an unanswered decision is asked until it answers: only that reopens it.
+    if (rechecks >= RECHECK_LIMIT && !adapter.isIdleRetirementAdmissionClosed()) {
       return
     }
     this.rechecks.set(adapter, rechecks + 1)
@@ -171,6 +176,16 @@ export class DaemonRouterPreRpcRetirement {
   private forget(adapter: DaemonPtyAdapter): void {
     this.recheckDelays.delete(adapter)
     this.options.forget(adapter)
+  }
+
+  /** Retired with a watched terminal: its exit forgets the generation, or this does once that exit is overdue. */
+  private forgetOnceExited(adapter: DaemonPtyAdapter): void {
+    if (adapter.hasWatchedSessions() && !this.awaitingExits.has(adapter)) {
+      this.awaitingExits.add(adapter)
+      this.schedule(adapter, this.options.timing?.exitDeliveryMaxMs ?? EXIT_DELIVERY_MAX_MS)
+      return
+    }
+    this.forget(adapter)
   }
 
   private async retireIfEmpty(adapter: DaemonPtyAdapter): Promise<void> {
@@ -210,7 +225,7 @@ export class DaemonRouterPreRpcRetirement {
     try {
       const result = await decision
       if (result.state === 'retiring' && !this.disposed) {
-        this.forget(adapter)
+        this.forgetOnceExited(adapter)
       } else if (!this.disposed && result.state === 'busy') {
         this.checkAgainLater(adapter)
       } else if (!this.disposed && result.state === 'unverifiable') {
