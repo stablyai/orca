@@ -10,6 +10,34 @@ import { closeWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-brow
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  pushClosedChatTabSnapshot,
+  pushRecentlyClosedTabKind
+} from '@/store/slices/tabs/recently-closed-tabs'
+import {
+  executionHostIdForStructuredTarget,
+  structuredAgentSessionTargetForTab
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+
+/** A restored chat that never mounted has no read owner, but the host status feed still names its provider session. */
+function chatProviderSessionId(tab: Tab, target: RuntimeClientTarget | null): string | undefined {
+  if (!target) {
+    return undefined
+  }
+  const owned = findStructuredAgentSessionReadOwner(
+    tab.entityId,
+    target,
+    tab.executionHostId ?? ''
+  )?.getSnapshot().providerSession?.id
+  return (
+    owned ??
+    getStructuredAgentSessionStatusFeed(target).getSnapshot().get(tab.entityId)?.providerSession?.id
+  )
+}
 
 export function createWorkspaceTabCloseCommands({
   worktreeId,
@@ -50,10 +78,36 @@ export function createWorkspaceTabCloseCommands({
     }
     const whenEmptied = opts?.whenEmptied ?? null
     if (item.contentType === 'agent-session') {
+      const agent = item.agentSessionAgent
       const close = () => {
-        if (useAppStore.getState().closeUnifiedTab(item.id)) {
-          whenEmptied?.()
+        const state = useAppStore.getState()
+        const target = structuredAgentSessionTargetForTab(state, item)
+        const providerSessionId = chatProviderSessionId(item, target)
+        const executionHostId =
+          item.executionHostId ?? (target ? executionHostIdForStructuredTarget(target) : undefined)
+        if (!state.closeUnifiedTab(item.id)) {
+          return
         }
+        if (agent && isTuiAgent(agent) && executionHostId && providerSessionId) {
+          useAppStore.setState((s) => ({
+            recentlyClosedChatTabsByWorktree: pushClosedChatTabSnapshot(
+              s.recentlyClosedChatTabsByWorktree,
+              worktreeId,
+              {
+                providerSessionId,
+                agent,
+                executionHostId,
+                ...(item.customLabel ? { customTitle: item.customLabel } : {})
+              }
+            ),
+            recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
+              s.recentlyClosedTabKindsByWorktree,
+              worktreeId,
+              'chat'
+            )
+          }))
+        }
+        whenEmptied?.()
       }
       if (
         !opts?.skipRunningProcessConfirm &&

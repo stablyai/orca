@@ -1,7 +1,30 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
-export type RecentlyClosedTabKind = 'terminal' | 'browser' | 'editor'
+export type RecentlyClosedTabKind = 'terminal' | 'browser' | 'editor' | 'chat'
+
+export type ClosedChatTabSnapshot = {
+  /** Provider conversation ID (Claude session / Codex thread), not the Orca tab session ID. */
+  providerSessionId: string
+  agent: TuiAgent
+  executionHostId: ExecutionHostId
+  customTitle?: string
+}
+
+const MAX_RECENT_CLOSED_CHAT_TABS = 10
+
+export function pushClosedChatTabSnapshot(
+  map: Record<string, ClosedChatTabSnapshot[]> | undefined,
+  worktreeId: string,
+  snapshot: ClosedChatTabSnapshot
+): Record<string, ClosedChatTabSnapshot[]> {
+  return {
+    ...map,
+    [worktreeId]: [snapshot, ...(map?.[worktreeId] ?? [])].slice(0, MAX_RECENT_CLOSED_CHAT_TABS)
+  }
+}
 
 // Cross-type history exceeds per-type cap 10; drained snapshot kinds are skipped on pop.
 const MAX_RECENT_CLOSED_TAB_KINDS = 30
@@ -28,10 +51,13 @@ export function pushRecentlyClosedTabKind(
 }
 
 export type RecentlyClosedTabsSlice = {
-  /** Newest-first close order across the terminal/browser/editor reopen stacks
+  /** Newest-first close order across the terminal/browser/editor/chat reopen stacks
    *  so Cmd+Shift+T pops true cross-type MRU (Chrome/Ghostty semantics). */
   recentlyClosedTabKindsByWorktree: Record<string, RecentlyClosedTabKind[]>
+  /** Newest-first identity of a closed chat, enough to resume the same conversation. */
+  recentlyClosedChatTabsByWorktree: Record<string, ClosedChatTabSnapshot[]>
   reopenClosedTab: (worktreeId: string) => boolean
+  reopenClosedChatTab: (worktreeId: string) => boolean
 }
 
 export const createRecentlyClosedTabsSlice: StateCreator<
@@ -41,6 +67,34 @@ export const createRecentlyClosedTabsSlice: StateCreator<
   RecentlyClosedTabsSlice
 > = (set, get) => ({
   recentlyClosedTabKindsByWorktree: {},
+  recentlyClosedChatTabsByWorktree: {},
+
+  reopenClosedChatTab: (worktreeId) => {
+    let snapshot: ClosedChatTabSnapshot | undefined
+    set((s) => {
+      const stack = s.recentlyClosedChatTabsByWorktree[worktreeId] ?? []
+      snapshot = stack[0]
+      if (!snapshot) {
+        return s
+      }
+      return {
+        recentlyClosedChatTabsByWorktree: {
+          ...s.recentlyClosedChatTabsByWorktree,
+          [worktreeId]: stack.slice(1)
+        }
+      }
+    })
+    if (!snapshot) {
+      return false
+    }
+    const closed = snapshot
+    void import('@/lib/agent-session/resume/reopen-closed-chat')
+      .then(({ resumeClosedChatTab }) =>
+        resumeClosedChatTab(closed, worktreeId, () => get().reopenClosedTab(worktreeId))
+      )
+      .catch(() => get().reopenClosedTab(worktreeId))
+    return true
+  },
 
   reopenClosedTab: (worktreeId) => {
     // Kind entries can outlive tighter/deduped snapshots; skip drained kinds, bounded by one shift per entry.
@@ -67,7 +121,9 @@ export const createRecentlyClosedTabsSlice: StateCreator<
           ? get().reopenClosedTerminalTab(worktreeId)
           : kind === 'browser'
             ? get().reopenClosedBrowserTab(worktreeId) !== null
-            : get().reopenClosedEditorTab(worktreeId)
+            : kind === 'chat'
+              ? get().reopenClosedChatTab(worktreeId)
+              : get().reopenClosedEditorTab(worktreeId)
       if (reopened) {
         return true
       }
