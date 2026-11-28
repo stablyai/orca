@@ -61,14 +61,23 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration inbox': async ({ flags, client, json }) => {
     const full = flags.has('full')
     const run = getPresentStringFlag(flags, 'run')
+    const worktree = getPresentStringFlag(flags, 'worktree')
     const result = await client.call<{
       messages: MessageSummary[]
       count: number
+      worktreeId?: string
     }>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
       terminal: getPresentStringFlag(flags, 'terminal'),
-      run
+      run,
+      ...(worktree ? { worktree } : {})
     })
+    if (worktree && !result.result.worktreeId) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This server does not support inbox --worktree. Update Orca on it before filtering by worktree.'
+      )
+    }
     // Why: a server older than v1.4.257 (reachable via --environment) drops `run` and returns every Run's mail.
     if (run && result.result.messages.some((message) => message.run_id !== run)) {
       throw new RuntimeClientError(
@@ -78,7 +87,8 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
     }
     if (!full) {
       printOrchestrationResult(result, json, {
-        fields: (value): { messages: MessageView[] } => ({
+        fields: (value): { messages: MessageView[]; worktreeId?: string } => ({
+          ...(value.worktreeId ? { worktreeId: value.worktreeId } : {}),
           messages: value.messages.map((message) =>
             inboxRowView(toMessageView(message, { recipient: true }))
           )

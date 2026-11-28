@@ -1,5 +1,6 @@
 import { undeliveredInboxQuery, type UndeliveredInboxOptions } from './undelivered-inbox-query'
 import { noteQuestionEdge } from './question-edges'
+import { getWorktreeInbox } from './worktree-message-inbox'
 import type { MessageType, MessageRow } from '../orchestration-records'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
@@ -295,6 +296,7 @@ export type MessageInboxMethods = {
   markAsReadAndDelivered: typeof markAsReadAndDelivered
   getInbox: typeof getInbox
   getAllMessagesForHandle: typeof getAllMessagesForHandle
+  getWorktreeInbox: typeof getWorktreeInbox
   getThreadMessagesFor: typeof getThreadMessagesFor
 }
 
@@ -314,6 +316,7 @@ export function attachMessageInbox(ctor: { prototype: object }): void {
     markAsReadAndDelivered,
     getInbox,
     getAllMessagesForHandle,
+    getWorktreeInbox,
     getThreadMessagesFor
   })
 }
