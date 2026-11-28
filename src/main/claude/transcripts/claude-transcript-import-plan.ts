@@ -10,7 +10,7 @@ import {
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import '../../native-chat/agent-session-journal/writing/journal-row-builders'
-import { journalLifecycleItemMutation } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
+import type { journalLifecycleItemMutation } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   HISTORY_CATCH_UP_MAX_OPERATIONS,
   type HistoryCatchUpPlan
