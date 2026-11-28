@@ -8,8 +8,6 @@ import type { AgentListStatus as AgentDotState } from '../../../../../src/shared
 import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
 import { AGENT_ROW_INDENT_PER_DEPTH } from './WorktreeAgentRow'
 
-// Grow the 14 pt controls toward 44 pt downward only: later siblings win hit tests, so top slop would steal taps from the row above.
-const CHILD_TOGGLE_HIT_SLOP = { top: 0, bottom: 15, left: 8, right: 8 } as const
 const IDLE_GROUP_HIT_SLOP = { top: 0, bottom: 15 } as const
 
 type ChildToggleProps = {
@@ -20,6 +18,8 @@ type ChildToggleProps = {
   /** A hidden descendant the desktop holds unread. */
   unread?: boolean
   onToggle: () => void
+  // Claim the workspace card press so expanding does not open the workspace.
+  onPressIn?: () => void
 }
 
 export function WorktreeAgentChildToggle({
@@ -27,7 +27,8 @@ export function WorktreeAgentChildToggle({
   expanded,
   signalState,
   unread,
-  onToggle
+  onToggle,
+  onPressIn
 }: ChildToggleProps) {
   const t = useMobileTranslation()
   const colors = useMobileColors()
@@ -50,29 +51,37 @@ export function WorktreeAgentChildToggle({
   return (
     <Pressable
       style={({ pressed }) => [styles.toggle, pressed && pressedStyle]}
-      hitSlop={CHILD_TOGGLE_HIT_SLOP}
       accessibilityRole="button"
       accessibilityLabel={
         !expanded && unread ? `${label}, ${t('agents.list.unread', 'Unread')}` : label
       }
       accessibilityState={{ expanded }}
+      onPressIn={(event) => {
+        event.stopPropagation()
+        onPressIn?.()
+      }}
       onPress={(event) => {
         event.stopPropagation()
         onToggle()
       }}
     >
-      {expanded ? null : (
-        <>
-          {signalState ? <AgentStateDot state={signalState} /> : null}
-          {unread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
-          <Text style={styles.count}>+{count}</Text>
-        </>
-      )}
-      {expanded ? (
-        <ChevronDown size={12} color={colors.textMuted} />
-      ) : (
-        <ChevronRight size={12} color={colors.textMuted} />
-      )}
+      {/* Glyphs must not eat the tap: a page SVG path never reaches Pressable onPress. */}
+      <View pointerEvents="none" style={styles.glyph}>
+        {expanded ? null : (
+          <>
+            {signalState ? <AgentStateDot state={signalState} /> : null}
+            {unread ? (
+              <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} />
+            ) : null}
+            <Text style={styles.count}>+{count}</Text>
+          </>
+        )}
+        {expanded ? (
+          <ChevronDown size={12} color={colors.textMuted} />
+        ) : (
+          <ChevronRight size={12} color={colors.textMuted} />
+        )}
+      </View>
     </Pressable>
   )
 }
@@ -150,7 +159,12 @@ export function WorktreeAgentIdleGroupRow({
 
 const stylesSheet = themedStyleSheet((colors) => ({
   toggle: {
-    height: 14,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  glyph: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2

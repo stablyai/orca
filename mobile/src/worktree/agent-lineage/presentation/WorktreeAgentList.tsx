@@ -27,8 +27,9 @@ type Props = {
   unvisited: boolean
   statusLive?: boolean
   isReadOnly?: boolean
-  onAgentPress?: (paneKey: string) => void
+  onAgentPress?: (paneKey: string, childId?: string) => void
   onAgentLongPress?: () => void
+  onPressIn?: () => void
   /** The desktop's "Full list" agent activity layout: every row, no summary. */
   fullList?: boolean
 }
@@ -50,6 +51,7 @@ export function WorktreeAgentList({
   isReadOnly = false,
   onAgentPress,
   onAgentLongPress,
+  onPressIn,
   fullList = false
 }: Props) {
   // Only lists that draw agent times tick, so the rest of the host list skips the 30 s clock.
@@ -81,6 +83,7 @@ export function WorktreeAgentList({
       unvisited={unvisited}
       isReadOnly={isReadOnly}
       onPress={onAgentPress}
+      onPressIn={onPressIn}
       onLongPress={onAgentLongPress}
     />
   )
@@ -127,6 +130,7 @@ export function WorktreeAgentList({
           unvisited={unvisited}
           isReadOnly={isReadOnly}
           onPress={onAgentPress}
+          onPressIn={onPressIn}
           onLongPress={onAgentLongPress}
           trailing={
             children.length > 0 ? (
@@ -137,6 +141,7 @@ export function WorktreeAgentList({
                   hiddenDescendants ? collapsedChildrenSignalState(hiddenDescendants) : undefined
                 }
                 unread={hiddenDescendants ? hidesUnread(hiddenDescendants) : false}
+                onPressIn={onPressIn}
                 onToggle={() => toggle(parentDisclosureKey(parentKey))}
               />
             ) : undefined

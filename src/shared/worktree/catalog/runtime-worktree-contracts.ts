@@ -42,6 +42,10 @@ export type RuntimeWorktreeAgentRow = {
   /** The host's Orca id for this agent's conversation (a chat's /clear root); old hosts omit it. */
   orcaSessionId?: string
   parentPaneKey: string | null
+  /** Canonical workspace that runs this pane. A mirrored copy keeps it. Old hosts omit it. */
+  homeWorktreeId?: string
+  /** Host of that workspace. Raw ids repeat across hosts. Old hosts omit it. */
+  homeHostId?: Worktree['hostId']
   state: AgentStatusState
   workingMode?: AgentWorkingMode
   agentType: AgentType | null

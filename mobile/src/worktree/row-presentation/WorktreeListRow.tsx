@@ -61,7 +61,7 @@ type Props = {
   /** Null until a live read says (rows from the phone's store carry no agent state). */
   status: WorktreeStatus | null
   onPress: (item: Worktree) => void
-  onAgentPress?: (item: Worktree, paneKey: string) => void
+  onAgentPress?: (item: Worktree, paneKey: string, childId?: string) => void
   statusLive?: boolean
   onLongPress?: (item: Worktree) => void
   onToggleLineage?: (item: WorkspaceListItem) => void
@@ -363,7 +363,7 @@ function WorktreeListRowComponent({
                 isReadOnly={isReadOnly}
                 onAgentPress={
                   onAgentPress
-                    ? (paneKey) => guardPress(() => onAgentPress(item, paneKey))()
+                    ? (paneKey, childId) => guardPress(() => onAgentPress(item, paneKey, childId))()
                     : undefined
                 }
                 onAgentLongPress={openActions}

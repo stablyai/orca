@@ -32,7 +32,8 @@ export function resolveRuntimeWorktreeSidebarStatus(
   summary: Pick<RuntimeWorktreePsSummary, 'status' | 'agents'>,
   now: number,
   titleEvidence: readonly RuntimeTerminalTitleEvidence[],
-  sourceOf: (paneKey: string) => AgentTitleSource | undefined
+  sourceOf: (paneKey: string) => AgentTitleSource | undefined,
+  ownsRow: (paneKey: string) => boolean = () => true
 ): WorktreeStatus {
   if (summary.agents.length === 0 && titleEvidence.length === 0) {
     return summary.status === 'working' || summary.status === 'permission'
@@ -47,10 +48,13 @@ export function resolveRuntimeWorktreeSidebarStatus(
     if (!isAgentStatusFresh(row, now)) {
       continue
     }
-    applyAgentPaneActivityFlags(flags, row)
-    const source = sourceOf(row.paneKey)
-    if (source) {
-      freshSources.push(source)
+    // A mirrored copy still silences its parent's title, but must not paint the coordinator busy.
+    if (ownsRow(row.paneKey)) {
+      applyAgentPaneActivityFlags(flags, row)
+      const source = sourceOf(row.paneKey)
+      if (source) {
+        freshSources.push(source)
+      }
     }
     if (row.state === 'done' && row.parentPaneKey) {
       finishedWorkerParents.add(row.parentPaneKey)

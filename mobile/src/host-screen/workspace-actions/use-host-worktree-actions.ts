@@ -9,21 +9,17 @@ import type { useForgetHostClient } from '../../transport/connection/host-client
 import { removeHostAndCloseClient } from '../../host-catalog/host-removal-lifecycle'
 import { isPageHostRemovalUnavailable } from '../../host-catalog/page-host-removal-refusal'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import {
-  rpcClientForExecutionHost,
-  workspaceRouteExecutionHost
-} from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
-import { serverUpdateNeededNotice } from '../../host-route-notice'
+import { rpcClientForExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { leaveHostRoute } from '../../host-route-exit'
 import {
   getWorktreeRowIdentity,
   isSameWorktreeRow
 } from '../../worktree/row-presentation/worktree-host-row-identity'
-import { noteLastVisitedWorktree } from '../../worktree/navigation/last-visited-worktree-by-host'
 import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
-import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
+import { worktreePinWrite, worktreeSleep } from '../host-screen-operations'
+import { openHostWorktreeSession } from './open-worktree-session'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
 import { useHostWorktreeRowWrites } from './use-host-worktree-row-writes'
@@ -262,36 +258,19 @@ export function useHostWorktreeActions(args: {
   const openWorktreeSession = useCallback(
     // A row not listed yet (a bot's home just made) opens from these fields alone.
     (item: Pick<Worktree, 'worktreeId' | 'hostId' | 'displayName' | 'repo'>, paneKey?: string) => {
-      const server = serverWorkspaces.hosts.find((host) => host.hostId === item.hostId)
-      if (server?.relay === 'update-needed') {
-        setServerNotice(serverUpdateNeededNotice(server.label))
-        return
-      }
-      const routeHost = workspaceRouteExecutionHost(client, hostCapabilities, item.hostId)
-      if (routeHost === null) {
-        return
-      }
-      // Use an empty missing hostId: the shell refuses /h//session, whereas the string undefined would name an accepted host.
-      const executionHost = routeHost ? `&executionHost=${encodeURIComponent(routeHost)}` : ''
-      const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
-      const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${executionHost}${pane}`
-      navigateFromHostList(target, Boolean(paneKey), () => {
-        // Record this phone’s visit before navigation; a session opened in another page cannot publish its stored write back here.
-        if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-          setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
-        } else if (hostId) {
-          noteLastVisitedWorktree({ hostId, worktreeId: item.worktreeId, executionHost: routeHost })
-        }
-        const rowClient = clientForRow(item)
-        if (rowClient && connState === 'connected') {
-          void worktreeActivate
-            .request(rowClient, {
-              worktree: `id:${item.worktreeId}`,
-              notifyClients: false,
-              navigation: 'caller'
-            })
-            .catch(() => null)
-        }
+      openHostWorktreeSession({
+        client,
+        clientForRow,
+        connState,
+        hostCapabilities,
+        hostId,
+        item,
+        navigateFromHostList,
+        paneKey,
+        serverWorkspaces,
+        setOptimisticActiveWorktreeIdentity,
+        setServerNotice,
+        worktrees
       })
     },
     [
@@ -301,7 +280,8 @@ export function useHostWorktreeActions(args: {
       hostCapabilities,
       hostId,
       navigateFromHostList,
-      serverWorkspaces
+      serverWorkspaces,
+      worktrees
     ]
   )
 
