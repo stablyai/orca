@@ -7,7 +7,10 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import { readJournalInputItem } from '../input-order/journal-input-obligations'
 import { journalItemLifecycleState } from '../journal-item-status-metadata'
 import { lostLiveWorkJournalBody } from '../item-lifecycle/journal-subagent-liveness'
-import { personStopDecidesTurn } from '../context-epochs/journal-stop-turn-end'
+import {
+  personStopDecidesFailure,
+  personStopDecidesTurn
+} from '../context-epochs/journal-stop-turn-end'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { spelledProviderTimelineItemKey } from '../../../../shared/agent-session/journal/provider-timeline-item-key'
 
@@ -25,6 +28,8 @@ export type JournalTimelineView = {
   unsettled(turnItemId: string | null): Iterable<AgentJournalRenderItem>
   /** A person's Stop, not the provider, ended this turn. */
   stopDecidesTurn(turnId: string, endedAt: number): boolean
+  /** A person's Stop caused this turn's failure, ended at endedAt (personStopDecidesFailure). */
+  stopDecidesFailure(turnId: string, endedAt: number): boolean
 }
 
 /** Row-local, so SQL selects the same population by its indexed columns. */
@@ -45,7 +50,8 @@ export function journalTimelineView(state: JournalReducerState): JournalTimeline
     withKeyPrefix: (prefix) => state.queries.itemsWithKeyPrefix(state, prefix),
     contextWindowHeld: () => state.queries.contextWindowHeld(state),
     unsettled: (turnItemId) => state.queries.unsettledItems(state, turnItemId),
-    stopDecidesTurn: (turnId, endedAt) => personStopDecidesTurn(state, turnId, endedAt)
+    stopDecidesTurn: (turnId, endedAt) => personStopDecidesTurn(state, turnId, endedAt),
+    stopDecidesFailure: (turnId, endedAt) => personStopDecidesFailure(state, turnId, endedAt)
   }
 }
 
@@ -53,7 +59,8 @@ export function journalTimelineView(state: JournalReducerState): JournalTimeline
 export function journalTimelineItemsView(
   item: (itemId: string) => AgentJournalRenderItem | null,
   items: () => Iterable<AgentJournalRenderItem>,
-  stopDecidesTurn: JournalTimelineView['stopDecidesTurn'] = () => false
+  stopDecidesTurn: JournalTimelineView['stopDecidesTurn'] = () => false,
+  stopDecidesFailure: JournalTimelineView['stopDecidesFailure'] = () => false
 ): JournalTimelineView {
   return {
     item,
@@ -78,7 +85,8 @@ export function journalTimelineItemsView(
     },
     contextWindowHeld: () => journalTimelineContextWindowHeld(items()),
     unsettled: (turnItemId) => unsettledJournalTimelineItems(items(), turnItemId),
-    stopDecidesTurn
+    stopDecidesTurn,
+    stopDecidesFailure
   }
 }
 

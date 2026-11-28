@@ -32,7 +32,10 @@ export function createCodexJournalTranslatorWriters(deps: CodexJournalTranslator
     turnScope: turnScopes.scopeFor(threadId, turnId)
   })
   const producerDeps = { ...deps, attributionFor }
-  const genericFrames = new CodexJournalGenericFrames(producerDeps, activeTurn)
+  const genericFrames = new CodexJournalGenericFrames(
+    { ...producerDeps, stopTurnId: (providerTurnId) => commands.journalTurnId(providerTurnId) },
+    activeTurn
+  )
   const items = new CodexJournalItems(
     producerDeps,
     activeTurn,

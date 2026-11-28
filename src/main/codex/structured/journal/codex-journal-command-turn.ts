@@ -12,6 +12,58 @@ import type { StructuredAgentSessionCommandRun } from '../../../native-chat/agen
 import { structuredCompactionOutcome } from '../../../native-chat/agent-session-wire/operations/structured-conversation-command-outcome'
 import { readCodexJournalRecord } from './codex-structured-journal-translation-values'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import {
+  codexTerminalRowIdentity,
+  writeCodexFailureRow,
+  type CodexFailureStop
+} from './codex-frame-row-write'
+import {
+  CODEX_JOURNAL_ADMITTED,
+  type CodexJournalTranslationAdmission
+} from './codex-structured-journal-contracts'
+
+/** A carried command's end: its own failure row, if any, apart from the rows that settle it. */
+export type CodexCommandEnd = {
+  failure: {
+    row: JournalLifecycleIdentityMutationInput & { kind: 'item' }
+    stop: CodexFailureStop
+    /** Codex's own error row for the turn, which this one repeats where it shows. */
+    unlessItemId?: string
+  } | null
+  mutations: JournalLifecycleIdentityMutationInput[]
+}
+
+/** A command's failure row, decided by the writer like Codex's own error rows, ahead of the batch
+ *  that settles the command; a sink that can't decide at its writer gets it in that batch. */
+export function writeCodexCommandFailure(
+  sink: StructuredAgentSessionEventSink,
+  end: CodexCommandEnd
+): {
+  admission: CodexJournalTranslationAdmission
+  mutations: JournalLifecycleIdentityMutationInput[]
+} {
+  if (!end.failure) {
+    return { admission: CODEX_JOURNAL_ADMITTED, mutations: end.mutations }
+  }
+  const { row, stop, unlessItemId } = end.failure
+  if (!sink.tryReviseResolvedItem) {
+    // As before: Codex's own error frame stands for the command's failure.
+    const rows = unlessItemId ? [] : [row]
+    return { admission: CODEX_JOURNAL_ADMITTED, mutations: [...rows, ...end.mutations] }
+  }
+  return {
+    admission: writeCodexFailureRow(
+      sink,
+      row.identity,
+      row.body,
+      { turnScope: row.turnScope },
+      stop,
+      unlessItemId
+    ),
+    mutations: end.mutations
+  }
+}
 
 type CarriedCommand = {
   command: StructuredAgentSessionCommandRun
@@ -57,6 +109,11 @@ export class CodexJournalCommandTurn {
       : null
   }
 
+  /** The journal turn a provider turn's rows belong to: the command's own when it carries one. */
+  journalTurnId(providerTurnId: string): string {
+    return this.carried.get(providerTurnId)?.command.turnId ?? providerTurnId
+  }
+
   /** An unclaimed command has no provider turn to interrupt. */
   providerTurnId(turnId: string): string | undefined {
     if (this.awaiting?.turnId === turnId) {
@@ -80,14 +137,15 @@ export class CodexJournalCommandTurn {
   end(
     providerTurnId: string,
     ended: {
+      threadId: string
       status: string | null
       error: string | null
       completedAt: number
     }
-  ): JournalLifecycleIdentityMutationInput[] {
+  ): CodexCommandEnd {
     const carried = this.carried.get(providerTurnId)
     if (!carried) {
-      return []
+      return { failure: null, mutations: [] }
     }
     const { command } = carried
     const detail = ended.error === null ? undefined : providerDiagnostic(ended.error, 'person')
@@ -97,25 +155,34 @@ export class CodexJournalCommandTurn {
       failed: ended.status !== 'completed' || detail ? (detail ? { detail } : {}) : null
     })
     const turnScope = { kind: 'turn' as const, turnItemId: agentJournalItemKey(command.identity) }
-    return [
-      // Successful compaction already has Codex's marker; do not add a second status row.
-      ...(verdict.failure && !carried.failureShown
-        ? [
-            {
-              kind: 'item' as const,
-              identity: command.resultIdentity,
-              body: {
-                kind: 'status' as const,
-                ...agentSessionFailureWords(verdict.failure, {
-                  surface: 'row',
-                  agentName: TUI_AGENT_DISPLAY_NAMES.codex
-                }),
-                tone: 'error' as const
-              },
-              turnScope
-            }
-          ]
-        : []),
+    // Successful compaction already has Codex's marker; do not add a second status row. After
+    // Codex's own error frame, the writer adds this row only where a Stop dropped that frame's row.
+    const failure = verdict.failure
+      ? {
+          row: {
+            kind: 'item' as const,
+            identity: command.resultIdentity,
+            body: {
+              kind: 'status' as const,
+              ...agentSessionFailureWords(verdict.failure, {
+                surface: 'row',
+                agentName: TUI_AGENT_DISPLAY_NAMES.codex
+              }),
+              tone: 'error' as const
+            },
+            turnScope
+          },
+          stop: { turnId: command.turnId, endedAt: ended.completedAt },
+          ...(carried.failureShown
+            ? {
+                unlessItemId: agentJournalItemKey(
+                  codexTerminalRowIdentity(ended.threadId, providerTurnId)
+                )
+              }
+            : {})
+        }
+      : null
+    const mutations: JournalLifecycleIdentityMutationInput[] = [
       {
         kind: 'item',
         identity: command.identity,
@@ -129,11 +196,13 @@ export class CodexJournalCommandTurn {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       }
     ]
+    return { failure, mutations }
   }
 
-  // Suppress duplicate failure rows after Codex's own terminal error frame.
-  errorShown(params: unknown): void {
-    const providerTurnId = readCodexTurnId(params)
+  // Codex's own terminal error frame was admitted: the command's row only repeats it. A frame
+  // that names no turn belongs to the active one, as its row does.
+  errorShown(params: unknown, activeTurnId: string | null = null): void {
+    const providerTurnId = readCodexTurnId(params) ?? activeTurnId
     const carried = providerTurnId ? this.carried.get(providerTurnId) : undefined
     // Retried stream errors do not end the command.
     if (carried && readCodexJournalRecord(params).willRetry !== true) {

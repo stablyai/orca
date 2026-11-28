@@ -59,6 +59,13 @@ type TimelineItemResolution =
       keepsSavedCall?: true
     }
   | { kind: 'literal'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  /** Written only where row `absentItemId` doesn't show: a repeat of what that row reports. */
+  | {
+      kind: 'literal-if-absent'
+      identity: AgentJournalItemIdentity
+      body: AgentJournalItemBody
+      absentItemId: string
+    }
   | { kind: 'acp-loss-warning'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
   | {
       kind: 'request-open'
@@ -92,11 +99,13 @@ type TimelineItemResolution =
       failureItemId: string
       write: AgentJournalTurnRowWrite
     }
-  /** A person's Stop at the write position picks one of a provider result's two readings. */
+  /** A person's Stop at the write position picks one of a provider result's two readings.
+   *  `failure`: the row reports the turn's failure, which a Stop decides only within its window. */
   | {
       kind: 'stop-decided'
       turnId: string
       endedAt: number
+      failure?: true
       ran: JournalTimelineItemResolution | null
       stopped: JournalTimelineItemResolution | null
     }
@@ -149,6 +158,10 @@ function resolveTimelineItem(
   switch (resolution.kind) {
     case 'literal':
       return resolved({ identity: resolution.identity, body: resolution.body })
+    case 'literal-if-absent':
+      return view.item(resolution.absentItemId)
+        ? nothing
+        : resolved({ identity: resolution.identity, body: resolution.body })
     case 'acp-loss-warning': {
       const identity = parseAgentJournalItemKey(agentJournalItemKey(resolution.identity))
       const key =
@@ -229,7 +242,9 @@ function resolveTimelineItem(
         )
       )
     case 'stop-decided': {
-      const stopped = view.stopDecidesTurn(resolution.turnId, resolution.endedAt)
+      const stopped = resolution.failure
+        ? view.stopDecidesFailure(resolution.turnId, resolution.endedAt)
+        : view.stopDecidesTurn(resolution.turnId, resolution.endedAt)
       const chosen = stopped ? resolution.stopped : resolution.ran
       const result = chosen
         ? resolveJournalTimelineItem(view, chosen, placement, reservedBytes)

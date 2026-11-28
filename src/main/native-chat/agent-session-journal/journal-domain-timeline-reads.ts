@@ -4,6 +4,7 @@ import type { JournalTimelineView } from './writing/journal-timeline-view'
 import { isUnsettledJournalTimelineItem } from './writing/journal-timeline-view'
 import {
   journalDomainLatestStop,
+  journalDomainStopDecidesFailure,
   journalDomainStopDecidesTurn
 } from './journal-domain-item-normalization'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
@@ -115,6 +116,16 @@ export function journalDomainTimelineReads(
       ),
     unsettled,
     stopDecidesTurn: (turnId, endedAt) =>
-      journalDomainStopDecidesTurn(journalDomainLatestStop(db, target, stopSettle), turnId, endedAt)
+      journalDomainStopDecidesTurn(
+        journalDomainLatestStop(db, target, stopSettle),
+        turnId,
+        endedAt
+      ),
+    stopDecidesFailure: (turnId, endedAt) =>
+      journalDomainStopDecidesFailure(
+        journalDomainLatestStop(db, target, stopSettle),
+        turnId,
+        endedAt
+      )
   }
 }

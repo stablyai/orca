@@ -19,7 +19,7 @@ import {
   type CodexJournalTranslationAdmission
 } from './codex-structured-journal-contracts'
 import { MAX_CODEX_GENERIC_TURN_BUCKETS } from './codex-structured-journal-limits'
-import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { CodexFrameRow } from './codex-frame-row-write'
 
 type ErrorInfo = { error: string; status?: number }
 type TerminalSignature = { code?: string; message?: string; status?: number }
@@ -69,10 +69,12 @@ export class CodexTurnFailures {
       account?: () => AgentSessionAccountKind | undefined
       localClock?: boolean
       activeTurn: (threadId: string) => string | null
+      /** When the frame being handled was received. */
+      receivedAt?: () => number
       append: (
         threadId: string,
         payload: unknown,
-        frame: Omit<UnhandledProviderFrameJournalItem, 'body'> & { body: AgentJournalStatusItem }
+        frame: Omit<UnhandledProviderFrameJournalItem, 'body'> & CodexFrameRow
       ) => CodexJournalTranslationAdmission
     }
   ) {
@@ -83,7 +85,8 @@ export class CodexTurnFailures {
     kind: string,
     payload: unknown,
     errorPayload: unknown,
-    threadId: string
+    threadId: string,
+    ifAbsent?: true
   ): CodexJournalTranslationAdmission {
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload, undefined, {
       reportsFailure: true
@@ -102,7 +105,9 @@ export class CodexTurnFailures {
           agentName: 'Codex',
           surface: 'row'
         })
-      }
+      },
+      ...this.receipt(),
+      ...(ifAbsent ? { ifAbsent } : {})
     })
     if (admission.accepted) {
       this.admittedTerminal(
@@ -126,9 +131,15 @@ export class CodexTurnFailures {
       return CODEX_JOURNAL_ADMITTED
     }
     const errorPayload = { turnId, error: turn.error, willRetry: false }
-    const admission = this.repeatsTerminal(errorPayload, threadId, turnId)
-      ? CODEX_JOURNAL_ADMITTED
-      : this.appendTerminal('notification:turn/completed', payload, errorPayload, threadId)
+    // A repeat of the error an earlier row of this turn reported adds no row, except where a
+    // person's Stop dropped that row: the writer decides, at this end's own receipt time.
+    const admission = this.appendTerminal(
+      'notification:turn/completed',
+      payload,
+      errorPayload,
+      threadId,
+      this.repeatsTerminal(errorPayload, threadId, turnId) ? true : undefined
+    )
     if (admission.accepted) {
       onShown(turnId)
     }
@@ -201,6 +212,11 @@ export class CodexTurnFailures {
       default:
         return agentSessionFailureFact('providerResponseFailed')
     }
+  }
+
+  private receipt(): { observedAt?: number } {
+    const observedAt = this.deps.receivedAt?.()
+    return observedAt === undefined ? {} : { observedAt }
   }
 
   private repeatsTerminal(payload: unknown, threadId: string, turnId: string): boolean {

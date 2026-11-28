@@ -1,11 +1,14 @@
 import { memoryJournalMap } from '../journal-memory-collections'
 import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 // All turn-end writers apply this rule on the journal lane. Session-ending Stop bindings are memory-only
-// and disappear on relaunch; provider verdicts and ends observed before Stop retain their meaning.
+// and disappear on relaunch; success verdicts, ends observed before Stop, and failures long after it
+// retain their meaning.
 
 import type {
   AgentJournalItemBody,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalTurnItem,
+  AgentJournalTurnLifecycle
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -121,21 +124,103 @@ export function beginJournalStopSettle(
   return stop.settle
 }
 
-/** Preserve provider verdicts and already-ended turns; otherwise apply the latest matching personal Stop. */
+/** How soon after a person's Stop a provider's failure for that turn is the Stop's: an interrupt's
+ *  round trip and Codex's stop grace fit well inside it; a crash later than this is its own. */
+export const STOP_DECIDES_FAILURE_MS = 30_000
+
+/** A turn end the Stop rule may decide: an end with no verdict, or a provider failure (an
+ *  interrupt that aborts a request can surface as one, as Claude's error results do). */
+export function turnEndStopMayDecide(body: AgentJournalItemBody): boolean {
+  return (
+    body.kind === 'turn' &&
+    ((body.state === 'interrupted' && body.outcome === undefined) || body.outcome === 'failure')
+  )
+}
+
+/** A failure the person's Stop owning this turn caused: it ended at or after that Stop and within
+ *  the window after it. The one rule for a turn's failed end and for its error rows. */
+export function personStopDecidesFailure(
+  state: TurnEndState,
+  turnId: string,
+  endedAt: number | undefined
+): boolean {
+  const stop = state.queuePauseMarks.latestStop
+  return (
+    stop !== null &&
+    endedAt !== undefined &&
+    endedAt - stop.event.at <= STOP_DECIDES_FAILURE_MS &&
+    stopEndsTurnAsCancellation(state, turnId, endedAt)
+  )
+}
+
+// A restore may keep an end's clock only to the second.
+const SECOND_MS = 1_000
+const toSecond = (at: number, round: (value: number) => number) => round(at / SECOND_MS) * SECOND_MS
+
+/** The stopped end's own clock as a restore kept it, to the second: a whole second the stopped end
+ *  rounds to, at the Stop's second or later and within its window. */
+// Doesn't check the Stop's turn or that previousAt follows the Stop: keepsStoppedEnd calls it only
+// after a cancellation of this same turn, which that Stop already decided.
+function restoredStoppedEnd(state: TurnEndState, previousAt: number, at: number): boolean {
+  const stop = state.queuePauseMarks.latestStop
+  return (
+    stop !== null &&
+    stopIsAPersons(stop.event.reason) &&
+    at % SECOND_MS === 0 &&
+    (toSecond(previousAt, Math.floor) === at || toSecond(previousAt, Math.round) === at) &&
+    at >= toSecond(stop.event.at, Math.floor) &&
+    at - stop.event.at <= STOP_DECIDES_FAILURE_MS
+  )
+}
+
+/** The same end of a turn a Stop already decided, written again: its own write at the same time,
+ *  or a failure for it within that Stop's window (a provider's completion after the Stop's own
+ *  settle, a duplicate completion), or one whose clock a restore lost or rounded. */
+function keepsStoppedEnd(
+  state: TurnEndState,
+  previous: AgentJournalTurnLifecycle,
+  body: AgentJournalTurnItem
+): boolean {
+  if (previous.outcome !== 'cancellation' || previous.turnId !== body.turnId) {
+    return false
+  }
+  if (previous.completedAt === body.completedAt) {
+    return true
+  }
+  if (body.outcome !== 'failure') {
+    return false
+  }
+  if (body.completedAt === undefined) {
+    return true
+  }
+  return (
+    personStopDecidesFailure(state, body.turnId, body.completedAt) ||
+    (previous.completedAt !== undefined &&
+      restoredStoppedEnd(state, previous.completedAt, body.completedAt))
+  )
+}
+
+/** Preserve success verdicts and already-ended turns; otherwise apply the latest matching personal
+ *  Stop. A failure reads as the Stop's only when it ended soon after that Stop. */
 export function turnEndAfterStop(
   state: TurnEndState,
   itemId: string,
   body: AgentJournalItemBody
 ): AgentJournalItemBody {
-  if (body.kind !== 'turn' || body.state !== 'interrupted' || body.outcome !== undefined) {
+  if (body.kind !== 'turn' || !turnEndStopMayDecide(body)) {
     return body
   }
   const previous = readAgentJournalTurn(state.items.get(itemId)?.body)
-  // An already-written end predates this Stop.
   if (previous && previous.state !== 'running' && previous.state !== 'unverifiable') {
-    return body
+    // A later revision of the end the Stop already decided keeps that verdict; any other
+    // already-written end predates this Stop.
+    return keepsStoppedEnd(state, previous, body)
+      ? { ...body, state: previous.state, outcome: 'cancellation' }
+      : body
   }
-  return stopEndsTurnAsCancellation(state, body.turnId, body.completedAt)
-    ? { ...body, outcome: 'cancellation' }
-    : body
+  const stopped =
+    body.outcome === 'failure'
+      ? personStopDecidesFailure(state, body.turnId, body.completedAt)
+      : stopEndsTurnAsCancellation(state, body.turnId, body.completedAt)
+  return stopped ? { ...body, state: 'interrupted', outcome: 'cancellation' } : body
 }

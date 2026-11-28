@@ -59,12 +59,14 @@ export type CodexStructuredLaunch = CodexBotLaunchOptions & {
   appBoundGrants?: true
 }
 
-/** Boundaries retain host receipt time through buffering and retries. */
+/** Boundaries, and the error frame a person's Stop judges against its turn's end, retain host
+ *  receipt time through buffering and retries. */
 export const CODEX_RECEIPT_TIMED_METHODS: ReadonlySet<string> = new Set([
   'turn/started',
   'turn/completed',
   'item/started',
-  'item/completed'
+  'item/completed',
+  'error'
 ])
 
 export type CodexStructuredSessionEvent =

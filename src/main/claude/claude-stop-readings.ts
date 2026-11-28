@@ -4,8 +4,9 @@ import type {
   StructuredAgentSessionRevisionOptions
 } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 
-/** The turn a person's Stop may have decided, and when the provider ended it. */
-export type ClaudeStopCheck = { turnId: string; endedAt: number }
+/** The turn a person's Stop may have decided, and when the provider ended it. `failure`: the
+ *  provider reported an error, which the Stop decides only within its window. */
+export type ClaudeStopCheck = { turnId: string; endedAt: number; failure?: true }
 
 export type ClaudeStopReadings = {
   ran: JournalTimelineItemResolution | null

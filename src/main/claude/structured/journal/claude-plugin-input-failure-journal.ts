@@ -37,7 +37,8 @@ export function journalClaudePluginInputFailure({
   }
   const scope = turn.turnScope
   // A person's Stop at the write position keeps a plain ending and no failure notice.
-  const stopCheck = turn.id !== null ? { turnId: turn.id, endedAt: event.observedAt } : null
+  const stopCheck =
+    turn.id !== null ? { turnId: turn.id, endedAt: event.observedAt, failure: true as const } : null
   finish(event.observedAt, true, stopCheck)
   // Physical-exit settlement revises this same row after proof; it must not add another notice.
   const identity = {

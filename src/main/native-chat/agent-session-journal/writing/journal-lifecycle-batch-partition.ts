@@ -4,6 +4,7 @@ import {
   journalLifecycleMutationItemId
 } from './journal-lifecycle-mutation'
 import type { JournalLifecycleMutationInput } from './journal-lifecycle-mutation'
+import { turnEndStopMayDecide } from '../context-epochs/journal-stop-turn-end'
 import type {
   JournalLifecycleBatchRow,
   JournalLifecycleMutation
@@ -127,12 +128,14 @@ function sizedAsStopped(mutation: JournalLifecycleMutationInput): JournalLifecyc
   if (
     mutation.kind !== 'item' ||
     mutation.body.kind !== 'turn' ||
-    mutation.body.state !== 'interrupted' ||
-    mutation.body.outcome !== undefined
+    !turnEndStopMayDecide(mutation.body)
   ) {
     return mutation
   }
-  return { ...mutation, body: { ...mutation.body, outcome: 'cancellation' } }
+  return {
+    ...mutation,
+    body: { ...mutation.body, state: 'interrupted', outcome: 'cancellation' }
+  }
 }
 
 function toLifecycleMutationRow(mutation: JournalLifecycleMutationInput): JournalLifecycleMutation {
