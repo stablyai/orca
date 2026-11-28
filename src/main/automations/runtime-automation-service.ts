@@ -1,33 +1,20 @@
 import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
-import { observeAutomationChatRun } from './observation/runtime-chat-run-observer'
 import { readAutomationRunReceipt } from './launch/automation-run-receipt'
-import { publishedLaunchTarget } from './launch/automation-agent-run-result'
-import { launchAutomationChatAgent } from './launch/automation-chat-agent-launch'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AutomationService } from './automation-service'
-import {
-  createRunTerminalRetention,
-  type RunTerminalRetention
-} from './terminal-retention/run-terminal-retention'
+import { createRuntimeRunTerminalRetention } from './terminal-retention/runtime-run-terminal-retention'
 import {
   getTuiAgentDetectCommands,
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { launchAutomationTerminalAgent, runOwnHandle } from './launch/automation-terminal-launch'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   createRuntimeAutomationRunTerminalObserver
 } from './observation/runtime-terminal-run-observer'
-import { closeEarlierHookReviewRunTerminals } from './terminal-retention/hook-review-blocked-run-terminals'
 import { bindBotAutomations, botAutomationServiceOptions } from './bot-automation-service-wiring'
-import {
-  runPaneKeepsRunPty,
-  runTabWasFocused
-} from './terminal-retention/run-terminal-workspace-session'
-import { automationRunSetupSkip } from './launch/automation-run-setup-skip'
 import { automationSystemSettled } from './dispatch/automation-wake-settle'
 
 const MAX_REMEMBERED_LAUNCHES = 256
@@ -103,7 +90,10 @@ export function createRuntimeAutomationService(input: {
             }
             const target =
               receipt.kind === 'terminal'
-                ? publishedLaunchTarget(runtime, receipt.launch)
+                ? (await import('./launch/automation-agent-run-result')).publishedLaunchTarget(
+                    runtime,
+                    receipt.launch
+                  )
                 : {
                     workspaceId: receipt.workspaceId,
                     sessionKind: 'chat' as const,
@@ -133,6 +123,8 @@ export function createRuntimeAutomationService(input: {
               const sentByRun = Boolean(
                 store.listAutomations().find((entry) => entry.id === run?.automationId)?.bot
               )
+              const { observeAutomationChatRun } =
+                await import('./observation/runtime-chat-run-observer')
               return await observeAutomationChatRun(runtime, run, options.signal, sentByRun)
             } catch (error) {
               if (options.signal.aborted) {
@@ -154,12 +146,14 @@ export function createRuntimeAutomationService(input: {
         const observation = await observer.observeCompletion(handle, { ...options, run })
         if (options.run && observation.error === AGENT_HOOKS_REVIEW_BLOCKED_ERROR) {
           const markDispatchResult = service.markDispatchResult.bind(service)
-          void closeEarlierHookReviewRunTerminals(
-            { store, runtime, markDispatchResult },
-            options.run
-          ).catch((error: unknown) => {
-            console.warn('[automations] hook-review tab cleanup failed:', error)
-          })
+          const blockedRun = options.run
+          void import('./terminal-retention/hook-review-blocked-run-terminals')
+            .then(({ closeEarlierHookReviewRunTerminals }) =>
+              closeEarlierHookReviewRunTerminals({ store, runtime, markDispatchResult }, blockedRun)
+            )
+            .catch((error: unknown) => {
+              console.warn('[automations] hook-review tab cleanup failed:', error)
+            })
         }
         return observation
       }
@@ -169,6 +163,10 @@ export function createRuntimeAutomationService(input: {
     allowRemoteHostScheduling: input.allowRemoteHostScheduling,
     ...botAutomationServiceOptions(runtime),
     chatDispatcher: async (request) => {
+      const [{ launchAutomationChatAgent }, { automationRunSetupSkip }] = await Promise.all([
+        import('./launch/automation-chat-agent-launch'),
+        import('./launch/automation-run-setup-skip')
+      ])
       const { terminalHandle, ...launched } = await launchAutomationChatAgent(runtime, {
         ...request,
         runs: store.listAutomationRuns(request.automation.id)
@@ -192,6 +190,10 @@ export function createRuntimeAutomationService(input: {
     },
     terminalLauncher: {
       launch: async (request) => {
+        const [{ launchAutomationTerminalAgent }, { automationRunSetupSkip }] = await Promise.all([
+          import('./launch/automation-terminal-launch'),
+          import('./launch/automation-run-setup-skip')
+        ])
         const { terminalHandle, ...launched } = await launchAutomationTerminalAgent(runtime, {
           ...request,
           runs: store.listAutomationRuns(request.automation.id)
@@ -222,85 +224,6 @@ export function createRuntimeAutomationService(input: {
   runtime.setAutomationService(service)
   bindBotAutomations(service, store, runtime)
   return service
-}
-
-function createRuntimeRunTerminalRetention(
-  service: AutomationService,
-  store: Store,
-  runtime: OrcaRuntimeService
-): RunTerminalRetention {
-  return createRunTerminalRetention({
-    listRuns: () => store.listAutomationRuns(),
-    terminalClientUse: (run) => {
-      if (runTabWasFocused(runtime, run)) {
-        return 'used'
-      }
-      return run.terminalPtyId ? runtime.readTerminalClientUse(run.terminalPtyId) : 'unknown'
-    },
-    runTerminalAlive: (run) => runOwnHandle(runtime, run) !== null,
-    runPaneKept: (run) => runPaneKeepsRunPty(runtime, run),
-    shellAloneAtPrompt: (run) =>
-      run.terminalPtyId
-        ? runtime.confirmTerminalShellAlone(run.terminalPtyId)
-        : Promise.resolve(false),
-    closeRunTerminal: async (run) => {
-      const handle = runOwnHandle(runtime, run)
-      if (!handle) {
-        return false
-      }
-      // Preserve user-created splits in the same tab.
-      await runtime.closeTerminal(handle)
-      return true
-    },
-    // Shared workspaces must close run panes rather than accumulate sleeping tabs.
-    runOwnsWorkspace: (run) => {
-      const provenance = run.workspaceId
-        ? store.getWorktreeMeta(run.workspaceId)?.automationProvenance
-        : undefined
-      // Why: a client-origin label names another owner's run, never one of this host's.
-      return provenance?.origin !== 'client' && provenance?.automationRunId === run.id
-    },
-    sleepRunWorkspace: async (run) => {
-      const ptyId = run.terminalPtyId
-      if (!run.workspaceId || !ptyId) {
-        return false
-      }
-      try {
-        // Sleep only this PTY, preserving other live terminals and the agent resume state.
-        const sleep = await runtime.sleepTerminalsForWorktree(`id:${run.workspaceId}`, {
-          soleLivePtyId: ptyId
-        })
-        // A retry may find no live PTYs if an earlier sleep stopped the process before failing.
-        const slept =
-          sleep.livePtyIds.length === 0 ||
-          (sleep.stoppedPtyIds.includes(ptyId) && !sleep.remainingLivePtyIds?.includes(ptyId))
-        if (!slept) {
-          return false
-        }
-      } catch (error) {
-        console.error('[automations] could not sleep a run workspace:', error)
-        return false
-      }
-      // Preserve tab and pane keys for resuming the slept agent.
-      await service.markDispatchResult({ runId: run.id, status: run.status, terminalPtyId: null })
-      return true
-    },
-    inAutomationLane: (automationId, operation) =>
-      service.runInAutomationLane(automationId, operation),
-    forgetRunTerminal: async (run, keepPane) => {
-      // An idle shell proves a dispatched run exited without a completion result.
-      const unfinished = run.status === 'dispatched'
-      await service.markDispatchResult({
-        runId: run.id,
-        status: unfinished ? 'dispatch_failed' : run.status,
-        error: unfinished
-          ? (run.error ?? 'The agent exited without reporting completion.')
-          : run.error,
-        ...(keepPane ? {} : { terminalSessionId: null, terminalPaneKey: null }),
-        terminalPtyId: null
-      })
-    }
-  })
 }
 
 function automationAgentCommands(agentId: string | undefined): string[] {

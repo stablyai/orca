@@ -4,7 +4,6 @@ import {
   configureDesktopCloudServices
 } from '../../runtime/construction/desktop-workspace-services'
 import { setBeforeRuntimeEnvironmentRemoval } from '../../ipc/runtime-environments/catalog/runtime-environment-removal-hooks'
-import { settlePairedServerAsksOnRemoval } from '../../runtime/orchestration/federation/paired-server-asks/paired-server-ask-removal'
 import { wireRecipeWorkspaceRemoval } from '../../ephemeral-vm/recipe-workspace-removal-wiring'
 import { wireGitHubIssueLinkTitleFill } from '../../github/workspace-links/github-issue-link-title-wiring'
 import {
@@ -25,9 +24,6 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import type { Store } from '../../persistence/loading-store/store'
 import type { StatsCollector } from '../../stats/collector'
 import type { DesktopCore } from '../../core-desktop/desktop-core'
-import { codexAiVaultSessionResumePreparation } from '../../codex/history/resume/codex-ai-vault-session-resume'
-import { prepareCodexPinnedLaunchHome } from '../agent-accounts/codex-session-resume-launch'
-import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { agentHookRuntimeDeps } from '../../agent-hooks/runtime/agent-hook-runtime-deps'
 import { getDaemonProvider } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
@@ -36,11 +32,7 @@ import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-envir
 import { trackRuntimeEnvironmentVerifiedTransitions } from '../../ipc/runtime-environments/status/runtime-environment-verified-transitions'
 import { onRuntimeEnvironmentStatusPublished } from '../../ipc/runtime-environments/status/runtime-environment-status-owner'
 import { installWslOrcadAccountShim } from '../wsl-startup/wsl-orcad-account-env-wiring'
-import {
-  codexStructuredLaunchHomeResolvers,
-  prepareCodexRuntimeHomeForLaunch
-} from '../agent-accounts/codex-launch-preparation'
-import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
+import { codexStructuredLaunchHomeResolvers } from '../agent-accounts/codex-launch-preparation'
 import type { RuntimeDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { BotShareClient } from '../../bots/sharing/bot-share-client'
 import { skillPackageDownloadOrigins } from '../../skills/runtime-transfer/skill-client-mediated-transfer'
@@ -104,11 +96,24 @@ export function initializeMainProcessRuntime(
     // Provide managed Codex homes here for desktop and headless session discovery; core IPC registration is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       core.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
-    prepareAiVaultSessionResume: codexAiVaultSessionResumePreparation(() => ({
-      runtimeHome: core.codexRuntimeHome,
-      systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
-      preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
-    })),
+    // Adoption passes its native system home as a second argument; forward it or the
+    // preparation would silently fall back to the settings-resolved source home.
+    prepareAiVaultSessionResume: async (request, nativeSystemHomePath?: string) => {
+      const [
+        { codexAiVaultSessionResumePreparation },
+        { resolveHostCodexSessionSourceHome },
+        { prepareCodexPinnedLaunchHome }
+      ] = await Promise.all([
+        import('../../codex/history/resume/codex-ai-vault-session-resume'),
+        import('../../codex/history/rollouts/codex-session-source-home'),
+        import('../agent-accounts/codex-session-resume-launch')
+      ])
+      return codexAiVaultSessionResumePreparation(() => ({
+        runtimeHome: core.codexRuntimeHome,
+        systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+        preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
+      }))(request, nativeSystemHomePath)
+    },
     ...codexStructuredLaunchHomeResolvers,
     prepareCodexCatalogProbeHome: (homePath) =>
       core.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
@@ -163,9 +168,11 @@ export function initializeMainProcessRuntime(
   runtime.rehydrateClientHostedBrowserPages()
   deps.attachBrowserHost(runtime)
   runtime.startupWorkerAuthority.begin()
-  setBeforeRuntimeEnvironmentRemoval((environmentId) =>
-    settlePairedServerAsksOnRemoval(runtime, environmentId)
-  )
+  setBeforeRuntimeEnvironmentRemoval(async (environmentId) => {
+    const { settlePairedServerAsksOnRemoval } =
+      await import('../../runtime/orchestration/federation/paired-server-asks/paired-server-ask-removal')
+    return settlePairedServerAsksOnRemoval(runtime, environmentId)
+  })
   return runtime
 }
 
@@ -194,8 +201,16 @@ export function configureRuntimeServices(
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.
-    prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+    prepareForCodexLaunch: async (target) => {
+      const { prepareCodexRuntimeHomeForLaunch } =
+        await import('../agent-accounts/codex-launch-preparation')
+      return prepareCodexRuntimeHomeForLaunch(target)
+    },
     prepareForClaudeLaunch: (target) => core.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
-    resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
+    resolveBaseEnvironment: async () => {
+      const { resolveHostAgentBaseEnvironment } =
+        await import('../../runtime/agent-session/environment/structured-agent-shell-environment')
+      return resolveHostAgentBaseEnvironment(store.getSettings())
+    }
   })
 }

@@ -1,7 +1,6 @@
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { LegacyWorkerTerminalRecoveryPlan } from './release/orchestration-legacy-worker-terminal-recovery'
-import { runLegacyWorkerTerminalRecovery } from './runtime-legacy-worker-terminal-recovery-runner'
 import type {
   LegacyWorkerRecoveryOptions,
   LegacyWorkerRecoveryPorts,
@@ -69,6 +68,11 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
         }
         if (!options.retry) {
           this.cancelScope(options.connectionId ? `ssh:${options.connectionId}` : 'local')
+        }
+        const { runLegacyWorkerTerminalRecovery } =
+          await import('./runtime-legacy-worker-terminal-recovery-runner')
+        if (this.stopped) {
+          throw new Error('worker_terminal_recovery_stopped')
         }
         resolveResult(await runLegacyWorkerTerminalRecovery(this, this.ports, options))
       } catch (error) {

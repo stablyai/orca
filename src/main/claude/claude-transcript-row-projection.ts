@@ -8,7 +8,7 @@ import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/a
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionItemAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
-import { HISTORY_CATCH_UP_MAX_OPERATIONS } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import { HISTORY_CATCH_UP_MAX_IMPORT_ROWS } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up-batches'
 import { claudeRestoredItemBody } from './transcripts/claude-transcript-item-reader'
 
 /** Resolve translator proposals against the bounded saved rows before admitting the catch-up. */
@@ -59,7 +59,8 @@ export function createClaudeTranscriptRowProjection(input: {
       ...journalLifecycleItemMutation({ ...options, turnScope, observedAt }, identity, body),
       ...(body.kind === 'message' && body.role === 'user' ? { echoOf: null } : {})
     })
-    if (mutations.size > HISTORY_CATCH_UP_MAX_OPERATIONS) {
+    // Split into commits at finish; this bounds what one import holds.
+    if (mutations.size > HISTORY_CATCH_UP_MAX_IMPORT_ROWS) {
       throw new Error('too-large')
     }
     return { accepted: true } as const

@@ -13,6 +13,7 @@ import { installPluginResidentWorkerWarmer } from '../workers/worker-admission/p
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
 import type { DispatcherOptions } from '../../runtime/rpc/dispatcher'
+import { DEFAULT_RPC_DISPATCH_CONFIG } from '../../runtime/rpc/methods/eager-rpc-method-registry'
 import type { PluginRuntimeRpc } from '../workers/host-api/plugin-host-runtime-call'
 import {
   pluginWorkspaceTerminal,
@@ -94,10 +95,19 @@ export function bindPluginRuntime(
   service: PluginService,
   runtime: OrcaRuntimeService,
   hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] },
-  methods: DispatcherOptions['methods']
+  methodsOrConfig:
+    | DispatcherOptions['methods']
+    | Pick<DispatcherOptions, 'methods' | 'lazyGroups'> = DEFAULT_RPC_DISPATCH_CONFIG,
+  lazyGroups?: DispatcherOptions['lazyGroups']
 ): PluginRuntimeDelegate {
   const statuses = () => hookServer.getStatusSnapshot()
-  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime, methods))
+  const resolved =
+    'methods' in methodsOrConfig ? methodsOrConfig : { methods: methodsOrConfig, lazyGroups }
+  const delegate = pluginRuntimeDelegate(
+    runtime,
+    statuses,
+    pluginRuntimeRpc(runtime, resolved.methods, resolved.lazyGroups)
+  )
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
   installPluginOpenedTerminalPruning(service)

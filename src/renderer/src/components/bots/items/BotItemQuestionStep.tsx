@@ -76,26 +76,27 @@ export function BotItemChipWords({ reply }: { reply: BotItemQuickReply }): React
   )
 }
 
-/** "Question → answer", muted: an answered line, or answers held for an ask the agent no longer waits
- *  on ("not sent yet"), which go into the comment box on click. */
+/** An answer's Markdown on its line: its first paragraph runs on after the arrow. */
+const ANSWER_MARKDOWN = 'contents text-foreground/72 [&>p:first-child]:inline'
+
+/** "Question → answer", muted: an answered line, its own words drawn as a comment is (`markdown`), or
+ *  answers held for an ask the agent no longer waits on ("not sent yet"), which go into the comment
+ *  box on click. */
 export function BotItemAnswerLine({
   question,
   words,
+  markdown,
   onClick
 }: {
   question: string
   words: string
+  markdown?: boolean
   onClick?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const content = (
-    <>
-      {botItemQuestionLine(question)} →{' '}
-      <span className="text-foreground/72 [overflow-wrap:anywhere]">{words}</span>
-      {onClick ? <> · {t('bots.items.ask.notSentYet', 'not sent yet')}</> : null}
-    </>
-  )
   const line = 'block w-full text-left text-[13px] leading-[19px] text-muted-foreground'
+  const lead = `${botItemQuestionLine(question)} → `
+  const answerClass = 'text-foreground/72 [overflow-wrap:anywhere]'
   return onClick ? (
     <button
       type="button"
@@ -105,10 +106,20 @@ export function BotItemAnswerLine({
       )}
       onClick={onClick}
     >
-      {content}
+      {lead}
+      <span className={answerClass}>{words}</span>
+      {' · '}
+      {t('bots.items.ask.notSentYet', 'not sent yet')}
     </button>
   ) : (
-    <p className={cn(line, 'whitespace-pre-line')}>{content}</p>
+    <div className={line}>
+      {lead}
+      {markdown ? (
+        <BotItemMarkdown text={words} className={ANSWER_MARKDOWN} />
+      ) : (
+        <span className={cn(answerClass, 'whitespace-pre-line')}>{words}</span>
+      )}
+    </div>
   )
 }
 

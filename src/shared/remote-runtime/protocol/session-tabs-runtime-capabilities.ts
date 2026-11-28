@@ -52,6 +52,12 @@ export const SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY =
 // sleeping panes; older hosts lack the method, so the item stays hidden there.
 export const TERMINAL_AGENT_ID_RUNTIME_CAPABILITY = 'terminal.agent-id.v1' as const
 
+// A phone continues a terminal's conversation in chat only on hosts that let it inspect the pane's
+// process, close the exact terminal it inspected (session.tabs.close `terminal`), and preflight the
+// chat whatever the host's launch default; older hosts strip `terminal` and close whatever is there.
+export const SESSION_TABS_CONTINUE_TERMINAL_IN_CHAT_RUNTIME_CAPABILITY =
+  'session-tabs.continue-terminal-in-chat.v1' as const
+
 export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
@@ -60,6 +66,7 @@ export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY,
+  SESSION_TABS_CONTINUE_TERMINAL_IN_CHAT_RUNTIME_CAPABILITY,
   SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY,
   SESSION_TABS_PLACEHOLDER_SETTLES_RUNTIME_CAPABILITY,
   SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY,

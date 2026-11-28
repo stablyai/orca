@@ -1,10 +1,8 @@
-import { powerMonitor } from 'electron'
+import { ipcMain, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import { installConnectorHost } from '../../connector-cloud/connector-host-install'
-import { registerGoogleSetupHandlers } from '../../ipc/google-setup'
-import { registerSlackHandOffHandlers } from '../../ipc/slack-hand-off'
-import { registerAvatarGenerationHandlers } from '../../avatar-generation/avatar-generation-ipc'
+import { registerLazyIpcHandleGroup } from '../../ipc/lazy-ipc-handle-group'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { installGoogleSetupHostWatch } from '../../google/google-setup-host-watch'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
@@ -37,9 +35,38 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
     return
   }
   powerMonitor.on('resume', host.refreshLinearLogins)
-  registerGoogleSetupHandlers()
-  registerSlackHandOffHandlers(() => runtime.getConnectorCloud())
-  registerAvatarGenerationHandlers(() => runtime.getCommitMessageAgentEnvironmentResolvers())
+  const googleSetupChannels = [
+    'googleSetup:pickClientFile',
+    'googleSetup:saveAppFile',
+    'googleSetup:watchDownloads',
+    'googleSetup:stopWatchingDownloads',
+    'googleSetup:findDownloadedKey'
+  ] as const
+  for (const channel of googleSetupChannels) {
+    ipcMain.removeHandler(channel)
+  }
+  registerLazyIpcHandleGroup(googleSetupChannels, async (ipc) => {
+    const { registerGoogleSetupHandlers } = await import('../../ipc/google-setup')
+    registerGoogleSetupHandlers(ipc)
+  })
+  ipcMain.removeHandler('slackHandOff:redeem')
+  registerLazyIpcHandleGroup(['slackHandOff:redeem'], async (ipc) => {
+    const { registerSlackHandOffHandlers } = await import('../../ipc/slack-hand-off')
+    registerSlackHandOffHandlers(() => runtime.getConnectorCloud(), ipc)
+  })
+  const avatarGenerationChannels = [
+    'avatarGeneration:capability',
+    'avatarGeneration:generate',
+    'avatarGeneration:cancel'
+  ] as const
+  for (const channel of avatarGenerationChannels) {
+    ipcMain.removeHandler(channel)
+  }
+  registerLazyIpcHandleGroup(avatarGenerationChannels, async (ipc) => {
+    const { registerAvatarGenerationHandlers } =
+      await import('../../avatar-generation/avatar-generation-ipc')
+    registerAvatarGenerationHandlers(() => runtime.getCommitMessageAgentEnvironmentResolvers(), ipc)
+  })
 }
 
 /** This process's connector, for the startup, auth and quit hooks. */

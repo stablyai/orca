@@ -20,18 +20,12 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import { getProjectHostSetupForRepo } from '../../../shared/project/host-setup/project-host-setup-lookup'
-import {
-  linkImportedFolderToProject,
-  type RepositoryMetadataOwner
-} from '../../workspaces/catalog/imported-folder-project-link'
+import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { runWorktreeChangeInvalidators } from '../../ipc/worktrees/listing/worktree-change-invalidators'
-import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
-import { updateProjectHostSetupWithProvenKind } from '../../workspaces/catalog/folder-repo-git-conversion'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { readAllWorktreeMetaForRepo } from '../../persistence/host-qualified-worktree-meta'
-import { readCurrentGitRemoteIdentity } from '../../workspaces/catalog/repo-git-remote-identity'
 import {
   countRepoWorkspacesWithMetadata,
   describeProjectRemovalRefusal
@@ -139,7 +133,9 @@ export class RuntimeProjectHostSetupController {
     const folderRemote =
       repoWasCreated && repo.gitRemoteIdentity !== undefined
         ? repo
-        : await readCurrentGitRemoteIdentity(repo)
+        : await (
+            await import('../../workspaces/catalog/repo-git-remote-identity')
+          ).readCurrentGitRemoteIdentity(repo)
     return this.completeSetup(args, repo, repoWasCreated, folderRemote)
   }
 
@@ -160,7 +156,11 @@ export class RuntimeProjectHostSetupController {
       repo,
       !knownRepoIds.has(repo.id),
       // Fresh-clone remote is unprobed; Git-remote linking needs that fact.
-      repo.gitRemoteIdentity === undefined ? await readCurrentGitRemoteIdentity(repo) : repo
+      repo.gitRemoteIdentity === undefined
+        ? await (
+            await import('../../workspaces/catalog/repo-git-remote-identity')
+          ).readCurrentGitRemoteIdentity(repo)
+        : repo
     )
   }
 
@@ -180,6 +180,8 @@ export class RuntimeProjectHostSetupController {
     updateProjectHostSetup: NonNullable<RuntimeStore['updateProjectHostSetup']>,
     args: ProjectHostSetupUpdateArgs
   ): Promise<ProjectHostSetupUpdateResult> {
+    const { updateProjectHostSetupWithProvenKind } =
+      await import('../../workspaces/catalog/folder-repo-git-conversion')
     const result = await updateProjectHostSetupWithProvenKind(
       store,
       (setupArgs) => {
@@ -193,6 +195,8 @@ export class RuntimeProjectHostSetupController {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
     if ('worktreeBasePath' in args.updates && result.repo) {
+      const { prepareLocalWorktreeRootForRepo } =
+        await import('../../workspaces/creation/worktree-root-preparation')
       void prepareLocalWorktreeRootForRepo(store, result.repo)
       invalidateAuthorizedRootsCache()
     }
@@ -291,6 +295,8 @@ export class RuntimeProjectHostSetupController {
     initialRepo: Repo,
     folderRemote: Pick<Repo, 'gitRemoteIdentity'>
   ): Promise<ProjectHostSetupResult> {
+    const { linkImportedFolderToProject } =
+      await import('../../workspaces/catalog/imported-folder-project-link')
     const repo = await linkImportedFolderToProject(
       this.deps.getStore,
       initialRepo,

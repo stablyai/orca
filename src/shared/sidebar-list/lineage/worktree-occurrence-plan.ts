@@ -83,16 +83,13 @@ export function buildWorktreeOccurrencePlan<
   duplicatePinned: boolean
   sectionsOf: (placement: LineagePlacementRows<Row>) => readonly Section[]
   owningSectionOf?: (row: Row) => { key: string; label: string }
+  owningSectionKeyOf?: (row: Row) => string
   projectIdOf?: (row: Row) => string
 }): WorktreeOccurrencePlan<Row> & { sections: readonly Section[] } {
   const { identityOf, childrenByParentIdentity, owningSectionOf } = args
-  let ownerByIdentity: Map<string, { key: string; label: string }> | undefined
-  if (owningSectionOf) {
-    ownerByIdentity = new Map()
-    for (const row of args.rows) {
-      ownerByIdentity.set(identityOf(row), owningSectionOf(row))
-    }
-  }
+  const owningSectionKeyOf =
+    args.owningSectionKeyOf ??
+    (owningSectionOf ? (row: Row): string => owningSectionOf(row).key : undefined)
   const sections = args.sectionsOf(getLineagePlacementRows(args))
   const hasLineage = childrenByParentIdentity.size > 0
   let parentByIdentity: Map<string, string> | undefined
@@ -125,7 +122,7 @@ export function buildWorktreeOccurrencePlan<
         const occurrence: WorktreeOccurrence<Row> = {
           key: `${section.key}:${identity}`,
           row,
-          owningSectionKey: ownerByIdentity?.get(identity)?.key,
+          owningSectionKey: owningSectionKeyOf?.(row),
           sectionKey: section.key,
           placement,
           sectionPath,
@@ -175,11 +172,10 @@ export function buildWorktreeOccurrencePlan<
         }
         emitted.add(identity)
         const descendants = children.get(identity)
-        const owner = ownerByIdentity?.get(identity)
         const occurrence: WorktreeOccurrence<Row> = {
           key: `${section.key}:${identity}`,
           row: next.row,
-          owningSectionKey: owner?.key,
+          owningSectionKey: owningSectionKeyOf?.(next.row),
           sectionKey: section.key,
           placement,
           sectionPath,
@@ -220,7 +216,7 @@ export function buildWorktreeOccurrencePlan<
         const occurrence: WorktreeOccurrence<Row> = {
           key: `${section.key}:${identity}`,
           row,
-          owningSectionKey: ownerByIdentity?.get(identity)?.key,
+          owningSectionKey: owningSectionKeyOf?.(row),
           sectionKey: section.key,
           placement,
           sectionPath,

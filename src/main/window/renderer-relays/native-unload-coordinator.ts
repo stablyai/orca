@@ -177,23 +177,20 @@ export async function prepareRendererForUpdate(
   ) {
     return null
   }
-  const update = Promise.withResolvers<void>()
-  updatesInFlight.set(contents, update.promise)
-  const release = (): void => {
-    updatesInFlight.delete(contents)
-    update.resolve()
-  }
-  contents.once('destroyed', update.resolve)
+  const preparation = Promise.withResolvers<void>()
+  updatesInFlight.set(contents, preparation.promise)
+  contents.once('destroyed', preparation.resolve)
   const outcome = await coordinator.prepare('update')
+  // Close waits only for the checkpoint: the install that follows closes this window itself.
+  preparation.resolve()
+  contents.removeListener('destroyed', preparation.resolve)
   if (outcome !== 'saved') {
-    contents.removeListener('destroyed', update.resolve)
-    release()
+    updatesInFlight.delete(contents)
     return null
   }
   return () => {
     coordinator.cancelPrepared()
-    contents.removeListener('destroyed', update.resolve)
-    release()
+    updatesInFlight.delete(contents)
   }
 }
 
@@ -239,7 +236,7 @@ export async function reloadWithRendererCheckpoint(
   return reload
 }
 
-/** Close waits for an update to finish or takes over an in-flight reload. */
+/** Close waits for an update's renderer checkpoint or takes over an in-flight reload. */
 export function settleRendererPreparationBeforeClose(
   contents: WebContents
 ): Promise<void> | undefined {

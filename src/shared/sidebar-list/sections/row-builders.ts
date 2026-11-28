@@ -80,7 +80,6 @@ export function appendWorktreeRows(
     folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
   }
 ): void {
-  const lineageRanges = buildWorktreeLineageRanges(plan)
   const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
   let childIdsByParent: Map<string, string[]> | undefined
   for (const occurrence of sectionOccurrences) {
@@ -94,25 +93,27 @@ export function appendWorktreeRows(
       }
     }
   }
+  const lineageRanges = childIdsByParent ? buildWorktreeLineageRanges(plan) : undefined
   const occurrences =
     childIdsByParent && options.collapsedGroups.size > 0
       ? getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
           options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
         )
       : sectionOccurrences
-  const needsHostIdentity = Boolean(
-    options.folderPairByIdentity || options.hostContextLabelByWorktreeIdentity
-  )
+  const needsHostIdentity =
+    (options.folderPairByIdentity?.size ?? 0) > 0 ||
+    (options.hostContextLabelByWorktreeIdentity?.size ?? 0) > 0
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
     const hostIdentity = needsHostIdentity ? getWorktreeHostIdentity(worktree) : undefined
     const folderPair = hostIdentity ? options.folderPairByIdentity?.get(hostIdentity) : undefined
+    const hasChildren = occurrence.childCount > 0
     if (folderPair) {
       result.push(
         buildFolderWorkspaceRow(folderPair, options.groupDepth, occurrence, {
           collapsedGroups: options.collapsedGroups,
-          childWorktreeIds: childIdsByParent?.get(occurrence.key),
-          descendantIdentities: lineageRanges.get(occurrence.key),
+          childWorktreeIds: hasChildren ? childIdsByParent?.get(occurrence.key) : undefined,
+          descendantIdentities: hasChildren ? lineageRanges?.get(occurrence.key) : undefined,
           hostContextLabel: hostIdentity
             ? options.hostContextLabelByWorktreeIdentity?.get(hostIdentity)
             : undefined
@@ -120,8 +121,7 @@ export function appendWorktreeRows(
       )
       continue
     }
-    const lineageGroupKey =
-      occurrence.childCount > 0 ? getWorktreeLineageGroupKey(worktree) : undefined
+    const lineageGroupKey = hasChildren ? getWorktreeLineageGroupKey(worktree) : undefined
     result.push({
       type: 'item',
       occurrence,
@@ -133,8 +133,8 @@ export function appendWorktreeRows(
       groupDepth: options.groupDepth,
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
-      lineageChildWorktreeIds: childIdsByParent?.get(occurrence.key),
-      lineageDescendantIdentities: lineageRanges.get(occurrence.key),
+      lineageChildWorktreeIds: hasChildren ? childIdsByParent?.get(occurrence.key) : undefined,
+      lineageDescendantIdentities: hasChildren ? lineageRanges?.get(occurrence.key) : undefined,
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         (hostIdentity

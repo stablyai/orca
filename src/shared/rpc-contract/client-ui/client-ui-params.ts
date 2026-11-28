@@ -106,6 +106,7 @@ export const TopLevelViewSchema = lazyZodSchema(() =>
       'automations',
       'space',
       'skills',
+      'plugins',
       // Bot templates was a view before it became a dialog; an older peer can still send it.
       'botTemplates',
       'artifacts',
