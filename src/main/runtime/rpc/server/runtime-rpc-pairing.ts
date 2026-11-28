@@ -115,6 +115,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           allocateStreamId: allocateTerminalSubscriptionStreamId,
           nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent),
           sourceControlAiSettings: () => this.runtime.requireStore().getSettings(),
+          phoneConnectionMode: (deviceId) =>
+            this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
+              ? 'local-only'
+              : 'automatic',
           prepareBrowserHost: async (host) => {
             if (this.runtime.getStatus().capabilities?.includes('browser.screencast.v1')) {
               const placement = await hosts.prepareBrowserHost?.(

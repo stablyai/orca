@@ -11,6 +11,20 @@ export type OrchestrationMailboxDeliveryFlight = {
 /** A mailbox waiting behind a terminal's in-flight pointer, with the types its waiters reserve. */
 type ParkedOrchestrationMailboxDeliveries = Map<string, ReadonlySet<string> | undefined>
 
+/** Deferred deliveries of one mailbox keep the union of their reserved types when every one
+ *  reserves some; an unreserved delivery lifts the reservation, as it may type everything. */
+export function mergeDeferredReservedTypes(
+  hasPrior: boolean,
+  prior: ReadonlySet<string> | undefined,
+  reservedTypes: ReadonlySet<string> | undefined
+): Set<string> | undefined {
+  const current = reservedTypes && reservedTypes.size > 0 ? reservedTypes : undefined
+  if (!hasPrior) {
+    return current ? new Set(current) : undefined
+  }
+  return prior && current ? new Set([...prior, ...current]) : undefined
+}
+
 export class OrchestrationMailboxPointerState {
   private readonly flightsByPtyId = new Map<string, OrchestrationMailboxDeliveryFlight>()
   private readonly parkedDeliveriesByPtyId = new Map<string, ParkedOrchestrationMailboxDeliveries>()
@@ -91,15 +105,14 @@ export class OrchestrationMailboxPointerState {
   parkDelivery(ptyId: string, mailboxHandle: string, reservedTypes?: ReadonlySet<string>): void {
     const parked: ParkedOrchestrationMailboxDeliveries =
       this.parkedDeliveriesByPtyId.get(ptyId) ?? new Map()
-    const prior = parked.get(mailboxHandle)
-    const current = reservedTypes && reservedTypes.size > 0 ? reservedTypes : undefined
-    let merged: Set<string> | undefined
-    if (!parked.has(mailboxHandle)) {
-      merged = current ? new Set(current) : undefined
-    } else if (prior && current) {
-      merged = new Set([...prior, ...current])
-    }
-    parked.set(mailboxHandle, merged)
+    parked.set(
+      mailboxHandle,
+      mergeDeferredReservedTypes(
+        parked.has(mailboxHandle),
+        parked.get(mailboxHandle),
+        reservedTypes
+      )
+    )
     this.parkedDeliveriesByPtyId.set(ptyId, parked)
   }
 

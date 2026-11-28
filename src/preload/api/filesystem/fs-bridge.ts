@@ -22,7 +22,10 @@ import type {
   AgentSessionAttachmentUploadTarget
 } from '../../../shared/agent-session/agent-session-attachments'
 import type { SearchResult } from '../../../shared/file-search/code-search-types'
-import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
+import type {
+  FsChangedPayload,
+  FsWatchPausedPayload
+} from '../../../shared/file-watch/filesystem-change-event'
 import type {
   ImportItemResult,
   ResolveDroppedPathsResult
@@ -279,5 +282,11 @@ export const fsApi = {
       callback(payload)
     ipcRenderer.on('fs:changed', listener)
     return () => ipcRenderer.removeListener('fs:changed', listener)
+  },
+  onWatchPaused: (callback: (payload: FsWatchPausedPayload) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: FsWatchPausedPayload) =>
+      callback(payload)
+    ipcRenderer.on('fs:watchPaused', listener)
+    return () => ipcRenderer.removeListener('fs:watchPaused', listener)
   }
 } satisfies PreloadApi['fs']

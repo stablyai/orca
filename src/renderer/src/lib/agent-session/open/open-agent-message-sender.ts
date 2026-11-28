@@ -8,6 +8,7 @@ import {
   structuredSessionOpenFeedbackText
 } from './activate-ai-vault-structured-session'
 import { showChatOpenUnavailable } from './chat-open-failure-toast'
+import { pairedServerTerminalFeedback } from './paired-server-open'
 import type { StructuredSessionOpenFeedback } from './activate-ai-vault-structured-session'
 import { useAppStore } from '@/store/index'
 import {
@@ -199,7 +200,8 @@ export async function openOrchestrationDispatch(
       }
     )
     if (result.kind === 'terminal') {
-      await focusTerminal(result.handle, terminalEnvironmentId(host, result), terminal)
+      const onServer = pairedServerTerminalFeedback(terminal, host, result, label)
+      await focusTerminal(result.handle, terminalEnvironmentId(host, result), onServer)
     }
   } catch (error) {
     showLookupFailure(

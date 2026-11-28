@@ -190,6 +190,7 @@
         "serviceUnconfirmed": "The WSL service did not confirm whether the distro runs.",
         "peerCheckFailed": "Orca couldn’t ask the WSL host whether another Orca on this computer still uses it: {{detail}}",
         "removalUnrecorded": "Orca couldn’t record what this Remove left running: {{detail}}",
+        "runsAsOtherUser": "Runs as {{user}}. To use {{defaultUser}}, remove the host and add it again.",
         "installLockWait_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minute.",
         "installLockWait_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minutes.",
         "installLockWaitGivesUp_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minute.",
@@ -746,6 +747,26 @@
       "statusAriaLabel": "Git blame: {{summary}}",
       "openCommitHint": "Click to open the commit",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Reload from Disk · auto-reload paused",
+      "ariaLabelPaused": "Reload from Disk, auto-reload paused",
+      "noChanges": "No changes on disk",
+      "readFailed": "Couldn't read {{value0}}",
+      "retry": "Retry",
+      "fileDeleted": "File deleted on disk",
+      "cannotCheckDirty": "Can't compare with disk while edits are unsaved",
+      "changedOnDisk": "Changed on disk",
+      "editsKept": "Unsaved edits in {{value0}} are kept",
+      "openTab": "Open Tab",
+      "paletteTitle": "Reload File from Disk",
+      "paletteDescription": "Read the active file from disk and reload it if it changed.",
+      "verbs": {
+        "reloadFile": "reload file",
+        "reloadFromDisk": "reload from disk",
+        "refreshFile": "refresh file",
+        "revertFile": "revert file"
+      }
     }
   },
   "githubChecks": {
@@ -2252,7 +2273,8 @@
         "add": "Add a server for this repo",
         "files": "From this repo’s files",
         "open": "Open {{file}}"
-      }
+      },
+      "unreadable": "Saved sign-in or key can’t be opened on this computer"
     }
   },
   "menu": {
@@ -3105,6 +3127,12 @@
         "hostCannotOpen": "This chat can't be reopened until Orca is updated.",
         "notLocatedNamed": "Orca can't find where {{agent}} is running, so it can't open it.",
         "notLocated": "Orca can't find where this agent is running, so it can't open it.",
+        "pairedServerUnpaired": "{{agent}} runs on a computer this Orca is no longer paired with, so it can't open it.",
+        "pairedServerUnreachable": "Orca couldn't reach {{server}} to open {{agent}}.",
+        "pairedServerGone": "{{agent}} is no longer running on {{server}}.",
+        "pairedServerElsewhere": "{{agent}} runs on a computer paired with {{server}}, not with this one, so Orca can't open it here.",
+        "thisAgent": "This agent",
+        "theAgent": "the agent",
         "worktreeDeleted": "The worktree was deleted.",
         "projectRemoved": "The project was removed from Orca.",
         "folderWorkspaceRemoved": "The folder workspace was removed.",
@@ -6401,7 +6429,9 @@
                   "sessionsGroupedByWorkspace": "Terminal sessions are grouped by workspace.",
                   "noTerminalSessions": "No terminal sessions yet.",
                   "ariaLabel": "Resource Manager, {{sessions}}",
-                  "ariaLabelWithSpaceScan": "Resource Manager, {{sessions}}, {{spaceScan}}"
+                  "ariaLabelWithSpaceScan": "Resource Manager, {{sessions}}, {{spaceScan}}",
+                  "appMemory": "Orca app memory: {{memory}}",
+                  "appMemoryAndSessions": "Orca app memory {{memory}} (Orca’s own processes, not terminals or agent CLIs), {{sessions}}"
                 }
               }
             }
@@ -8787,8 +8817,9 @@
         },
         "wslHostRemoval": {
           "keptForOthers": "Removed from this Orca. The host keeps running for {{value0}}.",
+          "forgotten": "Removed the host from Orca without stopping its server, which may still be running in the distro: {{value0}}",
           "partial": "The host was removed, but something in the distro is still running: {{value0}}",
-          "pending": "Orca didn’t remove the host yet: {{value0}} Remove it again to retry, or connect it to keep it.",
+          "pending": "Orca didn’t remove the host yet: {{value0}} Remove it again to retry; if Orca still can’t stop its server, it removes the host anyway. Or connect it to keep it.",
           "unavailable": "WSL hosts are not available on this computer."
         },
         "addRepoWslHostFolderPicker": {
@@ -11472,7 +11503,11 @@
             "c29089716e": "Kimi usage",
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
-            "aff6e6afdf": "IDE font"
+            "aff6e6afdf": "IDE font",
+            "statusBarMemory": {
+              "title": "Show memory in status bar",
+              "description": "Show Orca’s app memory next to the Resource Manager icon. Updates every 30 seconds while the window is focused."
+            }
           }
         },
         "auto": {
@@ -13540,8 +13575,11 @@
           "restarting": "Restarting…",
           "updated": "Updated",
           "failed": "Update failed",
-          "serviceManagerHelp": "Update Orca on the server host — through its system package manager if it was installed from a .deb or .rpm, otherwise through the service manager that starts it.",
-          "unpackedHelp": "Development builds must be updated from their source checkout.",
+          "nodeServerHelp": "Remote updates are off: this server runs Orca without its built-in updater, as Orca’s Node server (orcad) does. Install the newer Orca release on the server, then restart orca serve.",
+          "updaterNotStartedHelp": "Remote updates are off: Orca on this server has not started its updater. Restart Orca there and check again, or update it on the server.",
+          "headlessServeHelp": "Remote updates are off: this server runs orca serve without an update supervisor, so it cannot restart itself into a new version. Update Orca on the server, then restart its service.",
+          "systemPackageHelp": "Remote updates are off: Orca on this server was installed by a system package or another installer that has to update it. Update it the way it was installed, for example with apt or dnf for a .deb or .rpm.",
+          "devBuildHelp": "Remote updates are off: this server runs a development build. Update it from its source checkout.",
           "legacyHelp": "Remote updates are unavailable for this server. Update Orca on the server host.",
           "managedOverSshHelp": "This desktop updates this server over SSH. Use Update on its row in Remote Orca Servers."
         },
@@ -14132,7 +14170,10 @@
               "disconnectFailed": "Could not remove the saved Bitbucket credential.",
               "statusLoadFailed": "Could not check for a saved Bitbucket credential.",
               "replaceCredentials": "Manage credentials",
-              "credentialName": "Your Bitbucket credential"
+              "credentialName": "Your Bitbucket credential",
+              "storedCredentialRemote": "Saved in Orca on the selected server. ORCA_BITBUCKET_* environment variables there take precedence when set.",
+              "account_scope_prefix": "Account scope",
+              "scopeFollowsWorkspace": "Checked on the host that runs the open workspace. Credentials saved here are stored on that host."
             }
           }
         },
@@ -20521,7 +20562,12 @@
           "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
           "signInAgainAction": "Sign in again",
           "unconfiguredCopy": "Orca account sign-in is not configured on this machine yet.",
-          "openAccountSettings": "Open account settings"
+          "openAccountSettings": "Open account settings",
+          "deleteManyDescription_one": "{{count}} artifact will no longer be available at its public link.",
+          "deleteManyDescription_other": "{{count}} artifacts will no longer be available at their public links.",
+          "deleteNamedFailed": "Could not delete “{{name}}”.",
+          "deleteBatchStopped_one": "Could not delete “{{name}}”. {{count}} more was not deleted.",
+          "deleteBatchStopped_other": "Could not delete “{{name}}”. {{count}} more were not deleted."
         },
         "copySuccess": "Artifact link copied",
         "copyFailed": "Could not copy artifact link",
@@ -20536,7 +20582,7 @@
         },
         "ArtifactCollection": {
           "loadMore": "Load more",
-          "noMatches": "No matches"
+          "noMatchingArtifacts": "No matching artifacts"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Anyone with this link can view it",
@@ -20598,14 +20644,34 @@
           "size": "Size",
           "updated": "Updated",
           "expires": "Expires",
-          "actions": "Actions"
+          "actions": "Actions",
+          "selectAll": "Select all"
         },
         "ArtifactsPageSkeleton": {
           "loading": "Loading artifacts"
         },
         "expiredCompact": "Expired",
         "typeMarkdown": "Markdown",
-        "typeHtml": "HTML"
+        "typeHtml": "HTML",
+        "ArtifactListFilterMenu": {
+          "clearFilters": "Clear filters",
+          "any": "Any time",
+          "today": "Today",
+          "pastWeek": "Past 7 days",
+          "pastMonth": "Past 30 days",
+          "anyExpiry": "Any",
+          "withinWeek": "Within 7 days",
+          "expired": "Expired"
+        },
+        "ArtifactListRow": {
+          "select": "Select {{name}}"
+        },
+        "ArtifactListSelectionBar": {
+          "delete": "Delete",
+          "clear": "Clear",
+          "selected_one": "{{count}} selected",
+          "selected_other": "{{count}} selected"
+        }
       },
       "BrowserCookieImportMachineNotice": {
         "remoteLabel": "Browsers on {{value0}}",
@@ -21033,6 +21099,9 @@
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Resolving conflicts needs a newer Orca on this host. Update Orca on that host."
+      },
+      "bitbucket": {
+        "credentialsNeedNewerServer": "Update the remote Orca server to save Bitbucket credentials there."
       }
     },
     "ssh": {
@@ -22745,7 +22814,9 @@
           "failedReason": "Failed: {{error}}",
           "disabled": "Disabled",
           "notStarted": "Not started",
-          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
+          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here.",
+          "orcaRemoved": "Removed: restarts on next message",
+          "orcaChanged": "Changed: restarts on next message"
         },
         "signIn": {
           "action": "Sign in",
@@ -22760,7 +22831,8 @@
           "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
           "pastePlaceholder": "http://localhost:…"
         },
-        "manage": "Manage MCP servers"
+        "manage": "Manage MCP servers",
+        "stillFailing": "Still failing after reconnecting."
       },
       "cardKindHidden": {
         "description": "You can change this anytime in",
@@ -23960,6 +24032,7 @@
           "deleted": "Deleted",
           "kept": "Kept · {{count}}",
           "showMore": "Show {{count}} more",
+          "showFewer": "Show fewer",
           "waiting": "Inactive {{elapsed}} of {{after}} days",
           "title": "Activity",
           "notListed_one": "1 more kept workspace is not listed.",
@@ -24125,13 +24198,13 @@
           "dialog": {
             "createToken": "Create one",
             "environmentManagedLine": "Set by ORCA_BITBUCKET_* environment variables. Unset them to save one here.",
-            "savedLocallyOnly": "Saved on this computer only.",
             "accessTokenNeeds": "Needs read access to pull requests.",
             "atlassianEmail": "Atlassian email",
             "requiredScopes": "Required scopes",
             "apiBaseUrl": "API base URL",
             "close": "Close",
-            "verifyingEllipsis": "Verifying…"
+            "verifyingEllipsis": "Verifying…",
+            "savedOnSelectedServer": "Sent to the selected server and stored there, encrypted when it supports it."
           }
         }
       },
@@ -25655,7 +25728,10 @@
       "chatPasteCode": "Paste the code",
       "chatPasteCodeLabel": "The code Google shows after you sign in, or that page's address",
       "launchesUse": "New agy launches use this account",
-      "loginNow": "agy's login right now"
+      "loginNow": "agy's login right now",
+      "signedInUnread": "agy is signed in",
+      "unreadDetail": "Show the account to see which one. macOS may ask you to allow keychain access.",
+      "showAccount": "Show account"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -25769,6 +25845,7 @@
       "errors": {
         "ownerSilent": "The device that started this sign-in stopped answering.",
         "superseded": "An account change on this host stopped the sign-in. Start it again.",
+        "noPrompt": "The server's login command didn't show a sign-in link within a minute. Update Orca on the server, then try again.",
         "failed": "Sign-in failed. Try again."
       }
     },
@@ -26057,8 +26134,7 @@
         "failing": "failing",
         "running": "running",
         "cancelled": "cancelled",
-        "passing": "passing",
-        "more": "+{{count}} more"
+        "passing": "passing"
       }
     },
     "attachments": {
@@ -26536,10 +26612,12 @@
     "orchestrator": {
       "showTerminal": "Show terminal",
       "moveAgain": "Move again",
+      "move": "Move",
       "checkAgain": "Check again",
       "deferred": "Finishing your move to the {{distro}} host: some terminals are still busy.",
       "stuck": "An earlier move to the {{distro}} host hasn't finished settling.",
       "declined": "Moving is paused because you brought these projects back to this computer.",
+      "stateLost": "Orca lost your earlier choice for {{distro}}, so it won't move these projects on its own.",
       "doneToast": "Projects moved to the {{distro}} host",
       "terminalGone": "That terminal isn't open in this window any more. Check again to refresh.",
       "blocker": "{{title}}. {{hint}}",
@@ -27027,6 +27105,7 @@
       "invalidPairingCode": "Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.",
       "selfPairingCode": "This pairing code is for this Orca itself. Generate the code on the other computer instead.",
       "managedDeployment": "Orca runs this server on an SSH host for you; its pairing cannot be replaced or removed here. To decommission it, run `orca environment stop --environment <name> --yes` or use Settings > Orca on your SSH hosts; for a host that is gone, run `orca environment forget --environment <name> --yes`.",
+      "wslHostDeployment": "Orca runs this server in a WSL distro for you; its pairing cannot be replaced or removed here. Remove the WSL host in Orca, or run `orca environment forget --environment <name> --yes` to remove it without contacting its distro.",
       "sshAccessChangePending": "This server's SSH access change didn't finish. Retry or cancel it under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
       "sshAccessLinked": "Unlink this server's SSH access under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
       "alreadyPairedCloudWorkspace": "This server is already paired as \"{{name}}\". It belongs to a cloud workspace, which pairs it again when it resumes.",
@@ -30662,8 +30741,6 @@
         "automationEnded": "Ended"
       },
       "menu": {
-        "cancel": "Cancel",
-        "done": "Done",
         "waiting": "Waiting…"
       },
       "pill": {
@@ -30673,6 +30750,7 @@
         "moveTo": "Move to"
       },
       "row": {
+        "cancel": "Cancel",
         "done": "Done",
         "more": "More",
         "select": "Select {{title}}"

@@ -44,6 +44,8 @@ import {
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 
+const EMPTY_WORKSPACE_STATUSES: SectionRowsArgs['workspaceStatuses'] = []
+
 function createSidebarHostOptionsSelector() {
   let inputs: readonly unknown[] = []
   let result: SidebarHostOption[] = []
@@ -143,8 +145,10 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
   // Same-id registrations on two hosts: each row and project header needs its own host's.
   const repoOfWorktree = useMemo(() => createHostScopedRepoOf(repos, repoMap), [repos, repoMap])
-  // PR cache only affects grouping in pr-status mode; avoid re-planning all rows on every PR update in other modes.
+  // PR cache and workspace statuses only affect grouping in their respective modes.
   const prCacheForPlan = args.groupBy === 'pr-status' ? args.prCache : null
+  const workspaceStatusesForPlan =
+    args.groupBy === 'workspace-status' ? args.workspaceStatuses : EMPTY_WORKSPACE_STATUSES
   const rowPlan = useMemo(
     () =>
       planSidebarRows({
@@ -155,7 +159,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         repoOfWorktree,
         prGroupOf: createSidebarPRGroupReader(repoMap, prCacheForPlan),
         repoOrder,
-        workspaceStatuses: args.workspaceStatuses,
+        workspaceStatuses: workspaceStatusesForPlan,
         projectOrderBy: args.projectOrderBy,
         lineageById: args.worktreeLineageById,
         lineageParentIdentities,
@@ -184,7 +188,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       prCacheForPlan,
       defaultHostId,
       repoOrder,
-      args.workspaceStatuses,
+      workspaceStatusesForPlan,
       args.projectOrderBy,
       args.worktreeLineageById,
       lineageParentIdentities,
@@ -215,7 +219,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     worktreeMap: args.worktreeMap,
     worktreeLineageById: args.worktreeLineageById,
     prCache: prCacheForPlan,
-    workspaceStatuses: args.workspaceStatuses,
+    workspaceStatuses: workspaceStatusesForPlan,
     projectGroups: args.visibleProjectGroupsForRows,
     projectGrouping: args.projectGrouping,
     folderWorkspaces: args.visibleFolderWorkspacesForRows,

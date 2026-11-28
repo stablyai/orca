@@ -12,6 +12,7 @@
     },
     "hostSignIn": {
       "errors": {
+        "noPrompt": "The server's login command didn't show a sign-in link within a minute. Update Orca on the server, then try again.",
         "ownerSilent": "The device that started this sign-in stopped answering.",
         "superseded": "An account change on this host stopped the sign-in. Start it again."
       }
@@ -155,6 +156,22 @@
         "clearCompleted": {
           "cleared_one": "Cleared {{count}} completed agent",
           "cleared_other": "Cleared {{count}} completed agents"
+        }
+      },
+      "artifacts": {
+        "ArtifactListSelectionBar": {
+          "selected_one": "{{count}} selected",
+          "selected_other": "{{count}} selected"
+        },
+        "ArtifactListTableHeader": {
+          "name": "Name",
+          "size": "Size"
+        },
+        "ArtifactsPage": {
+          "deleteBatchStopped_one": "Could not delete “{{name}}”. {{count}} more was not deleted.",
+          "deleteBatchStopped_other": "Could not delete “{{name}}”. {{count}} more were not deleted.",
+          "deleteManyDescription_one": "{{count}} artifact will no longer be available at its public link.",
+          "deleteManyDescription_other": "{{count}} artifacts will no longer be available at their public links."
         }
       },
       "automations": {
@@ -3555,7 +3572,8 @@
       "repairSaveFailed": "Orca verified the server but could not save the new pairing. Check local settings storage and try again.",
       "selfPairingCode": "This pairing code is for this Orca itself. Generate the code on the other computer instead.",
       "sshAccessChangePending": "This server's SSH access change didn't finish. Retry or cancel it under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
-      "sshAccessLinked": "Unlink this server's SSH access under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it."
+      "sshAccessLinked": "Unlink this server's SSH access under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
+      "wslHostDeployment": "Orca runs this server in a WSL distro for you; its pairing cannot be replaced or removed here. Remove the WSL host in Orca, or run `orca environment forget --environment <name> --yes` to remove it without contacting its distro."
     }
   },
   "runtimeRpc": {
@@ -3832,6 +3850,7 @@
         "restartGaveUp_one": "Could not restart the Orca server in {{distro}} after {{count}} attempt",
         "restartGaveUp_other": "Could not restart the Orca server in {{distro}} after {{count}} attempts",
         "runningListUnavailable": "Windows didn’t report whether the distro is running.",
+        "runsAsOtherUser": "Runs as {{user}}. To use {{defaultUser}}, remove the host and add it again.",
         "serviceUnconfirmed": "The WSL service did not confirm whether the distro runs."
       }
     }

@@ -68,7 +68,7 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
   )
 }
 
-/** One panel row: status mark and the full title, then model and time; on hover or
+/** One panel row on one line: status mark, title and age (model and progress in the tooltip); on hover or
  *  focus Stop or Clear cover the row's end.
  *  The open button stretches over the whole row, so a press anywhere but the action opens it. A row
  *  whose details have not arrived yet keeps the same button, so focus on it survives their arrival. */
@@ -113,7 +113,6 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     row.progressNote
       ? row.progressNote
       : ''
-  const command = row?.kind === 'command'
   const label = [
     mixed && row ? workerDockKindLabel(t, row.kind) : '',
     row ? workerDockSpokenTitle(row.kind, title) : title,
@@ -125,7 +124,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     .filter(Boolean)
     .join(' · ')
   const tooltip = row
-    ? [row.name, title === row.title ? '' : row.title, title, state, progress, remote]
+    ? [row.name, row.model, title === row.title ? '' : row.title, title, state, progress, remote]
         .filter(Boolean)
         .join(' · ')
     : undefined
@@ -141,7 +140,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         aria-label={label}
         aria-disabled={row ? undefined : true}
         title={tooltip}
-        className="flex min-w-0 flex-1 items-start gap-2 py-0.5 pl-2 text-left text-sm after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring aria-disabled:text-muted-foreground"
+        className="flex h-8 min-w-0 flex-1 items-center gap-2 pl-2 text-left text-sm whitespace-nowrap after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring aria-disabled:text-muted-foreground"
         onClick={(event) => {
           if (row) {
             onOpen(row, event.currentTarget)
@@ -160,26 +159,17 @@ export const WorkerDockRow = memo(function WorkerDockRow({
             <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
           )}
         </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          {/* A command is one mono line; the tooltip carries the whole of it. */}
-          <span
-            className={
-              command ? 'truncate font-mono text-xs leading-5' : 'line-clamp-3 break-words'
-            }
-          >
-            {title}
-          </span>
-          {progress ? (
-            <span className="truncate text-xs text-muted-foreground">{progress}</span>
-          ) : null}
-          {row && (row.model || row.changedAt !== null) ? (
-            <span className="truncate text-xs text-muted-foreground">
-              {row.model}
-              {row.model && row.changedAt !== null ? ' · ' : null}
-              <Age at={row.changedAt} visible={visible} />
-            </span>
-          ) : null}
+        {/* A command reads as mono; the tooltip carries the whole of it. */}
+        <span
+          className={cn('min-w-0 flex-1 truncate', row?.kind === 'command' && 'font-mono text-xs')}
+        >
+          {title}
         </span>
+        {row && row.changedAt !== null ? (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            <Age at={row.changedAt} visible={visible} />
+          </span>
+        ) : null}
       </button>
       {/* Over the row's end on hover or focus, so at rest the title has the row's whole width. At rest it
           is transparent and takes no presses (a press there opens the row), but stays in the
@@ -188,7 +178,8 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         data-worker-dock-hover=""
         className={cn(
           // Inset by the focus ring's width, so a focused row's ring closes on all four sides.
-          'pointer-events-none absolute inset-y-[2px] right-[2px] flex items-center gap-1 rounded-r-[4px] bg-accent pr-1.5 pl-1.5',
+          // Empty (no action applies), it draws nothing, so it never covers the age.
+          'pointer-events-none absolute inset-y-[2px] right-[2px] flex items-center gap-1 rounded-r-[4px] bg-accent pr-1.5 pl-1.5 [&:not(:has(button,svg))]:hidden',
           pending
             ? 'opacity-100 [&>*]:pointer-events-auto'
             : 'opacity-0 group-hover/worker:opacity-100 group-hover/worker:[&>*:not(svg)]:pointer-events-auto group-focus-within/worker:opacity-100 [@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:[&>*:not(svg)]:pointer-events-auto'

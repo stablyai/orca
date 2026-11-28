@@ -3,7 +3,7 @@ import {
   dashboardRowBucketProjection,
   readAgentRowTurnRecords
 } from '@/components/dashboard/rows/dashboard-row-bucket'
-import { collectActiveDashboardWorkspaces } from '@/components/dashboard/snapshot/dashboard-snapshot-workspaces'
+import { collectActiveDashboardOwnerIds } from '@/components/dashboard/snapshot/dashboard-snapshot-workspaces'
 import {
   selectWorktreesByRepo,
   selectFolderWorkspaces
@@ -19,6 +19,8 @@ import {
 } from './agent-status-projection-types'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 import type { ProjectionRows } from './agent-status-projection-rows'
+
+const EMPTY_ACTIVE_OWNERS: ReadonlySet<string> = new Set()
 
 export function stageProjectionCounts(
   data: AgentStatusProjectionState,
@@ -53,14 +55,11 @@ export function stageProjectionCounts(
       }
     }
   }
-  const nextActiveOwners =
-    previous &&
+  const ownersUnchanged =
+    previous !== null &&
     previous.repos === state.repos &&
     selectWorktreesByRepo(previous) === selectWorktreesByRepo(state) &&
-    selectFolderWorkspaces(previous) === selectFolderWorkspaces(state) &&
-    previous.projectGroups === state.projectGroups
-      ? data.activeDashboardOwners
-      : new Set(collectActiveDashboardWorkspaces(state, false).map(({ worktree }) => worktree.id))
+    selectFolderWorkspaces(previous) === selectFolderWorkspaces(state)
   const countUpdates = new Map<string, CountedRow | undefined>()
   const ownerCounts = new Map<string, Record<DashboardBucket, number>>()
   const adjust = (row: CountedRow, delta: number) => {
@@ -73,29 +72,50 @@ export function stageProjectionCounts(
     }
     counts[row.bucket] += delta
   }
-  const turnRecords = readAgentRowTurnRecords(state)
-  for (const [key, value] of countRows) {
-    const row = value?.row
-    const owner = value?.owner
-    const before = data.countedRows.get(key)
-    const after =
-      row && owner && row.rowSource !== 'subagent'
-        ? {
-            owner,
-            bucket: dashboardRowBucketProjection(row, turnRecords).bucket
-          }
-        : undefined
-    if (before?.owner === after?.owner && before?.bucket === after?.bucket) {
-      continue
+  if (countRows.size > 0) {
+    const turnRecords = readAgentRowTurnRecords(state)
+    for (const [key, value] of countRows) {
+      const row = value?.row
+      const owner = value?.owner
+      const before = data.countedRows.get(key)
+      const after =
+        row && owner && row.rowSource !== 'subagent'
+          ? {
+              owner,
+              bucket: dashboardRowBucketProjection(row, turnRecords).bucket
+            }
+          : undefined
+      if (before?.owner === after?.owner && before?.bucket === after?.bucket) {
+        continue
+      }
+      if (before) {
+        adjust(before, -1)
+      }
+      if (after) {
+        adjust(after, 1)
+      }
+      countUpdates.set(key, after)
     }
-    if (before) {
-      adjust(before, -1)
-    }
-    if (after) {
-      adjust(after, 1)
-    }
-    countUpdates.set(key, after)
   }
+  if (data.countsByWorktree.size === 0 && ownerCounts.size === 0) {
+    return () => {
+      if (!ownersUnchanged) {
+        data.activeDashboardOwners = null
+      }
+      for (const [key, row] of countUpdates) {
+        if (row) {
+          data.countedRows.set(key, row)
+        } else {
+          data.countedRows.delete(key)
+        }
+      }
+    }
+  }
+  const previousActiveOwners = data.activeDashboardOwners ?? EMPTY_ACTIVE_OWNERS
+  const nextActiveOwners =
+    ownersUnchanged && data.activeDashboardOwners !== null
+      ? data.activeDashboardOwners
+      : collectActiveDashboardOwnerIds(state)
   const totals = { ...data.dashboardTotals }
   const adjustTotals = (counts: DashboardCounts, delta: number) => {
     for (const name of ['attention', 'working', 'done', 'idle'] as const) {
@@ -103,20 +123,27 @@ export function stageProjectionCounts(
     }
   }
   for (const [owner, counts] of ownerCounts) {
-    if (data.activeDashboardOwners.has(owner)) {
+    if (previousActiveOwners.has(owner)) {
       adjustTotals(data.countsByWorktree.get(owner) ?? EMPTY_COUNTS, -1)
       adjustTotals(counts, 1)
     }
   }
-  if (nextActiveOwners !== data.activeDashboardOwners) {
-    for (const owner of data.activeDashboardOwners) {
-      if (!nextActiveOwners.has(owner)) {
-        adjustTotals(ownerCounts.get(owner) ?? data.countsByWorktree.get(owner) ?? EMPTY_COUNTS, -1)
+  if (nextActiveOwners !== previousActiveOwners) {
+    for (const [owner, existingCounts] of data.countsByWorktree) {
+      const wasActive = previousActiveOwners.has(owner)
+      const isActive = nextActiveOwners.has(owner)
+      if (wasActive !== isActive) {
+        adjustTotals(ownerCounts.get(owner) ?? existingCounts, isActive ? 1 : -1)
       }
     }
-    for (const owner of nextActiveOwners) {
-      if (!data.activeDashboardOwners.has(owner)) {
-        adjustTotals(ownerCounts.get(owner) ?? data.countsByWorktree.get(owner) ?? EMPTY_COUNTS, 1)
+    for (const [owner, counts] of ownerCounts) {
+      if (data.countsByWorktree.has(owner)) {
+        continue
+      }
+      const wasActive = previousActiveOwners.has(owner)
+      const isActive = nextActiveOwners.has(owner)
+      if (wasActive !== isActive) {
+        adjustTotals(counts, isActive ? 1 : -1)
       }
     }
   }

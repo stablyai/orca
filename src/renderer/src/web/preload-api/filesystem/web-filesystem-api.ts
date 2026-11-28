@@ -187,7 +187,8 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     findSymlinkBelowRoot: () => Promise.resolve(null),
     watchWorktree: () => Promise.resolve(undefined),
     unwatchWorktree: () => Promise.resolve(undefined),
-    onFsChanged: () => noopUnsubscribe
+    onFsChanged: () => noopUnsubscribe,
+    onWatchPaused: () => noopUnsubscribe
   }
 }
 
