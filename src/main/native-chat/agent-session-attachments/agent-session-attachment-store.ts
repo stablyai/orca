@@ -41,6 +41,8 @@ type InFlightUpload = {
   expectedLength: number
   receivedLength: number
   writing: boolean
+  /** Set once this upload created its folder, so teardown may undo that and nothing else. */
+  owned: boolean
 }
 
 export type AgentSessionAttachmentStoreOptions = {
@@ -53,7 +55,7 @@ export class AgentSessionAttachmentStore {
     ttlMs: UPLOAD_IDLE_TTL_MS,
     tooManyMessage: 'Too many attachment uploads are in progress',
     notFoundMessage: NOT_FOUND,
-    onExpire: (upload) => void removeQuietly(upload.uploadDir)
+    onExpire: (upload) => void removeOwnedUpload(upload)
   })
 
   // Latest content write per folder, and pending writes by file so a re-send queues nothing.
@@ -94,15 +96,18 @@ export class AgentSessionAttachmentStore {
       name,
       expectedLength: args.byteLength,
       receivedLength: 0,
-      writing: false
+      writing: false,
+      owned: false
     }))
-    const uploadDir = join(this.rootDir, uploadId)
+    const upload = this.uploads.peek(uploadId)!
     try {
-      await mkdir(uploadDir, { recursive: true })
-      await writeFile(join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE), '', { flag: 'wx' })
+      await createUploadFolder(this.rootDir, upload.uploadDir)
+      upload.owned = true
+      const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      await writeFile(partPath, '', { flag: 'wx' })
     } catch (error) {
       this.uploads.delete(uploadId)
-      await removeQuietly(uploadDir)
+      await removeOwnedUpload(upload)
       throw error
     }
     return { uploadId }
@@ -156,7 +161,7 @@ export class AgentSessionAttachmentStore {
       )
       return { path: finalPath, name: upload.name, byteLength: upload.receivedLength }
     } catch (error) {
-      await removeQuietly(upload.uploadDir)
+      await removeOwnedUpload(upload)
       throw error
     } finally {
       this.uploads.delete(args.uploadId)
@@ -171,16 +176,17 @@ export class AgentSessionAttachmentStore {
   /** One committed upload whose hidden part file `write` fills, renamed into place; returns its
    *  path. Not in flight meanwhile: the sweep leaves a folder this new alone for an hour. */
   async storeWith(name: string, write: (partPath: string) => Promise<void>): Promise<string> {
-    const uploadDir = join(this.rootDir, randomUUID())
-    const finalPath = join(uploadDir, sanitizeAgentSessionAttachmentName(name))
+    const upload = { uploadDir: join(this.rootDir, randomUUID()), owned: false }
+    const finalPath = join(upload.uploadDir, sanitizeAgentSessionAttachmentName(name))
     try {
-      await mkdir(uploadDir, { recursive: true })
-      const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      await createUploadFolder(this.rootDir, upload.uploadDir)
+      upload.owned = true
+      const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
       await write(partPath)
       // Rename is the commit: nothing fallible may follow it.
       await renameFileWithWindowsRetryAsync(partPath, finalPath)
     } catch (error) {
-      await removeQuietly(uploadDir)
+      await removeOwnedUpload(upload)
       throw error
     }
     return finalPath
@@ -234,7 +240,7 @@ export class AgentSessionAttachmentStore {
         throw new Error(NOT_FOUND)
       }
       this.uploads.delete(args.uploadId)
-      await removeQuietly(upload.uploadDir)
+      await removeOwnedUpload(upload)
     }
     return { aborted: true }
   }
@@ -320,6 +326,22 @@ async function writeContent(uploadDir: string, path: string, bytes: Buffer): Pro
     }
     throw error
   }
+}
+
+/** Makes a new upload folder or fails: an existing one, whoever made it, is never adopted. */
+async function createUploadFolder(rootDir: string, uploadDir: string): Promise<void> {
+  await mkdir(rootDir, { recursive: true })
+  await mkdir(uploadDir)
+}
+
+/** Undoes an upload this store made: its part file, then its folder only if nothing else is in it. */
+async function removeOwnedUpload(upload: { uploadDir: string; owned: boolean }): Promise<void> {
+  if (!upload.owned) {
+    return
+  }
+  const partPath = join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+  await rm(partPath, { force: true }).catch(() => {})
+  await rmdir(upload.uploadDir).catch(() => {})
 }
 
 export async function removeQuietly(path: string): Promise<void> {
