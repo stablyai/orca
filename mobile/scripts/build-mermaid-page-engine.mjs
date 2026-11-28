@@ -28,12 +28,9 @@ async function main() {
     bundle: true,
     format: 'esm',
     splitting: false,
-    // Metro transforms this module again; preserve enum assignments for its export analysis.
-    minifyWhitespace: true,
-    minifyIdentifiers: true,
-    minifySyntax: false,
-    // The page that imports this already ships es2022 syntax, so Chrome 74 lowering only added bytes; keep Safari 15.
-    target: ['safari15'],
+    minify: true,
+    // Page-only artifact (imported exclusively by mermaid-page-engine.web.ts); match the page bundle's es2022 target.
+    target: ['es2022'],
     write: false,
     charset: 'utf8',
     legalComments: 'none',
