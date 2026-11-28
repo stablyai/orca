@@ -746,6 +746,7 @@
       "thinking": "Réflexion en cours",
       "toggleDetails": "Afficher ou masquer les détails du tour",
       "workedFor": "A travaillé pendant {{value0}}",
+      "continuedFor": "A continué pendant {{value0}}",
       "working": "Traitement…",
       "workingFor": "En cours depuis {{value0}}"
     },

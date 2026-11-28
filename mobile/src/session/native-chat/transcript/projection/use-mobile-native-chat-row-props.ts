@@ -7,13 +7,17 @@ import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/nati
 import { isActionableStructuredAgentSessionPrompt } from '../../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import { nativeChatRowOffersRewind } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-rewind-eligibility'
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import type { NativeChatBarStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-segments'
 import type { NativeChatTurnDiff } from '../../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatActivityJoin } from '../../../../../../src/shared/native-chat/transcript/events/native-chat-activity-rows'
 
 export type MobileNativeChatTurnRow = {
   turnDiff?: NativeChatTurnDiff
-  turnStatus: NativeChatTurnStatus | null
+  turnStatus: NativeChatBarStatus | null
   turnStatusAbove?: boolean
+  /** The turn's own bar, above this row while `turnStatus` is its stretch's: the turn's first loaded
+   *  row is the person's message mid-turn. It hides nothing loaded, so it does not open. */
+  turnLeadStatus?: NativeChatTurnStatus
   /** The live turn's bar stands in for a bare "Working…" line under it, which is not drawn. */
   turnStatusLive?: true
   turnExpanded: boolean

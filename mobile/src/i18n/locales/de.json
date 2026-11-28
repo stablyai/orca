@@ -705,6 +705,7 @@
       "thinking": "Denkt nach",
       "toggleDetails": "Details zum Durchgang ein-/ausblenden",
       "workedFor": "{{value0}} lang gearbeitet",
+      "continuedFor": "{{value0}} lang weitergearbeitet",
       "working": "Arbeitet…",
       "workingFor": "Arbeitet seit {{value0}}"
     },

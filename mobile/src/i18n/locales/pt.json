@@ -746,6 +746,7 @@
       "thinking": "Pensando",
       "toggleDetails": "Alternar detalhes do turno",
       "workedFor": "Trabalhou por {{value0}}",
+      "continuedFor": "Continuou por {{value0}}",
       "working": "Trabalhando…",
       "workingFor": "Trabalhando há {{value0}}"
     },

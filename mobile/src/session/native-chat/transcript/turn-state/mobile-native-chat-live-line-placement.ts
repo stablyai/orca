@@ -23,7 +23,8 @@ export type MobileNativeChatLiveLinePlacement = 'apart' | 'under' | 'merged'
 type BarFacts = {
   active: NativeChatTurnStatus | null
   activeTurnKey: string | null | undefined
-  bars: ReadonlyMap<string, { index: number; above: boolean }>
+  /** The row the live bar draws under: the turn's prompt, or the person's newest message mid-turn. */
+  liveBarIndex: number | undefined
   quiet: { turns: ReadonlySet<string> } | null
   rows: readonly NativeChatMessage[]
   /** The rows the list draws; the live line comes right after the last. */
@@ -32,13 +33,12 @@ type BarFacts = {
 
 export function mobileNativeChatLiveLinePlacement(
   line: NativeChatLiveLine | null,
-  { active, activeTurnKey, bars, quiet, rows, listMessages }: BarFacts
+  { active, activeTurnKey, liveBarIndex, quiet, rows, listMessages }: BarFacts
 ): MobileNativeChatLiveLinePlacement {
   if (!line || !active || activeTurnKey == null || quiet?.turns.has(activeTurnKey)) {
     return 'apart'
   }
-  const bar = bars.get(activeTurnKey)
-  const barRow = bar && !bar.above ? rows[bar.index] : undefined
+  const barRow = liveBarIndex === undefined ? undefined : rows[liveBarIndex]
   // Only a person's plain message draws the bar under itself; notices, automations and cards draw their own row.
   if (
     !barRow ||

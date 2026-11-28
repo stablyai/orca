@@ -3,7 +3,11 @@ import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot
 import { useContext, useState } from 'react'
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { nativeChatElapsedSeconds } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import {
+  nativeChatElapsedSeconds,
+  type NativeChatTurnStatus
+} from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import type { NativeChatBarStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-segments'
 import {
   formatMobileNativeChatTurnStatusLabel,
   nativeChatTurnStatusCopy
@@ -27,11 +31,53 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
   return counting ? nativeChatElapsedSeconds(startedAt, mountedAt, now) : 0
 }
 
+/** A row's turn bars: its turn's or stretch's under (or above) it, and the turn's own above a row
+ *  whose turn opener isn't loaded, which hides nothing to open. */
+export function mobileNativeChatTurnStatusRows({
+  status,
+  lead,
+  live,
+  expanded,
+  onToggle,
+  style
+}: {
+  status: NativeChatBarStatus | null | undefined
+  lead: NativeChatTurnStatus | undefined
+  live: boolean
+  expanded: boolean
+  onToggle: (() => void) | undefined
+  style: StyleProp<ViewStyle>
+}): { statusRow: React.ReactNode; leadRow: React.ReactNode } {
+  return {
+    statusRow: status ? (
+      <MobileNativeChatTurnStatus
+        startedAt={status.startedAt}
+        workedSeconds={status.workedSeconds}
+        verdict={status.verdict}
+        continued={status.continued === true}
+        live={live}
+        style={style}
+        expanded={expanded}
+        onToggleExpanded={onToggle}
+      />
+    ) : null,
+    leadRow: lead ? (
+      <MobileNativeChatTurnStatus
+        startedAt={lead.startedAt}
+        workedSeconds={lead.workedSeconds}
+        verdict={lead.verdict}
+        style={style}
+      />
+    ) : null
+  }
+}
+
 export function MobileNativeChatTurnStatus({
   pendingLabel,
   startedAt,
   workedSeconds,
   verdict,
+  continued = false,
   expanded = false,
   onToggleExpanded,
   trailing,
@@ -42,6 +88,8 @@ export function MobileNativeChatTurnStatus({
   startedAt: number | null
   workedSeconds?: number | null
   verdict?: AgentTurnOutcome
+  /** Settled: the stretch after the person's message mid-turn, which reads "Continued for". */
+  continued?: boolean
   expanded?: boolean
   onToggleExpanded?: () => void
   /** At the row's end, inside its hairline, while the turn is unsettled: a group turn's Stop. */
@@ -58,7 +106,7 @@ export function MobileNativeChatTurnStatus({
   const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
   const label =
     pendingLabel ??
-    formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t)
+    formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict, continued }, t)
   const copy = nativeChatTurnStatusCopy(t)
 
   const identity = bot ? (
