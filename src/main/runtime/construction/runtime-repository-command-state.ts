@@ -1,4 +1,6 @@
 import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { PRSnapshotReply } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import {
   LazyRuntimeGitHubRepositoryQueryCommands,
@@ -112,8 +114,13 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
         repoId,
         meta: { prNumber: number, prUrl: url }
       })
-    }
+    },
+    recordPROutcome: (repo, branch, outcome) => this.hostPROutcomeRecorder?.(repo, branch, outcome)
   })
+
+  /** Set only on a renderer-less host (orcad), whose served PR reads must fill its own cache. */
+  hostPROutcomeRecorder: ((repo: Repo, branch: string, outcome: PRSnapshotReply) => void) | null =
+    null
 
   protected readonly gitHubRepositoryQueries = new LazyRuntimeGitHubRepositoryQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),

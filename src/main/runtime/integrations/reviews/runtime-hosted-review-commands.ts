@@ -53,6 +53,7 @@ type RuntimeHostedReviewCommandsDeps = {
     admissionTier?: GitAdmissionTier
   ) => HostedReviewExecutionOptions | undefined
   recordCreated: (repoId: string, number: number, url: string) => void
+  recordPROutcome?: (repo: Repo, branch: string, outcome: PRSnapshotReply) => void
 }
 
 export class RuntimeHostedReviewCommands {
@@ -97,6 +98,7 @@ export class RuntimeHostedReviewCommands {
       if ('kind' in outcome && outcome.kind === 'found') {
         this.deps.recordCreated(repo.id, outcome.pr.number, outcome.pr.url)
       }
+      this.deps.recordPROutcome?.(repo, branch, outcome)
       return outcome
     }
     const lookupOptions: GitHubPRBranchLookupOptions = {

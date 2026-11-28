@@ -217,6 +217,11 @@ export async function activateBackendRuntime(
   const { wireGitHubIssueLinkTitleFill } =
     await import('../github/workspace-links/github-issue-link-title-wiring')
   registerCleanup(wireGitHubIssueLinkTitleFill(profileStore, runtime))
+  // No renderer writes this host's PR cache; served reads fill it for worktree.ps and cleanup (#50758).
+  const { recordHostPROutcome } =
+    await import('../github/pull-requests/refresh/host-pr-cache-recording')
+  runtime.hostPROutcomeRecorder = (repo, branch, outcome) =>
+    recordHostPROutcome(profileStore, repo, branch, outcome)
   const { installOrcadEmulatorBridge } = await import('../orcad/host-runtime/orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
   const relay = await installOrcadRelayAndAccount(runtime, registerCleanup)
