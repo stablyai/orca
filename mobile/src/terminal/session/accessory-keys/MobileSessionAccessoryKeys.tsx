@@ -7,7 +7,7 @@ import {
   type GestureResponderEvent,
   type ScrollViewInstance
 } from 'react-native'
-import { ClipboardPaste, Ellipsis } from 'lucide-react-native'
+import { ClipboardPaste, CornerDownLeft, Ellipsis } from 'lucide-react-native'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
 import { createTerminalLiveAccessoryInput } from '../../live-input/terminal-live-accessory-input'
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../../key-input/terminal-accessory-repeat'
@@ -42,13 +42,32 @@ const builtIn = (id: string): TerminalAccessoryKey => BUILT_IN.get(id)!
 const LEADING_KEYS = [builtIn('escape'), builtIn('tab')]
 const ARROW_KEYS = ['arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight'].map(builtIn)
 const BACKSPACE_KEY = builtIn('backspace')
+const ENTER_KEY = builtIn('enter')
 
-// The terminal's key row above the live input: the keys people reach for, then ⋯ for the rest.
+export type MobileSessionAccessoryKeysController = Pick<
+  MobileSessionController,
+  | 'customKeys'
+  | 'setDeleteKeyTarget'
+  | 'canPaste'
+  | 'canSend'
+  | 'handleAccessoryKey'
+  | 'stopAccessoryRepeat'
+  | 'cancelAccessoryRepeat'
+  | 'prepareAccessoryPress'
+  | 'handlePaste'
+  | 'dockKeys'
+  | 'activeSessionTab'
+  | 'activeHandleRef'
+  | 'terminals'
+  | 'smartRailEnabled'
+>
+
+// The terminal's key row above the live input: the keys people reach for, then Paste, Enter and ⋯ pinned at the end.
 export function MobileSessionAccessoryKeys({
   controller,
   onMoreKeys
 }: {
-  controller: MobileSessionController
+  controller: MobileSessionAccessoryKeysController
   onMoreKeys: () => void
 }) {
   const styles = useThemedStyles(terminalDockStylesSheet)
@@ -230,22 +249,6 @@ export function MobileSessionAccessoryKeys({
           ))}
         </View>
         {builtInKey(BACKSPACE_KEY)}
-        {canPaste && (
-          <Pressable
-            style={keyStyle}
-            disabled={!canSend}
-            hitSlop={TERMINAL_KEY_HIT_SLOP}
-            onPressIn={() => touch.arm('paste')}
-            onPress={(event) => touch.fire('paste', event, () => void handlePaste())}
-            accessibilityRole="button"
-            accessibilityLabel={t(
-              'session.accessoryKeys.pasteFromClipboard',
-              'Paste from clipboard'
-            )}
-          >
-            <ClipboardPaste size={15} color={colors.textPrimary} strokeWidth={2} />
-          </Pressable>
-        )}
         {customKeys
           .filter((key) => key.visible !== false)
           .map((key) => (
@@ -276,7 +279,23 @@ export function MobileSessionAccessoryKeys({
             </Pressable>
           ))}
       </ScrollView>
-      {/* Pinned outside the scroll, so the rest of the keys are always one tap away. */}
+      {/* Pinned outside the scroll, so Paste, Enter and ⋯ are always one tap away. */}
+      {canPaste && (
+        <Pressable
+          style={keyStyle}
+          disabled={!canSend}
+          hitSlop={TERMINAL_KEY_HIT_SLOP}
+          onPressIn={() => touch.arm('paste')}
+          onPress={(event) => touch.fire('paste', event, () => void handlePaste())}
+          accessibilityRole="button"
+          accessibilityLabel={t('session.accessoryKeys.pasteFromClipboard', 'Paste from clipboard')}
+        >
+          <ClipboardPaste size={15} color={colors.textPrimary} strokeWidth={2} />
+        </Pressable>
+      )}
+      <Pressable style={keyStyle} hitSlop={TERMINAL_KEY_HIT_SLOP} {...builtInPressProps(ENTER_KEY)}>
+        <CornerDownLeft size={15} color={colors.textPrimary} strokeWidth={2} />
+      </Pressable>
       <Pressable
         style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
         hitSlop={TERMINAL_KEY_HIT_SLOP}
