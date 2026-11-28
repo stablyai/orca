@@ -241,6 +241,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:importCookiesForClientHost', args),
   sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
     ipcRenderer.invoke('browser:session:resolvePartition', args),
+  listArdiaFileImportProfiles: () =>
+    ipcRenderer.invoke('browser:session:listArdiaFileImportProfiles'),
   sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),
   sessionDetectBrowsersForClientHost: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),

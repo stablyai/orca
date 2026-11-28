@@ -2,9 +2,21 @@ import { translateMain } from '../../../i18n/main-i18n'
 import { dialog, type BrowserWindow } from 'electron'
 
 // Main owns the file picker so a compromised renderer cannot request arbitrary file reads.
-export async function pickCookieFile(parentWindow: BrowserWindow | null): Promise<string | null> {
+export async function pickCookieFile(
+  parentWindow: BrowserWindow | null,
+  ardia?: { source: string; destination: string }
+): Promise<string | null> {
   const opts = {
     title: translateMain('native.dialog.importCookies', 'Import Cookies'),
+    ...(ardia
+      ? {
+          message: translateMain(
+            'native.dialog.ardiaCookieFile',
+            'Choose a JSON export from Ardia “{{source}}” for Orca “{{destination}}”.',
+            ardia
+          )
+        }
+      : {}),
     filters: [
       { name: translateMain('native.dialog.cookieFiles', 'Cookie Files'), extensions: ['json'] },
       { name: translateMain('native.dialog.allFiles', 'All Files'), extensions: ['*'] }

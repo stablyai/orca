@@ -222,6 +222,7 @@ export type BrowserApi = {
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: BrowserProfileCookieImportArgs) => Promise<BrowserCookieImportResult>
+  listArdiaFileImportProfiles: () => Promise<{ id: string; name: string }[]>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionDetectBrowsersForClientHost: (args: {

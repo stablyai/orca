@@ -291,7 +291,8 @@ export type BrowserSlice = {
   managedBrowserProfileStatusById: Record<string, 'pending' | 'failed'>
   importCookiesToProfile: (
     profileId: string,
-    pageRoute?: BrowserPageCookieImportRoute | null
+    pageRoute?: BrowserPageCookieImportRoute | null,
+    ardiaProfileName?: string
   ) => Promise<BrowserCookieImportExecutionResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {

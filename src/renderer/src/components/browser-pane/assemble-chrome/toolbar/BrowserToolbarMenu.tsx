@@ -353,8 +353,8 @@ export function BrowserToolbarMenu({
     }
   }
 
-  const handleImportFromFile = async (): Promise<void> => {
-    const result = await importCookiesToProfile(effectiveProfileId, pageRoute)
+  const handleImportFromFile = async (ardiaProfileName?: string): Promise<void> => {
+    const result = await importCookiesToProfile(effectiveProfileId, pageRoute, ardiaProfileName)
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -403,7 +403,7 @@ export function BrowserToolbarMenu({
                 onPickerOpenChange: setImportPickerOpen,
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
-                onImportFromFile: () => void handleImportFromFile()
+                onImportFromFile: (name) => void handleImportFromFile(name)
               }
             : null
         }
