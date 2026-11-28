@@ -4,6 +4,7 @@ import type {
   ClaudeHostRunningSessionsMove
 } from '../../../shared/agent-accounts/managed-account-types'
 import type { ClaudeHostSelectionChange } from '../../../shared/agent-accounts/claude/claude-pane-account-folder'
+import type { ClaudeAccountRotationStatus } from '../../../shared/agent-accounts/claude/claude-account-rotation'
 import type { PreloadApi } from '../../api-types'
 
 export const claudeAccountsApi = {
@@ -34,5 +35,7 @@ export const claudeAccountsApi = {
       callback(change)
     ipcRenderer.on('claudeAccounts:selectedElsewhere', listener)
     return () => ipcRenderer.removeListener('claudeAccounts:selectedElsewhere', listener)
-  }
+  },
+  rotationStatus: (): Promise<ClaudeAccountRotationStatus> =>
+    ipcRenderer.invoke('claudeAccounts:rotationStatus')
 } satisfies PreloadApi['claudeAccounts']

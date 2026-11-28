@@ -25807,7 +25807,52 @@
         "about": "About Claude usage polling"
       },
       "organizationSuffix": "Organization ···{{suffix}}",
-      "personalOrganization": "Personal"
+      "personalOrganization": "Personal",
+      "rotation": {
+        "title": "Switch accounts automatically near limits",
+        "description": "When the selected account nears its 5-hour or weekly limit, Orca gives its folder the login of an account with no running Claude sessions. Running sessions continue on the new login. Accounts on this Mac only.",
+        "externalRotator": "Another rotation tool on this Mac (~/.claude/rotate) is on, so Orca leaves the logins alone. Turn that tool off to let Orca switch accounts.",
+        "fiveHour": "Switch at 5-hour use",
+        "weekly": "Switch at weekly use",
+        "orderTitle": "Switch to",
+        "orderPrefer": "Highest priority first",
+        "orderReset": "Soonest weekly reset",
+        "accountsTitle": "Accounts",
+        "accountsDescription": "Orca never switches to or away from an account you turn off. An empty limit uses the one above. Priority 1 is used first, and Orca switches back to a higher one once its 5-hour use is under half. Accounts without a priority come last, least used first.",
+        "columnAccount": "Account",
+        "columnUse": "Use",
+        "columnFiveHour": "5-hour",
+        "columnWeekly": "Weekly",
+        "columnPriority": "Priority",
+        "useAccount": "Use {{account}}",
+        "fiveHourOf": "5-hour limit of {{account}}",
+        "weeklyOf": "Weekly limit of {{account}}",
+        "priorityOf": "Priority of {{account}}",
+        "priorityNone": "None",
+        "status": {
+          "unnamed": "an unnamed account",
+          "noAccounts": "Add at least two Claude accounts on this Mac to switch between them.",
+          "pending": "Checking the last switch. New switches wait until it is confirmed.",
+          "needsRepair": "After the last switch, a folder has no login or one for another account. Switching is paused until that folder is signed in to one of the two accounts again.",
+          "noCandidate": "The selected account is at its limit and no other account is free. Close sessions on another account or wait for a reset.",
+          "lastSwitch": "Last switch {{when}}: {{from}} to {{to}}.",
+          "next": "Next account to switch to: {{account}}.",
+          "checked": "Last checked {{when}}.",
+          "accountOff": "The selected account is turned off below, so Orca leaves it as it is."
+        },
+        "notice": {
+          "fiveHourLimit": "5-hour {{percent}}%",
+          "weeklyLimit": "weekly {{percent}}%",
+          "title": "Claude account rotation",
+          "unnamed": "another account",
+          "switchedOver": "{{from}} reached {{limits}}. Claude now uses {{to}}.",
+          "switchedPreferred": "Claude moved from {{from}} back to {{to}}, which has a higher priority.",
+          "switchedSoonerReset": "Claude moved from {{from}} to {{to}}, whose weekly limit resets sooner.",
+          "noCandidate": "Reached {{limits}}, but no other account is free to switch to. Close sessions on another account or wait for a reset.",
+          "reverted": "A running Claude session kept the old login, so the last switch was undone.",
+          "needsRepair": "After a switch, a folder has no login or one for another account. Orca keeps its backups of both logins and pauses switching until that folder is signed in to one of the two accounts again."
+        }
+      }
     },
     "codex": {
       "usageSignInLabel": "Signed out",

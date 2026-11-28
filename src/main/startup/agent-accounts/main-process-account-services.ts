@@ -15,6 +15,8 @@ import { createDesktopOrcaAccountService } from '../desktop-orca-account-service
 import { installOrcaServerSignIn, OrcaServerSignIn } from '../../orca-profiles/orca-server-sign-in'
 import { GoogleConnect, installGoogleConnect } from '../../google/google-connect'
 import { setBotToolSignInBrowser } from '../../bots/tool-oauth/bot-tool-sign-in-flows'
+import { installClaudeAccountRotation } from '../../ipc/accounts/claude-account-rotation'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
 export type DesktopAccountServiceDeps = {
   store: Store
@@ -55,6 +57,12 @@ export async function initializeMainProcessAccountServices(
   core.codexAccounts = services.codexAccounts
   core.claudeRuntimeAuth = services.claudeRuntimeAuth
   core.claudeAccounts = services.claudeAccounts
+  installClaudeAccountRotation({
+    store,
+    claudeRuntimeAuth: services.claudeRuntimeAuth,
+    rateLimits: services.rateLimits,
+    dataRoot: getAppEnvironment().getPath('userData')
+  })
   core.orcaAccount = createDesktopOrcaAccountService(openExternal)
   // A paired client may sign this host in too (D3); the desktop keeps its own window sign-in.
   installOrcaServerSignIn(new OrcaServerSignIn({ account: core.orcaAccount }))

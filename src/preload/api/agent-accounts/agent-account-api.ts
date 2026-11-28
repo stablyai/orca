@@ -1,3 +1,4 @@
+import type { ClaudeAccountRotationStatus } from '../../../shared/agent-accounts/claude/claude-account-rotation'
 import type {
   ClaudeAccountSelectionChange,
   ClaudeHostRunningSessionsMove,
@@ -82,6 +83,8 @@ export type ClaudeAccountsApi = {
     heldPtyIds: string[]
   }) => Promise<ClaudeHostRunningSessionsMove | undefined>
   onSelectedElsewhere?: (callback: (change: ClaudeAccountSelectionChange) => void) => () => void
+  /** Desktop only: the automatic login rotation between this host's account folders. */
+  rotationStatus?: () => Promise<ClaudeAccountRotationStatus>
 }
 
 export type GrokAccountsApi = {

@@ -25557,7 +25557,52 @@
         "about": "Claude 사용량 주기적 조회 정보"
       },
       "organizationSuffix": "조직 ···{{suffix}}",
-      "personalOrganization": "개인"
+      "personalOrganization": "개인",
+      "rotation": {
+        "title": "한도에 가까워지면 계정 자동 전환",
+        "description": "선택한 계정이 5시간 또는 주간 한도에 가까워지면, Orca가 그 폴더에 실행 중인 Claude 세션이 없는 계정의 로그인을 넣습니다. 실행 중인 세션은 새 로그인으로 계속됩니다. 이 Mac의 계정에만 적용됩니다.",
+        "externalRotator": "이 Mac에서 다른 전환 도구(~/.claude/rotate)가 켜져 있어 Orca는 로그인을 건드리지 않습니다. Orca가 계정을 전환하게 하려면 그 도구를 끄세요.",
+        "fiveHour": "5시간 사용량 기준",
+        "weekly": "주간 사용량 기준",
+        "orderTitle": "전환할 계정",
+        "orderPrefer": "순위 높은 계정 먼저",
+        "orderReset": "주간 초기화가 빠른 계정",
+        "accountsTitle": "계정별 설정",
+        "accountsDescription": "끈 계정으로는 전환하지 않고, 그 계정에서 다른 계정으로 전환하지도 않습니다. 기준을 비워 두면 위의 기준을 따릅니다. 1순위부터 쓰고, 더 높은 순위 계정의 5시간 사용량이 절반 아래로 내려가면 그 계정으로 돌아갑니다. 순위가 없는 계정은 맨 뒤에, 덜 쓴 계정부터 씁니다.",
+        "columnAccount": "계정",
+        "columnUse": "사용",
+        "columnFiveHour": "5시간",
+        "columnWeekly": "주간",
+        "columnPriority": "순위",
+        "useAccount": "{{account}} 사용",
+        "fiveHourOf": "{{account}}의 5시간 기준",
+        "weeklyOf": "{{account}}의 주간 기준",
+        "priorityOf": "{{account}}의 순위",
+        "priorityNone": "없음",
+        "status": {
+          "unnamed": "이름 없는 계정",
+          "noAccounts": "계정 사이를 전환하려면 이 Mac에 Claude 계정을 두 개 이상 추가하세요.",
+          "pending": "마지막 전환을 확인하는 중입니다. 확인될 때까지 새 전환은 기다립니다.",
+          "needsRepair": "마지막 전환 후 한 폴더에 로그인이 없거나 다른 계정이 로그인되어 있습니다. 그 폴더가 두 계정 중 하나로 다시 로그인될 때까지 전환을 멈춥니다.",
+          "noCandidate": "선택한 계정이 한도에 닿았지만 비어 있는 다른 계정이 없습니다. 다른 계정의 세션을 닫거나 초기화를 기다리세요.",
+          "lastSwitch": "마지막 전환 {{when}}: {{from}} → {{to}}.",
+          "next": "다음 전환 대상: {{account}}.",
+          "checked": "마지막 확인 {{when}}.",
+          "accountOff": "선택한 계정이 아래에서 꺼져 있어 Orca가 그대로 둡니다."
+        },
+        "notice": {
+          "fiveHourLimit": "5시간 {{percent}}%",
+          "weeklyLimit": "주간 {{percent}}%",
+          "title": "Claude 계정 자동 전환",
+          "unnamed": "다른 계정",
+          "switchedOver": "{{from}} 계정이 {{limits}}에 닿았습니다. 이제 Claude는 {{to}} 계정을 씁니다.",
+          "switchedPreferred": "Claude가 {{from}}에서 순위가 더 높은 {{to}}(으)로 돌아왔습니다.",
+          "switchedSoonerReset": "Claude가 {{from}}에서 주간 한도가 더 먼저 초기화되는 {{to}}(으)로 옮겼습니다.",
+          "noCandidate": "{{limits}}에 닿았지만 전환할 수 있는 다른 계정이 없습니다. 다른 계정의 세션을 닫거나 초기화를 기다리세요.",
+          "reverted": "실행 중인 Claude 세션이 이전 로그인을 유지해서 마지막 전환을 되돌렸습니다.",
+          "needsRepair": "전환 후 한 폴더에 로그인이 없거나 다른 계정이 로그인되어 있습니다. 그 폴더가 두 계정 중 하나로 다시 로그인될 때까지 Orca는 두 로그인의 백업을 보관하고 전환을 멈춥니다."
+        }
+      }
     },
     "codex": {
       "usageSignInLabel": "로그아웃됨",
