@@ -32,12 +32,12 @@ export function remoteRuntimeConnectOptions<TOptions extends ClientOptions>(
 const DISPLAYABLE_ENDPOINT_HOST_RE = /^(?:\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::\d{1,5})?$/i
 
 /** Pairing endpoints are untrusted; show only scheme and a host that cannot smuggle diagnostic verdicts. */
-function endpointForDisplay(endpoint: string): string {
+function endpointForDisplay(endpoint: string, fallback = 'the paired endpoint'): string {
   try {
     const { protocol, host } = new URL(endpoint)
-    return DISPLAYABLE_ENDPOINT_HOST_RE.test(host) ? `${protocol}//${host}` : 'the paired endpoint'
+    return DISPLAYABLE_ENDPOINT_HOST_RE.test(host) ? `${protocol}//${host}` : fallback
   } catch {
-    return 'the paired endpoint'
+    return fallback
   }
 }
 
@@ -45,9 +45,26 @@ export function isRemoteRuntimeConnectTimeout(error: unknown): boolean {
   return error instanceof Error && error.message === WS_HANDSHAKE_TIMEOUT_MESSAGE
 }
 
+/** A dial that went through a proxy; `label` carries no credentials, `failure` is fixed wording. */
+export type RemoteRuntimeDialProxy = { label: string; failure: string | null }
+
 /** Loss of contact leaves remote work unverifiable; never imply its terminals stopped (ssh-execution-boundary.md). */
-export function remoteRuntimeConnectFailureMessage(error: unknown, endpoint: string): string {
-  if (!isRemoteRuntimeConnectTimeout(error)) {
+export function remoteRuntimeConnectFailureMessage(
+  error: unknown,
+  endpoint: string,
+  proxy?: RemoteRuntimeDialProxy | null
+): string {
+  const timedOut = isRemoteRuntimeConnectTimeout(error)
+  if (proxy) {
+    const through =
+      `${REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE} at ${endpointForDisplay(endpoint)} through the ` +
+      `proxy ${endpointForDisplay(proxy.label, 'that was selected')}`
+    if (timedOut) {
+      return `${through}: the host did not answer, so anything running on it is unverifiable.`
+    }
+    return proxy.failure ? `${through}: ${proxy.failure}.` : `${through}.`
+  }
+  if (!timedOut) {
     return `${REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE}.`
   }
   // Do not name an elapsed bound: wss can rearm the inactivity timer after TCP connects and take roughly twice as long.

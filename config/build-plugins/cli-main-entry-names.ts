@@ -36,5 +36,12 @@ export const CLI_MAIN_ENTRY_NAMES = [
   // The CLI's own app environment, so main-process hook removers can resolve profile paths.
   'backend/node-service-environment',
   // `orca mcp connect` gets the MCP SDK (a devDependency) bundled in; the packaged CLI can't resolve it.
-  'mcp-servers/agent-files/mcp-connect-bridge'
+  'mcp-servers/agent-files/mcp-connect-bridge',
+  // The CLI dials a paired Runtime through the proxy its environment names.
+  'browser/network/execution-routes/browser-network-proxy-settings-source',
+  'browser/network/tunnels/browser-network-connected-socket',
+  'browser/network/tunnels/browser-network-tunnel-proxy-connect',
+  'browser/network/tunnels/browser-network-tunnel-proxy-selection',
+  'browser/network/tunnels/execution-route-socket-duplex',
+  'network/electron-default-proxy-session'
 ] as const
