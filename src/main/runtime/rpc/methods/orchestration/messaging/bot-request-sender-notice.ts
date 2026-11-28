@@ -30,7 +30,7 @@ import {
 import { lookupOrcaAgentSession } from '../../../../orchestration/mailbox/routing/structured-session-mail-address'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
-import { legacyAttachmentRefusal } from './legacy-attachment-recipient-refusal'
+import { isLegacyAttachmentRefusal } from './legacy-attachment-recipient-refusal'
 
 // Session senders resolve against the session records, which a restart leaves uninstalled until asked.
 export async function ensureSenderRecords(
@@ -152,7 +152,9 @@ function reachableSender(
     if (error instanceof OrchestrationError) {
       const from = request.from_handle
       // The notice keeps main's routing for a sender working another Orca's Task: it reads it after.
-      if (legacyAttachmentRefusal(db, from, runtime.getLiveTerminalPaneKey(from))) {
+      // Only a bare sender's resolution gives these codes for an attachment.
+      const bare = !from.startsWith('run:') && !from.startsWith('dispatch:')
+      if (bare && isLegacyAttachmentRefusal(error)) {
         const kept = resolveBareOrchestrationRecipient({
           runtime,
           db,
