@@ -249,7 +249,8 @@ async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
   if (!sources) {
     return null
   }
-  const roots = await inventoryRootsAsync(sources)
+  // A torn or unreadable source manifest falls back like a missing inventory did.
+  const roots = await inventoryRootsAsync(sources).catch(() => null)
   // With no build to compare against, skip hashing sources up front; the copy fingerprints its own bytes.
   if (roots && !(await hasBuildCandidates())) {
     return publishRelocatedHost(sources, roots, null)

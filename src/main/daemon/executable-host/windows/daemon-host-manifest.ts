@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { fileStatSignature } from '../../../filesystem/file-stat-signature'
 import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
 import { DAEMON_HOST_FS_CONCURRENCY, listDaemonHostTree } from './daemon-host-tree-walk'
 import { dirname, join, win32 as winPath } from 'node:path'
@@ -188,19 +189,24 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   return ops
 }
 
+async function sourceSignature(sourcePath: string): Promise<string> {
+  return fileStatSignature(await stat(sourcePath, { bigint: true }))
+}
+
 // Hash the bytes written; rereading a just-written file waits on Defender's scan of it.
 async function copyHashedFile(
   sourcePath: string,
   dest: string,
   expected: string | undefined
-): Promise<string> {
+): Promise<{ sha256: string; signature: string }> {
+  const signature = await sourceSignature(sourcePath)
   const bytes = await readFile(sourcePath)
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   if (expected !== undefined && sha256 !== expected) {
     throw new Error('daemon-host relocation: code changed while copying')
   }
   await writeFile(dest, bytes)
-  return sha256
+  return { sha256, signature }
 }
 
 export type ManifestCodeHashing = {
@@ -244,6 +250,7 @@ export async function executeManifest(
     await mkdir(dir, { recursive: true })
   }
   const hashes = new Map<string, string>()
+  const signatures = new Map<string, string>()
   // Settles in-flight copies before failing, so staging cleanup cannot race a copy still writing.
   await mapWithConcurrencyUntilFailure(files, DAEMON_HOST_FS_CONCURRENCY, async (file) => {
     const dest = destPath(stagingRoot, file.destRel)
@@ -255,7 +262,19 @@ export async function executeManifest(
     if (code.expected && expected === undefined) {
       throw new Error(`daemon-host relocation: ${file.destRel} is outside the fingerprint`)
     }
-    hashes.set(file.destRel, await copyHashedFile(file.sourcePath, dest, expected))
+    const copied = await copyHashedFile(file.sourcePath, dest, expected)
+    hashes.set(file.destRel, copied.sha256)
+    signatures.set(file.sourcePath, copied.signature)
   })
+  // A source replaced after it was read (an update mid-copy) would mix revisions in one build.
+  await mapWithConcurrencyUntilFailure(
+    [...signatures],
+    DAEMON_HOST_FS_CONCURRENCY,
+    async ([path, before]) => {
+      if ((await sourceSignature(path)) !== before) {
+        throw new Error('daemon-host relocation: code changed while copying')
+      }
+    }
+  )
   return hashes
 }

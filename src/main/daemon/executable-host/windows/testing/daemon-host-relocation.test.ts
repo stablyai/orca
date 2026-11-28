@@ -193,6 +193,35 @@ describe('executeManifest', () => {
   })
 })
 
+describe('executeManifest mixed revisions', () => {
+  it('rejects a fresh copy when a code file it already copied changes mid-copy', async () => {
+    const codeDir = join(tempDir, 'code')
+    mkdirSync(codeDir)
+    for (const name of ['a.js', 'b.js', 'c.js']) {
+      writeFileSync(join(codeDir, name), `revision-a ${name}`)
+    }
+    let calls = 0
+    const isCode = (rel: string): boolean => {
+      calls += 1
+      // Calls 1-3 come from listing and 4-6 from copying; the copy of the third file starts only after another finished.
+      if (calls === 6) {
+        writeFileSync(join(codeDir, 'a.js'), 'revision-b, a longer a.js')
+        writeFileSync(join(codeDir, 'b.js'), 'revision-b, a longer b.js')
+      }
+      return rel.startsWith('code/')
+    }
+    await expect(
+      executeManifest(
+        [{ sourcePath: codeDir, destRel: 'code', kind: 'dir' }],
+        join(tempDir, 'mixed'),
+        {
+          isCode
+        }
+      )
+    ).rejects.toThrow('code changed while copying')
+  })
+})
+
 describe('executeManifest missing sources', () => {
   // Electron's Windows Node can turn a failed opendir into a null handle (#50997); missing folders must reject.
   it('rejects a missing required folder and skips a missing optional one', async () => {
