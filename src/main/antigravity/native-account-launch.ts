@@ -5,6 +5,7 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/
 import { isAntigravityFileStorageHostAsync } from './native-file-credentials'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { getAntigravityAccountService, getAntigravityAccountVaultPath } from './native-account-host'
+import { AntigravityLaunchRestoreError } from './native-account-login-view'
 import { AGY_HOST_SELECTION, type AgyPreparedLogin } from './agy-account-selection'
 
 /** The selected account ('' when none) agy's login was found or put on; undefined when this launch
@@ -61,8 +62,43 @@ export async function prepareAntigravityAccountForLaunch(args: {
   })
 }
 
-/** Unnamed: a login Orca couldn't name without a keychain dialog. */
+/** A login no fresh evidence names. */
 const UNNAMED_LOGIN = '?'
+
+/** Where a launch left agy's login: on the selected account, else on `holder`, the account fresh
+ *  evidence names (null: none), with why it isn't the selected one. */
+export function agyPreparedLogin(
+  selected: string,
+  holder: string | null,
+  failure: string
+): AgyPreparedLogin {
+  return holder === selected
+    ? { key: selected, target: selected }
+    : { key: holder ?? UNNAMED_LOGIN, target: selected, failure }
+}
+
+/** Only a failed restore of the host's own login names who holds it; any other failure (a launch
+ *  on another home or credential store included) names nobody. */
+export function agyLoginHolderAfter(error: unknown): string | null {
+  return error instanceof AntigravityLaunchRestoreError ? error.holder : null
+}
+
+/** Windows puts no account back at launch, but reading its login there raises no dialog. */
+async function windowsLaunchLogin(selected: string): Promise<AgyPreparedLogin> {
+  if (!selected) {
+    return { key: selected, target: selected }
+  }
+  const holder = await getAntigravityAccountService({ runtime: 'host' })
+    .then((service) => service.readLoginHolder())
+    .catch(() => null)
+  return agyPreparedLogin(
+    selected,
+    holder,
+    holder === null
+      ? "Orca couldn't read agy's login."
+      : 'agy is signed in to another account. Select the account again under Settings → Accounts.'
+  )
+}
 
 /** A chat or listing puts the selected account back when that's safe and raises no keychain
  *  dialog, else starts on agy's current login as before; either way it says which account that is. */
@@ -71,30 +107,28 @@ export async function restoreSelectedAntigravityAccount(
 ): Promise<AgyPreparedLogin> {
   const selected = await AGY_HOST_SELECTION.atLaunch()
   let login: AgyPreparedLogin
-  try {
-    const found = await prepareAntigravityAccountForLaunch({
-      launchAgent: 'antigravity',
-      env: { ...env },
-      mayPrompt: false
-    })
-    login = { key: found ?? selected, target: found ?? selected }
-  } catch (error) {
-    console.warn("[antigravity] chat starts on agy's current login:", error)
-    const holder = await getAntigravityAccountService({ runtime: 'host' })
-      .then((service) => service.loginHolderWithoutPrompt())
-      .catch(() => null)
-    login =
-      holder === selected
-        ? { key: selected, target: selected }
-        : {
-            key: holder ?? UNNAMED_LOGIN,
-            target: selected,
-            failure: error instanceof Error ? error.message : String(error)
-          }
+  if (process.platform === 'win32') {
+    login = await windowsLaunchLogin(selected)
+  } else {
+    try {
+      const found = await prepareAntigravityAccountForLaunch({
+        launchAgent: 'antigravity',
+        env: { ...env },
+        mayPrompt: false
+      })
+      login = { key: found ?? selected, target: found ?? selected }
+    } catch (error) {
+      console.warn("[antigravity] chat starts on agy's current login:", error)
+      const reason = error instanceof Error ? error.message : String(error)
+      login = agyPreparedLogin(selected, agyLoginHolderAfter(error), reason)
+    }
   }
   AGY_HOST_SELECTION.prepared(login)
   return login
 }
+
+// A person's send in a chat a failed move held back tries the selected account once more.
+AGY_HOST_SELECTION.restoreWith(() => restoreSelectedAntigravityAccount({}))
 
 // The last agy Orca started on a previous account may have written its login back as it ran.
 AGY_HOST_SELECTION.onOldLoginsGone(() => {

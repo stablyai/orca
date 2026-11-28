@@ -146,6 +146,7 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
     atLaunch: AGY_HOST_SELECTION.atLaunch,
     current: AGY_HOST_SELECTION.current,
     target: AGY_HOST_SELECTION.target,
+    retry: AGY_HOST_SELECTION.retry,
     spawned: AGY_HOST_SELECTION.spawned,
     usedBy: (launch) =>
       !launch.antigravityChatAuth || savedChatAuthUsesAgyLogin(launch.antigravityChatAuth)

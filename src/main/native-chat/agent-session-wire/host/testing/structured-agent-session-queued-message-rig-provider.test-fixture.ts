@@ -23,6 +23,9 @@ export type QueuedRigProviderOptions = {
   acquiredAccountHome?: () => AgentSessionAccountHome
   /** The saved account each child launches on, and what a start would record now. */
   accountKey?: () => string
+  /** What a running child should match, when not `accountKey` (null: hold it where it is). */
+  launchAccountKey?: () => string | null
+  retryLaunchAccount?: NonNullable<StructuredAgentSessionAdapter['retryLaunchAccount']>
   agent?: 'claude'
   rewind?: NonNullable<StructuredAgentSessionAdapter['rewind']>
   recoverRewind?: NonNullable<StructuredAgentSessionAdapter['recoverRewind']>
@@ -133,7 +136,10 @@ export function createQueuedRigProvider(
       }
     },
     dispatch,
-    ...(options.accountKey ? { launchAccountKey: options.accountKey } : {}),
+    ...(options.accountKey
+      ? { launchAccountKey: options.launchAccountKey ?? options.accountKey }
+      : {}),
+    ...(options.retryLaunchAccount ? { retryLaunchAccount: options.retryLaunchAccount } : {}),
     captureMessageSteeringInputs: () => ({
       kind: 'codex',
       compiler: {

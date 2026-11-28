@@ -105,3 +105,20 @@ it('puts the selected login back after an agy that started on another account th
   chat.exit()
   expect(restore).toHaveBeenCalledOnce()
 })
+
+it("tries the selected account again for a person's send only while a failed move holds chats off it", async () => {
+  const selection = new AgyAccountSelection()
+  const restore = vi.fn(async () => selection.prepared({ key: 'b', target: 'b' }))
+  selection.restoreWith(restore)
+  selection.note(vault('a'))
+  selection.note(vault('b'))
+  await selection.retry('a')
+  expect(restore).not.toHaveBeenCalled()
+
+  selection.prepared({ key: 'a', target: 'b', failure: 'keychain access' })
+  await selection.retry('b')
+  expect(restore).not.toHaveBeenCalled()
+  await selection.retry('a')
+  expect(restore).toHaveBeenCalledOnce()
+  expect(selection.target()).toBe('b')
+})
