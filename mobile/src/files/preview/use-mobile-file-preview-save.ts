@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { FileWriteDiskConflict } from '../../../../src/shared/file-write/file-write-disk-precondition'
 import { translate } from '../../i18n/mobile-i18n'
 import { editorTextOfFileText, fileTextOfEditorText } from './mobile-file-preview-line-endings'
@@ -31,20 +31,25 @@ type SaveTarget = {
  * `savedFileText` is the file's own, which saves compare disk against.
  */
 export function useMobileFilePreviewSave(target: SaveTarget) {
-  const [draftContent, setDraftContent] = useState('')
-  const [savedContent, setSavedContent] = useState('')
+  const [draftContent, setDraftState] = useState('')
+  const [savedContent, setSavedState] = useState('')
   const [savedFileText, setSavedFileText] = useState('')
   const [conflict, setConflict] = useState<MobileFilePreviewConflict | null>(null)
   const [saveError, setSaveError] = useState('')
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
   const saveRevisionRef = useRef(0)
+  // Written with the state, so a save finishing before the next render compares against the latest draft.
   const draftContentRef = useRef(draftContent)
   const savedContentRef = useRef(savedContent)
-  useEffect(() => {
-    draftContentRef.current = draftContent
-    savedContentRef.current = savedContent
-  })
+  const setDraftContent = useCallback((content: string) => {
+    draftContentRef.current = content
+    setDraftState(content)
+  }, [])
+  const setSavedContent = useCallback((content: string) => {
+    savedContentRef.current = content
+    setSavedState(content)
+  }, [])
   // Unmount retires pending saves.
   useLayoutEffect(
     () => () => {
@@ -53,20 +58,22 @@ export function useMobileFilePreviewSave(target: SaveTarget) {
     []
   )
 
-  const acceptLoaded = useCallback((fileText: string) => {
-    const editorText = editorTextOfFileText(fileText)
-    setDraftContent(editorText)
-    setSavedContent(editorText)
-    setSavedFileText(fileText)
-    setConflict(null)
-  }, [])
+  const acceptLoaded = useCallback(
+    (fileText: string) => {
+      const editorText = editorTextOfFileText(fileText)
+      setDraftContent(editorText)
+      setSavedContent(editorText)
+      setSavedFileText(fileText)
+      setConflict(null)
+    },
+    [setDraftContent, setSavedContent]
+  )
 
   /** Drops the draft back to the saved text, for a reload that replaces both. */
   const revertDraft = useCallback(() => {
-    draftContentRef.current = savedContentRef.current
     setDraftContent(savedContentRef.current)
     setConflict(null)
-  }, [])
+  }, [setDraftContent])
 
   const { client, source, canWrite, onSourceRefreshed, onSaved } = target
   const save = useCallback(
@@ -159,6 +166,7 @@ export function useMobileFilePreviewSave(target: SaveTarget) {
       onSourceRefreshed,
       savedContent,
       savedFileText,
+      setSavedContent,
       source
     ]
   )

@@ -293,11 +293,17 @@ export function durableDraftRow(key: string, owner: DurableDraftRowOwner): Durab
     handle: {
       key,
       state: () => row.state,
-      // Why join: an editor asks again on every keystroke while a read is stalled.
-      load: () =>
-        (row.loading ??= enqueue(row, () => load(row)).finally(() => {
+      // Why join: an editor asks again on every keystroke while a read is stalled. A joining call
+      // waits for the queue's tail, so it still settles after writes queued since that read.
+      load: () => {
+        if (row.loading) {
+          return row.chain
+        }
+        row.loading = enqueue(row, () => load(row)).finally(() => {
           row.loading = null
-        })),
+        })
+        return row.loading
+      },
       save: (timing) => {
         if (timing === 'immediate') {
           flush(row)

@@ -12,5 +12,8 @@ describe('file preview line endings', () => {
     // A mixed file takes its dominant ending, as the desktop editor does.
     expect(fileTextOfEditorText('x\ny\nz', 'p\r\nq\r\nr\ns')).toBe('x\r\ny\r\nz')
     expect(fileTextOfEditorText('x\ny', 'p\nq\nr\r\ns')).toBe('x\ny')
+    // A classic-Mac file keeps its lone CR endings.
+    expect(editorTextOfFileText('a\rb\r')).toBe('a\nb\n')
+    expect(fileTextOfEditorText('a\nb\nc\n', 'a\rb\r')).toBe('a\rb\rc\r')
   })
 })
