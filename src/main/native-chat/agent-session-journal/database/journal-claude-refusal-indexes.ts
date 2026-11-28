@@ -43,13 +43,15 @@ const DEFINITIONS = new Map([
   ]
 ])
 
-/** Whether both exist; one under either name with other terms is an error, never kept or used. */
+/** Whether both exist. SQLite resolves names without ASCII case, so any object it would take for
+ *  either name must be exactly that index; anything else is an error, never kept or used. */
 function journalClaudeRefusalIndexesPresent(db: Database.Database): boolean {
   const stored = db
-    .prepare(`SELECT name,sql FROM sqlite_schema WHERE type='index' AND name IN (?,?)`)
+    .prepare(`SELECT type,name,sql FROM sqlite_schema WHERE lower(name) IN (?,?)`)
     .all(...DEFINITIONS.keys())
-  for (const { name, sql } of stored) {
-    if (sql !== `CREATE INDEX ${DEFINITIONS.get(String(name))}`) {
+  for (const { type, name, sql } of stored) {
+    const definition = DEFINITIONS.get(String(name))
+    if (type !== 'index' || definition === undefined || sql !== `CREATE INDEX ${definition}`) {
       throw new Error(`journal index ${String(name)} has another definition`)
     }
   }
@@ -66,7 +68,9 @@ export function ensureJournalClaudeRefusalIndexes(db: Database.Database): void {
     for (const definition of DEFINITIONS.values()) {
       writer.exec(`CREATE INDEX IF NOT EXISTS ${definition}`)
     }
-    journalClaudeRefusalIndexesPresent(writer)
+    if (!journalClaudeRefusalIndexesPresent(writer)) {
+      throw new Error('journal saved permission row indexes were not built')
+    }
   })
 }
 

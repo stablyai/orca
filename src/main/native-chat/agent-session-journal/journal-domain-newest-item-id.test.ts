@@ -258,6 +258,14 @@ it('fails a read whose index is missing, and builds both or names a conflicting 
   expect(() => ensureJournalClaudeRefusalIndexes(db)).toThrow(
     `journal index ${timedIndex} has another definition`
   )
+  // SQLite would take this full index for the name a seek forces.
+  db.exec(`DROP INDEX ${timedIndex}`)
+  db.exec(`DROP INDEX ${JOURNAL_CLAUDE_REFUSAL_POSITION_INDEX}`)
+  const variant = JOURNAL_CLAUDE_REFUSAL_POSITION_INDEX.toUpperCase()
+  db.exec(`CREATE INDEX ${variant} ON journal_items(session_id,epoch,item_id)`)
+  expect(() => ensureJournalClaudeRefusalIndexes(db)).toThrow(
+    `journal index ${variant} has another definition`
+  )
   db.close()
   older.close()
   reader.close()
