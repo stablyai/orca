@@ -19,7 +19,21 @@ declare module 'monaco-editor/esm/vs/language/typescript/tsWorker.js' {
       fileName: string,
       position: number
     ): Promise<readonly { fileName: string }[] | undefined>
+    getLanguageService(): {
+      getLinkedEditingRangeAtPosition(
+        fileName: string,
+        position: number
+      ): { ranges: { start: number; length: number }[]; wordPattern?: string } | undefined
+    }
   }
+}
+
+declare module 'monaco-editor/esm/vs/common/initialize.js' {
+  import type { TypeScriptWorker } from 'monaco-editor/esm/vs/language/typescript/tsWorker.js'
+  type WorkerArgs = ConstructorParameters<typeof TypeScriptWorker>
+  export function initialize(
+    factory: (context: WorkerArgs[0], createData: WorkerArgs[1]) => unknown
+  ): void
 }
 
 declare module 'monaco-editor/esm/vs/language/typescript/lib/typescriptServices.js' {
