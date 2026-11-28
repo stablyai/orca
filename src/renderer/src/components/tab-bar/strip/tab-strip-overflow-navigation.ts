@@ -66,6 +66,7 @@ export function useTabStripOverflowNavigation({
   const prevStripRef = useRef<{ worktreeId: string; tabIds: ReadonlySet<string> } | null>(null)
   const stickToEndRef = useRef(false)
   const tabClosedThisCommitRef = useRef(false)
+  const tabCloseGenerationRef = useRef(0)
   const activeTabIdRef = useRef<string | null>(null)
   const slotIdsRef = useRef<readonly string[]>(slotIds)
   const hoverDeferredRevealIdsRef = useRef<Set<string>>(new Set())
@@ -213,6 +214,9 @@ export function useTabStripOverflowNavigation({
     // Why identities, not a count: a tab that replaces another opens without the strip growing.
     const tabOpened = [...tabIds].some((id) => !prev.tabIds.has(id))
     tabClosedThisCommitRef.current = !tabOpened && [...prev.tabIds].some((id) => !tabIds.has(id))
+    if (tabClosedThisCommitRef.current) {
+      tabCloseGenerationRef.current += 1
+    }
     const scrollToEnd = (stick: boolean): void => {
       const el = tabStripRef.current
       if (!el) {
@@ -273,6 +277,7 @@ export function useTabStripOverflowNavigation({
     isFocused,
     tabStripRef,
     tabClosedThisCommitRef,
+    tabCloseGenerationRef,
     stickToEndRef,
     recordScrollAnchor,
     updateTabStripOverflowState

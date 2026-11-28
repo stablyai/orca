@@ -12,6 +12,7 @@ export function useRevealFocusedTabStripSlot({
   isFocused,
   tabStripRef,
   tabClosedThisCommitRef,
+  tabCloseGenerationRef,
   stickToEndRef,
   recordScrollAnchor,
   updateTabStripOverflowState
@@ -21,6 +22,7 @@ export function useRevealFocusedTabStripSlot({
   isFocused: boolean | undefined
   tabStripRef: RefObject<HTMLDivElement | null>
   tabClosedThisCommitRef: MutableRefObject<boolean>
+  tabCloseGenerationRef: MutableRefObject<number>
   stickToEndRef: MutableRefObject<boolean>
   recordScrollAnchor: () => void
   updateTabStripOverflowState: () => void
@@ -69,10 +71,11 @@ export function useRevealFocusedTabStripSlot({
       requestAnimationFrame(updateTabStripOverflowState)
       recordScrollAnchor()
       let removeReleaseListener = (): void => {}
+      const closeGeneration = tabCloseGenerationRef.current
       removeReleaseListener = onTabStripPointerGestureRelease(() => {
         removeReleaseListener()
         requestAnimationFrame(() => {
-          if (isFocusedRef.current) {
+          if (isFocusedRef.current && closeGeneration === tabCloseGenerationRef.current) {
             revealFocusedSlot()
           }
         })
@@ -93,6 +96,7 @@ export function useRevealFocusedTabStripSlot({
     recordScrollAnchor,
     revealFocusedSlot,
     tabClosedThisCommitRef,
+    tabCloseGenerationRef,
     tabStripRef,
     updateTabStripOverflowState
   ])
