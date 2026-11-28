@@ -757,6 +757,11 @@ describe('follow-up dispatch effective settings (#49307)', () => {
         recipe: buildCodexRecipe({}, '--model [a-z] -c model_reasoning_effort=`id`'),
         ...unavailable
       },
+      {
+        hadLaunchConfig: true,
+        recipe: buildCodexRecipe({ codex: 'codex --model gpt-{5,6}' }, ''),
+        ...unavailable
+      },
       { hadLaunchConfig: false, recipe: { agentArgs: '', agentEnv: {} }, ...unavailable }
     ] as const) {
       expect(

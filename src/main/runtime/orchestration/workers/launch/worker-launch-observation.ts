@@ -87,8 +87,14 @@ export function mergeWorkerLaunchObservation(json: string, observation: unknown)
   const nextSource = decoded.data.effectiveSource
   const priorSource = object.safeParse(previous.effectiveSource)
   const sourceBefore = priorSource.success ? priorSource.data : {}
+  const nextEffective = { ...effectiveBefore, ...effective }
   const sourceFields = nextSource
-    ? Object.fromEntries(Object.entries(nextSource).filter(([, value]) => value !== undefined))
+    ? Object.fromEntries(
+        Object.entries(nextSource).filter(
+          ([key, value]) =>
+            value !== undefined && !(nextEffective[key] === null && effectiveBefore[key] != null)
+        )
+      )
     : {}
   const effectiveFields = effective
     ? Object.fromEntries(

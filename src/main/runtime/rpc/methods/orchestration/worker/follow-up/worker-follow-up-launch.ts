@@ -127,7 +127,7 @@ function extractRecipeAgentArgs(
   return argsSlice && !argsSlice.includes('&') ? argsSlice : undefined
 }
 
-const SHELL_EXPANSION_CHARS = /[$`*?[\]]/
+const SHELL_EXPANSION_CHARS = /[$`*?[\]{}]/
 
 function literalRecipeSetting(
   value: string | null | undefined,
