@@ -1,3 +1,4 @@
+import { useNativeChatImageOnlyResolve } from './use-native-chat-image-only-pending'
 import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import { currentDraftScope } from '../../drafts/native-chat-launch-draft-source'
 import type {
@@ -238,7 +239,7 @@ export function useNativeChatComposerAttachments({
     ]
   )
 
-  const resolvePendingImageAttachment = useCallback(
+  const resolveAnyPendingImage = useCallback(
     (
       id: string,
       path: string,
@@ -274,6 +275,12 @@ export function useNativeChatComposerAttachments({
       return takePendingImageWithReferences(scope, scopeEditor(scope), id) !== undefined
     },
     [destinationScope, releasePreview, scopeEditor, serverOwnedPendingIds]
+  )
+
+  const resolvePendingImageAttachment = useNativeChatImageOnlyResolve(
+    resolveAnyPendingImage,
+    dropPendingImageAttachment,
+    mountedRef
   )
 
   const pendingChips = useMemo(

@@ -260,5 +260,5 @@ export function useNativeChatComposerPaste({
     setNotice
   ])
 
-  return { handlePaste, pasteFromClipboard }
+  return { handlePaste, pasteFromClipboard, startImageChip, saveClipboardImage, canPaste }
 }

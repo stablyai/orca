@@ -63,6 +63,7 @@ export function usePanZoomViewport({
   fitPadding,
   actualSizeClickZoom,
   zoomedDragPans = false,
+  metaWheelZooms = false,
   onClickOutsideContent
 }: {
   content: PanZoomSize | null
@@ -76,6 +77,8 @@ export function usePanZoomViewport({
   actualSizeClickZoom?: number
   /** Once zoomed in, a plain drag pans; at the fit it still does nothing. */
   zoomedDragPans?: boolean
+  /** ⌘+wheel zooms like pinch, as macOS image viewers do; otherwise it pans like a plain wheel. */
+  metaWheelZooms?: boolean
   /** A click (not a drag) beside the content runs this instead of toggling zoom. */
   onClickOutsideContent?: () => void
 }): PanZoomViewport {
@@ -146,7 +149,7 @@ export function usePanZoomViewport({
     return () => observer.disconnect()
   }, [canvas])
 
-  usePanZoomWheel(canvas, geometry, setManualView)
+  usePanZoomWheel(canvas, geometry, setManualView, metaWheelZooms)
 
   useEffect(() => {
     if (!canvas) {

@@ -89,7 +89,11 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       structuredTransport ? null : targetPtyId,
       canSend
     )
-    const { notices, setNotice } = useNativeChatComposerNotice(chatNotices, holdNotice)
+    const { notices, setNotice } = useNativeChatComposerNotice(
+      chatNotices,
+      holdNotice,
+      draftScopeKey
+    )
     const { textareaRef } = useNativeChatComposerAppMenuSelection(imeEnterGesture.isComposing)
     const recall = useNativeChatComposerRecall({
       draft,
@@ -310,7 +314,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         sendStructured,
         ptyCommandRouting: { ...ptyCommandRouting, setActiveSuggestion },
         setNotice,
-        sendMessage: submission.send
+        submission: { ...submission, goalActive: goalMode.active }
       })
 
     const interrupt = useNativeChatComposerInterrupt({

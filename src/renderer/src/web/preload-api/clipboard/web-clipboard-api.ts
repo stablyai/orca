@@ -1,5 +1,6 @@
 import { holdBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
-import { decodeBase64Bytes } from '@/lib/base64-bytes'
+import { generatedNoteImageRowsDecode } from '../../../../../shared/native-chat/media-notes/generated-note-image-rows'
+import { decodeBase64Bytes, encodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget
@@ -217,11 +218,19 @@ export async function saveWebClipboardImageAsTempFile(args?: {
   forNativeChatDraft?: boolean
   forStructuredChat?: boolean
   eventImage?: Blob
+  png?: Uint8Array
 }) {
   if (!requireActiveEnvironmentOrNull()) {
     return null
   }
-  const contentBase64 = await readClipboardImagePngBase64(args?.eventImage)
+  // A drawn notes image passes the same whole-PNG, size and decoded-rows check as on desktop before
+  // it is sent.
+  if (args?.png && !(await generatedNoteImageRowsDecode(args.png))) {
+    throw new Error('Notes image is not a PNG Orca can save.')
+  }
+  const contentBase64 = args?.png
+    ? encodeBase64Bytes(args.png)
+    : await readClipboardImagePngBase64(args?.eventImage)
   if (!contentBase64) {
     return null
   }

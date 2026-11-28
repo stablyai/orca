@@ -111,22 +111,28 @@ export function useNativeChatClipboardImagePaste({
     setNotice
   ])
 
-  // Return whether the original editor still owns the caret after settlement.
+  // Return whether the original editor still owns the caret after settlement. A drawn notes image
+  // (`png`) settles only in that editor, so for it the result is also whether it was attached.
   return useCallback(
     async (
       owner: NativeChatAttachmentOwner,
       pendingId: string | null,
       besideText: boolean,
       ready?: () => void,
-      eventImage?: Blob
+      eventImage?: Blob,
+      png?: Uint8Array
     ): Promise<boolean> => {
       const saved = await saveNativeChatPastedClipboardImage(owner, {
         besideText,
         ready,
         eventImage,
+        // A notes image's failure is reported by its viewer alone.
         canNotify: () =>
-          canComplete() && (!pendingId || pendingClipboardImages.get(pendingId) !== 'removed'),
-        setNotice
+          !png &&
+          canComplete() &&
+          (!pendingId || pendingClipboardImages.get(pendingId) !== 'removed'),
+        setNotice,
+        ...(png ? { png } : {})
       })
       if (saved.status !== 'saved') {
         dropImagePaste(pendingId)
@@ -152,22 +158,28 @@ export function useNativeChatClipboardImagePaste({
           reason = 'owner-changed'
         } else {
           const editInPlace = composerVisible && composerScope === scope && canPaste()
-          const settle = editInPlace
-            ? composer.resolvePendingImageAttachment
-            : resolvePendingImageAttachment
-          if (
-            settle(
-              pendingId,
-              saved.tempPath,
-              null,
-              editInPlace ? undefined : { insertReferences: null }
-            )
-          ) {
-            pendingClipboardImages.delete(pendingId)
-            if (staged) {
-              stageNativeChatDraftFile(scope, saved.tempPath)
+          // A drawn notes image is one piece with its notes: with its message box gone, the image
+          // is dropped rather than kept without them, and the notes stay in their viewer.
+          if (png && !editInPlace) {
+            reason = 'notes-image-destination-lost'
+          } else {
+            const settle = editInPlace
+              ? composer.resolvePendingImageAttachment
+              : resolvePendingImageAttachment
+            if (
+              settle(
+                pendingId,
+                saved.tempPath,
+                null,
+                editInPlace ? undefined : { insertReferences: null }
+              )
+            ) {
+              pendingClipboardImages.delete(pendingId)
+              if (staged) {
+                stageNativeChatDraftFile(scope, saved.tempPath)
+              }
+              return editInPlace
             }
-            return editInPlace
           }
         }
       }
@@ -175,7 +187,8 @@ export function useNativeChatClipboardImagePaste({
       dropImagePaste(pendingId)
       releaseBrowserAttachmentFiles([saved.tempPath])
       console.warn('[native-chat] saved image paste dropped', reason)
-      if (reason !== 'removed') {
+      // The notes viewer reports its own failure; a paste notice would name the wrong action.
+      if (reason !== 'removed' && !png) {
         const notice = nativeChatImagePasteFailedNotice()
         const noticeScope =
           scope ??

@@ -6,7 +6,8 @@ import {
 import { app, clipboard, ipcMain, nativeImage } from 'electron'
 import type { IpcHandleRegistrar } from '../../ipc/lazy-ipc-handle-group'
 import { randomUUID } from 'node:crypto'
-import { open, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
+import { saveRequestedClipboardImage } from './clipboard-image-save-request'
 import { runProcess } from '@orca/process-host'
 import { PATH_ACCESS_DENIED_MESSAGE } from '../../ipc/filesystem/access/filesystem-auth'
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
@@ -47,12 +48,11 @@ import {
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-attachments/agent-session-attachment-upload'
-import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardPlainText } from './clipboard-plain-text-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
-import { clipboardImagePngBytes, encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
+import { clipboardImagePngBytes } from './clipboard-image-png-encode'
 import {
   ClipboardPublisherBusyError,
   publishClipboardOperation,
@@ -187,22 +187,9 @@ export function registerClipboardHandlers(
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
-      const reader = clipboardFormatSnapshot()
-      const source = await readClipboardImageSource(reader)
-      if (!source) {
-        return null
-      }
-      const image = await readClipboardNativeImage(reader)
-      let png: Buffer | null = null
-      if (!image.isEmpty()) {
-        png = await encodeClipboardNativeImagePng(image)
-      } else if (source.windowsFileFormats) {
-        png = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
-          createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
-          openFile: (filePath) => open(filePath, 'r')
-        })
-      }
-      return png ? saveClipboardImageBufferForTarget(png, args, handlerOptions) : null
+      return saveRequestedClipboardImage(args, (png) =>
+        saveClipboardImageBufferForTarget(png, args, handlerOptions)
+      )
     }
   )
   ipc.handle('clipboard:savePastedTextAsFile', (event, args: SavePastedTextAsFileArgs) => {

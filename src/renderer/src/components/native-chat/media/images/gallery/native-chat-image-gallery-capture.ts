@@ -12,6 +12,9 @@ export type NativeChatGalleryEntry = {
   image: NativeChatGalleryImage
   /** The control that opens this image in the chat, for returning focus near it on close. */
   trigger: Element
+  /** Hands this image to its message's viewer with notes; false when nothing on screen took it.
+   *  Absent for images notes can't be drawn on. */
+  annotate?: () => boolean
 }
 
 export type NativeChatGalleryCapture = { entries: NativeChatGalleryEntry[]; index: number }
@@ -61,15 +64,21 @@ export function captureNativeChatGallery(
       continue
     }
     const clickedAt = element === clicked && clickedBlock ? record.blocks.indexOf(clickedBlock) : -1
+    const { annotate } = record
     record.images.forEach((image, at) => {
       if (at === clickedAt) {
         index = entries.length
       }
+      const block = record.blocks[at]
       entries.push({
         key: `${nextEntryKey++}`,
         messageId: record.messageId,
         image,
-        trigger: element
+        trigger: element,
+        // Web images would need a cross-origin read to draw, so only local ones take notes.
+        ...(annotate && block && image.source.kind === 'local'
+          ? { annotate: () => annotate(block) }
+          : {})
       })
     })
   }

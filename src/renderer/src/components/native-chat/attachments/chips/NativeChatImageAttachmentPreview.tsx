@@ -4,7 +4,9 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
-import { PanZoomImageDialog } from '@/components/editor/document-images/PanZoomImageDialog'
+import { NativeChatMediaViewer } from '../../media/notes/NativeChatMediaViewer'
+import { nativeChatSentNotesNumberMax } from '../../media/notes/native-chat-media-notes'
+import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import {
   copyableNativeChatImageSrc,
   keepPreviewOpenForChatMenu
@@ -24,6 +26,9 @@ type Props = {
   number?: number
   /** The paired server the chat runs on; a file stored there is read back through it. */
   hostEnvironmentId?: string
+  /** The message box draft holding this chip. Set, Annotate puts a marked copy and its notes there;
+   *  outside a chat's message box (an item comment, the browser's annotation strip) it only views. */
+  notesScopeKey?: string
   /** Absent where the image only shows, as an answer held to send later does. */
   onRemove?: (id: string) => void
 }
@@ -31,6 +36,7 @@ type Props = {
 export function NativeChatImageAttachmentPreview({
   attachment,
   hostEnvironmentId,
+  notesScopeKey,
   number,
   onRemove
 }: Props): React.JSX.Element {
@@ -48,6 +54,7 @@ export function NativeChatImageAttachmentPreview({
     <NativeChatImageThumbnail
       attachment={attachment}
       hostEnvironmentId={hostEnvironmentId}
+      notesScopeKey={notesScopeKey}
       number={number}
       onRemove={onRemove}
     />
@@ -143,6 +150,7 @@ function NativeChatUnavailableImageChip({
 function NativeChatImageThumbnail({
   attachment,
   hostEnvironmentId,
+  notesScopeKey,
   number,
   onRemove
 }: Props): React.JSX.Element {
@@ -258,14 +266,26 @@ function NativeChatImageThumbnail({
         <ImageNumberBadge number={number} />
         {onRemove ? <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} /> : null}
       </div>
-      <PanZoomImageDialog
+      <NativeChatMediaViewer
         open={isOpen}
         onOpenChange={setIsOpen}
-        src={fullSizeSrc}
+        src={fullSizeSrc ?? null}
         title={label}
-        showTitle
+        source={{
+          path: attachment.path,
+          ...(attachment.connectionId ? { connectionId: attachment.connectionId } : {})
+        }}
+        opener={thumbnailRef}
+        // Notes go into this chat's message box as a marked copy and text; elsewhere it only views.
+        annotatable={Boolean(onRemove && notesScopeKey)}
+        // Numbering goes on after the notes already in the message, as it does for a sent message.
+        offset={
+          isOpen && notesScopeKey
+            ? nativeChatSentNotesNumberMax(readNativeChatComposerDraft(notesScopeKey).text)
+            : 0
+        }
         onInteractOutside={keepPreviewOpenForChatMenu}
-        data-native-chat-copy-image-src={copySrc}
+        copySrc={copySrc}
         fallback={
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {isPending ? (

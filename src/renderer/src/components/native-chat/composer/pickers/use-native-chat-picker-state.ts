@@ -25,15 +25,15 @@ import {
   type ComposerAutocomplete
 } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import { applyPickerSuggestion } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-triggers'
-import {
-  classifyNativeChatSend,
-  type NativeChatSendClassification,
-  type NativeChatSessionSkill,
-  type SlashCommandSuggestion
+import type {
+  NativeChatSendClassification,
+  NativeChatSessionSkill,
+  SlashCommandSuggestion
 } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
+import { useNativeChatSendClassification } from './use-native-chat-send-classification'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
 import { useNativeChatPickerDismissal } from './use-native-chat-picker-dismissal'
 import { nativeChatFileMentionToken } from './native-chat-file-mention-token'
@@ -44,6 +44,8 @@ export type NativeChatPickerState = {
   listboxId: string
   retrySkills: () => void
   classifySend: (draft: string) => NativeChatSendClassification
+  /** Same answer as classifySend, with no telemetry. */
+  peekSendClassification: (draft: string) => NativeChatSendClassification
   clearSkillOrigin: () => void
   /** The draft still leads with the skill the user picked from the menu. */
   isPickedSkill: (draft: string) => boolean
@@ -277,16 +279,10 @@ export function useNativeChatPickerState(args: {
     [clearDismissed, derive, dismissalContext, dismissed, draft, handleMentionChange]
   )
 
-  const classifySend = useCallback(
-    (value: string) => {
-      return classifyNativeChatSend(
-        value,
-        agentCommands,
-        skillOriginRef.current,
-        profile?.skillPrefix ?? null
-      )
-    },
-    [agentCommands, profile]
+  const { classifySend, peekSendClassification } = useNativeChatSendClassification(
+    agentCommands,
+    skillOriginRef,
+    profile?.skillPrefix ?? null
   )
   const clearSkillOrigin = useCallback(() => {
     skillOriginRef.current = null
@@ -300,6 +296,7 @@ export function useNativeChatPickerState(args: {
     listboxId,
     retrySkills: discovery.retry,
     classifySend,
+    peekSendClassification,
     clearSkillOrigin,
     isPickedSkill,
     completeItem,

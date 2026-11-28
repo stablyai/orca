@@ -1,5 +1,10 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { toast } from 'sonner'
+import { MessageSquare } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PanZoomImageDialog } from '@/components/editor/document-images/PanZoomImageDialog'
 import {
   acquireLocalImageSrcLease,
@@ -159,6 +164,32 @@ export function NativeChatImageGalleryDialog({
   )
 
   const loading = chip(t('components.native-chat.imageGallery.loading', 'Loading image…'), false)
+  // Notes need a pointer and a keyboard, so phones view images only, as in the message's own viewer.
+  const annotate =
+    entry.annotate && !window.matchMedia('(pointer: coarse)').matches ? entry.annotate : null
+  const startAnnotating = (): void => {
+    if (!annotate) {
+      return
+    }
+    // The image's row takes it first; only then does this viewer close, so the image is never left
+    // with no viewer at all.
+    if (!annotate()) {
+      toast(
+        t(
+          'components.native-chat.imageGallery.annotateUnavailable',
+          'This image is no longer on screen. Close the preview and open it again to annotate.'
+        )
+      )
+      return
+    }
+    // The message's own viewer takes over: this one closes without handing focus back first.
+    handingOff.current = true
+    flushSync(() => {
+      setMenuOpen(false)
+      onClose('handoff')
+    })
+  }
+  const annotateLabel = t('components.native-chat.notes.annotate', 'Annotate')
 
   return (
     <PanZoomImageDialog
@@ -192,6 +223,18 @@ export function NativeChatImageGalleryDialog({
       onPrevious={canStep.previous ? () => step('previous') : null}
       onNext={canStep.next ? () => step('next') : null}
       onKeyDown={(event) => {
+        if (
+          annotate &&
+          event.key === 'c' &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !(event.target instanceof Element && event.target.closest('[role=menu],[role=listbox]'))
+        ) {
+          event.preventDefault()
+          startAnnotating()
+          return
+        }
         // Arrows inside the actions menu move through it, never through the images.
         if (
           (event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
@@ -238,24 +281,48 @@ export function NativeChatImageGalleryDialog({
         </>
       }
       toolbarActions={
-        image.actions ? (
-          <NativeChatImageActionsMenu
-            href={image.actions.href}
-            isFile={image.actions.isFile}
-            fileLinkContext={fileLinkContext}
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-            restoresFocus={() => !handingOff.current && open}
-            onRun={(action) => {
-              handingOff.current = true
-              flushSync(() => {
-                setMenuOpen(false)
-                onClose('handoff')
-              })
-              void action.run()
-            }}
-          />
-        ) : null
+        <>
+          {annotate ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={annotateLabel}
+                  aria-keyshortcuts="C"
+                  onClick={startAnnotating}
+                >
+                  <MessageSquare />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                <span className="flex items-center gap-2">
+                  {annotateLabel}
+                  <ShortcutKeyCombo size="compact" keys={['C']} />
+                </span>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {image.actions ? (
+            <NativeChatImageActionsMenu
+              href={image.actions.href}
+              isFile={image.actions.isFile}
+              fileLinkContext={fileLinkContext}
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              restoresFocus={() => !handingOff.current && open}
+              onRun={(action) => {
+                handingOff.current = true
+                flushSync(() => {
+                  setMenuOpen(false)
+                  onClose('handoff')
+                })
+                void action.run()
+              }}
+            />
+          ) : null}
+        </>
       }
     />
   )
