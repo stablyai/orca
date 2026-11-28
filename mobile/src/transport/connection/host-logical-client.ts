@@ -9,6 +9,10 @@ import type { HostProfile } from '../../host-catalog/host-profile'
 import { directPathForEndpoint } from '../relay/mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
 import { watchHostRevocation } from './host-revocation-watch'
+import {
+  setHostPairingRefused,
+  setHostRelayRouted
+} from '../../host-descriptors/direct-pairing-installations'
 import { createUndialableDirectClient, skipsDirectEndpoint } from './undialable-direct-endpoint'
 import { readvertiseOnPageChange } from './mobile-runtime-capability-negotiation'
 
@@ -25,6 +29,7 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
     return logical
   }
 
+  setHostRelayRouted(host.id, host.relay !== undefined)
   const endpointLifecycle = startMobileEndpointLifecycle(logical, host, onLog)
   endpointLifecycle.setForeground(AppState.currentState === 'active')
   const appStateSubscription = AppState.addEventListener('change', (state) => {
@@ -37,6 +42,7 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
     const store = processDeviceStore()
     store.fenceHostCache(host.id, revoked)
     setKeptBotsRevoked(host.id, revoked)
+    setHostPairingRefused(host.id, revoked)
     if (revoked) {
       void store.wipeHost(host.id, ['cache']).catch(() => undefined)
     }
