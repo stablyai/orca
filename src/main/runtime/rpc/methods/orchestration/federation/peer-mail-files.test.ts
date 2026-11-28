@@ -76,12 +76,10 @@ describe('files sent with mail to a bot on a paired server', () => {
   let journal: ReturnType<typeof openTestJournalHostDatabase>
   /** The upload's claims on B, by chat; none means the sweep treats it as unused. */
   const claimsOn = (path: string): string[] =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects only session_id, a TEXT column.
-    (
-      journal.db
-        .prepare('SELECT session_id FROM agent_session_attachment_claims WHERE upload_id = ?')
-        .all(agentSessionAttachmentUploadIdOfPath(path) ?? '') as { session_id: string }[]
-    ).map(({ session_id }) => session_id)
+    journal.db
+      .prepare('SELECT session_id FROM agent_session_attachment_claims WHERE upload_id = ?')
+      .all(agentSessionAttachmentUploadIdOfPath(path) ?? '')
+      .map((row) => String(row.session_id))
   /** The upload (1-based) whose commit stores the file and then loses its answer. */
   let lostCommit: number | null
   let releaseFails: boolean
