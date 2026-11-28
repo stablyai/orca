@@ -8,17 +8,20 @@ import {
   isUsageWaitingForCli
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection } from './usage-headline-sections'
+import { getUsageRosterRowState } from './usage-roster-row-state'
 
 /** "<Provider>: <message>" for a chip that shows only the alert, else null. */
 export function getUsageErrorAlertLabel(p: ProviderRateLimits, t: Translate): string | null {
-  const name = getProviderDisplayName(p.provider)
-  if (p.status === 'unavailable') {
-    return `${name}: ${t('auto.components.status.bar.UsageRosterPanel.usageUnavailable', 'Usage unavailable')}`
-  }
-  if (p.status !== 'error' || isUsageWaitingForCli(p) || getTightestUsageSection(p, t, 'all')) {
+  const alerted =
+    p.status === 'unavailable' ||
+    (p.status === 'error' && !isUsageWaitingForCli(p) && !getTightestUsageSection(p, t, 'all'))
+  if (!alerted) {
     return null
   }
-  return `${name}: ${getProviderUsageStatusLabel(p, t)}`
+  // Why the row's label: the menu row is where the message is read, so the description must match it.
+  const message =
+    getUsageRosterRowState(p, false, t).statusLabel ?? getProviderUsageStatusLabel(p, t)
+  return `${getProviderDisplayName(p.provider)}: ${message}`
 }
 
 /**
