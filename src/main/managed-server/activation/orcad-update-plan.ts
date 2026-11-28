@@ -135,10 +135,14 @@ export function planOrcadUpdate(input: {
       action: 'defer',
       code: 'orcad_update_daemon_protocol_unverifiable',
       ...(forceable ? { forceable: true } : {}),
-      reason:
-        'The terminal daemon did not report its protocol, so this update cannot show that ' +
-        `orcad ${input.candidateVersion} will reach the terminals it is forced past. Retry ` +
-        'when the daemon answers or has stopped.'
+      // Under full force an unwoken incumbent still names its check, not a silent daemon (#51014).
+      reason: input.census.unansweredBecause
+        ? `${input.census.unansweredBecause} So this update cannot show that orcad ` +
+          `${input.candidateVersion} will reach any terminals it is forced past. Retry once ` +
+          'that clears.'
+        : 'The terminal daemon did not report its protocol, so this update cannot show that ' +
+          `orcad ${input.candidateVersion} will reach the terminals it is forced past. Retry ` +
+          'when the daemon answers or has stopped.'
     }
   }
   if (liveSessions === null) {

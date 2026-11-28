@@ -23,9 +23,12 @@ import {
   ORCAD_READINESS_FILENAME,
   ORCAD_READINESS_MAX_BYTES,
   posixProcessAliveShellFunction,
-  posixProcessArgsShellFunction,
-  posixSlotProcessScanShellFunction
+  posixProcessArgsShellFunction
 } from './orcad-remote-host-support'
+import {
+  posixSlotProcessScanShellFunction,
+  writeOrcadPidAtomicallyCommand
+} from './orcad-remote-pid-marker'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import { ORCAD_STOP_REQUEST_FILENAME } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
@@ -125,7 +128,8 @@ export function orcadLaunchCommand(
     `chmod 600 ${readiness} &&`,
     `{ chmod 600 ${pidFile} ${log} 2>/dev/null || :; } &&`,
     `rm -f ${quotePosixShell(ORCAD_STOP_REQUEST_FILENAME)} &&`,
-    ...(detach === 'setsid' ? [`rm -f ${pidFile} &&`] : []),
+    // A failed write must not leave the previous run's PID to be judged instead (#51014).
+    `rm -f ${pidFile} &&`,
     ...(detach === 'setsid'
       ? setsidLaunchTail(entry, spec, readiness, log, pidFile, launchEnv, hostEnv)
       : [
@@ -136,8 +140,7 @@ export function orcadLaunchCommand(
           `exec nohup "$orcad_runtime" $orcad_runtime_flags ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
           `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)};`,
           `} > ${readiness} 2>> ${log} < /dev/null &`,
-          // Write then rename: a crash mid-write must not leave an empty PID file (#51014).
-          `echo $! > "$orcad_pid.tmp" && mv -f "$orcad_pid.tmp" ${pidFile} &&`,
+          `${writeOrcadPidAtomicallyCommand('$!', '$orcad_pid')} &&`,
           ...(recordSession
             ? [`${writeOrcadLaunchSshSessionCommand(host, spec.userDataDir)} &&`]
             : []),
@@ -163,7 +166,7 @@ function setsidLaunchTail(
     ...hostEnv.map(launchEnvAssignment),
     'sh -c \'orcad_detach() { if setsid -f true >/dev/null 2>&1; then setsid -f "$@"; ' +
       'else setsid "$@" & fi; }; orcad_detach "$@"\' orcad-detach',
-    `sh -c 'echo $$ > "$1.tmp" && mv -f "$1.tmp" "$1" && umask "$2" && shift 2 && exec "$@"' orcad-launch ${pidFile}`,
+    `sh -c '${writeOrcadPidAtomicallyCommand('$$', '$1')} && umask "$2" && shift 2 && exec "$@"' orcad-launch ${pidFile}`,
     '"$orcad_login_umask"',
     `"$orcad_runtime" $orcad_runtime_flags ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
     `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)}`,
@@ -231,9 +234,6 @@ export function orcadLivenessProbeCommand(
       'args=$(orcad_args "$1") && [ -n "$args" ] && ' +
       'case "$args" in *"$orcad_launcher"* | *"$orcad_server"*) return 1;; *) return 0;; esac; };',
     posixSlotProcessScanShellFunction(),
-    // A crash or a launch mid-write leaves a marker naming no PID; only no process running this slot proves it stale (#51014).
-    'orcad_unnamed() { orcad_slot_busy "$orcad_launcher" "$orcad_server"; ' +
-      'case $? in 1) echo DEAD;; *) echo UNKNOWN;; esac; };',
     `pid=$(cat ${pidFile} 2>/dev/null);`,
     'case "$pid" in',
     `"" ) if [ -e ${pidFile} ] || [ -e ${readiness} ]; then orcad_unnamed; else echo ${ORCAD_NEVER_LAUNCHED}; fi;;`,

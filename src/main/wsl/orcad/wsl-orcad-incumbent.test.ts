@@ -33,7 +33,7 @@ async function incumbentAfterWake(wake: Wake) {
 
 // An incumbent Orca never started has no daemon to ask; blaming the daemon hid the real check (#51014).
 describe('readWslOrcadIncumbent when the incumbent cannot be woken', () => {
-  it.each([false, 'live-terminals'] as const)(
+  it.each([false, 'live-terminals', true] as const)(
     'names the inconclusive liveness check, not a silent daemon (force %s)',
     async (force) => {
       const incumbent = await incumbentAfterWake({ outcome: 'unverifiable' })
@@ -48,12 +48,15 @@ describe('readWslOrcadIncumbent when the incumbent cannot be woken', () => {
       })
       expect(plan).toMatchObject({
         action: 'defer',
-        code: 'orcad_update_terminal_census_unavailable'
+        code:
+          force === true
+            ? 'orcad_update_daemon_protocol_unverifiable'
+            : 'orcad_update_terminal_census_unavailable'
       })
       expect(plan).not.toHaveProperty('forceable')
       const reason = 'reason' in plan ? plan.reason : ''
       expect(reason).toContain('could not tell whether orcad 0.1.0+old is still running')
-      expect(reason).not.toContain('terminal daemon did not answer')
+      expect(reason).not.toMatch(/terminal daemon did not (answer|report)/)
       expect((await incumbent.recount()).unansweredBecause).toBe(incumbent.census.unansweredBecause)
     }
   )

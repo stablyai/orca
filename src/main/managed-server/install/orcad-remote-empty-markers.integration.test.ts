@@ -1,10 +1,15 @@
 // Run the liveness probe in /bin/sh against PID and readiness markers that name no process (#51014).
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { orcadLivenessProbeCommand, parseOrcadLiveness } from './orcad-remote-launch'
+import {
+  orcadLaunchCommand,
+  orcadLivenessProbeCommand,
+  parseOrcadLiveness
+} from './orcad-remote-launch'
+import { writeOrcadPidAtomicallyCommand } from './orcad-remote-pid-marker'
 import { ORCAD_PID_FILENAME, ORCAD_READINESS_FILENAME } from './orcad-remote-host-support'
 import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
@@ -90,6 +95,51 @@ describeOnPosix('liveness of a slot whose markers name no PID', () => {
     () => {
       writeMarkers('')
       expect(probe('ps() { return 127; };')).toBe('UNKNOWN')
+    }
+  )
+
+  // tr stands in for any cmdline read that fails while the process still exists.
+  it.runIf(existsSync('/proc/self/cmdline'))(
+    'stays UNKNOWN when a listed process argv cannot be read from /proc',
+    () => {
+      writeMarkers('')
+      expect(probe('tr() { return 127; };')).toBe('UNKNOWN')
+    }
+  )
+})
+
+describeOnPosix('PID marker writes', () => {
+  it('leaves no PID file, not an empty one, when the write fails', () => {
+    const pidFile = join(versionDir, ORCAD_PID_FILENAME)
+    const write = writeOrcadPidAtomicallyCommand('4242', '$orcad_pid')
+    execFileSync('/bin/sh', ['-c', `orcad_pid='${pidFile}'; echo() { return 1; }; ${write} || :`])
+    expect(existsSync(pidFile)).toBe(false)
+    execFileSync('/bin/sh', ['-c', `orcad_pid='${pidFile}'; ${write}`])
+    expect(readFileSync(pidFile, 'utf8')).toBe('4242\n')
+  })
+
+  it.each(['nohup', 'setsid'] as const)(
+    'the %s launch drops the old PID first and records the new one atomically',
+    (detach) => {
+      const command = orcadLaunchCommand(
+        host,
+        {
+          remoteInstallDir: versionDir,
+          nodePath: '/usr/bin/node',
+          fullVersion: '0.1.0+old',
+          userDataDir: join(root, '.orca'),
+          bindHost: '127.0.0.1',
+          port: 0,
+          activationRoot: join(root, '.orca-remote')
+        },
+        detach
+      )
+      expect(command).toContain('rm -f "$orcad_pid" &&')
+      expect(command).toContain(
+        detach === 'nohup'
+          ? writeOrcadPidAtomicallyCommand('$!', '$orcad_pid')
+          : writeOrcadPidAtomicallyCommand('$$', '$1')
+      )
     }
   )
 })
