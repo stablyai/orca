@@ -32,7 +32,7 @@ function unsupported(): RuntimeClientError {
   return new RuntimeClientError('incompatible_runtime', UNSUPPORTED_MESSAGE)
 }
 
-async function callManagedServer<TResult>(
+export async function callManagedServer<TResult>(
   { client }: HandlerContext,
   method: string,
   params: Record<string, unknown>
@@ -87,7 +87,7 @@ function selectorOf(context: HandlerContext): { selector: string } {
 type Outcome = { outcome: string; code?: string; reason?: string }
 
 /** Reject unknown outcomes so newer-server responses cannot silently print undefined. */
-function report<TResult extends Outcome, TSettled extends TResult['outcome']>(
+export function report<TResult extends Outcome, TSettled extends TResult['outcome']>(
   response: RuntimeRpcSuccess<TResult>,
   json: boolean,
   settled: readonly TSettled[],

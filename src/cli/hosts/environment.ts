@@ -14,6 +14,11 @@ import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type {
+  OrcadManagedForgetResult,
+  OrcadManagedStopResult
+} from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import { report } from './managed-server'
 
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { redactRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -104,6 +109,53 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     ]
     printResult(localSuccess({ hosts }), json, formatHostList)
   },
+  // Managed-server lifecycle: Settings' Stop…/Forget… without the desktop UI.
+  'host stop': async ({ client, flags, json }) => {
+    const selector = requireManagementSelector(flags, '`orca host stop`')
+    if (flags.get('yes') !== true) {
+      throw new RuntimeClientError(
+        'confirmation_required',
+        `Stopping ${selector} ends its terminals and unlinks it from this machine. Re-run with --yes to confirm.`
+      )
+    }
+    const response = await client.call<OrcadManagedStopResult>('managedServer.stop', { selector })
+    report(response, json, ['unlinked'], () => `Stopped the Orca server on ${selector}.`)
+  },
+  'host forget': async ({ client, flags, json }) => {
+    const selector = requireManagementSelector(flags, '`orca host forget`')
+    if (flags.get('yes') !== true) {
+      throw new RuntimeClientError(
+        'confirmation_required',
+        `Forgetting ${selector} unlinks it from this machine without contacting its host. Re-run with --yes to confirm.`
+      )
+    }
+    // Headless serve publishes no managed-server actions, so forget has its own local method.
+    let response: RuntimeRpcSuccess<OrcadManagedForgetResult>
+    try {
+      response = await client.call<OrcadManagedForgetResult>('managedServer.forgetLocal', {
+        selector
+      })
+    } catch (error) {
+      if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca runtime predates `orca host forget`. Update Orca on that host and try again.'
+        )
+      }
+      throw error
+    }
+    report(
+      response,
+      json,
+      ['forgotten'],
+      () => `Forgot the Orca server registration ${selector} (host not contacted).`,
+      (result) =>
+        'code' in result && result.code === 'managed_server_unavailable'
+          ? `On a desktop runtime, run \`orca environment forget --environment ${selector} --yes\` instead.`
+          : null
+    )
+  },
+
   'host rm': async ({ client, flags, json }) => {
     rejectLocalPairingStoreRetargeting(
       flags,
@@ -193,6 +245,19 @@ function rejectLocalPairingStoreRetargeting(
   rejectRemoteSelectionFlags(flags, suffix, {
     nextSteps: [crossHostNextStep, 'Drop the flag to answer for this machine.']
   })
+}
+
+/** Managed-server lifecycle takes the server selector env-list prints, not `--host ssh:<id>`. */
+function requireManagementSelector(flags: Map<string, string | boolean>, what: string): string {
+  const selector = flags.get('environment')
+  if (typeof selector === 'string' && selector.trim().length > 0) {
+    return selector.trim()
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `${what} needs --environment <server>: the selector \`orca environment list\` prints.`,
+    { nextSteps: ['Run `orca environment list` and pass its id or name.'] }
+  )
 }
 
 function requireSshHostFlag(flags: Map<string, string | boolean>): string {

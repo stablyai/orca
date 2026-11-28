@@ -9,6 +9,9 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     commandPath.join(' ') === 'host list' ||
     // Removes ids that `host list` printed from this runtime; an ambient selection must not retarget it.
     commandPath.join(' ') === 'host rm' ||
+    // Managed-server lifecycle is this runtime's own state; an ambient selection must not retarget it.
+    commandPath.join(' ') === 'host stop' ||
+    commandPath.join(' ') === 'host forget' ||
     commandPath[0] === 'serve' ||
     // `agent hooks` configures this machine; launch and the ID commands act on the selected host.
     (commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
