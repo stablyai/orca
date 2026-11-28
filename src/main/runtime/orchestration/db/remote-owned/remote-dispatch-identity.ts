@@ -35,6 +35,7 @@ export function ensureRemoteDispatchRecord(
        ),
        chosen AS (
          SELECT session, pane, bot_lineage FROM creator
+         WHERE session IS NOT NULL OR pane IS NOT NULL OR bot_lineage IS NOT NULL
          ORDER BY rank LIMIT 1
        )
        INSERT INTO remote_dispatches (

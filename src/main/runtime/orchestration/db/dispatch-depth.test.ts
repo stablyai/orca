@@ -18,7 +18,7 @@ describe('creator lineage', () => {
       homePeerFingerprint: 'peer',
       protocolVersion: 1,
       runtimeEpoch: 'epoch',
-      chatLineage: true,
+      botLineage: true,
       mutationReceipt: {
         callerFingerprint: 'peer',
         requestId: 'attach',
@@ -54,7 +54,7 @@ describe('creator lineage', () => {
       homePeerFingerprint: 'peer',
       protocolVersion: 1,
       runtimeEpoch: 'epoch',
-      chatLineage: true,
+      botLineage: true,
       mutationReceipt: {
         callerFingerprint: 'peer',
         requestId: 'attach',
@@ -88,11 +88,12 @@ describe('creator lineage', () => {
       taskId: task.id,
       assigneeHandle: 'term_worker',
       creator: { kind: 'system' },
-      chatLineage: true,
+      botLineage: true,
       maxDepth: Number.MAX_SAFE_INTEGER
     })
 
-    expect(dispatch.chat_lineage).toBe(1)
+    expect(dispatch.chat_lineage).toBeNull()
+    expect(dispatch.bot_lineage).toBe(1)
   })
 
   it('keeps attached bot guidance through an unstamped local helper without changing its surface', () => {
@@ -103,7 +104,7 @@ describe('creator lineage', () => {
       homePeerFingerprint: 'peer',
       protocolVersion: 1,
       runtimeEpoch: 'epoch',
-      chatLineage: true,
+      botLineage: true,
       mutationReceipt: {
         callerFingerprint: 'peer',
         requestId: 'attach',

@@ -72,7 +72,7 @@ export function claimDispatchContextRow(
     creatorPaneKey?: string | null
     creatorOrcaSessionId?: OrcaSessionId | null
     creatorTurnSource?: DispatchCreatorTurnSource | null
-    botLineage?: boolean
+    chatLineage?: boolean
     botLineage?: boolean
     priorFailures: number
     depth: number
@@ -168,7 +168,7 @@ export function insertRemoteDispatchAttachmentRow(
     runtimeEpoch: string
     /** Home-computed depth; old clients default to 1. */
     depth: number
-    chatLineage?: boolean
+    botLineage?: boolean
   }
 ): void {
   assertStampedDepth(params.depth)

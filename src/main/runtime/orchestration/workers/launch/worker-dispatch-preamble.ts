@@ -109,7 +109,7 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     ? `
 
 === COMMIT CREDIT ===
-When you make a commit, do not add AI/model co-author or generated-by lines or trailers. Keep a
+When you make a commit, do not add AI/model co-author or generated-by trailers. Keep a
 Co-authored-by trailer only when it credits a genuine human contributor whose work you carry.`
     : ''
 

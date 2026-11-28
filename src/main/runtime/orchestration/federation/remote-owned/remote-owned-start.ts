@@ -108,13 +108,11 @@ export async function forwardedChatLineage(
 }
 
 export async function forwardedBotLineage(
+  botLineage: boolean,
   runtime: OrcaRuntimeService,
-  db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
-  params: StartParams,
-  caller: StartContext['orchestrationCaller'],
   server: OrchestrationWorkerServer
 ): Promise<{ botLineage?: true }> {
-  return startsInBotLineage(runtime, db, params, caller) &&
+  return botLineage &&
     (await serverSupports(runtime, server, ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY))
     ? { botLineage: true }
     : {}
@@ -184,9 +182,10 @@ export async function startRemoteOwnedWorker(
     params.worktree === 'new-child'
       ? await resolveCrossMachineChildParent(runtime, params.from, ctx.orchestrationCaller)
       : undefined
+  const botLineage = startsInBotLineage(runtime, db, params, ctx.orchestrationCaller)
   const lineage = {
     ...(await forwardedChatLineage(runtime, db, params, ctx.orchestrationCaller, server)),
-    ...(await forwardedBotLineage(runtime, db, params, ctx.orchestrationCaller, server))
+    ...(await forwardedBotLineage(botLineage, runtime, server))
   }
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
@@ -205,7 +204,7 @@ export async function startRemoteOwnedWorker(
     retryOf: params.retryOf,
     retriesAttemptHere: attemptHere !== undefined,
     creator: resolveDispatchCreator(runtime, params.from, ctx.orchestrationCaller),
-    botLineage: lineage.botLineage === true,
+    botLineage,
     create: existingTask
       ? undefined
       : {

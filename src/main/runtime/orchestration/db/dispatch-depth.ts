@@ -1,4 +1,5 @@
 import { createDispatchCreatorEvaluation } from './dispatch-creator-evaluation'
+import { dispatchHasBotLineage } from './bot-dispatch-lineage'
 import { requireOrchestrationAdmission } from '../addressing/orchestration-admission'
 
 import type { OrchestrationDb } from './orchestration-db'
@@ -117,6 +118,21 @@ export function creatorStartsChatWorkers(this: OrchestrationDb, creator: Dispatc
   )
 }
 
+/** Task guidance follows the creator's durable Dispatch, without affecting its worker surface. */
+export function creatorHasBotLineage(
+  this: OrchestrationDb,
+  creator: DispatchCreator,
+  isBotChat: (sessionId: string) => boolean = () => false
+): boolean {
+  if (creator.kind === 'system') {
+    return false
+  }
+  const dispatchId = requireOrchestrationAdmission(
+    liveDispatchCreatorEvaluation(this, creator).creatorId()
+  )
+  return dispatchId !== null && dispatchHasBotLineage(this, dispatchId, isBotChat)
+}
+
 export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCreator): number {
   return (
     requireOrchestrationAdmission(
@@ -150,6 +166,7 @@ export function liveDispatchCreatorEvaluation(db: OrchestrationDb, creator: Disp
 
 export type DispatchDepthMethods = {
   creatorStartsChatWorkers: typeof creatorStartsChatWorkers
+  creatorHasBotLineage: typeof creatorHasBotLineage
   resolveCreatorDepth: typeof resolveCreatorDepth
   resolveCreatorDispatchId: typeof resolveCreatorDispatchId
   resolveChildDispatchDepth: typeof resolveChildDispatchDepth
@@ -158,6 +175,7 @@ export type DispatchDepthMethods = {
 export function attachDispatchDepth(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     creatorStartsChatWorkers,
+    creatorHasBotLineage,
     resolveCreatorDepth,
     resolveCreatorDispatchId,
     resolveChildDispatchDepth
