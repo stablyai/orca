@@ -120,6 +120,15 @@ async function allExist(paths: readonly string[]): Promise<boolean> {
   ).every(Boolean)
 }
 
+/** Whether a process-host package dir (an install's or a staged copy's) has every export target. */
+export async function processHostExportsPresentAsync(packageDir: string): Promise<boolean> {
+  const exportPaths = processHostExportPaths(
+    await readFile(join(packageDir, 'package.json'), 'utf8'),
+    packageDir
+  )
+  return exportPaths !== null && (await allExist(exportPaths))
+}
+
 export async function inventoryRootsAsync(
   sources: DaemonHostSources
 ): Promise<CodeFileSource[] | null> {
@@ -127,11 +136,7 @@ export async function inventoryRootsAsync(
   if (!(await allExist(plan.required))) {
     return null
   }
-  const exportPaths = processHostExportPaths(
-    await readFile(plan.processHostManifest, 'utf8'),
-    plan.processHostDir
-  )
-  if (!exportPaths || !(await allExist(exportPaths))) {
+  if (!(await processHostExportsPresentAsync(plan.processHostDir))) {
     return null
   }
   const present = await mapWithConcurrencyUntilFailure(

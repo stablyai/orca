@@ -9,6 +9,7 @@ import { removeDaemonHostTree } from './daemon-host-tree-walk'
 import {
   buildDaemonHostManifest,
   daemonHostFitsPathBudget,
+  daemonHostProcessPackageDir,
   destPath,
   executeManifest,
   toPosixRelative,
@@ -27,7 +28,11 @@ import {
   type DaemonHostBuildInventory,
   type DaemonHostBuildMarker
 } from './daemon-host-build-inventory'
-import { daemonHostCodeMatcher, inventoryRootsAsync } from './daemon-host-inventory-roots'
+import {
+  daemonHostCodeMatcher,
+  inventoryRootsAsync,
+  processHostExportsPresentAsync
+} from './daemon-host-inventory-roots'
 import { daemonHostStagingName } from './daemon-host-reclaim'
 
 // Copy the Electron runtime outside NSIS's install-directory kill zone; failures fall back to the install runtime.
@@ -295,6 +300,14 @@ async function publishRelocatedHost(
         sources,
         [...hashes].map(([path, sha256]) => ({ path, sha256 }))
       )
+    // A cold copy has no expected inventory, so confirm the exports root validation relied on were copied.
+    const stagedProcessHost = destPath(
+      staging,
+      toPosixRelative(sources.appDir, daemonHostProcessPackageDir(sources))
+    )
+    if (!(await processHostExportsPresentAsync(stagedProcessHost))) {
+      throw new Error('daemon-host relocation: copy lacks a process-host export')
+    }
     await writeDaemonHostBuildMarker(staging, version, published)
     // Publish a new immutable build (a live daemon may use an older one); retry Defender's brief holds.
     await renameWithWindowsRetry(staging, dest)

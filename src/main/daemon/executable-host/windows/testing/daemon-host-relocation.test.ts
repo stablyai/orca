@@ -37,7 +37,10 @@ function installHostApp(): void {
 import { createHash } from 'node:crypto'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import { buildDaemonHostManifest, executeManifest, toPosixRelative } from '../daemon-host-manifest'
-import { daemonHostCodeMatcher } from '../daemon-host-inventory-roots'
+import {
+  daemonHostCodeMatcher,
+  processHostExportsPresentAsync
+} from '../daemon-host-inventory-roots'
 import { removeDaemonHostTree } from '../daemon-host-tree-walk'
 import { collectPinnedDaemonVersions } from '../daemon-host-pinned-versions'
 import {
@@ -308,6 +311,19 @@ describe('daemon-host copy with the production manifest', () => {
     await expect(
       executeManifest(buildDaemonHostManifest(sources), join(tempDir, 'prod-staging'), { isCode })
     ).rejects.toThrow('code changed while copying')
+  })
+})
+
+describe('processHostExportsPresentAsync', () => {
+  it('rejects a staged process-host copy missing an export the install declares', async () => {
+    const installed = join(installDir, 'resources', 'node_modules', '@orca', 'process-host')
+    const staged = join(tempDir, 'staged-process-host')
+    mkdirSync(join(staged, 'dist'), { recursive: true })
+    writeFileSync(join(staged, 'package.json'), readFileSync(join(installed, 'package.json')))
+    writeFileSync(join(staged, 'dist', 'run-process.js'), 'copied')
+
+    expect(await processHostExportsPresentAsync(installed)).toBe(true)
+    expect(await processHostExportsPresentAsync(staged)).toBe(false)
   })
 })
 
