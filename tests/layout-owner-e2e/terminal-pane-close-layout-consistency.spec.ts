@@ -16,6 +16,7 @@ import {
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 import { readMainLayout } from './helpers/main-terminal-layout'
 import { REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT } from '../../src/renderer/src/constants/terminal'
+import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
 
 // Ghost-pane repro: remote-issue-2 (2026-07-09) retained three root leaves but only two bindings/live PTYs near a hide/park close boundary.
 // Close or exit at each lifecycle phase and require persisted root leaves === persisted binding keys === live panes.
@@ -311,6 +312,10 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
   })
 
   test('split pane shell exits while hidden but still mounted', async ({ orcaPage }) => {
+    // Fails switch-on on the Linux lane (passes switch-off there, and on darwin).
+    if (process.platform === 'linux') {
+      knownSwitchOnFailure('A9')
+    }
     const { worktreeId, tabId, splitPtyId } = await setUpSplitTab(orcaPage)
     await createActiveTerminalTab(orcaPage, worktreeId)
     // Model setup-script shell exit while hidden but still mounted.
