@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { throwNoActiveSenderTerminal } from '../../orchestration/identity/terminal-identity'
 import {
   dropForeignTerminalHandle,
   resolveFencedRuntimeSource,
@@ -39,14 +40,27 @@ it('does not fence a guest CLI to the Windows runtime that stamped its pane (#49
 
 it('drops a Windows pane handle in a guest CLI so callers infer from cwd', () => {
   const env = paneEnv()
-  dropForeignTerminalHandle(env, '/home/u/.config/orca', 'linux')
+  dropForeignTerminalHandle(env, () => '/home/u/.config/orca', 'linux')
 
   expect(env.ORCA_TERMINAL_HANDLE).toBeUndefined()
+  // A Codex caller must not be told its env policy removed the handle.
+  vi.stubEnv('CODEX_THREAD_ID', 'thread-1')
+  expect(() => throwNoActiveSenderTerminal()).toThrow(/opened by a different Orca/)
+  vi.unstubAllEnvs()
+})
+
+it('keeps the handle when the profile path cannot be resolved', () => {
+  const env = paneEnv()
+  dropForeignTerminalHandle(env, () => {
+    throw new Error('APPDATA is not set')
+  })
+
+  expect(env.ORCA_TERMINAL_HANDLE).toBe('term_win')
 })
 
 it('keeps the handle for a Windows CLI on the runtime that stamped its pane', () => {
   const env = paneEnv()
-  dropForeignTerminalHandle(env, windowsStamp.profilePath, 'win32')
+  dropForeignTerminalHandle(env, () => windowsStamp.profilePath, 'win32')
 
   expect(env.ORCA_TERMINAL_HANDLE).toBe('term_win')
 })

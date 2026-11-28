@@ -9,7 +9,7 @@ import type {
   RuntimeRpcResponse
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { getPlatformUserDataPath } from '../profile/metadata'
+import { getDefaultUserDataPath, getPlatformUserDataPath } from '../profile/metadata'
 import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 import { sendRequest } from './transport'
 import { RuntimeClientError } from './types'
@@ -118,14 +118,32 @@ export function isLaunchedByAnotherRuntime(
   )
 }
 
+let foreignTerminalHandleDropped = false
+
+/** True once this run dropped another runtime's handle, so errors must not blame an env filter. */
+export function wasForeignTerminalHandleDropped(): boolean {
+  return foreignTerminalHandleDropped
+}
+
 /** Another runtime's handle names no terminal here; dropping it lets callers fall back to cwd inference. */
 export function dropForeignTerminalHandle(
   env: Record<string, string | undefined>,
-  userDataPath: string,
+  resolveUserDataPath: () => string = getDefaultUserDataPath,
   platform: NodeJS.Platform = process.platform
 ): void {
-  if (env.ORCA_TERMINAL_HANDLE && isLaunchedByAnotherRuntime(env, userDataPath, platform)) {
+  if (!env.ORCA_TERMINAL_HANDLE) {
+    return
+  }
+  let userDataPath: string
+  try {
+    userDataPath = resolveUserDataPath()
+  } catch {
+    // An unresolvable profile is reported by the client that needs it, not by every command here.
+    return
+  }
+  if (isLaunchedByAnotherRuntime(env, userDataPath, platform)) {
     delete env.ORCA_TERMINAL_HANDLE
+    foreignTerminalHandleDropped = true
   }
 }
 
