@@ -1,8 +1,5 @@
 import { createClaudeTranscriptRowProjection } from '../claude-transcript-row-projection'
-import {
-  agentJournalItemKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
@@ -39,6 +36,7 @@ import { createClaudeJournalTranslator } from '../structured/journal/claude-stru
 import type { ClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from '../structured/turns/claude-session-state-turn-over'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
+import { matchSavedHistoryIdentity } from './claude-transcript-history-identity'
 import { claudeTranscriptRowFrame } from './claude-local-command-reply'
 import {
   createTranscriptCompactionRecovery,
@@ -63,15 +61,7 @@ export function createClaudeTranscriptImportPlan(input: {
   let workAt: number | undefined
   const compactions = createTranscriptCompactionRecovery()
   const matchSource = (identities: AgentJournalItemIdentity[]) => {
-    const matches = identities.flatMap((identity) => saved(agentJournalItemKey(identity)) ?? [])
-    if (new Set(matches.map((item) => item.itemId)).size > 1) {
-      throw new Error('ambiguous-history-identity')
-    }
-    const item = matches[0]
-    const identity = item ? parseAgentJournalItemKey(item.itemId) : identities[0]
-    if (!identity) {
-      throw new Error('unknown-history-identity')
-    }
+    const { identity, item } = matchSavedHistoryIdentity(identities, saved)
     for (const candidate of identities) {
       aliases.set(agentJournalItemKey(candidate), identity)
     }
