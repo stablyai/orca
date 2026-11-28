@@ -5,12 +5,9 @@ import {
   createAgentPaneActivityFlags,
   type WorktreeStatus
 } from '../worktree/row-display/worktree-status-rollup'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../agent-session/view/structured-agent-session-projection'
 import type { BotGroup } from './bot-group-schema'
 import { botGroupRoomMembers } from './bot-group'
+import { chatPaneKey } from '../agent-session/view/structured-agent-session-projection'
 
 type BotGroupDot = Extract<WorktreeStatus, 'permission' | 'working'> | null
 type MemberStatus = Parameters<typeof applyAgentPaneActivityFlags>[1]
@@ -35,9 +32,7 @@ export function botGroupStatusOf(
 ): BotGroupDot {
   const flags = createAgentPaneActivityFlags()
   for (const { sessionId } of botGroupRoomMembers(group).flat()) {
-    const entry = statusOf(
-      structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
-    )
+    const entry = statusOf(chatPaneKey(sessionId))
     if (entry) {
       applyAgentPaneActivityFlags(flags, entry)
     }

@@ -19,6 +19,12 @@ export type PausedRebase = Extract<BaseRebaseState, { kind: 'rebase_paused' }>
 /** Resolve-with-AI while conflicts remain, when AI actions are on; null when they are off. */
 export type OperationRowAi = { busy: boolean; onPress: () => void } | null
 
+/** Why the row's Abort can't run now (no Git owner, or the paused run can't be identified). */
+export type AbortChoice = { blockedReason: string | null }
+
+/** What the row's Abort passes to the abort handlers. */
+export type AbortOptions = { confirmed: boolean; expectedRunIdentity?: string }
+
 /** Conflicts take the primary slot: Resolve with AI, or nothing (never a greyed Continue). */
 export function useConflictPrimary(
   unresolvedCount: number,
@@ -40,6 +46,7 @@ export function useConflictPrimary(
 }
 
 const NO_NOTES: (string | null)[] = []
+const DEFAULT_ABORT_CHOICE: AbortChoice = { blockedReason: null }
 
 export function RebaseOperationRow({
   actions,
@@ -47,7 +54,8 @@ export function RebaseOperationRow({
   branch,
   notes = NO_NOTES,
   ai,
-  abortTargetKey
+  abortTargetKey,
+  abortChoice = DEFAULT_ABORT_CHOICE
 }: {
   actions: BaseRebaseActions
   paused: PausedRebase
@@ -55,6 +63,7 @@ export function RebaseOperationRow({
   notes?: (string | null)[]
   ai: OperationRowAi
   abortTargetKey: string
+  abortChoice?: AbortChoice
 }): React.JSX.Element {
   const t = useTranslate()
   const conflict = useConflictPrimary(paused.unresolvedCount, ai)
@@ -89,8 +98,13 @@ export function RebaseOperationRow({
           )
   }
   const abort: OperationRowProps['abort'] = {
-    unavailable: actions.isAbortingRebase || actions.isContinuingRebase,
+    unavailable:
+      actions.isAbortingRebase ||
+      actions.isContinuingRebase ||
+      !actions.hasGitOwner ||
+      abortChoice.blockedReason !== null,
     busy: actions.isAbortingRebase && !actions.isContinuingRebase,
+    reason: abortChoice.blockedReason,
     onAbort: actions.onAbortRebase
   }
   return (

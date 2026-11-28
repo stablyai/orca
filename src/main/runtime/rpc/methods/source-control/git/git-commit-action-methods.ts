@@ -25,7 +25,9 @@ export const GIT_COMMIT_ACTION_METHODS = [
     permission: 'workspace',
     params: GitSequencer,
     handler: async (params, { runtime }) =>
-      runtime.sequencerAbortRuntimeGit(params.worktree, params.operation)
+      runtime.sequencerAbortRuntimeGit(params.worktree, params.operation, {
+        expectedRunIdentity: params.expectedRunIdentity
+      })
   }),
   defineMethod({
     name: 'git.cherryPick',

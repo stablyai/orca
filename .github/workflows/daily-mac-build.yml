@@ -56,7 +56,6 @@ jobs:
     with:
       ref: ${{ needs.resolve-main.outputs.head_sha }}
       build_template: true
-      fast_runners: false
 
   build-daily-mac:
     needs:
@@ -482,4 +481,3 @@ jobs:
       ref: ${{ needs.build-daily-mac.outputs.head_sha }}
       version: ${{ needs.build-daily-mac.outputs.version }}
       orcad_template: true
-      fast_release: false

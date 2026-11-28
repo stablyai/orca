@@ -6,7 +6,7 @@ import type {
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeWorkspaceFileTargets } from '../../workspaces/workspace-file-session-targets'
-import { isStructuredAgentSessionAddressPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { CHAT_PANE_ADDRESS_PREFIX } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorkspaceFileTargets {
   onMobileSessionTabsChanged(
     listener: MobileSessionTabSubscription['listener'],
@@ -103,7 +103,7 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
 
   /** Whether a pane's hook status reaches any listener: chat-scoped listeners read chat panes only. */
   protected hasPaneStatusListeners(paneKey: string): boolean {
-    return isStructuredAgentSessionAddressPaneKey(paneKey)
+    return paneKey.startsWith(CHAT_PANE_ADDRESS_PREFIX)
       ? this.mobileSessionTabListeners.size > 0
       : this.hasTerminalStatusListeners()
   }

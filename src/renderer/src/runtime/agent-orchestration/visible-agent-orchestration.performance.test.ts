@@ -32,8 +32,9 @@ function stateWith(unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']): Ap
   return { ...useAppStore.getState(), unifiedTabsByWorktree }
 }
 
-// Pane keys are `<tab id>:<hash>`; tests name rows by tab id.
-const tabOf = (paneKey: string) => paneKey.slice(0, paneKey.indexOf(':'))
+// A chat's pane key is `structured-agent-session-<session id>:<hash>`; tests name rows by session.
+const sessionOf = (paneKey: string) =>
+  paneKey.slice('structured-agent-session-'.length, paneKey.indexOf(':'))
 
 function workForOneRetitle(chatCount: number): { encodes: number; visits: number } {
   const source: AppState['unifiedTabsByWorktree'] = {}
@@ -71,23 +72,23 @@ it('keeps the right rows across adds, moves and closes', () => {
   }
   const rows = () => {
     const entries = [...representedOrchestrationWorktrees(stateWith(source)).entries()]
-    const named = entries.map(([pane, worktreeId]) => [tabOf(pane), worktreeId])
-    expect(named.filter(([tab]) => tab.startsWith('slot-filler-'))).toHaveLength(50)
-    return named.filter(([tab]) => !tab.startsWith('slot-filler-')).sort()
+    const named = entries.map(([pane, worktreeId]) => [sessionOf(pane), worktreeId])
+    expect(named.filter(([tab]) => tab.startsWith('filler-'))).toHaveLength(50)
+    return named.filter(([tab]) => !tab.startsWith('filler-')).sort()
   }
   expect(rows()).toEqual([
-    ['slot-a1', 'wt-a'],
-    ['slot-a2', 'wt-a'],
-    ['slot-b1', 'wt-b']
+    ['a1', 'wt-a'],
+    ['a2', 'wt-a'],
+    ['b1', 'wt-b']
   ])
   const steps: [[string, Tab[] | null][], string[][]][] = [
     [
       [['wt-c', [chatTab('wt-c', 'c1')]]],
       [
-        ['slot-a1', 'wt-a'],
-        ['slot-a2', 'wt-a'],
-        ['slot-b1', 'wt-b'],
-        ['slot-c1', 'wt-c']
+        ['a1', 'wt-a'],
+        ['a2', 'wt-a'],
+        ['b1', 'wt-b'],
+        ['c1', 'wt-c']
       ]
     ],
     [
@@ -96,24 +97,24 @@ it('keeps the right rows across adds, moves and closes', () => {
         ['wt-b', [chatTab('wt-b', 'b1'), chatTab('wt-b', 'a1')]]
       ],
       [
-        ['slot-a1', 'wt-b'],
-        ['slot-a2', 'wt-a'],
-        ['slot-b1', 'wt-b'],
-        ['slot-c1', 'wt-c']
+        ['a1', 'wt-b'],
+        ['a2', 'wt-a'],
+        ['b1', 'wt-b'],
+        ['c1', 'wt-c']
       ]
     ],
     [
       [['wt-b', null]],
       [
-        ['slot-a2', 'wt-a'],
-        ['slot-c1', 'wt-c']
+        ['a2', 'wt-a'],
+        ['c1', 'wt-c']
       ]
     ],
     [
       [['wt-a', [{ ...chatTab('wt-a', 'a2'), executionHostId: 'runtime:env-1' }]]],
       [
-        ['slot-a2', 'wt-a'],
-        ['slot-c1', 'wt-c']
+        ['a2', 'wt-a'],
+        ['c1', 'wt-c']
       ]
     ]
   ]
@@ -125,19 +126,19 @@ it('keeps the right rows across adds, moves and closes', () => {
   }
 })
 
-it('re-picks the alias winner when tabs sharing one chat swap order', () => {
+it('keeps one row per chat when tabs sharing it swap order', () => {
   const first = { ...chatTab('wt-d', 'd1'), id: 'tab-d1-first' }
   const second = { ...chatTab('wt-d', 'd1'), id: 'tab-d1-second' }
   let source: AppState['unifiedTabsByWorktree'] = {
     'wt-d': [first, second],
     'wt-e': [chatTab('wt-e', 'e1')]
   }
-  const winners = () => [...rowIdentities(stateWith(source)).aliases.values()].map(tabOf).sort()
-  expect(winners()).toEqual(['slot-e1', 'tab-d1-first'])
+  const rows = () => [...rowIdentities(stateWith(source)).aliases.values()].map(sessionOf).sort()
+  expect(rows()).toEqual(['d1', 'e1'])
   source = replaceTabBuckets(source, [['wt-d', [second, first]]])
-  expect(winners()).toEqual(['slot-e1', 'tab-d1-second'])
+  expect(rows()).toEqual(['d1', 'e1'])
   source = replaceTabBuckets(source, [['wt-d', [{ ...second, label: 'renamed' }, first]]])
   const visits = visibleOrchestrationWorkForTest().visits
-  expect(winners()).toEqual(['slot-e1', 'tab-d1-second'])
+  expect(rows()).toEqual(['d1', 'e1'])
   expect(visibleOrchestrationWorkForTest().visits - visits).toBeLessThanOrEqual(2)
 })

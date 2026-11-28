@@ -1,6 +1,5 @@
 import { selectWslHostsServing } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { useCallback, useMemo, useState } from 'react'
-import { shallow } from 'zustand/shallow'
 import { persistedUIValuesEqual } from '../../../../../../shared/collections/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -29,7 +28,6 @@ import {
   scopeHostSectionCollapse
 } from '../../../../../../shared/sidebar-list/hosts/host-section-collapse'
 import { addHostSectionRows } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
-import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import {
   mergeDraggedHostSectionOrder,
   orderHostSectionOptions
@@ -44,10 +42,12 @@ import {
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 const EMPTY_WORKSPACE_STATUSES: SectionRowsArgs['workspaceStatuses'] = []
+const EMPTY_PENDING_CREATIONS: { creationId: string; repoId: string }[] = []
 
 function createSidebarHostOptionsSelector() {
-  let inputs: readonly unknown[] = []
+  let prev: Parameters<typeof buildSidebarHostOptions>[0] | undefined
   let result: SidebarHostOption[] = []
   return (
     state: AppState,
@@ -56,24 +56,26 @@ function createSidebarHostOptionsSelector() {
     settings: AppState['settings'],
     hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
   ): SidebarHostOption[] => {
-    const nextInputs = [
-      repos,
-      state.sshTargetLabels,
-      state.sshConnectionStates,
-      settings,
-      statuses,
-      state.runtimeEnvironments,
-      hostLabelOverrides,
-      state.wslHostStatuses,
-      selectWslHostsServing(state),
-      state.wslHostServerFiles === 'missing',
-      selectEphemeralVmHostLifecycles(state)
-    ]
-    if (shallow(inputs, nextInputs)) {
+    const wslHostsEnabled = selectWslHostsServing(state)
+    const wslHostServerFilesMissing = state.wslHostServerFiles === 'missing'
+    const ephemeralVmHosts = selectEphemeralVmHostLifecycles(state)
+    if (
+      prev &&
+      prev.repos === repos &&
+      prev.sshTargetLabels === state.sshTargetLabels &&
+      prev.sshConnectionStates === state.sshConnectionStates &&
+      prev.settings === settings &&
+      prev.runtimeStatusByEnvironmentId === statuses &&
+      prev.runtimeEnvironments === state.runtimeEnvironments &&
+      prev.hostLabelOverrides === hostLabelOverrides &&
+      prev.wslHostStatuses === state.wslHostStatuses &&
+      prev.wslHostsEnabled === wslHostsEnabled &&
+      prev.wslHostServerFilesMissing === wslHostServerFilesMissing &&
+      prev.ephemeralVmHosts === ephemeralVmHosts
+    ) {
       return result
     }
-    inputs = nextInputs
-    const next = buildSidebarHostOptions({
+    prev = {
       repos,
       sshTargetLabels: state.sshTargetLabels,
       sshConnectionStates: state.sshConnectionStates,
@@ -82,10 +84,11 @@ function createSidebarHostOptionsSelector() {
       runtimeStatusByEnvironmentId: statuses,
       hostLabelOverrides,
       wslHostStatuses: state.wslHostStatuses,
-      wslHostsEnabled: selectWslHostsServing(state),
-      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing',
-      ephemeralVmHosts: selectEphemeralVmHostLifecycles(state)
-    })
+      wslHostsEnabled,
+      wslHostServerFilesMissing,
+      ephemeralVmHosts
+    }
+    const next = buildSidebarHostOptions(prev)
     if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
       result = next
     }
@@ -97,14 +100,11 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
   const lineageParentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
-  const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
+  const { setWorkspaceHostOrder } = getAppStoreState()
 
   // Why: manual header order is bound to state.repos; Recent/Smart derive order from the sorted worktree stream.
-  const repoOrder = useMemo(
-    () => getLogicalRepoOrderRankById(repos.map((repo) => repo.id)),
-    [repos]
-  )
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
+  const repoOrder = useMemo(() => getLogicalRepoOrderRankById(allRepoIds), [allRepoIds])
   const placeholderRepoIds = useEmptyProjectPlaceholderRepoIds({
     groupBy: args.groupBy,
     repos,
@@ -120,13 +120,15 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   )
   const pendingCreations = useMemo(
     () =>
-      pendingCreationKeys.map((key) => {
-        const separator = key.indexOf(' ')
-        return {
-          creationId: key.slice(0, separator),
-          repoId: key.slice(separator + 1)
-        }
-      }),
+      pendingCreationKeys.length === 0
+        ? EMPTY_PENDING_CREATIONS
+        : pendingCreationKeys.map((key) => {
+            const separator = key.indexOf(' ')
+            return {
+              creationId: key.slice(0, separator),
+              repoId: key.slice(separator + 1)
+            }
+          }),
     [pendingCreationKeys]
   )
   const hostLabelOverrides = useMemo(
@@ -281,11 +283,6 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     orderedHostOptions,
     rows
   ])
-  const renderedSidebarRowKeys = useMemo(
-    () => collectRenderedSidebarRowKeys(sectionRows),
-    [sectionRows]
-  )
-
   const headerHostOptions: readonly ExecutionHostRegistryEntry[] = hostOptions
   return {
     occurrencePlan: rowPlan.occurrencePlan,
@@ -293,7 +290,6 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     effectiveCollapsedGroups,
     rows,
     sectionRows,
-    renderedSidebarRowKeys,
     allRepoIds,
     placeholderRepoIds,
     handleReorderHostSections,

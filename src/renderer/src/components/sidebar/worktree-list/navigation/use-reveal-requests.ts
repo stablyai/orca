@@ -12,9 +12,13 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host/ex
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { hasRenderedSidebarRowKey } from '../listing/rendered-row-keys'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
 import { readSidebarRevealTarget } from '../../sidebar-reveal-target-state'
 import { runWithFinally } from '@/lib/run-with-finally'
+
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 
 function workspacePassesFilters(
   worktree: Worktree,
@@ -31,7 +35,7 @@ function workspacePassesFilters(
 // Adjust grouping and filters before scheduling the requested workspace’s viewport reveal.
 export function useSidebarRevealRequests(args: {
   groupBy: WorktreeGroupBy
-  renderedSidebarRowKeys: ReadonlySet<string>
+  sectionRows: readonly HostSectionRow[]
   visibleWorktrees: readonly Worktree[]
   visibleFolderWorkspaces: readonly FolderWorkspace[]
   currentSidebarWorktreeId: string | null
@@ -44,7 +48,7 @@ export function useSidebarRevealRequests(args: {
 }): void {
   const {
     groupBy,
-    renderedSidebarRowKeys,
+    sectionRows,
     visibleWorktrees,
     visibleFolderWorkspaces,
     currentSidebarWorktreeId,
@@ -55,10 +59,8 @@ export function useSidebarRevealRequests(args: {
     hasFilters,
     revealWorkspaceFilters
   } = args
-  const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const { setGroupBy, revealSidebarRow, revealWorktreeInSidebar } = getAppStoreState()
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
-  const revealSidebarRow = useAppStore((s) => s.revealSidebarRow)
-  const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
   const confirm = useConfirmationDialog()
   const confirmationPending = useRef(false)
   const latestArgs = useRef(args)
@@ -82,7 +84,7 @@ export function useSidebarRevealRequests(args: {
       setGroupBy('repo')
       return
     }
-    if (!renderedSidebarRowKeys.has(rowKey) && hasFilters) {
+    if (hasFilters && !hasRenderedSidebarRowKey(sectionRows, rowKey)) {
       const target = getKnownSidebarWorktreeById(
         rowKey,
         worktreeMap,
@@ -100,7 +102,7 @@ export function useSidebarRevealRequests(args: {
     currentSidebarExecutionHostId,
     folderWorkspaces,
     pendingRevealSidebarRow,
-    renderedSidebarRowKeys,
+    sectionRows,
     setGroupBy,
     worktreeMap,
     worktrees,

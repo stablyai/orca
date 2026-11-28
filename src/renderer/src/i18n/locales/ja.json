@@ -5338,9 +5338,8 @@
             "84c3b15dca": "Agent の使用量制限",
             "d663430cf9": "使用状況の追跡を設定",
             "remoteLabel": "{{host}} の使用量はありません",
-            "remoteTitle": "{{host}} の使用量",
-            "remoteBody": "このワークスペースは {{host}} で実行されているため、バーにはそのホストの使用量が表示されます。そのホストで Agent にサインインするか、ローカルのワークスペースにフォーカスすると、このコンピュータの使用量が表示されます。",
-            "remoteOpenAccounts": "{{host}} のアカウントを開く"
+            "remoteNoUsageYet": "まだ使用量はありません。そのホストでサインインしてください。",
+            "remoteAccounts": "アカウント"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "アップデートに失敗しました。クリックして展開します。",
@@ -14891,7 +14890,10 @@
             "operationResolve": "解決",
             "operationResolveLabel": "AI で競合を解決する",
             "operationMoreActions": "その他の操作",
-            "operationAbortConfirm": "もう一度選択すると中止します"
+            "operationAbortConfirm": "もう一度選択すると中止します",
+            "operationRunChangedTitle": "何も中止されていません",
+            "operationRunChangedDescription": "中止を選んだ後に操作が変わりました。現在の状態を確認して、もう一度お試しください。",
+            "operationRunUnknown": "どの実行が一時停止中か判別できないため、ここでは中止できません。ソース管理を更新するか、ターミナルで中止してください。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",

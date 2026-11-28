@@ -24,30 +24,6 @@ export function getOwnerNotSetUpLabel(
   return translateOwnerNotSetUpLabel(placeholder, placeholder.ownerLabel, t)
 }
 
-// Why a sentinel, not Trans markup: a host name containing "<" would parse as markup.
-const HOST_SLOT = '\u0000'
-
-/** The label split around the host name, so only the name truncates wherever the locale puts it. */
-export function getOwnerNotSetUpLabelParts(
-  placeholder: OwnerNotSetUpPlaceholder,
-  t: UsageCopyTranslate
-): {
-  before: string
-  host: string
-  after: string
-} {
-  const template = translateOwnerNotSetUpLabel(placeholder, HOST_SLOT, t)
-  const slot = template.indexOf(HOST_SLOT)
-  if (slot === -1) {
-    return { before: getOwnerNotSetUpLabel(placeholder, t), host: '', after: '' }
-  }
-  return {
-    before: template.slice(0, slot),
-    host: placeholder.ownerLabel,
-    after: template.slice(slot + HOST_SLOT.length)
-  }
-}
-
 export function getOwnerNotSetUpNote(
   placeholder: OwnerNotSetUpPlaceholder,
   t: UsageCopyTranslate

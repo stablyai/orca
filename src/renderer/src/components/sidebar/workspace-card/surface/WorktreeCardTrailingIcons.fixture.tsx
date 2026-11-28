@@ -39,7 +39,7 @@ const SEEDS: WorkspaceSeed[] = [
   { id: 'ti-mixed-3', name: 'three-mixed-reviews', agents: [], lastActivityMinutesAgo: 21 },
   {
     id: 'ti-mixed-many',
-    name: 'ten-reviews-with-a-very-long-workspace-name',
+    name: 'many-reviews-with-a-very-long-workspace-name',
     agents: [],
     lastActivityMinutesAgo: 25
   },
@@ -126,7 +126,7 @@ function decorate(worktree: Worktree): Worktree {
     case 'ti-mixed-many':
       return {
         ...worktree,
-        linkedItems: [701, 702, 703, 704, 705, 706, 707, 708, 709, 710].map(pr)
+        linkedItems: Array.from({ length: 24 }, (_, i) => pr(701 + i))
       }
     default:
       return worktree
@@ -153,9 +153,10 @@ const REVIEW_STATES: Record<number, ReviewSeed> = {
   602: FAILING,
   603: PASSING,
   ...Object.fromEntries(
-    [FAILING, RUNNING, PASSING, DRAFT, MERGED, MERGED, CLOSED, PASSING, MERGED, CLOSED].map(
-      (state, i) => [701 + i, state]
-    )
+    Array.from({ length: 24 }, (_, i) => [
+      701 + i,
+      [FAILING, RUNNING, PASSING, DRAFT, MERGED, MERGED, CLOSED, PASSING, MERGED, CLOSED][i % 10]
+    ])
   )
 }
 
