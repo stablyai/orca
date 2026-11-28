@@ -55,8 +55,6 @@ jobs:
     outputs:
       new_tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.version.outputs.version || steps.dry-run-version.outputs.version }}
-      dry_run: ${{ steps.dry-run-version.outputs.version != '' }}
-      push_main: ${{ steps.resolve.outputs.push_main }}
       release_sha: ${{ steps.release-commit.outputs.sha }}
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ (steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '') && steps.dry-run-version.outputs.version == '' }}
@@ -92,6 +90,8 @@ jobs:
           filter: blob:none
           # Fetch unpublished tags for version recovery; hidden tags can recreate/overwrite an existing version.
           fetch-tags: true
+          # prepare pushes nothing and runs release-source code, so keep the write token out of git config.
+          persist-credentials: false
 
       # Why: a relay-era ref (before #27215) needs the Windows relay addon this build no longer compiles.
       - name: Refuse a ref that still ships the SSH relay
@@ -677,13 +677,13 @@ jobs:
             echo "Publishing behavior is controlled by the existing job dependencies; this summary does not change release gating."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Only job that can read the release App key. It runs no release-source code (no checkout of a working tree, no
-  # Node, hooks off) and pushes prepare's tag only after checking it is exactly a version bump of the source.
+  # Only job that can read the release App key. It runs no release-source code (no working tree, no Node, hooks off)
+  # and binds what it pushes to the dispatch inputs and GitHub itself, not to prepare's word: prepare runs source code.
   # Why the App: GITHUB_TOKEN can't push a tag whose commit carries .github/workflows changes versus main.
   cut:
     needs: prepare
     # Dry runs from other branches stop at prepare: only main may enter the release environment.
-    if: needs.prepare.outputs.should_release == 'true' || (needs.prepare.outputs.dry_run == 'true' && github.ref == 'refs/heads/main')
+    if: needs.prepare.outputs.should_release == 'true' || ((github.event_name == 'workflow_dispatch' && inputs.dry_run) && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release
@@ -691,7 +691,7 @@ jobs:
       contents: write
     outputs:
       tag: ${{ needs.prepare.outputs.tag }}
-      should_release: ${{ needs.prepare.outputs.should_release }}
+      should_release: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && needs.prepare.outputs.should_release == 'true' }}
       release_sha: ${{ steps.remote-tag.outputs.sha }}
       source_ref: ${{ needs.prepare.outputs.source_ref }}
       source_sha: ${{ needs.prepare.outputs.source_sha }}
@@ -709,11 +709,26 @@ jobs:
         working-directory: .
         run: |
           set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::prepare gave no source commit."; exit 1; }
           git init -q release
           cd release
           git config core.hooksPath /dev/null
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           git fetch -q --no-tags --depth=1 origin "$SOURCE_SHA"
+
+      - name: Require the source commit to be on the requested ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
+        run: |
+          set -euo pipefail
+          ref_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/${REF:-main}" --jq .sha)"
+          [[ "$ref_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Could not resolve ref $REF."; exit 1; }
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$ref_sha" --jq .status)"
+          if [[ "$status" != identical && "$status" != ahead ]]; then
+            echo "::error::Source $SOURCE_SHA is not on the history of $REF ($ref_sha, compare: $status)."
+            exit 1
+          fi
 
       - name: Download release tag bundle
         if: needs.prepare.outputs.new_tag != ''
@@ -726,10 +741,24 @@ jobs:
         if: needs.prepare.outputs.new_tag != ''
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
+          DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+          KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
+          EXPLICIT_VERSION: ${{ github.event_name == 'schedule' && '' || inputs.version }}
+          VERSION_SUFFIX: ${{ github.event_name == 'schedule' && '' || inputs.version_suffix }}
         run: |
           set -euo pipefail
           fail() { echo "::error::Refusing to push $TAG: $1" >&2; exit 1; }
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+(\.[0-9A-Za-z]+)?)?$ && "$TAG" == "v$VERSION" ]] || fail "tag/version mismatch"
+          # Bind the version's shape to what was dispatched; the exact number comes from prepare's release math.
+          if [[ "$DRY_RUN" == true ]]; then
+            [[ "$VERSION" == "0.0.0-rc.$GITHUB_RUN_ID" ]] || fail "a dry run must use its placeholder version"
+          elif [[ -n "$EXPLICIT_VERSION" ]]; then
+            [[ "$VERSION" == "${EXPLICIT_VERSION#v}${VERSION_SUFFIX:+.$VERSION_SUFFIX}" ]] || fail "version is not the requested $EXPLICIT_VERSION"
+          elif [[ "$KIND" == rc ]]; then
+            [[ "$VERSION" == *-rc.* && ( -z "$VERSION_SUFFIX" || "$VERSION" == *".$VERSION_SUFFIX" ) ]] || fail "an rc cut must be an rc version"
+          else
+            [[ "$VERSION" != *-* ]] || fail "a $KIND cut must be a stable version"
+          fi
           bundle="$RUNNER_TEMP/bundle/release-tag.bundle"
           git bundle verify -q "$bundle"
           git -c transfer.fsckObjects=true fetch -q --no-tags "$bundle" "refs/tags/$TAG:refs/tags/$TAG"
@@ -745,26 +774,7 @@ jobs:
             awk -v v="$VERSION" '!done && /^  "version": "[^"]*",$/ { print "  \"version\": \"" v "\","; done = 1; next } { print }') ||
             fail "package.json differs from the source beyond its version"
 
-      - name: Fast-forward main to the release commit
-        if: needs.prepare.outputs.new_tag != '' && needs.prepare.outputs.push_main == 'true' && needs.prepare.outputs.dry_run != 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          echo "::add-mask::$auth"
-          push_log="$RUNNER_TEMP/release-push-main.log"
-          if GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-              git push origin "$RELEASE_SHA:refs/heads/main" >"$push_log" 2>&1; then
-            cat "$push_log"
-          elif grep -Fq 'GH013' "$push_log" && grep -Fq 'Changes must be made through a pull request.' "$push_log"; then
-            cat "$push_log"
-            echo "::notice::Main requires pull requests; leaving its version unchanged and publishing only $TAG."
-          else
-            cat "$push_log"
-            exit 1
-          fi
-
+      # Mint before moving main, so a key or App problem fails the cut before anything is pushed.
       - name: Mint release App token
         id: app-token
         if: needs.prepare.outputs.new_tag != ''
@@ -777,7 +787,7 @@ jobs:
 
       # Read-only proof of the token: repo scope, plus a write-access handshake that sends no refs or objects.
       - name: Check release App token access (dry run)
-        if: needs.prepare.outputs.dry_run == 'true'
+        if: (github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -793,8 +803,34 @@ jobs:
             git push --dry-run origin "refs/tags/$TAG:refs/tags/$TAG"
           echo "Dry run: the release App token can reach $GITHUB_REPOSITORY with push access; nothing was pushed."
 
+      # Main moves only when the source is still its exact tip, checked here rather than taken from prepare.
+      - name: Fast-forward main to the release commit
+        if: needs.prepare.outputs.new_tag != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          main_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ "$main_sha" != "$SOURCE_SHA" ]]; then
+            echo "Source is not main's tip; publishing only $TAG."
+            exit 0
+          fi
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          push_log="$RUNNER_TEMP/release-push-main.log"
+          if GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              git push origin "$RELEASE_SHA:refs/heads/main" >"$push_log" 2>&1; then
+            cat "$push_log"
+          elif grep -Fq 'GH013' "$push_log" && grep -Fq 'Changes must be made through a pull request.' "$push_log"; then
+            cat "$push_log"
+            echo "::notice::Main requires pull requests; leaving its version unchanged and publishing only $TAG."
+          else
+            cat "$push_log"
+            exit 1
+          fi
+
       - name: Push release tag with the release App
-        if: needs.prepare.outputs.new_tag != '' && needs.prepare.outputs.dry_run != 'true'
+        if: needs.prepare.outputs.new_tag != '' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -809,13 +845,18 @@ jobs:
 
       - name: Confirm the remote tag resolves to the release commit
         id: remote-tag
-        if: needs.prepare.outputs.dry_run != 'true'
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         run: |
           set -euo pipefail
           git fetch -q --no-tags --depth=1 origin "+refs/tags/$TAG:refs/remotes/origin-tags/$TAG"
           remote_sha="$(git rev-parse "refs/remotes/origin-tags/$TAG^{commit}")"
           if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ || "$remote_sha" != "$RELEASE_SHA" ]]; then
             echo "::error::Remote tag $TAG resolves to $remote_sha, not the verified release commit $RELEASE_SHA."
+            exit 1
+          fi
+          # A recovered tag must be the source or its version-bump child, as recover_unpublished_tag requires.
+          if [[ "$remote_sha" != "$SOURCE_SHA" && "$(git cat-file -p "$remote_sha" | awk '/^parent /{ print $2; exit }')" != "$SOURCE_SHA" ]]; then
+            echo "::error::Tag $TAG ($remote_sha) was not cut from source $SOURCE_SHA."
             exit 1
           fi
           echo "sha=$RELEASE_SHA" >>"$GITHUB_OUTPUT"
