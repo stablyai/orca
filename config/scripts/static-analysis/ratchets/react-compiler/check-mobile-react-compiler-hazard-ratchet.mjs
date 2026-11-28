@@ -359,6 +359,15 @@ function pascalFunctionNames(sf) {
     if (ts.isFunctionDeclaration(node) && node.name && /^[A-Z]/.test(node.name.text)) {
       names.add(node.name.text)
     }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      /^[A-Z]/.test(node.name.text) &&
+      node.initializer &&
+      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+    ) {
+      names.add(node.name.text)
+    }
     ts.forEachChild(node, visit)
   }
   visit(sf)
@@ -400,6 +409,30 @@ function componentCallsDuringRender(sf, components) {
   return count
 }
 
+function parameterNames(name) {
+  if (ts.isIdentifier(name)) {
+    return [name.text]
+  }
+  return name.elements.flatMap((element) =>
+    ts.isOmittedExpression(element) ? [] : parameterNames(element.name)
+  )
+}
+
+// The nearest function whose own parameter binds `name`, so an inner helper's parameter of the same name is not the hook's.
+function parameterBinder(node, name) {
+  for (let current = node.parent; current; current = current.parent) {
+    if (
+      (ts.isFunctionDeclaration(current) ||
+        ts.isFunctionExpression(current) ||
+        ts.isArrowFunction(current)) &&
+      current.parameters.some((param) => parameterNames(param.name).includes(name))
+    ) {
+      return current
+    }
+  }
+  return null
+}
+
 // The compiler treats props and hook arguments as immutable: writing into one keeps its identity
 // while its contents change, so memos keyed on it serve stale values. Return a new object instead.
 function mutatedReactParams(sf) {
@@ -415,11 +448,7 @@ function mutatedReactParams(sf) {
       ts.isIdentifier(node.arguments[0])
     ) {
       const owner = owningReactFunction(node)
-      const target = node.arguments[0].text
-      if (
-        owner !== null &&
-        owner.parameters.some((param) => ts.isIdentifier(param.name) && param.name.text === target)
-      ) {
+      if (owner !== null && parameterBinder(node, node.arguments[0].text) === owner) {
         count += 1
       }
     }
@@ -480,7 +509,7 @@ export function main(root = process.cwd(), arg = undefined) {
       baselinePath: BASELINE_PATH,
       header: HEADER,
       collect: collectMobileReactCompilerHazards,
-      unit: 'React Compiler hazard(s): render-path theme/language reads, unread memo deps, components called as functions or mutated props',
+      unit: 'React Compiler hazard(s): render-path theme/language reads, unread memo deps, components called as functions in render, or Object.assign onto a prop or hook argument',
       fix: [
         'Read the hook in the component and pass it down: useMobileColors() for colors,',
         'useThemedStyles(sheet) for styles, useMobileTranslation() for t, useMobileUiLocale()',
