@@ -94,24 +94,46 @@ const lettersRepo: Repo = {
   addedAt: 6
 }
 
-const REPOS = [githubRepo, forkRepo, gitlabRepo, folderRepo, longRepo, lettersRepo]
+/** No icon chosen, but a picked color, so Reset is available. */
+const noneRepo: Repo = { ...githubRepo, id: 'orca-none', repoIcon: null }
+
+const REPOS = [githubRepo, forkRepo, gitlabRepo, folderRepo, longRepo, lettersRepo, noneRepo]
+
+/** Only the card's appearance fields are applied; that is all it writes. */
+function applyAppearance(repoId: string, updates: RepoUpdate): void {
+  const appearance: Partial<Repo> = {}
+  if ('repoIcon' in updates) {
+    appearance.repoIcon = updates.repoIcon
+  }
+  if (updates.badgeColor !== undefined) {
+    appearance.badgeColor = updates.badgeColor
+  }
+  useAppStore.setState((state) => ({
+    repos: state.repos.map((repo) => (repo.id === repoId ? { ...repo, ...appearance } : repo))
+  }))
+}
 
 // Fixtures have no runtime to persist to, so edits land in the store directly and the card shows them.
 const STORE = {
   repos: REPOS,
   updateRepo: async (repoId: string, updates: RepoUpdate): Promise<boolean> => {
-    // Only the card's appearance fields are applied; that is all it writes.
-    const appearance: Partial<Repo> = {}
-    if ('repoIcon' in updates) {
-      appearance.repoIcon = updates.repoIcon
-    }
-    if (updates.badgeColor !== undefined) {
-      appearance.badgeColor = updates.badgeColor
-    }
-    useAppStore.setState((state) => ({
-      repos: state.repos.map((repo) => (repo.id === repoId ? { ...repo, ...appearance } : repo))
-    }))
+    applyAppearance(repoId, updates)
     return true
+  }
+}
+
+/** A slow host: each edit lands 800ms later, in order, like the real per-repo update chain. */
+let slowChain: Promise<unknown> = Promise.resolve()
+const SLOW_HOST_STORE = {
+  ...STORE,
+  updateRepo: (repoId: string, updates: RepoUpdate): Promise<boolean> => {
+    const next = slowChain.then(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      applyAppearance(repoId, updates)
+      return true
+    })
+    slowChain = next
+    return next
   }
 }
 
@@ -225,8 +247,6 @@ const uploadRepo: Repo = {
     label: 'logo.png'
   }
 }
-
-const noneRepo: Repo = { ...githubRepo, id: 'orca-none', repoIcon: null }
 
 const longImageRepo: Repo = {
   ...longRepo,
@@ -359,4 +379,11 @@ export const gearMenu = defineFixture({
     gear?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     await wait(300)
   }
+})
+
+export const slowHost = defineFixture({
+  width: 380,
+  store: SLOW_HOST_STORE,
+  render: () => <Peek repo={githubRepo} />,
+  interact: openImageTab
 })

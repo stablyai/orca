@@ -36,11 +36,14 @@ export function ProjectAppearanceEditor({
   repo,
   remote,
   autoColor,
+  appearanceEpoch,
   updateRepo
 }: {
   repo: Repo
   remote: ProjectRemoteDisplay | null
   autoColor: string
+  /** Changes on Reset and Undo, which supersede any preview or fetch still pending. */
+  appearanceEpoch: number
   updateRepo: (repoId: string, updates: RepoAppearanceUpdate) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -48,7 +51,7 @@ export function ProjectAppearanceEditor({
   const [style, setStyle] = React.useState<IconStyle>(() => iconStyleOf(repo.repoIcon))
   const suggestedLetters = useSuggestedMonogram(repo)
   // Why: opening Letters previews a suggestion; browsing away untouched must give the old icon back.
-  const previewedFromRef = React.useRef<{ icon: RepoIcon | null; preview: string } | null>(null)
+  const previewedFromRef = React.useRef<{ icon: RepoIcon | null; epoch: number } | null>(null)
   const setIcon = (repoIcon: RepoIcon | null): void => {
     previewedFromRef.current = null
     updateRepo(repo.id, { repoIcon })
@@ -60,19 +63,16 @@ export function ProjectAppearanceEditor({
     if (next === 'letters' && repo.repoIcon != null && repo.repoIcon.type !== 'letters') {
       const previous = repo.repoIcon ?? null
       setIcon({ type: 'letters', text: suggestedLetters })
-      previewedFromRef.current = { icon: previous, preview: suggestedLetters }
+      previewedFromRef.current = { icon: previous, epoch: appearanceEpoch }
       return
     }
     const previewed = previewedFromRef.current
-    previewedFromRef.current = null
-    // Only an untouched preview is undone; a reset or any other change since then stays.
-    if (
-      previewed &&
-      repo.repoIcon?.type === 'letters' &&
-      repo.repoIcon.text === previewed.preview
-    ) {
+    // Edits clear the preview; a Reset or Undo since then wins. Repo updates apply in order, so
+    // this restore lands after the preview even if the preview has not reached the store yet.
+    if (previewed && previewed.epoch === appearanceEpoch) {
       setIcon(previewed.icon)
     }
+    previewedFromRef.current = null
   }
 
   return (
@@ -118,6 +118,8 @@ export function ProjectAppearanceEditor({
         </TabsContent>
         <TabsContent value="image" className="mt-1">
           <ProjectImageSourceList
+            // A fresh list on Reset or Undo drops any fetch still loading and its error.
+            key={`${repo.id}:${appearanceEpoch}`}
             repo={repo}
             remote={remote}
             loadingGitHub={actions.loadingGitHub}

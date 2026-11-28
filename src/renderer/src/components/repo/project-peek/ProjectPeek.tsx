@@ -216,14 +216,20 @@ export function ProjectPeek({
     openSettingsTarget({ pane: 'repo', repoId: repo.id })
     openSettingsPage()
   }, [onRequestClose, openSettingsPage, openSettingsTarget, repo.id])
+  // Reset and Undo bump this so in-flight picks and previews never land on top of them.
+  const [appearanceEpoch, setAppearanceEpoch] = React.useState(0)
   const reset = (): void => {
     const previous = { repoIcon: repo.repoIcon ?? null, badgeColor: repo.badgeColor }
+    setAppearanceEpoch((epoch) => epoch + 1)
     // The default mark is the project's letters, so resetting clears the chosen icon and color.
     updateRepo(repo.id, { repoIcon: null, badgeColor: DEFAULT_REPO_BADGE_COLOR })
     toast(t('auto.components.repo.ProjectPeek.resetDone', 'Icon and color reset'), {
       action: {
         label: t('auto.components.repo.ProjectPeek.undo', 'Undo'),
-        onClick: () => updateRepo(repo.id, previous)
+        onClick: () => {
+          setAppearanceEpoch((epoch) => epoch + 1)
+          updateRepo(repo.id, previous)
+        }
       }
     })
   }
@@ -239,6 +245,7 @@ export function ProjectPeek({
         repo={repo}
         remote={remote}
         autoColor={autoColor}
+        appearanceEpoch={appearanceEpoch}
         updateRepo={updateRepo}
       />
     </div>
