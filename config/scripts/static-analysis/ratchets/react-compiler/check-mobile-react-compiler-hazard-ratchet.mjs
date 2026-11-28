@@ -413,8 +413,9 @@ function parameterNames(name) {
   if (ts.isIdentifier(name)) {
     return [name.text]
   }
+  // A rest element (...props) is a fresh object, so writing to it mutates nothing passed in.
   return name.elements.flatMap((element) =>
-    ts.isOmittedExpression(element) ? [] : parameterNames(element.name)
+    ts.isOmittedExpression(element) || element.dotDotDotToken ? [] : parameterNames(element.name)
   )
 }
 
