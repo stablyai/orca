@@ -53,11 +53,13 @@ it('returns the row appended last and reads it through the primary-key range', (
   const recovery = `${PREFIX}t0000000009:earlier:1:restored:bypassPermissions`
   // Minted after the clock moved back: a lower id, appended later.
   const warning = `${PREFIX}t0000000005:later:1:running:unconfirmed`
+  db.exec('BEGIN IMMEDIATE')
   append(recovery, 'Claude uses Full access again.')
   for (let index = 0; index < 50; index += 1) {
     append(`note-${index}`, 'unrelated row')
   }
   append(warning, "Full access is off, and Claude hasn't confirmed which approval mode it uses.")
+  db.exec('COMMIT')
 
   const statements: string[] = []
   const prepare = db.prepare.bind(db)

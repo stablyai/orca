@@ -2,6 +2,7 @@ import { setImmediate } from 'node:timers/promises'
 import { expect, it } from 'vitest'
 import { ClaudeControlRequestTimeoutError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import type { JournalSqlReads } from '../../../native-chat/agent-session-journal/journal-sql-reads'
 import { applyClaudeMessageOptions } from '../launch/claude-structured-message-options'
 import { readClaudeEarlierRefusalNotice } from './claude-permission-notice-history'
 import { adoptClaudeLaunchRootInit } from './claude-permission-startup'
@@ -100,7 +101,11 @@ const unanswered = (mode: string) =>
     ? Promise.reject(new ClaudeControlRequestTimeoutError('set_permission_mode'))
     : Promise.resolve()
 
-it.each([
+const histories: {
+  history: string
+  lookup: JournalSqlReads['newestItemId']
+  warned: string[]
+}[] = [
   {
     history: 'a saved Full access recovery',
     lookup: async () => savedNotice('restored:bypassPermissions'),
@@ -108,13 +113,19 @@ it.each([
   },
   {
     history: 'both lookups failing',
-    lookup: async (): Promise<null> => {
+    lookup: async () => {
       throw new Error('Reader exited')
     },
     warned: [UNCONFIRMED]
   },
-  { history: 'no saved row', lookup: async () => null, warned: [] }
-])(
+  {
+    history: 'no saved row',
+    lookup: async () => ({ itemId: null, greatestTimedId: null }),
+    warned: []
+  }
+]
+
+it.each(histories)(
   'with $history, Ask acknowledged and Auto unanswered writes nothing more',
   async ({ lookup, warned }) => {
     const { session, rows, writes } = permissionTestSession('bypassPermissions', unanswered)

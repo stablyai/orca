@@ -74,10 +74,14 @@ it('a Stop that ends a starting child revokes it at its receipt, before the clos
 it('a woken chat starts its next child with nothing revoked', async () => {
   await workingRig()
   await rig.workingSend()
+  const slept = rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.fence
   await rig.host.sleepWorkspace(workspaceOf(), true, () => true)
-  expect(revoked).toHaveBeenCalledTimes(1)
+  expect(revoked).toHaveBeenCalledWith(SESSION, slept, 'generation-1')
+  const cuts = revoked.mock.calls.length
 
   await rig.workingSend()
-  expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.fence).toBeGreaterThan(1)
-  expect(revoked).toHaveBeenCalledTimes(1)
+  const woken = rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.fence
+  expect(woken).toBeGreaterThan(slept!)
+  expect(revoked.mock.calls).toHaveLength(cuts)
+  expect(revoked.mock.calls.map(([, fence]) => fence)).not.toContain(woken)
 })

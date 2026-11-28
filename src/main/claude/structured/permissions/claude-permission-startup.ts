@@ -1,7 +1,12 @@
 import type { ClaudeSession } from '../claude-structured-session-state'
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
-import { claudeBypassRefused, claudeOwesPermissionFallback } from './claude-full-access-refusal'
+import {
+  claudeAutoFallbackReason,
+  claudeBypassRefused,
+  claudeOwesPermissionFallback
+} from './claude-full-access-refusal'
+import { journalClaudeSessionPermissionNotice } from './claude-full-access-refusal-notice'
 import { claudePermissionPickHolds } from './claude-permission-picks'
 import {
   recordClaudeBuildPermissionMode,
@@ -9,6 +14,36 @@ import {
 } from './claude-permission-mode-ladder'
 
 type ClaudeRootInit = NonNullable<ClaudeSession['actualFirstRootInit']>
+
+/** The mode initialize reports Claude opened in: startup evidence until a root init outranks it. */
+export function adoptClaudeInitializePermissionMode(session: ClaudeSession, opened: string): void {
+  if (session.startupPermissionMode === undefined) {
+    session.startupPermissionMode = opened
+  }
+  if (!session.firstRootInit) {
+    session.firstRootInit =
+      session.launchIntent?.permissionMode === 'auto'
+        ? { permissionMode: opened, source: 'initialize' }
+        : { permissionMode: opened }
+  }
+}
+
+/** The startup settings read's answer on auto: an Approve for me chat's warning waited for it. */
+export function settleClaudeStartupAutoDisabled(
+  session: ClaudeSession,
+  autoDisabled: boolean | undefined
+): void {
+  const autoNewlyDisabled = autoDisabled === true && session.autoDisabled !== true
+  session.autoDisabled = autoDisabled
+  if (session.launchIntent?.permissionMode !== 'auto') {
+    return
+  }
+  const pending = session.startupSettings
+  session.startupSettings = undefined
+  if (autoNewlyDisabled || (pending && claudeAutoFallbackReason(session) === 'started-outside')) {
+    journalClaudeSessionPermissionNotice(session)
+  }
+}
 
 export function readClaudeRootInit(message: Record<string, unknown>): ClaudeRootInit | undefined {
   if (message.type === 'system' && message.subtype === 'init' && isRootClaudeFrame(message)) {

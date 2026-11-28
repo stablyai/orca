@@ -38,11 +38,13 @@ import {
 } from './claude-structured-session-startup-exit'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import {
-  claudeAutoFallbackReason,
   readClaudeSettingsAutoDisabled,
   readClaudeSettingsBypassDisabled
 } from '../permissions/claude-full-access-refusal'
-import { journalClaudeSessionPermissionNotice } from '../permissions/claude-full-access-refusal-notice'
+import {
+  adoptClaudeInitializePermissionMode,
+  settleClaudeStartupAutoDisabled
+} from '../permissions/claude-permission-startup'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeStructuredSessionEvent
@@ -141,14 +143,8 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
   }
   const { init, initialization } = facts
   const opened = readClaudeOpenedPermissionMode(initialization)
-  if (opened && session.startupPermissionMode === undefined) {
-    session.startupPermissionMode = opened
-  }
-  if (opened && !session.firstRootInit) {
-    session.firstRootInit =
-      session.launchIntent?.permissionMode === 'auto'
-        ? { permissionMode: opened, source: 'initialize' }
-        : { permissionMode: opened }
+  if (opened) {
+    adoptClaudeInitializePermissionMode(session, opened)
   }
   // Preserve a running model already reported by a turn's init frame.
   if (init?.model && session.reportedOptions.model === undefined) {
@@ -281,22 +277,10 @@ async function settleClaudeStartupSettings(
       session.bypassDisabled,
       readClaudeSettingsBypassDisabled(settings)
     )
-    const autoDisabled = settledClaudeRefusalFact(
-      session.autoDisabled,
-      readClaudeSettingsAutoDisabled(settings)
+    settleClaudeStartupAutoDisabled(
+      session,
+      settledClaudeRefusalFact(session.autoDisabled, readClaudeSettingsAutoDisabled(settings))
     )
-    const autoNewlyDisabled = autoDisabled === true && session.autoDisabled !== true
-    session.autoDisabled = autoDisabled
-    if (session.launchIntent?.permissionMode === 'auto') {
-      const pending = session.startupSettings
-      session.startupSettings = undefined
-      if (
-        autoNewlyDisabled ||
-        (pending && claudeAutoFallbackReason(session) === 'started-outside')
-      ) {
-        journalClaudeSessionPermissionNotice(session)
-      }
-    }
   }
   if (!input.isCurrent() || token.pending || session.settingsObservation !== token) {
     return

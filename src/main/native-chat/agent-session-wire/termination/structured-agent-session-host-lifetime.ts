@@ -106,7 +106,9 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
       recorded,
       requestedAt: session.journal.cursor()
     }
-    revokeStructuredAgentSessionPermissionDispatch(context.deps.adapter, sessionId, child)
+    if (onlyIf) {
+      revokeStructuredAgentSessionPermissionDispatch(context.deps.adapter, sessionId, child)
+    }
   } else if (child.close.cause === cause) {
     // Repeated same-cause closes include newer queued work and rebind what shutdown cuts.
     child.close.requestedAt = session.journal.cursor()
