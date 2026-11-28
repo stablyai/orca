@@ -14,8 +14,8 @@ import {
 import { renderHook } from '@testing-library/react'
 import type * as BotHosts from '@/lib/bot-hosts'
 import type * as BotCatalog from '@/lib/bot-catalog'
-import { openBotHomeTab } from '@/lib/bot-catalog'
-import { admitToOwnTabs, claimChatMadeHere } from './shared-agent-chat-admission'
+import { claimChatMadeHere } from './shared-agent-chat-admission'
+import { useAppStore } from '@/store'
 import { makeTestBot } from '../../../../../main/bots/bot.test-fixture'
 
 // The agent's host: its chat list (whose each chat is), and every call that would place a chat in
@@ -149,6 +149,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   viewTabList(HOME, null)
+  useAppStore.setState(useAppStore.getInitialState(), true)
   vi.clearAllMocks()
 })
 
@@ -176,10 +177,11 @@ it.each([
 
 it('places this viewer’s own chats: one the host says is theirs, their Home, one made here', async () => {
   host.rows['own-side'] = row('own-side')
-  // Opened while this window shows Mate's tabs: its own tabs show again.
+  // Opened while this window shows Mate's tabs: the host can't open it, so their tabs stay.
   viewTabList(HOME, { accountId: MATE.accountId })
   await open(shared, 'own-side')
-  expect(viewed()).toBeNull()
+  expect(viewed()).toEqual({ person: { accountId: MATE.accountId }, picked: null })
+  viewTabList(HOME, null)
   await open(shared, 'owner-home')
   await open(shared, claimChatMadeHere('just-made'))
   expect(host.reveal.mock.calls).toEqual([['own-side'], ['owner-home'], ['just-made']])
@@ -192,11 +194,32 @@ it('places any chat of an agent shared with no one, as before', async () => {
   expect(viewed()).toBeNull()
 })
 
-it('shows this window’s own tabs again when it opens its own Home', async () => {
+it('shows this window’s own tabs again when one of its own chats, already open, is shown', async () => {
   host.bots = [shared]
+  useAppStore.setState({
+    unifiedTabsByWorktree: {
+      [HOME]: [
+        {
+          id: 'own-side-tab',
+          entityId: 'own-side',
+          contentType: 'agent-session',
+          agentSessionAgent: 'claude',
+          worktreeId: HOME,
+          groupId: 'group',
+          executionHostId: 'local',
+          label: 'Chat',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    }
+  })
   viewTabList(HOME, { accountId: MATE.accountId })
-  void openBotHomeTab(shared).catch(() => false)
-  expect(viewed()).toBeNull()
+  openBotSession(shared, 'own-side')
+  await vi.waitFor(() => expect(viewed()).toBeNull())
+  expect(host.reveal).not.toHaveBeenCalled()
 })
 
 it('places this viewer’s own chat opened by a session an earlier /clear of it left', async () => {
@@ -221,8 +244,7 @@ it('asks of the agent on the chat’s own host, never a same-id twin on another'
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a paired host's copy, as the host catalog lists it (Bot types only this app's own).
   const pairedTwin = { ...shared, hostId: 'runtime:env-twin' } as unknown as Bot
   host.bots = [pairedTwin, unshared]
-  expect(await admitToOwnTabs({ worktreeId: HOME, sessionId: 'any-side', hostId: 'local' })).toBe(
-    true
-  )
+  openBotSession(unshared, 'any-side')
+  await vi.waitFor(() => expect(host.reveal).toHaveBeenCalledWith('any-side'))
   expect(viewed()).toBeNull()
 })

@@ -27,17 +27,8 @@ export function claimChatMadeHere(sessionId: string): string {
 
 type OpenTarget = { worktreeId: string; sessionId: string; hostId: ExecutionHostId }
 
-/** True: the chat enters this window's own tabs, which show again over any viewed list. False: it
- *  was shown in a view instead. */
+/** True: the chat may enter this window's own tabs. False: it was shown in a view instead. */
 export async function admitToOwnTabs(target: OpenTarget): Promise<boolean> {
-  const own = await isOwnElseShownInView(target)
-  if (own) {
-    viewTabList(target.worktreeId, null)
-  }
-  return own
-}
-
-async function isOwnElseShownInView(target: OpenTarget): Promise<boolean> {
   const bot = readBotForWorkspace(target.worktreeId, target.hostId)
   if (!bot || botPeoplePicker(bot, null) === null) {
     return true

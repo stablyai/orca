@@ -334,8 +334,6 @@ export function openBotHome(bot: Bot): boolean {
  */
 export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Promise<boolean> {
   cancelPendingBotThreadOpen()
-  // This window's own Home shows its own tabs again.
-  viewTabList(folderWorkspaceKey(bot.folderWorkspaceId), null)
   // Home exists before the page opens, so the page lands on it rather than on a new terminal. The
   // host decides whose: a shared agent's opens this account's own Home there.
   const chatSessionId = await openBotChat(bot).catch((error: unknown) => {
@@ -349,6 +347,8 @@ export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Pr
   if (!openBotHome(bot)) {
     return false
   }
+  // This window's own Home shows its own tabs again.
+  viewTabList(folderWorkspaceKey(bot.folderWorkspaceId), null)
   if (chatSessionId) {
     const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
     // An open Home switches here; one not in this window yet opens when the host's activation
