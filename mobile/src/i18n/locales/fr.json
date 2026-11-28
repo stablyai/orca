@@ -7433,6 +7433,6 @@
     "workspacesAllButCount": "Tous sauf {{count}}",
     "headerMissing": "Renseignez {{header}} pour ajouter ce serveur.",
     "servers": "Serveurs",
-    "unreadable": "Sa connexion ou sa clé enregistrée ne s’ouvre pas sur l’ordinateur. Reconnectez-vous."
+    "unreadable": "La connexion ou la clé enregistrée ne peut pas être ouverte. Reconnectez-vous."
   }
 }

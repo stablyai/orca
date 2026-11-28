@@ -7685,6 +7685,6 @@
     "workspacesAllButCount": "{{count}}개 제외 전체",
     "headerMissing": "이 서버를 추가하려면 {{header}} 값을 입력하세요.",
     "servers": "서버",
-    "unreadable": "저장된 로그인 또는 키를 컴퓨터에서 열 수 없습니다. 다시 로그인하세요."
+    "unreadable": "저장된 로그인 또는 키를 열 수 없습니다. 다시 로그인하세요."
   }
 }

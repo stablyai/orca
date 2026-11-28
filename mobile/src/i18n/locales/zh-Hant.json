@@ -7252,6 +7252,6 @@
     "workspacesAllButCount": "全部（排除 {{count}} 個）",
     "headerMissing": "請填寫 {{header}} 才能新增此伺服器。",
     "servers": "伺服器",
-    "unreadable": "已儲存的登入或金鑰無法在電腦上開啟。請重新登入。"
+    "unreadable": "無法開啟已儲存的登入或金鑰。請重新登入。"
   }
 }

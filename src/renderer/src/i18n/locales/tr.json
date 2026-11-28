@@ -2253,7 +2253,7 @@
         "files": "Bu reponun dosyalarından",
         "open": "{{file}} dosyasını aç"
       },
-      "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar bu bilgisayarda açılamıyor. Oturum açın ya da anahtarı aşağıya yeniden girin."
+      "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar bu bilgisayarda açılamıyor"
     }
   },
   "menu": {

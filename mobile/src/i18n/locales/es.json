@@ -7433,6 +7433,6 @@
     "workspacesAllButCount": "Todos menos {{count}}",
     "headerMissing": "Rellena {{header}} para añadir este servidor.",
     "servers": "Servidores",
-    "unreadable": "Su inicio de sesión o clave guardados no se pueden abrir en el equipo. Vuelve a iniciar sesión."
+    "unreadable": "El inicio de sesión o la clave guardados no se pueden abrir. Vuelve a iniciar sesión."
   }
 }

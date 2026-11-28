@@ -1274,7 +1274,7 @@
         "files": "De los archivos de este repositorio",
         "open": "Abrir {{file}}"
       },
-      "unreadable": "Su inicio de sesión o clave guardados no se pueden abrir en este equipo. Inicia sesión o vuelve a introducir la clave abajo."
+      "unreadable": "El inicio de sesión o la clave guardados no se pueden abrir en este equipo"
     }
   },
   "menu": {

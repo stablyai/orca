@@ -207,7 +207,7 @@ function McpServerRow({
   const action =
     signingIn === null && (server.canSignIn || withOrca) && server.status === 'needs-auth'
       ? ({ action: 'signIn', server: server.name } as const)
-      : server.canReconnect && server.status === 'failed'
+      : server.canReconnect && agentSessionMcpShownStatus(server) === 'failed'
         ? ({ action: 'reconnect', server: server.name } as const)
         : null
   // A toggle in flight shows where it is going.
@@ -274,7 +274,7 @@ function McpServerRow({
                 }
               />
             ) : null}
-            {server.canToggle ? (
+            {server.canToggle && server.orcaChange !== 'removed' ? (
               <MobileSwitch
                 value={enabled}
                 disabled={busy}

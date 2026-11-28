@@ -7439,6 +7439,6 @@
     "workspacesAllButCount": "Todos, exceto {{count}}",
     "headerMissing": "Preencha {{header}} para adicionar este servidor.",
     "servers": "Servidores",
-    "unreadable": "O login ou a chave salvos não abrem no computador. Entre novamente."
+    "unreadable": "O login ou a chave salvos não podem ser abertos. Entre novamente."
   }
 }

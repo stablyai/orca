@@ -1599,7 +1599,7 @@
         "files": "Issus des fichiers de ce dépôt",
         "open": "Ouvrir {{file}}"
       },
-      "unreadable": "Sa connexion ou sa clé enregistrée ne s’ouvre pas sur cet ordinateur. Connectez-vous ou saisissez à nouveau sa clé ci-dessous."
+      "unreadable": "La connexion ou la clé enregistrée ne peut pas être ouverte sur cet ordinateur"
     }
   },
   "menu": {

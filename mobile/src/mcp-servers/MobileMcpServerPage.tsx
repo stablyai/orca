@@ -120,10 +120,7 @@ export function MobileMcpServerPage(props: {
             title={t('mcpServers.account', 'Account')}
             subtitle={
               unreadable
-                ? t(
-                    'mcpServers.unreadable',
-                    'Its saved sign-in or key doesn’t open on the computer. Sign in again.'
-                  )
+                ? t('mcpServers.unreadable', 'Saved sign-in or key can’t be opened. Sign in again.')
                 : needsSignIn
                   ? t('mcpServers.needsSignIn', 'Needs sign-in')
                   : undefined

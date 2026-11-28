@@ -8389,7 +8389,7 @@
     "workspacesAllButCount": "除 {{count}} 个外的全部",
     "headerMissing": "填写 {{header}} 后才能添加此服务器",
     "servers": "服务器",
-    "unreadable": "已保存的登录或密钥无法在电脑上打开。请重新登录。"
+    "unreadable": "无法打开已保存的登录或密钥。请重新登录。"
   },
   "chats": {
     "delete": {

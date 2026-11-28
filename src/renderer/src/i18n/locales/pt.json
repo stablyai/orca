@@ -3100,7 +3100,7 @@
         "files": "Dos arquivos deste repositório",
         "open": "Abrir {{file}}"
       },
-      "unreadable": "O login ou a chave salvos não abrem neste computador. Entre ou digite a chave novamente abaixo."
+      "unreadable": "O login ou a chave salvos não podem ser abertos neste computador"
     }
   },
   "auto": {

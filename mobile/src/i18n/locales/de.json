@@ -6692,6 +6692,6 @@
     "workspacesAllButCount": "Alle außer {{count}}",
     "headerMissing": "{{header}} ausfüllen, um diesen Server hinzuzufügen.",
     "servers": "Server",
-    "unreadable": "Die gespeicherte Anmeldung oder der Schlüssel lässt sich auf dem Computer nicht öffnen. Erneut anmelden."
+    "unreadable": "Gespeicherte Anmeldung oder Schlüssel lässt sich nicht öffnen. Erneut anmelden."
   }
 }

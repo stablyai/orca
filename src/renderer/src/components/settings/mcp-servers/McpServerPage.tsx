@@ -60,7 +60,7 @@ function SignInRow({
                 unreadable
                   ? t(
                       'settings.mcpServers.unreadable',
-                      'Its saved sign-in or key doesn’t open on this computer. Sign in, or enter its key below.'
+                      'Saved sign-in or key can’t be opened on this computer'
                     )
                   : null
               }

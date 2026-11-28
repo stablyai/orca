@@ -2253,7 +2253,7 @@
         "files": "From this repo’s files",
         "open": "Open {{file}}"
       },
-      "unreadable": "Its saved sign-in or key doesn’t open on this computer. Sign in, or enter its key below."
+      "unreadable": "Saved sign-in or key can’t be opened on this computer"
     }
   },
   "menu": {

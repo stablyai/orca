@@ -8551,6 +8551,6 @@
     "workspacesAllButCount": "{{count}} hariç tümü",
     "headerMissing": "Bu sunucuyu eklemek için {{header}} alanını doldurun.",
     "servers": "Sunucular",
-    "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar bilgisayarda açılamıyor. Yeniden oturum açın."
+    "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar açılamıyor. Yeniden oturum açın."
   }
 }

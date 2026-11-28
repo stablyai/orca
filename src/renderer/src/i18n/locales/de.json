@@ -1925,7 +1925,7 @@
         "files": "Aus den Dateien dieses Repos",
         "open": "{{file}} öffnen"
       },
-      "unreadable": "Die gespeicherte Anmeldung oder der Schlüssel lässt sich auf diesem Computer nicht öffnen. Anmelden oder den Schlüssel unten erneut eingeben."
+      "unreadable": "Gespeicherte Anmeldung oder Schlüssel lässt sich auf diesem Computer nicht öffnen"
     }
   },
   "menu": {

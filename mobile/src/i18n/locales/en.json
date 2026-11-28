@@ -8549,6 +8549,6 @@
     "workspacesAllButCount": "All but {{count}}",
     "headerMissing": "Fill in {{header}} to add this server.",
     "servers": "Servers",
-    "unreadable": "Its saved sign-in or key doesn’t open on the computer. Sign in again."
+    "unreadable": "Saved sign-in or key can’t be opened. Sign in again."
   }
 }

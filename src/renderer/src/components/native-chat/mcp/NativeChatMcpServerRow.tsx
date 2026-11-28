@@ -128,7 +128,7 @@ export function NativeChatMcpServerRow({
         {t('components.native-chat.mcp.signIn.action', 'Sign in')}
       </PendingLabel>
     </Button>
-  ) : server.canReconnect && server.status === 'failed' ? (
+  ) : server.canReconnect && agentSessionMcpShownStatus(server) === 'failed' ? (
     <Button
       type="button"
       variant="outline"
@@ -171,7 +171,7 @@ export function NativeChatMcpServerRow({
           {statusLine}
         </span>
         {actions}
-        {server.canToggle && !signIn ? (
+        {server.canToggle && !signIn && server.orcaChange !== 'removed' ? (
           <Switch
             size="compact"
             checked={enabled}
