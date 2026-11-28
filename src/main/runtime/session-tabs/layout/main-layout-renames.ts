@@ -91,8 +91,8 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
     if (!pane) {
       return null
     }
-    // As today's rename: the name stored, set on the terminal and answered is the one asked for.
-    const written = title || null
+    // As today's rename: the name is stored trimmed, a blank one resets it, the answer is as asked.
+    const written = title?.trim() || null
     if (pane.pty) {
       this.stampManualTitle(pane.pty, written)
     }
@@ -103,7 +103,7 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
       kind: 'custom',
       title: written
     })
-    return { handle, tabId: pane.tabId, title: written }
+    return { handle, tabId: pane.tabId, title }
   }
 
   /** `terminal.setPaneTitle` of a pane main owns: names that pane in main's layout. */

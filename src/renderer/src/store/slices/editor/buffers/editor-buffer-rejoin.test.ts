@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { assertEditorBufferInvariant } from './editor-buffer-record-lifecycle'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
@@ -6,6 +6,22 @@ import type { OpenFile } from '../types/open-file'
 import { isDetachedEditorBufferId } from './editor-buffer-views'
 import './editor-buffer-rejoin'
 import { getEditorModelOwnerKey } from '@/components/editor/model-lifetime/identity/editor-model-owner'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
+
+// Switch on, main renames the files and its answer rekeys the content.
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
+  (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 function tab(id: string, worktreeId: string, patch: Partial<OpenFile> = {}): OpenFile {
   return {
@@ -27,7 +43,9 @@ const recordOf = (id: string) => state().editorBufferIdOf[id]
 // Why: a rejoin runs on the next microtask, after the caller finishes settling the record.
 const settled = () => Promise.resolve()
 
-beforeEach(() => {
+let main: TabsDrawnFromMain
+
+beforeEach(async () => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
     worktreesByRepo: {
@@ -37,7 +55,10 @@ beforeEach(() => {
       ]
     }
   })
+  main = await drawTabsFromMain(useAppStore)
 })
+
+afterEach(() => main.close())
 
 /** A restored divergent pair: `a` holds "abc", `b` holds "abcd" and is detached. */
 function divergentPair(bPatch: Partial<OpenFile> = {}): void {
@@ -146,16 +167,22 @@ describe('a dirty record whose last view closed without a prompt', () => {
     expect(state().editorBufferKept).toEqual({})
   })
 
-  it('is dropped when a rename moves another file onto its path', () => {
+  it('is dropped when a rename moves another file onto its path', async () => {
     useAppStore.setState({
       openFiles: [tab('a', 'wt-1', { isDirty: true })],
       editorDrafts: { a: 'kept edits' }
     })
     const recordId = recordOf('a')
     closeWithoutPrompt(['a'])
-    useAppStore.setState((s) => ({
-      openFiles: [...s.openFiles, tab('/repo/z.ts', 'wt-1', { filePath: '/repo/z.ts' })]
-    }))
+    state().openFile({
+      filePath: '/repo/z.ts',
+      relativePath: 'z.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    await main.settle()
+    expect(view('/repo/z.ts')).toBeDefined()
     state().rekeyOpenFilesForPathChange({
       rekeys: [
         {
@@ -167,6 +194,7 @@ describe('a dirty record whose last view closed without a prompt', () => {
         }
       ]
     })
+    await main.settle()
     expect(recordOf('/repo/a.ts')).toBe(recordId)
     expect(state().editorDrafts['/repo/a.ts']).toBeUndefined()
     expect(view('/repo/a.ts')?.isDirty).toBe(false)
