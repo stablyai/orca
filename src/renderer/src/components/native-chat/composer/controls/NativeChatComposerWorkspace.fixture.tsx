@@ -5,6 +5,54 @@ import { getDefaultSettings } from '../../../../../../shared/orca-profiles/const
 import { NativeChatComposerWorkspace } from './NativeChatComposerWorkspace'
 import { nativeChatAppearanceStyle } from '../../appearance/native-chat-appearance-style'
 import { useAppStore } from '@/store'
+import { NativeChatAntigravityAuthContext } from '../../antigravity-auth/native-chat-antigravity-auth'
+import type { AntigravityChatAuthDetection } from '../../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
+
+type AgyFixture = {
+  method: NonNullable<AntigravityChatAuthDetection['method']>
+  project?: string
+  signedOut?: boolean
+  hover?: boolean
+}
+
+function AgyAuth(props: { agy?: AgyFixture; children: React.ReactNode }): React.JSX.Element {
+  const { agy } = props
+  if (!agy) {
+    return <>{props.children}</>
+  }
+  return (
+    <NativeChatAntigravityAuthContext
+      value={{
+        host: { kind: 'local' },
+        agy: 'yours',
+        managedVersion: null,
+        ownLogin: false,
+        detection: {
+          method: agy.method,
+          googleSignIn: { personal: !agy.signedOut, business: false },
+          apiKey: { available: true, source: 'environment' },
+          adc: { available: true, project: agy.project ?? null },
+          liveChats: 0,
+          agySignedOut: agy.signedOut === true
+        },
+        keyAndAdc: true,
+        switching: null,
+        switchTo: () => undefined,
+        signInWithGoogle: () => undefined,
+        openSettings: () => undefined,
+        refresh: () => undefined
+      }}
+    >
+      {props.children}
+    </NativeChatAntigravityAuthContext>
+  )
+}
+
+async function hoverAgyChip(frame: HTMLElement): Promise<void> {
+  const chip = frame.querySelector<HTMLElement>('[data-antigravity-auth-chip]')
+  chip?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+  await new Promise((resolve) => setTimeout(resolve, 900))
+}
 
 function workspaceFixture({
   branch = 'master',
@@ -14,7 +62,8 @@ function workspaceFixture({
   checkout = 'orca',
   folderName = 'notes',
   machineName = '',
-  fontSize
+  fontSize,
+  agy
 }: {
   branch?: string
   width?: number
@@ -24,6 +73,7 @@ function workspaceFixture({
   folderName?: string
   machineName?: string
   fontSize?: number
+  agy?: AgyFixture
 } = {}) {
   const repo: Repo = {
     id: 'composer-preview',
@@ -91,10 +141,15 @@ function workspaceFixture({
           fontSize ? nativeChatAppearanceStyle({ nativeChatAppearance: { fontSize } }) : undefined
         }
       >
-        <NativeChatComposerWorkspace terminalTabId="composer-preview-tab" />
+        <AgyAuth agy={agy}>
+          <NativeChatComposerWorkspace terminalTabId="composer-preview-tab" />
+        </AgyAuth>
       </div>
     ),
-    interact: (frame) => {
+    interact: async (frame) => {
+      if (agy?.hover) {
+        await hoverAgyChip(frame)
+      }
       if (machineName) {
         const machine = frame.querySelector<HTMLElement>(`[title="${machineName}"]`)
         if (!machine || machine.getBoundingClientRect().width === 0) {
@@ -234,4 +289,17 @@ export const narrowLongFolder = workspaceFixture({
   folder: true,
   width: 260,
   folderName: 'quarterly-planning-notes-and-research-for-the-design-team'
+})
+
+const LONG_PROJECT = 'enterprise-example-company-production-analytics-workspace-0042'
+export const agyGoogle = workspaceFixture({ agy: { method: 'oauth-personal' } })
+export const agySignedOut = workspaceFixture({ agy: { method: 'oauth-personal', signedOut: true } })
+export const agyApiKey = workspaceFixture({ agy: { method: 'gemini-api-key' } })
+export const agyNarrowLongName = workspaceFixture({
+  width: 260,
+  branch: 'feature/keep-the-composer-branch-button-within-a-narrow-pane',
+  agy: { method: 'agent-platform', project: LONG_PROJECT, hover: true }
+})
+export const agyHoverLongName = workspaceFixture({
+  agy: { method: 'agent-platform', project: LONG_PROJECT, hover: true }
 })

@@ -21627,7 +21627,8 @@
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity のサインイン方法: {{method}}。変更",
-        "chipTitle": "Antigravity のサインイン方法: {{method}}",
+        "chipTooltip": "Google · {{method}}",
+        "signedOutMethod": "{{method}}（サインアウト中）",
         "menuTitle": "Antigravity のサインイン方法",
         "detected": "検出済み",
         "settings": "サインイン設定…",

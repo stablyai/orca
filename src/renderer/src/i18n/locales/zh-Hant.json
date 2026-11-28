@@ -22163,7 +22163,8 @@
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity 以 {{method}} 登入。變更",
-        "chipTitle": "Antigravity 以 {{method}} 登入",
+        "chipTooltip": "Google · {{method}}",
+        "signedOutMethod": "{{method}}（已登出）",
         "menuTitle": "Antigravity 登入方式",
         "detected": "已偵測到",
         "settings": "登入設定…",

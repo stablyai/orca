@@ -23816,7 +23816,8 @@
       },
       "antigravityAuth": {
         "chipLabel": "O Antigravity entra com {{method}}. Alterar",
-        "chipTitle": "O Antigravity entra com {{method}}",
+        "chipTooltip": "Google · {{method}}",
+        "signedOutMethod": "{{method}}, sessão encerrada",
         "menuTitle": "O Antigravity entra com",
         "detected": "Detectado",
         "settings": "Configurações de login…",

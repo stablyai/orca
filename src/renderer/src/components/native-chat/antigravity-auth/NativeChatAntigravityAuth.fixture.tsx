@@ -88,7 +88,7 @@ function ChipMenu(props: { auth: NativeChatAntigravityAuth }) {
   return (
     <NativeChatAntigravityAuthContext value={props.auth}>
       <div className="flex h-80 items-end justify-end p-4 text-2xs text-chat-foreground-faint">
-        <NativeChatAntigravityAuthChip textClassName="text-2xs whitespace-nowrap" />
+        <NativeChatAntigravityAuthChip />
       </div>
     </NativeChatAntigravityAuthContext>
   )

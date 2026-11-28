@@ -21888,7 +21888,8 @@
       },
       "antigravityAuth": {
         "chipLabel": "更改 Antigravity 登录方式（当前：{{method}}）",
-        "chipTitle": "Antigravity 登录方式：{{method}}",
+        "chipTooltip": "Google · {{method}}",
+        "signedOutMethod": "{{method}}（已退出登录）",
         "menuTitle": "Antigravity 登录方式",
         "detected": "已检测",
         "settings": "登录设置…",

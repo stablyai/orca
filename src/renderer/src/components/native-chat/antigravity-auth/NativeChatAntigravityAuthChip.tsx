@@ -1,4 +1,5 @@
-import { ChevronDown, Cloud, KeyRound, LogIn, Settings2 } from 'lucide-react'
+import { Settings2 } from 'lucide-react'
+import googleLogo from '@/assets/connector-brands/google.svg'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -11,28 +12,16 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { antigravityChatAuthMethodLabel } from '@/components/provider-accounts/AntigravityChatAuthMethodItems'
-import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import { isAntigravityGoogleMethod } from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useNativeChatAntigravityAuth } from './native-chat-antigravity-auth'
 import { antigravityChatAuthMenuItems } from './antigravity-chat-auth-choices'
 import { antigravityProgramLabel } from './antigravity-auth-words'
 
-type Method = AntigravityChatAuthConfig['method']
-
-const ICONS: Record<Method, typeof KeyRound> = {
-  'oauth-personal': LogIn,
-  'oauth-business': LogIn,
-  'gemini-api-key': KeyRound,
-  'agent-platform': Cloud
-}
-
-/** How this Antigravity chat signs in, always in view, with the other methods one click away. */
-export function NativeChatAntigravityAuthChip({
-  textClassName
-}: {
-  textClassName: string
-}): React.JSX.Element | null {
+/** How this Antigravity chat signs in, as Google's mark with the method on hover and in its menu. */
+export function NativeChatAntigravityAuthChip(): React.JSX.Element | null {
   const t = useTranslate()
   const auth = useNativeChatAntigravityAuth()
   const method = auth?.detection?.method
@@ -53,37 +42,53 @@ export function NativeChatAntigravityAuthChip({
         t
       )
     : null
-  const Icon = ICONS[chatMethod]
+  const signedOut = isAntigravityGoogleMethod(chatMethod) && auth.detection?.agySignedOut === true
+  const status = signedOut
+    ? t('components.native-chat.antigravityAuth.signedOutMethod', '{{method}}, signed out', {
+        method: shown
+      })
+    : shown
   const newChatsDiffer = chatMethod !== method
   return (
     <DropdownMenu onOpenChange={(open) => open && auth.refresh()}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          data-antigravity-auth-chip=""
-          className="h-5.5 min-w-0 max-w-56 shrink justify-start"
-          aria-label={t(
-            'components.native-chat.antigravityAuth.chipLabel',
-            'Antigravity signs in with {{method}}. Change',
-            { method: shown }
-          )}
-          title={t(
-            'components.native-chat.antigravityAuth.chipTitle',
-            'Antigravity signs in with {{method}}',
-            { method: shown }
-          )}
-        >
-          {auth.switching ? (
-            <LoadingSpinner className="size-3" />
-          ) : (
-            <Icon className="size-3" aria-hidden />
-          )}
-          <span className={textClassName}>{shown}</span>
-          <ChevronDown className="size-3 shrink-0" aria-hidden />
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost-muted"
+              size="icon-xs"
+              data-antigravity-auth-chip=""
+              // Pulls the 16px mark flush with the footer padding, where the left icons start.
+              className="relative -mr-[5px] w-[26px]"
+              aria-label={t(
+                'components.native-chat.antigravityAuth.chipLabel',
+                'Antigravity signs in with {{method}}. Change',
+                { method: status }
+              )}
+            >
+              {auth.switching ? (
+                <LoadingSpinner className="size-4" />
+              ) : (
+                <img src={googleLogo} alt="" aria-hidden className="size-4" />
+              )}
+              {signedOut ? (
+                <span
+                  aria-hidden
+                  className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-destructive ring-[1.5px] ring-background"
+                />
+              ) : null}
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4} className="max-w-80">
+          <span className="block truncate">
+            {t('components.native-chat.antigravityAuth.chipTooltip', 'Google · {{method}}', {
+              method: status
+            })}
+          </span>
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" side="top" className="w-72">
         <DropdownMenuLabel>
           {t('components.native-chat.antigravityAuth.menuTitle', 'Antigravity signs in with')}

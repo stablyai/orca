@@ -22459,7 +22459,8 @@
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity-Anmeldung: {{method}}. Ändern",
-        "chipTitle": "Antigravity-Anmeldung: {{method}}",
+        "chipTooltip": "Google · {{method}}",
+        "signedOutMethod": "{{method}}, abgemeldet",
         "menuTitle": "Antigravity-Anmeldung über",
         "detected": "Erkannt",
         "settings": "Anmeldeeinstellungen…",
