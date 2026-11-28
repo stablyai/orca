@@ -835,7 +835,9 @@
         "administratorRestartSummary": "Local terminals and agents will close. Windows will ask you to approve.",
         "orcaCouldNotRestart": "Orca couldn’t restart.",
         "manualAdministratorSteps": "Manual steps",
-        "restartOrca": "Restart"
+        "restartOrca": "Restart",
+        "customShellAbsolutePath": "Enter the full path to a native Windows shell executable (.exe).",
+        "customShellExample": "C:\\msys64\\usr\\bin\\zsh.exe"
       },
       "limit": {
         "label": "Maximum running terminals",

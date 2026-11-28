@@ -5,6 +5,7 @@ import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-works
 import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import {
   getRemoteConnectionIdForWorktree,
+  isWindowsRendererRuntime,
   resolveCreatedTabShellOverride,
   worktreeUsesWslPath
 } from './terminal-workspace-routing'
@@ -69,5 +70,11 @@ export function resolveTerminalCreatedShell(
               : undefined
           )
   )
-  return { folder, createdShellOverride }
+  const useHostDefault =
+    s.settings?.terminalWindowsUseCustomShell &&
+    isWindowsRendererRuntime() &&
+    !isRemoteWorktree &&
+    !shellOverride &&
+    createdShellOverride !== 'wsl.exe'
+  return { folder, createdShellOverride: useHostDefault ? undefined : createdShellOverride }
 }

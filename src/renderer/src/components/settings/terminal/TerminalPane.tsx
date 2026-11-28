@@ -71,8 +71,11 @@ export function TerminalPane({
   const showWindowsHostSettings = isWindowsTerminalHost ?? isWindows
   const isMac = isMacUserAgent()
   const windowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
+  const allowWindowsCustomShell = isWindows && hostScope?.target.kind !== 'environment'
   const showWindowsPowerShellImplementation =
-    showWindowsHostSettings && windowsShell === 'powershell.exe'
+    showWindowsHostSettings &&
+    windowsShell === 'powershell.exe' &&
+    !(allowWindowsCustomShell && settings.terminalWindowsUseCustomShell)
 
   const [shellValidationError, setShellValidationError] = useState<string | null>(null)
   const configuredShell = settings.terminalDefaultShell?.trim() ?? ''
@@ -285,12 +288,16 @@ export function TerminalPane({
       </SettingsGroup>
     ) : null,
     showWindowsHostSettings &&
-    matchesSettingsSearch(searchQuery, getTerminalWindowsShellSearchEntry()) ? (
+    (matchesSettingsSearch(searchQuery, getTerminalWindowsShellSearchEntry()) ||
+      (allowWindowsCustomShell &&
+        matchesSettingsSearch(searchQuery, getTerminalDefaultShellSearchEntry(t)))) ? (
       <TerminalWindowsShellSection
         key="windows-shell"
+        settings={settings}
         updateSettings={updateSettings}
         windowsShell={windowsShell}
         gitBashAvailable={gitBashAvailable}
+        allowCustomShell={allowWindowsCustomShell}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalRenderingSearchEntries()) ? (

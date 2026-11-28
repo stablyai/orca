@@ -113,6 +113,7 @@
         "administratorRestartSummary": "本地终端和代理将会关闭。Windows 会请求你批准",
         "orcaCouldNotRestart": "Orca 无法重新启动",
         "manualAdministratorSteps": "手动步骤",
+        "customShellAbsolutePath": "请输入 Windows 原生 shell 可执行文件 (.exe) 的完整路径。",
         "restartOrca": "重新启动"
       },
       "limit": {

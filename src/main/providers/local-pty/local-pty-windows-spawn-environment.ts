@@ -83,6 +83,7 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
   const codexLaunchPreflightCommand = env.ORCA_CODEX_LAUNCH_PREFLIGHT
   if (
     codexLaunchPreflightCommand &&
+    (spawn.command || spawn.terminalShellArgs === undefined) &&
     (shellBasename === 'cmd.exe' || isWindowsGitBashShellPath(plan.shellPath))
   ) {
     if (shellBasename === 'cmd.exe') {

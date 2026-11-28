@@ -29,7 +29,7 @@ export type PtySubprocessOptions = {
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
   shellOverride?: string
-  /** Unix interactive profile args are ignored for command and agent launches. */
+  /** Interactive profile args are ignored for command and agent launches. */
   terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
