@@ -1371,7 +1371,8 @@
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
 1 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
-15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
+6 src/main/startup/runtime-startup/launch-serve-mode.ts # one-shot headless serve startup split out of main-process-runtime-launch.ts for lazy desktop boot (net -1)
+8 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 3 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts
 3 src/main/startup/serve-launch/main-process-serve.ts
