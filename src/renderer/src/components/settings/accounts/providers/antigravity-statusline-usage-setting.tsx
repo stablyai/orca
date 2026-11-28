@@ -17,12 +17,14 @@ export function AntigravityStatusLineUsageSetting({
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const [status, setStatus] = useState<AntigravityStatusLineStatus | null>(null)
   const enabled = settings?.antigravityStatusLineUsageEnabled === true
+  // Orca's status-hook gate also blocks this feed, so the row says so instead of staying empty.
+  const statusHooksOff = settings?.agentStatusHooksEnabled === false
   // Main installs or removes the hook when the setting flips; reading waits for that to finish.
   useEffect(() => {
     let cancelled = false
     void window.api.rateLimits.readAntigravityStatusLineStatus?.().then(
       (next) => !cancelled && setStatus(next),
-      () => !cancelled && setStatus(null)
+      () => !cancelled && setStatus({ state: 'error', configPath: '', detail: null })
     )
     return () => {
       cancelled = true
@@ -69,7 +71,15 @@ export function AntigravityStatusLineUsageSetting({
             )
           : description}
       </p>
-      {enabled && status?.state === 'error' ? (
+      {enabled && statusHooksOff ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t(
+            'accounts.antigravity.statusLineUsage.needsStatusHooks',
+            'Usage needs Agent Status Hooks, which are off. Turn them on in Settings → Agents.'
+          )}
+        </p>
+      ) : null}
+      {status?.state === 'error' ? (
         <p role="alert" className="mt-1 text-xs text-destructive">
           {status.detail ??
             t(
