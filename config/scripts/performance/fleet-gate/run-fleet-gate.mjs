@@ -359,9 +359,10 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
     if (!result.storeMeasured) {
       result.notes.push(`${arm} store pubs/wakeups: not measured (probe could not attach)`)
     }
-    console.log(
-      `[fleet-gate] ${label} up; ${renderer.breakpoints} store breakpoint(s); settling ${options.settleMs / 1000}s`
-    )
+    const storeStatus = result.storeMeasured
+      ? `${renderer.breakpoints} store breakpoint(s)`
+      : 'store probe unavailable'
+    console.log(`[fleet-gate] ${label} up; ${storeStatus}; settling ${options.settleMs / 1000}s`)
     // Pinned twice: UI state may still be loading the first time, so only the post-settle result counts.
     await pinClassicWorktreeCards(page)
     const agents = await seedAgentStatuses({ page, userDataDir, count: AGENT_PANES })

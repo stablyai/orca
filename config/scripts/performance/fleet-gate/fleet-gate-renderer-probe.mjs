@@ -62,15 +62,16 @@ export async function installRendererProbe(page) {
   const scripts = []
   const onScriptParsed = (event) => scripts.push(event)
   cdp.on('Debugger.scriptParsed', onScriptParsed)
-  let attachmentFailed = await cdp.send('Debugger.enable').then(
-    () => false,
-    () => true
+  const debuggerEnabled = await cdp.send('Debugger.enable').then(
+    () => true,
+    () => false
   )
-  if (!attachmentFailed) {
+  if (debuggerEnabled) {
     await new Promise((resolve) => setTimeout(resolve, 1_000))
   }
   cdp.off('Debugger.scriptParsed', onScriptParsed)
   let breakpoints = 0
+  let attachmentFailed = !debuggerEnabled
   for (const script of scripts) {
     // A split renderer chunk can contain just the store factory and its React bindings.
     if (!script.url) {
@@ -116,7 +117,7 @@ export async function installRendererProbe(page) {
     }
   }
   const storeMeasured = breakpoints > 0 && !attachmentFailed
-  if (!storeMeasured && breakpoints > 0) {
+  if (!storeMeasured && debuggerEnabled) {
     await cdp.send('Debugger.disable').catch(() => {})
   }
   return {
