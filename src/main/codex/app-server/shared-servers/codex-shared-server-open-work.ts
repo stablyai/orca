@@ -66,15 +66,15 @@ export class CodexSharedServerOpenWork {
   }
 
   private apply(change: ProviderRelayWorkChange): void {
-    if (change.effect === 'start') {
-      this.start(change.group, change.key)
-    } else if (change.effect === 'end') {
-      this.end(change.group, change.key)
-    } else {
+    if (change.effect === 'roster') {
       // A restated roster replaces the group.
       this.groups.delete(change.group)
       this.sizes.set(change.group, 0)
       change.keys.forEach((key) => this.start(change.group, key))
+    } else if (change.effect === 'start') {
+      this.start(change.group, change.key)
+    } else {
+      this.end(change.group, change.key)
     }
   }
 
