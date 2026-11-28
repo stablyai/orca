@@ -34,3 +34,36 @@ export function EditorFileTabCloseButton({
     </button>
   )
 }
+
+/** The dirty dot and close button share one slot so autosave cannot change tab width. */
+export function EditorFileTabStatusSlot({
+  isDirty,
+  isPinned,
+  showsSelectionChrome,
+  onClose
+}: {
+  isDirty: boolean
+  isPinned: boolean
+  showsSelectionChrome: boolean
+  onClose: () => void
+}): React.JSX.Element {
+  return (
+    <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
+      {isDirty && (
+        // Gives way to the close button on hover/focus; pinned tabs have none, so their dot stays.
+        <span
+          className={`absolute size-1.5 rounded-full bg-foreground/60${
+            isPinned ? '' : ' group-hover:hidden group-focus-within:hidden'
+          }`}
+        />
+      )}
+      {!isPinned && (
+        <EditorFileTabCloseButton
+          fileIsDirty={isDirty}
+          showsSelectionChrome={showsSelectionChrome}
+          onClose={onClose}
+        />
+      )}
+    </div>
+  )
+}
