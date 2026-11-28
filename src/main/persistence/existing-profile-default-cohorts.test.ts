@@ -86,6 +86,56 @@ describe('existing-profile default cohorts', () => {
     expect(createStore().getSettings().experimentalAppRail).toBe(true)
   })
 
+  it('deletes Orca chats with their workspace only for new profiles or an earlier opt-in', async () => {
+    expect(createStore().getSettings().deleteOrcaChatsWithWorkspace).toBe(true)
+    await closeTestStores()
+
+    initializeNewOrcaProfileState('created', undefined, testState.dir)
+    expect(
+      readPersistedState(getOrcaProfileDataFile('created', testState.dir), 'created').settings
+        .deleteOrcaChatsWithWorkspace
+    ).toBe(true)
+
+    writeDataFile(legacyProfile({ theme: 'dark' }))
+    const existing = createStore()
+    expect(existing.getSettings().deleteOrcaChatsWithWorkspace).toBe(false)
+    await existing.flushAsync()
+    await closeTestStores()
+    expect(createStore().getSettings().deleteOrcaChatsWithWorkspace).toBe(false)
+    await closeTestStores()
+
+    writeDataFile(legacyProfile({ deleteChatHistoryWithWorkspace: true }))
+    const optedIn = createStore().getSettings()
+    expect(optedIn.deleteOrcaChatsWithWorkspace).toBe(true)
+    expect(optedIn.deleteAgentTranscriptsWithWorkspace).toBe(true)
+  })
+
+  it('keeps the combined switch older builds read on only while both parts are on', async () => {
+    const store = createStore()
+    expect(store.getSettings().deleteAgentTranscriptsWithWorkspace).toBe(false)
+    store.updateSettings({ deleteAgentTranscriptsWithWorkspace: true })
+    expect(store.getSettings().deleteChatHistoryWithWorkspace).toBe(true)
+    store.updateSettings({ deleteOrcaChatsWithWorkspace: false })
+    expect(store.getSettings().deleteChatHistoryWithWorkspace).toBe(false)
+    // An older client writes only the combined switch: it sets both parts.
+    store.updateSettings({ deleteChatHistoryWithWorkspace: true })
+    expect(store.getSettings().deleteOrcaChatsWithWorkspace).toBe(true)
+    expect(store.getSettings().deleteAgentTranscriptsWithWorkspace).toBe(true)
+    await closeTestStores()
+
+    // An older build that turned the combined switch off in between decides both parts.
+    writeDataFile(
+      legacyProfile({
+        deleteOrcaChatsWithWorkspace: true,
+        deleteAgentTranscriptsWithWorkspace: true,
+        deleteChatHistoryWithWorkspace: false
+      })
+    )
+    const downgraded = createStore().getSettings()
+    expect(downgraded.deleteOrcaChatsWithWorkspace).toBe(false)
+    expect(downgraded.deleteAgentTranscriptsWithWorkspace).toBe(false)
+  })
+
   it('marks new chat messages only for existing profiles without a choice', async () => {
     const fresh = createStore()
     expect(nativeChatMarksNewMessages(fresh.getSettings())).toBe(false)

@@ -4,6 +4,7 @@ import type {
   WorkspaceCleanupRunTrigger
 } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { deleteChatHistoryOfDeletedWorkspaces } from './deleted-workspace-chat-history'
+import { reportDeletedChatsSweep } from '../../../telemetry/deleted-chats-telemetry'
 
 // Listing every transcript costs a stat and a cache read per file, so hourly runs sweep chats less often.
 const HOURLY_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -14,8 +15,21 @@ export class ChatHistorySweepSchedule {
 
   constructor(private readonly store: RuntimeStore) {}
 
+  /** Which parts are on: turning on another part sweeps again, even while one already was. */
+  enabledParts(): ReadonlySet<'orca-chats' | 'transcripts'> {
+    const settings = this.store.getSettings()
+    const parts = new Set<'orca-chats' | 'transcripts'>()
+    if (settings.deleteOrcaChatsWithWorkspace === true) {
+      parts.add('orca-chats')
+    }
+    if (settings.deleteAgentTranscriptsWithWorkspace === true) {
+      parts.add('transcripts')
+    }
+    return parts
+  }
+
   isOn(): boolean {
-    return this.store.getSettings().deleteChatHistoryWithWorkspace === true
+    return this.enabledParts().size > 0
   }
 
   isDue(trigger: WorkspaceCleanupRunTrigger, now: number): boolean {
@@ -39,9 +53,26 @@ export class ChatHistorySweepSchedule {
       return undefined
     }
     try {
-      const swept = await deleteChatHistoryOfDeletedWorkspaces(this.store, signal)
+      const settings = this.store.getSettings()
+      const started = performance.now()
+      const { transcripts, orcaChats } = await deleteChatHistoryOfDeletedWorkspaces(
+        this.store,
+        signal
+      )
       this.lastSweptAt = now
-      return swept
+      reportDeletedChatsSweep({
+        trigger,
+        orcaChatsOn: settings.deleteOrcaChatsWithWorkspace === true,
+        transcriptsOn: settings.deleteAgentTranscriptsWithWorkspace === true,
+        orcaChats,
+        transcripts,
+        elapsedMs: performance.now() - started
+      })
+      return {
+        deleted: transcripts.deleted + orcaChats.deleted,
+        failed: transcripts.failed + orcaChats.failed,
+        freedBytes: transcripts.freedBytes + orcaChats.freedBytes
+      }
     } catch (error) {
       console.warn('[workspace-cleanup] Chat history sweep failed', error)
       return undefined

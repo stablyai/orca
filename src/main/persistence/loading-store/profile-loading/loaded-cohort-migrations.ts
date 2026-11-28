@@ -151,6 +151,41 @@ export class LoadedCohortMigrationOperations {
     return { ...state, settings: { ...state.settings, experimentalAppRail: false } }
   }
 
+  /** Orca chats follow a deleted workspace on new profiles; saved ones keep the older combined switch's choice. */
+  seedDeleteOrcaChatsWithWorkspace(state: PersistedState, savedProfile: unknown): PersistedState {
+    const saved =
+      isRecord(savedProfile) && isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    const combined = saved?.deleteChatHistoryWithWorkspace === true
+    if (typeof saved?.deleteOrcaChatsWithWorkspace === 'boolean') {
+      const both =
+        saved.deleteOrcaChatsWithWorkspace && saved.deleteAgentTranscriptsWithWorkspace === true
+      // A combined switch that no longer says "both on" was changed by an older build since.
+      if (combined === both) {
+        return state
+      }
+      this.runtime.loadNeedsSave = true
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          deleteOrcaChatsWithWorkspace: combined,
+          deleteAgentTranscriptsWithWorkspace: combined
+        }
+      }
+    }
+    const fresh = !isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)
+    this.runtime.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        deleteOrcaChatsWithWorkspace: fresh || combined,
+        deleteAgentTranscriptsWithWorkspace: combined,
+        deleteChatHistoryWithWorkspace: combined
+      }
+    }
+  }
+
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     return this.seedMilestoneInstallCohort(
       this.migrateTelemetryIdentity(state, fileExistedOnLoad),

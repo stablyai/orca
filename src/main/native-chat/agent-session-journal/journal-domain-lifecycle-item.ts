@@ -1,4 +1,5 @@
 import { capturePRPendingAction } from '../../github/pr-watch/pr-pending-actions'
+import { withUncappedToolOutput } from './journal-tool-output-cap'
 import type Database from '../../sqlite/sync-database'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -88,8 +89,9 @@ export function writeJournalDomainLifecycleItem(
     mutation.linkage,
     position.sequenceIndex
   )
+  const written = previous ? journalItemRevisionValue(previous.item, rendered) : rendered
   const items = writeJournalDomainCurrentItem(db, target, {
-    item: previous ? journalItemRevisionValue(previous.item, rendered) : rendered,
+    item: written,
     ...(previous ? { previous } : {}),
     hidden: previous?.hidden ?? false,
     ownerFence: row.ownerFence!,
@@ -103,7 +105,7 @@ export function writeJournalDomainLifecycleItem(
       capturePRPendingAction(
         db,
         target.sessionId,
-        storedItem,
+        withUncappedToolOutput(storedItem, written),
         position.savedAt,
         previous?.item.body
       )

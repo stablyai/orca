@@ -197,7 +197,7 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
         ].filter(exists)
       ).toEqual([])
       expect([resumed, resumedPacked, open].filter(exists)).toEqual([resumed, resumedPacked, open])
-      expect(result).toEqual({ deleted: 3, failed: 0, freedBytes: freed })
+      expect(result.transcripts).toEqual({ deleted: 3, failed: 0, freedBytes: freed })
 
       // A Codex that keeps no writer locks gives no proof a chat isn't open, so its chats stay.
       rmSync(join(account, 'thread-writer-locks'), { recursive: true })
@@ -214,7 +214,7 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
           }))
       })
       expect(exists(lockless)).toBe(true)
-      expect(locklessRun).toEqual({ deleted: 0, failed: 0, freedBytes: 0 })
+      expect(locklessRun.transcripts).toEqual({ deleted: 0, failed: 0, freedBytes: 0 })
     }
   )
 })

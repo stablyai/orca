@@ -6,6 +6,7 @@ import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalPagedMaintenanceKind, JournalSqlMaintenance } from './journal-sql-maintenance'
 import { JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
 import { JournalSavedChatConversion } from './journal-saved-chat-conversion'
+import { DeletedChatsDiscardPass } from '../../telemetry/deleted-chats-telemetry'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
@@ -185,23 +186,30 @@ export class JournalSqlBackgroundMaintenance {
 
   /** Rows of chats the record store deleted, page by page like retired epochs. */
   private async forgottenChats(): Promise<void> {
-    let after: string | null = null
-    while (!this.stopped.signal.aborted) {
-      await setImmediate()
-      const page = await this.readers.database({ kind: 'forgotten-chats', after })
-      if (page.kind !== 'forgotten-chats') {
-        throw new Error('journal reader returned no forgotten chats')
-      }
-      for (const sessionId of page.sessionIds) {
-        await this.pages({ kind: 'chat-discard', sessionId })
-        if (this.stopped.signal.aborted) {
+    const pass = new DeletedChatsDiscardPass()
+    try {
+      for (let after: string | null = null; !this.stopped.signal.aborted;) {
+        await setImmediate()
+        const page = await this.readers.database({ kind: 'forgotten-chats', after })
+        if (page.kind !== 'forgotten-chats') {
+          throw new Error('journal reader returned no forgotten chats')
+        }
+        for (const sessionId of page.sessionIds) {
+          pass.note(await this.pages({ kind: 'chat-discard', sessionId }))
+          if (this.stopped.signal.aborted) {
+            return
+          }
+        }
+        after = page.sessionIds.at(-1) ?? null
+        if (after === null) {
           return
         }
       }
-      if (page.sessionIds.length === 0) {
-        return
-      }
-      after = page.sessionIds.at(-1)!
+    } catch (error) {
+      pass.failed = true
+      throw error
+    } finally {
+      pass.report()
     }
   }
 
@@ -240,28 +248,31 @@ export class JournalSqlBackgroundMaintenance {
   private async pages(
     operation: Extract<JournalSqlMaintenance, { kind: JournalPagedMaintenanceKind }>,
     limit = Infinity
-  ): Promise<void> {
+  ): Promise<{ bytes: number; discarded: boolean }> {
+    let bytes = 0
     for (let unit = 0; unit < limit && !this.stopped.signal.aborted; unit++) {
       if (operation.kind !== 'page-reclaim' && this.reclaim > 0) {
         await this.pages({ kind: 'page-reclaim' }, 1)
       }
       await setImmediate()
       if (this.stopped.signal.aborted) {
-        return
+        return { bytes, discarded: false }
       }
       const started = performance.now()
       const result = await this.writer.maintain(operation)
       if (!result || typeof result !== 'object' || !('more' in result)) {
         throw new Error('journal writer returned no maintenance page')
       }
+      bytes += 'bytes' in result && typeof result.bytes === 'number' ? result.bytes : 0
       if (operation.kind === 'page-reclaim') {
         this.reclaim = result.more ? Math.max(0, this.reclaim - 1) : 0
       }
       await this.rest(started)
       if (!result.more) {
-        return
+        return { bytes, discarded: 'discarded' in result && result.discarded === true }
       }
     }
+    return { bytes, discarded: false }
   }
 
   async rest(started: number): Promise<void> {

@@ -31,7 +31,7 @@ export const confirm = defineFixture({
   interact: async (frame) => {
     frame
       .querySelector<HTMLElement>(
-        '[role="switch"][aria-label="Delete agent history when a workspace is deleted"]'
+        '[role="switch"][aria-label="Delete Orca chats when a workspace is deleted"]'
       )
       ?.click()
   }

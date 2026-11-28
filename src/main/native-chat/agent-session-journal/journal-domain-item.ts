@@ -1,5 +1,6 @@
 import type { JournalDomainItemWrite, JournalDomainItemCommit } from './journal-domain-item-write'
 import { capturePRPendingAction } from '../../github/pr-watch/pr-pending-actions'
+import { withUncappedToolOutput } from './journal-tool-output-cap'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { JournalSqlScope } from './journal-sql-scope'
 import {
@@ -225,7 +226,8 @@ export function applyJournalDomainItem(
   if (!input.options.recovered) {
     const storedItem = items.find((item) => item.itemId === itemId)
     if (storedItem) {
-      capturePRPendingAction(db, sessionId, storedItem, savedAt, previous?.body)
+      const whole = withUncappedToolOutput(storedItem, next)
+      capturePRPendingAction(db, sessionId, whole, savedAt, previous?.body)
     }
   }
   const result: JournalDomainItemCommit = {

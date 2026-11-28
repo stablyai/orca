@@ -139,6 +139,8 @@ export type RuntimeStore = {
     codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
     codexSessionSourceHome?: GlobalSettings['codexSessionSourceHome']
     deleteChatHistoryWithWorkspace?: GlobalSettings['deleteChatHistoryWithWorkspace']
+    deleteOrcaChatsWithWorkspace?: GlobalSettings['deleteOrcaChatsWithWorkspace']
+    deleteAgentTranscriptsWithWorkspace?: GlobalSettings['deleteAgentTranscriptsWithWorkspace']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
     orchestrationCoordinatorApprovalsEnabled?: GlobalSettings['orchestrationCoordinatorApprovalsEnabled']

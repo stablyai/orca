@@ -31,6 +31,12 @@ import { createCodexRolloutHistoryReferencesClient } from '../../../codex/histor
 
 export type { ChatHistorySweepResult }
 
+/** Each part under its own setting; a part that is off reports nothing deleted. */
+export type ChatHistorySweepParts = {
+  transcripts: ChatHistorySweepResult
+  orcaChats: ChatHistorySweepResult
+}
+
 export type ChatHistoryTarget = Pick<AiVaultSession, 'agent' | 'filePath'>
 
 export type ChatHistorySweepDeps = {
@@ -55,8 +61,10 @@ export type ChatHistorySweepDeps = {
     chats: AgentSessionRecord[],
     shouldForget: (chat: AgentSessionRecord) => Promise<boolean>
   ) => Promise<ChatHistorySweepResult>
-  /** Read before each deletion: the user may turn the setting off while a long scan runs. */
+  /** Claude Code and Codex transcripts; read before each deletion, as the user may turn it off mid-scan. */
   isEnabled: () => boolean
+  /** Orca's own chats, under their own setting; absent means off. */
+  isOrcaChatsEnabled?: () => boolean
 }
 
 /**
@@ -94,22 +102,22 @@ async function listInScope(
   return [...sessions.values()]
 }
 
-/** Deletes transcripts and Orca chats whose Orca workspace folder is gone, however the workspace was deleted. */
+/** Deletes Orca chats and, under their own setting, transcripts whose Orca workspace folder is gone, however the workspace was deleted. */
 export async function sweepDeletedWorkspaceChatHistory(
   deps: ChatHistorySweepDeps
-): Promise<ChatHistorySweepResult> {
+): Promise<ChatHistorySweepParts> {
   const result: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const listed = await readListedFolders(deps.store)
   // A listed path whose symlinks couldn't be followed could protect any folder: prove nothing.
   if (!listed.complete) {
-    return result
+    return { transcripts: result, orcaChats: result }
   }
   const parents = await readWorkspaceParents(deps.store, listed)
   if (parents.ids.size === 0) {
-    return result
+    return { transcripts: result, orcaChats: result }
   }
   const scope = { ...deps, listed, parentIds: parents.ids }
-  const sessions = await listInScope(deps, parents.scopePaths)
+  const sessions = deps.isEnabled() ? await listInScope(deps, parents.scopePaths) : []
   const transcripts = await sweepGoneWorkspaceFolderGroups(
     scope,
     // The recorded cwd only: cached scope aliases can describe an earlier symlink target.
@@ -132,11 +140,11 @@ export async function sweepDeletedWorkspaceChatHistory(
         stillGone
       )
   )
-  const { listNativeChats, forgetNativeChats } = deps
+  const { listNativeChats, forgetNativeChats, isOrcaChatsEnabled } = deps
   const nativeChats =
-    listNativeChats && forgetNativeChats
+    listNativeChats && forgetNativeChats && isOrcaChatsEnabled?.()
       ? await sweepGoneWorkspaceFolderGroups(
-          scope,
+          { ...scope, isEnabled: isOrcaChatsEnabled },
           listNativeChats().flatMap((record) => {
             const path = nativeChatWorkspaceFolder(record, deps.now)
             return path ? [{ path, chat: record }] : []
@@ -144,18 +152,14 @@ export async function sweepDeletedWorkspaceChatHistory(
           (_key, chats, stillGone) => forgetNativeChats(chats, stillGone)
         )
       : result
-  return {
-    deleted: transcripts.deleted + nativeChats.deleted,
-    failed: transcripts.failed + nativeChats.failed,
-    freedBytes: transcripts.freedBytes + nativeChats.freedBytes
-  }
+  return { transcripts, orcaChats: nativeChats }
 }
 
 /** The sweep against this host's real session history: AI Vault's listing and its validated delete. */
 export function deleteChatHistoryOfDeletedWorkspaces(
   store: RuntimeStore,
   signal: AbortSignal
-): Promise<ChatHistorySweepResult> {
+): Promise<ChatHistorySweepParts> {
   // One fork index for the whole sweep, in its own worker: each gone folder's batch reuses it.
   const references = createCodexRolloutHistoryReferencesClient(signal)
   return sweepDeletedWorkspaceChatHistory({
@@ -196,7 +200,8 @@ export function deleteChatHistoryOfDeletedWorkspaces(
     },
     listNativeChats: listHostNativeChats,
     forgetNativeChats: forgetHostNativeChats,
-    isEnabled: () => store.getSettings().deleteChatHistoryWithWorkspace === true
+    isEnabled: () => store.getSettings().deleteAgentTranscriptsWithWorkspace === true,
+    isOrcaChatsEnabled: () => store.getSettings().deleteOrcaChatsWithWorkspace === true
   }).finally(async () => {
     await references.save()
     await references.close()

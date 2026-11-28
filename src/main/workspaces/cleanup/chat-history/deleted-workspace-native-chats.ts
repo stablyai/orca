@@ -58,7 +58,7 @@ export async function forgetHostNativeChats(
       return result
     }
     const { sessionId, location } = chat
-    let forgotten = false
+    let forgotten: boolean | 'uncopied' = false
     try {
       forgotten = await host.serialize(sessionId, async () => {
         // Any history read opens the conversation, so an open one may be on screen. A worker that
@@ -71,7 +71,7 @@ export async function forgetHostNativeChats(
           { sessionId, location, idleBefore: Date.now() - WORKSPACE_CLEANUP_RULE_GRACE_MS },
           () => shouldForget(chat)
         )
-        if (deleted && tabShown) {
+        if (deleted === true && tabShown) {
           await closeForgottenChatTab(host, sessionId)
         }
         return deleted
@@ -80,7 +80,11 @@ export async function forgetHostNativeChats(
       console.warn('[workspace-cleanup] Deleting a chat of a deleted workspace failed', error)
       result.failed += 1
     }
-    result.deleted += forgotten ? 1 : 0
+    result.deleted += forgotten === true ? 1 : 0
+    // Left for a later sweep: an older Orca's copy of it is still being converted.
+    if (forgotten === 'uncopied') {
+      result.skipped = (result.skipped ?? 0) + 1
+    }
   }
   return result
 }

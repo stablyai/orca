@@ -4,12 +4,12 @@ import { translateSearchKeyword } from '../../search/settings-search-keywords'
 
 export const getDeleteAgentHistorySearchEntry = createLocalizedCatalog(() => ({
   title: translate(
-    'components.settings.agents.deleteHistoryWithWorkspace.title',
-    'Delete agent history when a workspace is deleted'
+    'components.settings.agents.deleteHistoryWithWorkspace.cliTitle',
+    'Delete Claude Code and Codex history when a workspace is deleted'
   ),
   description: translate(
-    'components.settings.agents.deleteHistoryWithWorkspace.description',
-    "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+    'components.settings.agents.deleteHistoryWithWorkspace.cliDescription',
+    "Claude Code and Codex transcripts from deleted workspaces are removed automatically to free disk space. They can't be recovered."
   ),
   keywords: [
     ...translateSearchKeyword('components.settings.agents.deleteHistoryWithWorkspace.chat', 'chat'),
@@ -30,4 +30,16 @@ export const getDeleteAgentHistorySearchEntry = createLocalizedCatalog(() => ({
       'cleanup'
     )
   ]
+}))
+
+export const getDeleteOrcaChatsSearchEntry = createLocalizedCatalog(() => ({
+  title: translate(
+    'components.settings.agents.deleteHistoryWithWorkspace.orcaTitle',
+    'Delete Orca chats when a workspace is deleted'
+  ),
+  description: translate(
+    'components.settings.agents.deleteHistoryWithWorkspace.orcaDescription',
+    "Orca chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+  ),
+  keywords: getDeleteAgentHistorySearchEntry().keywords
 }))

@@ -112,13 +112,25 @@ export function pruneJournalDomainRetiredPage(
   return { kind: 'domain-retired', deleted, more: false }
 }
 
-/** One page in the admitted writer transaction, with no checkpoint or alternate admission path. */
+// One page at a time until 4 ms: a writer waiting behind reclaim waits at most about one page's move.
+const RECLAIM_PAGES_PER_STEP = 16
+const RECLAIM_STEP_MS = 4
+
+/** One step in the admitted writer transaction, with no checkpoint or alternate admission path. */
 export function reclaimJournalDomainPage(db: Database.Database): JournalDomainMaintenanceResult {
-  const free = Number(db.pragma('freelist_count', { simple: true }))
-  if (free > 0) {
+  const started = performance.now()
+  let free = Number(db.pragma('freelist_count', { simple: true }))
+  for (
+    let pages = 0;
+    free > 0 &&
+    pages < RECLAIM_PAGES_PER_STEP &&
+    (pages === 0 || performance.now() - started < RECLAIM_STEP_MS);
+    pages++
+  ) {
     db.exec('PRAGMA incremental_vacuum(1)')
+    free--
   }
-  return { kind: 'page-reclaim', more: free > 1 }
+  return { kind: 'page-reclaim', more: free > 0 }
 }
 
 export function journalDomainCompactionState(

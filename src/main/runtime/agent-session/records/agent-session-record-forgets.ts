@@ -49,11 +49,21 @@ export abstract class AgentSessionRecordForgets extends AgentSessionRecordTabs {
    *  of it. Its journal rows follow in background pages on the next maintenance tick, so a batch
    *  of deletions shares one pass. The caller holds the chat's conversation lane, so nothing opens
    *  it meanwhile. */
-  forgetIdleChat = (
+  forgetIdleChat = async (
     forget: AgentSessionIdleForget,
     stillWanted: () => Promise<boolean>
-  ): Promise<boolean> =>
-    this.journalDatabase.forgetChat(
+  ): Promise<boolean | 'uncopied'> => {
+    // Cleanup never copies a chat an older Orca saved: it waits until idle conversion has copied it,
+    // so nothing here waits for idle, holds a lane meanwhile, or writes during a low-disk backoff.
+    // A chat never opened in this store has nothing to copy and is deleted as before.
+    const copy = await this.journalDatabase.readers.database({
+      kind: 'chat-copy-state',
+      sessionId: forget.sessionId
+    })
+    if (copy.kind !== 'chat-copy-state' || copy.state === 'pending') {
+      return 'uncopied'
+    }
+    return this.journalDatabase.forgetChat(
       forget.sessionId,
       async () =>
         (await stillWanted()) &&
@@ -63,6 +73,7 @@ export abstract class AgentSessionRecordForgets extends AgentSessionRecordTabs {
           legacyTabIds: this.transactions.legacySessionTabIds
         })
     )
+  }
 
   /** Deletes every session of a chat for good with their tabs and its tombstone, in one commit, or
    *  none: each must be at rest. The caller holds every session's conversation lane; each journal

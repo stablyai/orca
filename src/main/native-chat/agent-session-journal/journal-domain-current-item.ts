@@ -1,3 +1,4 @@
+import { capJournalToolOutput } from './journal-tool-output-cap'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import { beforeJournalRequestWrite } from './journal-writer-request-events'
 import {
@@ -83,7 +84,10 @@ export function writeJournalDomainCurrentItem(
     input.previous?.item,
     input.stopSettle
   )
-  const item = body === input.item.body ? input.item : { ...input.item, body }
+  const item = capJournalToolOutput(
+    body === input.item.body ? input.item : { ...input.item, body },
+    input.previous?.item
+  )
   if (readAgentJournalItemBody(item.body) !== 'readable') {
     throw new AgentSessionJournalError(
       'journal_row_rejected',
