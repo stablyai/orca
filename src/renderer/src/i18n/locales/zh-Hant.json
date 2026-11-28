@@ -22704,7 +22704,7 @@
         "task": "任務",
         "workerCount_other": "{{count}} 個工作者",
         "failedCount": "{{count}} 個失敗",
-        "needsYouCount": "{{count}} 個等待你處理",
+        "needsYouCount": "{{count}} 個需要你",
         "newQuestions_other": "{{count}} 個新的工作者問題等待你回覆",
         "waitingOnYouName": "{{name}} · 等待你處理",
         "moreQuestions": "還有 {{count}} 個等待你處理",
@@ -28365,10 +28365,10 @@
         "replyTo": "回覆 {{name}}…"
       },
       "empty": {
-        "allClear": "暫無事項需要你",
+        "allClear": "暫無需要你的項目",
         "body": "{{bot}} 替你接手的項目會顯示在這裡，讓你知道它正在做什麼，以及哪些事需要你處理。",
         "filtered": "沒有符合的項目。",
-        "needsYou": "暫無事項需要你。",
+        "needsYou": "暫無需要你的項目。",
         "title": "還沒有項目",
         "short": "還沒有項目。{{bot}} 接手的項目會顯示在這裡。"
       },
@@ -28382,7 +28382,7 @@
       "filter": {
         "clearAll": "清除篩選",
         "label": "篩選項目",
-        "needsYou": "只顯示需要你的事項",
+        "needsYou": "只看需要你",
         "remove": "移除篩選 {{name}}"
       },
       "group": {
@@ -28593,7 +28593,7 @@
     "panel": {
       "idle": "閒置",
       "more": "更多",
-      "needYou_other": "{{count}} 個需要你",
+      "needYou_other": "{{count}} 項需要你",
       "showNeedYou_other": "顯示面板 · {{count}} 項需要你",
       "working": "{{count}} 項工作進行中",
       "settings": {
@@ -29301,7 +29301,7 @@
       "newThreadTab": "建立討論串",
       "items": {
         "orNames": "{{names}} 或 {{last}}",
-        "emptyBotsNeedsYou": "{{names}} 暫無事項需要你",
+        "emptyBotsNeedsYou": "{{names}} 暫無需要你的項目",
         "emptyBots": "沒有來自 {{names}} 的事項",
         "emptyTitle": "此群組還沒有事項",
         "filterNamed": "篩選事項，目前篩選條件：{{filter}}",

@@ -1866,7 +1866,7 @@
         "taskCount_one": "{{count}} 个任务",
         "taskCount_other": "{{count}} 个任务",
         "failedCount": "{{count}} 个失败",
-        "needsYouCount": "{{count}} 个等待你处理",
+        "needsYouCount": "{{count}} 个需要你",
         "runningCount": "{{count}} 个运行中",
         "workersRegion": "工作者",
         "stopOnComputer": "请在工作者运行的电脑上停止或清除它们"
@@ -6540,7 +6540,7 @@
       "homeChat": "主聊天",
       "chatFallback": "聊天",
       "filter": {
-        "needsYou": "只显示需要你的事项",
+        "needsYou": "只看需要你",
         "label": "筛选事项",
         "clear": "清除筛选",
         "clearAll": "清除筛选"

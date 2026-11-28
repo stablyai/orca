@@ -21564,7 +21564,7 @@
         "task": "任务",
         "workerCount_other": "{{count}} 个工作者",
         "failedCount": "{{count}} 个失败",
-        "needsYouCount": "{{count}} 个等待你处理",
+        "needsYouCount": "{{count}} 个需要你",
         "newQuestions_other": "{{count}} 个新的工作者问题等待你回答",
         "waitingOnYouName": "{{name}} · 等待你处理",
         "moreQuestions": "另有 {{count}} 个等待你处理",
@@ -28655,7 +28655,7 @@
       "filter": {
         "clearAll": "清除筛选",
         "label": "筛选事项",
-        "needsYou": "只显示需要你的事项",
+        "needsYou": "只看需要你",
         "remove": "移除筛选条件 {{name}}"
       },
       "group": {

@@ -29956,7 +29956,7 @@
       "newThreadTab": "Nouveau fil",
       "items": {
         "orNames": "{{names}} ou {{last}}",
-        "emptyBotsNeedsYou": "Rien de {{names}} ne requiert votre attention",
+        "emptyBotsNeedsYou": "Rien de {{names}} à traiter",
         "emptyBots": "Aucun élément de {{names}}",
         "emptyTitle": "Aucun élément de ce groupe pour l’instant",
         "filterNamed": "Filtrer les éléments, filtre actif : {{filter}}",

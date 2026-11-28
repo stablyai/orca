@@ -6667,7 +6667,7 @@
       "composerPlaceholder": "Gruba mesaj yazın; bir bottan bahsetmek için @ kullanın",
       "repliesValue": "Yanıtlar: {{value0}}",
       "whoAnswers": "Mesajlarınızı kim yanıtlar?",
-      "peerAsked": "{{from}}, {{to}} adlı bota sordu",
+      "peerAsked": "{{from}}, {{to}} botuna sordu",
       "peerFollowedUp": "{{bot}} takip mesajı gönderdi",
       "deleteTitle": "{{name}} silinsin mi?",
       "deleteDescription": "Gruptaki botlar silinmez.",

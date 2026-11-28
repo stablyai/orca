@@ -1769,7 +1769,7 @@
         "taskCount_one": "{{count}} 個任務",
         "taskCount_other": "{{count}} 個任務",
         "failedCount": "{{count}} 個失敗",
-        "needsYouCount": "{{count}} 個等待你處理",
+        "needsYouCount": "{{count}} 個需要你",
         "runningCount": "{{count}} 個執行中",
         "workersRegion": "工作者",
         "stopOnComputer": "請在工作者執行所在的電腦上停止或清除工作者"
@@ -5741,7 +5741,7 @@
         "waiting": "等待中"
       },
       "filter": {
-        "needsYou": "只顯示需要你的事項",
+        "needsYou": "只看需要你",
         "clearAll": "清除篩選"
       },
       "tab": "項目",
@@ -5768,8 +5768,8 @@
         "next": "下一個項目"
       },
       "empty": {
-        "needsYou": "暫無事項需要你。",
-        "allClear": "暫無事項需要你"
+        "needsYou": "暫無需要你的項目。",
+        "allClear": "暫無需要你的項目"
       },
       "write": {
         "offline": "{{host}} 已離線。"

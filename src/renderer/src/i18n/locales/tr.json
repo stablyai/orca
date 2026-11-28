@@ -29223,7 +29223,7 @@
       "repliesValue": "Yanıtlar: {{value0}}",
       "repliesPrefix": "Yanıtlar:",
       "whoAnswers": "Mesajlarınızı kim yanıtlar?",
-      "peerAsked": "{{from}}, {{to}} adlı bota sordu",
+      "peerAsked": "{{from}}, {{to}} botuna sordu",
       "peerTold": "{{from}}, {{to}} botuna bildirdi",
       "peerFollowedUp": "{{bot}} takip mesajı gönderdi",
       "peerReadItems": "{{bot}}, öğeleriyle ilgili bir güncellemeyi okudu",
@@ -29258,7 +29258,7 @@
       "newThreadTab": "Yeni ileti dizisi",
       "items": {
         "orNames": "{{names}} veya {{last}}",
-        "emptyBotsNeedsYou": "{{names}}: Sizden işlem bekleyen öğe yok",
+        "emptyBotsNeedsYou": "{{names}}: Sizi bekleyen öğe yok",
         "emptyBots": "{{names}} tarafından oluşturulmuş öğe yok",
         "emptyTitle": "Bu gruptan henüz öğe yok",
         "filterNamed": "Öğeleri filtrele · Geçerli filtre: {{filter}}",
