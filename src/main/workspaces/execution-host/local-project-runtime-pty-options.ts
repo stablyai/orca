@@ -7,7 +7,13 @@ import {
 import { resolveManagedSshHostLoginShell } from '../../pty/shell-startup/managed-ssh-host-login-shell'
 
 export type LocalPtySettings = Partial<
-  Pick<GlobalSettings, 'terminalWindowsShell' | 'terminalWindowsWslDistro' | 'terminalDefaultShell'>
+  Pick<
+    GlobalSettings,
+    | 'terminalWindowsShell'
+    | 'terminalWindowsWslDistro'
+    | 'terminalWindowsUseCustomShell'
+    | 'terminalDefaultShell'
+  >
 >
 
 /** Throws for a Windows runtime that needs repair. */

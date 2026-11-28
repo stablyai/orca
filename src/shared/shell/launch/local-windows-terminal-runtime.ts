@@ -2,7 +2,12 @@ import type { ProjectExecutionRuntimeResolution } from '../../execution-host/pro
 import type { GlobalSettings } from '../../settings/global-settings-types'
 
 type LocalWindowsTerminalRuntimeSettings =
-  | Partial<Pick<GlobalSettings, 'terminalWindowsShell' | 'terminalWindowsWslDistro'>>
+  | Partial<
+      Pick<
+        GlobalSettings,
+        'terminalWindowsShell' | 'terminalWindowsWslDistro' | 'terminalWindowsUseCustomShell'
+      >
+    >
   | undefined
 
 export type LocalWindowsTerminalRuntimeOptions = {
@@ -13,6 +18,16 @@ export type LocalWindowsTerminalRuntimeOptions = {
 export function isWslShellName(shellPath: string | undefined): boolean {
   const shellName = shellPath?.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   return shellName === 'wsl.exe' || shellName === 'wsl'
+}
+
+export function resolveConfiguredWindowsShell(
+  settings: LocalWindowsTerminalRuntimeSettings
+): string | undefined {
+  const savedShell = settings?.terminalWindowsShell
+  // Legacy WSL defaults predate project runtime selection.
+  return settings?.terminalWindowsUseCustomShell && isWslShellName(savedShell)
+    ? 'powershell.exe'
+    : savedShell
 }
 
 export function getHostShellForProjectRuntime(
@@ -35,7 +50,7 @@ export function resolveLocalWindowsTerminalRuntimeOptions(args: {
   /** OpenSSH login shell; outranks only the shipped `powershell.exe` default, as on the relay. */
   sshLoginShell?: string
 }): LocalWindowsTerminalRuntimeOptions {
-  const configuredShell = args.settings?.terminalWindowsShell
+  const configuredShell = resolveConfiguredWindowsShell(args.settings)
   const settingsShell =
     args.sshLoginShell && (!configuredShell || configuredShell === 'powershell.exe')
       ? args.sshLoginShell

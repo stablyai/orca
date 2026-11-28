@@ -8,7 +8,7 @@ type TerminalCustomShellInputProps = Omit<
 > & {
   value: string
   onEdit: (next: string) => void
-  onCommit: () => void
+  onCommit: (value: string) => void
 }
 
 /** Retain focused draft whitespace through trimmed persistence echoes; component ownership discards drafts on unmount without blur. */
@@ -28,9 +28,9 @@ export function TerminalCustomShellInput({
         setDraft(next)
         onEdit(next)
       }}
-      onBlur={() => {
+      onBlur={(event) => {
         setDraft(null)
-        onCommit()
+        onCommit(event.currentTarget.value)
       }}
     />
   )

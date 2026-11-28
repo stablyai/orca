@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../../../shared/shell/launch/windows-terminal-shell'
-import { isWindowsCustomShellPath } from '../../../../../../shared/shell/launch/terminal-default-shell'
+import {
+  isWindowsCustomShellPath,
+  normalizeTerminalDefaultShell
+} from '../../../../../../shared/shell/launch/terminal-default-shell'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
@@ -35,33 +38,31 @@ export function TerminalWindowsShellSection({
   allowCustomShell
 }: TerminalWindowsShellSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const pathValidationRequest = useRef(0)
   const [pathValidation, setPathValidation] = useState<{ path: string; error: string } | null>(null)
   const [argsDraft, setArgsDraft] = useState<string | null>(null)
   const custom = allowCustomShell && settings.terminalWindowsUseCustomShell === true
   const customPath = settings.terminalDefaultShell ?? ''
-  const pathError = pathValidation?.path === customPath ? pathValidation.error : undefined
-  const validateCustomPath = async (): Promise<void> => {
-    if (customPath && !isWindowsCustomShellPath(customPath)) {
-      setPathValidation({
-        path: customPath,
-        error: t(
-          'settings.terminal.windows.customShellAbsolutePath',
-          'Enter the full path to a native Windows shell executable (.exe).'
-        )
+  const pathError =
+    pathValidation?.path === normalizeTerminalDefaultShell(customPath)
+      ? pathValidation.error
+      : undefined
+  const validateCustomPath = async (value: string): Promise<void> => {
+    const request = ++pathValidationRequest.current
+    const path = normalizeTerminalDefaultShell(value)
+    let error: string | undefined
+    if (path && !isWindowsCustomShellPath(path)) {
+      error = t(
+        'settings.terminal.windows.customShellAbsolutePath',
+        'Enter the full path to a native Windows shell executable (.exe).'
+      )
+    } else if (path && !(await window.api.shell.pathExists(path).catch(() => false))) {
+      error = t('auto.components.settings.TerminalPane.5a5eac2f44', 'Shell not found: {{value0}}', {
+        value0: path
       })
-    } else if (customPath && !(await window.api.shell.pathExists(customPath))) {
-      setPathValidation({
-        path: customPath,
-        error: t(
-          'auto.components.settings.TerminalPane.5a5eac2f44',
-          'Shell not found: {{value0}}',
-          {
-            value0: customPath
-          }
-        )
-      })
-    } else {
-      setPathValidation(null)
+    }
+    if (request === pathValidationRequest.current) {
+      setPathValidation(error ? { path, error } : null)
     }
   }
   const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
@@ -101,6 +102,7 @@ export function TerminalWindowsShellSection({
               ariaLabel={t('auto.components.settings.TerminalPane.e9c84d0338', 'Default shell')}
               value={custom ? 'custom' : windowsShell}
               onChange={(value) => {
+                pathValidationRequest.current++
                 setPathValidation(null)
                 setArgsDraft(null)
                 updateSettings(
@@ -189,10 +191,11 @@ export function TerminalWindowsShellSection({
                 )}
                 spellCheck={false}
                 onEdit={(path) => {
+                  pathValidationRequest.current++
                   setPathValidation(null)
                   updateSettings({ terminalDefaultShell: path })
                 }}
-                onCommit={() => void validateCustomPath()}
+                onCommit={(path) => void validateCustomPath(path)}
                 aria-invalid={pathError !== undefined}
                 aria-describedby={pathError ? 'windows-custom-shell-error' : undefined}
               />
