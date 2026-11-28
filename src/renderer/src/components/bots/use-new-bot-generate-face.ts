@@ -19,7 +19,11 @@ function useNewBotGenerateFace(picture: NewBotPicture, intake: BotAvatarIntake):
       return ownTurn
     },
     picture.custom?.src
-      ? { src: picture.custom.src, description: picture.custom.description }
+      ? {
+          src: picture.custom.src,
+          description: picture.custom.description,
+          generated: picture.custom.generated
+        }
       : null,
     () => {
       generateTurn.current = intake.claim()

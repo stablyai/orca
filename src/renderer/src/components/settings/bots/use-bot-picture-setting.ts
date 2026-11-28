@@ -70,11 +70,7 @@ export function useBotPictureSetting(
     avatar: kept?.png ? null : (kept?.avatar ?? null)
   }).src
   const src = kept?.png ? `${PNG_DATA_URL_PREFIX}${kept.png}` : keptSrc
-  const savedDescription = useSavedPictureDescription({
-    id: bot.id,
-    hostId: bot.hostId,
-    avatar: kept?.avatar ?? null
-  })
+  const savedDescription = useSavedPictureDescription({ ...bot, avatar: kept?.avatar ?? null })
 
   // The save loop reads these between awaits, so they live in a ref.
   const loop = useRef<SaveLoop>({
@@ -314,6 +310,8 @@ export function useBotPictureSetting(
 
   // A retired mascot kept as the bot's own picture is still drawn and dressed as that mascot.
   const keptMascot = kept && !kept.png ? parseBotAvatar(kept.avatar) : null
+  // A generated picture's caption is the description that made it, and the slot folds to it.
+  const madeWith = kept ? (generatedPictureDescription(kept.png) ?? savedDescription) : null
   return {
     value: shown,
     custom: kept && {
@@ -321,13 +319,12 @@ export function useBotPictureSetting(
       fallback: botFallback({ name: bot.name, avatar: kept.avatar }),
       after: kept.after,
       ...(keptMascot?.kind === 'mascot' ? { mascot: keptMascot.id } : {}),
-      // A generated picture's caption is the description that made it.
       description:
-        generatedPictureDescription(kept.png) ??
-        savedDescription ??
+        madeWith ??
         (kept.png || isUploadAvatar(kept.avatar)
           ? t('bots.new.pictureUpload', 'Your image')
-          : t('settings.bots.pictureCurrent', 'Current picture'))
+          : t('settings.bots.pictureCurrent', 'Current picture')),
+      generated: madeWith !== null
     },
     pick,
     upload,

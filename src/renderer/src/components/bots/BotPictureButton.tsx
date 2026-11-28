@@ -61,7 +61,11 @@ export function BotPictureButton({
   const face = useGenerateFace(
     () => picture.uploads() === uploadsAtGenerate.current,
     picture.custom?.src
-      ? { src: picture.custom.src, description: picture.custom.description }
+      ? {
+          src: picture.custom.src,
+          description: picture.custom.description,
+          generated: picture.custom.generated
+        }
       : null,
     () => {
       uploadsAtGenerate.current = picture.uploads()

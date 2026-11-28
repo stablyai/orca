@@ -30,6 +30,7 @@ const GenerateArgs = lazyZodSchema(() =>
   })
 )
 const CancelArgs = lazyZodSchema(() => z.object({ requestId: z.string().min(1).max(128) }))
+const CapabilityArgs = lazyZodSchema(() => z.object({ fresh: z.boolean().optional() }).optional())
 
 // Sign-in can change while the picker is open, so a probe is reused only briefly.
 const CAPABILITY_TTL_MS = 30_000
@@ -48,11 +49,15 @@ export function registerAvatarGenerationHandlers(
   }
   const capability = (): Promise<AvatarGenerationCapability> => {
     if (!cached || Date.now() - cached.at > CAPABILITY_TTL_MS) {
-      cached = { at: Date.now(), value: probeAvatarGenerationCapability(envFor) }
-      // A failed probe must not stick for the whole TTL.
-      cached.value.catch(() => {
-        cached = null
+      const entry = { at: Date.now(), value: probeAvatarGenerationCapability(envFor) }
+      cached = entry
+      // A failed probe must not stick for the whole TTL, nor clear a newer one started since.
+      entry.value.catch(() => {
+        if (cached === entry) {
+          cached = null
+        }
       })
+      return entry.value
     }
     return cached.value
   }
@@ -62,12 +67,16 @@ export function registerAvatarGenerationHandlers(
     ipcMain.removeHandler('avatarGeneration:generate')
     ipcMain.removeHandler('avatarGeneration:cancel')
   }
-  ipc.handle('avatarGeneration:capability', () =>
-    capability().catch((error: unknown) => {
+  ipc.handle('avatarGeneration:capability', (_event, raw: unknown) => {
+    // Check again: an agent installed or signed in moments ago must not wait out the cache.
+    if (CapabilityArgs.safeParse(raw).data?.fresh === true) {
+      cached = null
+    }
+    return capability().catch((error: unknown) => {
       console.error('[avatar-generation] Capability probe failed:', error)
       return { agents: [] } satisfies AvatarGenerationCapability
     })
-  )
+  })
 
   ipc.handle(
     'avatarGeneration:generate',

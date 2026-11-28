@@ -144,6 +144,20 @@
     "kind": "object-property:error",
     "text": "unavailable",
     "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/component-fixtures/fixture-bot-picture.tsx",
+    "kind": "object-property:error",
+    "text": "failed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/component-fixtures/fixture-bot-picture.tsx",
+    "kind": "object-property:error",
+    "text": "signed-out",
+    "dynamic": false,
     "count": 1
   },
   {

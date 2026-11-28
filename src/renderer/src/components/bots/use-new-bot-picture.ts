@@ -104,12 +104,13 @@ export function useNewBotPicture(
   const [upload, setUpload] = useState<NewBotUpload | null>(() =>
     initialUpload ? { png: initialUpload, after: -1 } : null
   )
+  const madeWith = upload && generatedPictureDescription(upload.png)
   const custom = upload && {
     src: `data:image/png;base64,${upload.png}`,
     fallback: '',
     after: upload.after,
-    description:
-      generatedPictureDescription(upload.png) ?? t('bots.new.pictureUpload', 'Your image')
+    description: madeWith ?? t('bots.new.pictureUpload', 'Your image'),
+    generated: madeWith !== null
   }
   const showingUpload = value.kind === 'custom' && upload !== null
   const mascotId =

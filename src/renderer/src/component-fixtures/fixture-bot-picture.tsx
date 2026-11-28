@@ -1,6 +1,8 @@
 // The bot picture picker as fixtures frame it: a sample bot, upload and image-agent stubs, New bot and
 // Settings around the picker, and the steps that walk it to its Generate face.
+import { useEffect, useState } from 'react'
 import { stubBots } from './fixture-bots'
+import type { BotShareReview } from '../../../shared/bots/bot-share-received'
 import type { Bot } from '../../../shared/bot-types'
 import type {
   AvatarGenerationApi,
@@ -257,4 +259,121 @@ export const READY: AvatarGenerationCapability = {
 export async function openGenerateAgainBox(): Promise<void> {
   document.querySelector<HTMLButtonElement>('button[aria-label="Edit description"]')?.click()
   await settle(400)
+}
+
+/** No image agent until Check again finds Codex (as if just installed); then its runs fail once,
+ *  make a picture, and from the third on run until canceled. */
+export function stubGeneratorAfterRecheck(): void {
+  resetAvatarRequestsForTests()
+  let found = false
+  let runs = 0
+  stubUpload({
+    capability: async (options) => {
+      found ||= options?.fresh === true
+      await settle(300)
+      return found ? { agents: [{ agent: 'codex', status: 'ready' }] } : { agents: [] }
+    },
+    generate: async () => {
+      runs += 1
+      if (runs > 2) {
+        return new Promise(() => {})
+      }
+      await settle(800)
+      return runs === 1
+        ? { ok: false, error: 'failed', agent: 'codex' }
+        : { ok: true, agent: 'codex', image: { mimeType: 'image/png', base64: await artBase64() } }
+    },
+    cancel: async () => {}
+  })
+}
+
+/** Codex installed but signed out until Check again (as if signed in meanwhile), then ready. */
+export function stubSignedOutUntilRecheck(): void {
+  resetAvatarRequestsForTests()
+  let signedIn = false
+  stubUpload({
+    capability: async (options) => {
+      signedIn ||= options?.fresh === true
+      await settle(300)
+      return { agents: [{ agent: 'codex', status: signedIn ? 'ready' : 'signed-out' }] }
+    },
+    generate: async () => ({
+      ok: true,
+      agent: 'codex',
+      image: { mimeType: 'image/png', base64: await artBase64() }
+    }),
+    cancel: async () => {}
+  })
+}
+
+/** The first check finds Codex ready; later quiet checks answer the same, but slowly, while a run
+ *  finds it signed out in the meantime: the older answer must not bring Generate back. */
+export function stubStaleProbe(): void {
+  resetAvatarRequestsForTests()
+  let calls = 0
+  stubUpload({
+    capability: async (options) => {
+      calls += 1
+      if (calls > 1 && options?.fresh !== true) {
+        await settle(6000)
+      }
+      return { agents: [{ agent: 'codex', status: 'ready' }] }
+    },
+    generate: async () => ({ ok: false, error: 'signed-out', agent: 'codex' }),
+    cancel: async () => {}
+  })
+}
+
+/** The first capability check never answers. */
+export function stubGeneratorChecking(): void {
+  resetAvatarRequestsForTests()
+  stubUpload({
+    capability: () => new Promise(() => {}),
+    generate: async () => ({ ok: false, error: 'unavailable' }),
+    cancel: async () => {}
+  })
+}
+
+/** New bot from a shared link whose bot has its own picture (as the review gives it), once drawn. */
+export function NewBotFromSharedLink(): React.JSX.Element | null {
+  const [png, setPng] = useState<string | null>(null)
+  useEffect(() => {
+    void artBase64().then(setPng)
+  }, [])
+  if (!png) {
+    return null
+  }
+  const review: BotShareReview = {
+    reviewId: 'review-fixture',
+    shareId: 'share-fixture',
+    versionId: 'v1',
+    publisher: null,
+    publishedAt: '2026-11-27T00:00:00.000Z',
+    bot: {
+      schemaVersion: 1,
+      name: 'Perf Manager',
+      avatar: { image: 'avatar.png' },
+      purpose: '',
+      agentHint: 'claude',
+      skills: [],
+      tools: [],
+      connectors: [],
+      schedules: [],
+      eventSuggestions: [],
+      memory: []
+    },
+    files: [],
+    flags: [],
+    leftOut: [],
+    avatarDataUrl: `data:image/png;base64,${png}`
+  }
+  return (
+    <div className="h-[640px]">
+      <NewBotDialog
+        open
+        onOpenChange={() => {}}
+        fromShare={{ review, toolIds: [], onBack: () => {}, onMoved: () => {} }}
+      />
+    </div>
+  )
 }

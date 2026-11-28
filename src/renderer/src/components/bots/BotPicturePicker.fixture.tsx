@@ -2,6 +2,7 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import {
   dragOver,
   NewBot,
+  NewBotFromSharedLink,
   openGenerate,
   openGenerateAgainBox,
   openPicture,
@@ -12,6 +13,10 @@ import {
   settle,
   step,
   stubGeneration,
+  stubGeneratorAfterRecheck,
+  stubGeneratorChecking,
+  stubSignedOutUntilRecheck,
+  stubStaleProbe,
   stubUpload
 } from '../../component-fixtures/fixture-bot-picture'
 
@@ -216,4 +221,64 @@ export const generateBackToMascot = defineFixture({
     await step('ArrowRight')
     await settle(400)
   }
+})
+
+// No image agent on this computer: Generate stays, says so, and offers Check again.
+export const generateNoAgent = defineFixture({
+  width: 420,
+  setup: stubUpload,
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame, 'a tiny violet robot gardener', { submit: false })
+})
+
+export const generateChecking = defineFixture({
+  width: 420,
+  setup: stubGeneratorChecking,
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame)
+})
+
+// Driven by tests/component-fixtures: Check again finds Codex, then fail, retry, pick, cancel.
+export const generateRecheckNewBot = defineFixture({
+  width: 560,
+  setup: stubGeneratorAfterRecheck,
+  render: () => <NewBot />
+})
+
+export const generateRecheckSettings = defineFixture({
+  width: 420,
+  setup: stubGeneratorAfterRecheck,
+  render: () => <Settings />
+})
+
+// New bot from a shared link with the bot's own picture, as reported: Generate is one step back.
+export const generateSharedLinkNoAgent = defineFixture({
+  width: 560,
+  setup: stubUpload,
+  render: () => <NewBotFromSharedLink />,
+  interact: async () => {
+    await settle(600)
+    document.querySelector<HTMLButtonElement>('button[aria-label="Change picture"]')?.click()
+    await settle(400)
+  }
+})
+
+// The same with Codex ready: describing a new picture is in sight, not folded behind "Your image".
+export const generateSharedLinkReady = defineFixture({
+  ...generateSharedLinkNoAgent,
+  setup: stubGeneration(READY, 'image')
+})
+
+// Codex signed out: the field says so with Check again, which finds it signed in.
+export const generateSignedOutRecheck = defineFixture({
+  width: 420,
+  setup: stubSignedOutUntilRecheck,
+  render: () => <Settings />
+})
+
+// A slow check started before a run found Codex signed out must not bring Generate back.
+export const generateStaleProbe = defineFixture({
+  width: 560,
+  setup: stubStaleProbe,
+  render: () => <NewBot />
 })

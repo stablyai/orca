@@ -28356,7 +28356,10 @@
         "unavailable": "No installed agent can make images.",
         "failed": "{{agent}} couldn't make an image. Try again.",
         "face": "Generate a picture",
-        "agent": "Generate with {{agent}}"
+        "agent": "Generate with {{agent}}",
+        "checking": "Looking for {{first}} or {{second}}…",
+        "noneLinked": "To generate a picture, install <first>{{first}}</first> or <second>{{second}}</second> on this computer and sign in.",
+        "checkAgain": "Check again"
       }
     },
     "linear": {

@@ -27,7 +27,7 @@ import {
   type GenerateFaceDraft
 } from './AvatarGenerateFace'
 import { BotPictureRowFold } from './BotPictureRowFold'
-import { readAvatarCapability } from './avatar-generation-capability-store'
+import { avatarGenerationApi } from './avatar-generation-capability-store'
 import {
   CUSTOM_FACE,
   GENERATE_FACE,
@@ -50,6 +50,8 @@ export type BotPictureCustom = {
   fallback: string
   after: number
   description: string
+  /** `description` is what made the picture (Generate), not a plain caption like "Your image". */
+  generated?: boolean
   /** A mascot the carousel no longer offers: drawn and dressed as that mascot. */
   mascot?: BotMascotId
 }
@@ -157,9 +159,9 @@ export function BotPicturePicker({
   })
   const intake = sharedIntake ?? ownIntake
   const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
-  // Read once, at mount: the face list is final from the first paint. A check still unanswered
-  // at the very first open (just after launch) means no Generate face for that open only.
-  const [withGenerate] = useState(() => (readAvatarCapability()?.length ?? 0) > 0)
+  // Read once, at mount: the face list is final from the first paint. Every desktop picker has
+  // Generate, so it never vanishes while a check is out or none is found; its field says which.
+  const [withGenerate] = useState(() => avatarGenerationApi() !== null)
   // With Generate, the user's own picture lives in its slot: one tile, never two. An older
   // picture with no image (an emoji) keeps its own face.
   const customInSlot = withGenerate && Boolean(custom?.src) && !custom?.mascot
@@ -194,7 +196,9 @@ export function BotPicturePicker({
       return ownTurn
     },
     // A retired mascot keeps its own tile, so Generate never holds it.
-    custom?.src && !custom.mascot ? { src: custom.src, description: custom.description } : null,
+    custom?.src && !custom.mascot
+      ? { src: custom.src, description: custom.description, generated: custom.generated }
+      : null,
     () => {
       generateTurn.current = intake.claim()
     },
@@ -363,7 +367,7 @@ export function BotPicturePicker({
                 <GenerateField face={face} />
                 {/* While the slot holds a picture, Upload stays in reach under its description, as
                     do a new picture's Undo and errors. */}
-                <BotPictureRowFold open={face.folded || line.kind !== 'hint'}>
+                <BotPictureRowFold open={face.picture !== null || line.kind !== 'hint'}>
                   {uploadLine}
                 </BotPictureRowFold>
               </>

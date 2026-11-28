@@ -8,8 +8,15 @@ import type {
   AvatarImageAgent,
   AvatarImageAgentStatus
 } from '../../../../shared/avatar-generation/avatar-generation-contract'
-import { pickAvatarAgent } from '../../../../shared/avatar-generation/avatar-generation-agent-choice'
-import { refreshAvatarCapability, useAvatarCapability } from './avatar-generation-capability-store'
+import {
+  avatarAgentReady,
+  pickAvatarAgent
+} from '../../../../shared/avatar-generation/avatar-generation-agent-choice'
+import {
+  refreshAvatarCapability,
+  useAvatarCapability,
+  useAvatarCapabilityChecking
+} from './avatar-generation-capability-store'
 import {
   avatarRequestPending,
   cancelAvatarRequest,
@@ -62,6 +69,12 @@ export function useAvatarGeneration(
   agents: readonly AvatarImageAgentStatus[]
   /** null while no capable agent was found. */
   agent: AvatarImageAgent | null
+  /** `agent` is signed in, so Generate can run with it. */
+  agentReady: boolean
+  /** Still finding out which agents can make pictures: the first check, or Check again. */
+  checking: boolean
+  /** Check again, skipping main's brief cache: for an agent installed or signed in just now. */
+  recheck: () => void
   selectAgent: (agent: AvatarImageAgent) => void
   run: AvatarGenerationRun
   /** Kept while the hook is mounted, through later runs that fail or are canceled. */
@@ -79,9 +92,11 @@ export function useAvatarGeneration(
   choiceKey: string
 } {
   const agents = useAvatarCapability() ?? NO_AGENTS
+  const checking = useAvatarCapabilityChecking()
   const remembered = useAppStore((store) => store.settings?.avatarGenerationAgent)
   const [chosen, setChosen] = useState<AvatarImageAgent | null>(null)
-  const agent = pickAvatarAgent(agents, chosen ?? remembered)
+  const agent = pickAvatarAgent(agents, { chosen, remembered })
+  const agentReady = avatarAgentReady(agents, agent)
   const [run, setRun] = useState<AvatarGenerationRun>({ kind: 'idle' })
   const [result, setResult] = useState<GeneratedAvatar | null>(null)
   const current = useRef<string | null>(null)
@@ -115,7 +130,8 @@ export function useAvatarGeneration(
 
   const generate = (description: string): void => {
     const text = description.trim()
-    if (!text || !agent || avatarRequestPending(current.current)) {
+    // Only a signed-in agent runs; a signed-out one's field says to sign in and check again.
+    if (!text || !agent || !agentReady || avatarRequestPending(current.current)) {
       return
     }
     latest.current.onStart?.()
@@ -139,6 +155,10 @@ export function useAvatarGeneration(
           current.current = null
           setRun({ kind: 'error', failure, agent: failedAgent })
           latest.current.onFailed?.()
+        }
+        if (failure === 'unavailable') {
+          // Main no longer finds the agent the picker offered: the field shows what it finds now.
+          refreshAvatarCapability({ fresh: true })
         }
       },
       ended: (saved) => {
@@ -188,6 +208,14 @@ export function useAvatarGeneration(
   return {
     agents,
     agent,
+    agentReady,
+    checking,
+    recheck: () => {
+      if (run.kind === 'error') {
+        setRun({ kind: 'idle' })
+      }
+      refreshAvatarCapability({ fresh: true })
+    },
     selectAgent,
     run,
     result,

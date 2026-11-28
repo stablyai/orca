@@ -30102,7 +30102,10 @@
         "face": "生成头像",
         "agent": "使用 {{agent}} 生成",
         "closeAnytime": "可随时关闭",
-        "failedFor": "无法为 {{name}} 生成头像"
+        "failedFor": "无法为 {{name}} 生成头像",
+        "checking": "正在查找 {{first}} 或 {{second}}…",
+        "noneLinked": "要生成头像，请在这台电脑上安装 <first>{{first}}</first> 或 <second>{{second}}</second> 并登录",
+        "checkAgain": "重新检查"
       }
     },
     "section": {

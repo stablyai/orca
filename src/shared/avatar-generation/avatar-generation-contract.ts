@@ -6,7 +6,7 @@ export type AvatarImageAgent = (typeof AVATAR_IMAGE_AGENTS)[number]
 
 export type AvatarImageAgentStatus = { agent: AvatarImageAgent; status: 'ready' | 'signed-out' }
 
-/** Installed agents that can make images, in preference order; empty hides Generate. */
+/** Installed agents that can make images, in preference order; empty means Generate says none was found. */
 export type AvatarGenerationCapability = { agents: AvatarImageAgentStatus[] }
 
 export type AvatarGenerationFailure =
@@ -27,7 +27,8 @@ export type AvatarGenerationResult =
 export const MAX_AVATAR_DESCRIPTION_CHARS = 500
 
 export type AvatarGenerationApi = {
-  capability: () => Promise<AvatarGenerationCapability>
+  /** `fresh` probes again instead of reusing a recent answer (the picker's Check again). */
+  capability: (options?: { fresh?: boolean }) => Promise<AvatarGenerationCapability>
   generate: (args: {
     requestId: string
     description: string

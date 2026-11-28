@@ -1,32 +1,31 @@
 // The carousel's Generate face (the prompt icon, the run's progress, then the picture it made) and
 // the description field that takes the swatch row's place under it.
-import React, { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, Pencil, Sparkles, X } from 'lucide-react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ArrowUp, Pencil, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { AgentIconLabel } from '@/components/agent/agent-combobox-items'
 import { useTranslate } from '@/i18n/use-translate'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { cn } from '@/lib/class-names'
 import { MAX_AVATAR_DESCRIPTION_CHARS } from '../../../../shared/avatar-generation/avatar-generation-contract'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
-import { FieldNoteLine, sameNote, type FieldNote } from './AvatarGenerateFieldNote'
+import { AgentMenu } from './AvatarGenerateAgentMenu'
+import {
+  FieldNoteLine,
+  GeneratorLine,
+  sameNote,
+  type FieldNote,
+  type GeneratorState
+} from './AvatarGenerateFieldNote'
 import { BotPictureRowFold } from './BotPictureRowFold'
 import { useAvatarGeneration } from './use-avatar-generation'
 import type { GeneratedAvatar, GenerateFaceOptions } from './use-avatar-generation'
 
 const TILE = 'size-28 rounded-xl'
 
-/** A picture the Generate slot shows: the one just made, or the user's own picture in use. */
-export type SlotPicture = { src: string; description: string }
+/** A picture the Generate slot shows: the one just made, or the user's own picture in use.
+ *  `generated`: `description` is what made it, so the slot can fold to it. */
+export type SlotPicture = { src: string; description: string; generated?: boolean }
 
 export type GenerateFaceDraft = { value: string; onChange: (value: string) => void }
 
@@ -57,21 +56,24 @@ export function useGenerateFace(
   )
   const made = generation.result && !superseded ? generation.result : null
   const picture: SlotPicture | null = made
-    ? { src: `data:image/png;base64,${made.png}`, description: made.description }
+    ? { src: `data:image/png;base64,${made.png}`, description: made.description, generated: true }
     : applied
   const [ownDescription, setOwnDescription] = useState('')
   const description = options.draft?.value ?? ownDescription
   const setDescription = options.draft?.onChange ?? setOwnDescription
   // Editing reopens the description field under a picture already made.
   const [editing, setEditing] = useState(false)
+  // Generate asked for with no signed-in agent: the line saying why takes focus.
+  const [nudge, setNudge] = useState(0)
   // Bumped to move focus into the field; `select` also selects its text for retyping.
   const [focus, setFocus] = useState<{ count: number; select: boolean }>({
     count: 0,
     select: false
   })
-  // The field folds to one line of description while the slot holds a picture.
+  // The field folds to one line of description while the slot holds a picture made from one. Under
+  // an upload or a shared bot's picture it stays open, so describing a new one is in plain sight.
   const folded =
-    picture !== null &&
+    picture?.generated === true &&
     !editing &&
     (generation.run.kind === 'idle' || generation.run.kind === 'saving')
   return {
@@ -91,6 +93,9 @@ export function useGenerateFace(
     editing,
     setEditing,
     folded,
+    nudge,
+    /** Generate with no signed-in agent: points at the line that says why instead of doing nothing. */
+    nudgeSetup: () => setNudge((now) => now + 1),
     focus,
     focusField: (select: boolean) => setFocus((now) => ({ count: now.count + 1, select })),
     edit: () => {
@@ -223,70 +228,15 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
   return <PromptTile />
 }
 
-function AgentMenu({
-  face,
-  disabled
-}: {
-  face: GenerateFace
-  disabled: boolean
-}): React.JSX.Element {
-  const t = useTranslate()
-  const { agent, agents } = face
-  // One agent needs no choice; the progress line still names it.
-  if (!agent || agents.length < 2) {
-    return <span />
-  }
-  const label = getAgentLabel(agent)
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          disabled={disabled}
-          aria-label={t('bots.avatar.generate.agent', 'Generate with {{agent}}', {
-            agent: label
-          })}
-        >
-          <AgentIcon agent={agent} size={14} />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-36">
-        {agents.map((entry) => (
-          <DropdownMenuItem
-            key={entry.agent}
-            onSelect={() => {
-              face.selectAgent(entry.agent)
-              face.focusField(false)
-            }}
-          >
-            <Check
-              className={cn(
-                'size-4 shrink-0 text-foreground',
-                entry.agent === agent ? 'opacity-100' : 'opacity-0'
-              )}
-            />
-            <AgentIconLabel
-              icon={<AgentIcon agent={entry.agent} size={14} />}
-              label={getAgentLabel(entry.agent)}
-            />
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
   const t = useTranslate()
   const ref = useRef<HTMLTextAreaElement>(null)
   const { count, select } = face.focus
   const running = face.run.kind === 'running'
-  // Esc cancels a run, or folds the field back under the picture.
+  // Esc cancels a run, or folds the field back under the picture made from it.
   const onEscape = running
     ? face.cancel
-    : face.editing && face.picture !== null
+    : face.editing && face.picture?.generated === true
       ? () => face.setEditing(false)
       : null
   const latestOnEscape = useRef(onEscape)
@@ -322,7 +272,21 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
       box.setSelectionRange(box.value.length, box.value.length)
     }
   }, [count, select])
-  const ready = face.description.trim().length > 0 && !running && face.run.kind !== 'saving'
+  const sendable = face.description.trim().length > 0 && !running && face.run.kind !== 'saving'
+  const ready = sendable && face.agentReady
+  // No signed-in agent (still checking, none found, or signed out) leaves the field open for a draft;
+  // sending it points at the line that says why.
+  const blocked = sendable && !face.agentReady
+  const send = (): void => {
+    if (ready) {
+      // The button is disabled while the run goes, which would drop its focus and, inside a dialog,
+      // let the dialog take focus and close the picker; the field keeps it (read-only, Esc cancels).
+      ref.current?.focus({ preventScroll: true })
+      face.generate()
+    } else if (blocked) {
+      face.nudgeSetup()
+    }
+  }
   return (
     <div className="flex flex-col rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
       <textarea
@@ -337,9 +301,7 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault()
-            if (ready) {
-              face.generate()
-            }
+            send()
           }
         }}
         // Two lines at rest, growing to six, then scrolling.
@@ -352,9 +314,11 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
         <Button
           type="button"
           size="icon-xs"
-          disabled={!ready}
+          disabled={!ready && !blocked}
+          // Looks unavailable, but a press still points at why.
+          aria-disabled={blocked || undefined}
           aria-label={t('bots.avatar.generate.button', 'Generate')}
-          onClick={face.generate}
+          onClick={send}
         >
           <ArrowUp />
         </Button>
@@ -371,23 +335,42 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
 export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Element {
   const t = useTranslate()
   const { run } = face
-  const signedOut =
-    run.kind === 'idle' &&
-    face.agents.find((entry) => entry.agent === face.agent)?.status === 'signed-out'
+  const signedOut = run.kind === 'idle' && face.agent !== null && !face.agentReady
   const note: FieldNote | null =
     run.kind === 'error'
       ? { failure: run.failure, agent: run.agent ?? face.agent }
       : signedOut
         ? { failure: 'signed-out', agent: face.agent }
         : null
+  // Without an agent to run, the line says why: still checking, or none on this computer.
+  const generator: GeneratorState | null =
+    face.agent !== null ? null : face.checking ? 'checking' : 'none'
   // The last note stays while its row folds away, so the row shrinks instead of vanishing.
   const [lastNote, setLastNote] = useState<FieldNote | null>(note)
   if (note && !sameNote(note, lastNote)) {
     setLastNote(note)
   }
   const shownNote = note ?? lastNote
+  const [lastGenerator, setLastGenerator] = useState<GeneratorState | null>(generator)
+  if (generator && generator !== lastGenerator) {
+    setLastGenerator(generator)
+  }
+  const shownGenerator = generator ?? lastGenerator
+  // Folding makes the field's row inert, which drops focus from a field still focused (a picture just
+  // landed, or Esc). Inside a dialog its focus trap would then pull focus out and close the picker,
+  // so focus stays here, before the browser drops it.
+  const rootRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const root = rootRef.current
+    const active = document.activeElement
+    if (face.folded && root && active instanceof HTMLElement && active.closest('[inert]')) {
+      if (root.contains(active)) {
+        root.focus({ preventScroll: true })
+      }
+    }
+  }, [face.folded])
   return (
-    <>
+    <div ref={rootRef} tabIndex={-1} className="outline-none">
       <BotPictureRowFold open={face.folded}>
         <p className="flex min-h-7 items-center justify-center px-2 py-1">
           {/* Up to two lines; the full description shows on hover. */}
@@ -412,10 +395,17 @@ export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Eleme
           plus pt-2 makes the gap above 12px too. */}
       <BotPictureRowFold open={!face.folded} className="px-3 pt-2 pb-3">
         <DescriptionField face={face} />
-        <BotPictureRowFold open={note !== null}>
-          {shownNote ? <FieldNoteLine note={shownNote} /> : null}
+        <BotPictureRowFold open={generator !== null}>
+          {shownGenerator ? (
+            <GeneratorLine state={shownGenerator} nudge={face.nudge} onRecheck={face.recheck} />
+          ) : null}
+        </BotPictureRowFold>
+        <BotPictureRowFold open={note !== null && generator === null}>
+          {shownNote ? (
+            <FieldNoteLine note={shownNote} nudge={face.nudge} onRecheck={face.recheck} />
+          ) : null}
         </BotPictureRowFold>
       </BotPictureRowFold>
-    </>
+    </div>
   )
 }
