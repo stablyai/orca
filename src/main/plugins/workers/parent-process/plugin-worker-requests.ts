@@ -1,4 +1,6 @@
 import {
+  normalizePluginErrorCode,
+  type PluginResponse,
   pluginCancel,
   pluginRequest,
   type PluginEnvelope,
@@ -66,4 +68,22 @@ export function sendPluginWorkerRequest(
     pending.set(callId, { resolve: settle(resolve), reject: settle(reject), timer })
     send(pluginRequest(callId, method, params))
   })
+}
+
+export function settlePluginWorkerRequest(
+  pending: Map<number, PendingCall>,
+  message: PluginResponse
+): void {
+  const entry = pending.get(message.id)
+  if (!entry) {
+    return
+  }
+  clearTimeout(entry.timer)
+  pending.delete(message.id)
+  if (message.error) {
+    const code = normalizePluginErrorCode(message.error.code)
+    entry.reject(requestError(code, message.error.message || 'plugin command failed'))
+  } else {
+    entry.resolve(message.result)
+  }
 }

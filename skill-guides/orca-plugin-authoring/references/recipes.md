@@ -23,6 +23,11 @@ plugin is `trusted-worker`. `ORCA plugin create <dir> --template worker-panel` s
   `export function activate` is never called. It runs once when the worker starts; an optional
   `export function deactivate()` is awaited before it stops. An idle worker stops and restarts on
   its next command, event or panel request.
+- A request-driven worker can export `const sleepWhenIdle = true` to let Orca stop it early
+  when an ordinary worker is waiting for a slot. Use this only if every activation can rebuild
+  its state and every handler awaits its work. Timers, detached tasks and subscriptions that
+  must survive between requests need the default behavior. Orca waits for handlers and host
+  calls to finish and still awaits `deactivate()`. Older hosts ignore this export.
 - `ORCA plugin dev request <dir|plugin-key> <name> --data '<json>'` calls a handler the way
   `plugin.request` does and prints its answer, with no panel open.
 

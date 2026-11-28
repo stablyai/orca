@@ -20,6 +20,7 @@ export const WORKER_EVENTS = {
   init: 'init',
   /** worker → host, `{ commands }` registered on activate. */
   ready: 'ready',
+  idle: 'idle',
   log: 'log',
   fatal: 'fatal',
   shutdown: 'shutdown',
@@ -88,6 +89,10 @@ export type PluginWorkerInit = z.infer<typeof pluginWorkerInitSchema>
 
 const pluginWorkerChildEventSchema = lazyZodSchema(() =>
   z.discriminatedUnion('event', [
+    z.object({
+      event: z.literal(WORKER_EVENTS.idle),
+      payload: z.object({ through: z.int().min(-1) })
+    }),
     z.object({ event: z.literal(WORKER_EVENTS.ready), payload: pluginWorkerReadySchema }),
     z.object({ event: z.literal(WORKER_EVENTS.log), payload: pluginWorkerLogSchema }),
     z.object({ event: z.literal(WORKER_EVENTS.fatal), payload: pluginWorkerFatalSchema }),

@@ -44,6 +44,7 @@ export type PluginWorkerHandle = {
   notifyDataChanged(change: PluginDataChanged): void
   /** Last completed work timestamp, in milliseconds, for idle reaping. */
   lastActivityAt(): number
+  canSleepUnderPressure?(): boolean
   inFlightCount(): number
   dispose(): Promise<void>
   kill(): void
@@ -63,6 +64,7 @@ export type StartPluginWorkerOptions = {
   /** `orca.panels.post` from this worker, already shape-checked. */
   onPanelPost?: (post: PluginWorkerPanelPost) => void
   log: PluginWorkerLogSink
+  onSleepable?: () => void
   readyTimeoutMs?: number
   invokeTimeoutMs?: number
   eventTimeoutMs?: number

@@ -12,7 +12,6 @@ import {
   pluginEvent,
   pluginOutcomeResponse,
   pluginRequest,
-  normalizePluginErrorCode,
   readPluginEnvelope,
   type PluginEnvelope
 } from '../../../../shared/plugins/frames/plugin-protocol'
@@ -20,6 +19,7 @@ import type { PluginWorkerHandle, StartPluginWorkerOptions } from './plugin-host
 import {
   requestError,
   sendPluginWorkerRequest,
+  settlePluginWorkerRequest,
   type PendingCall,
   type PluginWorkerRequestChannel
 } from './plugin-worker-requests'
@@ -66,6 +66,7 @@ export async function startPluginWorker(
   const pendingEvents = new Map<number, ReturnType<typeof setTimeout>>()
   const exitCallbacks: ((code: number | null) => void)[] = []
   // One id space for host → worker requests: commands and event deliveries share `res`.
+  let idleThrough: number | undefined
   let nextId = 0
   let exited = false
   let exitCode: number | null = null
@@ -145,21 +146,13 @@ export async function startPluginWorker(
         case 'res': {
           lastActivityAt = Date.now()
           clearTimeout(pendingEvents.get(message.id))
-          const entry = pendingCommands.get(message.id)
-          if (pendingEvents.delete(message.id) || !entry) {
-            return
-          }
-          clearTimeout(entry.timer)
-          pendingCommands.delete(message.id)
-          if (message.error) {
-            const code = normalizePluginErrorCode(message.error.code)
-            entry.reject(requestError(code, message.error.message || 'plugin command failed'))
-          } else {
-            entry.resolve(message.result)
+          if (!pendingEvents.delete(message.id)) {
+            settlePluginWorkerRequest(pendingCommands, message)
           }
           return
         }
         case 'req': {
+          idleThrough = undefined
           lastActivityAt = Date.now()
           const { id } = message
           const signal = inFlightHostCalls.start(id)
@@ -183,6 +176,11 @@ export async function startPluginWorker(
         clearTimeout(timer)
         options.signal?.removeEventListener('abort', onAbort)
         resolve(event.payload.commands)
+      } else if (event?.event === WORKER_EVENTS.idle) {
+        idleThrough = event.payload.through
+        if (idleThrough === nextId - 1) {
+          options.onSleepable?.()
+        }
       } else if (event?.event === WORKER_EVENTS.panelPost) {
         lastActivityAt = Date.now()
         options.onPanelPost?.(event.payload)
@@ -271,6 +269,12 @@ export async function startPluginWorker(
       sendToChild(pluginRequest(eventId, WORKER_METHODS.deliverEvent, { event, payload }))
     },
     lastActivityAt: () => lastActivityAt,
+    canSleepUnderPressure: () =>
+      !disposed &&
+      !exited &&
+      idleThrough === nextId - 1 &&
+      pendingCommands.size === 0 &&
+      pendingEvents.size === 0,
     inFlightCount: () => pendingCommands.size + pendingEvents.size,
     async dispose() {
       if (disposed) {
