@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { useAppStore } from '@/store/index'
 import { mergePRCommentIntoList } from '@/store/github/comments/pr-comment-cache'
 import {
   acknowledgePRCommentsAfterAiLaunch,
@@ -97,7 +98,11 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       const isPanelStillOnLaunchReview = (): boolean =>
         checksPanelReviewStableKey(asyncResultKeyRef.current) === launchStableKey
       const githubTarget = resolution.githubTarget
-      const canReplyOnHost = resolution.provider === 'github' && githubTarget != null
+      // Why: read at launch so flipping the setting mid-ack cannot split one batch between behaviors.
+      const postAcknowledgements =
+        useAppStore.getState().settings?.sourceControlAi?.postCommentAcknowledgements !== false
+      const canReplyOnHost =
+        postAcknowledgements && resolution.provider === 'github' && githubTarget != null
       // Only GitHub supports fixing replies; missing targets matter only when selected comments need replies.
       let lastHostError =
         resolution.provider === 'github' &&
