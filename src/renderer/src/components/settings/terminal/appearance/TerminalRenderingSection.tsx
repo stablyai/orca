@@ -8,6 +8,8 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { TerminalContrastSetting } from './TerminalContrastSetting'
 import { useTranslate } from '@/i18n/use-translate'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal/images/terminal-inline-images-settings'
+import { resolveTerminalBoldBrightColors } from '@/lib/pane-manager/pane-terminal-options'
+import { getTerminalBoldBrightSearchEntry } from './terminal-typography-search'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type TerminalRenderingSectionProps = {
@@ -20,6 +22,7 @@ export function TerminalRenderingSection({
   updateSettings
 }: TerminalRenderingSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const [boldBright] = getTerminalBoldBrightSearchEntry()
   return (
     <SettingsGroup
       key="rendering"
@@ -90,6 +93,20 @@ export function TerminalRenderingSection({
 
       <TerminalContrastSetting settings={settings} updateSettings={updateSettings} />
 
+      <SearchableSetting {...boldBright} className="py-2">
+        <SettingsSwitchRow
+          label={boldBright.title}
+          description={boldBright.description}
+          checked={resolveTerminalBoldBrightColors(settings.terminalBoldBrightColors)}
+          onChange={() =>
+            updateSettings({
+              terminalBoldBrightColors: !resolveTerminalBoldBrightColors(
+                settings.terminalBoldBrightColors
+              )
+            })
+          }
+        />
+      </SearchableSetting>
       <SearchableSetting
         title={t('auto.components.settings.TerminalRenderingSection.08db7947d8', 'Inline images')}
         description={t(

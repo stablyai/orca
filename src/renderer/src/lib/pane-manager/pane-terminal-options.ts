@@ -24,6 +24,10 @@ export function resolveTerminalScrollOnUserInput(value: boolean | undefined): bo
   return value !== false
 }
 
+export function resolveTerminalBoldBrightColors(value: boolean | undefined): boolean {
+  return value !== false
+}
+
 export function resolveTerminalCursorInactiveStyle(
   cursorStyle: TerminalCursorStyle | undefined
 ): TerminalCursorInactiveStyle {

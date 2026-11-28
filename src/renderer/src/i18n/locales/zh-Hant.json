@@ -23348,7 +23348,10 @@
           "bottom": "底部",
           "scrollback": "回捲",
           "snap": "貼齊",
-          "position": "位置"
+          "position": "位置",
+          "bold": "粗體",
+          "bright": "亮色",
+          "ansi": "ansi"
         },
         "claudeCodeThemeSync": {
           "description": "這台電腦上的 Claude Code 會使用你的終端機配色，並即時跟隨主題變更，包括在 Orca 之外。關閉此選項會還原你先前的 Claude Code 主題。在 Claude Code 中選擇主題會停止同步。",
@@ -23903,6 +23906,10 @@
           "enabledDescription": "{{host}} 為其代理程式和終端機發出的提醒，包括推播到你的手機。",
           "sectionDescription": "{{host}} 為其代理程式和終端機發出的提醒。"
         }
+      },
+      "TerminalRendering": {
+        "boldBrightTitle": "以亮色繪製粗體文字",
+        "boldBrightDescription": "使用八種基本 ANSI 顏色的明亮變體繪製粗體文字。關閉後維持其一般顏色。"
       }
     },
     "agentChildRow": {

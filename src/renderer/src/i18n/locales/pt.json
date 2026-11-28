@@ -24817,7 +24817,10 @@
           "bottom": "final",
           "scrollback": "histórico",
           "snap": "encaixar",
-          "position": "posição"
+          "position": "posição",
+          "bold": "negrito",
+          "bright": "brilhante",
+          "ansi": "ansi"
         },
         "claudeCodeThemeSync": {
           "description": "O Claude Code neste computador usa as cores do seu terminal e acompanha as mudanças de tema em tempo real, inclusive fora do Orca. Desativar isso restaura seu tema anterior do Claude Code. Escolher um tema no Claude Code interrompe a sincronização.",
@@ -25396,6 +25399,10 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "Nome de usuário do Git em {{host}}"
+      },
+      "TerminalRendering": {
+        "boldBrightTitle": "Texto em negrito com cores brilhantes",
+        "boldBrightDescription": "Desenha o texto em negrito com a variante brilhante das oito cores ANSI básicas. Desative para manter as cores normais."
       }
     },
     "jiraIssueAssigneeField": {

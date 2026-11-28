@@ -13,6 +13,7 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalMinimumContrastRatio: 'Color Contrast',
   terminalCursorStyle: 'Cursor Style',
   terminalCursorBlink: 'Cursor Blink',
+  terminalBoldBrightColors: 'Bold in Bright Colors',
   terminalCursorOpacity: 'Cursor Opacity',
   terminalMouseHideWhileTyping: 'Mouse Hide While Typing',
   terminalInlineImages: 'Inline Images',

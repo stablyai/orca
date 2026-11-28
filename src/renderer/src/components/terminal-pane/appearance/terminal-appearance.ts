@@ -21,6 +21,7 @@ import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle,
+  resolveTerminalBoldBrightColors,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
@@ -224,6 +225,9 @@ export function applyTerminalAppearance(
     )
     pane.terminal.options.scrollOnUserInput = resolveTerminalScrollOnUserInput(
       settings.terminalScrollOnUserInput
+    )
+    pane.terminal.options.drawBoldTextInBrightColors = resolveTerminalBoldBrightColors(
+      settings.terminalBoldBrightColors
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'

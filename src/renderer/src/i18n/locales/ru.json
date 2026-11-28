@@ -24460,7 +24460,10 @@
           "bottom": "вниз",
           "scrollback": "история прокрутки",
           "snap": "привязка",
-          "position": "позиция"
+          "position": "позиция",
+          "bold": "жирный",
+          "bright": "яркий",
+          "ansi": "ansi"
         },
         "claudeCodeThemeSync": {
           "description": "Claude Code на этом компьютере использует цвета вашего терминала и сразу следует изменениям темы, в том числе вне Orca. Если выключить, восстановится ваша прежняя тема Claude Code. Выбор темы в Claude Code останавливает синхронизацию.",
@@ -25051,6 +25054,10 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "Имя пользователя Git на {{host}}"
+      },
+      "TerminalRendering": {
+        "boldBrightTitle": "Жирный текст яркими цветами",
+        "boldBrightDescription": "Отображать жирный текст яркими вариантами восьми базовых цветов ANSI. Отключите, чтобы сохранить их обычные цвета."
       }
     },
     "agentChildRow": {

@@ -23660,7 +23660,10 @@
           "bottom": "bas",
           "scrollback": "historique",
           "snap": "aligner",
-          "position": "position"
+          "position": "position",
+          "bold": "gras",
+          "bright": "vif",
+          "ansi": "ansi"
         },
         "claudeCodeThemeSync": {
           "description": "Claude Code sur cet ordinateur utilise les couleurs de votre terminal et suit les changements de thème en direct, y compris en dehors d'Orca. Désactiver cette option restaure votre ancien thème Claude Code. Choisir un thème dans Claude Code arrête la synchronisation.",
@@ -24239,6 +24242,10 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "Nom d'utilisateur Git sur {{host}}"
+      },
+      "TerminalRendering": {
+        "boldBrightTitle": "Texte en gras en couleurs vives",
+        "boldBrightDescription": "Affiche le texte en gras avec la variante vive des huit couleurs ANSI de base. Désactivez pour conserver leurs couleurs normales."
       }
     },
     "agentChildRow": {

@@ -23674,7 +23674,10 @@
           "bottom": "unten",
           "scrollback": "scrollback",
           "snap": "einrasten",
-          "position": "position"
+          "position": "position",
+          "bold": "fett",
+          "bright": "hell",
+          "ansi": "ansi"
         },
         "claudeCodeThemeSync": {
           "description": "Claude Code auf diesem Computer verwendet deine Terminalfarben und folgt Designänderungen live, auch außerhalb von Orca. Beim Ausschalten wird dein vorheriges Claude-Code-Design wiederhergestellt. Wählst du in Claude Code ein Design, endet die Synchronisierung.",
@@ -24241,6 +24244,10 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "Git-Benutzername auf {{host}}"
+      },
+      "TerminalRendering": {
+        "boldBrightTitle": "Fetter Text in hellen Farben",
+        "boldBrightDescription": "Fetten Text in der hellen Variante der acht ANSI-Grundfarben darstellen. Deaktiviere dies, um die normalen Farben beizubehalten."
       }
     },
     "agentChildRow": {

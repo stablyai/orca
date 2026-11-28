@@ -23674,7 +23674,10 @@
           "bottom": "alt",
           "scrollback": "kaydırma geçmişi",
           "snap": "hizala",
-          "position": "konum"
+          "position": "konum",
+          "bold": "kalın",
+          "bright": "parlak",
+          "ansi": "ansi"
         },
         "claudeCodeThemeSync": {
           "description": "Bu bilgisayardaki Claude Code, Orca dışında da terminalinizin renklerini kullanır ve tema değişikliklerini anında uygular. Bu seçeneği kapatırsanız önceki Claude Code temanız geri yüklenir. Claude Code içinden bir tema seçerseniz eşitleme durur.",
@@ -24241,6 +24244,10 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "{{host}} üzerindeki Git kullanıcı adı"
+      },
+      "TerminalRendering": {
+        "boldBrightTitle": "Kalın metni parlak renklerle çiz",
+        "boldBrightDescription": "Kalın metni sekiz temel ANSI renginin parlak varyantıyla çizer. Normal renklerini korumak için kapatın."
       }
     },
     "agentChildRow": {
