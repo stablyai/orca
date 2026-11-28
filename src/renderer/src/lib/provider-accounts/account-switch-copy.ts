@@ -143,11 +143,11 @@ export function antigravityAccountSwitchCopy(t: Translate = translate): AccountS
       }
       const freshNote = t(
         'accounts.antigravity.switchSessions.bodyFreshCount',
-        "{{count}} of them start a new conversation, because Orca doesn't know theirs.",
+        "{{count}} of them start new conversations, because Orca doesn't know which ones they were in.",
         {
           count: fresh,
           defaultValue_one:
-            "{{count}} of them starts a new conversation, because Orca doesn't know its own."
+            "{{count}} of them starts a new conversation, because Orca doesn't know which one it was in."
         }
       )
       return `${running} ${freshNote}`

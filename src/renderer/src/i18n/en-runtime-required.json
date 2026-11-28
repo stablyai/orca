@@ -2,8 +2,8 @@
   "accounts": {
     "antigravity": {
       "switchSessions": {
-        "bodyFreshCount_one": "{{count}} of them starts a new conversation, because Orca doesn't know its own.",
-        "bodyFreshCount_other": "{{count}} of them start a new conversation, because Orca doesn't know theirs.",
+        "bodyFreshCount_one": "{{count}} of them starts a new conversation, because Orca doesn't know which one it was in.",
+        "bodyFreshCount_other": "{{count}} of them start new conversations, because Orca doesn't know which ones they were in.",
         "body_one": "{{count}} Antigravity session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions stop their current work and restart now.",
         "body_other": "{{count}} Antigravity sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions stop their current work and restart now.",
         "reviewBody_one": "{{count}} Antigravity session wasn't moved to {{next}}.",
