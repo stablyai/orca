@@ -10,9 +10,7 @@ export async function expectAppTookLayoutOwner(
 ): Promise<void> {
   const expected = LAYOUT_OWNER_SWITCH_ON ? 'main' : 'window'
   const host = await app.evaluate(() => process.env.ORCA_LAYOUT_OWNER_RESOLVED)
-  const renderer = page
-    ? await page.evaluate(() => Reflect.get(globalThis, '__orcaLayoutOwner') ?? null)
-    : expected
+  const renderer = page ? await page.evaluate(() => window.__orcaLayoutOwner ?? null) : expected
   if (host !== expected || renderer !== expected) {
     throw new Error(
       `Layout owner did not take effect: expected ${expected}, main ${String(host)}, renderer ${String(renderer)}`

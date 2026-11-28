@@ -3,13 +3,15 @@ import { join, resolve } from 'node:path'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import {
   LAYOUT_OWNER_FLAG_DIR_KEY,
-  LAYOUT_OWNER_FLAG_FILE_NAME
+  LAYOUT_OWNER_FLAG_FILE_NAME,
+  type LayoutOwnerStartupScope
 } from '../../shared/workspace-layout/layout-owner-startup'
 import { resolveHostLayoutOwner } from './host-layout-owner'
 
 /** The banner reads the flag before userData is final; a flag only the final folder holds waits for the next launch. */
 export async function warnIfLayoutOwnerFlagMoved(userDataPath: string): Promise<void> {
-  const readFrom: unknown = Reflect.get(globalThis, LAYOUT_OWNER_FLAG_DIR_KEY)
+  const startup: LayoutOwnerStartupScope = globalThis
+  const readFrom = startup[LAYOUT_OWNER_FLAG_DIR_KEY]
   if (typeof readFrom !== 'string' || resolve(readFrom) === resolve(userDataPath)) {
     return
   }

@@ -46,6 +46,7 @@ export function readLayoutOwnerArgument(argv: readonly string[]): {
 
 export type LayoutOwnerStartupScope = {
   [LAYOUT_OWNER_GLOBAL]?: unknown
+  [LAYOUT_OWNER_FLAG_DIR_KEY]?: unknown
   document?: {
     querySelector(selector: string): { getAttribute(name: string): string | null } | null
   }
