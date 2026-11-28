@@ -34,6 +34,7 @@ import { NativeChatLinkClickContext } from '../../native-chat/links/actions/nati
 import { NativeChatLinkPeekProvider } from '../../native-chat/links/previews/native-chat-link-peek-context'
 import { useNativeChatLinkActions } from '../../native-chat/links/actions/use-native-chat-link-actions'
 import { BotItemActivityList } from './BotItemActivityList'
+import { BotItemWorkerDock } from './BotItemWorkerDock'
 import { useBotItemStatusNotes } from './BotItemStatusNoteDialog'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommentBox'
@@ -403,6 +404,7 @@ export function BotItemBody({
             </NativeChatLinkPeekProvider>
             <LinkActionPopover request={links.linkActionRequest} onClose={links.closeLinkActions} />
             <NativeChatSelectionQuote rootRef={pane} composerRef={comment} enabled={!deleted} />
+            {deleted ? null : <BotItemWorkerDock bot={bot} links={item.links} />}
             {deleted ? (
               nav && <BotItemNavRow nav={nav} />
             ) : (

@@ -68,6 +68,7 @@ export async function readServerOwnedWorker(
     stopped: record.worker_state === 'stopped' || record.worker_state === 'abandoned',
     // Its Dispatch failed there before any worker ran.
     startFailed: record.worker_state === null && record.status === 'failed',
+    serverOwned: true,
     host: record.environment_id,
     hostName: await remoteServerName(runtime, record.environment_id, link?.server_name),
     // The workspace is the server's; this Orca's record doesn't name it.

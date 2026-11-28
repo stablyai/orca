@@ -19,6 +19,8 @@ export type BotWorkWorker = {
   stopped: boolean
   /** Its start failed before any agent ran, as a lost or unknown start can turn out. */
   startFailed: boolean
+  /** The paired server owns the Dispatch and reports whether an agent ran. */
+  serverOwned?: true
   host: BotWorkHost
   /** The paired server's name, for a remote worker. */
   hostName: string | null

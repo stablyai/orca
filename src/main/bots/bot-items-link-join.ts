@@ -192,8 +192,8 @@ export class BotItemLinkJoin {
           latest: worker && worker.dispatchId !== link.ref ? worker.dispatchId : null,
           title: worker?.title ?? null,
           state: read ? workerState(worker) : 'unknown',
-          // A paired server's released worker also has no handle, though it ran.
-          ...(worker?.startFailed && worker.host === 'local'
+          // Legacy paired workers lose their handle on release, even if they ran.
+          ...(worker?.startFailed && (worker.host === 'local' || worker.serverOwned)
             ? { neverStarted: true as const }
             : {}),
           host: worker?.hostName ?? (worker && worker.host !== 'local' ? worker.host : null),
