@@ -32,6 +32,8 @@ Every orchestration command prints a short view by default: the IDs and state th
 - **Message** — inbox mail (`status`, `dispatch`, `worker_done`, `escalation`, `question`, `heartbeat`, …).
 - **Decision gate** — a coordinator-owned question that blocks a task until it is resolved.
 
+Workers are terminal CLI agents Orca launches, and bots are chat personas backed by Orca's built-in CLI agents; a standalone chat or desktop app cannot register as a worker or a bot. Orchestration commands such as `orca orchestration send` require a live Orca terminal identity as the sender, resolved from `--from`, `ORCA_TERMINAL_HANDLE`, or the calling workspace's terminal; without one they fail with `no_active_sender_terminal`. A shell outside an Orca terminal has no such identity and no Orca mailbox for replies, and inside a workspace with a single live terminal the command silently sends as that terminal — do not drive orchestration from a non-Orca app.
+
 Completion authority comes from the active dispatch context. Worker completion messages should include both `taskId` and `dispatchId`.
 
 Task IDs printed in terminals, such as `task_...`, are clickable links. Clicking one asks the Orca runtime for the task's current dispatch and focuses the assigned terminal, including when the task lives in a remote or SSH runtime.
