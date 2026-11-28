@@ -128,7 +128,7 @@ export function beginWorkerStop(
   }
 }
 
-export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): WorkerDispatchRow {
+export function settleWorkerStop(this: OrchestrationDb, dispatchId: string, processExited = true) {
   this.db.exec('BEGIN IMMEDIATE')
   try {
     const worker = this.getWorkerDispatch(dispatchId)
@@ -136,12 +136,15 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
     if (!worker || !dispatch || worker.state !== 'stopping') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
     }
+    const now = new Date().toISOString()
+    const state = processExited ? 'stopped' : 'abandoned'
+    const stage = processExited ? 'process_stopped' : 'assignment_settled'
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
       from: 'stopping',
-      to: 'stopped',
-      projection: { stage: 'process_stopped', updated_at: new Date().toISOString() }
+      to: state,
+      projection: { stage, updated_at: now }
     })
     if (['pending', 'dispatched'].includes(dispatch.status)) {
       transitionLifecycleWithDb(this.db, {
@@ -149,16 +152,16 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
         id: dispatchId,
         from: dispatch.status,
         to: 'failed',
-        projection: { completed_at: new Date().toISOString(), last_failure: 'stopped' }
+        projection: { completed_at: now, last_failure: state }
       })
     }
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
-    // Move helper mail received while the creator was stopping.
     this.closeQuestionsForDispatch(dispatchId)
     // Mail it never read stays for the next send, as a report would keep it.
     markUnreadFollowUpMail(this, dispatchId)
-    // Callers settle only after proving the process gone, so its terminal no longer pins the Run.
-    releaseExitedWorkerTerminalInTransaction(this, dispatchId)
+    if (processExited) {
+      releaseExitedWorkerTerminalInTransaction(this, dispatchId)
+    }
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
@@ -288,17 +291,6 @@ export function markWorkerStopUnknown(
     this.db.exec('RELEASE mark_worker_stop_unknown')
     throw error
   }
-}
-
-export type WorkerDispatchStopMethods = {
-  isDispatchProcessCurrent: typeof isDispatchProcessCurrent
-  isWorkerStopRequested: typeof isWorkerStopRequested
-  listHelperDispatchIds: typeof listHelperDispatchIds
-  beginWorkerStop: typeof beginWorkerStop
-  settleWorkerStop: typeof settleWorkerStop
-  reconcileFederatedWorkerStop: typeof reconcileFederatedWorkerStop
-  resumeFederatedWorkerForTerminalRelay: typeof resumeFederatedWorkerForTerminalRelay
-  markWorkerStopUnknown: typeof markWorkerStopUnknown
 }
 
 export function attachWorkerDispatchStop(ctor: { prototype: object }): void {
