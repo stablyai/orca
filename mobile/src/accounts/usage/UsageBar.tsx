@@ -145,7 +145,8 @@ const stylesSheet = themedStyleSheet((colors) => ({
     flex: 1,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.bgRaised,
+    // Not bgRaised: in dark that is the grouped list's own fill, which would hide the track.
+    backgroundColor: colors.translucentFill,
     overflow: 'hidden'
   },
   usageFill: {
