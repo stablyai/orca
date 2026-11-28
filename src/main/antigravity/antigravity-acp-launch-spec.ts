@@ -35,6 +35,7 @@ import { scrubAgyOrcaHomeEnvironment } from './antigravity-agy-orca-home-environ
 import { ANTIGRAVITY_LAUNCH_GATE } from './antigravity-chat-account'
 import { restoreAntigravityAccountForChat } from './native-account-launch'
 import { discardAgyListingSession } from './agy-listing-session-discard'
+import { antigravityChatNamingHome } from './antigravity-chat-naming-home'
 import { AGY_ACP_CLIENT_INFO } from './antigravity-acp-runtime-probe'
 import {
   AGY_SKIP_PERMISSIONS_FLAG,
@@ -166,6 +167,8 @@ function agyOrcaHomeSpec(home: AgentSessionAccountHome): AcpLaunchSpec | null {
 
 export const ANTIGRAVITY_LAUNCH_SPEC = {
   ...ANTIGRAVITY_AGY_LAUNCH_SPEC,
+  textTaskHome: (chatHome, folder) =>
+    antigravityChatNamingHome(ANTIGRAVITY_AGY_ORCA_HOME_LAUNCH_SPEC, chatHome, folder),
   hostBackend: {
     spec: ANTIGRAVITY_AGY_LAUNCH_SPEC,
     pins: (home) => isAntigravityHostAccountHome(home) || antigravityOrcaHomeFolder(home) !== null,

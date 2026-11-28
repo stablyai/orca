@@ -7,6 +7,9 @@ import {
   reclaimManagedRuntimeReleasesAtLaunch,
   startManagedRuntimeAutoUpdates
 } from '../../runtime/rpc/methods/host-management/managed-runtime-install'
+import { ACP_LAUNCH_SPECS } from '../../acp/launch/acp-launch-registry'
+import { sweepAcpTextTaskHomes } from '../../acp/text-task/acp-text-task-launch'
+import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 
 // Background chat-journal maintenance waits for this Electron host's serving milestone.
 const serving = Promise.withResolvers<void>()
@@ -47,5 +50,6 @@ export function chatJournalHostServing(): void {
         reclaimManagedRuntimeReleasesAtLaunch(state.core.runtime)
         startManagedRuntimeAutoUpdates()
       }
+      sweepAcpTextTaskHomes(getProfileUserDataPath(), ACP_LAUNCH_SPECS)
     })
 }

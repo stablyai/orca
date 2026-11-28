@@ -162,7 +162,7 @@ async function startService(args: WslHostHandlerArgs): Promise<WslHostService | 
         }
       }
     }
-    if ('nativeChatAutoName' in updates) {
+    if ('nativeChatAutoName' in updates || 'antigravityChatNaming' in updates) {
       for (const status of created.getStatuses()) {
         if (status.state === 'ready') {
           pushHostChatAutoName(args.getUserDataPath, status.environmentId, args.store)
