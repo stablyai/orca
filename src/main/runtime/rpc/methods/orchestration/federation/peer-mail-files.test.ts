@@ -83,6 +83,7 @@ describe('files sent with mail to a bot on a paired server', () => {
     ).map(({ session_id }) => session_id)
   /** The upload (1-based) whose commit stores the file and then loses its answer. */
   let lostCommit: number | null
+  let releaseFails: boolean
 
   function openSide(name: string, machine: string, transport?: OrchestrationEnvironmentTransport) {
     const db = new OrchestrationDb(join(dir, `${name}.db`))
@@ -258,6 +259,7 @@ describe('files sent with mail to a bot on a paired server', () => {
     claimedFor = []
     failingUpload = null
     lostCommit = null
+    releaseFails = false
     duringClaim = undefined
     chatClosed = false
     uploads.clear()
@@ -282,6 +284,9 @@ describe('files sent with mail to a bot on a paired server', () => {
           : undefined
       },
       async (sessionId, uploadIds) => {
+        if (releaseFails) {
+          throw new Error('journal is read-only')
+        }
         applyJournalWriterEffect(journal.db, bState, { kind: 'release', sessionId, uploadIds })
       }
     )
@@ -444,7 +449,13 @@ describe('files sent with mail to a bot on a paired server', () => {
       message: expect.stringMatching(
         /^Docs's chat moved on to a new session while uploading\. The message wasn't sent\. A file already copied to devB for it is attached to nothing there; Orca on devB clears unused uploads later\. Send it again\.$/
       ),
-      data: { effectsApplied: true, unattachedUploads: 1 }
+      code: 'peer_mail_not_sent',
+      data: {
+        cause: 'bot_chat_changed',
+        retryable: true,
+        effectsApplied: true,
+        unattachedUploads: 1
+      }
     })
     expect(b.db.getInbox(10)).toEqual([])
     // The claim it took was given back, so the sweep treats the file as unused.
@@ -532,7 +543,8 @@ describe('files sent with mail to a bot on a paired server', () => {
   it('says which files reached the server when a step before delivery fails', async () => {
     const prepare = a.db.db.prepare.bind(a.db.db)
     vi.spyOn(a.db.db, 'prepare').mockImplementation((sql: string) => {
-      if (/INSERT[^]*peer_questions_out/i.test(sql)) {
+      // The insert fails, and so would the cleanup of a row it never wrote.
+      if (/(INSERT|DELETE)[^]*peer_questions_out/i.test(sql)) {
         throw new Error('disk I/O error')
       }
       return prepare(sql)
@@ -544,5 +556,22 @@ describe('files sent with mail to a bot on a paired server', () => {
       data: { effectsApplied: true, unattachedUploads: 1 }
     })
     expect(methods()).not.toContain('orchestration.peerMailDeliver')
+  })
+  it('says a chat still holds the files when a refused send cannot give its claims back', async () => {
+    releaseFails = true
+    duringClaim = () => {
+      chatClosed = true
+    }
+
+    await expect(
+      send({ to: 'bot:Docs', chat: `chat:${B_OTHER}`, files: [file] })
+    ).rejects.toMatchObject({
+      code: 'peer_mail_not_sent',
+      message:
+        "Docs's chat moved on to a new session while uploading. The message wasn't sent. A file already copied to devB for it is still held there by a chat; Orca on devB removes it with that chat. Send it again.",
+      data: { cause: 'bot_chat_changed', filesKept: true, unattachedUploads: 1 }
+    })
+    expect(claimsOn(committed[0]!)).toEqual([B_OTHER])
+    expect(b.db.getInbox(10)).toEqual([])
   })
 })

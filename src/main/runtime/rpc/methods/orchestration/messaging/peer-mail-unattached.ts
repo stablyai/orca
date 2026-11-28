@@ -3,10 +3,14 @@
 // whether the server still holds them for a chat or will clear them as unused uploads.
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
-// The server may yet have done what an error ending in one of these asked: its answer never came back.
+// The server may yet have done what an error ending in one of these asked: its answer never came
+// back, or came back unreadable.
 const MAYBE_DONE = new Set([
   'runtime_timeout',
   'remote_runtime_unavailable',
+  'runtime_unavailable',
+  'invalid_runtime_response',
+  'remote_link_closed',
   'delivery_in_progress',
   'operation_unknown',
   'outcome_unknown'
@@ -45,7 +49,9 @@ export function withUnattachedUploads(
   const known = error instanceof OrchestrationError
   const data: object =
     known && typeof error.data === 'object' && error.data !== null ? error.data : {}
-  const kept = 'filesKept' in data && data.filesKept === true
+  const kept =
+    (known && error.code === 'peer_mail_files_kept') ||
+    ('filesKept' in data && data.filesKept === true)
   // The cause, then what happened, then what to do: a retry hint moves to the end.
   const text = error instanceof Error ? error.message : String(error)
   const again = / ?Send it again\.$/.test(text) ? ' Send it again.' : ''
@@ -55,11 +61,14 @@ export function withUnattachedUploads(
     .replace(/([^.])$/, '$1.')
   // What the server said about effects described only its own refusal, not these files.
   const rest = Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'effectsApplied'))
+  // One code the CLI hears across this Orca's own RPC, with the refusal's own code as its cause.
   return new OrchestrationError(
-    known ? error.code : 'peer_mail_not_sent',
+    'peer_mail_not_sent',
     `${reason} The message wasn't sent. ${note(server.name, copied, maybeOneMore, kept)}${again}`,
     {
       ...rest,
+      ...(known && error.code !== 'peer_mail_files_kept' ? { cause: error.code } : {}),
+      ...(kept ? { filesKept: true } : {}),
       // Copied files are an effect; one that only may have been leaves it unknown.
       ...(copied > 0 ? { effectsApplied: true } : {}),
       unattachedUploads: copied,

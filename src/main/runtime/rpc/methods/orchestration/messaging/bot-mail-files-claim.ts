@@ -78,7 +78,7 @@ export async function claimMailFilesFor(
 }
 
 /** Stores the mail with `admit`, given the files' current-check; a refusal or a duplicate gives back
- *  the claims this send took. A refusal that couldn't give them back says the files are kept. */
+ *  the claims this send took. A refusal that couldn't give them back is `peer_mail_files_kept`. */
 export async function admitWithClaimedFiles(
   claimed: ClaimedMailFiles | undefined,
   admit: (current?: () => void) => { sent: boolean; receipt: unknown }
@@ -90,11 +90,17 @@ export async function admitWithClaimedFiles(
   try {
     admitted = admit(claimed.current)
   } catch (error) {
-    if ((await claimed.release()) || !(error instanceof OrchestrationError)) {
+    if (await claimed.release()) {
       throw error
     }
-    const data = typeof error.data === 'object' && error.data !== null ? error.data : {}
-    throw new OrchestrationError(error.code, error.message, { ...data, filesKept: true })
+    // Its own code, so the sender hears it across the pairing: other refusal codes reach it bare.
+    const known = error instanceof OrchestrationError
+    const data = known && typeof error.data === 'object' && error.data !== null ? error.data : {}
+    throw new OrchestrationError(
+      'peer_mail_files_kept',
+      error instanceof Error ? error.message : String(error),
+      { ...data, ...(known ? { cause: error.code } : {}), effectsApplied: false, filesKept: true }
+    )
   }
   if (!admitted.sent) {
     await claimed.release()

@@ -88,8 +88,11 @@ export async function sendPeerMail(args: {
   const warnings: SendRecipientWarning[] = []
   const db = runtime.getOrchestrationDb()
   // Until the server is asked, nothing was delivered, whatever fails.
+  let recorded = false
   let delivering = false
   try {
+    const senderLabel = peerMailSenderLabel(runtime, caller.address)
+    const sender = peerMailSender(runtime, caller.address)
     if (type === 'question') {
       // Kept until its answer or notice comes back, so an unpair can tell the asker none will;
       // recorded first, so an answer pulled before delivery returns still settles it.
@@ -101,12 +104,13 @@ export async function sendPeerMail(args: {
         asker: caller.address,
         threadId: params.threadId
       })
+      recorded = true
     }
     delivering = true
     const held = await deliverPeerMail(runtime, server, conversation, {
       id,
       to,
-      senderLabel: peerMailSenderLabel(runtime, caller.address),
+      senderLabel,
       subject: params.subject,
       body: params.body,
       type,
@@ -115,13 +119,18 @@ export async function sendPeerMail(args: {
       chat: params.chat,
       item: params.item,
       attachments,
-      sender: peerMailSender(runtime, caller.address),
+      sender,
       ...(askers ? { askers } : {})
     })
     warnings.push(...held)
   } catch (error) {
-    if (type === 'question') {
-      forgetPeerQuestionOut(db, id)
+    if (recorded) {
+      // A cleanup that fails too mustn't hide why the send failed, or the files it left there.
+      try {
+        forgetPeerQuestionOut(db, id)
+      } catch (cleanup) {
+        console.warn('[orchestration] forgetting a failed peer question failed', cleanup)
+      }
     }
     // A refusal names the files it left there; a timeout may yet have delivered them with the mail.
     throw !delivering || peerMailStoredNothing(error)

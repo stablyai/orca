@@ -46,8 +46,9 @@ describe('storing mail whose files were claimed', () => {
         })
       })
     ).rejects.toMatchObject({
-      code: 'bot_paused',
-      data: { effectsApplied: false, filesKept: true }
+      code: 'peer_mail_files_kept',
+      message: 'Docs is paused. Nothing was sent.',
+      data: { cause: 'bot_paused', effectsApplied: false, filesKept: true }
     })
   })
 })
