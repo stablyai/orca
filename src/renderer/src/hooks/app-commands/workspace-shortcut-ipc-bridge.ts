@@ -110,20 +110,31 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
     })
   )
 
-  unsubs.push(
-    window.api.ui.onWorktreeHistoryNavigate((direction) => {
-      const store = useAppStore.getState()
-      // Why: mirror button visibility — worktree history nav is only meaningful in the terminal view, so no-op elsewhere.
-      if (store.activeView !== 'terminal' || !canNavigateWorktreeHistory(store)) {
-        return
-      }
-      if (direction === 'back') {
-        runBuiltInOrReplacement('worktree.history.back', () => store.goBackWorktree())
-      } else {
-        runBuiltInOrReplacement('worktree.history.forward', () => store.goForwardWorktree())
-      }
-    })
-  )
+  const navigateWorktreeHistory = (direction: 'back' | 'forward'): boolean => {
+    const store = useAppStore.getState()
+    if (!canNavigateWorktreeHistory(store)) {
+      return false
+    }
+    if (direction === 'back') {
+      runBuiltInOrReplacement('worktree.history.back', () => store.goBackWorktree())
+    } else {
+      runBuiltInOrReplacement('worktree.history.forward', () => store.goForwardWorktree())
+    }
+    return true
+  }
+  unsubs.push(window.api.ui.onWorktreeHistoryNavigate(navigateWorktreeHistory))
+
+  // Why bubble phase: a streamed browser page claims its side-button presses with preventDefault first.
+  const onMouseSideButton = (event: MouseEvent): void => {
+    if (event.defaultPrevented || (event.button !== 3 && event.button !== 4)) {
+      return
+    }
+    if (navigateWorktreeHistory(event.button === 3 ? 'back' : 'forward')) {
+      event.preventDefault()
+    }
+  }
+  window.addEventListener('mouseup', onMouseSideButton)
+  unsubs.push(() => window.removeEventListener('mouseup', onMouseSideButton))
 
   unsubs.push(
     window.api.ui.onToggleStatusBar(() => {
