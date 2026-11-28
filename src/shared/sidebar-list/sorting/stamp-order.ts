@@ -21,6 +21,15 @@ export function recentStamp(row: StampOrderRow): number {
   return finiteOr0(row.lastActivityAt)
 }
 
+/** Direct Smi (-1 | 0 | 1) descending comparison of host recency stamps without HeapNumber return boxing. */
+export function compareRecentStamps(a: StampOrderRow, b: StampOrderRow): number {
+  const rawA = a.lastActivityAt
+  const rawB = b.lastActivityAt
+  const recA = rawA !== undefined && Number.isFinite(rawA) ? rawA : 0
+  const recB = rawB !== undefined && Number.isFinite(rawB) ? rawB : 0
+  return recA > recB ? -1 : recA < recB ? 1 : 0
+}
+
 // Unknown tiers read Rest. Done ranks only while unread; newer hosts retier seen Done beside Working,
 // while older hosts leave it Done and therefore Rest to this reader.
 function tierRank(row: StampOrderRow): number {
