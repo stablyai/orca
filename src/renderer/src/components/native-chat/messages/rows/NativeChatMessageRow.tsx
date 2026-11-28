@@ -310,10 +310,7 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
   if (notice?.automationResult) {
     return (
       <div ref={rowRef}>
-        <NativeChatAutomationResultRow
-          note={notice.automationResult}
-          cleared={notice.automationResultCleared === true}
-        />
+        <NativeChatAutomationResultRow note={notice.automationResult} />
       </div>
     )
   }

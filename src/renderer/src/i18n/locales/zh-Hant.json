@@ -22070,10 +22070,7 @@
         "noGoal": "此聊天中 Codex 沒有可變更的目標。請輸入 /goal 並接上目標內容來設定。"
       },
       "automationResult": {
-        "openRun": "開啟執行紀錄",
-        "notRead": "{{name}} 尚未得知此結果，它會隨你之後的一則訊息一併送出。",
-        "read": "{{name}} 已隨你之後的一則訊息得知此結果。",
-        "cleared": "在聊天清除前已送達，不會傳給 {{name}}。"
+        "openRun": "開啟執行紀錄"
       },
       "slashCommandDescriptions": {
         "clearConversation": "清除對話",

@@ -3,10 +3,6 @@ import {
   makeAutomationResultNote,
   type AutomationResultNote
 } from '../../../../../shared/bots/bot-automation-result-note'
-import {
-  NativeChatDisclosureContext,
-  type NativeChatDisclosureStore
-} from '../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatAutomationResultRow } from './NativeChatAutomationResultRow'
 
 const AT = new Date(2026, 10, 9, 6, 19).getTime()
@@ -46,29 +42,3 @@ const rows = (
 
 export const states = defineFixture({ width: 560, render: () => rows })
 export const narrow = defineFixture({ width: 300, render: () => rows })
-
-// Every row open, so its read line shows: unread, told with a later message, cleared.
-const ALL_OPEN: NativeChatDisclosureStore = {
-  read: () => true,
-  write: () => {},
-  toolRunMeasurements: new Map()
-}
-const finished = {
-  outcome: 'finished' as const,
-  result: 'Three advisories and two stale branches.'
-}
-
-export const opened = defineFixture({
-  width: 560,
-  render: () => (
-    <NativeChatDisclosureContext.Provider value={ALL_OPEN}>
-      <div className="space-y-1">
-        <NativeChatAutomationResultRow note={note({ ...finished, runId: 'run-unread' })} />
-        <NativeChatAutomationResultRow
-          note={note({ ...finished, runId: 'run-read', readWith: 'message-1' })}
-        />
-        <NativeChatAutomationResultRow note={note({ ...finished, runId: 'run-cleared' })} cleared />
-      </div>
-    </NativeChatDisclosureContext.Provider>
-  )
-})

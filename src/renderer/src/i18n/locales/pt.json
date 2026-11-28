@@ -23484,10 +23484,7 @@
         "noGoal": "O Codex não tem nenhum objetivo para alterar neste chat. Defina um com /goal seguido do objetivo."
       },
       "automationResult": {
-        "openRun": "Abrir execução",
-        "notRead": "{{name}} ainda não foi informado. Irá junto com uma mensagem posterior.",
-        "read": "{{name}} foi informado sobre isto com uma mensagem posterior.",
-        "cleared": "Chegou antes de o chat ser limpo. Não será enviado para {{name}}."
+        "openRun": "Abrir execução"
       },
       "slashCommandDescriptions": {
         "clearConversation": "Limpar a conversa",

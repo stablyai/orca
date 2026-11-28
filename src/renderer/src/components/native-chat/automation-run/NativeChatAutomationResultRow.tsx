@@ -18,7 +18,7 @@ import { useNativeChatVisualOwner } from '../media/visuals/native-chat-visual-ow
 import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
 import { useAutomationRunWording } from './automation-run-wording'
 import { RUN_LINK_BUTTON } from './automation-run-link-button'
-import { NativeChatAutomationRowFrame, ROW_NOTE } from './NativeChatAutomationRowFrame'
+import { NativeChatAutomationRowFrame } from './NativeChatAutomationRowFrame'
 
 // The note carries no rules; past every schedule, so no schedule is worded.
 const NO_RULES = { dtstart: Number.MAX_SAFE_INTEGER, rrule: '' }
@@ -38,12 +38,9 @@ function useResultMark(note: AutomationResultNote): AutomationRowMark {
 
 /** An automation run's result in its bot's Chat, as its row; opens into the result. */
 export function NativeChatAutomationResultRow({
-  note,
-  cleared = false
+  note
 }: {
   note: AutomationResultNote
-  /** A later /clear left it unread for good. */
-  cleared?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
@@ -71,19 +68,6 @@ export function NativeChatAutomationResultRow({
           renderCodeBlock={NativeChatCodeBlock}
           className="text-sm text-card-foreground"
         />
-        <p className={`${ROW_NOTE} mt-2`}>
-          {note.readWith !== undefined
-            ? t('components.native-chat.automationResult.read', COPY.read, {
-                name: note.botName
-              })
-            : cleared
-              ? t('components.native-chat.automationResult.cleared', COPY.cleared, {
-                  name: note.botName
-                })
-              : t('components.native-chat.automationResult.notRead', COPY.notRead, {
-                  name: note.botName
-                })}
-        </p>
         <div className="mt-2">
           <button
             type="button"

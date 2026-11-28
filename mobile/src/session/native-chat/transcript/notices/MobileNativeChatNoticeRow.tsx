@@ -100,11 +100,7 @@ export function MobileNativeChatNoticeRow({
   }
   if (notice.automationResult) {
     return (
-      <MobileNativeChatAutomationResultRow
-        note={notice.automationResult}
-        cleared={notice.automationResultCleared === true}
-        fontScale={fontScale}
-      />
+      <MobileNativeChatAutomationResultRow note={notice.automationResult} fontScale={fontScale} />
     )
   }
   const botCard = mobileNativeChatBotCard(notice, {

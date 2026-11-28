@@ -82,8 +82,6 @@ export type NativeChatTextBlock = {
   usageLimitTurnItemId?: string
   /** On an automation's result note: the run and its result. */
   automationResult?: AutomationResultNote
-  /** Set by the list projection: a later /clear means this unread note will never reach the agent. */
-  automationResultCleared?: true
   /** A turn that carried an edited SOUL.md or MEMORY.md to a bot; read with `readBotContextNote`. */
   botContext?: BotContextNote
   /** A tidy-up changed the bot's memory: the line offers its summary. */

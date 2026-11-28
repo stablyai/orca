@@ -146,7 +146,6 @@ const block = lazyZodSchema(() =>
       orcaStop: z.object({ cause: z.string(), turnItemId: text }).optional(),
       usageLimitTurnItemId: text,
       ...storedBotStatusNotes,
-      automationResultCleared: z.literal(true).optional(),
       forkedFrom: z
         .object({
           sessionId: z.string(),

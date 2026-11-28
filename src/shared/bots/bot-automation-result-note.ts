@@ -37,9 +37,6 @@ export const AUTOMATION_RESULT_PREAMBLE_LIMITS = {
 export const AUTOMATION_RESULT_NOTE_COPY = {
   finished: 'finished',
   couldNotFinish: "couldn't finish",
-  notRead: "{{name}} hasn't been told yet. It goes with a later message.",
-  read: '{{name}} was told about this with a later message.',
-  cleared: "Arrived before the chat was cleared. It won't go to {{name}}.",
   openRun: 'Open run'
 } as const
 

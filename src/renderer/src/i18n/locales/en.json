@@ -22394,10 +22394,7 @@
         "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective."
       },
       "automationResult": {
-        "openRun": "Open run",
-        "notRead": "{{name}} hasn't been told yet. It goes with a later message.",
-        "read": "{{name}} was told about this with a later message.",
-        "cleared": "Arrived before the chat was cleared. It won't go to {{name}}."
+        "openRun": "Open run"
       },
       "slashCommandDescriptions": {
         "clearConversation": "Clear the conversation",

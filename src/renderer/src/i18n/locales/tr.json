@@ -22363,10 +22363,7 @@
         "noGoal": "Bu sohbette Codex'in değiştirilecek bir hedefi yok. /goal ve ardından hedefi yazarak bir hedef belirleyin."
       },
       "automationResult": {
-        "openRun": "Çalıştırmayı aç",
-        "notRead": "{{name}} henüz haberdar edilmedi. Daha sonraki bir mesajla birlikte gönderilecek.",
-        "read": "{{name}} bundan daha sonraki bir mesajla haberdar edildi.",
-        "cleared": "Sohbet temizlenmeden önce ulaştı. {{name}} bunu görmeyecek."
+        "openRun": "Çalıştırmayı aç"
       },
       "githubPeek": {
         "updated": "{{time}} güncellendi",
