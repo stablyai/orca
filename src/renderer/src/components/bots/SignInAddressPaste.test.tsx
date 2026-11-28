@@ -41,7 +41,11 @@ it('a tab cycling through many conversations keeps only the newest refused addre
     )
     fireEvent.change(screen.getByRole('textbox'), { target: { value: `http://x/${conversation}` } })
     await act(async () => {
-      fireEvent.submit(screen.getByRole('textbox').closest('form') as HTMLFormElement)
+      const form = screen.getByRole('textbox').closest('form')
+      if (!form) {
+        throw new Error('no form')
+      }
+      fireEvent.submit(form)
       await Promise.resolve()
       await Promise.resolve()
     })
