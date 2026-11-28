@@ -7,8 +7,8 @@ import { BOT_TOOLS_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/lau
 import { botToolRelay, MCP_HOST_LIST_RELAY_OWNER } from '../../bots/tool-relay/bot-tool-relay'
 
 /** Whose relay grant a launch's caller rides on: its bot's, or the host list's. */
-function callerOwner(sealed: Readonly<Record<string, string>>): string {
-  const token = sealed[BOT_TOOLS_TOKEN_ENV]
+function callerOwner(env: Readonly<Record<string, string>>): string {
+  const token = env[BOT_TOOLS_TOKEN_ENV]
   return (token ? botToolRelay.botOf(token) : null) ?? MCP_HOST_LIST_RELAY_OWNER
 }
 
