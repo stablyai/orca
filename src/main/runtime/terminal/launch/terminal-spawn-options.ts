@@ -89,6 +89,6 @@ export function terminalSpawnOptions({
     ...(launchOpts.isNewSession ? { isNewSession: true } : {}),
     ...BACKGROUND_TERMINAL_SPAWN_FLAGS,
     // A teammate's own terminal binds to no host pane.
-    ...(launchOpts.holder ? { persistHostSessionBinding: false } : {})
+    ...(launchOpts.holder ? { persistHostSessionBinding: false, holder: launchOpts.holder } : {})
   }
 }

@@ -1,3 +1,4 @@
+import type { TeammateTabListKey } from '../../../bots/team-share/teammate-rules'
 import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type {
   TerminalLimitStatus,
@@ -107,6 +108,8 @@ export type RuntimePtyController = {
     /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
     initiallyHidden?: boolean
     persistHostSessionBinding?: boolean
+    /** The teammate whose own list holds this terminal; its spawn wakes only their list's sleep. */
+    holder?: TeammateTabListKey
     expectedSourceBinding?: PtyBindingSourceExpectation
     placement?: TerminalPanePlacement
     terminalKittyKeyboardProtocol?: boolean

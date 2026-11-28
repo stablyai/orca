@@ -110,6 +110,7 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     ctx.releaseWorktreeSpawn = acquire
       ? await acquire.call(runtime, spawnWorktreeTarget(args.worktreeId, args.connectionId), {
           refuseSleptWorktree: args.refuseSleptWorktree,
+          list: args.holder ?? 'host',
           reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
           requireAttachOnly: () => {
             ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }

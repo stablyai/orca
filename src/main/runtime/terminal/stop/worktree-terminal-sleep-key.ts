@@ -33,6 +33,13 @@ export type WorktreeSleepScope = {
   listWorkspaceId: string
 }
 
+/** The workspace a list's sleep is keyed, told and recorded by: the workspace itself for the host
+ *  list, the teammate's own (`person:`) for theirs, so one list's sleep never wakes, blocks or
+ *  replays as another's. */
+export function listSleepWorkspaceId(worktreeId: string, list: PtyList = 'host'): string {
+  return list === 'host' ? worktreeId : tabListOfPty({ holder: list, worktreeId })
+}
+
 /** Use the launch host resolver and refuse ambiguity. Capture once: repo retargeting while asleep must not move the slept host's record. */
 export function resolveSleepScope(
   repos: readonly LaunchHostRepo[],
@@ -43,9 +50,7 @@ export function resolveSleepScope(
   if (launch.kind === 'ambiguous') {
     throw new Error('worktree_execution_host_unresolved')
   }
-  // Keyed by the list's workspace, so one list's sleep never wakes, blocks or replays as another's.
-  const listWorkspaceId =
-    list === 'host' ? worktree.id : tabListOfPty({ holder: list, worktreeId: worktree.id })
+  const listWorkspaceId = listSleepWorkspaceId(worktree.id, list)
   return {
     key: hostSleepKey(getConnectionExecutionHostId(launch.connectionId), listWorkspaceId),
     fence: { resolvedConnectionId: launch.connectionId },

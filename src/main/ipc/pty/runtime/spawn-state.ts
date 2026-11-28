@@ -1,3 +1,4 @@
+import type { TeammateTabListKey } from '../../../bots/team-share/teammate-rules'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import type { PtySpawnSizeSeed } from '../spawn/spawn-options-assembly'
@@ -148,6 +149,8 @@ export type RuntimePtySpawnArgs = {
   /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
   initiallyHidden?: boolean
   persistHostSessionBinding?: boolean
+  /** The teammate whose own list holds this terminal; its spawn wakes only their list's sleep. */
+  holder?: TeammateTabListKey
   expectedSourceBinding?: PtyBindingSourceExpectation
   placement?: TerminalPanePlacement
   terminalKittyKeyboardProtocol?: boolean
