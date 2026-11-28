@@ -5,7 +5,7 @@ import { parentPort } from 'node:worker_threads'
 import Database from '../../../../sqlite/sync-database'
 import { installWorkerSendLedger } from '../../../../worker-threads/worker-send-ledger'
 import { readConnectorWorkerCandidates } from '../connector-workers/connector-worker-candidates'
-import { readBotGroupTurnSource } from '../../../../bots/bot-group-turn-source'
+import { readBotGroupTurnSource } from './bot-group-turn-source'
 import type { OrchestrationDbConnection } from '../orchestration-db'
 import type {
   OrchestrationReaderRequest,

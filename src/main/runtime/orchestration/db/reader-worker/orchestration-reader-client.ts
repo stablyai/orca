@@ -43,7 +43,7 @@ const IN_PLACE: {
   connectorWorkerCandidates: (connection, args) =>
     readConnectorWorkerCandidates(connection, args.sessionIds, args.now),
   botGroupTurnSource: async (connection, args) => {
-    const { readBotGroupTurnSource } = await import('../../../../bots/bot-group-turn-source')
+    const { readBotGroupTurnSource } = await import('./bot-group-turn-source')
     return readBotGroupTurnSource(connection.db, args)
   }
 }

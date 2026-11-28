@@ -13,7 +13,9 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 import type { BotGroupTurn } from '../../shared/bots/bot-group'
 
 const live = vi.hoisted(() => ({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test setup assigns production-shaped values before each case.
   groups: null as BotGroupRuntime | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test setup assigns the rig host before each case.
   host: null as QueuedMessageTestRig['host'] | null,
   notices: [] as unknown[]
 }))
@@ -55,6 +57,7 @@ beforeEach(async () => {
     members: [{ botId: 'bot-1', sessionId }],
     replyMode: { kind: 'mentions' }
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The callback reads only the store in this fixture.
   live.groups = { store } as BotGroupRuntime
   live.host = rig.host
   live.notices = []
@@ -68,6 +71,7 @@ afterEach(async () => {
 it('persists an ended group turn before the provider close control', async () => {
   const callback = vi.fn((turnId: string) =>
     noteBotGroupMemberReply(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The completion callback needs only this notifier.
       { notifyBotsChanged: (notice: unknown) => live.notices.push(notice) } as never,
       sessionId,
       turnId
@@ -127,6 +131,7 @@ it('persists an ended group turn before the provider close control', async () =>
       sessionId,
       handle: codexProviderHandle(HOST_TEST_THREAD),
       reason: 'closed'
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The rig accepts the production close shape.
     } as never)
     expect(store.message('post-1')!.turns[0].end).toBe('finished')
     translator.dispose()

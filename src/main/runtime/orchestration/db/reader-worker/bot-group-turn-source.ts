@@ -1,12 +1,12 @@
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { BotGroupTurnDetailPage } from '../../shared/bots/use-bot-group-turn-details'
-import { BotGroupTurnSchema } from '../../shared/bots/bot-group-schema'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { BotGroupTurnDetailPage } from '../../../../../shared/bots/use-bot-group-turn-details'
+import { BotGroupTurnSchema } from '../../../../../shared/bots/bot-group-schema'
 import {
   HISTORY_PAGE_CONTENT_BUDGET_BYTES,
   oversizedHistoryItem
-} from '../native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
-import { agentJournalItemForWire } from '../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
-import type Database from '../sqlite/sync-database'
+} from '../../../../native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
+import { agentJournalItemForWire } from '../../../../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
+import type Database from '../../../../sqlite/sync-database'
 
 export type BotGroupTurnSourceInput = {
   groupId: string
@@ -61,7 +61,10 @@ function retainArchive(db: Database, operationId: string): void {
   }
   used.delete(operationId)
   while (used.size >= MAX_ARCHIVED_TURNS) {
-    const oldest = used.keys().next().value as string
+    const oldest = used.keys().next().value
+    if (typeof oldest !== 'string') {
+      break
+    }
     dropArchive(db, oldest)
   }
   used.set(operationId, Date.now())

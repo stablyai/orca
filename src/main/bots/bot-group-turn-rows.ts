@@ -7,6 +7,7 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 
 const MAX_GROUP_DETAIL_READS = 8
+const MAX_GROUP_DETAIL_WAITERS = 32
 
 export type BotGroupTurnRead = {
   page: Promise<BotGroupTurnDetailPage>
@@ -93,6 +94,9 @@ async function waitForTurnPage(
 
 function waitForDetailSlot(groups: BotGroupRuntime, signal?: AbortSignal): Promise<void> {
   signal?.throwIfAborted()
+  if (groups.turnDetailWaiters.length >= MAX_GROUP_DETAIL_WAITERS) {
+    throw new Error('Too many group turn detail reads are waiting.')
+  }
   return new Promise((resolve, reject) => {
     const wake = () => {
       cleanup()

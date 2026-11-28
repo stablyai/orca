@@ -97,7 +97,7 @@ it('keeps a removed member’s frozen result rows in the bounded room page', () 
   const orchestration = new OrchestrationDb(':memory:')
   databases.push(orchestration)
   const store = new BotGroupStore(orchestration.db)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- The page fixture only needs the store.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The page fixture calls only store reads.
   const groups = { store, mailTurnChecks: new Map() } as unknown as BotGroupRuntime
   store.put({
     id: 'group-1',

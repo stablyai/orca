@@ -6,7 +6,7 @@ import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { readBotGroup } from './bot-group-delivery'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
-import { readBotGroupTurnSource } from './bot-group-turn-source'
+import { readBotGroupTurnSource } from '../runtime/orchestration/db/reader-worker/bot-group-turn-source'
 
 // #47176: a matching room notice only carries preview bodies the reader does not hold.
 it('recovers the page with zero repeated reply bodies and one changed body at both sizes', () => {
@@ -161,9 +161,10 @@ it('reads the frozen source once across consecutive detail pages at both sizes',
           })?.kind
         ).toBe('frozen')
       }
-      expect(
-        db.db.prepare('SELECT COUNT(*) AS count FROM bot_group_archive_turn').get().count
-      ).toBe(8)
+      const archiveCount = db.db
+        .prepare('SELECT COUNT(*) AS count FROM bot_group_archive_turn')
+        .get()
+      expect(Number(archiveCount?.count)).toBe(8)
       const interleaved = 'next-frozen-1'
       expect(
         readBotGroupTurnSource(db.db, {
