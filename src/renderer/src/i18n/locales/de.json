@@ -28800,7 +28800,6 @@
       "ask": {
         "notSentYet": "noch nicht gesendet",
         "recommended": "Empfohlen",
-        "typeAnswer": "Antwort eingeben",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
         "skipped": "Übersprungen",
