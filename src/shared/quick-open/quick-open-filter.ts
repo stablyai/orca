@@ -29,8 +29,8 @@ export const HIDDEN_DIR_BLOCKLIST: ReadonlySet<string> = new Set([
 // `.local` may hold user files; block only the generated `.local/share` runtime subtree.
 const HIDDEN_PATH_BLOCKLIST: readonly string[] = ['.local/share']
 
-// Separate from HIDDEN_DIR_BLOCKLIST: node_modules isn't a dotdir but must still be pruned.
-const NON_DOTTED_PRUNE = 'node_modules'
+// Separate from HIDDEN_DIR_BLOCKLIST: generated dirs that aren't dotdirs must still be pruned.
+const NON_DOTTED_PRUNE: ReadonlySet<string> = new Set(['node_modules', '__pycache__'])
 
 function containsBlockedRelPath(path: string, blockedPath: string): boolean {
   return (
@@ -56,7 +56,7 @@ export function shouldIncludeQuickOpenPath(path: string): boolean {
       end = len
     }
     const segment = path.substring(start, end)
-    if (segment === NON_DOTTED_PRUNE || HIDDEN_DIR_BLOCKLIST.has(segment)) {
+    if (NON_DOTTED_PRUNE.has(segment) || HIDDEN_DIR_BLOCKLIST.has(segment)) {
       return false
     }
     start = end + 1
@@ -130,9 +130,9 @@ function isParentRelativePath(relPath: string): boolean {
   return relPath === '..' || relPath.startsWith('../')
 }
 
-/** Directory-match globs prune traversal, unlike contents-only exclusions; include node_modules. */
+/** Directory-match globs prune traversal, unlike contents-only exclusions. */
 export function buildHiddenDirExcludeGlobs(): string[] {
-  const names = [NON_DOTTED_PRUNE, ...HIDDEN_DIR_BLOCKLIST]
+  const names = [...NON_DOTTED_PRUNE, ...HIDDEN_DIR_BLOCKLIST]
   const out: string[] = []
   for (const name of names) {
     out.push('--glob', `!**/${escapeGlob(name)}`)
