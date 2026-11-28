@@ -39,7 +39,8 @@ export function ptyTerminationReason(
         'resourceManager.pty.endUnsupported',
         'End is unavailable for this terminal. Its host does not support the required safety checks. Close it from its tab or on its host.'
       )
-    default:
+    case 'replaced':
+    case 'unverifiable':
       return t(
         'resourceManager.pty.unverifiableEnd',
         'Unverifiable: the host could not confirm the result. The terminal may still be running.'
