@@ -24704,7 +24704,10 @@
       "chatPasteCodeLabel": "サインイン後に Google が表示するコード、またはそのページのアドレス",
       "apiKeyGet": "APIキーを取得する",
       "launchesUse": "新しく起動する agy はこのアカウントを使います",
-      "loginNow": "現在の agy のログイン"
+      "loginNow": "現在の agy のログイン",
+      "signedInUnread": "agy はサインイン済みです",
+      "unreadDetail": "どのアカウントかを確認するにはアカウントを表示してください。macOS がキーチェーンへのアクセス許可を求めることがあります。",
+      "showAccount": "アカウントを表示"
     },
     "claude": {
       "added": "アカウントを追加しました。次に起動する Claude で使用するには、これを選択してください。",

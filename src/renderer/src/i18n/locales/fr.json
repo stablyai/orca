@@ -25453,7 +25453,10 @@
       "chatPasteCode": "Collez le code",
       "chatPasteCodeLabel": "Le code que Google affiche après la connexion, ou l'adresse de cette page",
       "launchesUse": "Les nouveaux lancements d'agy utilisent ce compte",
-      "loginNow": "Connexion agy actuelle"
+      "loginNow": "Connexion agy actuelle",
+      "signedInUnread": "agy est connecté",
+      "unreadDetail": "Affichez le compte pour savoir lequel c’est. macOS peut vous demander d’autoriser l’accès au trousseau.",
+      "showAccount": "Afficher le compte"
     },
     "claude": {
       "added": "Compte ajouté. Sélectionnez-le pour l'utiliser pour le prochain Claude que vous démarrez.",

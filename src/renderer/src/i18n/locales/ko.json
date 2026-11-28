@@ -25458,7 +25458,10 @@
       "chatPasteCode": "코드를 붙여넣으세요",
       "chatPasteCodeLabel": "로그인 후 Google이 보여 주는 코드 또는 그 페이지의 주소",
       "launchesUse": "새로 실행하는 agy는 이 계정을 사용합니다",
-      "loginNow": "현재 agy 로그인"
+      "loginNow": "현재 agy 로그인",
+      "signedInUnread": "agy에 로그인되어 있습니다",
+      "unreadDetail": "어떤 계정인지 보려면 계정을 표시하세요. macOS가 키체인 접근 허용을 요청할 수 있습니다.",
+      "showAccount": "계정 표시"
     },
     "claude": {
       "added": "계정이 추가되었습니다. 다음에 시작하는 Claude에 사용하려면 이 계정을 선택하세요.",

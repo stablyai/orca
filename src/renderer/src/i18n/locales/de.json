@@ -25230,7 +25230,10 @@
       "chatPasteCode": "Code einfügen",
       "chatPasteCodeLabel": "Der Code, den Google nach der Anmeldung anzeigt, oder die Adresse dieser Seite",
       "launchesUse": "Neue agy-Starts verwenden dieses Konto",
-      "loginNow": "Aktuelle agy-Anmeldung"
+      "loginNow": "Aktuelle agy-Anmeldung",
+      "signedInUnread": "agy ist angemeldet",
+      "unreadDetail": "Zeige das Konto an, um zu sehen, welches es ist. macOS fragt eventuell nach Zugriff auf den Schlüsselbund.",
+      "showAccount": "Konto anzeigen"
     },
     "claude": {
       "added": "Konto hinzugefügt. Das Konto auswählen, um es beim nächsten Start von Claude zu verwenden.",

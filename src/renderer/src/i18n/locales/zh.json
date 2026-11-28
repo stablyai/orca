@@ -25115,7 +25115,10 @@
       "locationGlobal": "global",
       "signInGoogle": "使用 Google 登录",
       "launchesUse": "新启动的 agy 将使用此账号",
-      "loginNow": "agy 当前的登录"
+      "loginNow": "agy 当前的登录",
+      "signedInUnread": "agy 已登录",
+      "unreadDetail": "显示账户以查看是哪一个。macOS 可能会要求你允许访问钥匙串。",
+      "showAccount": "显示账户"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于你下次启动的 Claude",

@@ -25687,7 +25687,10 @@
       "chatPasteCode": "Paste the code",
       "chatPasteCodeLabel": "The code Google shows after you sign in, or that page's address",
       "launchesUse": "New agy launches use this account",
-      "loginNow": "agy's login right now"
+      "loginNow": "agy's login right now",
+      "signedInUnread": "agy is signed in",
+      "unreadDetail": "Show the account to see which one. macOS may ask you to allow keychain access.",
+      "showAccount": "Show account"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
