@@ -42,6 +42,19 @@ export type NativeChatOffer = {
   confirm: (tell: () => Promise<BotOfferTold>) => void
 }
 
+/** Confirms a card answer, then reloads the host's bots whether or not it was taken. Kept out of the
+ *  hook: React Compiler can't compile a try/finally. */
+async function confirmAndRefresh(
+  tell: () => Promise<BotOfferTold>,
+  hostId: Parameters<typeof refreshBotHost>[0]
+): Promise<BotOfferAnswerOutcome> {
+  try {
+    return (await confirmBotOfferAnswer(tell)).sent ? 'sent' : 'refused'
+  } finally {
+    await refreshBotHost(hostId)
+  }
+}
+
 export function useNativeChatOffer(botId: string, cardId: string): NativeChatOffer {
   const t = useTranslate()
   const view = useContext(NativeChatBotKickoffContext)
@@ -58,31 +71,21 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
     }
     running.current += 1
     setPending(true)
-    try {
-      if ((await submit()) === 'refused') {
-        toast.error(
-          view?.sendBlockedReason() ??
-            t(
-              'components.native-chat.offerCard.notSent',
-              "Couldn't send that to the bot. Try again."
-            )
-        )
-      }
-    } catch (error) {
+    const outcome = await submit().catch((error: unknown) => {
       toast.error(botErrorMessage(error))
-    } finally {
-      running.current -= 1
-      setPending(running.current > 0)
+      return null
+    })
+    running.current -= 1
+    setPending(running.current > 0)
+    if (outcome === 'refused') {
+      toast.error(
+        view?.sendBlockedReason() ??
+          t('components.native-chat.offerCard.notSent', "Couldn't send that to the bot. Try again.")
+      )
     }
   }
   const confirm = (tell: () => Promise<BotOfferTold>): void => {
-    void run(async () => {
-      try {
-        return (await confirmBotOfferAnswer(tell)).sent ? 'sent' : 'refused'
-      } finally {
-        await refreshBotHost(ref.hostId)
-      }
-    }, true)
+    void run(() => confirmAndRefresh(tell, ref.hostId), true)
   }
   // Claimed on the host before the send, so a second window, device or press sends nothing; a refused send gives
   // the claim back and leaves the card to press again.
