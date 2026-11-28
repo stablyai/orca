@@ -45,9 +45,17 @@ export async function prepareProviderRelayDirectory(
 /** A spool only its creating daemon can read; once that daemon is proven gone, nobody can. */
 async function removeDeadOwnersSpools(directory: string): Promise<void> {
   const names = await readdir(directory).catch(() => [])
+  // One probe per owner: a surviving daemon may hold many spools.
+  const gone = new Map<number, boolean>()
   for (const name of names) {
-    const owner = RELAY_SPOOL_NAME.exec(name)?.[1]
-    if (owner && Number(owner) !== process.pid && ownerProvenGone(Number(owner))) {
+    const owner = Number(RELAY_SPOOL_NAME.exec(name)?.[1] ?? process.pid)
+    if (owner === process.pid) {
+      continue
+    }
+    if (!gone.has(owner)) {
+      gone.set(owner, ownerProvenGone(owner))
+    }
+    if (gone.get(owner)) {
       await unlink(join(directory, name)).catch(() => {})
     }
   }

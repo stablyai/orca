@@ -9,8 +9,10 @@ import type {
 import type { AgentSessionMcpPanelState } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp-panel'
 import {
   agentSessionMcpRowFailure,
+  agentSessionMcpShownStatus,
   agentSessionMcpServerDisplayName,
-  groupAgentSessionMcpServers
+  groupAgentSessionMcpServers,
+  ORCA_MCP_SOURCE
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
 import { MobilePendingButton } from '../../../components/controls/MobilePendingButton'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
@@ -27,6 +29,7 @@ import {
   mobileMcpTraySummary
 } from './mobile-native-chat-mcp-server-copy'
 import { mcpPanelStylesSheet as stylesSheet } from './mobile-native-chat-mcp-panel-styles'
+import { McpStatusMark as StatusMark } from './mobile-native-chat-mcp-status-mark'
 import { composerInputStylesSheet } from '../../../components/composer-input/composer-input-styles'
 import { useThemedStyles } from '../../../theme/themed-styles'
 
@@ -40,6 +43,10 @@ export type MobileNativeChatMcpPanelProps = AgentSessionMcpPanelState & {
   onClose: () => void
   /** Opens the host's MCP servers page; null on a host without one. */
   onManage?: (() => void) | null
+  /** The chat's agent, as the header names it. */
+  agentLabel: string
+  /** Opens Orca's own sign-in to a server it signs in to itself. */
+  signInWithOrca?: (server: AgentSessionMcpServer) => void
   /** The server list's cap, so the tray and composer stay on screen above the keyboard. */
   listMaxHeight: number
 }
@@ -96,18 +103,9 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
 }
 
 function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
-  const trayStripStyles = useThemedStyles(trayStripStylesSheet)
-  const styles = useThemedStyles(stylesSheet)
   const { result, servers, t } = props
   if (result === null) {
     return null
-  }
-  if (result.status === 'not-running') {
-    return (
-      <Notice
-        text={t('chat.mcp.notRunning', 'MCP servers connect when you send your next message.')}
-      />
-    )
   }
   if (result.status === 'unsupported') {
     return (
@@ -129,9 +127,32 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
       />
     )
   }
-  if (servers.length === 0) {
+  if (result.status === 'ok' && servers.length === 0) {
     return <Notice text={t('chat.mcp.empty', 'No MCP servers are set up for this chat.')} />
   }
+  // An agent at rest lists what its next start gets; one that reports no status says so.
+  const notice =
+    result.status === 'not-running'
+      ? t('chat.mcp.notRunning', 'MCP servers connect when you send your next message.')
+      : servers.some((server) => server.status === 'unreported')
+        ? t('chat.mcp.unreported', "{{agent}} doesn't report connection status.", {
+            agent: props.agentLabel
+          })
+        : null
+  return (
+    <>
+      {notice ? <Notice text={notice} /> : null}
+      {servers.length > 0 ? <McpServerList {...props} /> : null}
+    </>
+  )
+}
+
+function McpServerList(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
+  const trayStripStyles = useThemedStyles(trayStripStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
+  const { servers, t } = props
+  const groups = groupAgentSessionMcpServers(servers)
+  const withOrca = groups.some((group) => group.source === ORCA_MCP_SOURCE)
   return (
     <ScrollView
       style={[styles.list, { maxHeight: props.listMaxHeight }]}
@@ -139,11 +160,12 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled
     >
-      {groupAgentSessionMcpServers(servers).map((group) => (
+      {groups.map((group) => (
         <View key={group.source ?? ''}>
-          {group.source === null ? null : (
+          {/* Servers the agent reports no source for are its own; under Orca's, say whose. */}
+          {group.source === null && !withOrca ? null : (
             <Text style={[trayStripStyles.groupLabel, styles.groupLabel]}>
-              {mobileMcpSourceLabel(group.source, t)}
+              {group.source === null ? props.agentLabel : mobileMcpSourceLabel(group.source, t)}
             </Text>
           )}
           {group.servers.map((server) => (
@@ -173,16 +195,19 @@ function McpServerRow({
   run,
   dismissSignIn,
   openUrl,
+  result,
+  signInWithOrca,
   t
 }: MobileNativeChatMcpPanelProps & { server: AgentSessionMcpServer; t: Translate }) {
   const styles = useThemedStyles(stylesSheet)
   const mine = pending !== null && pending.server === server.name ? pending : null
   const signingIn = signIn?.server === server.name ? signIn : null
   const busy = pending !== null
+  const withOrca = server.orca?.signsIn ? signInWithOrca : undefined
   const action =
-    signingIn === null && server.canSignIn && server.status === 'needs-auth'
+    signingIn === null && (server.canSignIn || withOrca) && server.status === 'needs-auth'
       ? ({ action: 'signIn', server: server.name } as const)
-      : server.canReconnect && server.status === 'failed'
+      : server.canReconnect && agentSessionMcpShownStatus(server) === 'failed'
         ? ({ action: 'reconnect', server: server.name } as const)
         : null
   // A toggle in flight shows where it is going.
@@ -193,7 +218,7 @@ function McpServerRow({
     <View>
       <View style={styles.row}>
         <View style={styles.mark}>
-          <StatusMark status={signingIn ? 'pending' : server.status} />
+          <StatusMark status={signingIn ? 'pending' : agentSessionMcpShownStatus(server)} />
         </View>
         <Text style={styles.name} numberOfLines={1}>
           {agentSessionMcpServerDisplayName(server)}
@@ -201,7 +226,7 @@ function McpServerRow({
         <Text
           style={[
             styles.statusLine,
-            !signingIn && server.status === 'failed' && styles.statusLineFailed
+            !signingIn && agentSessionMcpShownStatus(server) === 'failed' && styles.statusLineFailed
           ]}
           numberOfLines={1}
         >
@@ -209,7 +234,9 @@ function McpServerRow({
             ? signingIn.finish === 'external'
               ? t('chat.mcp.status.finishOnPage', 'Finish on the page that opened')
               : t('chat.mcp.status.waitingForSignIn', 'Waiting for sign-in…')
-            : mobileMcpServerStatusLine(server, t)}
+            : result?.status === 'not-running' && server.status === 'not-started'
+              ? '' // The notice above already says they connect on the next message.
+              : mobileMcpServerStatusLine(server, t)}
         </Text>
         {signingIn ? (
           <>
@@ -242,10 +269,12 @@ function McpServerRow({
                 tone={action.action === 'signIn' ? 'primary' : 'secondary'}
                 busy={mine?.action === action.action}
                 disabled={busy}
-                onPress={() => run(action)}
+                onPress={() =>
+                  withOrca && action.action === 'signIn' ? withOrca(server) : run(action)
+                }
               />
             ) : null}
-            {server.canToggle ? (
+            {server.canToggle && server.orcaChange !== 'removed' ? (
               <MobileSwitch
                 value={enabled}
                 disabled={busy}
@@ -267,7 +296,9 @@ function McpServerRow({
                 'chat.mcp.signInUnfinished',
                 "Sign-in isn't finished yet. Finish it on the page that opened, then tap Done."
               )
-            : (refusal.message ?? t('chat.mcp.actionFailed', "Couldn't do that. Try again."))}
+            : refusal.kind === 'stillFailing'
+              ? t('chat.mcp.stillFailing', 'Still failing after reconnecting.')
+              : (refusal.message ?? t('chat.mcp.actionFailed', "Couldn't do that. Try again."))}
         </Text>
       ) : null}
       {signingIn?.finish === 'callback' ? (
@@ -275,23 +306,6 @@ function McpServerRow({
       ) : null}
     </View>
   )
-}
-
-function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
-  const styles = useThemedStyles(stylesSheet)
-  switch (status) {
-    case 'connected':
-      return <View style={[styles.dot, styles.dotConnected]} />
-    case 'needs-auth':
-      return <View style={[styles.dot, styles.dotNeedsAuth]} />
-    case 'failed':
-      return <View style={[styles.dot, styles.dotFailed]} />
-    case 'disabled':
-    case 'not-started':
-      return <View style={[styles.dot, styles.dotDisabled]} />
-    case 'pending':
-      return <View style={styles.dotPending} />
-  }
 }
 
 // The phone never runs the agent, so a callback sign-in always finishes by pasting the address.

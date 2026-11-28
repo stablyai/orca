@@ -1,6 +1,7 @@
 import { ChevronDown, Folder, GitBranch, Plus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
+import { RAIL_PAGE_HIDE_NARROW } from '@/components/rail-page/RailPageHeader'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,18 +12,27 @@ import {
 /** The rare ways to add a plugin outside the catalog: a folder or a Git URL. */
 export function PluginAddMenu({
   disabled,
-  onChoose
+  onChoose,
+  railPage = false
 }: {
   disabled: boolean
   onChoose: (kind: 'local-path' | 'git') => void
+  /** Rail page header sizing; the label hides when the page is narrow. */
+  railPage?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const label = t('auto.components.settings.PluginAddMenu.add', 'Add plugin')
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" disabled={disabled}>
+        <Button
+          variant="outline"
+          size={railPage ? 'toolbar' : 'sm'}
+          disabled={disabled}
+          aria-label={label}
+        >
           <Plus />
-          {t('auto.components.settings.PluginAddMenu.add', 'Add plugin')}
+          {railPage ? <span className={RAIL_PAGE_HIDE_NARROW}>{label}</span> : label}
           <ChevronDown className="text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>

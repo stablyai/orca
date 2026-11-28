@@ -9,6 +9,7 @@ import { beginEdit, isTrackedEdit } from './gh-edit-task-record'
 import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/mutations/task-page-github-dialog-state-authority'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import { parseGitHubItemRepository } from '../../../../../shared/github/work-items/work-item-target'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
@@ -101,7 +102,7 @@ export function runGHEditStateChange({
           itemId: item.id,
           state: newState,
           sourceContext,
-          ownerRepo: projectOrigin ?? issueRepo
+          ownerRepo: projectOrigin ?? parseGitHubItemRepository(item.url)
         })
       }
       // An edit that began untracked is admitted now: a record that can own it (after a reconnect or

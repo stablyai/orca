@@ -70,6 +70,7 @@ export const COLUMNS = {
   refuse_401: "sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'token')",
   refuse_country: "sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'country')",
   keys_unavailable: "sumIf(_sample_interval, blob1 = 'upgrade' AND blob2 = 'keys_unavailable')",
+  object_unavailable: "sumIf(_sample_interval, blob1 = 'upgrade' AND blob2 = 'object_unavailable')",
   admin_failures: "sumIf(_sample_interval, blob1 = 'admin' AND blob2 != '200')",
   wakes: "sumIf(_sample_interval * double1, blob1 = 'wake')",
   wake_no_socket: "sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'no_socket')",
@@ -105,7 +106,7 @@ export type Rule = {
 
 const pct = (a: number, b: number) => (b > 0 ? (100 * a) / b : 0)
 // Every upgrade that reached the token check or the country check.
-const upgrades = (c: Counts) => c.socket_open + c.refuse_401 + c.refuse_country + c.keys_unavailable
+const upgrades = (c: Counts) => c.socket_open + c.refuse_401 + c.refuse_country + c.keys_unavailable + c.object_unavailable
 // Refusals other than the alerts' own probes.
 const refusals401 = (c: Counts, t: WakeThresholds) => Math.max(0, c.refuse_401 - t.probesPerWindow)
 // Never on an empty window, even with RECONNECT_SURGE_MIN set to 0.
@@ -143,6 +144,13 @@ export const RULES: Rule[] = [
     describe: (c) =>
       `drops ${c.drops}, reconnects ${c.reconnects} (${c.reconnects_late} ${LATE_RECONNECT_MS / 1000} s - ` +
       `${LATE_RECONNECT_MAX_MS / 3_600_000} h late), replaced sockets ${c.replaced}, failed wakes ${c.wake_error} in ${WINDOW_MIN} min`
+  },
+  {
+    // Upgrades whose forward to the host's object failed (a handled 503, so cloudflare-errors never
+    // sees it). Same floor and share as cloudflare-errors, which counted these before they were caught.
+    id: 'object-unavailable',
+    breach: (c, t) => c.object_unavailable > t.cfErrorsMin && pct(c.object_unavailable, upgrades(c)) > t.cfErrorsPct,
+    describe: (c) => `upgrades whose object forward failed ${c.object_unavailable} = ${pct(c.object_unavailable, upgrades(c)).toFixed(1)}% of ${upgrades(c)} upgrades in ${WINDOW_MIN} min`
   },
   {
     // The connector's publisher calls refused: its key, issuer or body is wrong.

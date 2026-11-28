@@ -148,20 +148,23 @@ function LoadingCycle(): React.JSX.Element {
 }
 export const loadingCycle = defineFixture({ width: 312, render: () => <LoadingCycle /> })
 
-/** A desktop-wide pane with typed text: lines use the box's full width, the controls sit below them. */
-function typed(text: string): ComponentFixture {
+/** A pane `width` wide (desktop-wide by default) with typed text: lines use the box's full width, the
+ *  controls sit below them. */
+function typed(text: string, width = 1248, total = 219): ComponentFixture {
   return defineFixture({
-    width: 1280,
+    width: width + 32,
     setup: () =>
       updateNativeChatComposerDraft(
         `bot-item-comment:${botRefKey(fixtureCos)}:${item.uid}`,
         { text, images: [] },
         'immediate'
       ),
-    render: () => <Row width={1248} total={219} attach />
+    render: () => <Row width={width} total={total} attach />
   })
 }
 export const wideUnbroken = typed('g'.repeat(400))
+/** One line under the 520px break, with arrows: it starts as far below the border as chat's composer text. */
+export const stackedOneLine = typed('Yes, merge it once CI is green', 420, 3)
 export const wideLines = typed(
   'Link expiry should default to 7 days, with a picker for 1 day, 30 days and never; owners can change it after sharing.\nResharing stays with editors.\nShip it behind the existing sharing flag.'
 )

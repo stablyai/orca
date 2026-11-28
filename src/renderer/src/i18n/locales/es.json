@@ -1273,7 +1273,8 @@
         "add": "Agregar un servidor para este repositorio",
         "files": "De los archivos de este repositorio",
         "open": "Abrir {{file}}"
-      }
+      },
+      "unreadable": "El inicio de sesión o la clave guardados no se pueden abrir en este equipo"
     }
   },
   "menu": {
@@ -1552,8 +1553,6 @@
           "localBaseRefNotUpdatedDirty": "Cambios sin confirmar en {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Commits solo locales en {{value0}}.",
           "localBaseRefNotUpdatedError": "Error de Git.",
-          "localBaseRefHideDetails": "Ocultar detalles",
-          "localBaseRefShowDetails": "Detalles",
           "0216895fb5": "No se pudo eliminar la rama",
           "5366d13eec": "Espacio de trabajo eliminado, rama conservada",
           "2e17f825d4": "Worktree eliminado, rama conservada",
@@ -1589,6 +1588,9 @@
           "localBaseRefShallowHistory": "Tu espacio de trabajo se creó a partir de {{value0}} y no se ve afectado. Orca no pudo actualizar además tu rama local {{value1}} porque este clon solo tiene el historial reciente, así que Git no puede confirmar que {{value1}} local solo esté atrasada. Para solucionarlo en todos los espacios de trabajo nuevos, ejecuta una vez:",
           "localBaseRefRefreshTurnOff": "Desactivar comprobación",
           "localBaseRefRefreshTurnOffHelp": "Qué hace Desactivar comprobación",
+          "localBaseRefRefreshDisable": "Desactivar",
+          "localBaseRefRefreshDisableTooltip": "Dejar de comprobar {{value0}}",
+          "localBaseRefClose": "Cerrar",
           "localBaseRefRefreshTurnOffTooltip": "Desactiva el ajuste de Orca {{value0}}. Orca dejará de actualizar {{value1}} local al crear un espacio de trabajo y esta advertencia dejará de aparecer. Los espacios de trabajo nuevos no se ven afectados. Vuelve a activarlo cuando quieras en Ajustes › Git.",
           "localBaseRefUnshallow": "Obtener historial completo",
           "localBaseRefUnshallowFailed": "No se pudo abrir una terminal para este espacio de trabajo",
@@ -3428,7 +3430,7 @@
         "99c2755218": "Busca issues o escribe JQL, p. ej. project = ABC",
         "2ff9fd71fd": "Actualizar issues de Jira",
         "0b65d3fb2c": "Buscar proyectos de Linear...",
-        "eec0c5c079": "Buscar issues de Linear...",
+        "eec0c5c079": "Buscar...",
         "8964184a8b": "Actualizar Linear",
         "3feb524d42": "Nuevo issue de Linear",
         "0cbf7e5cf3": "Modo de tarea Linear",
@@ -13545,7 +13547,12 @@
             "rollbackStopIncomplete": "No se hizo: Orca no pudo confirmar que el servidor actual se cerró, así que no hizo la reversión. Revisa orcad.log en la carpeta de instalación del servidor, dentro de ~/.orca-remote en el host, antes de volver a intentarlo.",
             "failed": "Orca no pudo completar esto en el servidor. Inténtalo de nuevo.",
             "defaultServer": "No se hizo: este servidor es el host predeterminado para proyectos nuevos. Elige otro en «Los proyectos nuevos se abren en» antes de detenerlo.",
-            "wslMoveRunning": "No se hizo: un proyecto se está moviendo a este servidor. Orca lo actualizará cuando termine el traslado."
+            "wslMoveRunning": "No se hizo: un proyecto se está moviendo a este servidor. Orca lo actualizará cuando termine el traslado.",
+            "recoveryRequired": "No se hizo: una actualización o detención interrumpida bloquea este host. Usa «Recuperar» o «Cancelar detención» si Orca lo ofrece y vuelve a intentarlo.",
+            "snapshotSpace": "No se hizo: este host no tiene espacio para la copia que Orca hace antes de actualizar. Libera espacio en el host y vuelve a intentarlo.",
+            "policyRefused": "No se hizo: Orca no activará esta compilación en este host. Revisa el host y vuelve a actualizar, o actualiza Orca primero si una versión más reciente de Orca lo ejecutó por última vez.",
+            "hostNewer": "No se hizo: una versión más reciente de Orca ejecutó por última vez el servidor de este host. Actualiza Orca y vuelve a intentarlo.",
+            "preflightFailed": "No se hizo: el nuevo servidor de Orca no superó su comprobación de inicio en este host, así que Orca dejó el host como estaba."
           },
           "reassurance": "Se ejecuta en cada host y se accede a través de tu propia conexión SSH. Tu código y tus archivos se quedan donde están. Solo la lista de proyectos, pestañas y terminales de Orca pasa al host."
         },
@@ -14894,12 +14901,7 @@
             "keepFile": "Conservar archivo",
             "keepDeletion": "Mantener eliminación",
             "refreshAll": "Actualizar todo",
-            "rebaseConflictCount_one": "{{count}} conflicto",
-            "rebaseConflictCount_other": "{{count}} conflictos",
-            "rebaseConflictCount_many": "{{count}} conflictos",
-            "rebasePaused": "Rebase en pausa",
             "rebaseResolveConflictsFirst": "Resuelve primero los conflictos",
-            "rebaseAbort": "Abortar",
             "rebaseContinue": "Continuar",
             "continueRebasePausedAgain": "Rebase en pausa en el siguiente conflicto",
             "continueRebaseFailed": "Error al continuar el rebase",
@@ -14910,7 +14912,6 @@
             "rebaseStopMovedOn": "El rebase ya avanzó. Revisa el panel e inténtalo de nuevo.",
             "rebaseEmptyStep": "No hay nada que confirmar en este paso. Aborta el rebase o termínalo en una terminal.",
             "rebaseStepUnreadableShort": "Comprobación fallida",
-            "rebaseCheckAgain": "Comprobar de nuevo",
             "rebaseRetryInspect": "Reintentar",
             "rebaseRetryInspectLabel": "Volver a comprobar el paso del rebase",
             "rebaseStoppedFinishInTerminal": "Git pausó este paso. Termínalo en una terminal o aborta.",
@@ -14944,7 +14945,11 @@
             "scopeNoUncommitted": "No hay cambios sin confirmar.",
             "scopeCommitFiles": "Archivos",
             "gitGraphButton": "Grafo",
-            "compareLoadingAgainst": "Comparando con {{base}}"
+            "compareLoadingAgainst": "Comparando con {{base}}",
+            "operationResolve": "Resolver",
+            "operationResolveLabel": "Resolver conflictos con IA",
+            "operationMoreActions": "Más acciones",
+            "operationAbortConfirm": "Vuelve a seleccionar para abortar"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -15102,9 +15107,6 @@
                 "unresolvedCount_one": "{{count}} sin resolver",
                 "unresolvedCount_other": "{{count}} sin resolver",
                 "unresolvedCount_many": "{{count}} sin resolver",
-                "sendQueuedCommentsToAi_one": "Enviar {{count}} comentario en cola a la IA",
-                "sendQueuedCommentsToAi_other": "Enviar {{count}} comentarios en cola a la IA",
-                "sendQueuedCommentsToAi_many": "Enviar {{count}} comentarios en cola a la IA",
                 "conflictsBlockThisMr": "Los conflictos bloquean este MR",
                 "conflictsBlockThisPr": "Los conflictos bloquean este PR",
                 "copyComment": "Copiar comentario",
@@ -15573,15 +15575,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Fusionar conflictos",
-                    "7f3af87549": "Rebase de conflictos",
-                    "6a8e9ad490": "Conflictos selectos",
-                    "bdf8772106": "Conflictos",
-                    "edc2d82a2b": "Fusión en progreso",
-                    "5c3707aa44": "Rebase en progreso",
-                    "ffe53a1da6": "Selección en progreso",
-                    "35eb76d323": "Operación en curso",
-                    "completeMerge": "Completar fusión"
+                    "bdf8772106": "Conflictos"
                   }
                 }
               },
@@ -17159,10 +17153,6 @@
           "39b6b9e4e4": "Commits en la rama"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Enviado",
-          "84898c548d": "Borrar",
-          "88b70d0ef5": "Copiar",
-          "bb84b4c374": "Notas de IA",
           "948a5fd6c8": "Borrar notas",
           "0f806a2ab1": "Cancelar",
           "b6c3b84476": "Mostrar árbol de archivos",
@@ -17173,7 +17163,6 @@
           "820ec01f24": "Los archivos en conflicto se revisan por separado",
           "fd8892b120": "No hay cambios para mostrar",
           "eb5f40e49c": "Esta vista de diff excluye los conflictos sin resolver porque el pipeline normal de diff de dos vías no es seguro para conflictos.",
-          "45cf23b418": "No se pudieron borrar las notas.",
           "ec5053c7f5": "Lado a lado",
           "f786fd54e1": "En línea",
           "ea08dae15b": "Contraer todo",
@@ -17188,12 +17177,6 @@
           "noExtension": "(sin extensión)",
           "diffLoadTimedOut": "El diff no terminó de cargarse.",
           "diffLoadFailed": "No se pudo cargar el diff.",
-          "moreNotesInSourceControl_one": "{{count}} nota más en Control de código fuente",
-          "moreNotesInSourceControl_other": "{{count}} notas más en Control de código fuente",
-          "moreNotesInSourceControl_many": "{{count}} notas más en Control de código fuente",
-          "clearNotesConfirm_one": "¿Borrar {{count}} nota de este worktree?",
-          "clearNotesConfirm_other": "¿Borrar {{count}} notas de este worktree?",
-          "clearNotesConfirm_many": "¿Borrar {{count}} notas de este worktree?",
           "changedFilesVs_one": "{{count}} archivo modificado respecto a {{baseRef}}",
           "changedFilesVs_other": "{{count}} archivos modificados respecto a {{baseRef}}",
           "changedFilesVs_many": "{{count}} archivos modificados respecto a {{baseRef}}",
@@ -17203,10 +17186,6 @@
           "changedFiles_one": "{{count}} archivo modificado",
           "changedFiles_other": "{{count}} archivos modificados",
           "changedFiles_many": "{{count}} archivos modificados",
-          "showAiNotes_one": "Mostrar {{count}} nota de IA",
-          "showAiNotes_other": "Mostrar {{count}} notas de IA",
-          "showAiNotes_many": "Mostrar {{count}} notas de IA",
-          "send": "Enviar",
           "openDiff": "Abrir diff",
           "openInEditor": "Abrir en el editor",
           "skippedConflictsExcluded": "Se excluyeron {{count}} conflictos no resueltos de esta vista de diff."
@@ -17409,7 +17388,6 @@
           "b1bfc04034": "Texto seleccionado",
           "f37b98999e": "Esta nota",
           "2b2b31382c": "Front matter",
-          "bb629de58a": "Copiar notas para el agente",
           "322afab6ff": "Notas de revisión",
           "0f9969a159": "Saltar a la primera nota de revisión",
           "12052c639c": "Cerrar búsqueda",
@@ -17482,7 +17460,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Enviar notas",
-          "433928cd9f": "Enviar {{value0}} a un agente",
           "thisNote": "Esta nota",
           "noteAlreadySent": "Nota ya enviada",
           "sendNotesToAgent": "Enviar notas a un agente",
@@ -17568,8 +17545,6 @@
           "3ababd949d": "Notas de revisión"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Copiar notas para el agente",
-          "a807596997": "notas copiadas",
           "8aaf2c4c69": "Mostrar notas de revisión",
           "af02dc2456": "Ocultar notas de revisión"
         },
@@ -18480,8 +18455,6 @@
             "b472c5fe03": "Agregar anotación del navegador",
             "b5ba6085de": "Pregunta",
             "143204e423": "Cambiar",
-            "d51ef37351": "Copiar",
-            "6f4ab3592b": "Copiado",
             "168350ae6a": "Haz clic o pon el cursor sobre un elemento, luego presiona C para copiar o S para hacer una captura de pantalla.",
             "777b5bc4ec": "Haz clic en un elemento para agregar comentarios para el agente.",
             "b733a91bd9": "Agrega comentarios para el elemento seleccionado.",
@@ -18501,9 +18474,7 @@
             "09a9489aa5": "Mostrar",
             "2a4c4b8e1f": "Copiar",
             "b71dc3d930": "Reconectar",
-            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo.",
-            "11c5084aa2": "Borrar anotaciones",
-            "734e4343ec": "Borrar anotaciones del navegador"
+            "fileUrlUnsupported": "Esta pestaña del navegador no puede abrir archivos locales. Usa \"Abrir vista previa al lado\" en el archivo."
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancelar",
@@ -20235,7 +20206,10 @@
         "resumedMany_other": "Reanudados: {{count}} agentes",
         "needYou_one": "{{count}} te necesita",
         "needYou_many": "{{count}} te necesitan",
-        "needYou_other": "{{count}} te necesitan"
+        "needYou_other": "{{count}} te necesitan",
+        "resumedCount_one": "Reanudado: {{count}}",
+        "resumedCount_many": "Reanudados: {{count}}",
+        "resumedCount_other": "Reanudados: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "No se encontraron distribuciones WSL",
@@ -22256,7 +22230,9 @@
           "pending": "Conectando…",
           "tools_many": "{{count}} herramientas",
           "tools_one": "{{count}} herramienta",
-          "tools_other": "{{count}} herramientas"
+          "tools_other": "{{count}} herramientas",
+          "orcaRemoved": "Eliminado: se reinicia con el próximo mensaje",
+          "orcaChanged": "Cambiado: se reinicia con el próximo mensaje"
         },
         "signIn": {
           "external": "Completa el proceso en la página que se abrió",
@@ -22298,7 +22274,8 @@
           "user": "Usuario",
           "plugin": "Plugin",
           "session": "Sesión"
-        }
+        },
+        "stillFailing": "Sigue fallando tras reconectar."
       }
     },
     "tab": {
@@ -23854,6 +23831,31 @@
         "cancel": "Cancelar",
         "tryAgain": "Reintentar"
       }
+    },
+    "notes": {
+      "sendButton": {
+        "sendCommentsToAgent_one": "Enviar {{count}} comentario a un agente",
+        "sendNotes_many": "Enviar {{count}} notas",
+        "sendComments_many": "Enviar {{count}} comentarios",
+        "sendCommentsToAgent_other": "Enviar {{count}} comentarios a un agente",
+        "sendNotes_one": "Enviar {{count}} nota",
+        "clearPageNotes_one": "¿Borrar {{count}} nota de esta página?",
+        "sendShort": "Enviar {{count}}",
+        "clearNotes": "Borrar notas…",
+        "sendNotes_other": "Enviar {{count}} notas",
+        "sendNotesToAgent_many": "Enviar {{count}} notas a un agente",
+        "sendComments_one": "Enviar {{count}} comentario",
+        "copyNotes": "Copiar notas",
+        "sendComments_other": "Enviar {{count}} comentarios",
+        "clearPageNotes_many": "¿Borrar {{count}} notas de esta página?",
+        "sendCommentsToAgent_many": "Enviar {{count}} comentarios a un agente",
+        "sending": "Enviando…",
+        "sendNotesToAgent_one": "Enviar {{count}} nota a un agente",
+        "clearPageNotes_other": "¿Borrar {{count}} notas de esta página?",
+        "sendNotesToAgent_other": "Enviar {{count}} notas a un agente",
+        "sentNotesStillListed": "Notas enviadas, pero siguen en la lista.",
+        "removeSentNotes": "Quitar"
+      }
     }
   },
   "dashboardPopout": {
@@ -24037,10 +24039,11 @@
     },
     "clientHosted": {
       "preparationFailed": "No se pudo iniciar el navegador remoto en este escritorio. Comprueba la conexión emparejada y vuelve a intentarlo.",
-      "unavailableTitle": "Navegador alojado en el cliente no disponible",
-      "unavailableDescription": "Esta página no está disponible en este escritorio en este momento.",
-      "unavailableOtherDesktopDescription": "Esta página está abierta en otro escritorio.",
-      "unavailableHostOfflineDescription": "{{host}} está sin conexión. Esta página se volverá a cargar aquí cuando se reconecte.",
+      "runsOnServerTitle": "Esta pestaña se ejecuta en tu servidor",
+      "runsOnServerBody": "Ábrela allí para continuar.",
+      "details": "Detalles",
+      "noBrowserTitle": "No se puede abrir esta pestaña aquí",
+      "noBrowserBody": "Este servidor no tiene navegador.",
       "download": {
         "started": "Descargando {{filename}}…",
         "completed": "{{filename}} descargado",
@@ -24065,9 +24068,9 @@
       "reload": "Recargar"
     },
     "reopenOnServer": {
-      "action": "Reabrir en el servidor",
-      "pending": "Reabriendo…",
-      "caveat": "Esto abre una nueva página en el host remoto en la última dirección de esta página. El estado de sesión iniciada y otros estados transitorios pueden diferir, y una página que provenga del envío de un formulario se abrirá en blanco.",
+      "action": "Abrir en el servidor",
+      "pending": "Abriendo…",
+      "caveat": "Se abre en el servidor en la última dirección de esta página. El estado de inicio de sesión puede ser distinto.",
       "failed": "No se pudo abrir esta página en el host remoto. Comprueba la conexión y vuelve a intentarlo."
     },
     "deviceMove": {
@@ -25525,6 +25528,9 @@
         "planModelWithoutThinking": "El modelo «{{model}}» no admite un nivel de esfuerzo de razonamiento.",
         "planThinkingLevelInvalid": "El nivel de razonamiento «{{level}}» no es válido para {{model}}.",
         "openCodeInvalidEvents": "OpenCode devolvió eventos JSON no válidos.",
+        "antigravityInvalidEvents": "Antigravity devolvió eventos JSON no válidos.",
+        "antigravityInvalidResult": "Antigravity devolvió un resultado no válido.",
+        "antigravityNoFinalResult": "Antigravity no devolvió ningún resultado final.",
         "kimiUnreadableOutput": "Kimi devolvió una salida que Orca no pudo leer. Vuelve a intentarlo.",
         "kimiSessionOccupied": "Kimi no pudo usar esta sesión porque está activa en otro cliente. Detén la sesión allí o sal de ese cliente y vuelve a intentarlo.",
         "kimiInterrupted": "Kimi se interrumpió antes de terminar de generar texto. Vuelve a intentarlo.",
@@ -25721,7 +25727,9 @@
     "failed": "La búsqueda falló. Reintenta.",
     "filters": {
       "toggle": "Mostrar u ocultar detalles de búsqueda",
-      "active": "{{count}} activos"
+      "active": "{{count}} activos",
+      "includeSummary": "Incluir: {{patterns}}",
+      "excludeSummary": "Excluir: {{patterns}}"
     },
     "noResults": "No hay resultados. Prueba otra búsqueda o ajusta los filtros."
   },
@@ -26114,8 +26122,7 @@
         "failing": "fallando",
         "running": "en curso",
         "cancelled": "cancelado",
-        "passing": "superado",
-        "more": "+{{count}} más"
+        "passing": "superado"
       }
     },
     "attachments": {
@@ -27722,13 +27729,10 @@
     "loadFailed": "No se pudo cargar el historial de Git",
     "updateHost": "Actualiza Orca en {{host}} para abrir el grafo de Git",
     "title": "Grafo de Git",
-    "revertConflicts": "Conflictos de reversión",
-    "revertInProgress": "Reversión en curso",
     "abortOperationTitle": "¿Abortar {{operation}}?",
     "abortOperationDescription": "Esto cancela la operación en curso y puede descartar las resoluciones de conflictos realizadas durante ella.",
     "abortOperation": "Abortar {{operation}}",
     "recoveryFailed": "No se pudo finalizar la operación. Actualiza el control de código fuente e inténtalo de nuevo.",
-    "continueOperation": "Continuar {{operation}}",
     "reverting": "Revirtiendo",
     "updateActionsHost": "Actualiza Orca en {{host}} para realizar acciones sobre commits",
     "thisHost": "este host",
@@ -27888,15 +27892,11 @@
       "colorSlate": "Pizarra",
       "colorGraphite": "Grafito",
       "colorInk": "Tinta",
-      "noChatAgents": "No hay agentes de chat disponibles en este ordenador.",
-      "change": "Cambiar",
       "computer": "Ordenador",
-      "computerHint": "Dónde se ejecuta el bot.",
       "computerAccountHint": "Dónde se ejecuta el bot, con la sesión de Orca iniciada como {{account}}.",
       "useChatDefaults": "Usar los valores predeterminados del chat",
       "chatDefault": "Del chat",
       "agent": "Agente",
-      "folder": "Carpeta: {{path}}",
       "name": "Nombre",
       "validation": {
         "addName": "Añade un nombre",

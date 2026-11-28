@@ -111,6 +111,12 @@ export class OrchestrationReaderClient {
   dispose(): void {
     this.queue.dispose()
   }
+
+  /** Disposes and resolves once the thread, and the connection it holds, are gone. */
+  async close(): Promise<void> {
+    this.queue.dispose()
+    await this.queue.retired()
+  }
 }
 
 let shared: OrchestrationReaderClient | null = null
@@ -119,4 +125,12 @@ let shared: OrchestrationReaderClient | null = null
 export function orchestrationReader(): OrchestrationReaderClient {
   shared ??= new OrchestrationReaderClient()
   return shared
+}
+
+/** At quit, before the file is replaced: the thread's idle connection would otherwise keep it open. */
+export async function closeOrchestrationReader(): Promise<void> {
+  const client = shared
+  shared = null
+  // A thread that failed to retire may still hold the file; the swap then finds it busy.
+  await client?.close().catch(() => {})
 }

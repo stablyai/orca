@@ -8,7 +8,10 @@ import {
   isActiveSidebarWorkspace,
   type ActiveSidebarWorkspace
 } from '../../../../../../shared/sidebar-list/selection/active-workspace'
-import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
+import {
+  getRenderedWorkspaceRowsInSidebarOrder,
+  type RenderedWorkspaceRow
+} from './worktree-sidebar-row-preference'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   setVisibleWorktreeIds,
@@ -35,17 +38,22 @@ export function useSidebarWorktreeSelection(args: {
     () => getRenderedWorkspaceRowsInSidebarOrder(sectionRows, pinnedDisplayPolicy),
     [pinnedDisplayPolicy, sectionRows]
   )
-  const renderedWorktrees = useMemo(() => renderedRows.map((row) => row.worktree), [renderedRows])
-  const repoByWorktree = useMemo(
-    () => new Map(renderedRows.map((row) => [row.worktree, row.repo])),
-    [renderedRows]
-  )
-  const renderedWorktreeIds = useReusedArrayIdentity(
-    useMemo(
-      () => Array.from(new Set(renderedWorktrees.map((worktree) => worktree.id))),
-      [renderedWorktrees]
-    )
-  )
+  const { renderedWorktrees, repoByWorktree, uniqueWorktreeIds } = useMemo(() => {
+    const worktrees: Worktree[] = []
+    const repoMap = new Map<Worktree, RenderedWorkspaceRow['repo']>()
+    const seenIds = new Set<string>()
+    const ids: string[] = []
+    for (const row of renderedRows) {
+      worktrees.push(row.worktree)
+      repoMap.set(row.worktree, row.repo)
+      if (!seenIds.has(row.worktree.id)) {
+        seenIds.add(row.worktree.id)
+        ids.push(row.worktree.id)
+      }
+    }
+    return { renderedWorktrees: worktrees, repoByWorktree: repoMap, uniqueWorktreeIds: ids }
+  }, [renderedRows])
+  const renderedWorktreeIds = useReusedArrayIdentity(uniqueWorktreeIds)
   const selection = useListMultiSelection({
     items: renderedWorktrees,
     getKey: getWorktreeHostIdentity,
@@ -126,9 +134,12 @@ export function useSidebarWorktreeSelection(args: {
       }
     }
     setVisibleWorktreeIds(renderedWorktreeIds)
+    const hasLineageChips = chipKeysByIdentity.size > 0
     setVisibleWorktreeShortcutTargets(
       renderedWorktrees.map((worktree) => {
-        const lineageGroupKey = chipKeysByIdentity.get(getWorktreeHostIdentity(worktree))
+        const lineageGroupKey = hasLineageChips
+          ? chipKeysByIdentity.get(getWorktreeHostIdentity(worktree))
+          : undefined
         return {
           id: worktree.id,
           ...(worktree.hostId ? { executionHostId: worktree.hostId } : {}),

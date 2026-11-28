@@ -50,23 +50,14 @@ function UserOptionRow({ option }: { option: PickerOption }): React.JSX.Element 
   )
 }
 
-export function SectionMenu({
-  parsed,
-  kind,
-  reviewerActive,
-  reviewerKind,
-  onPick,
-  onClearAll
-}: {
-  parsed: ParsedTaskQuery
-  kind: 'prs' | 'issues'
-  reviewerActive: string | null
-  reviewerKind: 'requested' | 'reviewed-by'
-  onPick: (s: SectionKey) => void
-  onClearAll: (() => void) | null
-}): React.JSX.Element {
-  const t = useTranslate()
-  const rows: { key: SectionKey; label: string; value: string | null }[] = [
+export function buildSectionRows(
+  parsed: ParsedTaskQuery,
+  kind: 'prs' | 'issues',
+  reviewerActive: string | null,
+  reviewerKind: 'requested' | 'reviewed-by',
+  t: Translate
+): { key: SectionKey; label: string; value: string | null }[] {
+  return [
     {
       key: 'author',
       label: t('auto.components.github.PRFilterSections.24754c44ad', 'Author'),
@@ -95,6 +86,25 @@ export function SectionMenu({
       value: parsed.assignee
     }
   ]
+}
+
+export function SectionMenu({
+  parsed,
+  kind,
+  reviewerActive,
+  reviewerKind,
+  onPick,
+  onClearAll
+}: {
+  parsed: ParsedTaskQuery
+  kind: 'prs' | 'issues'
+  reviewerActive: string | null
+  reviewerKind: 'requested' | 'reviewed-by'
+  onPick: (s: SectionKey) => void
+  onClearAll: (() => void) | null
+}): React.JSX.Element {
+  const t = useTranslate()
+  const rows = buildSectionRows(parsed, kind, reviewerActive, reviewerKind, t)
   return (
     <div className="py-1 text-xs">
       <div className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
