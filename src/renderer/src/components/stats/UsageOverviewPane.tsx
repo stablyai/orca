@@ -58,46 +58,63 @@ export function UsageOverviewPane(): React.JSX.Element {
   const observeCodexUsage = useAppStore((state) => state.observeCodexUsage)
   const observeOpenCodeUsage = useAppStore((state) => state.observeOpenCodeUsage)
   const observeMuseUsage = useAppStore((state) => state.observeMuseUsage)
+  const zcodeFailure = useAppStore((state) => state.zcodeUsageFailure)
+  const zcodeScanState = useAppStore((state) => state.zcodeUsageScanState)
+  const zcodeSummary = useAppStore((state) => state.zcodeUsageSummary)
+  const zcodeDaily = useAppStore((state) => state.zcodeUsageDaily)
+  const observeZcodeUsage = useAppStore((state) => state.observeZcodeUsage)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
   const refreshMuseUsage = useAppStore((state) => state.refreshMuseUsage)
+  const refreshZcodeUsage = useAppStore((state) => state.refreshZcodeUsage)
   const enableClaudeUsage = useAppStore((state) => state.enableClaudeUsage)
   const enableCodexUsage = useAppStore((state) => state.enableCodexUsage)
   const enableOpenCodeUsage = useAppStore((state) => state.enableOpenCodeUsage)
   const enableMuseUsage = useAppStore((state) => state.enableMuseUsage)
+  const enableZcodeUsage = useAppStore((state) => state.enableZcodeUsage)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useUsageObservation(observeClaudeUsage)
   useUsageObservation(observeCodexUsage)
   useUsageObservation(observeOpenCodeUsage)
   useUsageObservation(observeMuseUsage)
+  useUsageObservation(observeZcodeUsage)
 
   const overview = useMemo(
     () =>
-      buildUsageOverview({
-        claude: {
-          scanState: claudeScanState,
-          summary: claudeSummary,
-          daily: claudeDaily
+      buildUsageOverview(
+        {
+          claude: {
+            scanState: claudeScanState,
+            summary: claudeSummary,
+            daily: claudeDaily
+          },
+          codex: {
+            scanState: codexScanState,
+            summary: codexSummary,
+            daily: codexDaily
+          },
+          opencode: {
+            scanState: openCodeScanState,
+            summary: openCodeSummary,
+            daily: openCodeDaily
+          },
+          muse: {
+            scanState: museScanState,
+            summary: museSummary,
+            daily: museDaily
+          },
+          zcode: {
+            scanState: zcodeScanState,
+            summary: zcodeSummary,
+            daily: zcodeDaily
+          }
         },
-        codex: {
-          scanState: codexScanState,
-          summary: codexSummary,
-          daily: codexDaily
-        },
-        opencode: {
-          scanState: openCodeScanState,
-          summary: openCodeSummary,
-          daily: openCodeDaily
-        },
-        muse: {
-          scanState: museScanState,
-          summary: museSummary,
-          daily: museDaily
-        }
-      }),
+        t
+      ),
     [
+      t,
       claudeDaily,
       claudeScanState,
       claudeSummary,
@@ -109,7 +126,10 @@ export function UsageOverviewPane(): React.JSX.Element {
       museSummary,
       openCodeDaily,
       openCodeScanState,
-      openCodeSummary
+      openCodeSummary,
+      zcodeDaily,
+      zcodeScanState,
+      zcodeSummary
     ]
   )
   const recentDays = useMemo(
@@ -122,7 +142,8 @@ export function UsageOverviewPane(): React.JSX.Element {
     { name: 'Claude', message: usageFailureMessage(claudeFailure, t) },
     { name: 'Codex', message: usageFailureMessage(codexFailure, t) },
     { name: 'OpenCode', message: usageFailureMessage(openCodeFailure, t) },
-    { name: 'Muse', message: usageFailureMessage(museFailure, t) }
+    { name: 'Muse', message: usageFailureMessage(museFailure, t) },
+    { name: 'ZCode', message: usageFailureMessage(zcodeFailure, t) }
   ]
   const failureGroups = new Map<string, string[]>()
   for (const { name, message } of failures) {
@@ -134,7 +155,8 @@ export function UsageOverviewPane(): React.JSX.Element {
     claude: claudeScanState,
     codex: codexScanState,
     opencode: openCodeScanState,
-    muse: museScanState
+    muse: museScanState,
+    zcode: zcodeScanState
   }
   const allProvidersKnown = Object.values(knownProviders).every(Boolean)
   const canRefresh =
@@ -155,6 +177,9 @@ export function UsageOverviewPane(): React.JSX.Element {
         : Promise.resolve(),
       museScanState?.enabled || museFailure || !museScanState
         ? refreshMuseUsage()
+        : Promise.resolve(),
+      zcodeScanState?.enabled || zcodeFailure || !zcodeScanState
+        ? refreshZcodeUsage()
         : Promise.resolve()
     ])
   }
@@ -261,6 +286,16 @@ export function UsageOverviewPane(): React.JSX.Element {
                 >
                   {t('auto.components.stats.UsageOverviewPane.enableMuse', 'Enable Muse')}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    recordFeatureInteraction('usage-tracking')
+                    void enableZcodeUsage()
+                  }}
+                >
+                  {t('auto.components.stats.UsageOverviewPane.enableZcode', 'Enable ZCode')}
+                </Button>
               </div>
             </div>
           </div>
@@ -293,7 +328,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
                 {t(
                   'auto.components.stats.UsageOverviewPane.noLocalUsageYet',
-                  'No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.'
+                  'No local Claude, Codex, OpenCode, Muse, or ZCode usage found yet. The overview will populate after the next agent session writes token logs.'
                 )}
               </div>
             ) : overview.hasAnyData ? (
@@ -346,8 +381,10 @@ export function UsageOverviewPane(): React.JSX.Element {
                   void enableCodexUsage()
                 } else if (provider.id === 'opencode') {
                   void enableOpenCodeUsage()
-                } else {
+                } else if (provider.id === 'muse') {
                   void enableMuseUsage()
+                } else {
+                  void enableZcodeUsage()
                 }
               }}
             />

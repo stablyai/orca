@@ -188,7 +188,6 @@
 6 src/main/claude-accounts/sign-in/claude-account-folder.ts
 2 src/main/claude-accounts/sign-in/claude-account-registration.ts
 7 src/main/claude-accounts/sign-in/claude-command-process.ts
-2 src/main/claude-usage/store.ts
 2 src/main/claude-usage/transcript-file-discovery.ts
 13 src/main/claude/agent-view/agent-view-install.ts
 2 src/main/claude/agent-view/agent-view-plugin.ts
@@ -258,8 +257,6 @@
 1 src/main/codex-accounts/runtime-home/wsl/wsl-codex-auth-batch-reader.ts
 2 src/main/codex-accounts/service.ts
 10 src/main/codex-cli/command.ts
-1 src/main/codex-usage/codex-usage-provider.ts
-1 src/main/codex-usage/store.ts
 1 src/main/codex/app-server/codex-app-server-connection.ts
 2 src/main/codex/app-server/codex-app-server-session.ts
 1 src/main/codex/app-server/shared-servers/codex-shared-server-windows-job.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
@@ -762,8 +759,6 @@
 1 src/main/media/media-preview-protocol.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
 13 src/main/mimo/hook-service.ts
-1 src/main/muse-usage/muse-usage-provider.ts
-1 src/main/muse-usage/store.ts
 8 src/main/muse/hook-service.ts
 5 src/main/native-chat/agent-launch/structured-agent-command-resolution.ts
 1 src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts
@@ -811,8 +806,6 @@
 4 src/main/observability/index.ts
 4 src/main/observability/local-file-sink.ts
 2 src/main/omp/omp-transcript-import.ts
-1 src/main/opencode-usage/opencode-usage-provider.ts
-1 src/main/opencode-usage/store.ts
 1 src/main/opencode/acp/opencode-acp-connection.ts
 1 src/main/opencode/model-launch/opencode-launch-capabilities.ts
 1 src/main/opencode/model-launch/opencode-launch-model-context.ts
@@ -1420,7 +1413,6 @@
 8 src/main/updater/serve-update-handoff.ts
 1 src/main/updater/update-install-exit-watchdog.ts
 3 src/main/updater/updater-events.ts
-6 src/main/usage/scan-worker/usage-scan-worker-spawn.ts
 1 src/main/warp-themes/auto-discovered-theme-files.ts
 6 src/main/warp-themes/discovery.ts
 1 src/main/warp-themes/index.ts

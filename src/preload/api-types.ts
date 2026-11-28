@@ -15,7 +15,8 @@ import type {
   CodexUsageApi,
   MuseUsageApi,
   OpenCodeUsageApi,
-  RateLimitsApi
+  RateLimitsApi,
+  ZcodeUsageApi
 } from './api/agent-usage/agent-usage-api'
 import type { AiVaultApi } from './api/ai-vault/ai-vault-api'
 import type { AppApi, E2EApi, PlatformApi } from './api/app-api'
@@ -169,6 +170,7 @@ export type PreloadApi = {
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
   museUsage: MuseUsageApi
+  zcodeUsage: ZcodeUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']

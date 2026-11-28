@@ -4,6 +4,7 @@ import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
+import { ZcodeUsageStore } from '../zcode-usage/store'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import { stopUsageScanWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import type { UsageProviderKey } from '../../shared/backend/backend-service-contract'
@@ -84,7 +85,8 @@ export function createUsageService(host: UsageStoreHost) {
     claudeUsage: new ClaudeUsageStore(host),
     codexUsage: new CodexUsageStore(host),
     openCodeUsage: new OpenCodeUsageStore(host),
-    museUsage: new MuseUsageStore(host)
+    museUsage: new MuseUsageStore(host),
+    zcodeUsage: new ZcodeUsageStore(host)
   }
   const all = Object.values(stores)
   const handlers = new Map<string, Handler>()
@@ -92,6 +94,7 @@ export function createUsageService(host: UsageStoreHost) {
   registerUsageQueries(handlers, 'codexUsage', stores.codexUsage)
   registerUsageQueries(handlers, 'openCodeUsage', stores.openCodeUsage)
   registerUsageQueries(handlers, 'museUsage', stores.museUsage)
+  registerUsageQueries(handlers, 'zcodeUsage', stores.zcodeUsage)
   let accepting = true
   const active = new Set<Promise<unknown>>()
   const stop = async (): Promise<void> => {

@@ -98,6 +98,7 @@ import { e2eApi } from './api/diagnostics/e2e-bridge'
 import { mobileApi } from './api/mobile/mobile-bridge'
 import { agentStatusApi } from './api/agent-status/agent-status-bridge'
 import { speechApi } from './api/speech/speech-bridge'
+import { zcodeUsageApi } from './api/agent-usage/zcode-usage-bridge'
 
 installBrowserFindListener()
 
@@ -195,6 +196,7 @@ const api = {
   codexUsage: codexUsageApi,
   openCodeUsage: openCodeUsageApi,
   museUsage: museUsageApi,
+  zcodeUsage: zcodeUsageApi,
   aiVault: aiVaultApi,
   nativeChat: nativeChatApi,
   runtime: runtimeApi,

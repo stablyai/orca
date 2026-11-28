@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
@@ -10,6 +9,8 @@ import type { CodexUsageDailyAggregate, CodexUsageSession } from '../../codex-us
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../../muse-usage/types'
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
+
+import type { ZcodeUsageDailyAggregate, ZcodeUsageSession } from '../../zcode-usage/types'
 import type {
   UsageCacheSplitRequest,
   UsageCacheSplitResult,
@@ -20,6 +21,7 @@ import {
   scanCodexUsageOnWorker,
   scanMuseUsageOnWorker,
   scanOpenCodeUsageOnWorker,
+  scanZcodeUsageOnWorker,
   UsageScanWorkerClient
 } from './usage-scan-worker-client'
 
@@ -32,10 +34,6 @@ function defaultWorkerFactory(): Worker {
     currentWorkerEntryLayout(__dirname),
     USAGE_SCAN_WORKER_ENTRY_FILENAME
   )
-  // Reject missing entries synchronously; never await a worker that cannot become ready.
-  if (!existsSync(workerPath)) {
-    throw new Error(`Usage scan worker entry not found: ${workerPath}`)
-  }
   return spawnWorkerThread(workerPath, { name: 'orca-usage-scan' })
 }
 
@@ -90,6 +88,16 @@ export function scanMuseUsageFilesViaWorker(
   dailyAggregates: MuseUsageDailyAggregate[]
 }> {
   return scanMuseUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
+}
+
+export function scanZcodeUsageDatabasesViaWorker(
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef
+): Promise<{
+  sessions: ZcodeUsageSession[]
+  dailyAggregates: ZcodeUsageDailyAggregate[]
+}> {
+  return scanZcodeUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
 }
 
 /** Split source records on the worker; return only report JSON and whether migration occurred. */

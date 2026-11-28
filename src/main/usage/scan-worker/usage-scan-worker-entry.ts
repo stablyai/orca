@@ -14,6 +14,10 @@ import {
 import type { CodexUsagePersistedFile } from '../../codex-usage/types'
 import type { OpenCodeUsagePersistedDatabase } from '../../opencode-usage/types'
 import type { MuseUsagePersistedFile } from '../../muse-usage/types'
+
+import { scanZcodeUsageDatabases } from '../../zcode-usage/scanner'
+import { normalizeZcodeUsagePersistedDatabases } from '../../zcode-usage/persisted-database-normalization'
+import type { ZcodeUsagePersistedDatabase } from '../../zcode-usage/types'
 import type {
   UsageScanWorkerProgress,
   UsageScanWorkerRequest,
@@ -144,6 +148,22 @@ async function runScan(
       return {
         operation: 'scan',
         providerId: 'muse',
+        sessions: result.sessions,
+        dailyAggregates: result.dailyAggregates
+      }
+    }
+    case 'zcode': {
+      const result = await scanZcodeUsageDatabases(
+        request.worktrees,
+        normalizeZcodeUsagePersistedDatabases(
+          await readUsageSourceCache<ZcodeUsagePersistedDatabase>(request.sourceCache)
+        ),
+        onFilesScanned
+      )
+      await persistSourceCache(request.sourceCache, result.processedDatabases)
+      return {
+        operation: 'scan',
+        providerId: 'zcode',
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }

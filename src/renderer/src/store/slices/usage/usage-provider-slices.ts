@@ -6,14 +6,16 @@ import type {
   ClaudeUsageTypes,
   CodexUsageTypes,
   OpenCodeUsageTypes,
-  MuseUsageTypes
+  MuseUsageTypes,
+  ZcodeUsageTypes
 } from './usage-provider-slice-contract'
 
 export type {
   ClaudeUsageSlice,
   CodexUsageSlice,
   OpenCodeUsageSlice,
-  MuseUsageSlice
+  MuseUsageSlice,
+  ZcodeUsageSlice
 } from './usage-provider-slice-contract'
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
@@ -64,7 +66,7 @@ export const createMuseUsageSlice = createUsageProviderSlice<'muse', 'Muse', Mus
 export function clearUsageProviderData(): Partial<AppState> {
   return Object.assign(
     {},
-    ...(['claude', 'codex', 'openCode', 'muse'] as const).map((prefix) =>
+    ...(['claude', 'codex', 'openCode', 'muse', 'zcode'] as const).map((prefix) =>
       createUsagePatch(prefix, {
         failure: null,
         scanState: null,
@@ -77,3 +79,12 @@ export function clearUsageProviderData(): Partial<AppState> {
     )
   )
 }
+
+export const createZcodeUsageSlice = createUsageProviderSlice<'zcode', 'Zcode', ZcodeUsageTypes>({
+  prefix: 'zcode',
+  name: 'Zcode',
+  initialScope: 'orca',
+  initialRange: '30d',
+  getApi: (host) => usageApiForHost(host, 'zcodeUsage'),
+  hasCachedData: (state) => state.hasAnyZcodeData
+})

@@ -100,3 +100,15 @@ export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsag
 export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageTypes>
 export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageTypes>
 export type MuseUsageSlice = ProviderUsageSlice<'muse', 'Muse', MuseUsageTypes>
+
+export type ZcodeUsageTypes = UsageProviderTypes<
+  ZcodeUsageScope,
+  ZcodeUsageRange,
+  ZcodeUsageSnapshot
+>
+export type ZcodeUsageSlice = ProviderUsageSlice<'zcode', 'Zcode', ZcodeUsageTypes>
+import type {
+  ZcodeUsageScope,
+  ZcodeUsageRange,
+  ZcodeUsageSnapshot
+} from '../../../../../shared/zcode-usage-types'

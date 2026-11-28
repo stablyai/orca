@@ -160,3 +160,36 @@ export function createMuseProvider(
     activeDays: countActiveDays(dailyActiveDays)
   }
 }
+
+export function createZcodeProvider(
+  input: UsageOverviewInput['zcode'],
+  t: Translate = translate
+): UsageProviderOverview {
+  const summary = input.summary
+  const dailyActiveDays = input.daily
+    .filter((entry) => entry.totalTokens > 0)
+    .map((entry) => entry.day)
+  return {
+    id: 'zcode',
+    label: t('auto.lib.agent.catalog.zcode_label', 'ZCode'),
+    enabled: input.scanState?.enabled ?? false,
+    isScanning: input.scanState?.isScanning ?? false,
+    hasData: summary?.hasAnyZcodeData ?? input.scanState?.hasAnyZcodeData ?? false,
+    lastScanCompletedAt: input.scanState?.lastScanCompletedAt ?? null,
+    lastScanError: input.scanState?.lastScanError ?? null,
+    sessions: summary?.sessions ?? 0,
+    activityLabel: 'events',
+    activityCount: summary?.events ?? 0,
+    totalTokens: summary?.totalTokens ?? 0,
+    newInputTokens: Math.max((summary?.inputTokens ?? 0) - (summary?.cachedInputTokens ?? 0), 0),
+    outputTokens: summary?.outputTokens ?? 0,
+    cacheTokens: summary?.cachedInputTokens ?? 0,
+    reasoningTokens: summary?.reasoningOutputTokens ?? 0,
+    // The ZCode usage database carries no price.
+    estimatedCostUsd: null,
+    hasPartialCost: false,
+    topModel: summary?.topModel ?? null,
+    topProject: summary?.topProject ?? null,
+    activeDays: countActiveDays(dailyActiveDays)
+  }
+}

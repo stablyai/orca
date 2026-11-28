@@ -23,6 +23,7 @@ import {
   createClaudeUsageSlice,
   createCodexUsageSlice,
   createMuseUsageSlice,
+  createZcodeUsageSlice,
   createOpenCodeUsageSlice
 } from '../slices/usage/usage-provider-slices'
 import { createBrowserSlice } from '../slices/browser/create-browser-slice'
@@ -97,6 +98,7 @@ export function createTestStore(
         ...createCodexUsageSlice(...a),
         ...createOpenCodeUsageSlice(...a),
         ...createMuseUsageSlice(...a),
+        ...createZcodeUsageSlice(...a),
         ...createBrowserSlice(...a),
         ...createRateLimitSlice(...a),
         ...createSshSlice(...a),
