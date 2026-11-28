@@ -661,3 +661,20 @@ it('taking a hand-off back also takes a line break the message box put after its
   takeOutNativeChatNotesHandOff(SCOPE, { ids: ['marked'], text: NOTES_TEXT }, 'please check')
   expect(draft()).toEqual({ text: 'please check', ids: [] })
 })
+
+it('the notes line and its Undo stay when the message box writes back its words with a line break at the end', async () => {
+  updateNativeChatComposerDraft(SCOPE, { text: 'please check' }, 'immediate')
+  const { opener } = chat()
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  act(() => {
+    const { text } = readNativeChatComposerDraft(SCOPE)
+    updateNativeChatComposerDraft(SCOPE, { text: `${text}\n` }, 'immediate')
+  })
+  expect(line.result.current?.action?.label).toBe('Undo')
+  act(() => line.result.current?.action?.onClick())
+  expect(draft()).toEqual({ text: 'please check', ids: [] })
+})

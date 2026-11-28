@@ -296,12 +296,13 @@ export function afterComposerRender(): Promise<void> {
   )
 }
 
-// The same message: exactly the same words (line breaks too) and images (a filled placeholder
-// keeps its id but not its path). The editor's document isn't compared: the message box rewrites
-// it as it adopts a draft (NativeChatPromptEditor's onTransaction) without anyone typing, and
-// Undo takes out only the hand-off's own additions, so a document-only change survives it.
+// The same message: the same words (a line break typed anywhere in them too) and images (a filled
+// placeholder keeps its id but not its path). Not compared: whitespace at the very end, and the
+// editor's document. The message box rewrites both as it adopts a draft (NativeChatPromptEditor's
+// onTransaction writes back promptText and its own document) without anyone typing, and Undo takes
+// out only the hand-off's own additions, so such a change survives it.
 const sameDraft = (a: NativeChatComposerDraft, b: NativeChatComposerDraft): boolean =>
-  a.text === b.text && sameNativeChatComposerDraftImages(a.images, b.images)
+  a.text.trimEnd() === b.text.trimEnd() && sameNativeChatComposerDraftImages(a.images, b.images)
 
 /** "N notes added to your message" in the message box. Its Undo takes out exactly what the
  *  hand-off added (its marked images and its notes text) and nothing else. It is offered only when
