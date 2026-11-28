@@ -9412,8 +9412,11 @@
           "restarting": "Reiniciando…",
           "updated": "Atualizado",
           "failed": "Falha na atualização",
-          "serviceManagerHelp": "Atualize o Orca no host do servidor — através do gerenciador de pacotes do sistema se foi instalado de um .deb ou .rpm, ou através do gerenciador de serviços que o inicia.",
-          "unpackedHelp": "Builds de desenvolvimento precisam ser atualizadas a partir do seu checkout de origem.",
+          "nodeServerHelp": "As atualizações remotas estão desativadas: este servidor executa o Orca sem o atualizador integrado, como faz o servidor Node do Orca (orcad). Instale a versão mais nova do Orca no servidor e reinicie o orca serve.",
+          "updaterNotStartedHelp": "As atualizações remotas estão desativadas: o Orca neste servidor não iniciou o atualizador. Reinicie o Orca no servidor e verifique novamente, ou atualize-o lá.",
+          "headlessServeHelp": "As atualizações remotas estão desativadas: este servidor executa orca serve sem um supervisor de atualização, então não consegue reiniciar em uma nova versão. Atualize o Orca no servidor e reinicie o serviço.",
+          "systemPackageHelp": "As atualizações remotas estão desativadas: o Orca neste servidor foi instalado por um pacote do sistema ou outro instalador que precisa atualizá-lo. Atualize-o da mesma forma que foi instalado, por exemplo com apt ou dnf para um .deb ou .rpm.",
+          "devBuildHelp": "As atualizações remotas estão desativadas: este servidor executa uma versão de desenvolvimento. Atualize-a a partir do checkout do código-fonte.",
           "legacyHelp": "Atualize este servidor manualmente uma vez para habilitar atualizações remotas.",
           "managedOverSshHelp": "Este desktop atualiza este servidor por SSH. Use Atualizar na linha dele em Servidores remotos do Orca."
         },
@@ -26099,6 +26102,7 @@
       "errors": {
         "ownerSilent": "O dispositivo que iniciou este login parou de responder.",
         "superseded": "Uma alteração de conta neste host interrompeu o login. Inicie novamente.",
+        "noPrompt": "O comando de login do servidor não mostrou um link de login em um minuto. Atualize o Orca no servidor e tente novamente.",
         "failed": "Falha no login. Tente novamente."
       }
     },
