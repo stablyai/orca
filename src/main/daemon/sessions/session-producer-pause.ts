@@ -4,7 +4,7 @@ import {
   isTerminalPointerReportOnly
 } from '../../../shared/terminal/input/terminal-untyped-input'
 
-/** 'input' when typed input shortened the watchdog, so the stall owner can tell the two apart. */
+/** 'input': typed input waited 2 s behind the pause; 'timeout': the 60 s no-progress deadline passed. */
 export type StreamStallReason = 'input' | 'timeout'
 
 // A dropped resume notification must not wedge a shell; a still-flooded client can pause it again.
@@ -12,7 +12,7 @@ export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
 
 // Bound half-open consumer stalls; shed backlog before resuming the live producer.
 export const STREAM_BACKPRESSURE_STALL_WATCHDOG_MS = 60_000
-// Typed input behind a paused stream must reach the program soon; the input watchdog only resumes, never sheds.
+// Typed input behind a paused stream asks the stall owner to resume within 2 s; it never moves the 60 s deadline.
 export const STREAM_STALL_WITH_INPUT_WATCHDOG_MS = 2_000
 
 export class SessionProducerPause {
@@ -20,8 +20,7 @@ export class SessionProducerPause {
   private streamBackpressured = false
   private failsafeTimer: ReturnType<typeof setTimeout> | null = null
   private streamStallTimer: ReturnType<typeof setTimeout> | null = null
-  private streamStallDeadline = 0
-  private streamStallReason: StreamStallReason = 'timeout'
+  private inputStallTimer: ReturnType<typeof setTimeout> | null = null
   private onStreamStall: ((reason: StreamStallReason) => void) | null = null
 
   constructor(private readonly subprocess: Pick<SubprocessHandle, 'pause' | 'resume'>) {}
@@ -34,7 +33,8 @@ export class SessionProducerPause {
   ): boolean {
     if (source === 'stream') {
       if (canPauseStream) {
-        this.onStreamStall = onStreamStall ?? null
+        // A repeated pause without a handler keeps the armed watchdog's handler.
+        this.onStreamStall = onStreamStall ?? this.onStreamStall
         this.setStreamBackpressured(true)
       }
       return canPauseStream
@@ -109,42 +109,43 @@ export class SessionProducerPause {
     }
   }
 
-  /** Typed input while stream-paused shortens the stall watchdog; replies and pointer reports don't, and it never lengthens. */
+  /** Typed input while stream-paused asks the stall owner to resume in 2 s; replies and pointer reports don't. */
   noteInput(data: string): void {
     if (
-      this.streamStallTimer &&
-      this.streamStallDeadline - Date.now() > STREAM_STALL_WITH_INPUT_WATCHDOG_MS &&
-      !isUntypedTerminalInput(data) &&
-      !isTerminalPointerReportOnly(data)
+      !this.streamStallTimer ||
+      this.inputStallTimer ||
+      isUntypedTerminalInput(data) ||
+      isTerminalPointerReportOnly(data)
     ) {
-      clearTimeout(this.streamStallTimer)
-      this.armStreamStallWatchdog(STREAM_STALL_WITH_INPUT_WATCHDOG_MS, 'input')
-    }
-  }
-
-  private armStreamStallWatchdog(
-    delayMs = STREAM_BACKPRESSURE_STALL_WATCHDOG_MS,
-    reason: StreamStallReason = 'timeout'
-  ): void {
-    const onStreamStall = this.onStreamStall
-    if (!onStreamStall) {
       return
     }
-    this.streamStallDeadline = Date.now() + delayMs
-    this.streamStallReason = reason
+    this.inputStallTimer = setTimeout(() => {
+      this.inputStallTimer = null
+      // The owner resumes only a draining consumer; the 60 s deadline keeps running either way.
+      this.onStreamStall?.('input')
+    }, STREAM_STALL_WITH_INPUT_WATCHDOG_MS)
+  }
+
+  private armStreamStallWatchdog(): void {
+    if (!this.onStreamStall) {
+      return
+    }
     this.streamStallTimer = setTimeout(() => {
       this.streamStallTimer = null
       // Shed backlog before resuming; losing the consumer does not imply child exit.
-      onStreamStall(this.streamStallReason)
+      this.onStreamStall?.('timeout')
       this.setStreamBackpressured(false)
-    }, delayMs)
+    }, STREAM_BACKPRESSURE_STALL_WATCHDOG_MS)
   }
 
   private clearStreamStallWatchdog(): void {
-    if (this.streamStallTimer) {
-      clearTimeout(this.streamStallTimer)
-      this.streamStallTimer = null
+    for (const timer of [this.streamStallTimer, this.inputStallTimer]) {
+      if (timer) {
+        clearTimeout(timer)
+      }
     }
+    this.streamStallTimer = null
+    this.inputStallTimer = null
     this.onStreamStall = null
   }
 }

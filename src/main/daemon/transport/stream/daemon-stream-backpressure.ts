@@ -1,5 +1,6 @@
 import type { Socket } from 'node:net'
 import { STREAM_ENTRY_OVERHEAD_BYTES } from './daemon-stream-entry-accounting'
+import { LongPauseLogLimiter } from '../../../../shared/terminal/pty/flow-control/long-pause-log-limiter'
 
 // Each session pauses on its own backlog so a flooding sibling cannot queue ahead of an interactive one.
 // Worst case held per session is SESSION_HIGH_WATER_BYTES plus one PTY read.
@@ -10,10 +11,8 @@ const HIGH_WATER_BYTES = 4 * 1024 * 1024
 const LOW_WATER_BYTES = 1024 * 1024
 const PRESSURED_SESSION_HIGH_WATER_BYTES = 64 * 1024
 const PRESSURED_SESSION_LOW_WATER_BYTES = 32 * 1024
-// The 60 s watchdog sheds backlog only when its client completed no socket write this recently.
+// A stalled session resumes without shedding only when its client completed a socket write this recently.
 const DELIVERY_PROGRESS_WINDOW_MS = 10_000
-const LONG_PAUSE_LOG_MS = 2_000
-const LONG_PAUSE_LOG_INTERVAL_MS = 10_000
 
 type StallReason = 'input' | 'timeout'
 
@@ -21,7 +20,6 @@ type ClientBacklog = {
   queuedChars: Map<string, number>
   queuedMetadataBytes: Map<string, number>
   pendingWriteBytes: Map<string, number>
-  lastProgressAt: number
 }
 
 /** Counts held strings and socket writes together, including small writes that bypass the hold. */
@@ -33,8 +31,9 @@ export class DaemonStreamBackpressure {
   // Keep-tail dropping bounds stalled consumers; pausing again would freeze the shell behind them.
   private readonly stallReleasedSessions = new Set<string>()
   private pressured = false
-  private lastLongPauseLogAt = 0
-  private suppressedLongPauseLogs = 0
+  // Only real socket write completions count; kept apart from pruned backlogs so recreation never looks like progress.
+  private readonly lastWriteCompletedAtByClient = new Map<string, number>()
+  private readonly longPauseLog = new LongPauseLogLimiter()
 
   constructor(
     private readonly setPaused: (
@@ -77,7 +76,7 @@ export class DaemonStreamBackpressure {
     socket.write(line, () => {
       // A disconnected client's callbacks must not debit a replacement connection's writes.
       if (this.clients.get(clientId) === client) {
-        client.lastProgressAt = Date.now()
+        this.lastWriteCompletedAtByClient.set(clientId, Date.now())
         const remaining = (client.pendingWriteBytes.get(sessionId) ?? 0) - bytes
         if (remaining > 0) {
           client.pendingWriteBytes.set(sessionId, remaining)
@@ -160,9 +159,8 @@ export class DaemonStreamBackpressure {
   }
 
   private onStall(sessionId: string, reason: StallReason): void {
-    // Typed input never sheds output; a slow but draining consumer keeps lossless delivery.
-    if (reason === 'input' || this.deliveryProgressed(sessionId)) {
-      // Resume so the program can read input; the next refresh re-pauses with a fresh watchdog.
+    if (this.deliveryProgressed(sessionId)) {
+      // A draining consumer resumes losslessly so the program can read input; the next refresh re-pauses.
       if (this.pausedAtBySession.has(sessionId)) {
         this.resume(
           sessionId,
@@ -171,15 +169,18 @@ export class DaemonStreamBackpressure {
       }
       return
     }
-    this.releaseStalledSession(sessionId)
+    // Typed input never sheds; a stalled consumer waits for the unchanged 60 s deadline.
+    if (reason === 'timeout') {
+      this.releaseStalledSession(sessionId)
+    }
   }
 
   private deliveryProgressed(sessionId: string): boolean {
     const now = Date.now()
-    for (const [clientId, client] of this.clients) {
+    for (const [clientId, completedAt] of this.lastWriteCompletedAtByClient) {
       if (
         this.ownsSession(clientId, sessionId) &&
-        now - client.lastProgressAt < DELIVERY_PROGRESS_WINDOW_MS
+        now - completedAt < DELIVERY_PROGRESS_WINDOW_MS
       ) {
         return true
       }
@@ -204,9 +205,11 @@ export class DaemonStreamBackpressure {
   clear(clientId?: string): void {
     if (clientId === undefined) {
       this.clients.clear()
+      this.lastWriteCompletedAtByClient.clear()
       this.stallReleasedSessions.clear()
     } else {
       this.clients.delete(clientId)
+      this.lastWriteCompletedAtByClient.delete(clientId)
     }
     this.refresh()
   }
@@ -216,20 +219,10 @@ export class DaemonStreamBackpressure {
     this.pausedAtBySession.delete(sessionId)
     this.setPaused(sessionId, false)
     const pausedMs = pausedAt === undefined ? 0 : Date.now() - pausedAt
-    if (reason !== 'drained' || pausedMs >= LONG_PAUSE_LOG_MS) {
-      this.logLongPause(sessionId, pausedMs, reason)
-    }
-  }
-
-  private logLongPause(sessionId: string, pausedMs: number, reason: string): void {
-    const now = Date.now()
-    if (now - this.lastLongPauseLogAt < LONG_PAUSE_LOG_INTERVAL_MS) {
-      this.suppressedLongPauseLogs += 1
+    const suppressed = this.longPauseLog.admit(pausedMs, reason.startsWith('timeout'))
+    if (suppressed === null) {
       return
     }
-    const suppressed = this.suppressedLongPauseLogs
-    this.lastLongPauseLogAt = now
-    this.suppressedLongPauseLogs = 0
     this.reportLongPause({
       sessionId,
       pausedMs,
@@ -246,8 +239,7 @@ export class DaemonStreamBackpressure {
       client = {
         queuedChars: new Map(),
         queuedMetadataBytes: new Map(),
-        pendingWriteBytes: new Map(),
-        lastProgressAt: Date.now()
+        pendingWriteBytes: new Map()
       }
       this.clients.set(clientId, client)
     }
