@@ -1418,7 +1418,7 @@
       "pairingTemporarilyUnavailable": "Kopplung vorübergehend nicht verfügbar",
       "unlockHint": "Telefon entsperren, dann zum erneuten Versuch tippen",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv",
-      "tapToPairAgain": "Zum erneuten Koppeln mit dem Desktop tippen"
+      "tapToPairAgain": "Zum erneuten Koppeln tippen"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Host-Kompatibilität wird geprüft"

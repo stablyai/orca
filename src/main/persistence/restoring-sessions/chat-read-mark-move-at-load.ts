@@ -11,6 +11,7 @@ import {
   capPaneKeyTimestampRecord,
   readPaneKeyTimestampRecord
 } from '../../../shared/agent-session/view/pane-key-timestamp-record'
+import { chatPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 
 export function moveChatReadMarksAtLoad(state: PersistedState): PersistedState {
@@ -20,6 +21,7 @@ export function moveChatReadMarksAtLoad(state: PersistedState): PersistedState {
   }
 
   const matches: ChatReadMarkMatches = new Map()
+  const openChatPaneKeys: Record<string, number> = {}
   recordCanonicalChatReadMarkMatches(index, matches, state.ui)
   const sessions = [state.workspaceSession, ...Object.values(state.workspaceSessionsByHostId ?? {})]
   for (const session of sessions) {
@@ -27,6 +29,7 @@ export function moveChatReadMarksAtLoad(state: PersistedState): PersistedState {
       for (const tab of tabs) {
         if (tab.contentType === 'agent-session') {
           recordChatReadMarkMatch(index, matches, tab.entityId)
+          openChatPaneKeys[chatPaneKey(tab.entityId)] = 1
         }
       }
     }
@@ -53,7 +56,10 @@ export function moveChatReadMarksAtLoad(state: PersistedState): PersistedState {
   }
   const ui = { ...state.ui }
   for (const field of CHAT_READ_MARK_FIELDS) {
-    ui[field] = capPaneKeyTimestampRecord(moved[field] ?? readPaneKeyTimestampRecord(ui[field]))
+    ui[field] = capPaneKeyTimestampRecord(
+      moved[field] ?? readPaneKeyTimestampRecord(ui[field]),
+      field === 'activityClearedAtByPaneKey' ? openChatPaneKeys : undefined
+    )
   }
   return { ...state, ui }
 }

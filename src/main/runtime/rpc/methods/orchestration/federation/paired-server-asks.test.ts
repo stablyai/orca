@@ -751,7 +751,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     await listening()
     // An ask straight to Docs's chat address, which nothing lets in.
     await importItem({
-      conversationId: 'c_victim',
+      conversationId: 'peerconv_000000000001',
       messageId: 'm_victim',
       kind: 'client_ask',
       payload: {
@@ -762,10 +762,10 @@ describe('agents on a paired server messaging an agent on this computer', () => 
         rootSession: ASKER
       }
     })
-    expect(declined('c_victim', 'm_victim')).toBe(true)
+    expect(declined('peerconv_000000000001', 'm_victim')).toBe(true)
 
     await importItem({
-      conversationId: 'c_victim',
+      conversationId: 'peerconv_000000000001',
       messageId: 'forged_after_decline',
       kind: 'client_reply',
       payload: {
@@ -799,10 +799,10 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     }
 
     await importItem(
-      { conversationId: 'c_x', messageId: 'm_x', kind: 'client_ask', payload },
+      { conversationId: 'peerconv_000000000002', messageId: 'm_x', kind: 'client_ask', payload },
       impostor
     )
-    expect(declined('c_x', 'm_x')).toBe(true)
+    expect(declined('peerconv_000000000002', 'm_x')).toBe(true)
 
     settleRemovedPairedServer(computer.runtime, computer.db, 'env_s', 'Build Box')
     expect(isServerAllowed(computer.db, 'fingerprint_s', 'docs')).toBe(false)
@@ -845,7 +845,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
     await listening()
     await importItem({
-      conversationId: 'c_plain',
+      conversationId: 'peerconv_000000000003',
       messageId: 'm_plain',
       kind: 'client_ask',
       payload: {

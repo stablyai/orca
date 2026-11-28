@@ -234,6 +234,14 @@
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
     },
     {
+      "file": "src/i18n/bundled-locale-catalogs.web.ts",
+      "reason": "The native file imports gzip-compressed base64 catalog modules so Hermes does not compile 68,000+ nested object properties into bytecode. The Route A web build already splits raw JSON catalogs into separate on-demand locale-catalog chunks tracked by the bundle verifier."
+    },
+    {
+      "file": "src/components/mermaid/mermaid-page-engine.web.ts",
+      "reason": "Mermaid draws diagrams into a DOM element and pulls in KaTeX for math labels, which only a document can render. The native file resolves to null so native bundles never carry the 3 MiB pre-bundled Mermaid engine or KaTeX; this one loads the deferred page engine."
+    },
+    {
       "file": "src/components/markdown/math/mobile-markdown-math-typesetter.web.ts",
       "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX with the first formula the page draws and adds its stylesheet."
     },

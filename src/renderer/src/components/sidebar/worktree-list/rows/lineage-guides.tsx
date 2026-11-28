@@ -18,10 +18,12 @@ function railXs(rail: LineageRail | null): number[] {
 export function LineageGuides({
   guides,
   before,
+  height,
   hidden
 }: {
   guides: LineageRowGuides
   before: number
+  height?: number
   hidden: boolean
 }): React.JSX.Element | null {
   if (hidden) {
@@ -34,7 +36,12 @@ export function LineageGuides({
     <div
       aria-hidden="true"
       data-worktree-lineage-guides=""
-      className="pointer-events-none absolute inset-0 overflow-hidden"
+      className={
+        height !== undefined
+          ? 'pointer-events-none absolute inset-x-0 top-0 overflow-hidden'
+          : 'pointer-events-none absolute inset-0 overflow-hidden'
+      }
+      style={height !== undefined ? { height } : undefined}
     >
       {railXs(guides.rails).map((x) => (
         <span

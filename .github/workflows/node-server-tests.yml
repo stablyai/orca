@@ -44,6 +44,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 # Keep template callers independent while replacing superseded PR qualification.
 concurrency:
@@ -129,9 +130,10 @@ jobs:
           fi
 
   persistence:
-    needs: [changes, mobile_web_bundle]
+    needs: [changes]
     permissions:
       contents: read
+      actions: read
     concurrency:
       group: node-server-persistence-${{ matrix.os }}-${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'push' && !inputs.build_template && inputs.ref == '' }}
@@ -139,7 +141,6 @@ jobs:
     # Drafts re-trigger at readiness; inherited caller events must not depend on PR fields.
     if: >-
       ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
-      (needs.changes.outputs.qualification == 'false' || needs.mobile_web_bundle.result == 'success') &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     strategy:
       fail-fast: false
@@ -231,6 +232,28 @@ jobs:
         if: runner.os == 'Windows'
         with:
           arches: ${{ (inputs.build_template && matrix.os == 'windows-2022') && 'x64 arm64' || (runner.arch == 'ARM64' && 'arm64' || 'x64') }}
+      # Overlap checkout/install with mobile_web_bundle; wait here only if the bundle isn't uploaded yet.
+      - name: Wait for mobile web bundle
+        if: needs.changes.outputs.qualification != 'false'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deadline = Date.now() + 15 * 60_000
+            while (Date.now() < deadline) {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: context.runId, per_page: 100
+              })
+              if (artifacts.some(a => a.name === 'orcad-mobile-web-bundle' && !a.expired)) return
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const producer = jobs.find(j => j.name === 'mobile_web_bundle' || j.name.endsWith(' / mobile_web_bundle'))
+              if (producer && producer.status === 'completed' && producer.conclusion !== 'success') {
+                throw new Error(`mobile_web_bundle failed (${producer.conclusion})`)
+              }
+              await new Promise(resolve => setTimeout(resolve, 10_000))
+            }
+            throw new Error('Timed out waiting for orcad-mobile-web-bundle artifact.')
       - uses: actions/download-artifact@v8
         id: mobile-web-artifact
         if: needs.changes.outputs.qualification != 'false'
