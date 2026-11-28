@@ -13,7 +13,6 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import './visible-worktrees'
 import { computeVisibleWorktrees } from './compute-visible-worktrees'
-import { useForcedVisibleWorktreeIds } from './use-forced-visible-worktree-ids'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -81,7 +80,6 @@ export function useVisibleSidebarWorktrees(args: {
     visibleWorkspaceHostIds,
     workspaceHostScope
   } = filterState
-  const forcedVisibleWorktreeIds = useForcedVisibleWorktreeIds(args.agentSendTargetWorktreeId)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const botListedWorktreeIdentities = useBotListedWorktreeIdentities()
   const repos = useAppStore((s) => s.repos)
@@ -157,12 +155,14 @@ export function useVisibleSidebarWorktrees(args: {
       preserveLineageParentOrder: sortBy === 'manual',
       // Both sorts rank by host identity (use-sort-order.ts).
       sortedByHostIdentity: true,
-      forcedVisibleWorktreeIds
+      forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
+        ? [args.agentSendTargetWorktreeId]
+        : undefined
     })
     return withoutHiddenVmWorktrees(visible, hiddenVmCheckouts)
   }, [
     hiddenVmCheckouts,
-    forcedVisibleWorktreeIds,
+    args.agentSendTargetWorktreeId,
     worktreeIdsWithLiveAgent,
     sleepingSweepExemptWorktreeIds,
     botListedWorktreeIdentities,
