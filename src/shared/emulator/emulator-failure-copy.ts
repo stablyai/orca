@@ -11,6 +11,7 @@ export const EMULATOR_FAILURE_COPY = {
   simulatorToolsUnavailable:
     'Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.',
   requiresMacosXcode: 'iOS Simulator requires macOS with Xcode Command Line Tools.',
+  requiresMacos14: 'iOS Simulator requires macOS 14 or later.',
   simulatorNotFound:
     'Simulator {{udid}} not found. Create one via Xcode > Window > Devices and Simulators.',
   serveSimUnavailable: 'serve-sim is unavailable.',
@@ -61,6 +62,7 @@ const COPY_CODES_BY_ERROR_CODE: Readonly<Record<string, readonly EmulatorFailure
     'scrcpyServerInvalid'
   ],
   emulator_input_blocked: ['deviceHubInputBlocked'],
+  emulator_unsupported: ['requiresMacos14'],
   emulator_error: ['androidSdkMissing']
 }
 

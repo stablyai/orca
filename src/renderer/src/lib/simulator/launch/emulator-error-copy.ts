@@ -19,6 +19,7 @@ const COPY: Record<EmulatorFailureCode, (params: (name: string) => Param) => str
   simulatorToolsUnavailable: () =>
     translate('emulator.errors.simulatorToolsUnavailable', EN.simulatorToolsUnavailable),
   requiresMacosXcode: () => translate('emulator.errors.requiresMacosXcode', EN.requiresMacosXcode),
+  requiresMacos14: () => translate('emulator.errors.requiresMacos14', EN.requiresMacos14),
   simulatorNotFound: (param) => {
     const udid = param('udid')
     return udid === null

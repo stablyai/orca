@@ -27619,6 +27619,7 @@
       "noIosSimulators": "Keine iOS-Simulatoren gefunden. Einen unter Xcode Settings > Platforms hinzufügen.",
       "simctlUnavailable": "xcrun simctl ist nicht verfügbar.",
       "simulatorToolsUnavailable": "Die Tools für Xcode Simulator sind nicht verfügbar. Die Vollversion von Xcode installieren, einmal öffnen und dann mit `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer` auswählen.",
+      "requiresMacos14": "iOS Simulator erfordert macOS 14 oder neuer.",
       "requiresMacosXcode": "iOS Simulator erfordert macOS mit den Xcode Command Line Tools.",
       "simulatorNotFound": "Simulator {{udid}} nicht gefunden. Einen über Xcode > Window > Devices and Simulators erstellen.",
       "serveSimUnavailable": "serve-sim ist nicht verfügbar.",

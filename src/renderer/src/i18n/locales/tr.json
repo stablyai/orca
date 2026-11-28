@@ -27576,6 +27576,7 @@
       "noIosSimulators": "Hiç iOS Simulator bulunamadı. Xcode Settings > Platforms bölümünden bir tane ekleyin.",
       "simctlUnavailable": "xcrun simctl kullanılamıyor.",
       "simulatorToolsUnavailable": "Xcode Simulator araçları kullanılamıyor. Xcode'un tam sürümünü yükleyin, bir kez açın, ardından `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer` komutuyla seçin.",
+      "requiresMacos14": "iOS Simulator için macOS 14 veya üzeri gerekir.",
       "requiresMacosXcode": "iOS Simulator için macOS ve Xcode Command Line Tools gerekir.",
       "simulatorNotFound": "Simülatör {{udid}} bulunamadı. Xcode > Window > Devices and Simulators üzerinden bir tane oluşturun.",
       "serveSimUnavailable": "serve-sim kullanılamıyor.",

@@ -27604,6 +27604,7 @@
       "noIosSimulators": "iOS 시뮬레이터를 찾을 수 없습니다. Xcode Settings > Platforms에서 추가하세요.",
       "simctlUnavailable": "xcrun simctl을 사용할 수 없습니다.",
       "simulatorToolsUnavailable": "Xcode Simulator 도구를 사용할 수 없습니다. Xcode 전체 버전을 설치하고 한 번 연 다음 `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer` 명령으로 선택하세요.",
+      "requiresMacos14": "iOS 시뮬레이터를 사용하려면 macOS 14 이상이 필요합니다.",
       "requiresMacosXcode": "iOS 시뮬레이터를 사용하려면 macOS와 Xcode Command Line Tools가 필요합니다.",
       "simulatorNotFound": "{{udid}} 시뮬레이터를 찾을 수 없습니다. Xcode > Window > Devices and Simulators에서 생성하세요.",
       "serveSimUnavailable": "serve-sim을 사용할 수 없습니다.",

@@ -10,7 +10,9 @@ import {
   type SimulatorDevice
 } from '../simctl-simulator-devices'
 import {
+  assertServeSimHostSupported,
   execServeSimCommand,
+  isMissingFramebufferError,
   parseServeSimCommandArgs,
   resolveServeSimExecutable,
   serveSimKillArgs,
@@ -97,6 +99,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   async checkServeSimAvailable(): Promise<void> {
+    assertServeSimHostSupported()
     await this.execServeSim(['--help'], { timeoutMs: 10_000 })
   }
 
@@ -202,6 +205,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
+    assertServeSimHostSupported() // Fail before booting a simulator the helper cannot drive.
     const udid = await this.resolveDeviceId(deviceId)
     await ensureSimulatorBooted(udid)
     const startDetachedHelper = async (): Promise<EmulatorSessionInfo> => {
@@ -313,16 +317,6 @@ export class IosEmulatorBackend implements EmulatorBackend {
   ): Promise<unknown> {
     return execServeSimCommand(this.serveSimExecutable, args, options)
   }
-}
-
-const MISSING_FRAMEBUFFER_RE = /No framebuffer display descriptor found/i
-
-function isMissingFramebufferError(error: unknown): error is EmulatorError {
-  return (
-    error instanceof EmulatorError &&
-    error.code === 'emulator_error' &&
-    MISSING_FRAMEBUFFER_RE.test(error.message)
-  )
 }
 
 function toEmulatorDevice(device: SimulatorDevice): EmulatorDevice {

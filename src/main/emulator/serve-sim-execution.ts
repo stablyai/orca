@@ -1,12 +1,15 @@
 import { runProcess } from '@orca/process-host'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { platform, tmpdir } from 'node:os'
+import { platform, release, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { emulatorFailureText } from '../../shared/emulator/emulator-failure-copy'
 import { EmulatorError } from './emulator-errors'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
 const EXEC_TIMEOUT_MS = 90_000
+// serve-sim's native addon targets macOS 14 (Darwin 23); older hosts fail with a raw dyld error.
+const SERVE_SIM_MIN_DARWIN_MAJOR = 23
 const MAC_OPEN_SHIM_DIR = join(tmpdir(), 'orca-serve-sim-open-shim')
 const MAC_OPEN_SHIM_PATH = join(MAC_OPEN_SHIM_DIR, 'open')
 const MAC_OPEN_SHIM = `#!/bin/sh
@@ -78,6 +81,13 @@ function resolveMaterializedServeSimPackageDir(bundledPackageDir: string): strin
     )
   }
   return materializedServeSimPackageDir
+}
+
+// Gate only helper start and the availability probe: simctl-backed exec commands work on older hosts.
+export function assertServeSimHostSupported(): void {
+  if (platform() === 'darwin' && Number.parseInt(release(), 10) < SERVE_SIM_MIN_DARWIN_MAJOR) {
+    throw new EmulatorError('emulator_unsupported', emulatorFailureText('requiresMacos14'))
+  }
 }
 
 export function resolveServeSimExecutable(): ServeSimExecutable {
@@ -175,6 +185,16 @@ function serveSimFailureMessage(output: string): string {
   // Uncaught throws print serve-sim's minified source (every CLI message) first; keep the thrown error.
   const thrown = /^\w*Error: [\s\S]*?(?=^\s+at |^Node\.js v)/m.exec(output)
   return thrown?.[0].trim() || output.trim() || 'serve-sim command failed'
+}
+
+const MISSING_FRAMEBUFFER_RE = /No framebuffer display descriptor found/i
+
+export function isMissingFramebufferError(error: unknown): error is EmulatorError {
+  return (
+    error instanceof EmulatorError &&
+    error.code === 'emulator_error' &&
+    MISSING_FRAMEBUFFER_RE.test(error.message)
+  )
 }
 
 export async function execServeSimCommand(

@@ -27252,6 +27252,7 @@
       "noIosSimulators": "找不到 iOS 模擬器。請在 Xcode Settings > Platforms 中新增一個。",
       "simctlUnavailable": "無法使用 xcrun simctl。",
       "simulatorToolsUnavailable": "無法使用 Xcode Simulator 工具。請安裝完整版 Xcode，開啟一次，然後使用 `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer` 選取它。",
+      "requiresMacos14": "iOS 模擬器需要 macOS 14 或更新版本。",
       "requiresMacosXcode": "iOS 模擬器需要已安裝 Xcode Command Line Tools 的 macOS。",
       "simulatorNotFound": "找不到模擬器 {{udid}}。請透過 Xcode > Window > Devices and Simulators 建立一個。",
       "serveSimUnavailable": "無法使用 serve-sim。",

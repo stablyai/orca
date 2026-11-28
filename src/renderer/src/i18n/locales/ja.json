@@ -27290,6 +27290,7 @@
       "noIosSimulators": "iOS シミュレーターが見つかりません。Xcode Settings > Platforms で追加してください。",
       "simctlUnavailable": "xcrun simctl を利用できません。",
       "simulatorToolsUnavailable": "Xcode Simulator のツールを利用できません。Xcode の完全版をインストールし、一度開いてから `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer` で選択してください。",
+      "requiresMacos14": "iOS シミュレーターには macOS 14 以降が必要です。",
       "requiresMacosXcode": "iOS シミュレーターには、Xcode Command Line Tools をインストールした macOS が必要です。",
       "simulatorNotFound": "シミュレーター {{udid}} が見つかりません。Xcode > Window > Devices and Simulators で作成してください。",
       "serveSimUnavailable": "serve-sim を利用できません。",

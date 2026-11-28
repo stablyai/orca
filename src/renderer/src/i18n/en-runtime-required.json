@@ -3418,6 +3418,7 @@
       "noIosSimulators": "No iOS simulators found. Add one in Xcode Settings > Platforms.",
       "noSession": "No emulator session is active",
       "notAvailable": "Mobile Emulator is not available.",
+      "requiresMacos14": "iOS Simulator requires macOS 14 or later.",
       "requiresMacosXcode": "iOS Simulator requires macOS with Xcode Command Line Tools.",
       "scrcpyDownloadFailed": "Could not download scrcpy server: {{detail}}",
       "scrcpyServerInvalid": "Downloaded scrcpy server was invalid or truncated.",
