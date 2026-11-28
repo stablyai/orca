@@ -343,7 +343,9 @@ it("counts a sibling's wake from after Docs' post was admitted, before it was sa
   const { lead } = await carriedIn(
     thread,
     NEIL,
-    async () => vi.setSystemTime(AT + 60_000),
+    async () => {
+      vi.setSystemTime(AT + 60_000)
+    },
     // The sibling's wake lands at AT + 90_000, after the admission callback; the writer saves later.
     () => vi.setSystemTime(AT + 120_000)
   )
