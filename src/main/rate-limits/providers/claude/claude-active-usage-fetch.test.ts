@@ -49,7 +49,7 @@ afterEach(() => {
 
 async function routedProxies(
   options: Omit<ClaudeRateLimitFetchOptions, 'authPreparation'> = {},
-  { runtime, proxyDown }: { runtime?: 'wsl'; proxyDown?: boolean } = {}
+  { runtime }: { runtime?: 'wsl' } = {}
 ): Promise<unknown[]> {
   const routed: unknown[] = []
   const response = (): Response => Response.json({ five_hour: { utilization: 12 } })
@@ -57,9 +57,6 @@ async function routedProxies(
     fetch: async () => response(),
     fetchThroughProxy: async (proxy) => {
       routed.push(proxy)
-      if (proxyDown) {
-        throw new TypeError('net::ERR_PROXY_CONNECTION_FAILED')
-      }
       return response()
     },
     proxySession: () => null
@@ -117,16 +114,29 @@ it("lets an uppercase settings proxy replace Orca's on Windows, where env names 
   ])
 })
 
-// Failed proxies are remembered per URL, so these tests use their own.
-it('falls back to the app-wide path when the settings proxy is down', async () => {
-  writeSettings(join(configDir, 'settings.json'), { HTTPS_PROXY: 'http://127.0.0.1:7891' })
-  expect(await routedProxies({}, { proxyDown: true })).toHaveLength(1)
-})
-
-it('skips a settings proxy that just failed', async () => {
-  writeSettings(join(configDir, 'settings.json'), { HTTPS_PROXY: 'http://127.0.0.1:7892' })
-  expect(await routedProxies({}, { proxyDown: true })).toHaveLength(1)
-  expect(await routedProxies()).toEqual([])
+it('fails closed instead of using the app-wide path when the settings proxy is down', async () => {
+  const appWide = vi.fn(async () => Response.json({ five_hour: { utilization: 12 } }))
+  let proxied = 0
+  setMainHttpClient({
+    fetch: appWide,
+    fetchThroughProxy: async () => {
+      proxied++
+      throw new TypeError('net::ERR_PROXY_CONNECTION_FAILED')
+    },
+    proxySession: () => null
+  })
+  const fetchUsage = (): ReturnType<typeof fetchActiveClaudeRateLimits> =>
+    fetchActiveClaudeRateLimits({
+      authPreparation: { configDir, envPatch: {}, provenance: 'system' }
+    })
+  expect((await fetchUsage()).status).toBe('error')
+  // A repeat poll retries the proxy rather than remembering the failure and going around it.
+  expect((await fetchUsage()).status).toBe('error')
+  expect(proxied).toBe(2)
+  // A host without per-request proxies must not send the token on its app-wide route either.
+  setMainHttpClient({ fetch: appWide, proxySession: () => null })
+  expect((await fetchUsage()).status).toBe('error')
+  expect(appWide).not.toHaveBeenCalled()
 })
 
 it('keeps WSL accounts on the app-wide path', async () => {

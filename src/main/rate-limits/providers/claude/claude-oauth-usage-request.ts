@@ -90,45 +90,28 @@ type ClaudeUsageAccount = {
   networkProxySettings?: NetworkProxySettings
 }
 
-// Why: a proxy that drops traffic would otherwise add its full timeout to every poll before the fallback.
-const PROXY_ATTEMPT_TIMEOUT_MS = 3_000
-const FAILED_PROXY_SKIP_MS = 5 * 60_000
-const failedProxySkipUntil = new Map<string, number>()
-
 async function fetchThroughAccountProxy(
   client: MainHttpClient,
   token: string,
   signal: AbortSignal | undefined,
   account: ClaudeUsageAccount
 ): Promise<Response | null> {
-  // Headless hosts have no per-request proxy and keep the app-wide policy.
-  if (!client.fetchThroughProxy) {
-    return null
-  }
   const accountProxy = await readClaudeSettingsProxy(
     account.configDir,
     account.networkProxySettings
   )
-  const proxyUrl = accountProxy?.httpProxyUrl
-  if (!accountProxy || !proxyUrl || (failedProxySkipUntil.get(proxyUrl) ?? 0) > Date.now()) {
+  if (!accountProxy) {
     return null
   }
-  try {
-    const response = await client.fetchThroughProxy(
-      accountProxy,
-      OAUTH_USAGE_URL,
-      usageRequestInit(token, signal, PROXY_ATTEMPT_TIMEOUT_MS)
-    )
-    failedProxySkipUntil.delete(proxyUrl)
-    return response
-  } catch (error) {
-    if (signal?.aborted) {
-      throw error
-    }
-    // A settings.json proxy that is down should not hide usage the app-wide route can still read.
-    failedProxySkipUntil.set(proxyUrl, Date.now() + FAILED_PROXY_SKIP_MS)
-    return null
+  // Fail closed: the token must not leave through a route the account's settings did not pick.
+  if (!client.fetchThroughProxy) {
+    throw new Error("This host cannot route usage through the account's settings.json proxy")
   }
+  return client.fetchThroughProxy(
+    accountProxy,
+    OAUTH_USAGE_URL,
+    usageRequestInit(token, signal, API_TIMEOUT_MS)
+  )
 }
 
 async function requestUsage(
