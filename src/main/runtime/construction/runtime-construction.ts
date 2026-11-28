@@ -78,7 +78,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
   declare protected readonly readHookCliWriterObservationFn:
     | Bindings['readHookCliWriterObservation']
     | null
-  declare protected readonly checkHookAgentPresenceFn: HostServices['checkHookAgentPresenceFn']
+  declare protected readonly checkHookAgentPresenceFn: Bindings['checkHookAgentPresence'] | null
   declare readonly subscribeAgentProviderSessionChangesFn:
     | Bindings['subscribeAgentProviderSessionChanges']
     | null

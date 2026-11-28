@@ -4,6 +4,7 @@ import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrchestrationFleetWorker } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { projectWorkerFleet } from '../fleet/worker-list-projection'
+import { confirmStaleWorkerAgentProcesses } from '../fleet/fleet-agent-process-confirmation'
 import { createSessionWorkerLivenessReader } from '../../../../../orchestration/workers/lifecycle/session-worker-liveness'
 import { inspectSessionWorker } from './session-worker-observation'
 import type {
@@ -177,7 +178,7 @@ export async function showContextOnlyWorker(
   return {
     dispatch: exposeDispatchContext(dispatch),
     worker: exposeContextOnlyWorker(dispatch),
-    projection: projectFleetWorker(runtime, db, dispatch.id),
+    projection: await projectFleetWorker(runtime, db, dispatch.id),
     terminal: observation.exact ? observation.terminal : null,
     observation: exposeObservation(observation),
     terminalResource: null
@@ -204,20 +205,28 @@ export function exposeWorker(worker: WorkerDispatchRow) {
 }
 
 /** Use the same agent verdict as worker-list: a live PTY does not prove its agent is live, especially when list recovery points to show. */
-export function projectFleetWorkerPage(
+export async function projectFleetWorkerPage(
   runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatchId: string
-): ReturnType<typeof projectWorkerFleet> | null {
+): Promise<ReturnType<typeof projectWorkerFleet> | null> {
   const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
   if (rows.length === 0) {
     return null
   }
   const now = Date.now()
-  const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
+  const attentionFacts = db.getWorkerAttentionFactsForDispatches([dispatchId], now)
+  // worker-show reads the same quiet-idle confirmation worker-list does.
+  const statuses = await confirmStaleWorkerAgentProcesses({
+    rows,
+    attentionFacts,
+    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
+    now,
+    checkPresence: (paneKey) => runtime.checkHookAgentPresence(paneKey)
+  })
   return projectWorkerFleet({
     rows,
-    attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
+    attentionFacts,
     statuses,
     limit: 1,
     now,
@@ -227,12 +236,12 @@ export function projectFleetWorkerPage(
   })
 }
 
-export function projectFleetWorker(
+export async function projectFleetWorker(
   runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatchId: string
-): OrchestrationFleetWorker | null {
-  return projectFleetWorkerPage(runtime, db, dispatchId)?.workers[0] ?? null
+): Promise<OrchestrationFleetWorker | null> {
+  return (await projectFleetWorkerPage(runtime, db, dispatchId))?.workers[0] ?? null
 }
 
 export function exposeFederatedWorkerObservation(

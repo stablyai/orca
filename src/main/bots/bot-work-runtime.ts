@@ -44,6 +44,7 @@ export type BotWorkRuntime = Pick<
   | 'getOrchestrationFleetAgentStatusSnapshot'
   | 'ensureStructuredAgentSessionHost'
   | 'getAgentStatusSnapshotFn'
+  | 'checkHookAgentPresence'
 > & {
   showManagedTerminalWorkspace: BotWorkWorkspaceShow
   linkStore: () =>

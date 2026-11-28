@@ -3,11 +3,7 @@ import {
   projectOrchestrationFleet,
   type FleetDurableWorker
 } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
-import { resolveFleetWorkerOutcome } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-outcome-resolution'
-import {
-  liveWorkerTerminalAutoReleaseAt,
-  type WorkerTerminalListState
-} from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import type { WorkerTerminalListState } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import {
@@ -19,6 +15,8 @@ import {
   readFederatedFleetSnapshots
 } from '../../../../../orchestration/legacy-remote-home/federated-fleet-snapshot'
 import { ensureSessionWorkerRecords } from '../observation/session-worker-observation'
+import { projectDurableWorker } from './fleet-durable-worker'
+import { confirmStaleWorkerAgentProcesses } from './fleet-agent-process-confirmation'
 
 export type WorkerListPageParams = {
   run?: string
@@ -36,40 +34,9 @@ export function projectWorkerFleet(args: {
   completeProjection?: boolean
   observeSession?: Parameters<typeof projectOrchestrationFleet>[0]['observeSession']
 }) {
-  const workers: FleetDurableWorker[] = args.rows.map((row) => {
-    return {
-      ...row,
-      outcome: resolveFleetWorkerOutcome({
-        attemptOutcome: args.attentionFacts.get(row.dispatchId)?.outcome ?? 'outcome_unknown',
-        workerState: row.workerState,
-        dispatchStatus: row.dispatchStatus
-      }),
-      resource: row.resource
-        ? {
-            id: row.resource.id,
-            ownerDispatchId: row.resource.owner_dispatch_id,
-            worktreeId: row.resource.worktree_id,
-            paneKey: row.resource.pane_key,
-            processIncarnation: row.resource.process_incarnation,
-            endpointId: row.resource.endpoint_id,
-            endpointIncarnation: row.resource.endpoint_incarnation,
-            hostScope: row.resource.host_scope,
-            ownershipState: row.resource.ownership_state,
-            releaseState: row.resource.release_state,
-            autoReleaseAt: liveWorkerTerminalAutoReleaseAt(row.resource),
-            updatedAt: row.resource.updated_at
-          }
-        : null,
-      handedOn: row.handedOn && {
-        toDispatchId: row.handedOn.toDispatchId,
-        resource: row.handedOn.resource && {
-          id: row.handedOn.resource.id,
-          ownerDispatchId: row.handedOn.resource.owner_dispatch_id,
-          releaseState: row.handedOn.resource.release_state
-        }
-      }
-    }
-  })
+  const workers: FleetDurableWorker[] = args.rows.map((row) =>
+    projectDurableWorker(row, args.attentionFacts)
+  )
   const durable = new Map(workers.map((worker) => [worker.dispatchId, worker]))
   if (!args.completeProjection) {
     const fleet = {
@@ -113,14 +80,22 @@ export async function projectWorkerListFleet(
 ) {
   const db = runtime.getOrchestrationDb()
   const now = Date.now()
-  const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
   await ensureSessionWorkerRecords(runtime, rows)
+  const attentionFacts = db.getWorkerAttentionFactsForDispatches(
+    rows.map((row) => row.dispatchId),
+    now
+  )
+  // A quiet idle worker keeps its last hook row; re-probe that row's process before calling it stale.
+  const statuses = await confirmStaleWorkerAgentProcesses({
+    rows,
+    attentionFacts,
+    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
+    now,
+    checkPresence: (paneKey) => runtime.checkHookAgentPresence(paneKey)
+  })
   const fleet = projectWorkerFleet({
     rows,
-    attentionFacts: db.getWorkerAttentionFactsForDispatches(
-      rows.map((row) => row.dispatchId),
-      now
-    ),
+    attentionFacts,
     statuses,
     limit: options.limit,
     now,

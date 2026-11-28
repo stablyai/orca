@@ -59,6 +59,9 @@ export type FleetAgentStatusEvidence = {
   /** Replay restamps delivery past transient-clear watermarks: use it for order, never staleness. */
   deliveredAt: number
   activity: FleetAgentActivity
+  /** Ephemeral: this runtime re-probed the row's recorded process then and found it live.
+   *  Never persisted and never a restamp of `clock`; only a stale at-rest/running row may use it. */
+  processConfirmedAt?: number
 }
 
 /** Explicit unidentifiable workers prevent missing handles from matching every row. */

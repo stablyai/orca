@@ -8,11 +8,16 @@ import {
 } from '../../../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import type { SendRecipientWarning } from './recipient-routing'
 
+type DeliveryHoldRuntime = Pick<
+  OrcaRuntimeService,
+  'readTerminalMailHold' | 'getTerminalOrchestrationCliTarget'
+> &
+  Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold' | 'admitRecordedIdleAgentMail'>>
+
 /** The receipt line for mail the delivery gate would hold right now; null when it would deliver.
  *  Never throws: the mail is already stored, so a failed read must not fail the send. */
 export async function sendDeliveryHoldWarning(
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliTarget'> &
-    Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold'>>,
+  runtime: DeliveryHoldRuntime,
   db: OrchestrationDb,
   recipient: string
 ): Promise<SendRecipientWarning | null> {
@@ -25,8 +30,7 @@ export async function sendDeliveryHoldWarning(
 }
 
 async function readDeliveryHoldWarning(
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliTarget'> &
-    Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold'>>,
+  runtime: DeliveryHoldRuntime,
   db: OrchestrationDb,
   recipient: string
 ): Promise<SendRecipientWarning | null> {
@@ -37,6 +41,9 @@ async function readDeliveryHoldWarning(
       return null
     }
   }
+  // A quiet idle worker's hook row can be older than the 30-minute status window: confirm its
+  // recorded process and re-admit the rest before the receipt calls the agent unverifiable.
+  await runtime.admitRecordedIdleAgentMail?.(recipient).catch(() => false)
   const hold =
     (await runtime.readSleepingMailHold?.(recipient)) ??
     (await readMailboxDeliveryHold(recipient, {
@@ -67,8 +74,7 @@ async function readDeliveryHoldWarning(
  *  a waiting `check --wait` took is read by that call, so no hold applies to it. */
 export async function withDeliveryHoldWarning<T>(
   sent: T,
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliTarget'> &
-    Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold'>>,
+  runtime: DeliveryHoldRuntime,
   db: OrchestrationDb,
   recipient: string,
   takenByWaiter: boolean

@@ -6,6 +6,7 @@ import {
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { evaluateTuiIdle } from './tui-idle-evidence'
@@ -31,6 +32,17 @@ const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
   'blocked',
   'overlay'
 ])
+
+/** A local row whose agent finished its turn at rest; waits, blocks and resume-only rows stay out. */
+function isRecordedIdleAgentStatusRow(row: AgentStatusIpcPayload): boolean {
+  return (
+    row.connectionId === null &&
+    row.providerSessionOnly !== true &&
+    row.restoredUnconfirmed !== true &&
+    row.paneSleep === undefined &&
+    row.state === 'done'
+  )
+}
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
@@ -166,6 +178,42 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return refusal && CORROBORATED_HOLDS.has(refusal.kind)
       ? refusal
       : { kind: 'unverified', terminal: terminal.handle }
+  }
+
+  /** A quiet idle worker's last hook row can outlive the terminal's last live status. Confirm the
+   *  row's recorded process once, then re-admit the recorded rest so mail reads the same evidence
+   *  worker-show does. A title that still names work or a prompt is newer than the row, so it wins. */
+  async admitRecordedIdleAgentMail(mailbox: string): Promise<boolean> {
+    const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
+    if (!terminal || isMailboxTerminalTakingInput(terminal)) {
+      return false
+    }
+    const pty = this.ptysById.get(terminal.ptyId)
+    if (
+      !pty?.connected ||
+      pty.connectionId !== null ||
+      pty.lastAgentStatus === 'working' ||
+      pty.lastAgentStatus === 'permission'
+    ) {
+      return false
+    }
+    const check = this.checkHookAgentPresenceFn
+    const rowsForPane = this.getAgentStatusSnapshotForPaneFn
+    if (!check || !rowsForPane) {
+      return false
+    }
+    for (const paneKey of terminal.paneKeys) {
+      if (!rowsForPane(paneKey).some(isRecordedIdleAgentStatusRow)) {
+        continue
+      }
+      if ((await check(paneKey).catch(() => null)) !== 'live') {
+        continue
+      }
+      // The process outlived its hook stream: the recorded rest speaks for it now.
+      this.applyReattachedAgentStatus(terminal.ptyId, 'idle')
+      return true
+    }
+    return false
   }
 
   /** Whether a waiting `check --wait` takes mail of this type stored for this mailbox, as arrival would. */
