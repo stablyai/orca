@@ -980,11 +980,9 @@ jobs:
     needs:
       - cut
       - create-release
-      - orcad-template
       - release-preflight
       - release-javascript
       - build-mac
-    # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
@@ -992,12 +990,11 @@ jobs:
       needs.create-release.result == 'success' &&
       needs.release-preflight.result == 'success' &&
       needs.release-javascript.result == 'success' &&
-      needs.build-mac.result == 'success' &&
-      (needs.orcad-template.result == 'success' ||
-        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
+      needs.build-mac.result == 'success'
     env:
       # beforePack and afterPack fail the package when the template is absent.
       ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
+      JOBS: ${{ matrix.platform == 'win' && 'max' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1036,6 +1033,13 @@ jobs:
       contents: write
 
     steps:
+      - name: Enable parallel Windows checkout
+        if: matrix.platform == 'win'
+        shell: bash
+        run: |
+          git config --global checkout.workers 0
+          echo 'TrackFileAccess=false' >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -1159,8 +1163,9 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
 
-      # Build required out/mobile-web from mobile’s React Native/Expo dependencies.
+      # Build required out/mobile-web only when shared release JavaScript is not restored.
       - uses: ./.github/actions/install-mobile-dependencies
+        if: needs.release-javascript.outputs.supported != 'true'
 
       # Install AT-SPI runtime bindings for Linux provider verification and rpm for builder’s fpm backend; stock Ubuntu lacks them.
       - name: Install Linux computer-use provider dependencies
@@ -1228,6 +1233,29 @@ jobs:
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.source_sha }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
+      # Overlap checkout/install/build with orcad-template; wait here before packaging.
+      - name: Wait for the qualified orcad template
+        if: needs.cut.outputs.ships_orcad_template == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deadline = Date.now() + 30 * 60_000
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+              const failed = lanes.find(job => job.status === 'completed' &&
+                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
+              if (failed) throw new Error(`Template qualification failed: ${failed.name} (${failed.conclusion})`)
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: context.runId, per_page: 100
+              })
+              if (artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)) return
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for orcad-template artifact.')
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
@@ -2039,19 +2067,15 @@ jobs:
     needs:
       - cut
       - create-release
-      - orcad-template
       - release-preflight
       - release-javascript
-    # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
       needs.cut.outputs.should_release == 'true' &&
       needs.create-release.result == 'success' &&
       needs.release-preflight.result == 'success' &&
-      needs.release-javascript.result == 'success' &&
-      (needs.orcad-template.result == 'success' ||
-        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
+      needs.release-javascript.result == 'success'
     # Keep every SignPath workflow job GitHub-hosted; separate release-mac-build allows Blacksmith outside Windows provenance.
     runs-on: ubuntu-latest
     permissions:
@@ -2126,6 +2150,7 @@ jobs:
     needs:
       - cut
       - create-release
+      - orcad-template
       - build
       - build-mac
       - verify-mac-build
@@ -2137,6 +2162,8 @@ jobs:
       !cancelled() &&
       needs.cut.result == 'success' &&
       needs.create-release.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false')) &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
       needs.verify-mac-build.result == 'success' &&
