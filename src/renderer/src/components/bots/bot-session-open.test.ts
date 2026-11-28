@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
-  const listeners = new Set<() => void>()
+  /** Called as zustand calls its listeners, with the state after and before the write. */
+  const listeners = new Set<(state: object, previous: object) => void>()
   const state: {
     activeView: string
     activeWorkspaceKey: string | null
@@ -19,6 +20,11 @@ const mocks = vi.hoisted(() => {
     unifiedTabsByWorktree: {},
     fetchFolderWorkspaces: async () => {}
   }
+  const write = (change: () => void): void => {
+    const previous = { ...state }
+    change()
+    listeners.forEach((listener) => listener(state, previous))
+  }
   return {
     state,
     listeners,
@@ -28,30 +34,30 @@ const mocks = vi.hoisted(() => {
     unavailable: vi.fn(),
     callBotRpc: vi.fn(),
     /** The user shows another workspace, as a workspace switch writes the store. */
-    show: (workspace: string): void => {
-      state.activeWorkspaceKey = workspace
-      state.activeWorktreeId = workspace
-      listeners.forEach((listener) => listener())
-    },
+    show: (workspace: string): void =>
+      write(() => {
+        state.activeWorkspaceKey = workspace
+        state.activeWorktreeId = workspace
+      }),
     /** The pending-creation row's click: setActivePendingWorktreeCreation writes only this field. */
-    pickPending: (creationId: string | null): void => {
-      state.activePendingCreationId = creationId
-      listeners.forEach((listener) => listener())
-    },
+    pickPending: (creationId: string | null): void =>
+      write(() => {
+        state.activePendingCreationId = creationId
+      }),
     /** A server tab frame: tabs change inside a workspace; which workspace is shown does not. */
-    tabFrame: (workspace: string, tabs: readonly string[]): void => {
-      state.unifiedTabsByWorktree = { ...state.unifiedTabsByWorktree, [workspace]: tabs }
-      listeners.forEach((listener) => listener())
-    },
+    tabFrame: (workspace: string, tabs: readonly string[]): void =>
+      write(() => {
+        state.unifiedTabsByWorktree = { ...state.unifiedTabsByWorktree, [workspace]: tabs }
+      }),
     /** A store write that changes no workspace selection, like a catalog read. */
-    touch: (): void => listeners.forEach((listener) => listener())
+    touch: (): void => write(() => {})
   }
 })
 
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => mocks.state,
-    subscribe: (listener: () => void) => {
+    subscribe: (listener: (state: object, previous: object) => void) => {
       mocks.listeners.add(listener)
       return () => mocks.listeners.delete(listener)
     }
@@ -90,6 +96,7 @@ import {
   cancelPendingBotThreadOpen,
   runBotThreadOpen
 } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
+import { withBotThreadOpenNavigation } from '@/lib/agent-session/open/bot-thread-open-navigation'
 import { openBotChatTab, openBotSession, startAndOpenBotChat } from './bot-session-open'
 
 const opened = { opened: {} }
@@ -248,6 +255,40 @@ describe('openBotChatTab', () => {
     expect(newer.signal.aborted).toBe(false)
   })
 
+  it('leaves a newer thread link opening when the older chat’s Home list answers', async () => {
+    // Admitting the Home selects it, which the link's own navigation watch reads as a newer move.
+    mocks.admit.mockImplementation(() => {
+      if (mocks.fetchFolderWorkspaces.mock.calls.length === 0) {
+        return missing
+      }
+      mocks.show('folder:home-1')
+      return opened
+    })
+    let answer = (): void => {}
+    mocks.fetchFolderWorkspaces.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          answer = resolve
+        })
+    )
+    const open = openBotChatTab(serverBot, 'chat-1')
+    await vi.waitFor(() => expect(mocks.fetchFolderWorkspaces).toHaveBeenCalledTimes(1))
+    let link: AbortSignal | undefined
+    void runBotThreadOpen('link-b', (signal) => {
+      link = signal
+      return withBotThreadOpenNavigation(
+        signal,
+        () => new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()))
+      )
+    })
+    answer()
+    await expect(open).resolves.toBe(false)
+    expect(mocks.admit).toHaveBeenCalledTimes(1)
+    expect(mocks.state.activeWorkspaceKey).toBe('folder:elsewhere')
+    expect(mocks.activate).not.toHaveBeenCalled()
+    expect(link?.aborted).toBe(false)
+  })
+
   it('stays put when the user moves to another workspace while the Home list loads', async () => {
     mocks.admit.mockReturnValue(missing)
     const list = heldFolderList()
@@ -388,9 +429,9 @@ describe('startAndOpenBotChat', () => {
     )
     const newer = pendingThreadLink('link-b')
     started('chat-1')
-    await vi.waitFor(() => expect(mocks.admit).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(mocks.listeners.size).toBe(0))
     await Promise.resolve()
+    expect(mocks.admit).not.toHaveBeenCalled()
     expect(mocks.activate).not.toHaveBeenCalled()
     expect(newer.signal.aborted).toBe(false)
   })

@@ -1,10 +1,14 @@
 import { useAppStore } from '@/store'
+import { botThreadOpenRevision } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 
-/** Whether the user moved to another workspace, view or host, or picked a workspace still being
- *  created, since a bot open was asked for. */
+/** Whether the user moved to another workspace, view or host, picked a workspace still being
+ *  created, or opened a bot thread link, since a bot open was asked for. */
 export type BotOpenIntent = {
   /** True once any such move happened, even if the window later came back. */
   moved: () => boolean
+  /** True once a thread link began opening since the ask. Still read after `stop`, which ends only
+   *  the selection watch: the open's own Home switch must not count, but a newer link always wins. */
+  linkOpened: () => boolean
   stop: () => void
 }
 
@@ -37,6 +41,8 @@ export function watchBotOpenIntent(
   } = useAppStore
 ): BotOpenIntent {
   const asked = workspaceKey(store.getState())
+  const links = botThreadOpenRevision()
+  const linkOpened = (): boolean => botThreadOpenRevision() !== links
   let moved = false
   let unsubscribe: (() => void) | null = store.subscribe(() => {
     if (workspaceKey(store.getState()) !== asked) {
@@ -46,7 +52,8 @@ export function watchBotOpenIntent(
     }
   })
   return {
-    moved: () => moved,
+    moved: () => moved || linkOpened(),
+    linkOpened,
     stop: () => {
       unsubscribe?.()
       unsubscribe = null

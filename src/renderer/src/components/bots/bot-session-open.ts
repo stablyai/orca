@@ -1,8 +1,5 @@
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
-import {
-  botThreadOpenPending,
-  cancelPendingBotThreadOpen
-} from '@/lib/agent-session/open/bot-thread-open-lifecycle'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { targetBotChatLatest } from '@/lib/agent-session/open/bot-link-item-target'
 import { botTarget, callBotRpc, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { activateAndRevealFolderWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
@@ -96,7 +93,7 @@ export async function openBotChatTab(
     return false
   }
   // A thread link opened since the click is newer; this open would cancel it, so it yields.
-  if (botThreadOpenPending()) {
+  if (intent.linkOpened()) {
     return false
   }
   return activateAiVaultStructuredSession(
