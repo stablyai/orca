@@ -87,7 +87,6 @@ export function queuedMessageCardCaption(
       return null
   }
 }
-
 /** Steer's or Send's label and tooltip: Steer only into a turn that is running (`queuedMessageCardSteers`). */
 export function queuedMessageCardSendNow(
   card: Pick<QueuedMessageCard, 'hold' | 'command'>,
@@ -189,14 +188,20 @@ export function NativeChatQueuedMessageCard({
       </li>
     )
   }
-  // Nothing acts on a send still on its way: the host holds no card for it yet.
-  const actionable = card.hold !== 'sending'
-  // The host refuses these edits: a command would become a message, a run the owner's words.
-  const editable = actionable && !card.notEditable && onEdit !== undefined
-  // Edit and Delete wait for hover or keyboard focus; Steer stays on every row.
-  const toolCount = actionable ? (editable ? 2 : 1) : 0
-  const maskStyle: (React.CSSProperties & { '--queued-tools-mask': string }) | undefined =
-    toolCount > 0 ? { '--queued-tools-mask': queuedRowToolsMask(toolCount) } : undefined
+  const editable = card.hold !== 'sending' && !card.notEditable && onEdit !== undefined
+  const toolCount = card.hold === 'sending' ? 0 : editable ? 2 : 1
+  const toolStyle:
+    | (React.CSSProperties & { '--queued-tools-mask': string; '--queued-tools-width': string })
+    | undefined =
+    toolCount > 0
+      ? {
+          '--queued-tools-mask': queuedRowToolsMask(toolCount),
+          '--queued-tools-width':
+            toolCount === 1
+              ? 'max(24px, calc(var(--spacing) * 6))'
+              : 'calc(max(24px, calc(var(--spacing) * 6)) + max(24px, calc(var(--spacing) * 6)) + 1px)'
+        }
+      : undefined
   return (
     <li
       ref={drag?.rowRef}
@@ -221,7 +226,7 @@ export function NativeChatQueuedMessageCard({
           )}
         />
       ) : null}
-      <div className="flex items-center gap-1">
+      <div className={cn('flex gap-1', expanded ? 'items-start' : 'items-center')}>
         <span className="relative flex size-3.5 shrink-0 items-center justify-center">
           {attention && !drag?.grip ? (
             <AlertCircle className="size-3.5 text-destructive" aria-hidden />
@@ -242,14 +247,24 @@ export function NativeChatQueuedMessageCard({
             'min-w-0 flex-1',
             // The line fades out under the revealed tools; shown while acting, so a pressed tool never vanishes.
             toolCount > 0 &&
-              (busy
-                ? '[mask-image:var(--queued-tools-mask)]'
-                : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
+              (expanded
+                ? '[padding-right:var(--queued-tools-width)]'
+                : busy
+                  ? '[mask-image:var(--queued-tools-mask)]'
+                  : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
           )}
-          style={maskStyle}
+          style={toolStyle}
         >
           {sender}
-          {expanded ? null : (
+          {expanded ? (
+            <p
+              id={textId}
+              className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words text-sm text-foreground"
+              style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
+            >
+              {line}
+            </p>
+          ) : (
             <p ref={measureLine} className="truncate text-sm text-foreground" title={line}>
               {line}
             </p>
@@ -322,7 +337,7 @@ export function NativeChatQueuedMessageCard({
           ) : null}
           {/* Every row keeps its own Steer at rest, since each sends that one message. A command never
               steers: its Send shows only while the agent is idle. */}
-          {actionable && !card.waitsForAgent ? (
+          {card.hold !== 'sending' && !card.waitsForAgent ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -360,15 +375,6 @@ export function NativeChatQueuedMessageCard({
           ) : null}
         </div>
       </div>
-      {expanded ? (
-        <p
-          id={textId}
-          className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm text-foreground"
-          style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
-        >
-          {line}
-        </p>
-      ) : null}
     </li>
   )
 }

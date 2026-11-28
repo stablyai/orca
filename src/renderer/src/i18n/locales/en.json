@@ -1747,7 +1747,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost means this bot’s computer.",
           "headers": "Headers",
-          "authHint": "If the server needs browser sign-in, Connect appears after its native check.",
+          "authHint": "If the server needs browser sign-in, Sign in appears after its native check.",
           "executable": "Executable",
           "commandPlaceholder": "npx",
           "args": "Arguments",
@@ -24250,7 +24250,9 @@
           "updateFailed": "Couldn't update notifications on {{host}}.",
           "unsupported": "Update Orca on {{host}} to change its notifications here.",
           "enabledDescription": "Alerts {{host}} sends for its agents and terminals, including pushes to your phones.",
-          "sectionDescription": "Alerts {{host}} sends for its agents and terminals."
+          "sectionDescription": "Alerts {{host}} sends for its agents and terminals.",
+          "loadFailed": "Couldn't load notifications from {{host}}.",
+          "retry": "Try again"
         }
       },
       "orcaAccount": {

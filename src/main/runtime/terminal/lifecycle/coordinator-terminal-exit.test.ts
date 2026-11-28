@@ -7,6 +7,7 @@ import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/con
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { withDurableRuntimeStore } from '../../construction/test-context/runtime-durable-store-fixture'
+import { registerBoundPty } from '../layout/bind-first-pane.test-fixture'
 
 const LEAF = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const PANE = `tab_c:${LEAF}`
@@ -21,9 +22,19 @@ describe("a Run whose coordinator's terminal ended", () => {
 
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
-    runtime = new OrcaRuntimeService(null)
+    let session = getDefaultWorkspaceSession()
+    const store = withDurableRuntimeStore({
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: (next: WorkspaceSessionState) => {
+        session = next
+      },
+      getSettings: () => ({}),
+      flushOrThrow: () => undefined
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries every store method a terminal exit reaches.
+    runtime = new OrcaRuntimeService(store as never)
     runtime.setOrchestrationDb(db)
-    runtime.registerPty('pty-c', 'wt', null, {
+    registerBoundPty(runtime, 'pty-c', 'wt', null, {
       tabId: 'tab_c',
       leafId: LEAF,
       terminalHandle: 'term_c'
@@ -126,7 +137,7 @@ describe("a Run whose coordinator's terminal ended", () => {
     db.bindRun({ runId, coordinatorHandle: null, coordinatorPaneKey: `tab_s:${OTHER_LEAF}` })
     if (sleptTerminal) {
       // Slept in place: its record and pane stay, disconnected, and the sleep keeps its Runs.
-      window.registerPty('pty-s', 'wt', null, { tabId: 'tab_s', leafId: OTHER_LEAF })
+      registerBoundPty(window, 'pty-s', 'wt', null, { tabId: 'tab_s', leafId: OTHER_LEAF })
       window.intentionalPtyStops.mark('pty-s', 'reversible', null)
       await window.onPtyExit('pty-s', 0)
     }

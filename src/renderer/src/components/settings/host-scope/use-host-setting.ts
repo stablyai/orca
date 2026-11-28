@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import type { Translate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host/execution-host'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 import type { HostNotificationSettings } from '../../../../../shared/notifications/notification-settings-types'
@@ -19,6 +22,7 @@ import {
 export type HostSetting<V> =
   | { state: 'loading' }
   | { state: 'unsupported' }
+  | { state: 'error' }
   | { state: 'ready'; value: V }
 
 /** What settings.get/update answer with: this host's client-visible settings. */
@@ -57,10 +61,15 @@ export function useServerSettingValue<T>(args: {
   setting: HostSetting<T>
   /** `shown` displays at once, so a second edit builds on it (list rows derive the next value). */
   update: (updates: Record<string, unknown>, shown?: T) => Promise<void>
+  retry: () => void
 } {
   const { environmentId, read, updateFailedMessage } = args
   const [remote, setRemote] = useState<{ environmentId: string; setting: HostSetting<T> } | null>(
     null
+  )
+  const [attempt, setAttempt] = useState(0)
+  const hostConnected = useRuntimeHostStatusSelector(environmentId, (entry) =>
+    environmentId ? isConnectedRuntimeHostState(runtimeHostConnectionStateForEntry(entry)) : false
   )
   // A slower reply to an earlier write, or one from the previous host, must not undo a later state.
   const generation = useRef(0)
@@ -74,6 +83,15 @@ export function useServerSettingValue<T>(args: {
     },
     [read]
   )
+  const retry = useCallback(() => {
+    if (!environmentId) {
+      return
+    }
+    setRemote((prev) =>
+      prev?.environmentId === environmentId && prev.setting.state === 'error' ? null : prev
+    )
+    setAttempt((count) => count + 1)
+  }, [environmentId])
 
   useEffect(() => {
     if (!environmentId) {
@@ -87,18 +105,28 @@ export function useServerSettingValue<T>(args: {
           settle(environmentId, result.settings)
         }
       },
-      (error: unknown) => console.error('Failed to load host settings:', error)
+      (error: unknown) => {
+        console.error('Failed to load host settings:', error)
+        if (current && loaded === generation.current) {
+          setRemote((prev) =>
+            prev?.environmentId === environmentId && prev.setting.state === 'ready'
+              ? prev
+              : { environmentId, setting: { state: 'error' } }
+          )
+        }
+      }
     )
     return () => {
       current = false
     }
-  }, [environmentId, settle])
+  }, [environmentId, settle, attempt, hostConnected])
 
   return {
     setting:
       environmentId && remote?.environmentId === environmentId
         ? remote.setting
         : { state: 'loading' },
+    retry,
     update: async (updates, shown) => {
       if (!environmentId) {
         return

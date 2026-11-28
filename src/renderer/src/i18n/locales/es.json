@@ -1121,7 +1121,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost se refiere al equipo de este bot.",
           "headers": "Encabezados",
-          "authHint": "Si el servidor requiere iniciar sesión en el navegador, aparecerá Conectar después de su comprobación nativa.",
+          "authHint": "Si el servidor requiere iniciar sesión en el navegador, aparecerá «Iniciar sesión» después de su comprobación nativa.",
           "executable": "Ejecutable",
           "commandPlaceholder": "npx",
           "args": "Argumentos",
@@ -19427,7 +19427,7 @@
           "runStatusDispatchFailed": "Fallida"
         },
         "runContent": {
-          "noOutput": "No hay contenido de salida disponible."
+          "noOutput": "Sin salida."
         },
         "runViewState": {
           "viewRun": "Ver ejecución",
@@ -30409,7 +30409,7 @@
       "newThreadTab": "Nuevo hilo",
       "items": {
         "orNames": "{{names}} o {{last}}",
-        "emptyBotsNeedsYou": "Ningún elemento de {{names}} requiere tu atención",
+        "emptyBotsNeedsYou": "Nada de {{names}} requiere tu atención",
         "emptyBots": "No hay elementos de {{names}}",
         "emptyTitle": "Aún no hay elementos de este grupo",
         "filterNamed": "Filtrar elementos, filtrados por {{filter}}",

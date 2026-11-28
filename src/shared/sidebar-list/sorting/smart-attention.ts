@@ -60,9 +60,18 @@ export function hasFreshAttributedAgentStatus(
   if (freshUnstampedTabIds.size === 0) {
     return false
   }
-  return Object.values(tabsByWorktree).some((tabs) =>
-    tabs.some((tab) => freshUnstampedTabIds.has(tab.id))
-  )
+  for (const worktreeId in tabsByWorktree) {
+    if (!Object.hasOwn(tabsByWorktree, worktreeId)) {
+      continue
+    }
+    const tabs = tabsByWorktree[worktreeId]
+    for (let i = 0; i < tabs.length; i += 1) {
+      if (freshUnstampedTabIds.has(tabs[i].id)) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 /** Latest prior Done/blocked/waiting timestamp, excluding user-stopped turns; null when none qualifies. */
@@ -286,8 +295,15 @@ export function collectTabPaneInputs(
   }
 
   const paneTitles = sources.runtimePaneTitlesByTabId[tab.id]
-  const paneTitleEntries = paneTitles ? Object.entries(paneTitles) : undefined
-  if (!paneTitleEntries || paneTitleEntries.length === 0) {
+  let paneTitleCount = 0
+  if (paneTitles) {
+    for (const key in paneTitles) {
+      if (Object.hasOwn(paneTitles, key)) {
+        paneTitleCount += 1
+      }
+    }
+  }
+  if (!paneTitles || paneTitleCount === 0) {
     const coveredLeafIds = isSyntheticAgentPermissionTitle(tab.title)
       ? permissionHookLeafIds
       : hookLeafIds
@@ -304,14 +320,17 @@ export function collectTabPaneInputs(
 
   // Why: split-pane tabs host multiple agents, one title each; mirrors getWorkingAgentsPerWorktree precedence.
   const tabLayout = sources.terminalLayoutsByTabId?.[tab.id]
-  for (let i = 0; i < paneTitleEntries.length; i += 1) {
-    const [runtimePaneId, title] = paneTitleEntries[i]
+  for (const runtimePaneId in paneTitles) {
+    if (!Object.hasOwn(paneTitles, runtimePaneId)) {
+      continue
+    }
+    const title = paneTitles[Number(runtimePaneId)]
     const coveredLeafIds = isSyntheticAgentPermissionTitle(title)
       ? permissionHookLeafIds
       : hookLeafIds
     const leafId = resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId)
     const hasSingleUnmappedHook =
-      leafId === null && coveredLeafIds?.size === 1 && paneTitleEntries.length === 1
+      leafId === null && coveredLeafIds?.size === 1 && paneTitleCount === 1
     if ((leafId !== null && coveredLeafIds?.has(leafId)) || hasSingleUnmappedHook) {
       continue
     }

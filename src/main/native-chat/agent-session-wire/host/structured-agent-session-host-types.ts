@@ -232,6 +232,8 @@ export type StructuredAgentSessionHostDeps = {
   onRequestFailure?: (failure: StructuredAgentSessionRequestFailure) => void
   /** A provider died on its own with no running or failed request to carry the news. */
   onIdleProviderDeath?: (death: StructuredAgentSessionIdleDeath) => void
+  /** A person's close ended a running provider; must not throw. */
+  onUserClosedProvider?: (closed: { sessionId: string; fence: number }) => void
   /** Every committed journal batch, after request-failure observation; must not throw. */
   observeCommittedRows?: (
     sessionId: string,

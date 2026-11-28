@@ -100,7 +100,25 @@ export function useMobileWorkerApprovals({
     }
     let pending: MobileWorkerApproval[] | null = null
     let retry: ReturnType<typeof setTimeout> | undefined
+    const scheduleRetry = (): void => {
+      pending = null
+      setReceived(NONE)
+      if (retry === undefined) {
+        retry = setTimeout(() => setAttempt((n) => n + 1), RETRY_MS)
+      }
+    }
     const stop = client.subscribe('orchestration.workerApprovalsSubscribe', { party }, (raw) => {
+      const streamError = StreamErrorFrame.safeParse(raw)
+      if (streamError.success) {
+        const code = streamError.data.error?.code
+        if (code !== 'method_not_found' && code !== 'forbidden') {
+          scheduleRetry()
+        } else {
+          pending = null
+          setReceived(NONE)
+        }
+        return
+      }
       const parsed = WorkerApprovalsFrame.safeParse(raw)
       if (!parsed.success) {
         return
@@ -126,10 +144,9 @@ export function useMobileWorkerApprovals({
             ? current
             : { party, list: closed.length ? closed : NONE }
         )
-      } else if (frame.type === 'end' && retry === undefined) {
+      } else if (frame.type === 'end') {
         // The list it sent is no longer kept current.
-        setReceived(NONE)
-        retry = setTimeout(() => setAttempt((n) => n + 1), RETRY_MS)
+        scheduleRetry()
       }
     })
     return () => {
@@ -191,6 +208,11 @@ export function useMobileWorkerApprovals({
     : received
   return { open, receipts: receipts.party === party ? receipts.list : NONE, answer }
 }
+
+const StreamErrorFrame = z.looseObject({
+  type: z.literal('error'),
+  error: z.looseObject({ code: z.string().optional() }).optional()
+})
 
 // A new frame repeats every closed prompt; a line redraws only when its answer changes.
 function sameReceipts(

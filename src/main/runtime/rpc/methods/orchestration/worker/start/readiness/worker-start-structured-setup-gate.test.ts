@@ -6,6 +6,7 @@ import {
 } from '../../../../../../terminal/layout/orca-runtime-layout-owner-start-fixture'
 import type { WorkerEffect, WorkerSetupReceipt } from '../placement/worker-placement-topology'
 import { watchStructuredWorkerSetup } from './worker-start-structured-setup-gate'
+import { registerBoundPty } from '../../../../../../terminal/layout/bind-first-pane.test-fixture'
 
 it('waits for setup on a terminal the window adopted before the wait began', async () => {
   const { runtime } = setupLayoutOwnerRuntime()
@@ -24,7 +25,7 @@ it('waits for setup on a terminal the window adopted before the wait began', asy
   const internals = runtime as any
   runtime.attachWindow(1)
   internals.registerPreAllocatedHandleForPty(ptyId, handle)
-  runtime.registerPty(ptyId, WORKTREE_ID, null, { tabId, leafId, terminalHandle: handle })
+  registerBoundPty(runtime, ptyId, WORKTREE_ID, null, { tabId, leafId, terminalHandle: handle })
   internals.issuePtyHandle(internals.ptysById.get(ptyId))
   try {
     await runtime.syncWindowGraph(1, {

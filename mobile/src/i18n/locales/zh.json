@@ -1497,14 +1497,14 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
-      "needsYou_one": "{{count}} 个需要你处理",
-      "needsYou_other": "{{count}} 个需要你处理",
+      "needsYou_one": "{{count}} 个需要你",
+      "needsYou_other": "{{count}} 个需要你",
       "openHost": "打开 {{title}}",
       "pairingInvalid": "配对无效",
       "pairingTemporarilyUnavailable": "配对暂时不可用",
       "unlockHint": "解锁手机后，轻点重试",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 个活跃",
-      "tapToPairAgain": "轻点以重新与桌面配对"
+      "tapToPairAgain": "轻点重新配对"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "正在检查主机兼容性"
@@ -1866,7 +1866,7 @@
         "taskCount_one": "{{count}} 个任务",
         "taskCount_other": "{{count}} 个任务",
         "failedCount": "{{count}} 个失败",
-        "needsYouCount": "{{count}} 个等待你处理",
+        "needsYouCount": "{{count}} 个需要你",
         "runningCount": "{{count}} 个运行中",
         "workersRegion": "工作者",
         "stopOnComputer": "请在工作者运行的电脑上停止或清除它们"
@@ -3231,7 +3231,7 @@
       "terminalTitle": "终端",
       "terminalLayout": "终端布局",
       "sourceControl": "源代码管理",
-      "itemsNeedYou": "事项，{{count}} 个需要你处理",
+      "itemsNeedYou": "事项，{{count}} 个需要你",
       "quickCommands": "快捷命令",
       "items": "事项",
       "textSize": "文字大小"
@@ -3792,7 +3792,7 @@
       "yes": "是"
     },
     "tabsSheet": {
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "working": "工作中",
       "everythingElse": "其他",
       "closeTab": "关闭 {{title}}",
@@ -3825,8 +3825,8 @@
       "tabCount": "{{count}} 个标签页",
       "actionsHint": "显示此标签页的操作",
       "hint": "显示所有标签页",
-      "needYou_one": "{{count}} 个需要你处理",
-      "needYou_other": "{{count}} 个需要你处理"
+      "needYou_one": "{{count}} 个需要你",
+      "needYou_other": "{{count}} 个需要你"
     },
     "textSizeSheet": {
       "chatTitle": "聊天文字",
@@ -3849,7 +3849,7 @@
     },
     "sidebar": {
       "backTo": "返回 {{title}}",
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "files": "文件",
       "otherWorkspaces": "其他工作区"
     },
@@ -5307,7 +5307,7 @@
       "started": "开始",
       "trigger": "触发",
       "output": "输出",
-      "noOutput": "没有可用的输出内容",
+      "noOutput": "没有可用输出",
       "loadingRuns": "正在加载运行…",
       "loading": "加载中…",
       "hourly": "每小时",
@@ -5932,7 +5932,7 @@
     },
     "section": {
       "title": "Bots",
-      "summary": "{{title}}，{{total}} 个 bot，{{attention}} 个需要你处理，{{unread}} 个未读，{{working}} 个工作中",
+      "summary": "{{title}}，{{total}} 个 bot，{{attention}} 个需要你，{{unread}} 个未读，{{working}} 个工作中",
       "newBot": "新建 bot",
       "reorderTitle": "调整 bots 顺序",
       "reorder": "调整顺序…"
@@ -5964,12 +5964,12 @@
       "peerFollowedUp": "{{bot}} 跟进了",
       "items": {
         "emptyTitle": "此群组还没有事项",
-        "needsYouCount_one": "{{count}} 项需要你处理",
-        "needsYouCount_other": "{{count}} 项需要你处理",
+        "needsYouCount_one": "{{count}} 项需要你",
+        "needsYouCount_other": "{{count}} 项需要你",
         "workingCount_one": "{{count}} 个进行中",
         "workingCount_other": "{{count}} 个进行中",
         "filterBot": "Bot",
-        "needsYouCount": "{{count}} 项需要你处理",
+        "needsYouCount": "{{count}} 项需要你",
         "workingCount": "{{count}} 个进行中"
       },
       "newThreadTab": "新话题",
@@ -6531,16 +6531,16 @@
         "planned": "已计划",
         "working": "进行中",
         "waiting": "等待中",
-        "needsYou": "需要你处理",
+        "needsYou": "需要你",
         "done": "已完成",
         "canceled": "已取消"
       },
-      "needYouCount_one": "{{count}} 个事项需要你处理",
-      "needYouCount_other": "{{count}} 个事项需要你处理",
+      "needYouCount_one": "{{count}} 个事项需要你",
+      "needYouCount_other": "{{count}} 个事项需要你",
       "homeChat": "主聊天",
       "chatFallback": "聊天",
       "filter": {
-        "needsYou": "仅显示需要你处理的",
+        "needsYou": "只看需要你",
         "label": "筛选事项",
         "clear": "清除筛选",
         "clearAll": "清除筛选"
@@ -6561,7 +6561,7 @@
         "canceled": "取消了此事项",
         "reopened": "重新打开了此事项",
         "moved": "将此事项移至",
-        "madeNeedsYou": "添加了此事项，并标记为“需要你处理”",
+        "madeNeedsYou": "添加了此事项，并标记为“需要你”",
         "made": "添加了此事项",
         "linked": "关联了 {{links}}",
         "workerStarted": "工作者已启动：",
@@ -6675,8 +6675,8 @@
       "empty": {
         "title": "还没有事项",
         "body": "当 {{bot}} 为你接手任务时，会在这里显示它正在做什么，以及需要你做什么",
-        "needsYou": "没有需要你处理的事项",
-        "allClear": "没有需要你处理的事项，也没有正在运行的工作",
+        "needsYou": "暂无事项需要你",
+        "allClear": "暂无事项需要你",
         "filtered": "没有匹配的事项"
       },
       "toast": {
@@ -8171,7 +8171,7 @@
       "moreMatches_other": "还有 {{count}} 个匹配项。输入更完整的名称以缩小范围",
       "readFailedTitle": "无法加载聊天",
       "runningCount": "{{count}} 个运行中",
-      "needsYouCount": "{{count}} 项需要你处理",
+      "needsYouCount": "{{count}} 项需要你",
       "open": "打开",
       "delete": "删除聊天"
     },
@@ -8190,7 +8190,7 @@
       "needYou_one": "{{count}} 个需要你",
       "needYou_other": "{{count}} 个需要你",
       "working": "{{count}} 个工作中",
-      "itemsNeedYou": "事项，{{count}} 个需要你处理",
+      "itemsNeedYou": "事项，{{count}} 个需要你",
       "chats": "聊天",
       "files": "文件",
       "backTo": "返回 {{name}}"
@@ -8261,7 +8261,7 @@
       "placeholder": "搜索智能体"
     },
     "sections": {
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "working": "工作中",
       "done": "已完成",
       "offline": "离线",

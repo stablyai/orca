@@ -3,7 +3,10 @@ import type { WorkspaceAttachment } from '../../../../../../shared/worktree/type
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { buildWorkspaceAttachmentEdits } from '../metadata/worktree-attachment-editing'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import {
+  getWorkspaceAttachments,
+  hasWorkspaceAttachments
+} from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { toast } from 'sonner'
 
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
@@ -207,7 +210,7 @@ export function useWorktreeCardSecondaryDetails({
   // The experimental card draws the PR in its status lane; Classic lists it with the other details.
   const reviewInStatusLane = newCardStyle
   const hasDetails =
-    getWorkspaceAttachments(worktree).length > 0 ||
+    hasWorkspaceAttachments(worktree) ||
     hasWorktreeCardDetails({
       issue: metaIssue,
       linearIssue: metaLinearIssue,
