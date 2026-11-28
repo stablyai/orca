@@ -13,7 +13,11 @@ import { startGitCommonWatch } from '../git/worktree-git-common-watch'
 
 export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path: string }
 
-export type WorktreeBaseSubscription = { unsubscribe: () => Promise<void> }
+export type WorktreeBaseSubscription = {
+  unsubscribe: () => Promise<void>
+  /** Membership changed on watcher sync; owners that route by repo id re-read it. */
+  syncRepos?: () => void
+}
 
 export type WorktreePollerWindowVisibility = {
   isWindowVisible: () => boolean

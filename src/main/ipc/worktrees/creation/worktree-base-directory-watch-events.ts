@@ -10,11 +10,12 @@ import {
   invalidateActiveGitStatusRefResolution,
   invalidateGitStatusRefResolutionForPaths
 } from '../git/worktree-git-status-ref-watch'
+import type { WorktreeBaseSubscription } from './worktree-base-directory-poller'
 import type { WorktreeWatcherFailureRefreshCooldown } from './worktree-watcher-failure-refresh-cooldown'
 import { runWorktreeChangeInvalidators } from '../listing/worktree-change-invalidators'
 
 export type ActiveWatch = WorktreeBaseNotificationWatch & {
-  subscription: { unsubscribe: () => Promise<void> }
+  subscription: WorktreeBaseSubscription
   gitStatusRefPaths: Set<string>
   watcherFailureRefresh: WorktreeWatcherFailureRefreshCooldown
 }
