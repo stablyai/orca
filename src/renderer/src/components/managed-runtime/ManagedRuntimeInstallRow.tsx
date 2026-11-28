@@ -30,7 +30,9 @@ export function ManagedRuntimeInstallRow(props: {
   buttonSize?: 'xs' | 'default'
   /** False leaves out the ⋯ Reinstall/Remove menu, for rows that only prompt an install. */
   menu?: boolean
-}): React.JSX.Element | null {
+  /** Rendered instead when the row has nothing to report or offer. */
+  empty?: React.ReactNode
+}): React.JSX.Element {
   const t = useTranslate()
   const { observation, agentLabel } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
@@ -64,7 +66,7 @@ export function ManagedRuntimeInstallRow(props: {
     view.action === null &&
     (view.status === null || (view.ownCopy && !removable))
   ) {
-    return null
+    return <>{props.empty ?? null}</>
   }
   const button = view.prominent ? view.action : null
   const action = button ? null : view.action

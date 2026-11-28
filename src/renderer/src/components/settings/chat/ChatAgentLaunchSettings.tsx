@@ -22,6 +22,7 @@ import { agentLaunchRouteStoreFor } from '@/lib/agent-session/launch/routing/age
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import {
   AgentOpensAsControl,
+  chatRuntimeProgramName,
   chatUnavailableOnThisDesktop,
   useAgentChatRuntimeInstall
 } from '../../agent/launch-settings/AgentChatChoiceControls'
@@ -140,9 +141,10 @@ function ManagedChatAgentRow(props: ChatAgentRowProps): React.JSX.Element {
   return (
     <ManagedRuntimeInstallRow
       observation={runtime}
-      agentLabel={props.label}
+      agentLabel={chatRuntimeProgramName(props.agent) ?? props.label}
       signInRunning={signInRunning}
       menu={false}
+      empty={<ChatAgentRow {...props} />}
     >
       {(line, actions) => <ChatAgentRow {...props} line={line} actions={actions} />}
     </ManagedRuntimeInstallRow>

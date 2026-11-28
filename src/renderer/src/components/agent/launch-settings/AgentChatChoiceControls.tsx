@@ -17,6 +17,11 @@ import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 // The chat choice is this computer's, so the downloaded chat programs are too.
 const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 
+/** Antigravity chats run agy itself, so its install row names the program rather than a "runtime". */
+export function chatRuntimeProgramName(agent: TuiAgent): string | null {
+  return agent === 'antigravity' ? TUI_AGENT_CONFIG.antigravity.detectCmd : null
+}
+
 export function AgentOpensAsControl({
   label,
   opensAs,
@@ -96,8 +101,7 @@ export function AgentChatRuntimeArea({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { runtime, signInRunning } = useAgentChatRuntimeInstall(agent)
-  // Antigravity chats run agy itself, so its row names the program rather than a "runtime".
-  const program = agent === 'antigravity' ? TUI_AGENT_CONFIG.antigravity.detectCmd : null
+  const program = chatRuntimeProgramName(agent)
   if (chatUnavailableOnThisDesktop(agent)) {
     return <ChatUnavailableOnWindowsNote label={label} />
   }
