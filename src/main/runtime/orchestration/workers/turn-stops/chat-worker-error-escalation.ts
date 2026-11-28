@@ -124,7 +124,8 @@ export async function escalateChatWorkerError(
           fence: `${REQUEST_FENCE}${request.sessionId}:${request.kind}:${request.id}`,
           legacyStopKey: `request:${request.kind}:${request.id}`,
           legacyReportId: escalationId(dispatch.id, request),
-          // The limit was the worker's last news and Orca still continues it: no news.
+          // The limit was the worker's last news and Orca still continues it: no news. Safe for any
+          // turn because coordinator mail waits behind a usage-limited turn (readFailedTurnHold).
           ...(limit?.continues && lastReportWasUsageLimit(db, dispatch, from)
             ? { unreported: true as const }
             : {}),
