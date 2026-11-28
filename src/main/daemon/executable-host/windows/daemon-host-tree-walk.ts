@@ -32,15 +32,24 @@ export async function listDaemonHostTree(
     const isDir = await mapWithConcurrencyUntilFailure(level, limit, async (entry) =>
       (await (followLinks ? stat : lstat)(entry.sourcePath)).isDirectory()
     )
-    const dirs = level.filter((_, index) => isDir[index])
-    listing.dirs.push(...dirs)
     listing.files.push(...level.filter((_, index) => !isDir[index]))
-    const children = await mapWithConcurrencyUntilFailure(dirs, limit, async (dir) =>
-      (await readdir(dir.sourcePath)).map((name) => ({
-        sourcePath: join(dir.sourcePath, name),
-        destRel: `${dir.destRel}/${name}`,
-        filter: dir.filter
-      }))
+    const children = await mapWithConcurrencyUntilFailure(
+      level.filter((_, index) => isDir[index]),
+      limit,
+      async (dir) => {
+        // Removal re-checks before descending so a dir swapped for a junction is unlinked, not walked.
+        // A swap between this lstat and readdir stays possible; it needs a same-user writer in the tree.
+        if (!followLinks && !(await lstat(dir.sourcePath)).isDirectory()) {
+          listing.files.push(dir)
+          return []
+        }
+        listing.dirs.push(dir)
+        return (await readdir(dir.sourcePath)).map((name) => ({
+          sourcePath: join(dir.sourcePath, name),
+          destRel: `${dir.destRel}/${name}`,
+          filter: dir.filter
+        }))
+      }
     )
     level = children.flat().filter(accepted)
   }

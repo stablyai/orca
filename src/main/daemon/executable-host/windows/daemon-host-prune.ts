@@ -12,7 +12,12 @@ export async function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence
   if (!isPackagedElectronWin32()) {
     return
   }
+  // Decide on version dirs first: awaiting staging cleanup before them would let the pid evidence go stale.
+  await pruneSupersededVersions(evidence)
   await pruneDaemonHostStaging()
+}
+
+async function pruneSupersededVersions(evidence: PinnedDaemonVersionsEvidence): Promise<void> {
   if (evidence.status === 'unverifiable') {
     console.warn(`[daemon] Skipping daemon-host prune: ${evidence.reason}`)
     return

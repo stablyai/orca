@@ -222,6 +222,30 @@ describe('executeManifest mixed revisions', () => {
   })
 })
 
+describe('executeManifest added files', () => {
+  it('rejects a fresh copy when a code file appears after listing', async () => {
+    const codeDir = join(tempDir, 'code')
+    mkdirSync(codeDir)
+    writeFileSync(join(codeDir, 'entry.js'), 'require("./chunk.js")')
+    let calls = 0
+    const isCode = (rel: string): boolean => {
+      calls += 1
+      // Calls 1-2 list and copy entry.js; call 3 picks the code dirs to re-list after the copy.
+      if (calls === 3) {
+        writeFileSync(join(codeDir, 'chunk.js'), 'module.exports = {}')
+      }
+      return rel.startsWith('code')
+    }
+    await expect(
+      executeManifest(
+        [{ sourcePath: codeDir, destRel: 'code', kind: 'dir' }],
+        join(tempDir, 'added'),
+        { isCode }
+      )
+    ).rejects.toThrow('code changed while copying')
+  })
+})
+
 describe('executeManifest missing sources', () => {
   // Electron's Windows Node can turn a failed opendir into a null handle (#50997); missing folders must reject.
   it('rejects a missing required folder and skips a missing optional one', async () => {
@@ -240,24 +264,41 @@ describe('executeManifest missing sources', () => {
 })
 
 describe('removeDaemonHostTree', () => {
-  it('removes a copy without following links out of it', async () => {
-    const outside = join(tempDir, 'install-file.txt')
-    writeFileSync(outside, 'keep')
-    const outsideDir = join(tempDir, 'install-dir')
-    mkdirSync(outsideDir)
-    writeFileSync(join(outsideDir, 'inner.txt'), 'keep')
+  function hostWithCopy(): string {
     const host = join(tempDir, 'host')
     mkdirSync(join(host, 'nested', 'empty'), { recursive: true })
     writeFileSync(join(host, 'nested', 'file.txt'), 'copy')
-    symlinkSync(outside, join(host, 'file-link'))
+    return host
+  }
+
+  it('removes a copy without following a junction out of it', async () => {
+    const outsideDir = join(tempDir, 'install-dir')
+    mkdirSync(outsideDir)
+    writeFileSync(join(outsideDir, 'inner.txt'), 'keep')
+    const host = hostWithCopy()
     symlinkSync(outsideDir, join(host, 'nested', 'dir-link'), 'junction')
 
     await removeDaemonHostTree(host)
 
     expect(existsSync(host)).toBe(false)
-    expect(readFileSync(outside, 'utf8')).toBe('keep')
     expect(readFileSync(join(outsideDir, 'inner.txt'), 'utf8')).toBe('keep')
   })
+
+  // File symlinks need Developer Mode or SeCreateSymbolicLinkPrivilege on Windows; junctions don't.
+  it.skipIf(process.platform === 'win32')(
+    'removes a copy without following a file link out of it',
+    async () => {
+      const outside = join(tempDir, 'install-file.txt')
+      writeFileSync(outside, 'keep')
+      const host = hostWithCopy()
+      symlinkSync(outside, join(host, 'file-link'))
+
+      await removeDaemonHostTree(host)
+
+      expect(existsSync(host)).toBe(false)
+      expect(readFileSync(outside, 'utf8')).toBe('keep')
+    }
+  )
 })
 
 // Age beyond the publication window so quarantine sees a settled corrupt record.

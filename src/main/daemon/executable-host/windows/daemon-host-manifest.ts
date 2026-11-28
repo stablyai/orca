@@ -1,8 +1,12 @@
 import { createHash } from 'node:crypto'
-import { access, copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { fileStatSignature } from '../../../filesystem/file-stat-signature'
 import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
-import { DAEMON_HOST_FS_CONCURRENCY, listDaemonHostTree } from './daemon-host-tree-walk'
+import {
+  DAEMON_HOST_FS_CONCURRENCY,
+  listDaemonHostTree,
+  type TreeEntry
+} from './daemon-host-tree-walk'
 import { dirname, join, win32 as winPath } from 'node:path'
 
 /** Preserve signed bytes and basename; path-based NSIS sweeps spare the copy, but taskkill /IM can still kill it. */
@@ -209,6 +213,28 @@ async function copyHashedFile(
   return { sha256, signature }
 }
 
+// A file added or removed under the code after listing would publish an incomplete build.
+async function assertCodeDirsUnchanged(
+  codeDirs: readonly TreeEntry[],
+  listed: readonly TreeEntry[]
+): Promise<void> {
+  const listedRels = new Set(listed.map((entry) => entry.destRel))
+  await mapWithConcurrencyUntilFailure(codeDirs, DAEMON_HOST_FS_CONCURRENCY, async (dir) => {
+    const names = (await readdir(dir.sourcePath)).filter(
+      (name) => !dir.filter || dir.filter(join(dir.sourcePath, name))
+    )
+    const listedCount = [...listedRels].filter(
+      (rel) => rel.startsWith(`${dir.destRel}/`) && !rel.slice(dir.destRel.length + 1).includes('/')
+    ).length
+    if (
+      names.length !== listedCount ||
+      names.some((name) => !listedRels.has(`${dir.destRel}/${name}`))
+    ) {
+      throw new Error('daemon-host relocation: code changed while copying')
+    }
+  })
+}
+
 export type ManifestCodeHashing = {
   /** Posix destRels whose copied bytes are hashed and returned. */
   isCode: (destRel: string) => boolean
@@ -266,6 +292,10 @@ export async function executeManifest(
     hashes.set(file.destRel, copied.sha256)
     signatures.set(file.sourcePath, copied.signature)
   })
+  await assertCodeDirsUnchanged(
+    dirs.filter((dir) => code.isCode(dir.destRel)),
+    [...files, ...dirs]
+  )
   // A source replaced after it was read (an update mid-copy) would mix revisions in one build.
   await mapWithConcurrencyUntilFailure(
     [...signatures],
