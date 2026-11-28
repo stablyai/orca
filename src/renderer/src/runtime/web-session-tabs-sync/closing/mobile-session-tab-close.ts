@@ -1,5 +1,10 @@
 import type { AppState } from '../../../store/types'
 import { isBotChatTab } from '@/components/bots/bot-workspace'
+import {
+  SESSION_TAB_CLOSE_FAILED_ERROR,
+  SESSION_TAB_NOT_FOUND_ERROR
+} from '../../../../../shared/workspace-layout/client-views/session-tab-close'
+import { isLocalSessionTabCloseOwned } from './local-session-tab-close-owner'
 
 const EDITOR_SESSION_CONTENT_TYPES = new Set([
   'editor',
@@ -48,4 +53,24 @@ export function closeMobileSessionTabInStore(
   }
 
   return false
+}
+
+/** Main's host close for this chat landed: its tab leaves now. Always answers, so main never waits
+ *  out a timeout; a close this window started itself is already removing the tab. */
+export function dropHostClosedSessionTab(
+  store: Parameters<typeof closeMobileSessionTabInStore>[0],
+  worktreeId: string,
+  hostTabId: string,
+  localTabId: string
+): string | undefined {
+  if (isLocalSessionTabCloseOwned(worktreeId, hostTabId)) {
+    return undefined
+  }
+  try {
+    return closeMobileSessionTabInStore(store, worktreeId, localTabId)
+      ? undefined
+      : SESSION_TAB_NOT_FOUND_ERROR
+  } catch (error) {
+    return error instanceof Error ? error.message : SESSION_TAB_CLOSE_FAILED_ERROR
+  }
 }

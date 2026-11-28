@@ -514,9 +514,9 @@ async function closeChatTab(
   const { sessions } = worker.current.host.collaboratorsForTests()
   const asked: string[] = []
   const window = {
-    closeSessionTab: async (_tabId: string, _worktreeId: string, stage?: { stage: string }) => {
-      asked.push(`${stage?.stage ?? 'close'}:${sessions.get(SESSION)?.child ? 'running' : 'ended'}`)
-      if (failHostClose && stage?.stage === 'confirm') {
+    closeSessionTab: async (_tabId: string, _worktreeId: string, stage?: string) => {
+      asked.push(`${stage ?? 'close'}:${sessions.get(SESSION)?.child ? 'running' : 'ended'}`)
+      if (failHostClose && stage === 'confirm') {
         // The host went away between the window's answer and the host close.
         setStructuredAgentSessionHost(null)
       }
@@ -550,7 +550,7 @@ it('lets a chat tab leave the window only once its host close landed', async () 
 it('keeps a chat tab in the window when its host close fails', async () => {
   const worker = await startWorker()
   expect(await closeChatTab(worker, true)).toEqual({
-    asked: ['confirm:running', 'failed:running'],
+    asked: ['confirm:running'],
     closed: false
   })
   expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('ready')

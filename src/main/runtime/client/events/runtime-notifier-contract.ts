@@ -150,7 +150,7 @@ export type RuntimeNotifier = {
   closeSessionTab?(
     tabId: string,
     worktreeId: string,
-    stage?: { stage: SessionTabCloseStage; error?: string }
+    stage?: SessionTabCloseStage
   ): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   /** The window moves a client's pane to a new tab, since it owns the layout; rejects when it cannot answer. */

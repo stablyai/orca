@@ -110,7 +110,7 @@ export async function closeMobileStructuredSessionPresentation(input: {
     !host && (input.reason === undefined || input.reason === 'user') && input.local()
   const surface = captureInstalledStructuredSessionSurface(input.tab.sessionId, input.runtime)
   if (host) {
-    // The window keeps the tab until its chat's host close lands, so a failed close strands nothing.
+    // The window keeps the tab until its chat's host close lands; a failed close leaves it open.
     return closeRenderedStructuredSessionTabAround(
       input.notifier,
       input.tab.id,

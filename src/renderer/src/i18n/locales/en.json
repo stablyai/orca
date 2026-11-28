@@ -31480,8 +31480,5 @@
       "badJson": "Check the pasted JSON: it doesn’t parse.",
       "none": "Orca found no server it can add. SSE servers, servers with their own OAuth client or tool filters, and values read from the environment (${VAR}) aren’t supported."
     }
-  },
-  "sessionTabs": {
-    "chatCloseFailed": "Couldn't close this chat."
   }
 }

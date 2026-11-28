@@ -8,7 +8,7 @@ type SessionTabCloseNotifier =
       closeSessionTab?: (
         tabId: string,
         worktreeId: string,
-        stage?: { stage: SessionTabCloseStage; error?: string }
+        stage?: SessionTabCloseStage
       ) => void | Promise<unknown>
     }
   | null
@@ -19,7 +19,7 @@ export async function closeRenderedStructuredSessionTab(
   notifier: SessionTabCloseNotifier,
   tabId: string,
   worktreeId: string,
-  stage?: { stage: SessionTabCloseStage; error?: string }
+  stage?: SessionTabCloseStage
 ): Promise<void> {
   if (notifier?.closeSessionTab) {
     try {
@@ -33,32 +33,20 @@ export async function closeRenderedStructuredSessionTab(
 }
 
 /** The window confirms the close and keeps the tab; `close` then runs the host close, and the tab
- *  leaves only when it landed. A failed close keeps the tab and shows why. */
+ *  leaves only when it landed. A failed close keeps the tab. */
 export async function closeRenderedStructuredSessionTabAround(
   notifier: SessionTabCloseNotifier,
   tabId: string,
   worktreeId: string,
   close: () => Promise<boolean>
 ): Promise<boolean> {
-  await closeRenderedStructuredSessionTab(notifier, tabId, worktreeId, { stage: 'confirm' })
-  let closed = false
-  let failure: unknown
-  try {
-    closed = await close()
-  } catch (error) {
-    failure = error
-  }
-  const error = failure instanceof Error ? failure.message : failure ? String(failure) : undefined
-  await closeRenderedStructuredSessionTab(
-    notifier,
-    tabId,
-    worktreeId,
-    closed ? { stage: 'drop' } : { stage: 'failed', ...(error ? { error } : {}) }
-  ).catch((notifyError: unknown) =>
-    console.warn('[structured-agent-session] settling a chat tab close failed', notifyError)
-  )
-  if (failure !== undefined) {
-    throw failure
+  await closeRenderedStructuredSessionTab(notifier, tabId, worktreeId, 'confirm')
+  const closed = await close()
+  if (closed) {
+    await closeRenderedStructuredSessionTab(notifier, tabId, worktreeId, 'drop').catch(
+      (error: unknown) =>
+        console.warn('[structured-agent-session] dropping a closed chat tab failed', error)
+    )
   }
   return closed
 }

@@ -17,7 +17,7 @@ export async function requestSessionTabCloseFromRenderer(
   mainWindow: BrowserWindow,
   tabId: string,
   worktreeId: string,
-  stage?: { stage: SessionTabCloseStage; error?: string }
+  stage?: SessionTabCloseStage
 ): Promise<void> {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
     throw new Error('renderer_unavailable')
@@ -49,10 +49,12 @@ export async function requestSessionTabCloseFromRenderer(
       }
       finish(response.error ? new Error(response.error) : undefined)
     }
+    // Only a close that may ask a person waits for one; a drop asks nobody.
+    const asks = stage !== 'drop'
     const expiresAt = Date.now() + SESSION_TAB_CLOSE_CONFIRMATION_MS
     const timeout = setTimeout(
       () => finish(new Error(SESSION_TAB_CLOSE_TIMEOUT_ERROR)),
-      SESSION_TAB_CLOSE_CONFIRMATION_MS + SESSION_TAB_CLOSE_RESPONSE_GRACE_MS
+      (asks ? SESSION_TAB_CLOSE_CONFIRMATION_MS : 0) + SESSION_TAB_CLOSE_RESPONSE_GRACE_MS
     )
     timeout.unref?.()
     releaseListeners.push(
@@ -64,7 +66,13 @@ export async function requestSessionTabCloseFromRenderer(
         onRendererUnavailable
       )
     )
-    const request: SessionTabCloseRequest = { requestId, tabId, worktreeId, expiresAt, ...stage }
+    const request: SessionTabCloseRequest = {
+      requestId,
+      tabId,
+      worktreeId,
+      ...(asks ? { expiresAt } : {}),
+      ...(stage ? { stage } : {})
+    }
     try {
       webContents.send('ui:sessionTabCloseRequest', request)
     } catch {

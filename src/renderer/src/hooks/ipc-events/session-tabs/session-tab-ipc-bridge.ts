@@ -1,8 +1,9 @@
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
 import { isLocalSessionTabCloseOwned } from '@/runtime/web-session-tabs-sync/closing/local-session-tab-close-owner'
-import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
+import {
+  closeMobileSessionTabInStore,
+  dropHostClosedSessionTab
+} from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
 import {
   SESSION_TAB_CLOSE_CANCELED_ERROR,
   SESSION_TAB_CLOSE_FAILED_ERROR,
@@ -55,8 +56,7 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   )
 
   unsubs.push(
-    window.api.ui.onSessionTabCloseRequest((request) => {
-      const { requestId, tabId, worktreeId, expiresAt, stage } = request
+    window.api.ui.onSessionTabCloseRequest(({ requestId, tabId, worktreeId, expiresAt, stage }) => {
       const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
       const store = useAppStore.getState()
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
@@ -82,17 +82,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
           Math.max(0, expiresAt - Date.now())
         )
       }
-      if (stage === 'drop' || stage === 'failed') {
-        // Main's host close for this chat landed, or did not: only then does its tab leave.
-        if (stage === 'failed' && !isLocalSessionTabCloseOwned(worktreeId, tabId)) {
-          toast.error(
-            translate('sessionTabs.chatCloseFailed', "Couldn't close this chat."),
-            request.error ? { description: request.error } : undefined
-          )
-        }
-        const closed =
-          stage === 'drop' && closeMobileSessionTabInStore(store, worktreeId, localTabId)
-        respond(closed || stage === 'failed' ? undefined : SESSION_TAB_NOT_FOUND_ERROR)
+      if (stage === 'drop') {
+        respond(dropHostClosedSessionTab(store, worktreeId, tabId, localTabId))
         return
       }
       const closeAndRespond = (): void => {
