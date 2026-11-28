@@ -103,6 +103,7 @@ const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
     opensInTerminal: true
   },
   { name: 'plan', description: 'Toggle plan mode' },
+  { name: 'vibe', description: 'Toggle vibe mode: direct fast/good worker sessions' },
   { name: 'compact', description: 'Compact conversation context' },
   { name: 'clear', description: 'Clear context while keeping the session' },
   { name: 'new', description: 'Start a new session' },
