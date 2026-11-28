@@ -667,7 +667,6 @@
 2 src/main/ipc/settings/settings.ts
 3 src/main/ipc/shell/shell.ts
 5 src/main/ipc/source-control/hosted-review.ts
-3 src/main/ipc/ssh/plain-ssh-terminal-handlers.ts
 2 src/main/ipc/ssh/ssh-connection-handlers.ts
 2 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
 2 src/main/ipc/ssh/ssh-target-crud-handlers.ts
