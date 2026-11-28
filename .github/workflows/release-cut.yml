@@ -628,7 +628,7 @@ jobs:
       - name: Pick the dry-run placeholder version
         id: dry-run-version
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run
-        run: echo "version=0.0.0-rc.$GITHUB_RUN_ID" >>"$GITHUB_OUTPUT"
+        run: echo "version=0.0.0-rc.0" >>"$GITHUB_OUTPUT"
 
       - name: Bump package.json and tag
         id: tag
@@ -778,6 +778,7 @@ jobs:
       # Runs for recovered tags too: an existing tag is held to the same content rules as a new one.
       - name: Verify the tag is only a version bump of the source
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEW_TAG: ${{ needs.prepare.outputs.new_tag }}
           PREPARED_VERSION: ${{ needs.prepare.outputs.version }}
           DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
@@ -798,10 +799,13 @@ jobs:
             VERSION="${TAG#v}"
             git -c transfer.fsckObjects=true fetch -q --no-tags --depth=1 origin "+refs/tags/$TAG:refs/tags/$TAG"
           fi
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+(\.[0-9A-Za-z]+)?)?$ && "$TAG" == "v$VERSION" ]] || fail "not a release version tag"
+          # Canonical, at most nine digits per number (like the explicit-version gate), so the arithmetic below can't wrap.
+          n='(0|[1-9][0-9]{0,8})'
+          [[ "$VERSION" =~ ^$n\.$n\.$n(-rc\.$n(\.(0|[1-9][0-9]{0,8}|[0-9A-Za-z]*[A-Za-z][0-9A-Za-z]*))?)?$ && "$TAG" == "v$VERSION" ]] ||
+            fail "not a release version tag"
           # Bind the version to what was dispatched, against the stable floor read here rather than from prepare.
           if [[ "$DRY_RUN" == true ]]; then
-            [[ -n "$NEW_TAG" && "$VERSION" == "0.0.0-rc.$GITHUB_RUN_ID" ]] || fail "a dry run must use its placeholder version"
+            [[ -n "$NEW_TAG" && "$VERSION" == "0.0.0-rc.0" ]] || fail "a dry run must use its placeholder version"
           elif [[ -n "$EXPLICIT_VERSION" ]]; then
             [[ "$VERSION" == "${EXPLICIT_VERSION#v}${VERSION_SUFFIX:+.$VERSION_SUFFIX}" ]] || fail "version is not the requested $EXPLICIT_VERSION"
           elif [[ "$KIND" == rc ]]; then
@@ -820,7 +824,6 @@ jobs:
             fi
             IFS=. read -r fM fm fp <<<"${floor:-0.0.0}"
             IFS=. read -r vM vm vp <<<"${VERSION%%-*}"
-            vM=$((10#$vM)) vm=$((10#$vm)) vp=$((10#$vp))
             ok=false
             # The upper bounds match prepare's 100-step tag-collision loop.
             case "$KIND" in
@@ -832,6 +835,13 @@ jobs:
             # recover_unpublished_tag may also reuse the source's own unpublished stable tag, which is the floor.
             [[ -z "$NEW_TAG" && "$KIND" != rc && "$VERSION" == "$floor" ]] && ok=true
             [[ "$ok" == true ]] || fail "$VERSION is not the next $KIND after stable ${floor:-0.0.0}"
+            if [[ "$VERSION" == *-rc.* ]]; then
+              # RC numbers advance one at a time; allow prepare's history slack but not an arbitrary jump.
+              ord="${VERSION#*-rc.}" ord="${ord%%.*}" prefix="refs/tags/v${VERSION%%-*}-rc."
+              top="$(git ls-remote --tags --refs origin | cut -f2 | { grep -F "$prefix" || true; } |
+                sed "s|^${prefix//./\\.}||; s|\..*||" | { grep -xE '[0-9]{1,9}' || true; } | sort -n | tail -n 1)"
+              (( ord <= ${top:-0} + 100 )) || fail "rc.$ord jumps past the highest RC tag rc.${top:-none}"
+            fi
           fi
           commit="$(git rev-parse "refs/tags/$TAG^{commit}")"
           [[ "$commit" == "$RELEASE_SHA" ]] || fail "tag commit $commit is not prepare's $RELEASE_SHA"
@@ -843,6 +853,8 @@ jobs:
           [[ "$(git cat-file -p "$commit" | sed '/^$/q' | awk '/^parent /{ print $2 }')" == "$SOURCE_SHA" ]] || fail "release commit is not a single-parent child of $SOURCE_SHA"
           changed="$(git diff-tree --name-only -r "$SOURCE_SHA" "$commit")"
           [[ -z "$changed" || "$changed" == package.json ]] || fail "release commit changes more than package.json"
+          [[ "$(git ls-tree "$commit" package.json | cut -d' ' -f1-2)" == "$(git ls-tree "$SOURCE_SHA" package.json | cut -d' ' -f1-2)" ]] ||
+            fail "package.json changed its file mode or type"
           # Byte-for-byte: the source package.json with only its version line replaced.
           cmp -s <(git show "$commit:package.json") <(git show "$SOURCE_SHA:package.json" |
             awk -v v="$VERSION" '!done && /^  "version": "[^"]*",$/ { print "  \"version\": \"" v "\","; done = 1; next } { print }') ||
