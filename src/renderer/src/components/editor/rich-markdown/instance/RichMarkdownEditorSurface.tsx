@@ -76,6 +76,7 @@ type RichMarkdownEditorSurfaceProps = {
   annotationPopover: RichMarkdownAnnotationTarget | null
   markdownSourceLineOffset: number
   tableOfContentsItems: MarkdownTocItem[]
+  activeTocId?: string | null
   showTableOfContents: boolean
   searchState: {
     activeMatchIndex: number
@@ -169,6 +170,7 @@ export function RichMarkdownEditorSurface({
   annotationPopover,
   markdownSourceLineOffset,
   tableOfContentsItems,
+  activeTocId,
   showTableOfContents,
   searchState,
   searchActions,
@@ -200,6 +202,7 @@ export function RichMarkdownEditorSurface({
       {showTableOfContents ? (
         <MarkdownTableOfContentsPanel
           items={tableOfContentsItems}
+          activeId={activeTocId}
           onClose={onCloseTableOfContents ?? (() => {})}
           onNavigate={onNavigateTableOfContentsItem}
         />

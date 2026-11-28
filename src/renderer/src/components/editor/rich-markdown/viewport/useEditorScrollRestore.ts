@@ -50,12 +50,18 @@ export function useEditorScrollRestore(
 
     let frameId = 0
     let attempts = 0
+    let lastApplied: number | undefined
 
     // Retry while asynchronous Tiptap hydration grows scrollHeight; the initial frame may not reach the cached offset.
     const tryRestore = (): void => {
+      // A heading jump (or any external scroll) owns the viewport now; do not snap it back (#24287).
+      if (lastApplied !== undefined && Math.abs(container.scrollTop - lastApplied) > 1) {
+        return
+      }
       const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
       const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
       container.scrollTop = nextScrollTop
+      lastApplied = container.scrollTop
 
       if (Math.abs(container.scrollTop - targetScrollTop) <= 1 || maxScrollTop >= targetScrollTop) {
         return

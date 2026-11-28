@@ -10,6 +10,7 @@ const TOC_INDENT_STEP_PX = 12
 export function MarkdownTocRow({
   renderChildren = true,
   collapsedIds,
+  activeId,
   depth,
   item,
   onNavigate,
@@ -17,6 +18,7 @@ export function MarkdownTocRow({
 }: {
   renderChildren?: boolean
   collapsedIds: ReadonlySet<string>
+  activeId?: string | null
   depth: number
   item: MarkdownTocItem
   onNavigate: (id: string) => void
@@ -34,7 +36,12 @@ export function MarkdownTocRow({
 
   return (
     <>
-      <div className="markdown-toc-row" style={{ paddingLeft: rowPaddingLeft }}>
+      <div
+        className="markdown-toc-row"
+        data-active={item.id === activeId ? 'true' : undefined}
+        aria-current={item.id === activeId ? 'location' : undefined}
+        style={{ paddingLeft: rowPaddingLeft }}
+      >
         {hasChildren ? (
           <button
             type="button"
@@ -76,6 +83,7 @@ export function MarkdownTocRow({
             <MarkdownTocRow
               key={child.id}
               collapsedIds={collapsedIds}
+              activeId={activeId}
               depth={depth + 1}
               item={child}
               onNavigate={onNavigate}
