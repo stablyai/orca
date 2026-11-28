@@ -91,16 +91,16 @@ export class UsageLimitColdCuts {
   }
 
   /** At most three history reads per pass; a read that throws stays retryable without starving others. */
-  async readUnread(visible: readonly string[], current: () => boolean): Promise<void> {
-    if (!current()) {
-      return
-    }
+  async readUnread(visible: readonly string[], stillShown: (id: string) => boolean): Promise<void> {
     const pass = ++this.passes
-    const unread = visible.filter((id) => !this.deps.sessions.has(id) && !this.cuts.has(id))
+    const unread = visible.filter(
+      (id) => stillShown(id) && !this.deps.sessions.has(id) && !this.cuts.has(id)
+    )
     unread.sort((a, b) => (this.failures.get(a) ?? 0) - (this.failures.get(b) ?? 0))
     for (const id of unread.slice(0, 3)) {
+      const current = () => stillShown(id)
       if (!current()) {
-        return
+        continue
       }
       try {
         await this.readJournal(id, true, current)
@@ -109,7 +109,7 @@ export class UsageLimitColdCuts {
         }
       } catch (error) {
         if (!current()) {
-          return
+          continue
         }
         if (!this.failures.has(id)) {
           this.deps.logger.warn('usage-limit continue could not read a chat', {
@@ -123,7 +123,7 @@ export class UsageLimitColdCuts {
     }
   }
 
-  retain(shown: ReadonlySet<string>): void {
+  retain(shown: Pick<ReadonlySet<string>, 'has'>): void {
     for (const cache of [this.cuts, this.failures]) {
       for (const id of cache.keys()) {
         if (!shown.has(id)) {

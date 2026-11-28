@@ -37,12 +37,10 @@ export class StructuredAgentSessionUsageLimitContinue {
   private stopRecords: (() => void) | undefined
   private running = false
   private disposed = false
-  private scheduleRevision = 0
-  private activeSend: { id: string } | undefined
   private readonly attempts = new Map<string, Attempt>()
   private readonly holds = new UsageLimitAccountHolds()
   private readonly cold: UsageLimitColdCuts
-  private shown = new Set<string>()
+  private shown = new Map<string, symbol>()
   private readonly told = new Set<(sessionId?: string) => void>()
 
   /** A chat's (or, with none named, every chat's) continue may have ended without a status publish:
@@ -90,11 +88,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       return
     }
     if (visible.length !== this.shown.size || visible.some((id) => !this.shown.has(id))) {
-      this.scheduleRevision += 1
       this.retainShown(visible)
-      if (this.activeSend && !this.shown.has(this.activeSend.id)) {
-        this.activeSend = undefined
-      }
     }
     this.syncLoadedHandles()
   }
@@ -118,7 +112,6 @@ export class StructuredAgentSessionUsageLimitContinue {
     if (this.timer) {
       clearInterval(this.timer)
       this.timer = undefined
-      this.scheduleRevision += 1
     }
   }
 
@@ -126,13 +119,13 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   /** Only a loaded chat with a cut has a schedule whose state can change; an unknown reset gains
    *  or loses one as the chat's account moves. */
-  private async publishScheduled(current = () => !this.disposed): Promise<void> {
+  private async publishScheduled(): Promise<void> {
     for (const id of this.deps.sessions.keys()) {
-      if (!current()) {
+      if (this.disposed) {
         return
       }
       const handle = this.deps.sessions.get(id)
-      const stillLoaded = () => current() && this.deps.sessions.get(id) === handle
+      const stillLoaded = () => !this.disposed && this.deps.sessions.get(id) === handle
       const cut = await this.cold.readForSweep(id, stillLoaded)
       if (stillLoaded() && cut !== 'unreadable' && cut !== null) {
         this.deps.publish(id)
@@ -147,7 +140,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.stopRecords?.()
     this.stopSettings = undefined
     this.stopRecords = undefined
-    this.activeSend = undefined
+    this.shown.clear()
     this.cold.clear()
     this.attempts.clear()
     this.holds.clear()
@@ -160,9 +153,10 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   /** Drops what the sweep keeps for chats no longer open. */
   private retainShown(visible: readonly string[]): void {
-    const shown = new Set(visible)
+    // Retire just the chat that closed; a later reopen cannot reuse its pending work.
+    const shown = new Map(visible.map((id) => [id, this.shown.get(id) ?? Symbol()]))
     // A closed chat has no status publish when it never loaded: say its continue ended here.
-    const closed = [...this.shown].filter((id) => !shown.has(id))
+    const closed = [...this.shown.keys()].filter((id) => !shown.has(id))
     this.shown = shown
     closed.forEach((id) => this.told.forEach((listener) => listener(id)))
     for (const id of this.attempts.keys()) {
@@ -261,30 +255,28 @@ export class StructuredAgentSessionUsageLimitContinue {
     if (visible.length === 0 && this.deps.sessions.size === 0) {
       return
     }
-    const revision = this.scheduleRevision
-    const current = () => !this.disposed && this.scheduleRevision === revision
-    this.cold.retain(this.shown)
+    const shown = this.shown
+    const stillShown = (id: string) => !this.disposed && this.shown.get(id) === shown.get(id)
+    this.cold.retain(shown)
     // Off, nothing is sent, but an account switch still moves when Continue applies.
     this.running = true
     try {
       // Visibility and workspace sleep can change without a journal or settings commit.
-      await this.publishScheduled(current)
-      if (!current()) {
-        return
-      }
-      await this.cold.readUnread(visible, current)
-      if (!current()) {
+      await this.publishScheduled()
+      await this.cold.readUnread(visible, stillShown)
+      if (this.disposed) {
         return
       }
       this.holds.beginPass(this.deps.now())
       const due: { id: string; cut: Cut; at: number }[] = []
       for (const id of visible) {
-        if (!this.deps.sessions.has(id) && !this.cold.has(id)) {
+        const current = () => stillShown(id)
+        if (!current() || (!this.deps.sessions.has(id) && !this.cold.has(id))) {
           continue
         }
         const read = await this.cold.readForSweep(id, current)
         if (!current()) {
-          return
+          continue
         }
         // Unreadable is not "no cut": its attempt record must survive to guard a repeat send.
         if (read === 'unreadable') {
@@ -295,7 +287,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         if (read) {
           await this.holds.attribute(id, this.deps.host, read, this.deps.now(), current)
           if (!current()) {
-            return
+            continue
           }
         }
         const cut = read && this.holds.withSwitchReset(id, read)
@@ -325,17 +317,8 @@ export class StructuredAgentSessionUsageLimitContinue {
       // One at a time, since a cold send can start an agent process; the rest stay due for later
       // passes, so a reset that frees many chats does not start their agents all at once.
       for (const next of due.slice(0, USAGE_LIMIT_CONTINUE_SENDS_PER_PASS)) {
-        if (!current()) {
-          return
-        }
-        const send = { id: next.id }
-        this.activeSend = send
-        try {
-          await this.send(next.id, next.cut, () => this.activeSend === send)
-        } finally {
-          if (this.activeSend === send) {
-            this.activeSend = undefined
-          }
+        if (stillShown(next.id)) {
+          await this.send(next.id, next.cut, () => stillShown(next.id))
         }
       }
     } catch (error) {

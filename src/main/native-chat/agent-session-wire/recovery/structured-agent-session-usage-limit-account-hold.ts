@@ -160,7 +160,7 @@ export class UsageLimitAccountHolds {
     return holds
   }
 
-  retain(shown: ReadonlySet<string>): void {
+  retain(shown: Pick<ReadonlySet<string>, 'has'>): void {
     for (const cache of [this.holds, this.scopes, this.bindings, this.providers, this.movedSince]) {
       for (const id of cache.keys()) {
         if (!shown.has(id)) {

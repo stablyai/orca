@@ -216,3 +216,65 @@ it('keeps the existing deadlines only while chats or leases need them', async ()
     }
   }
 })
+
+it('keeps a saved-cut read when another chat closes and reopens', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-chat-timer-membership-'))
+  let host: StructuredAgentSessionHost | undefined
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  try {
+    seedProfile(root, 2)
+    const opened = await openHost(root)
+    host = opened.host
+    const { store, journalDatabase } = opened
+    const stable = historicalId(0)
+    const other = historicalId(1)
+    await store.showSessionTabs([stable, other])
+    const epoch = journalDatabase.ensureSessionEpoch.bind(journalDatabase)
+    const read = vi.spyOn(journalDatabase, 'ensureSessionEpoch')
+    const reopen = async (id: string) => {
+      await store.setSessionTabVisibility(id, false)
+      await store.setSessionTabVisibility(id, true)
+    }
+    const interleave = async (changedId: string) => {
+      const started = Promise.withResolvers<void>()
+      const proceed = Promise.withResolvers<void>()
+      read.mockImplementation(async (id) => {
+        if (id === stable) {
+          started.resolve()
+          await proceed.promise
+        }
+        return epoch(id)
+      })
+      const ticking = opened.host.usageLimitContinue.tick()
+      try {
+        await Promise.race([
+          started.promise,
+          ticking.then(() => {
+            throw new Error('the saved cut read did not start')
+          })
+        ])
+        await reopen(changedId)
+      } finally {
+        proceed.resolve()
+        await ticking
+        read.mockImplementation(epoch)
+      }
+      await opened.host.usageLimitContinue.tick()
+    }
+
+    await interleave(other)
+    expect(read.mock.calls.filter(([id]) => id === stable)).toHaveLength(1)
+    await reopen(stable)
+    await interleave(stable)
+    expect(read.mock.calls.filter(([id]) => id === stable)).toHaveLength(3)
+  } finally {
+    try {
+      await host?.flushAllStreamedEvents()
+      await closeTestAgentSessionDatabase(root).catch(() => {})
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+})
