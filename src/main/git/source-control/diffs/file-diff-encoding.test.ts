@@ -194,3 +194,23 @@ it('decodes each committed side using the attributes that normalized its blob', 
   git('rm', '.gitattributes')
   expect(await read()).toMatchObject({ originalContent: '漏', modifiedContent: '漏' })
 })
+
+it.each([
+  { stagedRule: 'working-tree-encoding=GB18030', checkoutRule: '-working-tree-encoding' },
+  { stagedRule: '-working-tree-encoding', checkoutRule: 'working-tree-encoding=GB18030' }
+])(
+  'keeps staged text readable after changing $stagedRule only on disk',
+  async ({ stagedRule, checkoutRule }) => {
+    const { repo, git } = createRepo()
+    const filePath = 'sample.c'
+    const attributes = join(repo, '.gitattributes')
+    writeFileSync(attributes, `sample.c ${stagedRule}\n`)
+    writeFileSync(join(repo, filePath), Buffer.from('c2a9', 'hex'))
+    git('add', '.gitattributes', filePath)
+    writeFileSync(attributes, `sample.c ${checkoutRule}\n`)
+
+    const options = { encoding: 'gb18030' } as const
+    expect((await getDiff(repo, filePath, true, false, options)).modifiedContent).toBe('漏')
+    expect((await getDiff(repo, filePath, false, false, options)).originalContent).toBe('漏')
+  }
+)

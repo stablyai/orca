@@ -59,21 +59,27 @@ export async function readDiffAttributes(
   }
 }
 
-export async function readTreeStoresUtf8(
+export async function readBlobStoresUtf8(
   worktreePath: string,
   gitPath: string,
-  treeish: string,
+  treeish: string | undefined,
   options: GitDiffReadOptions
 ): Promise<boolean | undefined> {
   if (isImageOrPdfPreviewPath(gitPath)) {
     return false
   }
   try {
+    const source = treeish === undefined ? '--cached' : `--source=${treeish}`
     const { stdout } = await gitExecFileAsync(
-      ['check-attr', '-z', `--source=${treeish}`, 'working-tree-encoding', '--', gitPath],
+      ['check-attr', '-z', source, 'working-tree-encoding', '--', gitPath],
       gitReadOptionsForWorktree(worktreePath, options)
     )
-    return hasNamedValue(stdout.split('\0')[2])
+    const value = stdout.split('\0')[2]
+    // Git add can use a checkout rule before .gitattributes itself is staged.
+    if (treeish === undefined && value === 'unspecified') {
+      return undefined
+    }
+    return hasNamedValue(value)
   } catch {
     // Older Git lacks --source. Retain the checkout-based decoding on those hosts.
     return undefined

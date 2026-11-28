@@ -17,7 +17,7 @@ import { literalPathspec } from '../git-pathspec'
 import {
   type DiffAttributes,
   readDiffAttributes,
-  readTreeStoresUtf8,
+  readBlobStoresUtf8,
   isImageOrPdfPreviewPath
 } from './textconv-driver'
 
@@ -121,10 +121,7 @@ async function readGitBlob(
   const { hasTextconv, storesUtf8 } = await attributes
   let rawEncoding = options.encoding
   if (rawEncoding === 'gb18030' && !isAscii(raw) && isUtf8(raw)) {
-    // Git cleans index entries with checkout attributes, but committed sides can predate those rules.
-    const normalized = oid
-      ? ((await readTreeStoresUtf8(worktreePath, gitPath, oid, options)) ?? storesUtf8)
-      : storesUtf8
+    const normalized = (await readBlobStoresUtf8(worktreePath, gitPath, oid, options)) ?? storesUtf8
     if (normalized) {
       rawEncoding = 'utf-8'
     }
