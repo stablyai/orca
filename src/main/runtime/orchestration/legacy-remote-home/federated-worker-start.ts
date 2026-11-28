@@ -69,6 +69,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   validateFederatedWorkerStartPlacement(params, createsWorktree)
   const server = await runtime.resolveOrchestrationWorkerServer(params.on as string)
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: status.get is the paired runtime status contract used only after this call validates its capabilities.
   const status = (await runtime.callOrchestrationWorkerServer(
     server.environmentId,
     'status.get',
