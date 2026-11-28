@@ -28,6 +28,10 @@ export abstract class DaemonPtyPreservedHostLoss extends DaemonPtyDaemonRecovery
     this.preservedDaemonExited = opts.preservedDaemonExited ?? preservedDaemonProcessExited
   }
 
+  protected override daemonProcessExited(pid: number | undefined): boolean {
+    return this.preservedDaemonExited(pid)
+  }
+
   getProviderProcessClient(): DaemonClient | null {
     return this.protocolVersion >= PROVIDER_SPAWN_PROTOCOL_VERSION ? this.client : null
   }

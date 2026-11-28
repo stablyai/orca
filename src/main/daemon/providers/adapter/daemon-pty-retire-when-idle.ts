@@ -78,7 +78,7 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
       if (
         !isDaemonEndpointGoneError(error) ||
         this.activeSessionIds.size > 0 ||
-        !preservedDaemonProcessExited(this.lastAuthenticatedIdentity?.pid)
+        !this.daemonProcessExited(this.lastAuthenticatedIdentity?.pid)
       ) {
         return 'unknown'
       }
@@ -101,6 +101,10 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
 
   onConnectionLost(listener: () => void): () => void {
     return this.client.onDisconnected(listener)
+  }
+
+  protected daemonProcessExited(pid: number | undefined): boolean {
+    return preservedDaemonProcessExited(pid)
   }
 
   protected stopRetireWhenIdleWatch(): void {

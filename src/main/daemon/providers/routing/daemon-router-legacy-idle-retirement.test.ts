@@ -82,7 +82,9 @@ function adapterFor(dir: string, generation: Generation): DaemonPtyAdapter {
     socketPath: generation.socketPath,
     tokenPath: generation.tokenPath,
     protocolVersion: generation.protocolVersion,
-    historyPath: join(dir, 'history')
+    historyPath: join(dir, 'history'),
+    // In process, a retired daemon's "process" is gone once its idle shutdown finished.
+    preservedDaemonExited: () => generation.retired
   })
 }
 
