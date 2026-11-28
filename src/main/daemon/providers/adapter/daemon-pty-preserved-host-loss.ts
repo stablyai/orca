@@ -28,7 +28,7 @@ export abstract class DaemonPtyPreservedHostLoss extends DaemonPtyDaemonRecovery
     this.preservedDaemonExited = opts.preservedDaemonExited ?? preservedDaemonProcessExited
   }
 
-  protected override daemonProcessExited(pid: number | undefined): boolean {
+  protected daemonProcessExited(pid: number | undefined): boolean {
     return this.preservedDaemonExited(pid)
   }
 
