@@ -78,12 +78,15 @@ orca host rm --host ssh:<target-id> --json
 It removes the target the same way Settings does, so the passive `~/.ssh/config` import does not add the alias back on the next launch. It takes only the `ssh:<target-id>` form, not the bare name, because it deletes data. It refuses `--host local`, paired servers (use `orca environment rm`), and an id this Orca host does not have.
 
 Retire the managed Orca server on an SSH host, by the name `orca environment list` prints. The two commands are alternatives:
+Use `host stop` while the host still answers: it stops the server and removes the record once the host proves it exited.
 
 ```bash
-# The host still answers: stop the server, then remove the record once the host proves it exited.
 orca host stop --environment <server> --yes --json
+```
 
-# The machine is gone: remove the record without contacting the host. Nothing on the host is stopped.
+Use `host forget` only when the machine is gone: it removes the record without contacting the host, and nothing on the host is stopped.
+
+```bash
 orca host forget --environment <server> --yes --json
 ```
 
