@@ -33,8 +33,7 @@ export class SessionProducerPause {
   ): boolean {
     if (source === 'stream') {
       if (canPauseStream) {
-        // A repeated pause without a handler keeps the armed watchdog's handler.
-        this.onStreamStall = onStreamStall ?? this.onStreamStall
+        this.onStreamStall = onStreamStall ?? null
         this.setStreamBackpressured(true)
       }
       return canPauseStream
@@ -111,7 +110,9 @@ export class SessionProducerPause {
 
   /** Typed input while stream-paused asks the stall owner to resume in 2 s; replies and pointer reports don't. */
   noteInput(data: string): void {
+    const onStreamStall = this.onStreamStall
     if (
+      !onStreamStall ||
       !this.streamStallTimer ||
       this.inputStallTimer ||
       isUntypedTerminalInput(data) ||
@@ -122,18 +123,20 @@ export class SessionProducerPause {
     this.inputStallTimer = setTimeout(() => {
       this.inputStallTimer = null
       // The owner resumes only a draining consumer; the 60 s deadline keeps running either way.
-      this.onStreamStall?.('input')
+      onStreamStall('input')
     }, STREAM_STALL_WITH_INPUT_WATCHDOG_MS)
   }
 
   private armStreamStallWatchdog(): void {
-    if (!this.onStreamStall) {
+    // Each timer keeps the handler it was armed with, so a later pause can't redirect it.
+    const onStreamStall = this.onStreamStall
+    if (!onStreamStall) {
       return
     }
     this.streamStallTimer = setTimeout(() => {
       this.streamStallTimer = null
       // Shed backlog before resuming; losing the consumer does not imply child exit.
-      this.onStreamStall?.('timeout')
+      onStreamStall('timeout')
       this.setStreamBackpressured(false)
     }, STREAM_BACKPRESSURE_STALL_WATCHDOG_MS)
   }

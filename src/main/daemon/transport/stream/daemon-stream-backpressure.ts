@@ -22,6 +22,14 @@ type ClientBacklog = {
   pendingWriteBytes: Map<string, number>
 }
 
+function holdsSessionOutput(client: ClientBacklog, sessionId: string): boolean {
+  return (
+    client.queuedChars.has(sessionId) ||
+    client.queuedMetadataBytes.has(sessionId) ||
+    client.pendingWriteBytes.has(sessionId)
+  )
+}
+
 /** Counts held strings and socket writes together, including small writes that bypass the hold. */
 export class DaemonStreamBackpressure {
   private readonly clients = new Map<string, ClientBacklog>()
@@ -73,10 +81,12 @@ export class DaemonStreamBackpressure {
       STREAM_ENTRY_OVERHEAD_BYTES
     client.pendingWriteBytes.set(sessionId, (client.pendingWriteBytes.get(sessionId) ?? 0) + bytes)
     this.refresh()
-    socket.write(line, () => {
+    socket.write(line, (error?: Error | null) => {
       // A disconnected client's callbacks must not debit a replacement connection's writes.
       if (this.clients.get(clientId) === client) {
-        this.lastWriteCompletedAtByClient.set(clientId, Date.now())
+        if (!error) {
+          this.lastWriteCompletedAtByClient.set(clientId, Date.now())
+        }
         const remaining = (client.pendingWriteBytes.get(sessionId) ?? 0) - bytes
         if (remaining > 0) {
           client.pendingWriteBytes.set(sessionId, remaining)
@@ -176,11 +186,15 @@ export class DaemonStreamBackpressure {
   }
 
   private deliveryProgressed(sessionId: string): boolean {
+    // Only clients still holding this session's output can prove it is draining; an idle sibling can't.
     const now = Date.now()
-    for (const [clientId, completedAt] of this.lastWriteCompletedAtByClient) {
+    for (const [clientId, client] of this.clients) {
+      const completedAt = this.lastWriteCompletedAtByClient.get(clientId)
       if (
+        completedAt !== undefined &&
+        now - completedAt < DELIVERY_PROGRESS_WINDOW_MS &&
         this.ownsSession(clientId, sessionId) &&
-        now - completedAt < DELIVERY_PROGRESS_WINDOW_MS
+        holdsSessionOutput(client, sessionId)
       ) {
         return true
       }

@@ -1,7 +1,7 @@
 const LONG_PAUSE_MS = 2_000
 const MIN_LOG_INTERVAL_MS = 10_000
 
-/** Admits a long output-pause log line at most once per 10 s and counts the lines it held back. */
+/** Admits a long output-pause log line at most once per 10 s and counts the lines it held back; `always` lines (watchdog fires) are never held back. */
 export class LongPauseLogLimiter {
   private lastLoggedAt = 0
   private suppressed = 0
@@ -12,7 +12,7 @@ export class LongPauseLogLimiter {
       return null
     }
     const now = Date.now()
-    if (now - this.lastLoggedAt < MIN_LOG_INTERVAL_MS) {
+    if (!always && now - this.lastLoggedAt < MIN_LOG_INTERVAL_MS) {
       this.suppressed += 1
       return null
     }
