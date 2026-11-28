@@ -86,7 +86,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.legacyExitProof.record(this.legacy)
   }
 
-  readonly getRetiringAdapters = (): DaemonPtyAdapter[] => this.spawner.legacyIdle.retiringAdapters()
+  readonly getRetiringAdapters = (): DaemonPtyAdapter[] =>
+    this.spawner.legacyIdle.retiringAdapters()
 
   async discoverLegacySessions(): Promise<void> {
     await this.ownerResolver.discoverRoutes()

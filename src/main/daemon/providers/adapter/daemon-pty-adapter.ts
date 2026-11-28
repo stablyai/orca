@@ -238,8 +238,7 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
         // A terminate never exits 0 (awin: -1 per bridge pane; `exit`/`exit 0` gave 0): a clean exit is
         // the user's own, so it closes at once, without the settle wait or classification.
         if (wslDistro && event.payload.code !== 0 && isProvenProcessExit(event.payload.code)) {
-          this.exitsClassifying++
-          void this.finishWslBridgeExit(event.sessionId, event.payload, wslDistro, performance.now())
+          void this.finishWslBridgeExit(event.sessionId, event.payload, wslDistro)
           return
         }
         this.finishExit(event.sessionId, event.payload)
@@ -258,9 +257,10 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
   private async finishWslBridgeExit(
     sessionId: string,
     exit: Omit<DaemonPtyRouterExitEvent, 'id'>,
-    wslDistro: string,
-    exitAt: number
+    wslDistro: string
   ): Promise<void> {
+    // Runs before the first await, in the exit event's own turn.
+    const exitAt = this.startExitClassification()
     const verdict = await classifyWslBridgeExit(wslDistro, exitAt, this.readRunningWslDistros, () =>
       this.wslBridgeBootIdentity.rebootedSinceSpawn(sessionId, wslDistro)
     ).catch(this.exitClassificationFailed)
