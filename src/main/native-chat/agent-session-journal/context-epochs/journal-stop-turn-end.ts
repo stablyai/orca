@@ -1,7 +1,8 @@
 import { memoryJournalMap } from '../journal-memory-collections'
 import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 // All turn-end writers apply this rule on the journal lane. Session-ending Stop bindings are memory-only
-// and disappear on relaunch; provider verdicts and ends observed before Stop retain their meaning.
+// and disappear on relaunch; success verdicts, ends observed before Stop, and failures long after it
+// retain their meaning.
 
 import type {
   AgentJournalItemBody,
@@ -121,21 +122,52 @@ export function beginJournalStopSettle(
   return stop.settle
 }
 
-/** Preserve provider verdicts and already-ended turns; otherwise apply the latest matching personal Stop. */
+/** How soon after a person's Stop a provider's failure for that turn is the Stop's: an interrupt's
+ *  round trip and Codex's stop grace fit well inside it; a crash later than this is its own. */
+export const STOP_DECIDES_FAILURE_MS = 30_000
+
+/** A turn end the Stop rule may decide: an end with no verdict, or a provider failure (an
+ *  interrupt that aborts a request can surface as one, as Claude's error results do). */
+export function turnEndStopMayDecide(body: AgentJournalItemBody): boolean {
+  return (
+    body.kind === 'turn' &&
+    ((body.state === 'interrupted' && body.outcome === undefined) || body.outcome === 'failure')
+  )
+}
+
+/** A failure the person's Stop for this turn caused: it ended within the window after that Stop. */
+function stopCausedFailure(state: TurnEndState, completedAt: number | undefined): boolean {
+  const stop = state.queuePauseMarks.latestStop
+  return (
+    stop !== null &&
+    completedAt !== undefined &&
+    completedAt - stop.event.at <= STOP_DECIDES_FAILURE_MS
+  )
+}
+
+/** Preserve success verdicts and already-ended turns; otherwise apply the latest matching personal
+ *  Stop. A failure reads as the Stop's only when it ended soon after that Stop. */
 export function turnEndAfterStop(
   state: TurnEndState,
   itemId: string,
   body: AgentJournalItemBody
 ): AgentJournalItemBody {
-  if (body.kind !== 'turn' || body.state !== 'interrupted' || body.outcome !== undefined) {
+  if (body.kind !== 'turn' || !turnEndStopMayDecide(body)) {
     return body
   }
   const previous = readAgentJournalTurn(state.items.get(itemId)?.body)
-  // An already-written end predates this Stop.
   if (previous && previous.state !== 'running' && previous.state !== 'unverifiable') {
+    // A later revision of the end the Stop already decided keeps that verdict.
+    if (previous.outcome === 'cancellation' && previous.completedAt === body.completedAt) {
+      return { ...body, state: previous.state, outcome: 'cancellation' }
+    }
+    // An already-written end predates this Stop.
+    return body
+  }
+  if (body.outcome === 'failure' && !stopCausedFailure(state, body.completedAt)) {
     return body
   }
   return stopEndsTurnAsCancellation(state, body.turnId, body.completedAt)
-    ? { ...body, outcome: 'cancellation' }
+    ? { ...body, state: 'interrupted', outcome: 'cancellation' }
     : body
 }
