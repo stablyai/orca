@@ -1,21 +1,12 @@
 // What an app's MCP address needs before a bot can use it: nothing, Orca's own sign-in, a sign-in
 // Orca can't make yet, or no answer worth deciding on. MCP authorization (2025-06-18) over RFC 9728
 // protected-resource metadata and RFC 8414 / OIDC authorization-server metadata.
-import {
-  discoverAuthorizationServerMetadata,
-  discoverOAuthProtectedResourceMetadata,
-  extractWWWAuthenticateParams
-} from '@modelcontextprotocol/sdk/client/auth.js'
-import {
-  checkResourceAllowed,
-  resourceUrlFromServerUrl
-} from '@modelcontextprotocol/sdk/shared/auth-utils.js'
 import type {
   AuthorizationServerMetadata,
   OAuthProtectedResourceMetadata
 } from '@modelcontextprotocol/sdk/shared/auth.js'
-import { InitializeResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../../network/http-client'
 import { isSecureOAuthEndpoint, secureOAuthFetch, type OAuthFetch } from './secure-oauth-fetch'
 import type { AddressLookup } from './oauth-endpoint-address'
@@ -85,7 +76,12 @@ async function probe(url: string, options: BotToolDiscoveryOptions) {
   } catch {
     throw new Unavailable()
   }
-  const challenge = response.status === 401 ? extractWWWAuthenticateParams(response) : {}
+  const challenge =
+    response.status === 401
+      ? (await import('@modelcontextprotocol/sdk/client/auth.js')).extractWWWAuthenticateParams(
+          response
+        )
+      : {}
   const ok = response.status >= 200 && response.status < 300
   const mcp = ok ? await answersInitialize(response).catch(() => false) : false
   await response.body?.cancel().catch(() => undefined)
@@ -94,17 +90,23 @@ async function probe(url: string, options: BotToolDiscoveryOptions) {
 
 // The initialize answer is small; a body past this, or no answer, isn't one.
 const INITIALIZE_BYTES = 64 * 1024
-const InitializeResponse = z.object({
-  jsonrpc: z.literal('2.0'),
-  id: z.literal(1),
-  result: z.unknown()
-})
+const InitializeResponse = lazyZodSchema(() =>
+  z.object({
+    jsonrpc: z.literal('2.0'),
+    id: z.literal(1),
+    result: z.unknown()
+  })
+)
 
 /** The JSON-RPC answer to our `initialize`, carrying a complete MCP initialize result. */
-const isInitializeResult = (text: string): boolean => {
+const isInitializeResult = async (text: string): Promise<boolean> => {
   try {
     const response = InitializeResponse.safeParse(JSON.parse(text))
-    return response.success && InitializeResultSchema.safeParse(response.data.result).success
+    if (!response.success) {
+      return false
+    }
+    const { InitializeResultSchema } = await import('@modelcontextprotocol/sdk/types.js')
+    return InitializeResultSchema.safeParse(response.data.result).success
   } catch {
     return false
   }
@@ -145,13 +147,13 @@ async function answersInitialize(response: Response): Promise<boolean> {
             .filter((line) => line.startsWith('data:'))
             .map((line) => line.slice(5).replace(/^ /, ''))
             .join('\n')
-          if (data && isInitializeResult(data)) {
+          if (data && (await isInitializeResult(data))) {
             return true
           }
         }
       }
       if (done) {
-        return !sse && isInitializeResult(text)
+        return !sse && (await isInitializeResult(text))
       }
     }
   } finally {
@@ -169,6 +171,8 @@ export async function issuerMetadata(
   issuer: string,
   fetchFn: OAuthFetch
 ): Promise<AuthorizationServerMetadata | undefined> {
+  const { discoverAuthorizationServerMetadata } =
+    await import('@modelcontextprotocol/sdk/client/auth.js')
   const metadata = await discoverAuthorizationServerMetadata(issuer, {
     fetchFn,
     protocolVersion: PROTOCOL_VERSION
@@ -233,6 +237,13 @@ export async function findAuthServer(
     status = response.status
     return response
   }
+  const [
+    { discoverOAuthProtectedResourceMetadata },
+    { checkResourceAllowed, resourceUrlFromServerUrl }
+  ] = await Promise.all([
+    import('@modelcontextprotocol/sdk/client/auth.js'),
+    import('@modelcontextprotocol/sdk/shared/auth-utils.js')
+  ])
   try {
     resourceMetadata = await discoverOAuthProtectedResourceMetadata(
       url,

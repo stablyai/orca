@@ -1,4 +1,5 @@
 import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-control-requests'
+import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import {
   AgentSessionOptionRejectedError,
   ClaudeEffortValidationError
@@ -37,8 +38,10 @@ export function claudeModelTransitionRestart(
     const model = input.executionOptions?.model
     const opened = session?.firstRootInit?.permissionMode
     const requested = session?.launchIntent?.permissionMode
+    // A kept agent takes a model pick live (set_model); it is never replaced for one.
     return Boolean(
       session?.fence === input.fence &&
+      !keptClaudeAgentRelay(session.connection) &&
       model !== undefined &&
       model !== session.launchIntent?.model &&
       requested !== undefined &&

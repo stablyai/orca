@@ -16,17 +16,16 @@ import { worktreesUnderHomes } from './bot-handed-workspaces'
 import { readPairedHandedAgents } from './bot-paired-handed-agents'
 import type { BotHandedAgentObservation } from '../../shared/bots/bot-activity-handed-agents'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { latestLiveAgentStatusRowsByPaneKey } from '../../shared/agent-status/live-agent-status-rows'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import type { BotUpNext } from '../../shared/bots/bot-look-around'
 import { lookAroundUpNext } from './bot-look-around-state'
 import { lookAroundDueAt, lookAroundNextAt } from './bot-look-around-schedule'
 import { botLookAround } from '../../shared/bots/bot-look-around'
 import { createSharedBotBuilds } from './shared-bot-builds'
 import type { BotActivityRead } from '../../shared/bots/bot-activity-schema'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 /** The chats and panes whose Dispatches are the bot's workers. */
 export type BotWorkerCreators = { orcaSessionIds: string[]; paneKeys: string[] }
@@ -175,7 +174,7 @@ export async function readBotActivity(
   const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
   const links = host.externalConversations(bot.folderWorkspaceId)
   const sessions = (await host.chatTabs(workspaceId)).map((tab) => ({
-    paneKey: structuredAgentSessionStatusPaneKey(tab.sessionId),
+    paneKey: chatPaneKey(tab.sessionId),
     sessionId: tab.sessionId,
     label: tab.title
   }))
@@ -210,7 +209,7 @@ export async function readBotActivity(
     orcaSessionIds: [...new Set(chatSessionIds)],
     paneKeys: [
       ...new Set([
-        ...chatSessionIds.map(structuredAgentSessionStatusPaneKey),
+        ...chatSessionIds.map(chatPaneKey),
         ...runs.flatMap((run) => (run.terminalPaneKey ? [run.terminalPaneKey] : []))
       ])
     ]
@@ -230,8 +229,7 @@ export async function readBotActivity(
     recordedWorkers,
     automations,
     runs,
-    sessionStatus: (sessionId) =>
-      activityStatus(rowByPaneKey.get(structuredAgentSessionStatusPaneKey(sessionId)))
+    sessionStatus: (sessionId) => activityStatus(rowByPaneKey.get(chatPaneKey(sessionId)))
   })
   const upNext = host.upNext?.(bot)
   return { ...activity, readAt, ...(upNext ? { upNext } : {}) }
@@ -279,6 +277,8 @@ export function runtimeBotActivityHost(runtime: OrcaRuntimeService): BotActivity
         .getOrchestrationDb()
         .listDispatchesCreatedByAny(creators, BOT_ACTIVITY_COMPLETED_LIMIT)
       const creatorById = new Map(created.map((dispatch) => [dispatch.id, dispatch]))
+      const { readDispatchWorkers } =
+        await import('../runtime/rpc/methods/orchestration/worker/session-workers-method')
       const workers = await readDispatchWorkers(
         runtime,
         created.map((dispatch) => dispatch.id),

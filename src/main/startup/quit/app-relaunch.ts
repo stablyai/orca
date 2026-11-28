@@ -4,6 +4,8 @@ import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/
 import { runWithLaunchPath } from '../shell-environment/hydrate-shell-path'
 import { getWindowsAdministratorRelaunchOptions } from '../../windows/windows-administrator-restart'
 import { BACKGROUND_OPEN_ARG } from '../../../shared/app-lifecycle/launch/background-open-argv'
+import { writeRuntimeRestartMarker } from '../../runtime/rpc/server/runtime-restart-marker-file'
+import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 
 export type AppRelaunchReason =
   | 'admin-restart'
@@ -32,6 +34,11 @@ function defaultRelaunchOptions(): Electron.RelaunchOptions | undefined {
   }
   const args = administrator?.args ?? process.argv.slice(1)
   return { ...administrator, args: args.filter((arg) => arg !== BACKGROUND_OPEN_ARG) }
+}
+
+/** Same-profile relaunches only: CLI callers in surviving terminals then wait instead of reopening Orca. */
+export async function announceRuntimeRelaunch(): Promise<void> {
+  await writeRuntimeRestartMarker(getCanonicalUserDataPath(), 'relaunch')
 }
 
 export async function runBeforeRelaunchCleanup(

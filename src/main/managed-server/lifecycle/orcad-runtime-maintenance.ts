@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 
 import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
+import { holdWslForSshUpgrade } from '../../wsl/execution/wsl-ssh-upgrade-hold'
 import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
 import {
   clearManagedOrcadUpdateDeferral,
@@ -87,71 +88,78 @@ export async function runManagedOrcadUpdate(
     admitRecord?: OrcadDeployOptions['admitRecord']
   }
 ): Promise<OrcadManagedDeployResult> {
-  const { countFirst, ...recount } = updateTerminalCounts((options) =>
-    collectManagedTerminalCensus(
-      userDataPath,
-      environment,
-      context.activationRecord,
-      undefined,
-      options
+  const { signal } = args
+  // Windows can idle out a loopback WSL distro mid-upload; keep it running for this update.
+  const hold = await holdWslForSshUpgrade(context, signal)
+  try {
+    signal?.throwIfAborted()
+    const { countFirst, ...recount } = updateTerminalCounts((options) =>
+      collectManagedTerminalCensus(
+        userDataPath,
+        environment,
+        context.activationRecord,
+        undefined,
+        options
+      )
     )
-  )
-  const census = await countFirst()
-  const localOrcadDir =
-    args.localOrcadDir ??
-    (await materializeOrcadArtifact(context.serverTarget, { signal: args.signal }))
-  const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
-  const result = await deployOrcad({
-    ...slot,
-    localOrcadDir,
-    target: context.serverTarget,
-    census,
-    ...recount,
-    censusRecord: context.activationRecord,
-    force: args.force,
-    appVersion: getAppEnvironment().getVersion(),
-    ...(args.admitRecord ? { admitRecord: args.admitRecord } : {})
-  })
-  if (result.outcome === 'installed-not-activated') {
-    const deferral = {
-      outcome: 'deferred' as const,
-      candidateVersion: result.fullVersion,
-      code: result.code,
-      reason: result.reason,
-      // Force may override policy deferrals, including a newer host build.
-      forceable:
-        isForceableOrcadDeferral(result) || result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+    const census = await countFirst()
+    const localOrcadDir =
+      args.localOrcadDir ?? (await materializeOrcadArtifact(context.serverTarget, { signal }))
+    const slot = managedOrcadSlot(context, deployment.remotePort, signal)
+    const result = await deployOrcad({
+      ...slot,
+      localOrcadDir,
+      target: context.serverTarget,
+      census,
+      ...recount,
+      censusRecord: context.activationRecord,
+      force: args.force,
+      appVersion: getAppEnvironment().getVersion(),
+      ...(args.admitRecord ? { admitRecord: args.admitRecord } : {})
+    })
+    if (result.outcome === 'installed-not-activated') {
+      const deferral = {
+        outcome: 'deferred' as const,
+        candidateVersion: result.fullVersion,
+        code: result.code,
+        reason: result.reason,
+        // Force may override policy deferrals, including a newer host build.
+        forceable:
+          isForceableOrcadDeferral(result) || result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+      }
+      // Policy refusal is final for this host, not a transient update to retry.
+      if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {
+        recordManagedOrcadUpdateDeferral(environment.id, deferral, context.activationRecord)
+      }
+      await pruneSupersededOrcadCandidates(slot, context.serverTarget, result.fullVersion)
+      return deferral
     }
-    // Policy refusal is final for this host, not a transient update to retry.
-    if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {
-      recordManagedOrcadUpdateDeferral(environment.id, deferral, context.activationRecord)
+    clearManagedOrcadUpdateDeferral(environment.id)
+    const alreadyActive = result.outcome === 'already-active'
+    const managed = { environmentId: environment.id, hostLabel: context.target.label }
+    const started = alreadyActive && (await wakeAlreadyActiveOrcad(slot, managed))
+    const readiness = await probeManagedOrcadReadiness(
+      context,
+      localOrcadDir,
+      result.fullVersion,
+      signal
+    )
+    await pruneManagedOrcadVersions({
+      slot,
+      serverTarget: context.serverTarget,
+      activeVersion: result.fullVersion,
+      readiness
+    })
+    const updated = await refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
+    if (started || result.outcome !== 'already-active') {
+      await followLaunchedServerPort(userDataPath, environment.id)
     }
-    await pruneSupersededOrcadCandidates(slot, context.serverTarget, result.fullVersion)
-    return deferral
-  }
-  clearManagedOrcadUpdateDeferral(environment.id)
-  const alreadyActive = result.outcome === 'already-active'
-  const managed = { environmentId: environment.id, hostLabel: context.target.label }
-  const started = alreadyActive && (await wakeAlreadyActiveOrcad(slot, managed))
-  const readiness = await probeManagedOrcadReadiness(
-    context,
-    localOrcadDir,
-    result.fullVersion,
-    args.signal
-  )
-  await pruneManagedOrcadVersions({
-    slot,
-    serverTarget: context.serverTarget,
-    activeVersion: result.fullVersion,
-    readiness
-  })
-  const updated = await refreshMaintainedOrcadPairing(userDataPath, environment.id, readiness)
-  if (started || result.outcome !== 'already-active') {
-    await followLaunchedServerPort(userDataPath, environment.id)
-  }
-  return {
-    outcome: result.outcome === 'already-active' ? 'already-current' : 'updated',
-    environment: redactRuntimeEnvironment(updated),
-    activeVersion: result.fullVersion
+    return {
+      outcome: result.outcome === 'already-active' ? 'already-current' : 'updated',
+      environment: redactRuntimeEnvironment(updated),
+      activeVersion: result.fullVersion
+    }
+  } finally {
+    hold?.release()
   }
 }

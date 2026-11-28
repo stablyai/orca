@@ -27,18 +27,18 @@ export function shortPluginBranchName(branch: string): string {
 /** The id `workspace.list` gives the workspace, which every workspace method takes; `workspaceId`
  *  is Orca's raw id, which they take too but which differs from it for most worktrees. Absent
  *  before host API 1.7. */
-const workspaceListId = pluginWorkspaceIdSchema.optional()
+const workspaceListId = lazyZodSchema(() => pluginWorkspaceIdSchema.optional())
 
-const workspaceIdentity = {
+const workspaceIdentity = () => ({
   workspaceId: z.string().min(1).max(2048),
   workspaceListId,
   /** Folder workspaces have no branch; only worktrees emit lifecycle events today. */
   kind: z.enum(['worktree', 'folder'])
-}
+})
 
 export const workspaceCreatedPayloadSchema = lazyZodSchema(() =>
   z.object({
-    ...workspaceIdentity,
+    ...workspaceIdentity(),
     path: z
       .string()
       .min(1)
@@ -49,7 +49,7 @@ export const workspaceCreatedPayloadSchema = lazyZodSchema(() =>
 
 export const workspaceRemovedPayloadSchema = lazyZodSchema(() =>
   z.object({
-    ...workspaceIdentity,
+    ...workspaceIdentity(),
     path: z
       .string()
       .min(1)

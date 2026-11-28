@@ -21,6 +21,7 @@ import type {
 import { resolveDurableOrcadCatalogMutation } from './orcad-catalog-durable-mutation'
 import { ORCAD_MIGRATION_DESTINATION_UNSUPPORTED } from '../catalog/orcad-migration-request'
 import { orcadMigrationRequestFits } from '../catalog/orcad-migration-request-budget'
+import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
@@ -153,8 +154,12 @@ export async function abortOrcadMigrationCutover(
     return committedRefusal()
   }
   const { destination } = context
-  // Older journals can hold oversized manifests; identity-only abort must still release them.
-  if (!orcadMigrationRequestFits({ manifest: cutover.manifest })) {
+  // Older journals can hold oversized manifests, and rolled-back builds drop unknown fields from newer manifests;
+  // identity-only abort must still release them.
+  if (
+    !orcadMigrationRequestFits({ manifest: cutover.manifest }) ||
+    !manifestDigestMatches(cutover.manifest)
+  ) {
     const aborted = await destination.abortByReference(cutover.manifest)
     if (aborted.state === 'committed') {
       return committedRefusal()
@@ -286,6 +291,11 @@ function committedRefusal(): OrcadMigrationAbortResult {
     code: 'orcad_migration_committed_source_cannot_be_released',
     reason: 'This host’s Orca server already holds this migration; it can only move forward.'
   }
+}
+
+function manifestDigestMatches(manifest: OrcadMigrationManifest): boolean {
+  const { manifestSha256, ...unsigned } = manifest
+  return computeOrcadMigrationManifestSha256(unsigned) === manifestSha256
 }
 
 function isDestinationUnsupported(error: unknown): boolean {

@@ -6,6 +6,7 @@ import {
   installRemoteServerUpdater
 } from '../../../hosts/management/remote-server-updater'
 import { UpdaterCheckParams } from '../../../../../shared/rpc-contract/updater/updater-params'
+import { readUpdateRestartImpact } from '../../../hosts/management/update-restart-impact'
 
 export const UPDATER_METHODS = [
   defineMethod({
@@ -31,5 +32,12 @@ export const UPDATER_METHODS = [
     permission: 'host-admin',
     params: null,
     handler: (_params, { runtime }) => installRemoteServerUpdater(runtime.getRuntimeId())
+  }),
+  // A remote client's restart confirm names exactly what the update would stop.
+  defineMethod({
+    name: 'updater.restartImpact',
+    permission: 'workspace',
+    params: null,
+    handler: () => readUpdateRestartImpact()
   })
 ]

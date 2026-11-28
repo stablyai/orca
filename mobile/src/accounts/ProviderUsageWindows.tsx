@@ -5,18 +5,13 @@ import {
   WEEKLY_WINDOW_MINUTES,
   type UsageWindowSection
 } from '../../../src/shared/agent-usage/display/usage-provider-windows'
-import {
-  formatPoolLabel,
-  isGroupedUsagePool,
-  type UsagePoolSibling
-} from '../../../src/shared/agent-usage/display/grouped-usage-pool'
 import { UsageBar } from './usage/UsageBar'
 import { getUsageBarState, getWindowResetLabel } from './usage/usage-selectors'
 import type { ProviderRateLimits } from './accounts-snapshot'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 
 const SESSION_WINDOW_MINUTES = 300
 const EMPTY_SECTIONS: UsageWindowSection[] = [
@@ -35,15 +30,9 @@ function formatWindowLength(minutes: number, t: Translate): string {
 }
 
 // The desktop roster's labels, except 5h and 7d use mobile's translated copy (desktop shows 7d as "wk").
-function getWindowLabel(
-  section: UsageWindowSection,
-  buckets: readonly UsagePoolSibling[],
-  t: Translate
-): string {
+function getWindowLabel(section: UsageWindowSection, t: Translate): string {
   if (section.kind === 'bucket') {
-    return isGroupedUsagePool(section.window)
-      ? formatPoolLabel(section.window, buckets, (minutes) => formatWindowLength(minutes, t))
-      : section.name
+    return section.name
   }
   if (section.kind === 'fableWeekly') {
     return t('accounts.screen.fableWindow', 'Fable')
@@ -71,12 +60,12 @@ export function ProviderUsageWindows({
   /** Account rows keep empty session/weekly bars so a not-yet-read account still shows its windows. */
   showEmptyWindows?: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const buckets = limits?.buckets ?? []
   const sections = (limits ? getUsageWindowSections(limits) : EMPTY_SECTIONS).filter(
     (section) => showEmptyWindows || section.window !== null
   )
-  // Pool names can repeat when agy leaves a window unnamed, so count each name's occurrences.
+  // Pool names can repeat when a provider leaves a window unnamed, so count each name's occurrences.
   const seen = new Map<string, number>()
   return (
     <View style={styles.windows}>
@@ -89,7 +78,7 @@ export function ProviderUsageWindows({
         return (
           <UsageBar
             key={`${name}:${occurrence}`}
-            label={getWindowLabel(section, buckets, t)}
+            label={getWindowLabel(section, t)}
             usedPercent={bar.usedPercent}
             unavailable={bar.unavailable}
             loading={bar.loading}
@@ -103,7 +92,7 @@ export function ProviderUsageWindows({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   windows: {
     flexDirection: 'row',
     flexWrap: 'wrap',

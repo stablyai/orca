@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { clearClientRouteProfileCookies } from '../../browser/cookies/client-route/browser-client-route-cookie-clear'
 import { clearSshRouteProfileCookies } from '../../browser/cookies/route-partition/browser-route-partition-cookie-clear'
@@ -14,16 +15,18 @@ function targetId(value: unknown): string | null {
 }
 
 /** Settings' Clear cookies: one profile's jar on the selected host, cleared on this computer. */
-export function registerCookieClearHandlers(): void {
-  for (const channel of [
-    'browser:session:clearCookies',
-    'browser:session:clearCookiesForClientHost',
-    'browser:session:clearCookiesForSshHost'
-  ]) {
-    ipcMain.removeHandler(channel)
+export function registerCookieClearHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    for (const channel of [
+      'browser:session:clearCookies',
+      'browser:session:clearCookiesForClientHost',
+      'browser:session:clearCookiesForSshHost'
+    ]) {
+      ipcMain.removeHandler(channel)
+    }
   }
 
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:clearCookies',
     async (event, args: { profileId?: unknown }): Promise<boolean> => {
       const profileId = targetId(args?.profileId)
@@ -35,7 +38,7 @@ export function registerCookieClearHandlers(): void {
   )
 
   // The jar a server profile's This-device pages use; null when this desktop doesn't host them.
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:clearCookiesForClientHost',
     async (
       event,
@@ -51,7 +54,7 @@ export function registerCookieClearHandlers(): void {
   )
 
   // An SSH host's jar lives on this computer, so it clears while the host is disconnected too.
-  ipcMain.handle(
+  ipc.handle(
     'browser:session:clearCookiesForSshHost',
     async (event, args: { sshTargetId?: unknown; profileId?: unknown }): Promise<boolean> => {
       const sshTargetId = targetId(args?.sshTargetId)

@@ -36,7 +36,7 @@ import { useWorktreeDropCommitContext } from '../drag/use-drop-commit-context'
 import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
-import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { renderWorktreeVirtualRows } from '../rows/virtual-row-dispatch'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
@@ -45,6 +45,8 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction; native overflow anchoring fights it and causes jumps.
   overflowAnchor: 'none'
 }
+
+const EMPTY_DRAG_UNITS_BY_ROW: ReadonlyMap<number, { identity: string }> = new Map()
 
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
@@ -164,7 +166,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     worktreeMap,
     worktreeLineageById,
-    worktreeDragGroups: session.worktreeDragGroups,
+    getWorktreeDragGroups: session.getWorktreeDragGroups,
     keepsFolderParent: rowGeometry.keepsFolderParent,
     captureFolderRetention: rowGeometry.captureFolderRetention
   })
@@ -338,7 +340,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const draggingIdentity = runtime.worktreeDragState.draggingWorktreeId
   const hiddenDragRanges = useDraggedSubtreeRanges(projection, draggingIdentity)
   const rowContext = buildWorktreeVirtualRowContext({
-    dragUnitsByRow: rowGeometry.ranges.byRow,
+    dragUnitsByRow:
+      runtime.worktreeDragState.previewOffsetsByWorktreeId.size > 0
+        ? rowGeometry.getRanges().byRow
+        : EMPTY_DRAG_UNITS_BY_ROW,
     hiddenDragRanges,
     props: rowProps,
     projection,
@@ -411,10 +416,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
             headerDrag,
             worktreeDragState: runtime.worktreeDragState
           })}
-          {virtualItems.map((vItem) => {
-            const row = renderRows[vItem.index]
-            return row ? renderWorktreeVirtualRow(rowContext, row, vItem, t) : null
-          })}
+          {renderWorktreeVirtualRows(rowContext, virtualItems, t)}
         </div>
       </div>
       {showScrollToTop ? <WorktreeListScrollToTopButton onClick={scrollToTop} /> : null}

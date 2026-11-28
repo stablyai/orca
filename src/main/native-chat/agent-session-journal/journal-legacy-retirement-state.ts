@@ -5,6 +5,7 @@ import {
   type LegacySourceArtifact,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 /**
  * Saved beside the copy receipt. Builds from before on-update retirement read the v1 key, so this
@@ -227,16 +228,18 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
     : null
 }
 
-const COUNT = z.number().int().nonnegative()
-const LEGACY_PROOF_COUNTS = z.object({
-  chats: COUNT,
-  alreadyConverted: COUNT,
-  newlyConverted: COUNT,
-  deletedHere: COUNT,
-  drafts: COUNT,
-  originals: COUNT,
-  copies: COUNT
-})
+const COUNT = lazyZodSchema(() => z.number().int().nonnegative())
+const LEGACY_PROOF_COUNTS = lazyZodSchema(() =>
+  z.object({
+    chats: COUNT,
+    alreadyConverted: COUNT,
+    newlyConverted: COUNT,
+    deletedHere: COUNT,
+    drafts: COUNT,
+    originals: COUNT,
+    copies: COUNT
+  })
+)
 
 function decodeCounts(value: unknown): { counts?: LegacyProofCounts } {
   const counts = LEGACY_PROOF_COUNTS.safeParse(value)

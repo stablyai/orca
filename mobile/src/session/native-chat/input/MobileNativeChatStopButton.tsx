@@ -1,13 +1,13 @@
 import { Square } from 'lucide-react-native'
-import { colors } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { triggerSelection } from '../../../platform/haptics/haptics'
 import { MobilePendingButton } from '../../../components/controls/MobilePendingButton'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles as styles
+  composerInputStylesSheet
 } from '../../../components/composer-input/composer-input-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 // held tracks this phone’s in-flight Stop request, not the host’s stopping status.
 export function MobileNativeChatStopButton({
@@ -17,7 +17,8 @@ export function MobileNativeChatStopButton({
   onStop?: () => void
   held: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   return (
     <MobilePendingButton

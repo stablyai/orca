@@ -8,6 +8,7 @@ import {
   structuredSessionOpenFeedbackText
 } from './activate-ai-vault-structured-session'
 import { showChatOpenUnavailable } from './chat-open-failure-toast'
+import { pairedServerTerminalFeedback } from './paired-server-open'
 import type { StructuredSessionOpenFeedback } from './activate-ai-vault-structured-session'
 import { useAppStore } from '@/store/index'
 import {
@@ -16,7 +17,6 @@ import {
   showLookupFailure
 } from './open-located-agent-message-sender'
 import type { LookupFailure } from './open-located-agent-message-sender'
-import { unnamedSenderLabel } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-label'
 import {
   agentMessageSenderOpens,
   agentMessageSenderReplacedOnHandle,
@@ -34,6 +34,7 @@ import type { OrchestrationCrewRow } from '../../../../../shared/orchestration/o
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { unreachableOpenFailure } from '../../../../../shared/agent-session/view/structured-session-open-failure-detail'
+import { agentMessageSavedName } from '../../../../../shared/agent-session/view/messages/agent-message-presentation'
 
 type Sender = AgentMessageSource['senders'][number]
 const opensInFlight = new Map<string, Promise<void>>()
@@ -45,7 +46,7 @@ export function openAgentMessageSender(
   chatWorktreeId: string,
   target?: RuntimeClientTarget,
   dispatchId?: string,
-  name?: string
+  name?: string | null
 ): Promise<void> {
   const state = useAppStore.getState()
   // Read at click time, so a stale render cannot open what the host has since rejected.
@@ -56,7 +57,8 @@ export function openAgentMessageSender(
     target,
     dispatchId
   )
-  const label = name ?? sender.name ?? unnamedSenderLabel()
+  // A blank snapshot name names no one, so the unavailable toast keeps its "An agent" subject.
+  const label = name ?? agentMessageSavedName(sender) ?? undefined
   const reopen = () =>
     openAgentMessageSender(source, sender, chatWorktreeId, target, dispatchId, name)
   if (resolved.kind === 'located') {
@@ -112,7 +114,7 @@ async function openSender(
   source: AgentMessageSource,
   sender: Sender,
   host: RuntimeClientTarget,
-  name: string,
+  name: string | undefined,
   retry: () => Promise<void>
 ): Promise<void> {
   const { party } = sender
@@ -139,7 +141,7 @@ async function openSender(
       kind: 'sender',
       party,
       messageIds,
-      displayName: name ?? undefined,
+      displayName: name,
       ...(known ? { fallback: known } : {})
     },
     { target: host, retry }
@@ -198,7 +200,8 @@ export async function openOrchestrationDispatch(
       }
     )
     if (result.kind === 'terminal') {
-      await focusTerminal(result.handle, terminalEnvironmentId(host, result), terminal)
+      const onServer = pairedServerTerminalFeedback(terminal, host, result, label)
+      await focusTerminal(result.handle, terminalEnvironmentId(host, result), onServer)
     }
   } catch (error) {
     showLookupFailure(

@@ -1,5 +1,9 @@
 import { MobileNativeChatGoalCheckNotice } from './MobileNativeChatGoalCheckNotice'
 import * as Fallback from '../../../../../../src/shared/native-chat/transcript/notices/claude-model-fallback'
+import {
+  AGENT_ACCOUNT_NOT_MOVED_COPY,
+  AGENT_ACCOUNT_SWITCH_COPY
+} from '../../../../../../src/shared/native-chat/transcript/notices/agent-account-switch-notice'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
@@ -23,11 +27,14 @@ import {
 } from './mobile-native-chat-notice-context'
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
 import { MobileNativeChatAutomationResultRow } from '../MobileNativeChatAutomationResultRow'
-import { MobileNativeChatDivider, mobileNativeChatDividerStyles } from '../MobileNativeChatDivider'
+import {
+  MobileNativeChatDivider,
+  mobileNativeChatDividerStylesSheet
+} from '../MobileNativeChatDivider'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, type MobilePalette } from '../../../../theme/mobile-theme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
 import { noticeLineText } from './native-chat-notice-line-text'
 import { nativeChatReviewNoticeSummary } from './native-chat-review-notice-copy'
@@ -36,13 +43,13 @@ import { mobileNativeChatBotCard } from '../bot-cards/mobile-native-chat-bot-car
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-stopped-before-start'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
-import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
+import { toolStylesSheet } from '../tool-results/mobile-native-chat-tool-styles'
 import { MobileNativeChatUsageLimitRow } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
-import { sheetPrimaryButtonStyles } from '../../../../components/sheets/SheetPrimaryButton'
+import { sheetPrimaryButtonStylesSheet } from '../../../../components/sheets/SheetPrimaryButton'
 import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 
-function toneColor(tone: NativeChatNoticeTone): string {
+function toneColor(colors: MobilePalette, tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
 }
 
@@ -61,7 +68,11 @@ export function MobileNativeChatNoticeRow({
   cardId?: string
   timestamp?: number | null
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const toolStyles = useThemedStyles(toolStylesSheet)
+  const mobileNativeChatDividerStyles = useThemedStyles(mobileNativeChatDividerStylesSheet)
+  const sheetPrimaryButtonStyles = useThemedStyles(sheetPrimaryButtonStylesSheet)
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const detailId = useId()
@@ -140,8 +151,8 @@ export function MobileNativeChatNoticeRow({
         style={[
           toolStyles.codeText,
           scaledType(MONO_SIZE, fontScale),
-          look.kind === 'settled-permission' && { color: toneColor(look.tone) },
-          look.kind === 'auto-review-denied' && { color: toneColor('warning') }
+          look.kind === 'settled-permission' && { color: toneColor(colors, look.tone) },
+          look.kind === 'auto-review-denied' && { color: toneColor(colors, 'warning') }
         ]}
       >
         {diagnosticText}
@@ -218,6 +229,20 @@ export function MobileNativeChatNoticeRow({
           {nativeChatHostStatusCopy(t)[look.presentation]}
         </Text>
       )
+    case 'account-switch':
+      return (
+        <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
+          {'reason' in look
+            ? t('chat.notice.accountNotMoved', AGENT_ACCOUNT_NOT_MOVED_COPY, {
+                to: look.to,
+                reason: look.reason
+              })
+            : t('chat.notice.accountSwitch', AGENT_ACCOUNT_SWITCH_COPY, {
+                from: look.from,
+                to: look.to
+              })}
+        </Text>
+      )
     case 'model-fallback':
       return (
         <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
@@ -263,7 +288,7 @@ export function MobileNativeChatNoticeRow({
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
-        look.tone && { color: toneColor(resolved ? 'notice' : look.tone) }
+        look.tone && { color: toneColor(colors, resolved ? 'notice' : look.tone) }
       ]
       const continuation = names.continuation
       const continueOffered =
@@ -319,7 +344,7 @@ export function MobileNativeChatNoticeRow({
         <View style={resolved ? styles.toneCard : [styles.card, styles.toneCard]}>
           <Icon
             size={16 * fontScale}
-            color={toneColor(resolved ? 'notice' : look.tone)}
+            color={toneColor(colors, resolved ? 'notice' : look.tone)}
             strokeWidth={2}
             style={styles.toneIcon}
           />
@@ -330,7 +355,7 @@ export function MobileNativeChatNoticeRow({
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   dividerLink: { textDecorationLine: 'underline' },
   faint: { color: colors.textMuted },
   commandOutput: {
@@ -341,7 +366,7 @@ const styles = themedStyleSheet(() => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     borderRadius: radii.surface,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     padding: spacing.md,
     gap: spacing.sm
   },

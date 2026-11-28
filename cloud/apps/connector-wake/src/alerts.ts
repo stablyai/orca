@@ -108,8 +108,13 @@ async function probes(env: WakeAlertsEnv, wait: (ms: number) => Promise<void>): 
 // read also says so hourly.
 async function withCloudflare(env: WakeAlertsEnv, now: Counts, before: Counts, atMs: number, hourly: boolean): Promise<{ read: boolean; warning: string | null }> {
   try {
-    // Never the edge's script, which is the shared module's default.
-    const counts = await cloudflareErrors({ ...env, CF_SCRIPT_NAME: env.CF_SCRIPT_NAME || DEFAULT_SCRIPT_NAME }, WINDOW_MIN, LAG_MIN, atMs)
+    // Never the edge's script, which is the shared module's default. Hibernated socket events that
+    // throw are left out: when Cloudflare retires a ConnectorHost every few hours, each hibernated
+    // socket's close ends in the runtime's "this Durable Object instance is no longer active"
+    // (scriptThrewException), and the desktop reconnects in about a second. Cloudflare's data cannot
+    // tell that apart from our own webSocketMessage/Close/Error throwing, so those no longer page
+    // here either; Worker errors and object fetch/RPC errors still count.
+    const counts = await cloudflareErrors({ ...env, CF_SCRIPT_NAME: env.CF_SCRIPT_NAME || DEFAULT_SCRIPT_NAME }, WINDOW_MIN, LAG_MIN, atMs, { skipHibernationErrors: true })
     if (!counts) { return { read: false, warning: null } }
     Object.assign(now, counts[0])
     Object.assign(before, counts[1])

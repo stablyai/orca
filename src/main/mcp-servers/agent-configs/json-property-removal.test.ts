@@ -1,3 +1,4 @@
+import { parse } from 'jsonc-parser'
 import { describe, expect, it } from 'vitest'
 import { insertJsonProperties } from './json-property-insertion'
 import { removeJsonProperties, removeJsonProperty } from './json-property-removal'
@@ -55,5 +56,22 @@ describe('removeJsonProperties', () => {
       const inserted = insertJsonProperties(text, ['s'], added)!
       expect(removeJsonProperties(inserted, ['s'], ['e', 'f'])).toBe(text)
     }
+  })
+})
+
+describe('repeated keys', () => {
+  // jsonc-parser's parse(), which reads the file back, keeps the last property by each name.
+  it('inserts into and removes from the repeated table the reader uses', () => {
+    const source = '{"mcpServers":{"old":{"command":"keep"}},"mcpServers":{"active":true}}'
+    const inserted = insertJsonProperties(source, ['mcpServers'], [['orca', { command: 'orca' }]])!
+    expect(parse(inserted)).toEqual({ mcpServers: { active: true, orca: { command: 'orca' } } })
+    expect(removeJsonProperties(inserted, ['mcpServers'], ['orca'])).toBe(source)
+  })
+
+  it('removes the active property and keeps the shadowed one', () => {
+    const source = '{"mcpServers":{"bridge":{"command":"user"},"bridge":{"command":"orca"}}}'
+    expect(removeJsonProperties(source, ['mcpServers'], ['bridge'])).toBe(
+      '{"mcpServers":{"bridge":{"command":"user"}}}'
+    )
   })
 })

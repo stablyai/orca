@@ -107,6 +107,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'nativeChatQueueFollowUps'
   | 'nativeChatCiResultLines'
   | 'nativeChatAutoName'
+  | 'antigravityChatNaming'
   | 'workspaceCleanupPolicy'
   | 'prAutoRefresh'
   | 'newTabMenuLayout'

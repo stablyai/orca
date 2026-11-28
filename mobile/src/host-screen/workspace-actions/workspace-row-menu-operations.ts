@@ -37,6 +37,16 @@ export const workspaceNotificationMutesWrite = bindDeferredRpcOperation(
   })
 )
 
+export const workspaceNotificationMuteSet = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'ui.set-workspace-notification-muted-or-skip',
+    method: 'ui.setWorkspaceNotificationMuted',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('workspace-notification-mute-set', notificationMutesSchema)
+  })
+)
+
 // Optimistic row writes; a refusal puts the row back.
 export const worktreeReadStateWrite = bindDeferredRpcOperation(
   defineRpcOperation({

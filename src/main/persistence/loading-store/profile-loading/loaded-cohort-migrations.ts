@@ -36,6 +36,14 @@ export class LoadedCohortMigrationOperations {
         }
       }
     }
+    if (typeof state.settings?.nativeChatMarkNewMessages !== 'boolean') {
+      this.runtime.loadNeedsSave = true
+      // Why not a default: writers that spread defaults into saved settings would turn existing profiles off.
+      state = {
+        ...state,
+        settings: { ...state.settings, nativeChatMarkNewMessages: existingProfile }
+      }
+    }
     if (state.settings?.claudeCodeThemeSyncOffer === undefined) {
       this.runtime.loadNeedsSave = true
       // Why every profile: settings.json is global, so even a fresh profile must not restyle Claude Code unasked.

@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import { joinSentences } from '../../../../../shared/text/sentence-joining'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
@@ -44,14 +45,16 @@ export function PluginRemoveDialog({
             })}
           </DialogTitle>
           <DialogDescription>
-            {t(
-              'auto.components.settings.PluginRemoveDialog.description',
-              'Its data is removed too.'
-            )}{' '}
-            {t(
-              'auto.components.settings.PluginRemoveDialog.pausesAutomations',
-              'Automations it created are paused, and stay paused if you install it again.'
-            )}
+            {joinSentences([
+              t(
+                'auto.components.settings.PluginRemoveDialog.description',
+                'Its data is removed too.'
+              ),
+              t(
+                'auto.components.settings.PluginRemoveDialog.pausesAutomations',
+                'Automations it created are paused, and stay paused if you install it again.'
+              )
+            ])}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

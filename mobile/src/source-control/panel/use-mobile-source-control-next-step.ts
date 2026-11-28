@@ -3,7 +3,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { presentPrMerge } from '../review/pull-request/actions/pr-actions-state'
 import { useMobilePrActions } from '../review/pull-request/actions/use-mobile-pr-actions'
-import '../review/pull-request/actions/pr-actions-engine'
 import type { PrActionBusyKey } from '../review/pull-request/actions/pr-actions-engine'
 import { prActionSlices, type PrSlice } from '../review/pull-request/mobile-pr-queries'
 import {
@@ -206,6 +205,7 @@ export function useMobileSourceControlNextStep({
         prDetails: readyPr?.details ?? null,
         createBlocked: reviewAbsent && createPrAction.visible && Boolean(createPrAction.hint),
         agentName,
+        t,
         busy: {
           completingMerge: busyAction === MOBILE_COMPLETE_MERGE_ACTION_ID,
           agentLaunch: triage.isBusy('fix-checks') || triage.isBusy('resolve-conflicts'),
@@ -242,7 +242,6 @@ export function useMobileSourceControlNextStep({
             )
         }
       }),
-    // t: labels are translated inside the builder.
     [
       actions,
       agentName,
@@ -282,7 +281,7 @@ export function useMobileSourceControlNextStep({
     mergeIntent && pr
       ? {
           title: t('pullRequest.prActionsSection.mergeConfirmTitle', 'Merge pull request?'),
-          message: presentPrMerge(pr, mergeIntent.method).confirmMessage,
+          message: presentPrMerge(pr, mergeIntent.method, t).confirmMessage,
           confirmLabel: t('pullRequest.prActionsSection.mergeButton', 'Merge'),
           onConfirm: () => {
             setMergeIntent(null)

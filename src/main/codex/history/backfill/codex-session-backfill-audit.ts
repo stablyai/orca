@@ -3,8 +3,26 @@ import type { Stats } from 'node:fs'
 import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { streamCodexSessionLedgerRecords } from '../rollouts/codex-session-ledger-stream'
+import {
+  bufferSliceContains,
+  forEachCodexSessionLedgerRecord
+} from '../rollouts/codex-session-ledger-stream'
+import {
+  bufferSliceEquals,
+  createFlatJsonFieldSlot,
+  scanFlatJsonObjectBuffer
+} from '../rollouts/flat-json-object-buffer-scan'
 import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
+
+const UNICODE_ESCAPE_BYTES = Buffer.from('\\u')
+const FILE_EVENT_ID_BYTES = Buffer.from('fileEventId')
+const DIAGNOSTIC_EVENT_ID_BYTES = Buffer.from('diagnosticEventId')
+const RUN_SUMMARY_BYTES = Buffer.from('run-summary')
+const HARDLINK_BYTES = Buffer.from('hardlink')
+const COPY_BYTES = Buffer.from('copy')
+const EXISTING_BYTES = Buffer.from('existing')
+const COPY_UNSUPPORTED_BYTES = Buffer.from('copy-unsupported')
+const FAILED_BYTES = Buffer.from('failed')
 
 export type CodexSessionBackfillAuditWriter = (record: Record<string, unknown>) => Promise<boolean>
 
@@ -64,25 +82,69 @@ export async function readCodexSessionBackfillAuditCoverage(
     diagnosticEventIds: new Set<string>(),
     hasRunSummary: false
   }
-  for await (const record of streamCodexSessionLedgerRecords(auditLogPath, {
-    throwOnReadFailure: true
-  })) {
-    coverage.hasRunSummary ||= record.action === 'run-summary'
-    if (
-      typeof record.action === 'string' &&
-      HEAL_AUDIT_ACTIONS.has(record.action) &&
-      typeof record.fileEventId === 'string'
-    ) {
-      coverage.fileEventIds.add(record.fileEventId)
+  const actionSlot = createFlatJsonFieldSlot('action')
+  const fileEventIdSlot = createFlatJsonFieldSlot('fileEventId')
+  const diagnosticEventIdSlot = createFlatJsonFieldSlot('diagnosticEventId')
+  const slots = [actionSlot, fileEventIdSlot, diagnosticEventIdSlot] as const
+  await forEachCodexSessionLedgerRecord(
+    auditLogPath,
+    (record) => {
+      coverage.hasRunSummary ||= record.action === 'run-summary'
+      if (
+        typeof record.action === 'string' &&
+        HEAL_AUDIT_ACTIONS.has(record.action) &&
+        typeof record.fileEventId === 'string'
+      ) {
+        coverage.fileEventIds.add(record.fileEventId)
+      }
+      if (
+        typeof record.action === 'string' &&
+        DIAGNOSTIC_AUDIT_ACTIONS.has(record.action) &&
+        typeof record.diagnosticEventId === 'string'
+      ) {
+        coverage.diagnosticEventIds.add(record.diagnosticEventId)
+      }
+    },
+    {
+      throwOnReadFailure: true,
+      shouldParseBuffer: (buf, start, end) =>
+        bufferSliceContains(buf, start, end, FILE_EVENT_ID_BYTES) ||
+        bufferSliceContains(buf, start, end, DIAGNOSTIC_EVENT_ID_BYTES) ||
+        bufferSliceContains(buf, start, end, RUN_SUMMARY_BYTES) ||
+        bufferSliceContains(buf, start, end, UNICODE_ESCAPE_BYTES),
+      onLineBuffer: (buf, start, end) => {
+        if (!scanFlatJsonObjectBuffer(buf, start, end, slots)) {
+          return false
+        }
+        if (!actionSlot.isString) {
+          return true
+        }
+        const aStart = actionSlot.valueStart
+        const aEnd = actionSlot.valueEnd
+        if (bufferSliceEquals(buf, aStart, aEnd, RUN_SUMMARY_BYTES)) {
+          coverage.hasRunSummary = true
+        } else if (
+          fileEventIdSlot.isString &&
+          (bufferSliceEquals(buf, aStart, aEnd, EXISTING_BYTES) ||
+            bufferSliceEquals(buf, aStart, aEnd, HARDLINK_BYTES) ||
+            bufferSliceEquals(buf, aStart, aEnd, COPY_BYTES))
+        ) {
+          coverage.fileEventIds.add(
+            buf.toString('utf-8', fileEventIdSlot.valueStart, fileEventIdSlot.valueEnd)
+          )
+        } else if (
+          diagnosticEventIdSlot.isString &&
+          (bufferSliceEquals(buf, aStart, aEnd, COPY_UNSUPPORTED_BYTES) ||
+            bufferSliceEquals(buf, aStart, aEnd, FAILED_BYTES))
+        ) {
+          coverage.diagnosticEventIds.add(
+            buf.toString('utf-8', diagnosticEventIdSlot.valueStart, diagnosticEventIdSlot.valueEnd)
+          )
+        }
+        return true
+      }
     }
-    if (
-      typeof record.action === 'string' &&
-      DIAGNOSTIC_AUDIT_ACTIONS.has(record.action) &&
-      typeof record.diagnosticEventId === 'string'
-    ) {
-      coverage.diagnosticEventIds.add(record.diagnosticEventId)
-    }
-  }
+  )
   return coverage
 }
 

@@ -6,9 +6,9 @@ import { PickerModal } from '../../components/sheets/PickerModal'
 import { statusDotColor } from '../../components/feedback/StatusDot'
 import { hostPickerOptions } from '../../host-catalog/selection/use-connected-host-picker'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { HostProfile } from '../../host-catalog/host-profile'
 import { useHostDisplay } from '../../host-descriptors/use-host-display'
@@ -33,11 +33,12 @@ export function MobileHomeHostPill(props: {
   onPick: (hostId: string) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const [open, setOpen] = useState(false)
   const title = useHostDisplay(props.host).title
   const choosable = props.hosts.length > 1
-  const dot = statusDotColor(props.state ?? 'disconnected')
+  const dot = statusDotColor(colors, props.state ?? 'disconnected')
   return (
     <>
       <MobileHomePill
@@ -45,7 +46,7 @@ export function MobileHomeHostPill(props: {
         leading={<View style={[styles.dot, { backgroundColor: dot }]} />}
         accessibilityLabel={
           choosable
-            ? t('home.tabs.chooseDesktop', '{{desktop}}, choose another desktop', {
+            ? t('home.tabs.chooseComputer', '{{desktop}}, choose another computer', {
                 desktop: title
               })
             : title
@@ -73,7 +74,8 @@ export function MobileHomePill(props: {
   accessibilityLabel: string
   onPress?: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const [pressed, setPressed] = useState(false)
   const choosable = props.onPress !== undefined
   return (
@@ -107,7 +109,7 @@ export function MobileHomePill(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pillHit: { alignSelf: 'flex-start', maxWidth: '100%' },
   pill: {
     flexDirection: 'row',

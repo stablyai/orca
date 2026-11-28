@@ -4,25 +4,26 @@ import { dirname } from 'node:path'
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
 import type { AntigravityAccountSummary } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
-import type {
-  ProviderRateLimits,
-  RateLimitRuntimeTarget
-} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
 import { readPrivateWindowsCredentialFile } from '../../shared/secure-storage/windows-credential-file-io'
 
-export type StoredAntigravityUsage = {
-  target: RateLimitRuntimeTarget
-  rateLimits: ProviderRateLimits
-}
-export type StoredAntigravityAccount = Omit<AntigravityAccountSummary, 'usage'> & {
+export type StoredAntigravityAccount = AntigravityAccountSummary & {
   credentials: string
-  /** Last verified reading per runtime this account was read on. */
-  usage?: StoredAntigravityUsage[]
+}
+/** agy's login as Orca last read it, keyed by the fingerprint its keychain item had then, so a
+ *  later listing can name it without reading the secret, which may raise a keychain dialog. */
+export type VerifiedAntigravityLogin = {
+  fingerprint: string
+  email: string | null
+  subject: string | null
+  authMethod: string
+  accountId: string | null
 }
 export type AntigravityAccountVault = {
   accounts: StoredAntigravityAccount[]
   selectedAccountId: string | null
+  /** Older builds drop it when they write the vault; Orca then reads the login again on request. */
+  verifiedLogin?: VerifiedAntigravityLogin
 }
 export type AntigravityAccountStore = {
   read(): Promise<AntigravityAccountVault>
@@ -49,15 +50,16 @@ function isAccount(value: unknown): value is StoredAntigravityAccount {
   )
 }
 
-function isStoredUsage(value: unknown): value is StoredAntigravityUsage {
+const nullableString = (value: unknown): boolean => value === null || typeof value === 'string'
+
+function isVerifiedLogin(value: unknown): value is VerifiedAntigravityLogin {
   return (
     isRecord(value) &&
-    isRecord(value.target) &&
-    (value.target.runtime === 'host' || value.target.runtime === 'wsl') &&
-    (value.target.wslDistro === null || typeof value.target.wslDistro === 'string') &&
-    isRecord(value.rateLimits) &&
-    value.rateLimits.provider === 'antigravity' &&
-    typeof value.rateLimits.updatedAt === 'number'
+    typeof value.fingerprint === 'string' &&
+    nullableString(value.email) &&
+    nullableString(value.subject) &&
+    typeof value.authMethod === 'string' &&
+    nullableString(value.accountId)
   )
 }
 
@@ -123,15 +125,26 @@ export function createEncryptedAntigravityAccountStore(
               throw new Error('inconsistent identity')
             }
           }
-          for (const account of value.accounts) {
-            // A malformed reading is only a lost cache entry, never a reason to reject the vault.
-            if (account.usage !== undefined) {
-              account.usage = Array.isArray(account.usage)
-                ? account.usage.filter(isStoredUsage)
-                : []
-            }
+          return {
+            // Older builds cached quota readings in `usage`; drop them so the next write removes them.
+            accounts: value.accounts.map(
+              ({ usage: _usage, ...account }: StoredAntigravityAccount & { usage?: unknown }) =>
+                account
+            ),
+            selectedAccountId: value.selectedAccountId,
+            // A malformed cache only costs a read on request, so it never fails the vault.
+            ...(isVerifiedLogin(value.verifiedLogin)
+              ? {
+                  verifiedLogin: {
+                    fingerprint: value.verifiedLogin.fingerprint,
+                    email: value.verifiedLogin.email,
+                    subject: value.verifiedLogin.subject,
+                    authMethod: value.verifiedLogin.authMethod,
+                    accountId: value.verifiedLogin.accountId
+                  }
+                }
+              : {})
           }
-          return { accounts: value.accounts, selectedAccountId: value.selectedAccountId }
         } catch {
           throw new Error(
             'Antigravity account snapshots could not be read; the existing vault was preserved.'

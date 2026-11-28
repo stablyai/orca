@@ -106,7 +106,7 @@ function peerRunMailStatements(row: string): [string, string] {
          'message', json_object(
            'from', ${row}.from_handle, 'type', ${row}.type, 'subject', ${row}.subject,
            'body', ${row}.body, 'payload', ${row}.payload, 'priority', ${row}.priority,
-           'threadId', ${row}.thread_id
+           'threadId', ${row}.thread_id, 'replyTo', ${row}.reply_to
          ),
          'dispatchId', p.dispatch_id, 'taskId', p.task_id
        ) AS payload

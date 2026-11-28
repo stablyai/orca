@@ -70,12 +70,20 @@ export function shareFlagPage(
   }
 }
 
-export function scheduleWhen(rrule: string): string {
-  return formatAutomationSchedule(rrule)
+export function scheduleWhen(
+  rrule: string,
+  t: ReturnType<typeof useMobileTranslation>,
+  locale: string
+): string {
+  return formatAutomationSchedule(rrule, t, locale)
 }
 
-export function eventWhen(source: string, event: string): string {
-  return automationEventKind(source, event) ? eventLabel({ source, event }) : event
+export function eventWhen(
+  source: string,
+  event: string,
+  t: ReturnType<typeof useMobileTranslation>
+): string {
+  return automationEventKind(source, event) ? eventLabel({ source, event }, t) : event
 }
 
 /** One automation can start on several events; it is ticked and shown once. */

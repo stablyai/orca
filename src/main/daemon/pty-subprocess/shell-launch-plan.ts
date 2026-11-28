@@ -34,7 +34,7 @@ import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-execut
 import { resolvePosixPaneShellPath } from '../../pty/shell-startup/posix-pwsh'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
-import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
+import { addTerminalHandleToWslEnv, addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
@@ -195,6 +195,7 @@ export async function createPtyShellLaunchPlan(
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       addOrcaWslInteropEnv(env)
     }
+    addTerminalHandleToWslEnv(env)
   } else {
     rescrubDaemonPtyEnvironment(env, opts)
     // Resolving a bare pwsh is not a fallback: no warning, and SHELL stays the user's login shell.

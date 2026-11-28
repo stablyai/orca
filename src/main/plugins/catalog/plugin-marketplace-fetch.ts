@@ -123,7 +123,8 @@ async function readMarketplaceAtCommit(
   return extractCatalogImages(
     index,
     readBlob,
-    (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, memo),
+    (entry, read, remainingBudget) =>
+      fillMonorepoReleaseImages(entry, catalogUrl, read, memo, remainingBudget),
     memo
   )
 }
@@ -157,7 +158,8 @@ async function extractBatchedMarketplaceImages(
     const extracted = await extractCatalogImages(
       index,
       readBlob,
-      (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, state.memo),
+      (entry, read, remainingBudget) =>
+        fillMonorepoReleaseImages(entry, catalogUrl, read, state.memo, remainingBudget),
       state.memo
     )
     if (missing.size === 0) {

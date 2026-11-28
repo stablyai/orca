@@ -7,6 +7,8 @@ import {
 } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { resolveStructuredEnvAccountHomePath } from '../../runtime/agent-session/environment/structured-agent-account-home'
 
+import type { AcpPreparedAccount } from './acp-launch-contract'
+
 type AccountPin = { accountHomeVariable: string } | { accountLocatorKind: 'opencode' }
 
 export type AcpAccountBinding = {
@@ -24,7 +26,7 @@ export type AcpAccountBinding = {
     antigravityChatAuth?: AntigravityChatAuthConfig,
     assertCurrent?: () => void,
     purpose?: 'chat' | 'listing'
-  ): Promise<void>
+  ): Promise<AcpPreparedAccount | void>
 }
 
 export function directoryAccountBinding(

@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewGuard
+} from '../pane/ownership/native-chat-view-memory'
 import { ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/class-names'
@@ -61,9 +64,15 @@ export function NativeChatAutomationSendAgain({
   const { say } = wording
   const owner = useNativeChatVisualOwner()
   const bot = useBotForWorkspace(owner?.worktreeId ?? null)
-  const [sending, setSending] = useState<'idle' | 'busy' | 'sent'>(
-    resend === 'sent' ? 'sent' : 'idle'
+  // Kept with the chat tab: a row released mid-send returns still sending, or already sent. Only sent rows count
+  // toward the newest few kept; a send in flight is never dropped.
+  const [busy, setBusy] = useNativeChatViewGuard(`automation-resend-busy:${run.runId}`, false)
+  const [sent, setSent] = useNativeChatViewGuard(
+    `automation-resend:${run.runId}`,
+    false,
+    KEPT_PROMPT_VIEWS
   )
+  const sending = busy ? 'busy' : sent ? 'sent' : 'idle'
   if (resend === 'none' || run.wait === undefined || !bot || !owner) {
     return null
   }
@@ -76,17 +85,15 @@ export function NativeChatAutomationSendAgain({
       className={RUN_LINK_BUTTON}
       disabled={sending === 'busy'}
       onClick={() => {
-        setSending('busy')
+        setBusy(true)
         void callBotRpc(bot, 'bots.sendRunAgain', {
           botId: bot.id,
           sessionId: owner.sessionId,
           runId: run.runId
         })
-          .then(() => setSending('sent'))
-          .catch((error: unknown) => {
-            setSending('idle')
-            toast.error(botErrorMessage(error))
-          })
+          .then(() => setSent(true))
+          .catch((error: unknown) => toast.error(botErrorMessage(error)))
+          .finally(() => setBusy(false))
       }}
     >
       {say('sendAgain')}

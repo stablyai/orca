@@ -81,7 +81,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       acquisitions: this.acquisitions,
       ...(deps.onEvent ? { onEvent: deps.onEvent } : {}),
       ...(deps.logger ? { logger: deps.logger } : {}),
-      forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null)
+      forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null),
+      forgetMcpSignIn: (sessionId) => this.manageMcp.forget(sessionId)
     })
   }
 
@@ -204,8 +205,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined =>
     this.sessions.get(sessionId)?.backgroundTasks.state
 
-  heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
-    this.sessions.get(sessionId)?.dispatchEchoes.heldSends()
+  relayOpenWork = backgroundStops.codexRelayOpenWork(this.sessions)
+  heldSends = (id: string) => this.sessions.get(id)?.dispatchEchoes.heldSends()
 
   holdsLiveProviderProcess = codexHoldsLiveProviderProcess(this.sessions, this.acquisitions)
 

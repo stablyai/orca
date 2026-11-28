@@ -6,8 +6,10 @@
  */
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isStructuredAgentId } from '../lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openEnum } from '../../validation/zod-salvage'
+import { managedRuntimeRetired } from '../../agent-launch/installation/managed-runtime-install'
 
 export const AGENT_SESSION_AVAILABILITY_METHOD = 'agentSession.subscribeAvailability'
 
@@ -16,7 +18,8 @@ export const AGENT_SESSION_AVAILABILITY_METHOD = 'agentSession.subscribeAvailabi
 export type AgentSessionChatProgram = 'available' | 'installable' | 'missing' | 'unknown'
 
 /** `refused` carries the reason (`agent`: this host cannot run its chat; `windows`: the agent has
- *  no chat on a Windows host); `unknown` is a check that could not answer, never a refusal. */
+ *  no chat on a Windows host; `too-old`: the installed CLI is older than chats need); `unknown` is
+ *  a check that could not answer, never a refusal. */
 export type AgentSessionAgentAvailability = (
   | { agent: string; state: 'available' }
   | { agent: string; state: 'refused'; reason?: string }
@@ -30,15 +33,17 @@ export type AgentSessionAvailabilityFrame = {
 
 const MAX_AGENTS = 128
 
-const rowSchema = z.object({
-  agent: z.string().refine(isStructuredAgentId),
-  // A state this build does not know claims nothing.
-  state: openEnum(['available', 'refused', 'unknown'] as const, 'unknown'),
-  reason: z.string().max(64).optional(),
-  chatProgram: openEnum(['available', 'installable', 'missing', 'unknown'] as const, 'unknown')
-    .optional()
-    .catch(undefined)
-})
+const rowSchema = lazyZodSchema(() =>
+  z.object({
+    agent: z.string().refine(isStructuredAgentId),
+    // A state this build does not know claims nothing.
+    state: openEnum(['available', 'refused', 'unknown'] as const, 'unknown'),
+    reason: z.string().max(64).optional(),
+    chatProgram: openEnum(['available', 'installable', 'missing', 'unknown'] as const, 'unknown')
+      .optional()
+      .catch(undefined)
+  })
+)
 
 /** One frame's answers by agent, or null when the frame is not an availability frame. */
 export function decodeAgentSessionAvailabilityFrame(
@@ -57,7 +62,12 @@ export function decodeAgentSessionAvailabilityFrame(
       continue
     }
     const { agent, state, reason, chatProgram } = parsed.data
-    const program = chatProgram ? { chatProgram } : {}
+    const program = !chatProgram
+      ? {}
+      : {
+          chatProgram:
+            chatProgram === 'installable' && managedRuntimeRetired(agent) ? 'missing' : chatProgram
+        }
     byAgent.set(
       agent,
       state === 'refused'

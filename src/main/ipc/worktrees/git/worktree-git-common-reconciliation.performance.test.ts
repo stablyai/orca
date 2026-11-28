@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { WorktreeBasePollEvent } from '../creation/worktree-base-directory-poller'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
 import { startGitCommonPolling } from './worktree-git-common-polling'
+import { notifyWorktreeActivity, onRepoActivity } from './worktree-activity-signal'
 
 // Perf contract (#48030): the watcher backstop stat'ed every worktree's git metadata every 30 s while the window was
 // visible (~200 stats/s at 1,900 worktrees) even though the native watcher already reports changes.
@@ -102,8 +103,10 @@ function hide(): void {
   onHidden?.()
 }
 let visible = true
-let activity: ((repoId: string) => void) | null = null
 let events: WorktreeBasePollEvent[] = []
+let repoIds = ['repo']
+// The activity registry is module-global, so a test that throws must not leave its owner registered.
+const started: ReturnType<typeof createGitCommonWatchReconciliation>[] = []
 
 async function startReconciliation(): Promise<
   ReturnType<typeof createGitCommonWatchReconciliation>
@@ -131,14 +134,10 @@ async function startReconciliation(): Promise<
     shouldKeep: () => true,
     onRootReplacement: () => {},
     onEvents: (next) => events.push(...next),
-    subscribeRepoActivity: (listener) => {
-      activity = listener
-      return () => {
-        activity = null
-      }
-    },
-    ownsRepo: (repoId) => repoId === 'repo'
+    subscribeRepoActivity: onRepoActivity,
+    getRepoIds: () => repoIds
   })
+  started.push(reconciliation)
   await reconciliation.ensureStarted()
   reveal = () => {
     visible = true
@@ -154,6 +153,7 @@ beforeEach(() => {
   fs.stall = null
   fs.latencyMs = 0
   events = []
+  repoIds = ['repo']
   visible = true
   put(join('/', 'repo'), true)
   put(COMMON, true)
@@ -163,7 +163,8 @@ beforeEach(() => {
   }
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(started.splice(0).map((reconciliation) => reconciliation.unsubscribe()))
   vi.useRealTimers()
 })
 
@@ -285,14 +286,29 @@ it('runs only the reveal sweep when focus lands before show/restore', async () =
   await stop()
 })
 
+it('routes activity to a repo that joins this git directory on watcher sync', async () => {
+  const reconciliation = await startReconciliation()
+  await vi.advanceTimersByTimeAsync(30_000)
+  const added = addWorktreeEntry('joined-repo-command')
+  notifyWorktreeActivity('joined::/w')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events).not.toContainEqual({ type: 'create', path: added })
+  repoIds = ['repo', 'joined']
+  reconciliation.syncRepoIds()
+  notifyWorktreeActivity('joined::/w')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events).toContainEqual({ type: 'create', path: added })
+  await reconciliation.unsubscribe()
+})
+
 it('re-checks on agent turns and shell commands in this repo, never above the old cadence', async () => {
   const { unsubscribe: stop } = await startReconciliation()
   await vi.advanceTimersByTimeAsync(30_000)
   const added = addWorktreeEntry('agent-add')
-  activity?.('other-repo')
+  notifyWorktreeActivity('other-repo::/w')
   await vi.advanceTimersByTimeAsync(0)
   expect(events).toEqual([])
-  activity?.('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(0)
   expect(events).toContainEqual({ type: 'create', path: added })
 
@@ -300,7 +316,7 @@ it('re-checks on agent turns and shell commands in this repo, never above the ol
   fs.stats = 0
   for (let second = 0; second < 600; second += 1) {
     for (let agent = 0; agent < 100; agent += 1) {
-      activity?.('repo')
+      notifyWorktreeActivity('repo::/w')
     }
     await vi.advanceTimersByTimeAsync(1_000)
   }
@@ -326,11 +342,11 @@ it('forces the reveal sweep when a short hide spans where the old 30 s tick woul
 it('checks again once the throttle opens when activity lands inside it', async () => {
   const { unsubscribe: stop } = await startReconciliation()
   await vi.advanceTimersByTimeAsync(30_000)
-  activity?.('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(5_000)
   const added = addWorktreeEntry('second-command')
-  activity?.('repo')
-  activity?.('repo')
+  notifyWorktreeActivity('repo::/w')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(0)
   expect(events).not.toContainEqual({ type: 'create', path: added })
   await vi.advanceTimersByTimeAsync(25_000)
@@ -345,9 +361,9 @@ it('holds activity during a stalled scan without spinning timers', async () => {
   fs.stall = new Promise((resolve) => {
     release = resolve
   })
-  activity?.('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(0)
-  activity?.('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(60_000)
   // Only the five-minute sweep timer; a hung mount must not drive a retry loop.
   expect(vi.getTimerCount()).toBeLessThanOrEqual(1)
@@ -397,10 +413,10 @@ it('keeps the 30 s network-volume cadence at its old cost under constant activit
 it('reports activity within 30 s even when a full sweep follows soon after the retry', async () => {
   const { unsubscribe: stop } = await startReconciliation()
   await vi.advanceTimersByTimeAsync(240_000)
-  activity?.('repo')
+  notifyWorktreeActivity('repo::/w')
   await vi.advanceTimersByTimeAsync(1_000)
   const added = addWorktreeEntry('before-sweep')
-  activity?.('repo')
+  notifyWorktreeActivity('repo::/w')
   // The retry opens at 270 s; the timed sweep at 300 s would be 59 s after the activity.
   await vi.advanceTimersByTimeAsync(30_000)
   expect(events).toContainEqual({ type: 'create', path: added })

@@ -83,3 +83,29 @@ export function isBrowserPageOfAnotherHost(
   const owner = getBrowserPageRemoteOwnerEnvironmentId(state, page)
   return owner === null || (owner !== environmentId && isLiveEnvironment(state, owner))
 }
+
+/** A row naming our own or a live peer's page is an echo from a server we serve, not its tab (#38136). */
+export function createAnotherHostBrowserTabMatcher(
+  state: MirrorRowOwnershipState,
+  worktreeId: string,
+  environmentId: string
+): (tab: { browserPageId: string; browserWorkspaceId: string }) => boolean {
+  const pageById = new Map<string, BrowserPage>()
+  const otherHostWorkspaceIds = new Set<string>()
+  for (const workspace of state.browserTabsByWorktree[worktreeId] ?? []) {
+    for (const candidate of state.browserPagesByWorkspace[workspace.id] ?? []) {
+      if (!pageById.has(candidate.id)) {
+        pageById.set(candidate.id, candidate)
+      }
+      if (isBrowserPageOfAnotherHost(state, candidate, environmentId)) {
+        otherHostWorkspaceIds.add(workspace.id)
+      }
+    }
+  }
+  return (tab) => {
+    const page = pageById.get(tab.browserPageId)
+    return page
+      ? isBrowserPageOfAnotherHost(state, page, environmentId)
+      : otherHostWorkspaceIds.has(tab.browserWorkspaceId)
+  }
+}

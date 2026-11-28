@@ -37,7 +37,6 @@ import {
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store/index'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
-import '@/lib/workspace/creation/new-workspace-ssh-gate'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import {
   connectRepoSshConnection,

@@ -8,6 +8,7 @@ import {
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionLastTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-last-turn'
 import {
+  launchedAgentSessionAccount,
   withMovedAccountHome,
   type createAgentSessionOwnerProof
 } from '../ownership/agent-session-owner-proof'
@@ -150,16 +151,9 @@ export function applyAgentSessionRecordCommand(
         }),
         command.args.accountAcquisition
       )
+      const launchedAccount = launchedAgentSessionAccount(record, command.args)
       next = withMovedAccountHome(
-        command.args.launchedAccountHome
-          ? {
-              ...proved,
-              launchedAccount: {
-                fence: command.args.fence,
-                accountHome: command.args.launchedAccountHome
-              }
-            }
-          : proved,
+        launchedAccount ? { ...proved, launchedAccount } : proved,
         record,
         command.args.movedAccountHome
       )

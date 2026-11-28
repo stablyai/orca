@@ -114,7 +114,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     ? (args.journalItems ?? NO_ITEMS)
     : null
   const allCards = useMemo(() => {
-    const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, {
+    const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, t, {
       agentWorking,
       queuePaused: queuePause !== null,
       agentName: args.agentName,

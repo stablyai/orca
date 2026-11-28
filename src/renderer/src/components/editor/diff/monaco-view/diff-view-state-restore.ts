@@ -19,16 +19,27 @@ export function restoreDiffViewStateWhileLayoutSettles(
   const subscriptions: IDisposable[] = []
   let settling = true
   let restored = false
+  let restoring = false
   let checkPending = false
+  let frame: number | null = null
   let settleTimer: ReturnType<typeof setTimeout> | undefined
 
   const restore = (): void => {
     restored = true
     if (diffEditor.getModel()) {
-      diffEditor.restoreViewState(viewState)
+      restoring = true
+      try {
+        diffEditor.restoreViewState(viewState)
+      } finally {
+        restoring = false
+      }
     }
   }
   const restoreAndStartSettling = (): void => {
+    frame = null
+    if (!settling) {
+      return
+    }
     restore()
     if (settling) {
       settleTimer = setTimeout(stopSettling, SETTLE_WINDOW_MS)
@@ -47,6 +58,10 @@ export function restoreDiffViewStateWhileLayoutSettles(
   }
   const stopSettling = (): void => {
     settling = false
+    if (frame !== null) {
+      cancelAnimationFrame(frame)
+      frame = null
+    }
     clearTimeout(settleTimer)
     for (const subscription of subscriptions.splice(0)) {
       subscription.dispose()
@@ -66,16 +81,22 @@ export function restoreDiffViewStateWhileLayoutSettles(
     })
   }
 
-  const frame = requestAnimationFrame(restoreAndStartSettling)
-  diffEditor.onDidDispose(() => {
-    cancelAnimationFrame(frame)
-    stopSettling()
-  })
+  frame = requestAnimationFrame(restoreAndStartSettling)
+  diffEditor.onDidDispose(stopSettling)
   // Capture on the diff container so wheel, scrollbar, overview ruler, and either pane end the window.
   const container = diffEditor.getContainerDomNode()
   const inputEvents = ['pointerdown', 'wheel', 'keydown'] as const
   for (const type of inputEvents) {
     container.addEventListener(type, stopSettling, { capture: true, passive: true })
+  }
+  // Why: goToDiff can scroll without moving the cursor (e.g. single hunk), so end settling before it runs.
+  const hasOwnGoToDiff = Object.hasOwn(diffEditor, 'goToDiff')
+  const originalGoToDiff = typeof diffEditor.goToDiff === 'function' ? diffEditor.goToDiff : null
+  if (originalGoToDiff) {
+    diffEditor.goToDiff = (target) => {
+      stopSettling()
+      originalGoToDiff.call(diffEditor, target)
+    }
   }
   subscriptions.push(
     originalEditor.onDidContentSizeChange(checkAfterHeightChange),
@@ -85,12 +106,19 @@ export function restoreDiffViewStateWhileLayoutSettles(
     modifiedEditor.onDidChangeModel(stopSettling),
     // Programmatic navigation (header next/previous change) happens outside the container.
     modifiedEditor.onDidChangeCursorPosition((event) => {
-      if (event.source === 'api') {
+      if (!restoring && event.source === 'api') {
         stopSettling()
       }
     }),
     {
       dispose: () => {
+        if (originalGoToDiff) {
+          if (hasOwnGoToDiff) {
+            diffEditor.goToDiff = originalGoToDiff
+          } else {
+            Reflect.deleteProperty(diffEditor, 'goToDiff')
+          }
+        }
         for (const type of inputEvents) {
           container.removeEventListener(type, stopSettling, { capture: true })
         }

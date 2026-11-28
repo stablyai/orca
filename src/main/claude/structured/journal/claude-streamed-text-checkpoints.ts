@@ -54,6 +54,8 @@ export type ClaudeStreamedTextCheckpoints = {
   /** Flush before settling; discard retained blocks so interrupted turns cannot accumulate text. */
   settle: () => void
   readonly pending: number
+  /** Some appended text isn't saved yet, so a relay ack must save it before releasing its lines. */
+  readonly unsaved: boolean
   dispose: () => void
 }
 
@@ -74,12 +76,14 @@ export function createClaudeStreamedTextCheckpoints(
   deps: ClaudeStreamedTextCheckpointDeps
 ): ClaudeStreamedTextCheckpoints {
   const identities = new Map<string, AgentJournalItemIdentity>()
+  const keyOf = new WeakMap<AgentJournalItemIdentity, string>()
   /** Retain producer scope because persist has no frame to read. */
   const scopes = new Map<string, string | null>()
   /** Last written linkage, used only to skip revisions that change nothing. */
   const writtenLinkage = new Map<string, StructuredAgentSessionAppendOptions>()
   const latestText = new Map<string, string>()
   const checkpointLengths = new Map<string, number>()
+  const unsaved = new Set<string>()
 
   /** Resolve each checkpoint afresh; later announcements revise provisional producers on the same row. */
   const producerOptions = (key: string): StructuredAgentSessionAppendOptions => {
@@ -105,6 +109,8 @@ export function createClaudeStreamedTextCheckpoints(
     const options = producerOptions(key)
     checkpointLengths.set(key, text.length)
     writtenLinkage.set(key, options)
+    // Emitted and flushed text is the block's whole text so far.
+    unsaved.delete(key)
     deps.persist(identity, text, options, undefined, live.committed(key))
   }
 
@@ -138,6 +144,7 @@ export function createClaudeStreamedTextCheckpoints(
     writtenLinkage.delete(key)
     latestText.delete(key)
     checkpointLengths.delete(key)
+    unsaved.delete(key)
   }
 
   const finish = (ended: ClaudeStreamedBlockEnd, only?: (key: string) => boolean): void => {
@@ -156,9 +163,15 @@ export function createClaudeStreamedTextCheckpoints(
 
   return {
     append: (identity, text, parentToolUseId = null) => {
-      const key = agentJournalItemKey(identity)
+      // A block's identity is one object for all its deltas, so its key is built once.
+      let key = keyOf.get(identity)
+      if (key === undefined) {
+        key = agentJournalItemKey(identity)
+        keyOf.set(identity, key)
+      }
       identities.set(key, identity)
       scopes.set(key, parentToolUseId)
+      unsaved.add(key)
       coalescer.append(key, text)
     },
     flush,
@@ -189,6 +202,9 @@ export function createClaudeStreamedTextCheckpoints(
     get pending() {
       return identities.size
     },
+    get unsaved() {
+      return unsaved.size > 0
+    },
     dispose: () => {
       live.dispose()
       coalescer.dispose()
@@ -197,6 +213,41 @@ export function createClaudeStreamedTextCheckpoints(
       writtenLinkage.clear()
       latestText.clear()
       checkpointLengths.clear()
+      unsaved.clear()
     }
   }
+}
+
+/**
+ * A relay ack's save must cover text the checkpoints still hold. The daemon's forced ack asks
+ * `has`, then flushes in the same task; every other barrier (a subagent row, a prompt) flushes too,
+ * but rewriting a block's whole text there would multiply writes as it grows, so only a flush that
+ * follows a `has` that found unsaved text in the same task saves it.
+ */
+export function bindClaudeUnsavedText(
+  sink: Pick<StructuredAgentSessionEventSink, 'bindLiveText'>,
+  streams: readonly Pick<ClaudeStreamedTextCheckpoints, 'unsaved' | 'flush'>[]
+): () => void {
+  let asked = false
+  return (
+    sink.bindLiveText?.({
+      read: () => [],
+      has: () => {
+        const unsaved = streams.some((stream) => stream.unsaved)
+        if (unsaved && !asked) {
+          asked = true
+          setImmediate(() => {
+            asked = false
+          })
+        }
+        return unsaved
+      },
+      flush: () => {
+        if (asked) {
+          asked = false
+          streams.forEach((stream) => stream.flush())
+        }
+      }
+    }) ?? (() => {})
+  )
 }

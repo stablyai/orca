@@ -8,11 +8,10 @@ import type { AcpSessionModelDiscovery } from '../acp/discovery/acp-model-discov
 import {
   antigravityAgyOrcaHomeRevision,
   antigravityChatRunsOnAgyHome,
-  onAntigravityAgyOrcaHomeChanged
+  onAntigravityAgyOrcaHomeChanged,
+  savedChatAuthUsesAgyLogin
 } from './antigravity-chat-route'
-import { ORCA_ACP_CLIENT_INFO } from '../acp/launch/acp-client-info'
 import { windowsLocalAppDataBinDirectories } from '../acp/launch/acp-windows-install-directories'
-import type { Implementation } from '../acp/generated/acp-protocol.generated'
 import {
   ANTIGRAVITY_ACP_DIALECT,
   ANTIGRAVITY_AGY_ORCA_HOME_DIALECT
@@ -33,13 +32,13 @@ import {
 import { ANTIGRAVITY_TRANSCRIPT_IMPORT } from './antigravity-transcript-import'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { deliverAntigravityInstructions } from '../acp/launch/acp-instructions'
-import {
-  compareAppVersions,
-  isValidAppVersion
-} from '../../shared/app-lifecycle/identity/app-version'
 import { scrubAgyOrcaHomeEnvironment } from './antigravity-agy-orca-home-environment'
 import { ANTIGRAVITY_LAUNCH_GATE } from './antigravity-chat-account'
+import { AGY_HOST_SELECTION } from './agy-account-selection'
+import { restoreSelectedAntigravityAccount } from './native-account-launch'
 import { discardAgyListingSession } from './agy-listing-session-discard'
+import { antigravityChatNamingHome } from './antigravity-chat-naming-home'
+import { AGY_ACP_CLIENT_INFO } from './antigravity-acp-runtime-probe'
 import {
   AGY_SKIP_PERMISSIONS_FLAG,
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
@@ -58,16 +57,6 @@ const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
       targetless: [],
       markers: ['--conversation', '-conversation']
     })
-}
-
-const ZED_CLIENT_INFO: Implementation = { name: 'zed', version: '0.0.0' }
-
-// agy 1.5.1 and later offer every model to any client. Orca requires a newer agy, so `zed` is only
-// the fallback when agy's version is unknown.
-function agyClientInfo(version: string | null): Implementation {
-  return version && isValidAppVersion(version) && compareAppVersions(version, '1.5.1') >= 0
-    ? ORCA_ACP_CLIENT_INFO
-    : ZED_CLIENT_INFO
 }
 
 // An alternate-case updater flag on Windows would shadow the configured uppercase entry. A
@@ -97,7 +86,9 @@ const AGY_SESSION_MODEL_DISCOVERY: AcpSessionModelDiscovery = {
   listingNamesConfiguredModel: false,
   inPrivateFolder: true,
   listsOnDemand: true,
-  discardSession: discardAgyListingSession
+  discardSession: discardAgyListingSession,
+  // Its commands and skills differ per folder (`.agents/skills`), unlike its models.
+  listsCommandsInChatFolder: true
 }
 
 // agy on its own home uses agy's own sign-in and history; Orca neither signs it in nor out there.
@@ -105,11 +96,8 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   agent: 'antigravity',
   command: 'agy',
   ignoreAgentCommandSetting: true,
-  // Off, Orca's agy runs no chat: chats run the user's own (same ~/.gemini history), and on a host
-  // without one they get launch's cliMissing refusal.
-  managedCopyAllowed: (settings) => settings.antigravityManagedAgyEnabled !== false,
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
-  clientInfo: agyClientInfo,
+  clientInfo: AGY_ACP_CLIENT_INFO,
   // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
   // and can replace agy mid-probe.
   env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
@@ -126,7 +114,10 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
         throw new Error("this chat runs on the host's agy")
       }
       return env
-    }
+    },
+    // An agy still on a previous account may have written its login back over the selected one
+    // (#50100); a listing reads the account's models, so it starts on the selected account too.
+    prepare: (env) => restoreSelectedAntigravityAccount(env)
   },
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
   installDirectories: ({ env, homePath }) => [
@@ -147,6 +138,16 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
   launchGate: ANTIGRAVITY_LAUNCH_GATE,
+  // Saved accounts swap agy's one login, which Orca's homes share too, so the home can't tell them
+  // apart; an Orca home on a key or gcloud runs on no saved account.
+  launchAccount: {
+    atLaunch: AGY_HOST_SELECTION.atLaunch,
+    current: AGY_HOST_SELECTION.current,
+    target: AGY_HOST_SELECTION.target,
+    spawned: AGY_HOST_SELECTION.spawned,
+    usedBy: (launch) =>
+      !launch.antigravityChatAuth || savedChatAuthUsesAgyLogin(launch.antigravityChatAuth)
+  },
   keepsEverySession: true
 } satisfies AcpLaunchSpec
 
@@ -178,6 +179,8 @@ function agyOrcaHomeSpec(home: AgentSessionAccountHome): AcpLaunchSpec | null {
 
 export const ANTIGRAVITY_LAUNCH_SPEC = {
   ...ANTIGRAVITY_AGY_LAUNCH_SPEC,
+  textTaskHome: (chatHome, folder) =>
+    antigravityChatNamingHome(ANTIGRAVITY_AGY_ORCA_HOME_LAUNCH_SPEC, chatHome, folder),
   hostBackend: {
     spec: ANTIGRAVITY_AGY_LAUNCH_SPEC,
     pins: (home) => isAntigravityHostAccountHome(home) || antigravityOrcaHomeFolder(home) !== null,

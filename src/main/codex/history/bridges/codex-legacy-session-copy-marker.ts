@@ -1,6 +1,7 @@
 import { lstat, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, normalize, sep } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 
 export type LegacyCopiedSessionMarker = {
   sourcePath: string
@@ -21,16 +22,18 @@ export function legacySessionCopyMarkerPath(managedHome: string, relativePath: s
 }
 
 // Optional fields fall back to absent, so a marker an older build wrote stays readable.
-const markerSchema = z.object({
-  sourcePath: z.string(),
-  sourceSize: z.number(),
-  sourceMtimeMs: z.number(),
-  targetSize: z.number(),
-  targetMtimeMs: z.number(),
-  kept: z.literal(true).optional().catch(undefined),
-  verified: z.string().optional().catch(undefined),
-  aside: z.string().optional().catch(undefined)
-})
+const markerSchema = lazyZodSchema(() =>
+  z.object({
+    sourcePath: z.string(),
+    sourceSize: z.number(),
+    sourceMtimeMs: z.number(),
+    targetSize: z.number(),
+    targetMtimeMs: z.number(),
+    kept: z.literal(true).optional().catch(undefined),
+    verified: z.string().optional().catch(undefined),
+    aside: z.string().optional().catch(undefined)
+  })
+)
 
 export function parseLegacyCopiedSessionMarker(text: string): LegacyCopiedSessionMarker | null {
   let fields: unknown

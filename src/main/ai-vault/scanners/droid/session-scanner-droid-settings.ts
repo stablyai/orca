@@ -6,6 +6,12 @@ import type { SidecarEnrichment } from '../../parse-cache/session-scanner-sideca
 import { asRecord } from '../../parsing/session-record-fields'
 import { numberValue } from '../../parsing/session-scanner-token-values'
 
+export function droidSettingsPathForTranscript(transcriptPath: string): string | undefined {
+  return transcriptPath.endsWith('.jsonl')
+    ? `${transcriptPath.slice(0, -'.jsonl'.length)}.settings.json`
+    : undefined
+}
+
 // Droid persists model and usage only in this sibling; the `system`/`completion` records that
 // carry them exist on `droid exec --output-format stream-json` stdout, never in the transcript.
 export async function enrichDroidSessionFromSettings(
@@ -16,8 +22,10 @@ export async function enrichDroidSessionFromSettings(
   if (!foldSession) {
     return { session: foldSession, refused: false }
   }
-  // Droid discovery only yields `.jsonl` transcripts.
-  const settingsPath = `${transcriptPath.slice(0, -'.jsonl'.length)}.settings.json`
+  const settingsPath = droidSettingsPathForTranscript(transcriptPath)
+  if (!settingsPath) {
+    return { session: foldSession, refused: false }
+  }
   let record: Record<string, unknown> | null
   try {
     record = await readJsonObjectIfExists(settingsPath, signal)

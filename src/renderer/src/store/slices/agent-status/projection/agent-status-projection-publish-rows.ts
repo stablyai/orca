@@ -1,5 +1,4 @@
 import type { AppState } from '../../../types'
-import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { compareWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-order'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
@@ -10,6 +9,15 @@ import type { AgentStatusProjectionState } from './agent-status-projection-state
 import type { ProjectionTopology } from './agent-status-projection-topology'
 import type { ProjectionRows } from './agent-status-projection-rows'
 import { agentRowEntriesEqual } from '@/components/sidebar/workspace-card/activity/worktree-agent-live-index-patch'
+
+function hasPaneKey(rows: readonly { paneKey: string }[], targetKey: string): boolean {
+  for (let i = 0; i < rows.length; i += 1) {
+    if (rows[i].paneKey === targetKey) {
+      return true
+    }
+  }
+  return false
+}
 
 export function publishProjectionRows(
   data: AgentStatusProjectionState,
@@ -39,7 +47,7 @@ export function publishProjectionRows(
       cleanup.add(next.worktreeId)
     }
     for (const rowKey of oldKeys) {
-      if (oldOwner !== next.worktreeId || !next.rows.some((row) => row.paneKey === rowKey)) {
+      if (oldOwner !== next.worktreeId || !hasPaneKey(next.rows, rowKey)) {
         if (oldOwner) {
           const b = data.worktrees.get(oldOwner)!
           b.keys.delete(rowKey)
@@ -85,10 +93,16 @@ export function publishProjectionRows(
     }
     const hadOwner = data.ownerForSource.has(key)
     if (next.rows.length && next.worktreeId) {
-      data.rowsForSource.set(
-        key,
-        next.rows.map((row) => row.paneKey)
-      )
+      let rowKeys: string[]
+      if (next.rows.length === 1) {
+        rowKeys = [next.rows[0].paneKey]
+      } else {
+        rowKeys = []
+        for (let i = 0; i < next.rows.length; i += 1) {
+          rowKeys.push(next.rows[i].paneKey)
+        }
+      }
+      data.rowsForSource.set(key, rowKeys)
       data.ownerForSource.set(key, next.worktreeId)
     } else {
       data.rowsForSource.delete(key)
@@ -162,18 +176,22 @@ export function publishProjectionRows(
       data.orphanOwners.set(key, entry.worktreeId)
     }
     const priorIcon = data.icons.get(key)
-    const oldTab = parseAgentStatusPaneIdentity(key, data.represented.get(key))?.tabId
-    if ((!entry || moved.has(key)) && oldTab) {
+    const oldTab = data.acceptedTabByKey.get(key)
+    const nextTab = entry ? next.tabId : undefined
+    if (oldTab && oldTab !== nextTab) {
       const keys = data.acceptedByTab.get(oldTab)
       keys?.delete(key)
       if (!keys?.size) {
         data.acceptedByTab.delete(oldTab)
       }
     }
-    if (entry && next.tabId) {
-      const keys = data.acceptedByTab.get(next.tabId) ?? new Set()
+    if (nextTab) {
+      const keys = data.acceptedByTab.get(nextTab) ?? new Set()
       keys.add(key)
-      data.acceptedByTab.set(next.tabId, keys)
+      data.acceptedByTab.set(nextTab, keys)
+      data.acceptedTabByKey.set(key, nextTab)
+    } else {
+      data.acceptedTabByKey.delete(key)
     }
     if (moved.has(key)) {
       data.ranks.delete(key)

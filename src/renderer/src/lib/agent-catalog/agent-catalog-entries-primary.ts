@@ -137,7 +137,7 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
       cmd: 'agy',
       searchAliases: ['agy'],
-      homepageUrl: 'https://antigravity.google/docs/cli-overview'
+      homepageUrl: 'https://antigravity.google/docs/getting-started?tab=cli'
     }
   ]
 }

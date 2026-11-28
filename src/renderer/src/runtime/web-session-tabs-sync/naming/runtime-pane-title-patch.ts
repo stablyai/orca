@@ -1,6 +1,7 @@
 import {
   collectRuntimePaneLeafIds,
   isRuntimePaneTitleOrphan,
+  liveSlotIdsAreDense,
   resolveRuntimePaneTitleLeafId,
   resolveRuntimePaneTitleLeafIdFromSparseSlots
 } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
@@ -58,9 +59,7 @@ export function buildMirroredRuntimePaneTitlePatch(
       .map(Number)
       .filter((id) => Number.isInteger(id) && id >= FIRST_PANE_ID)
       .sort((a, b) => a - b)
-    const liveSlotsAreDense =
-      liveSlotIds.length === leaves.size &&
-      liveSlotIds.every((id, index) => id === FIRST_PANE_ID + index)
+    const liveSlotsAreDense = liveSlotIdsAreDense(liveSlotIds, leaves.size)
     const manager = findRegisteredTerminalTab(tab.id, tab.worktreeId)?.tab.getManager()
     const hostSurfacesByLeaf = new Map(surfacesByTab.get(hostTabId))
     for (const [hostLeafId, retainedSurface] of retainedSurfaceByPrunedLeafId ?? []) {

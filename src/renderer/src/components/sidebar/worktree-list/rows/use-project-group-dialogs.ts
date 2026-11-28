@@ -16,6 +16,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
@@ -128,27 +129,32 @@ export function useProjectGroupDialogs(args: {
           { group: group.name }
         )
       )
-      try {
-        await refreshFolderProjectGroup(group, {
-          getRepos: () => useAppStore.getState().repos,
-          getProjectGroups: () => useAppStore.getState().projectGroups,
-          scanNestedRepos: useAppStore.getState().scanNestedRepos,
-          importNestedRepos: useAppStore.getState().importNestedRepos,
-          moveProjectToGroup
-        })
-      } catch (error) {
-        console.error('Failed to refresh project group:', error)
-        toast.error(
-          translate(
-            'auto.components.sidebar.WorktreeList.projectGroupRefreshScanFailed',
-            'Could not scan this project group'
-          ),
-          { description: error instanceof Error ? error.message : String(error) }
-        )
-      } finally {
-        toast.dismiss(loadingToastId)
-        refreshingGroupIds.current.delete(group.id)
-      }
+      await runWithFinally(
+        async () => {
+          try {
+            await refreshFolderProjectGroup(group, {
+              getRepos: () => useAppStore.getState().repos,
+              getProjectGroups: () => useAppStore.getState().projectGroups,
+              scanNestedRepos: useAppStore.getState().scanNestedRepos,
+              importNestedRepos: useAppStore.getState().importNestedRepos,
+              moveProjectToGroup
+            })
+          } catch (error) {
+            console.error('Failed to refresh project group:', error)
+            toast.error(
+              translate(
+                'auto.components.sidebar.WorktreeList.projectGroupRefreshScanFailed',
+                'Could not scan this project group'
+              ),
+              { description: error instanceof Error ? error.message : String(error) }
+            )
+          }
+        },
+        () => {
+          toast.dismiss(loadingToastId)
+          refreshingGroupIds.current.delete(group.id)
+        }
+      )
     },
     [moveProjectToGroup]
   )
@@ -245,18 +251,19 @@ export function useProjectGroupDialogs(args: {
       return
     }
     const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, deleteUnsavedTargets)
-    try {
-      reportProjectGroupDeleteFailures(
-        await deleteProjectGroupWithContainedProjects(deleteDialog.groupId, {
-          removeContainedProjects,
-          hostId: deleteDialog.hostId,
-          confirmedDiscards
-        })
-      )
-    } finally {
+    await runWithFinally(
+      async () => {
+        reportProjectGroupDeleteFailures(
+          await deleteProjectGroupWithContainedProjects(deleteDialog.groupId, {
+            removeContainedProjects,
+            hostId: deleteDialog.hostId,
+            confirmedDiscards
+          })
+        )
+      },
       // Why: deleting contained projects can unmount this dialog before its close handler runs, so the parent owns cleanup.
-      setDeleteDialog(null)
-    }
+      () => setDeleteDialog(null)
+    )
   }, [
     deleteProjectGroupWithContainedProjects,
     removeContainedProjects,

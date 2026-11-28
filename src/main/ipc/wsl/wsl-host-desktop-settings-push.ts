@@ -99,6 +99,12 @@ export function pushHostChatAutoName(
       hostSupports: (capability) =>
         wslOrcadHostSupports(environmentId, capability, () => call('status.get', undefined))
     },
-    () => store.getSettings().nativeChatAutoName !== false
+    () => {
+      const settings = store.getSettings()
+      return {
+        nativeChatAutoName: settings.nativeChatAutoName !== false,
+        antigravityChatNaming: settings.antigravityChatNaming === true
+      }
+    }
   )
 }

@@ -120,7 +120,7 @@ function configurationSchema(strictness: PluginArtifactStrictness) {
       return { ...config, autoClosingPairs }
     })
 }
-const tolerantConfigurationSchema = configurationSchema('tolerant')
+const tolerantConfigurationSchema = lazyZodSchema(() => configurationSchema('tolerant'))
 
 export type PluginGrammarArtifact = z.infer<typeof grammarSchema>
 export type PluginLanguageConfiguration = z.infer<typeof tolerantConfigurationSchema>

@@ -1,4 +1,5 @@
 import { recordStructuredChatAgentStart } from '../../../telemetry/structured-chat-dispatch'
+import { takeProviderRelayRunPlacement } from '../../../provider-relay/app-provider-relays'
 import { tuiAgentToAgentKind } from '../../../../shared/agent-status/identity/agent-kind'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isDeepStrictEqual } from 'node:util'
@@ -39,6 +40,7 @@ export async function acquireOwner(
   record: AgentSessionRecord
   acquisitionGeneration: string
   accountHome?: AgentSessionAccountHome
+  accountKey?: string
 }> {
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
@@ -86,6 +88,7 @@ export async function acquireOwner(
           sessionId: record.sessionId,
           fence,
           process,
+          placement: takeProviderRelayRunPlacement(record.sessionId),
           now: input.now()
         })
       }
@@ -95,6 +98,7 @@ export async function acquireOwner(
         sessionId: record.sessionId,
         fence,
         process: acquired.process,
+        placement: takeProviderRelayRunPlacement(record.sessionId),
         now: input.now()
       })
     } else if (!sameOwnerProcess(record.lease.ownerProcess, acquired.process)) {
@@ -112,6 +116,7 @@ export async function acquireOwner(
       fence,
       ...(acquired.link ? { link: acquired.link } : {}),
       ...(acquired.accountHome ? { launchedAccountHome: acquired.accountHome } : {}),
+      ...(acquired.accountKey ? { launchedAccountId: acquired.accountKey } : {}),
       ...(acquired.movedAccountHome ? { movedAccountHome: acquired.movedAccountHome } : {}),
       ...(acquired.accountRecipe
         ? {
@@ -136,7 +141,8 @@ export async function acquireOwner(
     return {
       record: proved,
       acquisitionGeneration: acquired.acquisitionGeneration,
-      ...(acquired.accountHome ? { accountHome: acquired.accountHome } : {})
+      ...(acquired.accountHome ? { accountHome: acquired.accountHome } : {}),
+      ...(acquired.accountKey !== undefined ? { accountKey: acquired.accountKey } : {})
     }
   } catch (error) {
     if (isAgentSessionPreSpawnError(error)) {

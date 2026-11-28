@@ -5,6 +5,11 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 import { prepareNativeChatCliFork } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
 import type { NativeChatCliForkSubject } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
 import {
+  rememberBoundedNativeChatCliForkOrigin,
+  takeNativeChatCliForkOrigin,
+  type NativeChatCliForkOrigin
+} from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-origins'
+import {
   buildAiVaultCliForkStartupForWorktree,
   captureAiVaultCliForkOwner,
   readAiVaultCliForkLaunchSettings
@@ -38,22 +43,13 @@ const subscribe = (listener: () => void) => {
   return () => listeners.delete(listener)
 }
 
-// Session-only, keyed by the fork's own conversation: until its first message the fork has no
-// transcript, so the chat it was forked from is still that conversation.
-const forkOrigins = new Map<string, { sessionId: string; workspaceId: string }>()
-const forkOriginKey = (workspaceId: string, providerSessionId: string) =>
-  `${workspaceId}\0${providerSessionId}`
-
 /** The pane a new tab launched in; a split keeps it on the `first` side. */
 function launchedLeafId(node: TerminalPaneLayoutNode | null | undefined): string | undefined {
   return !node ? undefined : node.type === 'leaf' ? node.leafId : launchedLeafId(node.first)
 }
 
 /** Binds the chat to the first conversation the fork's own pane reports, so a later one is not mistaken for it. */
-function rememberForkOrigin(
-  terminalTabId: string,
-  origin: { sessionId: string; workspaceId: string }
-) {
+function rememberForkOrigin(terminalTabId: string, origin: NativeChatCliForkOrigin) {
   const bind = (state: AppState): boolean => {
     if (!state.unifiedTabsByWorktree[origin.workspaceId]?.some((tab) => tab.id === terminalTabId)) {
       return true
@@ -63,7 +59,7 @@ function rememberForkOrigin(
       ? state.agentStatusByPaneKey.get(`${terminalTabId}:${leafId}`)?.providerSession?.id
       : undefined
     if (fork) {
-      forkOrigins.set(forkOriginKey(origin.workspaceId, fork), origin)
+      rememberBoundedNativeChatCliForkOrigin(origin.workspaceId, fork, origin)
     }
     return !!fork
   }
@@ -91,12 +87,10 @@ export async function reopenNativeChatCliForkOrigin(
   standInChatSessionId: string | undefined,
   target: RuntimeClientTarget
 ): Promise<boolean> {
-  const key = forkOriginKey(terminal.workspaceId, terminal.providerSessionId)
-  const origin = forkOrigins.get(key)
+  const origin = takeNativeChatCliForkOrigin(terminal.workspaceId, terminal.providerSessionId)
   if (!origin) {
     return false
   }
-  forkOrigins.delete(key)
   const opened = await openDesktopStructuredSession(
     { kind: 'history', structuredSession: origin, agent: terminal.agent },
     { target, feedback: quietOpenFeedback }

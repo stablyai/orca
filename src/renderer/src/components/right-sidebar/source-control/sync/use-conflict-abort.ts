@@ -8,12 +8,22 @@ import {
   abortRuntimeGitMerge,
   abortRuntimeGitRebase
 } from '@/runtime/source-control/git/runtime-git-sync-client'
-import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
+import type {
+  GitAbortOperationRequest,
+  GitConflictOperation
+} from '../../../../../../shared/git/status/git-status-types'
 import type { AbortConflictOperation } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { toastIfOperationRunChanged } from './operation-run-changed-toast'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
+import { runWithFinally } from '@/lib/run-with-finally'
+
+/** `confirmed`: the caller already confirmed in place, so skip the dialog. `expectedRunIdentity`:
+ *  the run that confirmation was for; the abort refuses if a different run is paused now. */
+type ConflictAbortOptions = { confirmed?: boolean } & GitAbortOperationRequest
 
 export function useSourceControlConflictAbort({
   activeRepoTarget,
@@ -38,7 +48,11 @@ export function useSourceControlConflictAbort({
   const confirmAction = useConfirmationDialog()
 
   const handleAbortOperation = useCallback(
-    async (requestedOperation: AbortConflictOperation): Promise<void> => {
+    async (
+      requestedOperation: AbortConflictOperation,
+      // The operation bar confirms in place, so it skips the dialog.
+      { confirmed = false, expectedRunIdentity }: ConflictAbortOptions = {}
+    ): Promise<void> => {
       if (
         !activeWorktreeId ||
         !worktreePath ||
@@ -67,71 +81,82 @@ export function useSourceControlConflictAbort({
             'auto.components.right.sidebar.SourceControl.abortMergeConfirmDescription',
             'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
           )
-      const confirmed = await confirmAction({
-        title,
-        description,
-        confirmLabel: isRebase
-          ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-          : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge'),
-        confirmVariant: 'destructive'
-      })
-      if (!confirmed || operationStore.getState().isAbortingOperation) {
+      const approved =
+        confirmed ||
+        (await confirmAction({
+          title,
+          description,
+          confirmLabel: isRebase
+            ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+            : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge'),
+          confirmVariant: 'destructive'
+        }))
+      if (!approved || operationStore.getState().isAbortingOperation) {
         return
       }
 
       const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
       operationStore.setState({ isAbortingOperation: true, remoteActionError: null })
-      try {
-        const context = {
-          // Abort on the repo owner, which may differ from the focused host.
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        }
-        const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
-        await abortGitOperation(context)
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : isRebase
-              ? translate(
-                  'auto.components.right.sidebar.SourceControl.abortRebaseFailedFallback',
-                  'Failed to abort rebase'
-                )
-              : translate(
-                  'auto.components.right.sidebar.SourceControl.abortMergeFailedFallback',
-                  'Failed to abort merge'
-                )
-        toast.error(
-          isRebase
-            ? translate(
-                'auto.components.right.sidebar.SourceControl.abortRebaseFailed',
-                'Abort rebase failed'
-              )
-            : translate(
-                'auto.components.right.sidebar.SourceControl.abortMergeFailed',
-                'Abort merge failed'
-              ),
-          { description: message }
-        )
-        operationStore.setState({
-          remoteActionError: {
-            kind: isRebase ? 'abort_rebase' : 'abort_merge',
-            message,
-            rawError: message
+      await runWithFinally(
+        async () => {
+          try {
+            const context = {
+              // Abort on the repo owner, which may differ from the focused host.
+              target: requireGitOwnerTarget(activeRepoTarget),
+              worktreeId: activeWorktreeId,
+              worktreePath,
+              connectionId
+            }
+            const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
+            await abortGitOperation(context, { expectedRunIdentity })
+          } catch (error) {
+            // A refused abort left the new run alone; it is not a failed action to record.
+            if (toastIfOperationRunChanged(error)) {
+              return
+            }
+            const message = extractIpcErrorMessage(
+              error,
+              isRebase
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.abortRebaseFailedFallback',
+                    'Failed to abort rebase'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.abortMergeFailedFallback',
+                    'Failed to abort merge'
+                  )
+            )
+            toast.error(
+              isRebase
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.abortRebaseFailed',
+                    'Abort rebase failed'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.abortMergeFailed',
+                    'Abort merge failed'
+                  ),
+              { description: message }
+            )
+            operationStore.setState({
+              remoteActionError: {
+                kind: isRebase ? 'abort_rebase' : 'abort_merge',
+                message,
+                rawError: message
+              }
+            })
           }
-        })
-      } finally {
-        operationStore.setState({ isAbortingOperation: false })
-        refreshSourceControlAfterRemoteAction({
-          worktreeId: activeWorktreeId,
-          refreshGitStatus: refreshActiveGitStatusAfterMutation,
-          refreshBranchCompare: refreshBranchCompareRef.current,
-          refreshGitHistory: refreshGitHistoryRef.current
-        })
-      }
+        },
+        () => {
+          operationStore.setState({ isAbortingOperation: false })
+          refreshSourceControlAfterRemoteAction({
+            worktreeId: activeWorktreeId,
+            refreshGitStatus: refreshActiveGitStatusAfterMutation,
+            refreshBranchCompare: refreshBranchCompareRef.current,
+            refreshGitHistory: refreshGitHistoryRef.current
+          })
+        }
+      )
     },
     [
       scope,
@@ -147,32 +172,24 @@ export function useSourceControlConflictAbort({
     ]
   )
 
-  const handleAbortMerge = useCallback(async (): Promise<void> => {
-    await handleAbortOperation('merge')
-  }, [handleAbortOperation])
-
-  const handleAbortRebase = useCallback(async (): Promise<void> => {
-    await handleAbortOperation('rebase')
-  }, [handleAbortOperation])
-
-  const handleAbortOperationForConflict = useCallback(
-    (operation: GitConflictOperation): void => {
-      if (operation === 'merge') {
-        void handleAbortMerge()
-        return
-      }
-      if (operation === 'rebase') {
-        void handleAbortRebase()
-      }
+  const handleAbortMerge = useCallback(
+    async (options?: ConflictAbortOptions): Promise<void> => {
+      await handleAbortOperation('merge', options)
     },
-    [handleAbortMerge, handleAbortRebase]
+    [handleAbortOperation]
+  )
+
+  const handleAbortRebase = useCallback(
+    async (options?: ConflictAbortOptions): Promise<void> => {
+      await handleAbortOperation('rebase', options)
+    },
+    [handleAbortOperation]
   )
 
   return {
     confirmAction,
     handleAbortMerge,
     handleAbortOperation,
-    handleAbortOperationForConflict,
     handleAbortRebase
   }
 }

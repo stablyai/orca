@@ -3,12 +3,12 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { useDictationSetupPoller } from '../use-dictation-setup-poller'
@@ -51,21 +51,22 @@ function setupErrorMessage(error: SetupError, t: Translate): string {
   }
 }
 
-function formatSize(bytes: number | null | undefined, t: Translate): string {
+function formatSize(bytes: number | null | undefined, t: Translate, locale: string): string {
   if (!bytes) {
     return ''
   }
   return t('components.dictationSetupSheet.modelSize', '{{size}} MB', {
-    size: Math.round(bytes / 1_000_000).toLocaleString(getUiIntlLocale())
+    size: Math.round(bytes / 1_000_000).toLocaleString(locale)
   })
 }
 
-function modelMetadata(model: MobileSpeechModel, t: Translate): string {
-  const details = model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes, t)
+function modelMetadata(model: MobileSpeechModel, t: Translate, locale: string): string {
+  const details =
+    model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes, t, locale)
   if (isModelInFlight(model) && model.progress != null) {
     return t('components.dictationSetupSheet.modelProgress', '{{details}} · {{progress}}%', {
       details,
-      progress: Math.round(model.progress * 100).toLocaleString(getUiIntlLocale())
+      progress: Math.round(model.progress * 100).toLocaleString(locale)
     })
   }
   return model.status === 'extracting'
@@ -75,8 +76,10 @@ function modelMetadata(model: MobileSpeechModel, t: Translate): string {
 
 // Configure paired computer’s dictation/model from phone; poll while download is in flight.
 export function MobileDictationSetupSheet({ visible, client, onClose, onReady }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [error, setError] = useState<SetupError | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -216,10 +219,10 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                         </Text>
                       ) : null}
                     </View>
-                    <Text style={styles.modelMeta}>{modelMetadata(model, t)}</Text>
+                    <Text style={styles.modelMeta}>{modelMetadata(model, t, intlLocale)}</Text>
                   </View>
                   {action === 'needs-api-key' ? (
-                    <Text style={styles.modelStateText}>{cloudModelNeedsKey()}</Text>
+                    <Text style={styles.modelStateText}>{cloudModelNeedsKey(t)}</Text>
                   ) : action === 'in-use' ? (
                     <View style={styles.selectedTag}>
                       <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
@@ -288,7 +291,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   heading: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,

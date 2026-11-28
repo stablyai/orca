@@ -204,6 +204,7 @@ function importWorkerMail(
     type: mail.message.type,
     priority: mail.message.priority,
     threadId: mail.message.threadId ?? undefined,
+    replyTo: mail.message.replyTo ?? undefined,
     payload: mail.message.payload ?? undefined,
     runId: link.run_id
   })

@@ -80,33 +80,25 @@ export function useBotCollapseAll(
 ): BotCollapseAll | null {
   const hasChildren = useBotSidebarChildren()
   const saved = useMemo(() => botFoldKeys(savedEntries), [savedEntries])
-  // Groups have nothing under their row to fold.
-  const withChildren = useMemo(
+  // Groups have nothing under their row to fold; offscreen bots haven't reported children yet.
+  const foldable = useMemo(
     () =>
       new Set(
         entries.flatMap((entry) =>
-          entry.kind === 'bot' && hasChildren(entry.id)
+          entry.kind === 'bot' && (hasChildren(entry.id) || !hasBotSidebarChildPresence(entry.id))
             ? [getLineageGroupKey(folderWorkspaceKey(entry.home.id))]
             : []
         )
       ),
     [entries, hasChildren]
   )
-  const foldState = useMemo(() => createFoldState(saved, withChildren), [saved, withChildren])
+  const foldState = useMemo(() => createFoldState(saved, foldable), [saved, foldable])
   const state = useAppStore((s) => foldState(s.collapsedGroups))
   const allCollapsed = state === ALL
   const toggle = useCallback(() => {
     const { collapsedGroups, setCollapsedGroups } = useAppStore.getState()
     const next = new Set(collapsedGroups)
-    // Offscreen bots might not have reported their children yet.
-    const toFold = allCollapsed
-      ? saved
-      : new Set([
-          ...withChildren,
-          ...botFoldKeys(
-            entries.filter((entry) => entry.kind === 'bot' && !hasBotSidebarChildPresence(entry.id))
-          )
-        ])
+    const toFold = allCollapsed ? saved : foldable
     if (allCollapsed) {
       for (const key of saved) {
         next.delete(key)
@@ -117,6 +109,6 @@ export function useBotCollapseAll(
       }
     }
     setCollapsedGroups(recordCollapsedGroupChanges(collapsedGroups, next, toFold))
-  }, [allCollapsed, entries, saved, withChildren])
+  }, [allCollapsed, foldable, saved])
   return state === NONE ? null : { allCollapsed, toggle }
 }

@@ -166,6 +166,7 @@ export const SettingsUpdate = lazyZodSchema(() =>
       nativeChatQueueFollowUps: z.boolean().optional(),
       nativeChatCiResultLines: z.boolean().optional(),
       nativeChatAutoName: z.boolean().optional(),
+      antigravityChatNaming: z.boolean().optional(),
       /** This host's own notification switches; see HOST_NOTIFICATION_SETTINGS_RUNTIME_CAPABILITY. */
       hostNotifications: HostNotificationSettingsUpdate.optional(),
       workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional(),

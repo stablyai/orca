@@ -1,24 +1,13 @@
 import { StyleSheet } from 'react-native'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input/text-input-font-size'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { COMPOSER_TEXT_SIZE } from '../../components/composer-input/composer-input-styles'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
+export const mobileBrowserPaneStylesSheet = themedStyleSheet((colors) => ({
   root: {
     flex: 1,
     minHeight: 0,
     backgroundColor: colors.bgBase
-  },
-  toolbar: {
-    minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
   },
   viewport: {
     flex: 1,
@@ -56,13 +45,13 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   browserImage: {
     backgroundColor: colors.bgBase
   },
+  // Only the spinner or the reason; no scrim, which read as a grey wash over a light page.
   overlay: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
-    gap: spacing.sm,
-    backgroundColor: 'rgba(13, 15, 24, 0.2)'
+    gap: spacing.sm
   },
   errorText: {
     color: colors.textPrimary,
@@ -95,117 +84,30 @@ export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: 13
   },
-  streamStoppedButton: {
-    minHeight: 30
+  // The hidden field the keyboard types into, at the size the page never zooms to.
+  liveInput: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    width: 1,
+    height: 1,
+    opacity: 0,
+    fontSize: COMPOSER_TEXT_SIZE
   },
-  streamStoppedButtonText: {
-    fontSize: 13
-  },
-  dialogOverlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    backgroundColor: 'rgba(13, 15, 24, 0.5)'
-  },
-  dialogCard: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: radii.floating,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    padding: spacing.lg
-  },
-  dialogTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  dialogMessage: {
+  promptLine: {
     color: colors.textSecondary,
     fontSize: typography.bodySize,
     lineHeight: 20,
-    marginTop: spacing.sm
+    marginTop: spacing.xs
   },
-  dialogInput: {
-    height: 36,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    fontSize: TEXT_INPUT_FONT_SIZE
-  },
-  dialogButtonDisabled: {
-    opacity: 0.5
+  promptFields: {
+    gap: spacing.sm,
+    marginTop: spacing.md
   },
   dialogError: {
     color: colors.statusRed,
     fontSize: typography.metaSize,
     lineHeight: 18,
     marginTop: spacing.sm
-  },
-  dialogActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.lg
-  },
-  dialogButton: {
-    minHeight: 34,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  dialogButtonPrimary: {
-    backgroundColor: colors.textPrimary
-  },
-  dialogButtonPressed: {
-    opacity: 0.75
-  },
-  dialogButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  dialogButtonPrimaryText: {
-    color: colors.bgBase
-  },
-  keyboardDock: {
-    zIndex: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs + 2
-  },
-  keyboardInput: {
-    flex: 1,
-    height: 34,
-    paddingHorizontal: spacing.md,
-    // Use text-input seam: native keeps body size; web floor 16px prevents focus zoom that keyboard seam mistakes for no keyboard.
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    fontFamily: typography.monoFamily,
-    marginRight: spacing.sm
-  },
-  sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: radii.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised
-  },
-  disabled: {
-    opacity: 0.35
-  },
-  disabledText: {
-    color: colors.textMuted
   }
 }))

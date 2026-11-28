@@ -1,15 +1,15 @@
 import type { ConnectionPresentationModel } from '../../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../../i18n/mobile-i18n'
 import { View, Text, ScrollView, Pressable, FlatList } from 'react-native'
-import { colors, spacing, type MobileColorScheme, pressedStyle } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { SectionHeader } from '../../../components/list/ListGroup'
+import { MobileTaskRow, MobileTaskRowSeparator } from '../../task-list/mobile-task-row'
+import { spacing, type MobileColorScheme, pressedStyle } from '../../../theme/mobile-theme'
 import { ChevronDown } from 'lucide-react-native'
-import { TaskProviderLogo } from '../../../components/icons/TaskProviderLogo'
 import {
   ignoreKeptRowPress,
   renderMobileTasksListState
 } from '../../task-list/mobile-tasks-list-state'
-import { styles } from '../../mobile-tasks-legacy-styles'
-import { createLinearTask, formatUpdatedAt } from '../../item-detail/mobile-tasks-item-mapping'
+import { createLinearTask } from '../../item-detail/mobile-tasks-item-mapping'
 import type { TaskItem } from '../../mobile-tasks-project-workspace-types'
 import { linearIssueSecondaryParts } from '../../item-detail/mobile-tasks-reviewer-linear'
 
@@ -19,17 +19,22 @@ export function renderMobileTasksLinearList(
   bottomBarHeight: number
 ) {
   const {
+    colors,
     effectiveLinearDisplayProperties,
     insets,
     linearBoardSections,
     linearIssuesForView,
+    linearFilterLabel,
     linearListEntries,
     linearViewMode,
     mutatingStatus,
     refreshTasks,
     refreshing,
+    styles,
+    t,
     taskUiReady
   } = model
+  const listStyles = listStylesSheet.resolve(colorScheme)
   // The last list, kept before Tasks is ready, is read-only.
   const setActionItem = taskUiReady ? model.setActionItem : ignoreKeptRowPress
   const setLinearStatusPickerItem = taskUiReady
@@ -83,7 +88,7 @@ export function renderMobileTasksLinearList(
                     ]}
                     disabled={mutatingStatus}
                     accessibilityRole="button"
-                    accessibilityLabel={translate(
+                    accessibilityLabel={t(
                       'tasks.linearList.changeStatusFrom',
                       'Change status from {{status}}',
                       {
@@ -124,93 +129,56 @@ export function renderMobileTasksLinearList(
       }
       ItemSeparatorComponent={({ leadingItem, trailingItem }) =>
         leadingItem?.type === 'section' || trailingItem?.type === 'section' ? null : (
-          <View style={styles.separator} />
+          <MobileTaskRowSeparator />
         )
       }
-      contentContainerStyle={[
-        styles.list,
-        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
-      ]}
+      contentContainerStyle={{
+        paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight)
+      }}
+      ListHeaderComponent={
+        linearListEntries[0]?.type === 'section' ? undefined : (
+          <View style={listStyles.heading}>
+            <SectionHeader title={linearFilterLabel} first />
+          </View>
+        )
+      }
       refreshing={refreshing}
       onRefresh={refreshTasks}
-      renderItem={({ item: entry }) => {
+      renderItem={({ item: entry, index }) => {
         if (entry.type === 'section') {
           return (
-            <View style={styles.repoSectionHeader}>
-              <View style={[styles.repoSectionDot, { backgroundColor: entry.section.color }]} />
-              <Text style={styles.repoSectionTitle} numberOfLines={1}>
-                {entry.section.label}
-              </Text>
-              <Text style={styles.boardCount}>{entry.section.issues.length}</Text>
+            <View style={listStyles.heading}>
+              <SectionHeader
+                title={entry.section.label}
+                trailing={String(entry.section.issues.length)}
+                first={index === 0}
+              />
             </View>
           )
         }
         const issue = entry.issue
         const linearTask = createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>
+        const edge = (neighbour: (typeof linearListEntries)[number] | undefined) =>
+          neighbour === undefined || neighbour.type === 'section'
         return (
-          <Pressable
-            style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
-            onPress={() => {
-              setActionItem(linearTask)
-            }}
-          >
-            <View style={styles.taskIcon}>
-              <TaskProviderLogo provider="linear" size={15} color={colors.textSecondary} />
-            </View>
-            <View style={styles.taskMain}>
-              <View style={styles.taskTitleRow}>
-                <Text style={styles.taskTitle} numberOfLines={2}>
-                  {issue.title}
-                </Text>
-                {effectiveLinearDisplayProperties.has('updated') ? (
-                  <Text style={styles.updatedAt}>{formatUpdatedAt(issue.updatedAt)}</Text>
-                ) : null}
-              </View>
-              <View style={styles.metaRow}>
-                <View style={[styles.repoDot, { backgroundColor: issue.state.color }]} />
-                <Text style={styles.subtitle} numberOfLines={1}>
-                  {linearIssueSecondaryParts(issue, effectiveLinearDisplayProperties).join(' · ')}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.linearListTrailing}>
-              {effectiveLinearDisplayProperties.has('state') ? (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.statusPill,
-                    styles.linearStatePill,
-                    pressed && pressedStyle
-                  ]}
-                  disabled={mutatingStatus}
-                  accessibilityRole="button"
-                  accessibilityLabel={translate(
-                    'tasks.linearList.changeStatusFrom',
-                    'Change status from {{status}}',
-                    {
-                      status: issue.state.name
-                    }
-                  )}
-                  onPress={(event) => {
-                    event.stopPropagation()
-                    setLinearStatusPickerItem(linearTask)
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.linearStateDot,
-                      { backgroundColor: issue.state.color || colors.textMuted }
-                    ]}
-                  />
-                  <Text style={[styles.statusText, styles.statusTextFlex]} numberOfLines={1}>
-                    {issue.state.name}
-                  </Text>
-                  <ChevronDown size={12} color={colors.textSecondary} />
-                </Pressable>
-              ) : null}
-            </View>
-          </Pressable>
+          <MobileTaskRow
+            item={linearTask}
+            first={edge(linearListEntries[index - 1])}
+            last={edge(linearListEntries[index + 1])}
+            meta={[
+              effectiveLinearDisplayProperties.has('state') ? issue.state.name : '',
+              ...linearIssueSecondaryParts(issue, effectiveLinearDisplayProperties)
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            onPress={() => setActionItem(linearTask)}
+          />
         )
       }}
     />
   )
 }
+
+const listStylesSheet = themedStyleSheet(() => ({
+  heading: { marginHorizontal: spacing.lg }
+}))

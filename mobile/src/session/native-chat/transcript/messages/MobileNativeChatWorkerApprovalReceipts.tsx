@@ -14,15 +14,19 @@ import { readShellApprovalDetail } from '../../../../../../src/shared/agent-sess
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { MobileAgentMessageOpenContext } from '../agent-messages/mobile-agent-message-context'
 import { workerOpener } from '../../input/prompts/MobileNativeChatWorkerApproval'
 import type { MobileWorkerApproval } from '../../input/prompts/use-mobile-worker-approvals'
 import { MobileNativeChatEventName, MobileNativeChatEventRow } from './MobileNativeChatEventRow'
-import { MONO_SIZE, scaledType, styles as rowStyles } from './mobile-native-chat-message-styles'
-import { styles as runStyles } from '../mobile-automation-run-row-styles'
+import {
+  MONO_SIZE,
+  scaledType,
+  stylesSheet as rowStylesSheet
+} from './mobile-native-chat-message-styles'
+import { stylesSheet as runStylesSheet } from '../mobile-automation-run-row-styles'
 import { RECORD_SENTENCE_KEEP as KEEP, recordSentenceParts } from './native-chat-record-sentence'
 
 type Placed = ReadonlyMap<string, readonly MobileWorkerApproval[]>
@@ -80,6 +84,8 @@ export const MobileNativeChatWorkerApprovalReceipts = memo(
     messageId: string
     fontScale: number
   }): React.JSX.Element | null {
+    const styles = useThemedStyles(stylesSheet)
+    const rowStyles = useThemedStyles(rowStylesSheet)
     const entries = useContext(MobileWorkerApprovalReceiptsContext)?.get(messageId)
     return entries ? (
       <View style={[rowStyles.row, styles.lines]}>
@@ -109,7 +115,9 @@ function WorkerApprovalReceipt({
   entry: MobileWorkerApproval
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const runStyles = useThemedStyles(runStylesSheet)
   const t = useMobileTranslation()
   const openWorker = workerOpener(useContext(MobileAgentMessageOpenContext), entry)
   const { approval } = entry
@@ -249,7 +257,7 @@ function recordSentence(t: Translate, sentence: WorkerApprovalRecordSentence): s
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   lines: { gap: spacing.sm },
   detail: { color: colors.textSecondary },
   label: { fontWeight: '600' },
