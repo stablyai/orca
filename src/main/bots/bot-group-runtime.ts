@@ -118,18 +118,24 @@ export function assertBotGroupQueuedMessageAllowed(
   }
 }
 
+export function isBotGroupHomeFolderWorkspace(
+  runtime: Partial<Pick<OrcaRuntimeService, 'getExistingOrchestrationDb'>>,
+  folderWorkspaceId: string
+): boolean {
+  const orchestration = runtime.getExistingOrchestrationDb?.()
+  if (!orchestration) {
+    return false
+  }
+  return new BotGroupStore(orchestration.db)
+    .list()
+    .some((group) => group.folderWorkspaceId === folderWorkspaceId)
+}
+
 export function assertNotBotGroupHomeFolderWorkspace(
   runtime: Partial<Pick<OrcaRuntimeService, 'getExistingOrchestrationDb'>>,
   folderWorkspaceId: string
 ): void {
-  const orchestration = runtime.getExistingOrchestrationDb?.()
-  if (!orchestration) {
-    return
-  }
-  const isHome = new BotGroupStore(orchestration.db)
-    .list()
-    .some((group) => group.folderWorkspaceId === folderWorkspaceId)
-  if (isHome) {
+  if (isBotGroupHomeFolderWorkspace(runtime, folderWorkspaceId)) {
     throw new Error(
       'Cannot delete a bot group home folder workspace directly. Delete the bot group instead.'
     )

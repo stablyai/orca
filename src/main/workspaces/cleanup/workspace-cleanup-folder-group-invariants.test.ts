@@ -110,6 +110,7 @@ describe('workspace cleanup folder-group and paired-host invariants', () => {
     let active = 0
     let maxActive = 0
     const readyOnlyFlags: unknown[] = []
+    const pending: (() => void)[] = []
     const servers = Array.from({ length: 10 }, (_, i) => ({
       environmentId: `env-${i}`,
       name: `server-${i}`
@@ -128,7 +129,9 @@ describe('workspace cleanup folder-group and paired-host invariants', () => {
         readyOnlyFlags.push(internal?.readyOnly)
         active += 1
         maxActive = Math.max(maxActive, active)
-        await new Promise((resolve) => setTimeout(resolve, 5))
+        await new Promise<void>((resolve) => {
+          pending.push(resolve)
+        })
         active -= 1
         if (environmentId === 'env-3') {
           throw new Error('Paired server is not currently connected.')
@@ -137,9 +140,21 @@ describe('workspace cleanup folder-group and paired-host invariants', () => {
       }
     }
 
-    const result = await readPairedFolderChildren(runtime)
+    const resultPromise = readPairedFolderChildren(runtime)
+    let settled = false
+    void resultPromise.finally(() => {
+      settled = true
+    })
+    while (!settled) {
+      if (pending.length > 0) {
+        const wave = pending.splice(0)
+        wave.forEach((resolve) => resolve())
+      }
+      await Promise.resolve()
+    }
+    const result = await resultPromise
     expect(readyOnlyFlags).toEqual(Array(10).fill(true))
-    expect(maxActive).toBeLessThanOrEqual(4)
+    expect(maxActive).toBe(4)
     expect(result).toEqual({ complete: false, children: [] })
   })
 

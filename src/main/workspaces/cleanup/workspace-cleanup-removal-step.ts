@@ -160,8 +160,12 @@ async function deleteCheckedWorkspace(
   }
 }
 
-/** Re-checks independent workspaces one at a time and each local folder group once as a batch
- * (with a fresh paired-server read), then removes approved members through the lifecycle queue. */
+type FolderRecheckResult =
+  | { kind: 'failed'; error: string }
+  | { kind: 'checked'; allGoing: boolean; byId: Map<string, WorkspaceCleanupEvaluation> }
+
+/** Re-checks independent workspaces one at a time and each local folder group once (with a fresh
+ * paired-server read), while strictly preserving the caller's deepest-path-first removal order. */
 export async function removeWorkspacesForCleanup<TRef>(args: {
   runtime: OrcaRuntimeService
   store: RuntimeStore
@@ -173,94 +177,80 @@ export async function removeWorkspacesForCleanup<TRef>(args: {
   { ref: TRef; reason: NonNullable<WorkspaceCleanupRunRow['reason']>; outcome: RemovalOutcome }[]
 > {
   const { runtime, store, removals, signal } = args
-  const batches: { localFolderKey: string | null; targets: CleanupRemovalTarget<TRef>[] }[] = []
-  const folderBatches = new Map<string, CleanupRemovalTarget<TRef>[]>()
-  for (const entry of removals) {
-    const folderKey = entry.workspace.localFolderKey
+  const expectedIdsByFolder = new Map<string, string[]>()
+  for (const { workspace } of removals) {
+    const folderKey = workspace.localFolderKey
     if (folderKey) {
-      let group = folderBatches.get(folderKey)
-      if (!group) {
-        group = []
-        folderBatches.set(folderKey, group)
-        batches.push({ localFolderKey: folderKey, targets: group })
-      }
-      group.push(entry)
-    } else {
-      batches.push({ localFolderKey: null, targets: [entry] })
+      const ids = expectedIdsByFolder.get(folderKey) ?? []
+      ids.push(workspace.ref.worktreeId)
+      expectedIdsByFolder.set(folderKey, ids)
     }
   }
+  const folderRechecks = new Map<string, FolderRecheckResult>()
   const results: {
     ref: TRef
     reason: NonNullable<WorkspaceCleanupRunRow['reason']>
     outcome: RemovalOutcome
   }[] = []
-  for (const batch of batches) {
+  for (const { workspace, ref, reason } of removals) {
     if (signal?.aborted) {
       break
     }
-    let fresh: WorkspaceCleanupWorkspace[]
-    let evaluations: WorkspaceCleanupEvaluation[]
-    try {
-      const target = batch.targets[0].workspace
-      fresh = await collectWorkspaceCleanupWorkspaces({
-        store,
-        runtime,
-        globalRules: args.globalRules(),
-        now: args.now(),
-        ...(batch.localFolderKey
-          ? { folderKey: batch.localFolderKey }
-          : { worktreeId: target.ref.worktreeId, withFolderSiblings: false }),
-        // Always re-read connected paired servers before removal so newly attached members hold the folder.
-        readPairedFolderChildren: () => readPairedFolderChildren(runtime),
-        signal
-      })
-      evaluations = await decideWorkspaceCleanups(runtime, fresh, args.now())
-    } catch (error) {
-      const failure = describeRemovalError(error)
-      for (const { ref, reason } of batch.targets) {
-        results.push({ ref, reason, outcome: { outcome: 'failed', error: failure } })
-      }
-      continue
-    }
-    const byId = new Map<string, WorkspaceCleanupEvaluation>()
-    for (let i = 0; i < fresh.length; i++) {
-      byId.set(fresh[i].ref.worktreeId, evaluations[i])
-    }
-    const allGoing =
-      fresh.length > 0 &&
-      evaluations.every((entry) => entry.action !== 'keep') &&
-      batch.targets.every(({ workspace }) => {
-        const entry = byId.get(workspace.ref.worktreeId)
-        return entry !== undefined && entry.action !== 'keep'
-      })
-    if (!allGoing) {
-      for (const { workspace, ref, reason } of batch.targets) {
-        const entry = byId.get(workspace.ref.worktreeId)
-        const outcome: RemovalOutcome = !entry
-          ? { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
-          : entry.action === 'keep'
-            ? { ...keptRunOutcome(entry), keptOnRecheck: true }
-            : { outcome: 'kept', keepCause: 'folder-workspace-sibling', keptOnRecheck: true }
-        results.push({ ref, reason, outcome })
-      }
-      continue
-    }
-    for (const { workspace, ref, reason } of batch.targets) {
-      if (signal?.aborted) {
-        break
-      }
-      const entry = byId.get(workspace.ref.worktreeId)
-      if (!entry || entry.action === 'keep') {
-        results.push({
-          ref,
-          reason,
-          outcome: { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
+    const folderKey = workspace.localFolderKey
+    let check = folderKey ? folderRechecks.get(folderKey) : undefined
+    if (!check) {
+      try {
+        const fresh = await collectWorkspaceCleanupWorkspaces({
+          store,
+          runtime,
+          globalRules: args.globalRules(),
+          now: args.now(),
+          ...(folderKey
+            ? { folderKey }
+            : { worktreeId: workspace.ref.worktreeId, withFolderSiblings: false }),
+          // Always re-read connected paired servers before removal so newly attached members hold the folder.
+          readPairedFolderChildren: () => readPairedFolderChildren(runtime),
+          signal
         })
-        continue
+        const evaluations = await decideWorkspaceCleanups(runtime, fresh, args.now())
+        const byId = new Map<string, WorkspaceCleanupEvaluation>()
+        for (let i = 0; i < fresh.length; i++) {
+          byId.set(fresh[i].ref.worktreeId, evaluations[i])
+        }
+        const expectedIds = folderKey
+          ? (expectedIdsByFolder.get(folderKey) ?? [])
+          : [workspace.ref.worktreeId]
+        const allGoing =
+          fresh.length > 0 &&
+          evaluations.every((entry) => entry.action !== 'keep') &&
+          expectedIds.every((id) => {
+            const entry = byId.get(id)
+            return entry !== undefined && entry.action !== 'keep'
+          })
+        check = { kind: 'checked', allGoing, byId }
+      } catch (error) {
+        check = { kind: 'failed', error: describeRemovalError(error) }
       }
-      const outcome = await deleteCheckedWorkspace(runtime, workspace, entry, signal)
-      results.push({ ref, reason, outcome })
+      if (folderKey) {
+        folderRechecks.set(folderKey, check)
+      }
     }
+    if (check.kind === 'failed') {
+      results.push({ ref, reason, outcome: { outcome: 'failed', error: check.error } })
+      continue
+    }
+    const entry = check.byId.get(workspace.ref.worktreeId)
+    if (!check.allGoing || !entry || entry.action === 'keep') {
+      const outcome: RemovalOutcome = !entry
+        ? { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
+        : entry.action === 'keep'
+          ? { ...keptRunOutcome(entry), keptOnRecheck: true }
+          : { outcome: 'kept', keepCause: 'folder-workspace-sibling', keptOnRecheck: true }
+      results.push({ ref, reason, outcome })
+      continue
+    }
+    const outcome = await deleteCheckedWorkspace(runtime, workspace, entry, signal)
+    results.push({ ref, reason, outcome })
   }
   return results
 }

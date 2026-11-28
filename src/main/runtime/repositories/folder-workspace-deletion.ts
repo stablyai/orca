@@ -62,7 +62,7 @@ export async function deleteFolderWorkspaceRow(
     if (store.getBots?.().some((bot) => bot.folderWorkspaceId === folderWorkspaceId)) {
       throw new Error('Cannot delete a bot home folder workspace directly. Delete the bot instead.')
     }
-    if (deps.isBotGroupHome?.(folderWorkspaceId)) {
+    if (await deps.isBotGroupHome?.(folderWorkspaceId)) {
       throw new Error(
         'Cannot delete a bot group home folder workspace directly. Delete the bot group instead.'
       )
