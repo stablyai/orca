@@ -6,7 +6,6 @@ import {
 } from '../layout/orca-runtime-layout-owner-start-fixture'
 import { registerBoundPty } from '../layout/bind-first-pane.test-fixture'
 import { storeOf } from '../layout/profile-session-store.test-fixture'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 
 it('publishes a rename and reset for a live terminal the open host window holds no pane for', async () => {
   const { runtime, session } = setupLayoutOwnerRuntime()
@@ -62,18 +61,11 @@ it('publishes a rename and reset for a live terminal the open host window holds 
         }
       ]
     })
-    // Switch on, paired clients read the name from main's layout; the window's rows follow its redraw.
-    const mainTitle = () =>
-      session().tabsByWorktree[WORKTREE_ID]?.find((tab) => tab.id === tabId)?.customTitle
     const published = async () => {
       const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
       const tab = result.tabs.find((entry) => entry.id === rowId)
       return {
-        customTitle: ORCA_LAYOUT_OWNER_IS_MAIN
-          ? mainTitle()
-          : tab?.type === 'terminal'
-            ? tab.customTitle
-            : undefined,
+        customTitle: tab?.type === 'terminal' ? tab.customTitle : undefined,
         publicationEpoch: result.publicationEpoch
       }
     }
