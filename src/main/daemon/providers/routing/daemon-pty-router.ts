@@ -21,6 +21,7 @@ import type {
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { DaemonIdleRetirementResult } from '../adapter/daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
+import { DaemonLegacyIdleRetirement } from './daemon-legacy-idle-retirement'
 import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
 import { findLegacySessionOwner } from './daemon-router-legacy-owner'
 import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-router-exited-legacy'
@@ -35,6 +36,10 @@ export class DaemonPtyRouter implements IPtyProvider {
   private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
   private readonly legacyExitProof = new LegacyDaemonExitProof()
+  private readonly legacyIdleRetirement = new DaemonLegacyIdleRetirement(
+    (adapter) => adapter !== this.current && this.legacy.includes(adapter),
+    () => this.retirement.spawnInFlight > 0
+  )
   readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
@@ -61,6 +66,7 @@ export class DaemonPtyRouter implements IPtyProvider {
       // Another generation's exit for a reused ID must not unroute its live owner.
       (id, adapter) => {
         this.ownerResolver.forgetRoute(id, adapter)
+        void this.legacyIdleRetirement.request(adapter)
       },
       (adapter) => this.ownerResolver.invalidateProvider(adapter)
     )
@@ -70,6 +76,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   async discoverLegacySessions(): Promise<void> {
     await this.ownerResolver.discoverRoutes()
     this.legacyExitProof.record(this.legacy)
+    await Promise.all(this.legacy.map((adapter) => this.legacyIdleRetirement.request(adapter)))
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
@@ -96,13 +103,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
   }
 
-  requestIdleRetirement(): Promise<DaemonIdleRetirementResult> {
-    return this.retirement.requestIdleRetirement()
-  }
+  requestIdleRetirement = (): Promise<DaemonIdleRetirementResult> =>
+    this.retirement.requestIdleRetirement()
 
-  releaseIdleRetirementFence(): void {
-    this.retirement.releaseFence()
-  }
+  releaseIdleRetirementFence = (): void => this.retirement.releaseFence()
 
   supportsGitCredentialGuardHost(sessionId?: string): boolean {
     const adapter = sessionId ? this.adapterFor(sessionId) : this.current
@@ -285,6 +289,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
     const processes = await this.ownerResolver.listProcesses(opts)
     this.legacyExitProof.record(this.legacy)
+    void Promise.all(this.legacy.map((adapter) => this.legacyIdleRetirement.request(adapter)))
     return processes
   }
 
@@ -336,7 +341,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   dispose(): void {
-    this.subscriptions.dispose()
+    this.disposeRouterOnly()
     for (const adapter of this.allAdapters()) {
       adapter.dispose()
     }
@@ -344,26 +349,21 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   // Restart reuses legacy adapters; detach subscriptions without disposing those adapters.
   disposeRouterOnly(): void {
+    this.legacyIdleRetirement.dispose()
     this.subscriptions.dispose()
   }
 
   async disconnectOnly(): Promise<void> {
-    this.subscriptions.dispose()
+    this.disposeRouterOnly()
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }
 
-  getCurrentAdapter(): DaemonPtyAdapter {
-    return this.current
-  }
+  getCurrentAdapter = (): DaemonPtyAdapter => this.current
 
   // Preserve array identity while removing exited legacy adapters in place.
-  getLegacyAdapters(): readonly DaemonPtyAdapter[] {
-    return this.legacy
-  }
+  getLegacyAdapters = (): readonly DaemonPtyAdapter[] => this.legacy
 
-  getAllAdapters(): readonly DaemonPtyAdapter[] {
-    return this.allAdapters()
-  }
+  getAllAdapters = (): readonly DaemonPtyAdapter[] => this.allAdapters()
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {
     return this.sessionAdapters.get(sessionId) ?? this.current
