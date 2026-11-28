@@ -79,11 +79,15 @@ export async function seedCarriedKeptCodexCommands(
     if (!threadId || !itemId || !turnId || seeded.has(`${threadId}\u0000${itemId}`)) {
       continue
     }
-    const key = savedKey ?? agentJournalItemKey(codexNonMessageIdentity(threadId, turnId, itemId))
-    const body = await journal!.reads.itemBody(key).catch(() => null)
+    // The live row wins; a history import's row only when no live one exists. Seeded once.
+    const liveKey = agentJournalItemKey(codexNonMessageIdentity(threadId, turnId, itemId))
+    const live = await journal!.reads.itemBody(liveKey).catch(() => null)
+    const fromHistory = live?.kind !== 'tool-call' ? savedKey : undefined
+    const body = fromHistory ? await journal!.reads.itemBody(fromHistory).catch(() => null) : live
     if (body?.kind !== 'tool-call') {
       continue
     }
+    seeded.add(`${threadId}\u0000${itemId}`)
     const input = jsonObject(body.input) ?? {}
     const item = {
       type: 'commandExecution',
@@ -92,12 +96,8 @@ export async function seedCarriedKeptCodexCommands(
       command: input.command ?? null,
       cwd: input.cwd ?? null
     }
-    translator.seedRunningItems(
-      threadId,
-      turnId,
-      [item],
-      [savedKey ? (parseAgentJournalItemKey(savedKey) ?? undefined) : undefined]
-    )
+    const identity = fromHistory ? (parseAgentJournalItemKey(fromHistory) ?? undefined) : undefined
+    translator.seedRunningItems(threadId, turnId, [item], [identity])
     if (body.output) {
       translator.seedRunningOutput(
         threadId,

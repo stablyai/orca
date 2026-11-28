@@ -211,7 +211,10 @@ export class CodexJournalItems {
 
   /** A kept agent's running command: later output streams onto its row with its saved fields. */
   seedRunning(thread: string, turn: string, item: CodexThreadItem, id?: AgentJournalItemIdentity) {
-    return this.track(thread, turn, item, id ?? this.identityFor(thread, turn, item))
+    // A saved row's own identity is the one its later frames (its end too) resolve to.
+    const identity = id ?? this.identityFor(thread, turn, item)
+    this.identities.set(codexStructuredItemKey(thread, item.id), identity)
+    return this.track(thread, turn, item, identity)
   }
 
   private track(
@@ -258,10 +261,7 @@ export class CodexJournalItems {
     })
     this.identities.set(key, identity)
     while (this.identities.size > MAX_CODEX_IDENTITY_ENTRIES) {
-      const oldest = this.identities.keys().next().value
-      if (typeof oldest === 'string') {
-        this.identities.delete(oldest)
-      }
+      this.identities.delete(this.identities.keys().next().value ?? '')
     }
     while (this.details.size > MAX_CODEX_DETAIL_ENTRIES) {
       const oldest = this.details.keys().next().value
