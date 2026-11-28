@@ -11,7 +11,7 @@ import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/a
 import { acpPrivateTempConnect } from './acp-private-temp'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
-import type { AcpLaunchSpec } from './acp-launch-contract'
+import type { AcpLaunchSpec, AcpPreparedAccount } from './acp-launch-contract'
 import type { AcpStructuredConnection, ConnectAcpAgent } from '../process/acp-structured-connection'
 
 export function prepareAcpStructuredLaunch(
@@ -36,15 +36,10 @@ export async function prepareAcpLaunch<
     spec: AcpLaunchSpec
     antigravityChatAuth?: AntigravityChatAuthConfig
     release?: () => Promise<void>
+    preparedAccount?: AcpPreparedAccount
   }
 >(resolve: () => Promise<Launch>, closedBeforeSpawn: () => void): Promise<Launch> {
-  const preparationFailure = (error: unknown): never => {
-    closedBeforeSpawn()
-    // An account that can't sign in says so, as the agent itself would.
-    throw error instanceof AgentSessionAcquisitionRefusal && error.reason === 'notSignedIn'
-      ? error
-      : launchPreparationFailure(error)
-  }
+  const preparationFailure = preparationFailureFor(closedBeforeSpawn)
   const launch = await resolve().catch(preparationFailure)
   const { spec } = launch
   // Nothing has spawned yet, so a failure from here on removes the launch's own files at once.
@@ -63,15 +58,58 @@ export async function prepareAcpLaunch<
     }
     const { prepare } = spec.account
     if (prepare) {
-      await prepare(launch.env, launch.antigravityChatAuth, closedBeforeSpawn).catch(
-        preparationFailure
-      )
+      const preparedAccount = await prepare(
+        launch.env,
+        launch.antigravityChatAuth,
+        closedBeforeSpawn
+      ).catch(preparationFailure)
       closedBeforeSpawn()
+      return preparedAccount ? { ...launch, preparedAccount } : launch
     }
   } catch (error) {
     return failBeforeSpawn(error)
   }
   return launch
+}
+
+function preparationFailureFor(closedBeforeSpawn: () => void) {
+  return (error: unknown): never => {
+    closedBeforeSpawn()
+    // An account that can't sign in says so, as the agent itself would.
+    throw error instanceof AgentSessionAcquisitionRefusal && error.reason === 'notSignedIn'
+      ? error
+      : launchPreparationFailure(error)
+  }
+}
+
+/** Right before the spawn, with nothing awaited after it: a login prepared for a selection that
+ *  was replaced meanwhile is prepared once more, so the chat starts on the new one. */
+export async function currentAcpLaunchAccount<
+  Launch extends Pick<
+    AcpStructuredLaunch,
+    'spec' | 'env' | 'antigravityChatAuth' | 'preparedAccount' | 'release'
+  >
+>(launch: Launch, closedBeforeSpawn: () => void): Promise<Launch> {
+  const prepared = launch.preparedAccount
+  const current = launch.spec.launchAccount?.current()
+  const { prepare } = launch.spec.account
+  if (
+    !prepared ||
+    'foreign' in prepared ||
+    !prepare ||
+    current == null ||
+    current === prepared.target
+  ) {
+    return launch
+  }
+  const again = await prepare(launch.env, launch.antigravityChatAuth, closedBeforeSpawn).catch(
+    (error: unknown) => {
+      void launch.release?.().catch(() => undefined)
+      return preparationFailureFor(closedBeforeSpawn)(error)
+    }
+  )
+  closedBeforeSpawn()
+  return again ? { ...launch, preparedAccount: again } : launch
 }
 
 /** Releases the launch's files once the child exits, or at once when it never spawned. */

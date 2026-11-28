@@ -12,8 +12,10 @@ import type {
   StoredAntigravityAccount
 } from './native-account-store'
 import {
+  AntigravityLaunchRestoreError,
   AntigravityLoginReader,
   antigravityAccountState,
+  type AntigravityLoginEvidence as LoginEvidence,
   antigravityLoginMatches,
   type AntigravityQuietRead
 } from './native-account-login-view'
@@ -78,6 +80,19 @@ export class AntigravityAccountService {
     const vault = await this.store.read()
     const login = (await this.logins.known(vault, fingerprint, persist)) ?? 'unread'
     return antigravityAccountState(vault, login, Boolean(this.launchRestore))
+  }
+
+  /** Reads only Orca's saved accounts, never agy's login, and waits on no other account work. */
+  async readSelection(): Promise<void> {
+    await this.store.read()
+  }
+
+  /** The saved account agy's login holds; only where reading it raises no dialog (Windows). */
+  readLoginHolder(): Promise<string | null> {
+    return this.serialize(async () => {
+      const { vault, current } = await this.reconcile()
+      return current ? this.logins.view(vault, current).accountId : null
+    }, false)
   }
 
   /** Reads agy's login even where that may raise a keychain dialog; only for an explicit request. */
@@ -165,25 +180,51 @@ export class AntigravityAccountService {
 
   /** `mayPrompt: false` (a chat start) never waits on a keychain dialog: it skips the restore while
    *  other account work runs, reads agy's login only briefly, and not again once that failed. */
-  async prepareForLaunch({ mayPrompt = true }: { mayPrompt?: boolean } = {}): Promise<void> {
+  /** The selected account ('' when none) agy's login was found or put on; null when `quiet` left
+   *  it unread. */
+  async prepareForLaunch(
+    options: { mayPrompt?: boolean; quiet?: boolean } = {}
+  ): Promise<string | null> {
+    const seen: LoginEvidence = {}
+    try {
+      return await this.prepareLogin(options, seen)
+    } catch (error) {
+      throw new AntigravityLaunchRestoreError(
+        error,
+        await this.logins.holderAfterFailure(seen).catch(() => null)
+      )
+    }
+  }
+
+  private async prepareLogin(
+    { mayPrompt = true, quiet = false }: { mayPrompt?: boolean; quiet?: boolean },
+    seen: LoginEvidence
+  ): Promise<string | null> {
     const early = mayPrompt ? undefined : await this.backend.readWithoutPrompt?.()
-    if (await this.logins.settlesLaunch(early, false)) {
-      return
+    const settled = await this.logins.settlesLaunch(early, false)
+    if (settled !== null) {
+      return settled
+    }
+    // Nobody asked (`quiet`): a login only a keychain read could name waits for the next launch.
+    if (quiet && early && 'fingerprint' in early) {
+      return null
     }
     if (early && 'fingerprint' in early && (this.logins.briefAccessFailed || this.prompting > 0)) {
       throw new Error(
         "Checking agy's login for the selected account could ask for keychain access, so it was left as it is."
       )
     }
-    const restore = async () => {
+    const restore = async (): Promise<string> => {
       const quiet = await this.backend.readWithoutPrompt?.()
-      if (await this.logins.settlesLaunch(quiet, true)) {
-        return
+      const settled = await this.logins.settlesLaunch(quiet, true)
+      if (settled !== null) {
+        return settled
       }
       const { vault, current } = await this.reconcile(undefined, quiet)
+      seen.login = current
       const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
       if (!vault.selectedAccountId || (selected && current && this.matches(selected, current))) {
-        return
+        return vault.selectedAccountId ?? ''
       }
       // Each running agy writes its own login back to the one native slot on every token refresh.
       // Exactly one saved account holding it (reconcile just saved it) restores the selection, as
@@ -197,11 +238,14 @@ export class AntigravityAccountService {
       if (this.launchRestore.signInHoldsLogin()) {
         throw new Error('Antigravity sign-in is in progress. Finish it, then launch agy again.')
       }
+      // From the write on, what this restore read no longer names agy's login.
+      delete seen.login
       await this.switchNative(selected, current)
       // No vault write: both logins are already saved, and another Orca process selecting meanwhile wins.
       if ((await this.store.read()).selectedAccountId !== selected.id) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
       }
+      return selected.id
     }
     // A chat's keychain calls give up early; one the keychain refused or left unanswered stops the
     // next chats asking, while other refusals (a sign-in in progress) don't.

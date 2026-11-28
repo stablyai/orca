@@ -24,6 +24,31 @@ import type {
   McpServer
 } from '../generated/acp-protocol.generated'
 
+/** Where preparation left a login several saved accounts share (`AcpLaunchAccount`): `key` is the
+ *  account the launch runs on, `target` the selection it prepared for, `failure` why they differ. */
+export type AcpPreparedLogin = { key: string; target: string; failure?: string }
+/** `foreign`: the launch runs on another home or credential store than the login saved accounts
+ *  swap, so none names its login and no switch moves it. */
+export type AcpPreparedAccount = AcpPreparedLogin | { foreign: true }
+
+/** Opaque saved-account keys, where several share one login. A launch records the account its
+ *  preparation left the login on (`AcpPreparedAccount`), else `current()` as it spawns. */
+export type AcpLaunchAccount = {
+  atLaunch(): Promise<string>
+  /** The selected account; null until known. */
+  current(): string | null
+  /** What a running child should match: the selection, or null while moving to it is known to fail. */
+  target(): string | null
+  /** False for a launch that signs in some other way (a key, gcloud), which no saved account names. */
+  usedBy?(launch: { antigravityChatAuth?: AntigravityChatAuthConfig }): boolean
+  /** A chat's process spawned on `key` (none: on a login no saved account names); `prepared` when
+   *  its preparation said so. */
+  spawned?(
+    process: { onExit(listener: () => void): void },
+    chat: { sessionId: string; key?: string; prepared?: AcpPreparedLogin }
+  ): void
+}
+
 export type AcpLaunchSpec = {
   agent: TuiAgent
   command: string
@@ -119,6 +144,9 @@ export type AcpLaunchSpec = {
     signal?: AbortSignal
   }): Promise<Readonly<Record<string, unknown>> | undefined>
   launchGate?: AcpLaunchGate
+  /** For an agent whose saved accounts swap one login inside one home, so the home can't tell
+   *  which account a child launched on. */
+  launchAccount?: AcpLaunchAccount
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true
   /** Lets an agent that keeps every session run naming tasks anyway, each on a home of its own in
