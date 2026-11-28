@@ -1,4 +1,4 @@
-import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
+import { AcpInteractionModeChoice, acpEffortOption, acpSelectChoices } from './acp-select-choices'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
@@ -45,8 +45,11 @@ export class AcpStructuredOptions {
       | 'fastConfigId'
       | 'thinkingConfigId'
       | 'interactionModes'
+      | 'planPermissionMode'
     > = {}
   ) {}
+
+  readonly modeChoice = new AcpInteractionModeChoice(() => this.dialect)
 
   private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
   /** As the agent last reported them; replace through `adoptConfigOptions`. */
@@ -242,9 +245,7 @@ export class AcpStructuredOptions {
       return option ? { method: 'config', configId: option.id, value } : null
     }
     if (key === 'interactionMode') {
-      const option = this.select('mode')
-      const native = acpInteractionModeValue(this.dialect.interactionModes, option, value)
-      return option && native ? { method: 'config', configId: option.id, value: native } : null
+      return this.modeChoice.write(this.select('mode'), value)
     }
     return null
   }
@@ -319,7 +320,7 @@ export class AcpStructuredOptions {
     if (!values) {
       return this.applied.get('permissionMode') ?? null
     }
-    const current = this.select('mode')?.currentValue
+    const current = this.modeChoice.running(this.select('mode')?.currentValue)
     return current
       ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
       : null

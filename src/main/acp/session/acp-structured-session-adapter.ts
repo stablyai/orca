@@ -26,7 +26,8 @@ import { readAcpLiveOptions } from '../options/acp-live-options'
 import {
   acpPermissionWritesSettled,
   acpRunningPermission,
-  applyAcpLivePermissionMode
+  applyAcpLivePermissionMode,
+  serializeAcpModeWrite
 } from '../options/acp-live-permission-mode'
 import { acpControlsSettled, writeAcpSessionOption } from '../options/acp-session-option-write'
 import { acpOptionWriteBound, withAcpModelFallback } from '../turns/acp-model-command'
@@ -231,8 +232,10 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     }
   }
 
-  answerPrompt: SessionAdapter['answerPrompt'] = (input) =>
-    this.live(input.sessionId).prompts.answer(input)
+  answerPrompt: SessionAdapter['answerPrompt'] = (input) => {
+    const session = this.live(input.sessionId)
+    return session.prompts.answer(input, { buildMode: session.options.modeChoice.build() })
+  }
 
   async setOption(input: SetOptionInput) {
     const session = this.live(input.sessionId)
@@ -245,7 +248,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     session.options.notePick(input.key)
     // Bound option writes so they cannot hold the session queue indefinitely.
     const bound = { ...this.writeBound(session, input.signal), key: input.key, value: input.value }
-    await writeAcpSessionOption(session.connection, session.options, write, bound)
+    const send = (next = write) =>
+      writeAcpSessionOption(session.connection, session.options, next, bound)
+    // Where Plan is a permission level, Plan/Build and permission picks write the same option.
+    await (input.key === 'interactionMode' && session.spec.dialect.planPermissionMode
+      ? serializeAcpModeWrite(session, () =>
+          send(session.options.write(input.key, input.value) ?? write)
+        )
+      : send())
     return session.options.reported()
   }
 

@@ -1,6 +1,8 @@
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
 import { droidToolSubagents } from './droid-subagents'
+import { droidModelEfforts } from './droid-model-catalog'
+import { droidSpecApproval } from './droid-spec-approval'
 
 const SHELL_EXIT_LINE = /(?:^|\n)\[Process exited with code (-?\d+)\]$/u
 const SHELL_FAILURE_LINE = /^Error: Command failed \(exit code: -?\d+\)(?:\n|$)/u
@@ -49,6 +51,10 @@ export const DROID_ACP_DIALECT: AcpDialect = {
   clientCapabilities: { elicitation: { form: {} } },
   normalizeToolUpdate,
   toolSubagents: droidToolSubagents,
+  modelEfforts: droidModelEfforts,
+  // Spec is one of Droid's autonomy levels; Auto (Off) until the chat has run at another.
+  planPermissionMode: { plan: 'spec', build: 'normal' },
+  request: droidSpecApproval,
   // Droid's commands are all skills: its own, the user's and the project's.
   skillDescription: ({ description }) => description
 }

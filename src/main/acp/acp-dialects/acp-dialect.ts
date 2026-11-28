@@ -40,9 +40,15 @@ export type AcpAdvertisedEfforts = {
   declaredDefaultEffort?: string | null
 }
 
+/** What the running chat knows when its answer is written. */
+export type AcpReplyContext = {
+  /** The permission level Build runs at, for an agent whose Plan is one of those levels. */
+  buildMode?: string
+}
+
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
-  reply(response: AgentSessionPromptResponse | null): unknown
+  reply(response: AgentSessionPromptResponse | null, context?: AcpReplyContext): unknown
   /** A URL request the agent may later report finished with `elicitation/complete`. */
   elicitationId?: string
 }
@@ -286,6 +292,9 @@ export type AcpDialect = {
   thinkingConfigId?: string
   /** This agent's mode values, mapped to Orca's Build/Plan interaction mode. */
   interactionModes?: Readonly<Record<AgentSessionInteractionMode, string>>
+  /** Plan is this value of the agent's permission mode option; Build returns to the level that ran
+   *  before it, `build` until one is seen. */
+  planPermissionMode?: { plan: string; build: string }
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }

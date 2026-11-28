@@ -75,9 +75,15 @@ export function applyAcpLivePermissionMode(
     }
     return Promise.resolve()
   }
-  const written = (modeWrites.get(session) ?? Promise.resolve()).then(() =>
-    writeAcpSessionMode(session, mode, bound.timeoutMs)
-  )
+  return serializeAcpModeWrite(session, () => writeAcpSessionMode(session, mode, bound.timeoutMs))
+}
+
+/** Runs `write` after every mode write already asked of this chat, so picks land in pick order. */
+export function serializeAcpModeWrite(
+  session: LivePermissionSession,
+  write: () => Promise<void>
+): Promise<void> {
+  const written = (modeWrites.get(session) ?? Promise.resolve()).then(write)
   modeWrites.set(
     session,
     written.catch(() => undefined)
@@ -95,9 +101,17 @@ async function writeAcpSessionMode(
   if (value === undefined || acpRunningPermission(session) === mode) {
     return
   }
+  const configId = session.options.modeConfigId()
+  const current = session.options.configOptions.find((option) => option.id === configId)
+  // Writing it would end Plan; Build applies it instead.
+  if (session.options.modeChoice.holds(current?.currentValue)) {
+    session.options.modeChoice.adoptBuild(value)
+    session.permission = mode
+    return
+  }
   // Not the shared option writer: its revision would supersede a send's model or effort write.
   const reply = await session.connection
-    .setConfigOption(session.options.modeConfigId(), value, undefined, undefined, timeoutMs)
+    .setConfigOption(configId, value, undefined, undefined, timeoutMs)
     .catch((error: unknown) => {
       // Only the agent's refusal proves the mode held; otherwise the next send restarts the agent.
       if (!(error instanceof AcpAgentError)) {

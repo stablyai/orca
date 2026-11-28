@@ -84,3 +84,50 @@ export function acpInteractionModeValue(
     ? native
     : null
 }
+
+/** Orca's Build/Plan as the agent's mode values. Where Plan is one of the agent's permission
+ *  levels, Build returns to the level that ran before it. */
+export class AcpInteractionModeChoice {
+  private lastBuild: string | undefined
+
+  // Read lazily: the options that own this choice take the dialect in their own constructor.
+  constructor(
+    private readonly dialect: () => Pick<AcpDialect, 'interactionModes' | 'planPermissionMode'>
+  ) {}
+
+  write(
+    modeOption: SelectOption | null,
+    value: string
+  ): { method: 'config'; configId: string; value: string } | null {
+    const plan = this.dialect().planPermissionMode
+    if (plan && modeOption && modeOption.currentValue !== plan.plan) {
+      this.lastBuild = modeOption.currentValue
+    }
+    const modes = plan
+      ? { default: this.build()!, plan: plan.plan }
+      : this.dialect().interactionModes
+    const native = acpInteractionModeValue(modes, modeOption, value)
+    return modeOption && native
+      ? { method: 'config', configId: modeOption.id, value: native }
+      : null
+  }
+
+  holds(current: unknown): boolean {
+    return current !== undefined && current === this.dialect().planPermissionMode?.plan
+  }
+
+  /** The permission level running now; in Plan, the one Build returns to. */
+  running(current: string | undefined): string | undefined {
+    return this.holds(current) ? this.build() : current
+  }
+
+  /** A permission picked during Plan applies once the chat returns to Build. */
+  adoptBuild(value: string): void {
+    this.lastBuild = value
+  }
+
+  build(): string | undefined {
+    const plan = this.dialect().planPermissionMode
+    return plan && (this.lastBuild ?? plan.build)
+  }
+}
