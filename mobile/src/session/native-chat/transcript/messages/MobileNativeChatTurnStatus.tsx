@@ -16,6 +16,9 @@ import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styl
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useNow } from '../../../../hooks/use-now'
 
+// Owner pick pending on option D: true keeps the row's line while it spins in place of "Working…".
+const LIVE_ROW_KEEPS_LINE = false
+
 // Stop ticking settled turns so old transcripts retain no timers.
 function useElapsedSeconds(startedAt: number | null, counting: boolean): number {
   // Preserves the pre-stamp epoch for the frame before the turn's startedAt lands.
@@ -56,6 +59,7 @@ export function MobileNativeChatTurnStatus({
   const label =
     pendingLabel ??
     formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t)
+  const copy = nativeChatTurnStatusCopy(t)
 
   const identity = bot ? (
     <View accessibilityRole="image" accessibilityLabel={bot.name}>
@@ -72,9 +76,7 @@ export function MobileNativeChatTurnStatus({
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         accessibilityLabel={
-          bot
-            ? `${bot.name}, ${label}, ${nativeChatTurnStatusCopy(t).toggleDetails}`
-            : nativeChatTurnStatusCopy(t).toggleDetails
+          bot ? `${bot.name}, ${label}, ${copy.toggleDetails}` : `${label}, ${copy.toggleDetails}`
         }
       >
         {identity}
@@ -93,8 +95,16 @@ export function MobileNativeChatTurnStatus({
     )
   }
 
+  // Standing in for the live line, it announces what that line did, never the ticking clock.
+  const spoken = live ? copy.working : label
   return (
-    <View style={[styles.row, !live && styles.bar, style]}>
+    <View
+      style={[styles.row, (!live || LIVE_ROW_KEEPS_LINE) && styles.bar, style]}
+      // A group turn's Stop sits inside; grouping the row would hide that button.
+      accessible={!trailing}
+      accessibilityLabel={trailing ? undefined : bot ? `${bot.name}, ${spoken}` : spoken}
+      accessibilityLiveRegion={live ? 'polite' : undefined}
+    >
       {identity}
       {live ? (
         <View style={styles.spinner}>
