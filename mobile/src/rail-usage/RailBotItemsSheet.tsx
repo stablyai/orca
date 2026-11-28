@@ -298,8 +298,10 @@ export function RailBotItemsSheet({
 
   const sheetItemUid =
     sheet === null ? null : 'item' in sheet ? sheet.item.uid : (sheet.items[0]?.uid ?? null)
-  const sheetTarget =
-    (sheetItemUid ? ownerOf.get(sheetItemUid) : null) ?? itemTarget ?? targets[0] ?? null
+  // A sheet item stays on its owner. Another target's client would move or snooze it on the wrong host.
+  const sheetTarget = sheetItemUid
+    ? (ownerOf.get(sheetItemUid) ?? null)
+    : (itemTarget ?? targets[0] ?? null)
 
   const pageNode =
     page === 'filter' ? (

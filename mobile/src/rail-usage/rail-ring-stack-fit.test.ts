@@ -167,5 +167,14 @@ describe('railRingStackFit', () => {
       5 * buttonClear +
       (withButton.paddingBottom - buttonOverhang)
     expect(withButtonUsed).toBeLessThanOrEqual(324)
+
+    // One ring has no gap. Room 50 cannot hold the 74pt natural stack, so the ring scales to minRing.
+    const one = railRingStackFit({ ...base, count: 1, room: 50, minRing })
+    expect(one.diameter).toBe(32)
+    expect(one.height).toBeNull()
+    const oneOverhang = base.overhang * ((one.diameter ?? 0) / base.ring)
+    const oneUsed =
+      one.paddingTop + (one.diameter ?? 0) + oneOverhang + (one.paddingBottom - oneOverhang)
+    expect(oneUsed).toBeLessThanOrEqual(50)
   })
 })

@@ -249,11 +249,20 @@ export function useRailBotItems({
     return seen !== undefined && isBotItemUnseen(item, seen)
   }
 
-  const allRead = shownTargets.length > 0 && shownReads.length === shownTargets.length
   const failed = shownTargets.some((target) => {
     const report = reports.get(target.key)
     return (report?.items.error ?? null) !== null || report?.tree.refreshFailed === true
   })
+  // A null client never produces a read. Waiting on it keeps a loaded sheet on the spinner.
+  // An in-flight read (client, no read, no error) still blocks so the list does not flash partial.
+  const targetSettled = (target: RailBotTarget): boolean => {
+    const report = reports.get(target.key)
+    return (
+      report?.items.read != null || (report?.items.error ?? null) !== null || target.client == null
+    )
+  }
+  const allSettled = shownTargets.length > 0 && shownTargets.every(targetSettled)
+  const allRead = allSettled && (shownReads.length > 0 || !failed)
   const error =
     shownTargets.map((target) => reports.get(target.key)?.items.error).find((e) => e != null) ?? ''
   const filterOn = effectivePickedKeys !== null || needsYouOnly

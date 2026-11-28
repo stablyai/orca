@@ -74,22 +74,27 @@ export function railRingStackFit(args: {
     height,
     pitch: item + clear
   })
-  // A lone ring has no gap to share unless a leading control adds one.
+  // A lone ring has no gap to share unless a leading control adds one. It can still shrink to minRing.
   const gapCount = hasLeading ? count : count - 1
-  if (room === null || count <= 0 || gapCount <= 0) {
+  if (room === null || count <= 0) {
     return layout(paddingTop, gap, paddingBottom, null)
   }
   const items = leadingHeight + count * item
-  if (paddingTop + items + gapCount * gap + paddingBottom <= room) {
+  const gaps = Math.max(gapCount, 0) * gap
+  if (paddingTop + items + gaps + paddingBottom <= room) {
     return layout(paddingTop, gap, paddingBottom, null)
   }
   const tightBottom = Math.min(paddingBottom, 2)
-  const tightGap = tightenTop
-    ? Math.floor((room - items - tightBottom) / (gapCount + 1))
-    : Math.floor((room - paddingTop - items - tightBottom) / gapCount)
-  if (tightGap >= minGap) {
-    const clear = Math.min(gap, tightGap)
-    return layout(tightenTop ? Math.min(paddingTop, clear) : paddingTop, clear, tightBottom, null)
+  if (gapCount > 0) {
+    const tightGap = tightenTop
+      ? Math.floor((room - items - tightBottom) / (gapCount + 1))
+      : Math.floor((room - paddingTop - items - tightBottom) / gapCount)
+    if (tightGap >= minGap) {
+      const clear = Math.min(gap, tightGap)
+      return layout(tightenTop ? Math.min(paddingTop, clear) : paddingTop, clear, tightBottom, null)
+    }
+  } else if (paddingTop + items + tightBottom <= room) {
+    return layout(paddingTop, gap, tightBottom, null)
   }
   const effectiveTop = tightenTop ? Math.min(paddingTop, minGap) : paddingTop
   // Scale the ring and its label together. The leading control stays full size.
