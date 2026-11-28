@@ -1,5 +1,5 @@
 import { constants, accessSync, lstatSync, mkdirSync } from 'node:fs'
-import { mkdir, lstat, open, opendir, rename, unlink } from 'node:fs/promises'
+import { mkdir, lstat, open, rename, unlink } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -17,25 +17,31 @@ import {
 } from './provider-group-orphan-guard'
 import { PROVIDER_GROUP_REAP_TIMEOUT_MS } from './provider-process-supervisor'
 import { terminateProviderFaultDescendants } from './provider-fault-ownership'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
+import { openDirectory } from '../../shared/open-directory'
 
-const row = z.object({
-  pid: z.number().int().min(2),
-  ppid: z.number().int().min(0),
-  pgid: z.number().int().min(1),
-  startedAt: z.string().min(1).max(255),
-  startResolution: z.enum(['clock-tick', 'microsecond', 'second'])
-})
-const recordSchema = z.object({
-  version: z.literal(1),
-  nonce: z.string().uuid(),
-  hostname: z.string().max(255),
-  statePath: z.string().max(4096),
-  bootId: z.string().min(1).max(255),
-  owner: row,
-  leader: row,
-  watcher: row,
-  pgid: z.number().int().min(2)
-})
+const row = lazyZodSchema(() =>
+  z.object({
+    pid: z.number().int().min(2),
+    ppid: z.number().int().min(0),
+    pgid: z.number().int().min(1),
+    startedAt: z.string().min(1).max(255),
+    startResolution: z.enum(['clock-tick', 'microsecond', 'second'])
+  })
+)
+const recordSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    nonce: z.string().uuid(),
+    hostname: z.string().max(255),
+    statePath: z.string().max(4096),
+    bootId: z.string().min(1).max(255),
+    owner: row,
+    leader: row,
+    watcher: row,
+    pgid: z.number().int().min(2)
+  })
+)
 const startups = new Map<string, Promise<void>>()
 const MAX_RECORD_BYTES = 16_384
 const availableDirectories = new Map<string, string | null>()
@@ -160,7 +166,7 @@ async function scanOwnership(directory: string, bootId: string): Promise<void> {
   }
   const owners = new Map<string, ReturnType<typeof readPosixProcessRow>>()
   const localHostname = hostname()
-  const dir = await opendir(directory)
+  const dir = await openDirectory(directory)
   for await (const entry of dir) {
     if (!entry.isFile() || !entry.name.endsWith('.json')) {
       continue

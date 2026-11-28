@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../src/shared/execution-host/execution-host'
-import { structuredAgentSessionPaneKey } from '../../../../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { botHomeWorktreeId, hostBotsKey } from '../../../../bots/host-bots-read'
 import { useOpenBotHome } from '../../../../bots/use-open-bot-home'
 import { openMobileStructuredSession } from '../../agent-session/open-mobile-structured-session'
@@ -20,6 +20,7 @@ import {
   type MobileBotCardOfferEdit
 } from './mobile-bot-card-host'
 import { botCardChatOpener } from './mobile-bot-card-chat-open'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 
 /** Gives a chat's bot cards their host, and holds New bot for an offer card's Edit: the computer is
  *  the one its proposer runs on, and the bot it makes answers that card. */
@@ -38,6 +39,7 @@ export function MobileBotCardHostProvider({
   hostTitle: string | null | undefined
   children: ReactNode
 }): React.JSX.Element {
+  const t = useMobileTranslation()
   const server = useContext(WorkspaceServerContext)
   const [editing, setEditing] = useState<MobileBotCardOfferEdit | null>(null)
   const openMobileSession = useOpenMobileSession()
@@ -62,7 +64,7 @@ export function MobileBotCardHostProvider({
             hostId: pairedHostId,
             ...(executionHost ? { executionHost } : {}),
             worktreeId: opened.worktreeId,
-            paneKey: structuredAgentSessionPaneKey(opened.tabId, chatId),
+            paneKey: chatPaneKey(chatId),
             name: bot.name
           }),
         // Every bot a card names runs on this chat's computer, so its Home opens here, not through link lookup.
@@ -85,11 +87,12 @@ export function MobileBotCardHostProvider({
       hostKey: hostBotsKey(pairedHostId, executionHost),
       pairedHostId,
       ...(executionHost ? { executionHost } : {}),
-      hostLabel: (server ? server.name : hostTitle) ?? '',
+      hostLabel:
+        (server ? server.name : hostTitle)?.trim() || t('bots.link.computer', 'your computer'),
       editOffer: setEditing,
       ...(executionHost ? {} : { openAutomations: () => openMobileAutomations(pairedHostId) })
     }),
-    [client, pairedHostId, executionHost, server, hostTitle, chatOpener, openMobileAutomations]
+    [client, pairedHostId, executionHost, server, hostTitle, chatOpener, openMobileAutomations, t]
   )
   const bots = useHostBotsEntry(editing ? host.hostKey : null)?.bots
   const hostId = host.executionHost ?? LOCAL_EXECUTION_HOST_ID

@@ -1,6 +1,8 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { StoredHostProfile } from './host-profile'
 
+const NO_CANDIDATES: readonly string[] = []
+
 export type HostDirectEndpointFields = Pick<StoredHostProfile, 'endpoint' | 'directEndpointOrigin'>
 
 /** A saved endpoint becomes the desktop's to move once the desktop lists it as one of its own addresses. */
@@ -12,32 +14,32 @@ export function directEndpointListedByHost(
 }
 
 /**
- * Where to try the desktop when it no longer lists a saved endpoint it once listed. Only the desktop can
- * say an address is no longer its own; a still-listed endpoint is kept even when it prefers another.
- * The candidate is dialed, never saved, until the phone authenticates there: an address that left
- * for a moment (Wi-Fi reconnect, Tailscale restart) must not strand the row elsewhere.
+ * Where to try the desktop, in order, when it no longer lists a saved endpoint it once listed. Only the
+ * desktop can say an address is no longer its own; a still-listed endpoint is kept even when it prefers
+ * another. Candidates are dialed, never saved, until the phone authenticates at one: an address that
+ * left for a moment (Wi-Fi reconnect, Tailscale restart) must not strand the row elsewhere.
  */
-export function directEndpointCandidate(
+export function directEndpointCandidates(
   row: HostDirectEndpointFields,
   endpoints: readonly string[]
-): string | null {
-  if (row.directEndpointOrigin !== 'host' || endpoints.includes(row.endpoint)) {
-    return null
+): readonly string[] {
+  if (
+    row.directEndpointOrigin !== 'host' ||
+    endpoints.length === 0 ||
+    endpoints.includes(row.endpoint)
+  ) {
+    return NO_CANDIDATES
   }
   // Never cross LAN and Tailscale: one can be unreachable from wherever the phone goes next.
   const tailscale = isTailscaleEndpoint(row.endpoint)
-  let best: string | null = null
-  let bestShared = -1
-  for (const candidate of endpoints) {
-    // On a multi-homed desktop, the address nearest the old one (a DHCP move stays in its subnet) is
-    // the one this phone most likely reaches; ties keep the desktop's preference order.
-    const shared = sharedAddressSegments(row.endpoint, candidate)
-    if (isTailscaleEndpoint(candidate) === tailscale && shared > bestShared) {
-      best = candidate
-      bestShared = shared
-    }
-  }
-  return best
+  // On a multi-homed desktop, the address nearest the old one (a DHCP move stays in its subnet) is
+  // the one this phone most likely reaches; the stable sort keeps the desktop's order on ties.
+  // The same address on two interfaces is one dial.
+  return [...new Set(endpoints)]
+    .filter((candidate) => isTailscaleEndpoint(candidate) === tailscale)
+    .map((candidate) => ({ candidate, shared: sharedAddressSegments(row.endpoint, candidate) }))
+    .sort((a, b) => b.shared - a.shared)
+    .map(({ candidate }) => candidate)
 }
 
 function sharedAddressSegments(a: string, b: string): number {

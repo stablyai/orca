@@ -24,9 +24,7 @@ export function renderResourceUsagePopoverHeader(
     <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
       <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
         <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
-        <span className="truncate">
-          {t('auto.components.status.bar.StatusBar.d1e1a7a6bf', 'Resource Manager')}
-        </span>
+        <span className="truncate">{t('resourceManager.resources', 'Resources')}</span>
       </div>
 
       <div className="flex items-center gap-0.5">

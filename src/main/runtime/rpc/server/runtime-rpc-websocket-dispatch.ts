@@ -3,7 +3,8 @@ import { callerScopeOf, devicePrincipalOf } from './pairing/device-principal'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
-import type { RpcRequest } from '../core'
+import type { RpcContext, RpcRequest } from '../core'
+import type { DeviceEntry } from './pairing/device-entry'
 import type { WebSocketTransport } from '../transports/websocket/ws-transport'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
@@ -289,10 +290,14 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         delegatedMobileDevices:
           device.scope === 'runtime'
             ? {
-                sync: (phones) =>
-                  this.syncDelegatedMobileDevices(device.deviceId, phones, connectionId)
+                sync: (phones, clientInstanceId) =>
+                  this.syncDelegatedMobileDevices(device.deviceId, phones, {
+                    connectionId,
+                    clientInstanceId
+                  })
               }
             : undefined,
+        delegatedPhoneServerOffers: this.delegatedPhoneServerOffers(device),
         signal: abortRegistration?.signal,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>
@@ -304,5 +309,12 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       abortRegistration?.dispose()
       this.releaseLongPoll(longPoll, device.deviceId)
     }
+  }
+
+  // Pairing lives above this class in the server chain; RuntimeRpcMobilePairing provides it.
+  protected delegatedPhoneServerOffers(
+    _device: DeviceEntry
+  ): RpcContext['delegatedPhoneServerOffers'] {
+    return undefined
   }
 }

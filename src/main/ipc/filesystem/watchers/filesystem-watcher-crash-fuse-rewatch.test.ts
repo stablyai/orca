@@ -9,7 +9,8 @@ vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
 vi.mock('fs/promises', () => ({ stat: vi.fn(async () => ({ isDirectory: () => true })) }))
 vi.mock('../watcher-process/parcel-watcher-process', () => ({
   subscribeViaWatcherProcess: subscribeMock,
-  disposeWatcherProcess: vi.fn()
+  disposeWatcherProcess: vi.fn(),
+  setSharedWatcherDeliveryStallListener: vi.fn()
 }))
 
 import { closeAllWatchers } from './filesystem-watcher-shutdown'
@@ -62,7 +63,7 @@ describe('local watcher after the crash fuse opens', () => {
     sender.send.mockClear()
     await vi.advanceTimersByTimeAsync(5 * 60_000 - 1)
     expect(subscribeMock).toHaveBeenCalledTimes(1)
-    expect(sender.send).not.toHaveBeenCalled()
+    expect(sender.send).not.toHaveBeenCalledWith('fs:changed', expect.anything())
 
     await vi.advanceTimersByTimeAsync(1)
     expect(subscribeMock).toHaveBeenCalledTimes(2)
@@ -92,7 +93,7 @@ describe('local watcher after the crash fuse opens', () => {
     expect(subscribeMock).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(subscribeMock).toHaveBeenCalledTimes(2)
-    expect(sender.send).not.toHaveBeenCalled()
+    expect(sender.send).not.toHaveBeenCalledWith('fs:changed', expect.anything())
 
     await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(subscribeMock).toHaveBeenCalledTimes(3)

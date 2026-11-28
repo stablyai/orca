@@ -56,6 +56,8 @@ export type WorkerObservation =
       legacyStopKey: string
       /** The whole id, for a report those builds did not key by a stop. */
       legacyReportId?: string
+      /** A rest the coordinator already knows of: recorded with nothing to report. */
+      unreported?: true
     }
   | {
       presence: 'gone'
@@ -128,7 +130,7 @@ export function observeWorker(
     nextWorkerPresence(current, {
       presence: awaitsAPerson(rest.reason) ? 'prompt' : 'resting',
       fence: observation.fence,
-      report: storedReport(rest, observation)
+      report: observation.unreported ? null : storedReport(rest, observation)
     }),
     deps
   )

@@ -109,7 +109,7 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
   const workspaceSparseDraftParsed = useMemo(
     () =>
       workspaceSparseDraft
-        ? parseSparsePresetDirectories(workspaceSparseDraft.directoriesText)
+        ? parseSparsePresetDirectories(t, workspaceSparseDraft.directoriesText)
         : null,
     [t, workspaceSparseDraft]
   )
@@ -162,13 +162,13 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     return [
       ...agents.map((agent) => ({
         value: agent,
-        label: workspaceAgentLabel(agent),
+        label: workspaceAgentLabel(t, agent),
         subtitle: agent,
         renderIcon: () => <MobileAgentIcon agentId={workspaceAgentIconId(agent)} size={18} />
       })),
       {
         value: 'blank' as const,
-        label: workspaceAgentLabel('blank'),
+        label: workspaceAgentLabel(t, 'blank'),
         subtitle: t('tasks.workspaceCreateProjection.openShell', 'Open a shell'),
         renderIcon: () => <MobileAgentIcon agentId="__blank__" size={18} />
       }
@@ -251,7 +251,8 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     setWorkspaceBranchNameOverride(undefined)
     setShowWorkspaceBaseBranchPicker(false)
   }, [])
-  return Object.assign(model, {
+  return {
+    ...model,
     getWorkspaceTargetRepo,
     workspaceCreateTargetRepo,
     workspaceCreateTargetConnectionId,
@@ -271,7 +272,7 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     handleWorkspaceNameDraftChange,
     selectWorkspaceBaseBranch,
     clearWorkspaceBaseBranch
-  })
+  }
 }
 
 export type WorkspaceCreateProjectionModel = ReturnType<

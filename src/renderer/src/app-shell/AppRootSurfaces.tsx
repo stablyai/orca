@@ -17,7 +17,7 @@ import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast
 import { McpStaleTerminalsStartupOffer } from '../components/settings/mcp-servers/McpStaleTerminalsStartupOffer'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackDiscoveryHost'
-import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
+import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialogHost'
 import { TelemetryFirstLaunchSurface } from '../components/onboarding/telemetry/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './chrome/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
@@ -138,10 +138,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
+  const remoteServerUpdateDialogOpen = useAppStore((s) => s.remoteServerUpdateDialogOpen)
 
-  const shouldMountSetupGuideTelemetryObserver = persistedUIReady
-  const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
-  const shouldMountDictationController = voiceEnabled || dictationState !== 'idle'
   const renderPetOverlay = shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
 
   return (
@@ -277,16 +275,16 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           </ModalBoundary>
         ) : null}
       </Suspense>
-      {shouldMountSetupGuideTelemetryObserver ? (
+      {persistedUIReady && (
         <Suspense fallback={null}>
           <SetupGuideTelemetryObserver />
         </Suspense>
-      ) : null}
-      {activeContextualTourId !== null ? (
+      )}
+      {activeContextualTourId !== null && (
         <Suspense fallback={null}>
           <ContextualTourOverlay />
         </Suspense>
-      ) : null}
+      )}
       {/* Wait for UI hydration so default visibility cannot flash a saved-hidden pet. */}
       {renderPetOverlay ? (
         <Suspense fallback={null}>
@@ -298,7 +296,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
       <MacosUpdateRequirementHost />
       <AppNotificationCards
         activeView={activeView}
-        shouldMountUpdateCard={shouldMountUpdateCard}
+        shouldMountUpdateCard={shouldMountUpdateCardForStatus(updateStatus)}
         chatUiHereCornerCardOpen={onboardingGate.chatUiHereCornerCardOpen}
         onChatUiHereCornerCardClose={() => onboardingGate.setChatUiHereCornerCardOpen(false)}
       />
@@ -384,13 +382,13 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             document.body
           )
         : null}
-      {shouldMountDictationController ? (
+      {(voiceEnabled || dictationState !== 'idle') && (
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.dictation" resetKey={activeView}>
             <DictationController />
           </OverlayBoundary>
         </Suspense>
-      ) : null}
+      )}
       <OverlayBoundary boundaryId="overlay.recent-tab-switcher" resetKey={activeView}>
         <RecentTabSwitcher />
       </OverlayBoundary>
@@ -398,11 +396,13 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
       <OverlayBoundary boundaryId="overlay.skill-freshness-update-dialog">
         <SkillFreshnessUpdateDialogHost />
       </OverlayBoundary>
-      <Suspense fallback={null}>
-        <OverlayBoundary boundaryId="overlay.remote-server-update-dialog">
-          <RemoteServerUpdateDialog />
-        </OverlayBoundary>
-      </Suspense>
+      {remoteServerUpdateDialogOpen && (
+        <Suspense fallback={null}>
+          <OverlayBoundary boundaryId="overlay.remote-server-update-dialog">
+            <RemoteServerUpdateDialog />
+          </OverlayBoundary>
+        </Suspense>
+      )}
     </>
   )
 })

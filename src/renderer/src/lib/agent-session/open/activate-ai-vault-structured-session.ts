@@ -25,6 +25,7 @@ import type {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { nativeChatRestartStillStarting } from '@/components/native-chat-recovery/offers/native-chat-restart-runtimes'
 import { showChatOpenUnavailable, type ChatOpenUnavailable } from './chat-open-failure-toast'
+import { openOnPairedServer, pairedServerToAsk } from './paired-server-open'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { cancelPendingBotThreadOpen } from './bot-thread-open-lifecycle'
 
@@ -75,7 +76,8 @@ export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
-  options?: { deps: StructuredSessionActivationDeps; retry: () => Promise<unknown> },
+  /** `retry`: what Retry repeats, so a caller with a prerequisite step repeats it too. */
+  options?: { deps?: StructuredSessionActivationDeps; retry: () => Promise<unknown> },
   target?: RuntimeClientTarget
 ): Promise<boolean> {
   if (!session.structuredSession) {
@@ -84,7 +86,7 @@ export async function activateAiVaultStructuredSession(
   // A group member's session reopens the room it talks in, not the member's own chat.
   const room = botGroupRoomOfRow(readBotGroups(), session)
   if (room) {
-    if (!options?.deps.signal) {
+    if (!options?.deps?.signal) {
       cancelPendingBotThreadOpen()
     }
     await openBotGroupRoom(room.group, room.roomId, room.label)
@@ -109,7 +111,7 @@ type DesktopStructuredSessionOpenOptions = {
   retry?: 'open' | (() => Promise<unknown>)
 }
 
-export function openDesktopStructuredSession(
+export async function openDesktopStructuredSession(
   source: StructuredSessionOpenSource,
   options: DesktopStructuredSessionOpenOptions = {}
 ): Promise<StructuredSessionOpenResult> {
@@ -120,19 +122,39 @@ export function openDesktopStructuredSession(
   // Read when the open starts: the selection may move before it settles.
   const pairedHostId = openingPairedHostId(source, target)
   const retryOpen = retry === 'open' ? () => openDesktopStructuredSession(source, options) : retry
-  return openDesktopStructuredSessionInteraction(source, {
+  let pairedServer: string | undefined
+  const result = await openDesktopStructuredSessionInteraction(source, {
     target,
     deps,
     locate,
-    present: (result, owner) =>
-      presentDesktopStructuredSession(
-        result,
-        source,
-        feedback ?? deps ?? structuredSessionOpenFeedback,
-        pairedHostId,
-        { owner, retry: retryOpen }
-      )
+    present: (answer, owner) => {
+      pairedServer = pairedServerToAsk(answer, owner)
+      if (!pairedServer) {
+        presentDesktopStructuredSession(
+          answer,
+          source,
+          feedback ?? deps ?? structuredSessionOpenFeedback,
+          pairedHostId,
+          { owner, retry: retryOpen }
+        )
+      }
+    }
   })
+  if (!pairedServer) {
+    return result
+  }
+  // This computer started it on a paired server, which alone knows where it runs: ask there, as
+  // `worker-show --environment` does.
+  const agent = source.kind === 'sender' ? source.displayName : source.agent
+  const base = feedback ?? deps ?? structuredSessionOpenFeedback
+  return openOnPairedServer(pairedServer, agent, base, (host, onServer) =>
+    openDesktopStructuredSession(source, {
+      ...options,
+      locate: undefined,
+      target: host,
+      feedback: onServer
+    })
+  )
 }
 
 /** The chat an open is for, when the source names one before the host answers. */

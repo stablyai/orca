@@ -5,7 +5,10 @@ import type {
 import type { OrcadMigrationBlocker } from '../../../../../../shared/orcad-migration/orcad-migration-preflight'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import {
+  ORCAD_HOST_NEWER_DEFERRAL_CODE,
+  ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { dependencyKindLabel } from './managed-server-dependency-kinds'
 
 export function migrationPhaseLabel(
@@ -148,6 +151,8 @@ const UNVERIFIABLE_CODES = new Set([
   'orcad_initial_runtime_unverifiable',
   'orcad_update_terminal_census_unavailable',
   'orcad_update_daemon_protocol_unverifiable',
+  'orcad_incumbent_identity_unverifiable',
+  'orcad_candidate_preflight_unanswered',
   'orcad_rollback_active_identity_unverifiable',
   'orcad_rollback_census_unavailable',
   'orcad_rollback_daemon_protocol_unverifiable',
@@ -174,6 +179,37 @@ export function managedServerOutcomeLabel(
     return t(
       'auto.components.settings.managedServers.outcome.defaultServer',
       'Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.'
+    )
+  }
+  // Checked before verdicts: Stop reports a held host as unverifiable.
+  if (code === 'orcad_activation_recovery_required') {
+    return t(
+      'auto.components.settings.managedServers.outcome.recoveryRequired',
+      'Not done: an interrupted update or stop holds this host. Use Recover or Cancel stop if Orca offers it, then try again.'
+    )
+  }
+  if (code === 'orcad_snapshot_space_insufficient') {
+    return t(
+      'auto.components.settings.managedServers.outcome.snapshotSpace',
+      'Not done: this host has no room for the copy Orca takes before updating. Free space on the host, then try again.'
+    )
+  }
+  if (code === 'orcad_activation_policy_refused') {
+    return t(
+      'auto.components.settings.managedServers.outcome.policyRefused',
+      'Not done: Orca won’t activate this build on this host. Check the host and update again, or update Orca first if a newer Orca last ran it.'
+    )
+  }
+  if (code === ORCAD_HOST_NEWER_DEFERRAL_CODE) {
+    return t(
+      'auto.components.settings.managedServers.outcome.hostNewer',
+      'Not done: a newer Orca last ran this host’s server. Update Orca, then try again.'
+    )
+  }
+  if (code === 'orcad_candidate_preflight_failed') {
+    return t(
+      'auto.components.settings.managedServers.outcome.preflightFailed',
+      'Not done: the new Orca server failed its startup check on this host, so Orca left the host as it was.'
     )
   }
   if (result.verdict === 'live' || LIVE_TERMINAL_CODES.has(code)) {

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type {
   ContinueRebaseAction,
   ContinueRebaseRequest,
@@ -13,8 +14,11 @@ import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registere
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 
-export function registerFilesystemGitRebaseHandlers({ store }: FilesystemHandlerContext): void {
-  ipcMain.handle(
+export function registerFilesystemGitRebaseHandlers(
+  { store }: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'git:continueRebase',
     async (
       _event,
@@ -45,7 +49,7 @@ export function registerFilesystemGitRebaseHandlers({ store }: FilesystemHandler
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:rebaseAutoStash',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<boolean> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))

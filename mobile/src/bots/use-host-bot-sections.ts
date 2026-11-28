@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useMemo } from 'react'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -7,7 +7,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { MobileLineageStores } from '../worktree/agent-lineage/mobile-workspace-lineage'
 import type { LastVisitedWorktreeOnHost } from '../worktree/row-presentation/host-list-highlight'
-import { getMobileUiRevision, subscribeMobileUiLanguage } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   buildHostBotSections,
   type HostBotListing,
@@ -43,7 +43,7 @@ export function useHostBotSections(args: {
     listings,
     collapsedGroups
   })
-  const uiRevision = useSyncExternalStore(subscribeMobileUiLanguage, getMobileUiRevision)
+  const t = useMobileTranslation()
   // Read again each time a search over this computer's bots starts, as the desktop's does, so an edited purpose matches.
   const searchesOwnBots =
     search.trim() !== '' &&
@@ -66,7 +66,8 @@ export function useHostBotSections(args: {
         purposes,
         drawRow: drawBotRow(lastVisited),
         lineageStores: args.lineageStores,
-        ...chatInputs
+        ...chatInputs,
+        t
       }),
     [
       rows,
@@ -79,8 +80,7 @@ export function useHostBotSections(args: {
       lastVisited,
       args.lineageStores,
       chatInputs,
-      // Status lines are translated while drawn, so a language switch draws them again.
-      uiRevision
+      t
     ]
   )
   usePublishedBotStatuses(args.hostId, listings, sections.sections)

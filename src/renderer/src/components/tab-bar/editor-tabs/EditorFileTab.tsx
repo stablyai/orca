@@ -1,6 +1,7 @@
 import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { useSortable } from '@dnd-kit/sortable'
 import { Eye, ShieldAlert } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -27,12 +28,12 @@ import {
   getTabStripBorderClasses
 } from '../strip/drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/view-mode/markdown-preview-controls'
-import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { getEditorFileTabModeIcon } from './editor-file-tab-mode-icon'
+import { LazyEditorFileTabContextMenu } from './editor-file-tab-context-menu-lazy'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
-import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
+import { EditorFileTabStatusSlot } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/files/access/local-file-access'
@@ -110,6 +111,7 @@ export default function EditorFileTab({
     (s) => file.isPreview === true && s.settings?.editorPreviewTabsEnabled !== false
   )
   const [menuOpen, setMenuOpen] = useState(false)
+  const hasOpenedMenu = useLatchedOpen(menuOpen)
   const [isRenaming, setIsRenaming] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const renameFocusFrameRef = useRef<number | null>(null)
@@ -348,19 +350,12 @@ export default function EditorFileTab({
           </span>
         )}
       </span>
-      {/* Share one dot/close slot so autosave cannot change tab width. */}
-      <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
-        {file.isDirty && (
-          <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
-        )}
-        {!isPinned && (
-          <EditorFileTabCloseButton
-            fileIsDirty={file.isDirty}
-            showsSelectionChrome={isActive}
-            onClose={onClose}
-          />
-        )}
-      </div>
+      <EditorFileTabStatusSlot
+        isDirty={file.isDirty}
+        isPinned={isPinned}
+        showsSelectionChrome={isActive}
+        onClose={onClose}
+      />
     </div>
   )
 
@@ -389,31 +384,35 @@ export default function EditorFileTab({
         </div>
       </ContextMenuTrigger>
 
-      <EditorFileTabContextMenu
-        file={file}
-        unifiedTabId={dragData.unifiedTabId}
-        groupId={dragData.groupId}
-        isPinned={isPinned}
-        isRenaming={isRenaming}
-        hasTabsToRight={hasTabsToRight}
-        hasTabsToLeft={hasTabsToLeft}
-        tabCount={tabCount}
-        canRename={canRename}
-        canShowMarkdownPreview={canShowMarkdownPreview}
-        resolvedLanguage={resolvedLanguage}
-        repoConnectionId={repo?.connectionId ?? null}
-        skipMenuFocusRestoreRef={skipMenuFocusRestoreRef}
-        onActivate={onActivate}
-        onOpenRenameInput={openRenameInput}
-        onTogglePin={onTogglePin}
-        onClose={onClose}
-        onCloseOthers={onCloseOthers}
-        onCloseAll={onCloseAll}
-        onCloseToRight={onCloseToRight}
-        onCloseToLeft={onCloseToLeft}
-        onCloseSplitPane={onCloseSplitPane}
-        onOpenMarkdownPreview={openMarkdownPreview}
-      />
+      {hasOpenedMenu ? (
+        <React.Suspense fallback={null}>
+          <LazyEditorFileTabContextMenu
+            file={file}
+            unifiedTabId={dragData.unifiedTabId}
+            groupId={dragData.groupId}
+            isPinned={isPinned}
+            isRenaming={isRenaming}
+            hasTabsToRight={hasTabsToRight}
+            hasTabsToLeft={hasTabsToLeft}
+            tabCount={tabCount}
+            canRename={canRename}
+            canShowMarkdownPreview={canShowMarkdownPreview}
+            resolvedLanguage={resolvedLanguage}
+            repoConnectionId={repo?.connectionId ?? null}
+            skipMenuFocusRestoreRef={skipMenuFocusRestoreRef}
+            onActivate={onActivate}
+            onOpenRenameInput={openRenameInput}
+            onTogglePin={onTogglePin}
+            onClose={onClose}
+            onCloseOthers={onCloseOthers}
+            onCloseAll={onCloseAll}
+            onCloseToRight={onCloseToRight}
+            onCloseToLeft={onCloseToLeft}
+            onCloseSplitPane={onCloseSplitPane}
+            onOpenMarkdownPreview={openMarkdownPreview}
+          />
+        </React.Suspense>
+      ) : null}
     </ContextMenu>
   )
 }

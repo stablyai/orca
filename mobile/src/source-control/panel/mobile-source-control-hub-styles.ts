@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const hubStyles = themedStyleSheet(() => ({
+export const hubStylesSheet = themedStyleSheet((colors) => ({
   // Inset like the Tasks and Agent History switches in their NavBar accessory rows.
   segments: {
     marginHorizontal: spacing.md,

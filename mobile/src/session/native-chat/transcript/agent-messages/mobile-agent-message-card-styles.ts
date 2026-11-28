@@ -1,12 +1,12 @@
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
-export const styles = themedStyleSheet(() => ({
+export const stylesSheet = themedStyleSheet((colors) => ({
   compactCard: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.surface,
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.chatPanel
   },
   meta: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
   senders: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },

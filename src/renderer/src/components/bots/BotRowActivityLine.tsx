@@ -14,7 +14,7 @@ import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { stripInlineMarkdownForToc } from '@/components/editor/markdown/navigation/markdown-toc-text'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Bot } from '../../../../shared/bot-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -52,7 +52,7 @@ export function useBotRowLine(
       bot.paused
         ? []
         : [
-            ...(bot.chatSessionId ? [structuredAgentSessionStatusPaneKey(bot.chatSessionId)] : []),
+            ...(bot.chatSessionId ? [chatPaneKey(bot.chatSessionId)] : []),
             ...links.map((link) => link.paneKey),
             ...(chats ?? []).map((chat) => chat.paneKey)
           ],

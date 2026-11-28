@@ -15,14 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Separate cache stores per pool; native keys are image-scoped, and ci-cache-warmup.yml warms hosted 24.04 x64.
-        runner:
-          [
-            blacksmith-4vcpu-ubuntu-2404-arm,
-            blacksmith-8vcpu-ubuntu-2404,
-            ubuntu-24.04-arm,
-            ubuntu-22.04
-          ]
+        # Native keys are image-scoped, and ci-cache-warmup.yml warms hosted 24.04 x64.
+        runner: [ubuntu-24.04-arm, ubuntu-22.04]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
@@ -36,12 +30,9 @@ jobs:
           native-runtime: node
           node-version: '24'
           # Hosted consumers of these images restore neither the Electron archive nor the root store.
-          cache-electron-package: ${{ startsWith(matrix.runner, 'blacksmith-') }}
-          cache-pnpm-store: ${{ startsWith(matrix.runner, 'blacksmith-') }}
+          cache-electron-package: 'false'
+          cache-pnpm-store: 'false'
           cache-pnpm-store-lookup-only: 'true'
-      - name: Populate shared Electron archive
-        if: startsWith(matrix.runner, 'blacksmith-')
-        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
       - name: Verify native cache is usable
         run: node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --check-only
 
@@ -268,13 +259,9 @@ jobs:
   warm-linux-package-fixtures:
     if: github.event_name != 'pull_request'
     concurrency:
-      group: ci-cache-warmup-linux-package-fixtures-${{ matrix.runner }}-${{ github.event.pull_request.number || github.ref }}
+      group: ci-cache-warmup-linux-package-fixtures-ubuntu-24.04-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [blacksmith-4vcpu-ubuntu-2404, ubuntu-24.04]
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'

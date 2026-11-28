@@ -7,9 +7,9 @@ import type { DiffComment } from '../../../../../src/shared/file-review/diff-com
 import type { MobileDiffLine } from '../diff-state/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../../../files/session-documents/mobile-file-syntax'
 import { mobileDiffLineNumber, mobileDiffLinePrefix } from '../diff-state/mobile-diff-format'
-import { colors, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { MobileSyntaxSegments } from '../../../components/code-presentation/MobileSyntaxSegments'
 
 // Each pickable line row carries this id, so a drag finds the row under the finger in the page itself.
@@ -19,12 +19,12 @@ type Props = {
   line: MobileHighlightedDiffLine<MobileDiffLine>
   comments: readonly DiffComment[]
   staleCommentIds: ReadonlySet<string>
-  /** Part of the lines picked for a note. */
+  /** Part of the picked lines. */
   selected?: boolean
   /** Fits the file's longest line number, so every row's gutter lines up. */
   numberWidth: number
   /** Absent where lines take no notes, e.g. a past commit's files. */
-  onAddNote?: (lineNumber: number) => void
+  onSelectLine?: (lineNumber: number) => void
   onEditNote: (comment: DiffComment) => void
 }
 
@@ -55,13 +55,14 @@ export const MobileDiffReviewLine = memo(function MobileDiffReviewLine({
   staleCommentIds,
   selected = false,
   numberWidth,
-  onAddNote,
+  onSelectLine,
   onEditNote
 }: Props) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const lineNumber = mobileDiffLineNumber(line)
-  const canComment = onAddNote !== undefined && canCommentOnLine(line)
+  const canComment = onSelectLine !== undefined && canCommentOnLine(line)
   const ground = [
     line.kind === 'add' && styles.addedRow,
     line.kind === 'delete' && styles.deletedRow,
@@ -106,13 +107,14 @@ export const MobileDiffReviewLine = memo(function MobileDiffReviewLine({
         disabled={!canComment}
         onPress={() => {
           if (canComment && line.newLineNumber !== undefined) {
-            onAddNote?.(line.newLineNumber)
+            onSelectLine?.(line.newLineNumber)
           }
         }}
         accessibilityRole={canComment ? 'button' : 'text'}
+        accessibilityState={canComment ? { selected } : undefined}
         accessibilityLabel={
           canComment && line.newLineNumber !== undefined
-            ? t('components.diffReviewLine.addNoteOnLine', 'Add note on line {{number}}', {
+            ? t('components.diffReviewLine.selectLine', 'Select line {{number}}', {
                 number: line.newLineNumber
               })
             : accessibilityLabelForLine(line, t)
@@ -161,6 +163,7 @@ export function MobileDiffReviewCharWidthProbe({
 }: {
   onCharWidth: (width: number) => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Text
       aria-hidden
@@ -196,7 +199,7 @@ const webPinned: ViewStyle =
     : {}
 
 // Use 18px lineHeight alone without padding/minHeight to match desktop diff density (STA-1239).
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'stretch'
@@ -261,7 +264,7 @@ const styles = themedStyleSheet(() => ({
     paddingRight: 10
   },
   codePressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.translucentFill
   },
   codeText: {
     ...(Platform.OS === 'web' ? { whiteSpace: 'pre' as const } : {}),

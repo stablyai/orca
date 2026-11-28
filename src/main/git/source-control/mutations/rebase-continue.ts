@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import type {
   ContinueRebaseAction,
@@ -17,6 +17,7 @@ import { trackGitOperationWriters } from '../../command-runner/git-writer-lifeti
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
 import { readRebaseIndexObservation } from './rebase-index-observation'
 import { resolveGitDir } from '../resolve-git-dir'
+import { readRebaseDirIdentity } from './operation-run-identity'
 import { AUTOSTASH_REAPPLY_CONFLICT, detectConflictOperation } from './git-conflict-operation'
 import { takeOrcaRebaseProvenance } from './orca-rebase-provenance'
 import { joinGitOutput, readGitErrorOutput } from './git-command-output'
@@ -232,20 +233,6 @@ export async function readRebaseRunIdentity(
   options: GitRuntimeOptions
 ): Promise<string | null> {
   return readRebaseDirIdentity(await resolveGitDir(worktreePath, options))
-}
-
-async function readRebaseDirIdentity(gitDir: string): Promise<string | null> {
-  for (const dir of ['rebase-merge', 'rebase-apply']) {
-    try {
-      const info = await stat(path.join(gitDir, dir), { bigint: true })
-      // Never ctime: Git adds and removes files in this dir on every step. Birth time is 0 where
-      // the filesystem lacks it, leaving the inode alone to tell runs apart.
-      return `${dir}:${info.ino}:${info.birthtimeNs}`
-    } catch {
-      // Only one backend's directory exists.
-    }
-  }
-  return null
 }
 
 async function readHead(worktreePath: string, options: GitRuntimeOptions): Promise<string | null> {

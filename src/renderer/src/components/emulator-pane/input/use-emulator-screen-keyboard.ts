@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { syncSimulatorKeyboardLayout, typeEmulatorText } from './emulator-keyboard-runtime'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import type { ServeSimKeyboardFrame } from '../../../../../shared/emulator/emulator-keyboard-frame'
 import { sendAndroidKey } from './android-keyboard-input'
@@ -47,6 +47,7 @@ export function useEmulatorScreenKeyboard({
   const pasteRequestIdRef = useRef(0)
   // True once main has put the simulator's hardware layout on the Mac's, so physical keys type what the Mac key shows.
   const physicalKeysRef = useRef(false)
+  const printableAsTextRef = useRef(false)
   const layoutSyncIdRef = useRef(0)
   const [keyboardCaptureActive, setKeyboardCaptureActive] = useState(false)
 
@@ -54,13 +55,13 @@ export function useEmulatorScreenKeyboard({
   const [heldInput] = useState(() => new HeldSimulatorInput())
   const simulatorSinks = useMemo<HeldSimulatorInputSinks>(
     () => ({
-      keyFrames: (press) => simulatorKeyFrames(press, physicalKeysRef.current),
+      keyFrames: (press) =>
+        simulatorKeyFrames(press, physicalKeysRef.current, printableAsTextRef.current),
       sendFrames: (frames) =>
         captureActiveRef.current && sendKeyboardFrames(frames)
           ? (frames.length - 1) * KEYBOARD_FRAME_DELAY_MS
           : null,
-      typeText: (text) =>
-        callRuntimeRpc({ kind: 'local' }, 'emulator.type', { text, worktree: worktreeId })
+      typeText: (text) => typeEmulatorText(worktreeId, text)
     }),
     [sendKeyboardFrames, worktreeId]
   )
@@ -81,20 +82,14 @@ export function useEmulatorScreenKeyboard({
     heldInput.startSync()
     // A dead key the simulator took under the old layout no longer owns the Mac's next composition.
     physicalDeadKeyRef.current = false
-    void callRuntimeRpc<{ physicalKeys: boolean }>(
-      { kind: 'local' },
-      'emulator.syncKeyboardLayout',
-      {
-        worktree: worktreeId
-      }
-    )
-      .then((result) => result.physicalKeys === true)
-      .catch(() => false)
-      .then((physicalKeys) => {
+    void syncSimulatorKeyboardLayout(worktreeId)
+      .catch(() => ({ physicalKeys: false, printableAsText: false }))
+      .then((layout) => {
         if (syncId !== layoutSyncIdRef.current) {
           return
         }
-        physicalKeysRef.current = physicalKeys
+        physicalKeysRef.current = layout.physicalKeys
+        printableAsTextRef.current = layout.printableAsText
         heldInput.finishSync(simulatorSinks)
       })
   }, [heldInput, physicalDeadKeyRef, scrcpyKeyboard, simulatorSinks, worktreeId])
@@ -279,11 +274,7 @@ export function useEmulatorScreenKeyboard({
         send: scrcpyKeyboard
           ? scrcpyKeyboard.pasteText
           : (value) =>
-              callRuntimeRpc({ kind: 'local' }, 'emulator.type', {
-                paste: true,
-                text: value,
-                worktree: worktreeId
-              })
+              typeEmulatorText(worktreeId, value, true)
                 .then(() => true)
                 .catch(() => false),
         text

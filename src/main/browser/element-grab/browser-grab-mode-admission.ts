@@ -84,3 +84,12 @@ export function disposeGrabModeStateForPage(browserPageId: string): void {
   }
   grabModeOperationByPageId.delete(browserPageId)
 }
+
+export function resetGrabModeState(): void {
+  grabModeOwners.clear()
+  grabModeIntents.clear()
+  for (const state of grabModeOperationByPageId.values()) {
+    retireGrabModeAdmission(state)
+  }
+  grabModeOperationByPageId.clear()
+}

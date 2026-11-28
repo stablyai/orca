@@ -9,18 +9,19 @@ import { MobileNativeChatBotIdentityContext } from '../session/native-chat/mobil
 import { MobileNativeChatRowOverlaysHost } from '../session/native-chat/transcript/message-actions/MobileNativeChatRowOverlaysHost'
 import { MobileNativeChatMessage } from '../session/native-chat/transcript/messages/MobileNativeChatMessage'
 import { MobileNativeChatTurnStatus } from '../session/native-chat/transcript/messages/MobileNativeChatTurnStatus'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import {
   MobileNativeChatEventName,
   MobileNativeChatEventRow
 } from '../session/native-chat/transcript/messages/MobileNativeChatEventRow'
-import { styles as messageStyles } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
-import { groupStyles as styles } from './mobile-bot-group-styles'
+import { stylesSheet } from '../session/native-chat/transcript/messages/mobile-native-chat-message-styles'
+import { groupStylesSheet } from './mobile-bot-group-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export function MobileBotGroupRemoteAsk({ ask }: { ask: BotGroupRemoteAsk }) {
-  useMobileColorScheme()
+  const messageStyles = useThemedStyles(stylesSheet)
+  const styles = useThemedStyles(groupStylesSheet)
   const t = useMobileTranslation()
   const { answer, status, detail, shortened } = botGroupRemoteAskLines(ask, t)
   const conversation = useMemo(

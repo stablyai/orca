@@ -159,11 +159,12 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
       stale = true
     }
   }, [client, tasksSupported, workspaceCreateDraft, workspaceCreateTargetConnectionId])
-  return Object.assign(model, {
+  return {
+    ...model,
     startNewWorkspaceSparsePreset,
     startEditWorkspaceSparsePreset,
     saveWorkspaceSparsePreset
-  })
+  }
 }
 
 export type WorkspaceSparseActionsModel = ReturnType<typeof useMobileTasksWorkspaceSparseActions>

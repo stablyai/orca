@@ -38,8 +38,12 @@ export function mergeWorktreeMetaForWrite(
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentBaseMutation,
   identity?: WorktreeMetaIdentity
 ): WorktreeMeta {
-  const { diffCommentsBase: _diffCommentsBase, ...metaUpdates } = updates
-  if (metaUpdates.diffComments !== undefined) {
+  const {
+    diffCommentsBase: _diffCommentsBase,
+    deliveredDiffCommentSnapshots,
+    ...metaUpdates
+  } = updates
+  if (metaUpdates.diffComments !== undefined || deliveredDiffCommentSnapshots !== undefined) {
     metaUpdates.diffComments = applyDiffCommentWrite(existing?.diffComments, updates)
   }
   const normalizedUpdates = normalizeWorkspaceAttachmentUpdate(existing, metaUpdates)

@@ -7,6 +7,7 @@ import {
 import { botItemQuestionPairing } from './bot-item-question-answers'
 import type { BotItemEvent } from './bot-items'
 import {
+  botItemAnswer,
   botItemAnswerWords,
   botItemAnswersText,
   botItemNamedAnswers,
@@ -53,6 +54,39 @@ it('shows each posted option on its own question when their headings and options
   expect(shape.decisions.map((_, index) => botItemAnswerWords(shape, index, reply))).toEqual([
     'Yes',
     'No'
+  ])
+})
+
+it('recognizes a saved option whose spaces were collapsed when sent', () => {
+  const shape = botItemQuestionShape({
+    ask: {
+      questions: [
+        { prompt: 'Who checks the route?', options: [] },
+        { prompt: 'When?', options: [{ label: 'At  *sunrise*' }] }
+      ]
+    }
+  })
+  expect(botItemAnswer(shape, 1, { text: 'When? → At *sunrise*' })).toEqual({
+    words: 'At *sunrise*',
+    picked: true
+  })
+})
+
+it('reads each line of a sent answer against its own question once option spaces collapse', () => {
+  const shape = botItemQuestionShape({
+    ask: {
+      questions: [
+        { prompt: 'Who?', options: [{ label: 'The  *lead*' }] },
+        { prompt: 'When?', options: [{ label: 'At  *sunrise*' }] },
+        { prompt: 'Where?', options: [{ label: 'The  *pass*' }] }
+      ]
+    }
+  })
+  const text = botItemAnswersText(shape, ['The  *lead*', 'At  *sunrise*', 'The *lead*'])
+  expect(shape.decisions.map((_, index) => botItemAnswer(shape, index, { text }))).toEqual([
+    { words: 'The *lead*', picked: true },
+    { words: 'At *sunrise*', picked: true },
+    { words: 'The *lead*', picked: false }
   ])
 })
 

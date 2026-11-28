@@ -5,7 +5,10 @@ import type {
 } from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { splitQualifiedPluginKey } from '../../../../../shared/plugins/catalog/plugin-marketplace'
-import { pluginRepositoryOrigin } from '../../../../../shared/plugins/catalog/plugin-repository-link'
+import {
+  pluginInstallTrustee,
+  pluginRepositoryOrigin
+} from '../../../../../shared/plugins/catalog/plugin-repository-link'
 import { gitUrlPluginPublisher } from '../../../../../shared/plugins/installation/plugin-publisher-derivation'
 import { pluginPointsFromManifest, pluginTrust } from './plugin-access-profile'
 import { pluginTrustWarnings } from './plugin-consent-copy'
@@ -23,7 +26,8 @@ export type PluginInstallTrustKind =
 
 export type PluginInstallTrustPrompt = {
   kind: PluginInstallTrustKind
-  /** Who the reader must trust: the repository owner Orca parsed, else the derived publisher. */
+  /** Who the reader must trust: the repository owner Orca parsed, else the derived publisher;
+   *  the publisher for an Orca-hosted mirror in Orca's community catalog. */
   trustee: string
   /** The publisher Orca derives from where it installs from, never the manifest's claim. */
   publisher: string | null
@@ -70,7 +74,12 @@ export function catalogInstallTrustPrompt(
           : 'content'
   return {
     kind,
-    trustee: origin?.owner ?? publisher ?? listing.pluginKey,
+    trustee:
+      pluginInstallTrustee({
+        url: listing.source.url,
+        publisher,
+        catalogUrl: listing.marketplaceUrl ?? null
+      }) ?? listing.pluginKey,
     publisher,
     repository: origin?.repository ?? listing.source.url,
     location: listing.marketplaceName || null,

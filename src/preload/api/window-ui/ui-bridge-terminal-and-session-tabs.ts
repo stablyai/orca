@@ -200,11 +200,16 @@ export const uiTerminalAndSessionTabsApi = {
     return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
   },
   onFocusEditorTab: (
-    callback: (data: { tabId: string; worktreeId: string; userInitiated?: boolean }) => void
+    callback: (data: {
+      tabId: string
+      worktreeId: string
+      paneKey?: string
+      userInitiated?: boolean
+    }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { tabId: string; worktreeId: string; userInitiated?: boolean }
+      data: { tabId: string; worktreeId: string; paneKey?: string; userInitiated?: boolean }
     ) => callback(data)
     ipcRenderer.on('ui:focusEditorTab', listener)
     return () => ipcRenderer.removeListener('ui:focusEditorTab', listener)

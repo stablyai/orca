@@ -9,6 +9,7 @@ import type {
   WslMoveProgressEvent,
   WslMoveProgressStep
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
+import { joinSentences } from '../../../../shared/text/sentence-joining'
 import { formatWslMoveBytes, wslMoveStepLabel } from './wsl-move-copy'
 
 // 'finishing' is the tail of the switch on this desktop; the stepper shows it under Switching.
@@ -83,29 +84,31 @@ export function WslMoveProgressBody({
         </div>
       ) : null}
       <p className="text-xs text-muted-foreground">
-        {cancel === 'too-late'
-          ? t(
-              'wslMove.progress.tooLate',
-              'Too late to cancel: the host is already switching over. Keep Orca open until it finishes.'
-            )
-          : !cancellable
+        {joinSentences([
+          cancel === 'too-late'
             ? t(
-                'wslMove.progress.switching',
-                'The switch cannot be cancelled. Keep Orca open until it finishes.'
+                'wslMove.progress.tooLate',
+                'Too late to cancel: the host is already switching over. Keep Orca open until it finishes.'
               )
-            : current > 0
+            : !cancellable
               ? t(
-                  'wslMove.progress.readOnly',
-                  'These projects are read-only while they move. You can cancel until the switch starts.'
+                  'wslMove.progress.switching',
+                  'The switch cannot be cancelled. Keep Orca open until it finishes.'
                 )
-              : t(
-                  'wslMove.progress.cancelUntilSwitch',
-                  'You can cancel until the switch starts.'
-                )}{' '}
-        {t(
-          'wslMove.progress.closeKeepsGoing',
-          'Closing this dialog does not stop the move; it opens again when the move ends.'
-        )}
+              : current > 0
+                ? t(
+                    'wslMove.progress.readOnly',
+                    'These projects are read-only while they move. You can cancel until the switch starts.'
+                  )
+                : t(
+                    'wslMove.progress.cancelUntilSwitch',
+                    'You can cancel until the switch starts.'
+                  ),
+          t(
+            'wslMove.progress.closeKeepsGoing',
+            'Closing this dialog does not stop the move; it opens again when the move ends.'
+          )
+        ])}
       </p>
       <DialogFooter>
         <Button

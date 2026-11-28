@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { classifyRemotePairingHostname } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import { joinSentences } from '../../../../../../shared/text/sentence-joining'
+import type { RemoteServerUpdateEntry } from '../../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {
@@ -63,21 +64,23 @@ export function RuntimeServerRowDetails({
       {lead ? <p className="text-foreground">{lead}</p> : null}
       {unreachable ? (
         <p className="text-muted-foreground">
-          {t(
-            'auto.components.settings.serverList.unreachableHint',
-            'Check that Orca is running on the server and that this computer can reach its address.'
-          )}
-          {kind === 'tailscale'
-            ? ` ${t(
-                'auto.components.settings.serverList.tailscaleTip',
-                'This is a Tailscale address, so both computers need to be signed in to the same tailnet.'
-              )}`
-            : kind === 'loopback'
-              ? ` ${t(
-                  'auto.components.settings.serverList.loopbackTip',
-                  'A 127.0.0.1 address works only through an SSH tunnel.'
-                )}`
-              : ''}
+          {joinSentences([
+            t(
+              'auto.components.settings.serverList.unreachableHint',
+              'Check that Orca is running on the server and that this computer can reach its address.'
+            ),
+            kind === 'tailscale'
+              ? t(
+                  'auto.components.settings.serverList.tailscaleTip',
+                  'This is a Tailscale address, so both computers need to be signed in to the same tailnet.'
+                )
+              : kind === 'loopback'
+                ? t(
+                    'auto.components.settings.serverList.loopbackTip',
+                    'A 127.0.0.1 address works only through an SSH tunnel.'
+                  )
+                : ''
+          ])}
         </p>
       ) : null}
       {remoteUpdate?.phase === 'manual' ? (
