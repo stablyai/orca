@@ -7,6 +7,7 @@ import {
   parseNativeHangArtifact,
   type NativeHangArtifact
 } from './native-hang-report'
+import { openDirectory } from '../../shared/open-directory'
 
 const CAPTURE_ID = /^hang-(\d{1,16})-[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/
 const CAPTURE_FILE = /^(hang-\d{1,16}-[\da-f-]{36})(\.(?:recovered|seen))?\.json$/
@@ -32,7 +33,7 @@ async function entries(directory: string): Promise<string[] | null> {
     if (!(await fs.lstat(directory)).isDirectory()) {
       return null
     }
-    const handle = await fs.opendir(directory)
+    const handle = await openDirectory(directory)
     try {
       const names: string[] = []
       while (names.length < 64) {
