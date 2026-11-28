@@ -3,8 +3,10 @@
 // Builder owns declarations and manifest checks MobileWebBundleRouteSchema. Haptics census derives required token from every reachable seam.
 // Every route offers the device store; without it (an older shell) the page keeps its data in memory only.
 const DEVICE_STORE_GRANT = 'native.store.rows'
+// Every route lists relayed servers; with this a page hides those the phone pairs with directly.
+const DIRECT_PAIRINGS_GRANT = 'native.pairings.installations'
 
-export const MOBILE_WEB_PAGE_ROUTES = [
+const DECLARED_PAGE_ROUTES = [
   // Home needs navigate/storage for session hops and app pins; shared protocol-wall Update action needs externalLink. Wide ownsHostArea permits sidebar.
   // New bot's import copies the message for the old bot; Shared links' Copy link writes and From a link's Paste reads.
   {
@@ -154,3 +156,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     ]
   }
 ]
+
+export const MOBILE_WEB_PAGE_ROUTES = DECLARED_PAGE_ROUTES.map((route) => ({
+  ...route,
+  optionalGrants: [...(route.optionalGrants ?? []), DIRECT_PAIRINGS_GRANT]
+}))
