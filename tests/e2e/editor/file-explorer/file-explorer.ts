@@ -50,19 +50,19 @@ export async function clickFileInExplorer(
     }
 
     const separator = worktree.path.includes('\\') ? '\\' : '/'
+    const languages = new Map([
+      ['md', 'markdown'],
+      ['json', 'json'],
+      ['ts', 'typescript'],
+      ['java', 'java']
+    ])
     for (const fileName of candidateNames) {
-      const filePath = `${worktree.path}${separator}${fileName}`
+      const filePath = `${worktree.path}${separator}${fileName.split('/').join(separator)}`
       state.openFile({
         filePath,
         relativePath: fileName,
         worktreeId: activeWorktreeId,
-        language: fileName.endsWith('.md')
-          ? 'markdown'
-          : fileName.endsWith('.json')
-            ? 'json'
-            : fileName.endsWith('.ts')
-              ? 'typescript'
-              : 'plaintext',
+        language: languages.get(fileName.split('.').at(-1) ?? '') ?? 'plaintext',
         mode: 'edit'
       })
       return fileName
