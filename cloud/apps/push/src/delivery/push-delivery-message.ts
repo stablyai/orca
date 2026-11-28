@@ -12,6 +12,8 @@ export type PushOrcaData = {
   notificationEpoch: string
   source: string
   agentState: string | null
+  category?: 'orca.reply'
+  replyTarget?: PushNotification['replyTarget']
 }
 
 export type PushDelivery = {
@@ -55,6 +57,7 @@ export function buildPushDelivery(input: {
     orca: {
       ...(notification.kind ? { kind: notification.kind } : {}),
       hostFingerprint,
+      ...(notification.replyTarget ? { replyTarget: notification.replyTarget, category: notification.category } : {}),
       ...(notification.paneKey === undefined ? {} : { paneKey: notification.paneKey }),
       ...(notification.worktreeId === undefined ? {} : { worktreeId: notification.worktreeId }),
       ...(notification.executionHost === undefined

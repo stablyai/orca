@@ -9,6 +9,7 @@ type TerminalSendRefusalParams = {
   enter?: unknown
   interrupt?: unknown
   requireAgentStatus?: unknown
+  requireEmptyDraft?: unknown
   resolvedLaunchDraft?: { text?: unknown }
 }
 
@@ -34,6 +35,7 @@ function isSendParams(params: unknown): params is TerminalSendRefusalParams {
 export function isGuardedCombinedTerminalSend(params: TerminalSendRefusalParams): boolean {
   return (
     params.requireAgentStatus === 'sendable' &&
+    params.requireEmptyDraft !== true &&
     typeof params.text === 'string' &&
     params.text.length > 0 &&
     (params.enter === true || params.interrupt === true)

@@ -7,26 +7,28 @@ import {
   useMobileNativeChatDraft
 } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { appendReturnedDraftText } from '../../../src/shared/native-chat/input/drafts/returned-draft-text'
+import { useNotificationReplyChatDraft } from '../notifications/reply/use-notification-reply-chat-draft'
 import { loadMobileNativeChatDrafts } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-persistence'
 
 // A group's rooms keep their drafts as chat tabs (mobileNativeChatScopeKey's shape) of a workspace named
 // for the group, which no worktree id takes; one row per group, so a page deleting one rewrites no other's.
-function groupDrafts(groupId: string): string {
+export function mobileBotGroupDraftWorkspaceId(groupId: string): string {
   return `bot-groups:${groupId}`
 }
 
 /** A room's draft key, a chat tab's scope so it is saved like one: the group's id for its original
  *  room, a thread's id for that thread. */
 export function mobileBotGroupDraftKey(hostId: string, groupId: string, roomId: string): string {
-  return `${hostId}\0${groupDrafts(groupId)}\0${roomId}`
+  return `${hostId}\0${mobileBotGroupDraftWorkspaceId(groupId)}\0${roomId}`
 }
 
 /** A group room's composer text and photos, kept and saved with chat's drafts, so they outlive the
  *  room's page. */
 export function useMobileBotGroupDraft(hostId: string, groupId: string, roomId: string) {
   const key = mobileBotGroupDraftKey(hostId, groupId, roomId)
+  useNotificationReplyChatDraft(hostId, mobileBotGroupDraftWorkspaceId(groupId), key)
   useEffect(() => {
-    void loadMobileNativeChatDrafts(hostId, groupDrafts(groupId))
+    void loadMobileNativeChatDrafts(hostId, mobileBotGroupDraftWorkspaceId(groupId))
   }, [hostId, groupId])
   const text = useMobileNativeChatDraft(key)
   const editGenerationRef = useRef(0)

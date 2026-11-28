@@ -17,6 +17,7 @@ import {
   type PushGatewayResult
 } from './push-gateway-response'
 import { PushGatewaySession } from './push-gateway-session'
+import type { NotificationReplyTarget } from '../../../shared/notifications/notification-reply'
 
 const RegisterResponseSchema = lazyZodSchema(() =>
   z.object({ registrationId: z.string().min(1).max(512) })
@@ -53,6 +54,8 @@ export type PushSendNotification = {
   worktreeId?: string
   paneKey?: string
   executionHost?: `runtime:${string}`
+  category?: 'orca.reply'
+  replyTarget?: NotificationReplyTarget
 }
 
 type PushGatewayClientOptions = {
@@ -120,6 +123,26 @@ export class PushGatewayClient {
     await cancelUnreadResponseBody(response.response)
     // A gateway that no longer knows the registration is as deleted as it gets.
     return response.response.ok || response.response.status === 404
+  }
+
+  async readReplyCategory(): Promise<boolean> {
+    try {
+      const response = await this.fetchImpl(`${this.origin}/v1/capabilities`, {
+        method: 'GET',
+        redirect: 'error',
+        signal: AbortSignal.timeout(PUSH_REQUEST_DEADLINE_MS)
+      })
+      const body: unknown = JSON.parse(await response.text())
+      return (
+        response.ok &&
+        typeof body === 'object' &&
+        body !== null &&
+        'replyCategory' in body &&
+        body.replyCategory === true
+      )
+    } catch {
+      return false
+    }
   }
 
   async send(input: {

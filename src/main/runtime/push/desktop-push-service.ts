@@ -11,11 +11,13 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { PushDispatcher, type PushCoverageRequest } from './push-dispatcher'
 import { PushBadgeSync } from './push-badge-sync'
-import type { ExecutionHostPushCoverage } from './push-burst-slots'
+import type { DesktopPushServiceOptions } from './desktop-push-service-options'
 import { mobilePushTokenDigest } from './push-token-digest'
 import { pushTestResult, unregisteredTestResult } from './push-test-result'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
+import { notificationReplyTarget } from './notification-reply-target'
+import { PushReplyCategoryGate } from './push-reply-category-gate'
 import {
   readMobilePushDeliveryMode,
   type MobilePushDeliveryMode
@@ -26,20 +28,6 @@ const OUTBOX_RETRY_BASE_MS = 30_000
 const OUTBOX_RETRY_MAX_MS = 10 * 60_000
 
 type RegisterStorageFailure = 'not_mobile' | 'registration_storage_failed'
-
-type DesktopPushServiceOptions = {
-  runtime: OrcaRuntimeService
-  runtimeRpc: OrcaRuntimeRpcServer
-  gatewayUrl: string
-  /** Inject a gateway client for tests. */
-  client?: PushGatewayClient
-  /** Inject outbox backoff scheduling for tests. */
-  scheduleRetry?: (run: () => void, delayMs: number) => void
-  /** Inject the per-device registration bucket for tests. */
-  registerThrottle?: PushRegisterThrottle
-  /** Asks a mirrored session's execution host which of this host's phones it pushes itself. */
-  coverage?: ExecutionHostPushCoverage
-}
 
 export class DesktopPushService {
   private readonly runtime: OrcaRuntimeService
@@ -75,6 +63,8 @@ export class DesktopPushService {
       client,
       registry,
       deliveryMode: this.deliveryMode,
+      replyFor: (event) => notificationReplyTarget(this.runtime, event),
+      replyCategory: new PushReplyCategoryGate(() => client.readReplyCategory()),
       coverage: options.coverage
     })
     this.badgeSync = new PushBadgeSync({ client, registry, runtime: options.runtime })

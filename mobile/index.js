@@ -2,9 +2,12 @@
 import './src/i18n/plural-rules-polyfill'
 // Headless notification launches do not mount the router layout.
 import './src/notifications/dismissal/push-background-dismissal'
+import { registerNotificationReplyTask } from './src/notifications/reply/notification-reply-background'
+import './src/notifications/reply/android-background-task-timers'
 import { loadPairedE2EENativeBindings } from './src/transport/encryption/paired-e2ee-native-bindings'
 import { providePairedE2EENativeBindings } from './src/transport/encryption/paired-e2ee-native-codec'
 import 'expo-router/entry'
 
 // Why here: only the app entry may load native modules; tests and desktop code reach the transport.
 providePairedE2EENativeBindings(loadPairedE2EENativeBindings)
+void registerNotificationReplyTask().catch(() => {})

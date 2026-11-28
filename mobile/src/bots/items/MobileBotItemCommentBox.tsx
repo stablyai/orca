@@ -1,3 +1,4 @@
+import { useNotificationReplyDrafts } from '../../notifications/reply/use-notification-reply-drafts'
 // The item page's comment box, docked at the bottom: it sends with the chat composer's arrow, and a sent
 // comment shows in Activity at once while it goes (one that fails stays there with Retry). Closing the
 // panel keeps each item's draft, photos too, for the session. Offline, Comment waits. While the agent's
@@ -45,6 +46,9 @@ import {
   botItemCommentDraftKey,
   botItemCommentDrafts as drafts,
   writeBotItemCommentDraft,
+  loadBotItemCommentDraft,
+  persistBotItemCommentDraft,
+  returnBotItemCommentDraft,
   shownBotItemCommentDrafts as shownDrafts
 } from './bot-item-comment-drafts'
 
@@ -100,6 +104,17 @@ export function MobileBotItemCommentBox({
   const t = useMobileTranslation()
   const mic = useContext(BotItemCommentMicContext)
   const key = botItemCommentDraftKey(hostId, item.uid)
+  const restoreNotificationDraft = useCallback(
+    async (text: string) => {
+      if (!(await loadBotItemCommentDraft(key))) {
+        return false
+      }
+      returnBotItemCommentDraft(key, text)
+      return persistBotItemCommentDraft(key)
+    },
+    [key]
+  )
+  useNotificationReplyDrafts(key, restoreNotificationDraft)
   const [text, setTextState] = useState(() => drafts.get(key) ?? '')
   const quote = question && !replyMark.hidden ? question : null
   const [error, setError] = useState<string | null>(null)

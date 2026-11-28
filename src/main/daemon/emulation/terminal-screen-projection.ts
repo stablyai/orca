@@ -1,4 +1,7 @@
-import { detectTerminalComposerDraft } from '../../../shared/terminal/input/terminal-composer-draft'
+import {
+  detectTerminalComposerDraft,
+  readTerminalComposerTypedText
+} from '../../../shared/terminal/input/terminal-composer-draft'
 import type { HeadlessEmulator } from './headless-emulator'
 import type { HeadlessTerminalRow } from './headless-terminal-rows'
 import type { RuntimeTerminalRowMetadata } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
@@ -63,7 +66,11 @@ export function projectTerminalTailLines(
   }
   return {
     ...projectTerminalRows(tail, limit),
-    ...(draft ? { draft: draft.text } : {})
+    ...(draft
+      ? { draft: draft.text }
+      : readTerminalComposerTypedText(emulator.getCursorLineContext()) === ''
+        ? { draft: '' }
+        : {})
   }
 }
 
@@ -88,7 +95,11 @@ export function projectTerminalVisibleLines(
   }
   return {
     ...projectTerminalRows(visible),
-    ...(draft ? { draft: draft.text } : {})
+    ...(draft
+      ? { draft: draft.text }
+      : readTerminalComposerTypedText(emulator.getCursorLineContext(undefined, options)) === ''
+        ? { draft: '' }
+        : {})
   }
 }
 
