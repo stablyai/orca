@@ -3,9 +3,30 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../../sqlite/sync-database'
-import { recordJournalConnectorReplies } from './journal-connector-replies'
-import { readJournalConnectorReplies } from './journal-connector-replies-read'
+import {
+  fillJournalConnectorReplies,
+  sentJournalConnectorReplies,
+  recordJournalConnectorReplies
+} from './journal-connector-replies'
+import {
+  readJournalConnectorReplies,
+  readOwedJournalConnectorReplies
+} from './journal-connector-replies-read'
 import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies-schema'
+import { migrateJournalDomainSchema } from '../database/journal-domain-migrations'
+import type { JournalOperationWindow } from '../journal-domain-operation-window'
+import { readOperationWindowItems } from '../journal-operation-window-rows'
+import { JournalSqlScope } from '../journal-sql-scope'
+import {
+  SlackAnswerPresentationSchema,
+  SLACK_PRESENTATION_UNCONFIRMED,
+  slackAnswerText
+} from '../../../../shared/connectors/slack-answer-presentation'
+import {
+  journalSlackAnswerPresentation,
+  prepareSlackAnswerPresentation,
+  pruneSlackAnswerPresentations
+} from './journal-slack-answer-presentation'
 
 let dir = ''
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
@@ -38,4 +59,119 @@ it('reads a row an older build left as the older quiet rule, and records new row
   )
   db.close()
   expect(rules).toEqual({ old: null, new: 'trailing' })
+})
+
+it('binds preparation to a running root turn and keeps the first filled presentation after reopen', () => {
+  dir = mkdtempSync(join(tmpdir(), 'orca-reply-schema-'))
+  const file = join(dir, 'journal.db')
+  const db = new Database(file)
+  migrateJournalDomainSchema(db)
+  const turn = { sessionId: 'chat-1', epoch: 'e', turnItemId: 'turn-1' }
+  db.exec(`INSERT INTO journal_items
+    (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,kind,lifecycle_state,payload_json)
+    VALUES('chat-1','e','turn-1',1,1,1,0,0,'turn','running','{}')`)
+  const presentation = SlackAnswerPresentationSchema.parse({
+    v: 1,
+    text: 'Compile took longest.',
+    visual: {
+      kind: 'table',
+      title: 'Build stages',
+      source: 'Build report',
+      columns: [{ label: 'Stage' }, { label: 'Time', unit: 's' }],
+      rows: [
+        ['Install', 14],
+        ['Compile', 87]
+      ]
+    }
+  })
+  expect(prepareSlackAnswerPresentation(db, { ...turn, epoch: 'older' }, presentation)).toBe(false)
+  expect(prepareSlackAnswerPresentation(db, turn, presentation, 1)).toBe(true)
+  db.exec(`UPDATE journal_items SET lifecycle_state='completed' WHERE item_id='turn-1'`)
+  expect(
+    prepareSlackAnswerPresentation(db, turn, { ...presentation, text: 'A later answer.' })
+  ).toBe(false)
+  recordJournalConnectorReplies(db, turn, 'm1', false, {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'What took the most time?' }],
+    connectorDelivery: {
+      account: 'a',
+      deliveryId: 'd',
+      conversation: { source: 'slack', externalId: 'slack:T1:C1:1.2' }
+    }
+  })
+  const first = {
+    account: 'a',
+    deliveryId: 'd',
+    answerDeliveryId: 'd',
+    turnItemId: turn.turnItemId,
+    outcome: 'answered' as const,
+    prose: slackAnswerText(presentation),
+    presentationTurn: turn
+  }
+  expect(fillJournalConnectorReplies(db, [first], 10)).toBe(1)
+  expect(
+    fillJournalConnectorReplies(
+      db,
+      [{ ...first, outcome: 'quiet', prose: undefined, presentationTurn: undefined }],
+      11
+    )
+  ).toBe(0)
+  // A prior build wrote the presentation but did not record preparation on the turn row.
+  db.exec('ALTER TABLE journal_items DROP COLUMN slack_answer_prepared')
+  db.close()
+
+  const reopened = new Database(file)
+  try {
+    migrateJournalDomainSchema(reopened)
+    const scope = new JournalSqlScope(reopened, turn.sessionId, turn.epoch)
+    const readPrepared = () => {
+      const answers: NonNullable<JournalOperationWindow['slackAnswers']> = []
+      readOperationWindowItems(scope, 0, {}, null, answers)
+      return answers
+    }
+    expect(readPrepared()).toEqual([['turn-1', presentation]])
+    expect(journalSlackAnswerPresentation(reopened, turn)).toEqual(presentation)
+    expect(readJournalConnectorReplies(reopened, 'chat-1')[0]?.fill?.presentation).toBeUndefined()
+    expect(readOwedJournalConnectorReplies(reopened, 'a', null, 1, true)[0]?.fill).toEqual({
+      outcome: 'answered',
+      answerDeliveryId: 'd',
+      turnItemId: 'turn-1',
+      prose: SLACK_PRESENTATION_UNCONFIRMED,
+      presentation,
+      filledAt: 10
+    })
+    expect(pruneSlackAnswerPresentations(reopened, 100, 50)).toEqual({ deleted: 0, more: false })
+    expect(journalSlackAnswerPresentation(reopened, turn)).toEqual(presentation)
+    sentJournalConnectorReplies(reopened, [{ account: 'a', deliveryId: 'd' }], 101)
+    recordJournalConnectorReplies(reopened, turn, 'unrelated', false, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'An unrelated pending request' }],
+      connectorDelivery: {
+        account: 'a',
+        deliveryId: 'unrelated',
+        conversation: { source: 'slack', externalId: 'slack:T1:C1:1.2' }
+      }
+    })
+    expect(pruneSlackAnswerPresentations(reopened, 150, 50)).toEqual({ deleted: 1, more: false })
+    expect(journalSlackAnswerPresentation(reopened, turn)).toBeUndefined()
+    expect(readPrepared()).toEqual([['turn-1', null]])
+    expect(
+      fillJournalConnectorReplies(
+        reopened,
+        [{ ...first, deliveryId: 'unrelated', answerDeliveryId: 'unrelated' }],
+        151
+      )
+    ).toBe(1)
+    expect(readOwedJournalConnectorReplies(reopened, 'a', null, 1, true)[0]?.fill).toEqual({
+      outcome: 'answered',
+      answerDeliveryId: 'unrelated',
+      turnItemId: 'turn-1',
+      prose: SLACK_PRESENTATION_UNCONFIRMED,
+      filledAt: 151
+    })
+  } finally {
+    reopened.close()
+  }
 })

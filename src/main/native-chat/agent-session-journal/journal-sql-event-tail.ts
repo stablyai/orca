@@ -2,6 +2,7 @@ import { appendJournalRequestEvent } from './journal-writer-request-events'
 import type Database from '../../sqlite/sync-database'
 import type { JournalDomainEventChanges } from './journal-domain-schema'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+import { pruneSlackAnswerPresentations } from './connector-replies/journal-slack-answer-presentation'
 
 export const JOURNAL_EVENT_HISTORY_MS = 24 * 60 * 60 * 1000
 const MAX_EVENT_SEQUENCES = 4096
@@ -72,9 +73,10 @@ export function pruneJournalSqlEventTail(
     compact.run(row.sequence, row.session_id, row.epoch)
     remove.run(row.session_id, row.epoch, row.sequence)
   }
+  const presentations = pruneSlackAnswerPresentations(db, now, JOURNAL_EVENT_HISTORY_MS)
   return {
     kind: 'event-tail',
-    deleted: expired.length,
-    more: expired.length === 50
+    deleted: expired.length + presentations.deleted,
+    more: expired.length === 50 || presentations.more
   }
 }

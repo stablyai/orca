@@ -22,6 +22,7 @@ import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/ag
 export type EndedTurnReplies = {
   sessionId: string
   turnItemId: string
+  journalEpoch?: string
   /** The deliveries the turn answered, opener first (connectorReplyTurnStamps). */
   stamps: readonly ConnectorReplyStamp[]
   /** The turn's opening message: a continuation fills only the rows its admission claimed. */
@@ -188,6 +189,14 @@ export function conversationReplyFill(
         silencedWhole: silencedWhole.get(conversation) === true
       })
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
+      const presentationTurn =
+        row.conversation.source === 'slack' &&
+        turn.bot &&
+        outcome === 'answered' &&
+        prose === turn.prose &&
+        turn.journalEpoch
+          ? { sessionId: turn.sessionId, epoch: turn.journalEpoch, turnItemId: turn.turnItemId }
+          : undefined
       fills.push({
         account: row.account,
         deliveryId: row.deliveryId,
@@ -196,6 +205,7 @@ export function conversationReplyFill(
         answerDeliveryId,
         turnItemId: turn.turnItemId,
         ...(prose ? { prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) } : {}),
+        ...(presentationTurn ? { presentationTurn } : {}),
         ...(outcome === 'failed' && turn.failure ? { failure: turn.failure } : {}),
         ...(turn.links.length > 0 ? { links: turn.links } : {}),
         ...(outcome === 'answered' && turn.tookMs !== undefined ? { tookMs: turn.tookMs } : {}),

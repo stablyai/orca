@@ -13,6 +13,7 @@ import { readGoogleDefaultAccount } from '../../../google/google-credential-stor
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { CONNECTOR_ACT_METHOD } from './connector-act'
+import { CONNECTOR_SLACK_PRESENTATION_FEATURE } from '../../../../shared/connectors/slack-answer-presentation'
 
 type Workspaces = Pick<BotConnectorsView, 'workspaces' | 'workspacesNote'>
 
@@ -72,20 +73,29 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
                 ? places.message
                 : 'Orca Cloud could not list them.'
         }
+    const services = botConnectorServices(
+      bot,
+      {
+        gh,
+        server: orcaSignInServer(runtime),
+        linear: (await runtime.linearStatus()).connected,
+        google: (await getGoogleConnect()?.accounts()) ?? [],
+        googleApp: Boolean(await getGoogleConnect()?.client()),
+        googleDefault: getGoogleConnect() ? await readGoogleDefaultAccount() : { email: null }
+      },
+      sources
+    )
+    const slack = services.find((service) => service.source === 'slack' && service.signedIn)
+    if (
+      slack &&
+      runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_SLACK_PRESENTATION_FEATURE)
+    ) {
+      slack.detail =
+        'Native charts and tables are available for eligible replies and scheduled results.'
+    }
     return {
       bot: bot.name,
-      services: botConnectorServices(
-        bot,
-        {
-          gh,
-          server: orcaSignInServer(runtime),
-          linear: (await runtime.linearStatus()).connected,
-          google: (await getGoogleConnect()?.accounts()) ?? [],
-          googleApp: Boolean(await getGoogleConnect()?.client()),
-          googleDefault: getGoogleConnect() ? await readGoogleDefaultAccount() : { email: null }
-        },
-        sources
-      ),
+      services,
       ...workspaces
     }
   }

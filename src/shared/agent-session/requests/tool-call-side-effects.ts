@@ -196,6 +196,22 @@ const ORCA_READS: readonly (readonly string[])[] = [
 ]
 
 function orcaReads(args: readonly string[]): boolean {
+  if (args[0] === 'bot' && args[1] === 'reply') {
+    const flags = args.slice(2)
+    const index = flags.findIndex(
+      (arg) => arg === '--presentation-file' || arg.startsWith('--presentation-file=')
+    )
+    const separate = flags[index] === '--presentation-file'
+    const path = separate ? flags[index + 1] : flags[index]?.slice('--presentation-file='.length)
+    if (path && (!separate || !path.startsWith('-'))) {
+      flags.splice(index, separate ? 2 : 1)
+      return (
+        flags.includes('--prepare-final') &&
+        flags.every((flag) => flag === '--prepare-final' || flag === '--json')
+      )
+    }
+    return false
+  }
   return (
     !args.some((word) => /^--(join|download|out|offer)/.test(word)) &&
     ORCA_READS.some((path) => path.every((word, index) => args[index] === word))

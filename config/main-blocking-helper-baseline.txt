@@ -772,14 +772,12 @@
 4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-6 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker; +1 creates the operation-window send indexes (IF NOT EXISTS, one-shot) on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 2 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
-1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts
 1 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 4 src/main/native-chat/agent-session-journal/replay/journal-read-row.ts

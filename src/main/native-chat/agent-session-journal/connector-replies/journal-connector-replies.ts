@@ -1,6 +1,12 @@
 import type { ConnectorFailure } from '../../../../shared/connectors/connector-cloud-contract'
 import type Database from '../../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  SLACK_ANSWER_MAX_TEXT,
+  SLACK_PRESENTATION_UNCONFIRMED,
+  slackAnswerText
+} from '../../../../shared/connectors/slack-answer-presentation'
+import { journalSlackAnswerPreparation } from './journal-slack-answer-presentation'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   answersThroughOutbox,
@@ -109,11 +115,14 @@ export function fillJournalConnectorReplies(
 ): number {
   const fillWhere = (expect: string) =>
     db.prepare(`UPDATE journal_connector_replies SET outcome=?,answer_delivery_id=?,
-    turn_item_id=?,prose=?,failure_json=?,links_json=?,took_ms=?,turn_started_at=?,
+    turn_item_id=?,prose=CASE WHEN source='slack' AND ? THEN ? ELSE ? END,
+    has_presentation=CASE WHEN source='slack' AND ? THEN 1 END,
+    failure_json=?,links_json=?,took_ms=?,turn_started_at=?,
     tools_ran=COALESCE(?,tools_ran),filled_at=? WHERE account=? AND delivery_id=? AND outcome IS NULL AND ${expect}`)
   const open = fillWhere(EXPECT_OPEN)
   const claimed = fillWhere(EXPECT_CLAIMED)
   const owed = fillWhere(EXPECT_CUT)
+  const answerText = new Map<string, string | null | undefined>()
   let filled = 0
   for (const row of fills) {
     const expect = row.expect
@@ -123,12 +132,32 @@ export function fillJournalConnectorReplies(
         : 'claimMessageId' in expect
           ? [claimed, [expect.claimMessageId]]
           : [owed, [expect.cutTurnId]]
+    const { presentationTurn, prose } = row
+    let hasPresentation = false
+    if (
+      presentationTurn &&
+      row.outcome === 'answered' &&
+      prose &&
+      prose.length <= SLACK_ANSWER_MAX_TEXT &&
+      prose.includes('\nSource: ')
+    ) {
+      const key = JSON.stringify(presentationTurn)
+      if (!answerText.has(key)) {
+        const answer = journalSlackAnswerPreparation(db, presentationTurn)
+        answerText.set(key, answer ? slackAnswerText(answer) : answer)
+      }
+      const preparedText = answerText.get(key)
+      hasPresentation = preparedText === null || preparedText === prose
+    }
     filled += Number(
       fill.run(
         row.outcome,
         row.answerDeliveryId,
         row.turnItemId ?? null,
-        row.prose ?? null,
+        hasPresentation ? 1 : 0,
+        SLACK_PRESENTATION_UNCONFIRMED,
+        prose ?? null,
+        hasPresentation ? 1 : 0,
         failureJson(row.failure),
         row.links?.length ? JSON.stringify(row.links) : null,
         row.tookMs ?? null,

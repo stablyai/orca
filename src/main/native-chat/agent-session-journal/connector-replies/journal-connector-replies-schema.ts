@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
   answer_delivery_id TEXT,
   turn_item_id TEXT,
   prose TEXT,
+  has_presentation INTEGER,
   failure_json TEXT,
   links_json TEXT,
   filled_at INTEGER,
@@ -34,6 +35,18 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_connector_replies_open
   ON journal_connector_replies(session_id, outcome, sent_at);
+CREATE INDEX IF NOT EXISTS journal_connector_replies_owed
+  ON journal_connector_replies(account, delivery_id) WHERE outcome IS NOT NULL AND sent_at IS NULL;
+CREATE TABLE IF NOT EXISTS journal_slack_answer_presentations (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  turn_item_id TEXT NOT NULL,
+  presentation_json TEXT NOT NULL,
+  check_at INTEGER NOT NULL,
+  PRIMARY KEY(session_id, epoch, turn_item_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS journal_slack_answer_check_at
+  ON journal_slack_answer_presentations(check_at);
 `
 
 // Columns later builds added the same way, with no user_version change: an older build never reads
@@ -49,7 +62,8 @@ const ADDED_COLUMNS = [
   ['claim_message_id', 'TEXT'],
   ['quiet_rule', 'TEXT'],
   ['tools_ran', 'INTEGER'],
-  ['empty_retried', 'INTEGER']
+  ['empty_retried', 'INTEGER'],
+  ['has_presentation', 'INTEGER']
 ] as const
 
 /** Creates the table, and adds the columns a table an earlier build made lacks. */
@@ -70,5 +84,7 @@ export function ensureJournalConnectorRepliesSchema(db: {
   db.exec(`CREATE INDEX IF NOT EXISTS journal_connector_replies_message
     ON journal_connector_replies(session_id, epoch, message_id) WHERE outcome IS NULL;
   CREATE INDEX IF NOT EXISTS journal_connector_replies_claim
-    ON journal_connector_replies(claim_message_id) WHERE claim_message_id IS NOT NULL`)
+    ON journal_connector_replies(claim_message_id) WHERE claim_message_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS journal_connector_replies_presentation
+    ON journal_connector_replies(session_id,epoch,turn_item_id) WHERE has_presentation=1 AND sent_at IS NULL`)
 }

@@ -4,8 +4,14 @@ import {
   JOURNAL_CONNECTOR_REPLY_PROSE_BYTES,
   type JournalConnectorReplyRow
 } from '../../../../shared/agent-session/journal/journal-connector-reply'
+import type { SlackAnswerPresentation } from '../../../../shared/connectors/slack-answer-presentation'
+import { journalSlackAnswerPresentation } from './journal-slack-answer-presentation'
 
 // The reply outbox's reads (design item 125 §3), on the journal's reader workers.
+
+const REPLY_COLUMNS = `account,delivery_id,source,external_id,session_id,epoch,message_id,queued,
+  outcome,answer_delivery_id,turn_item_id,failure_json,links_json,took_ms,turn_started_at,filled_at,cut_turn_id,
+  cut_kind,claim_message_id,tools_ran,empty_retried`
 
 /** Rows not yet accepted: unfilled, or filled and unsent; one session's, or every one. */
 export function readJournalConnectorReplies(
@@ -14,9 +20,15 @@ export function readJournalConnectorReplies(
 ): JournalConnectorReplyRow[] {
   const rows =
     sessionId === undefined
-      ? db.prepare('SELECT * FROM journal_connector_replies WHERE sent_at IS NULL').all()
+      ? db
+          .prepare(
+            `SELECT ${REPLY_COLUMNS},prose,quiet_rule FROM journal_connector_replies WHERE sent_at IS NULL`
+          )
+          .all()
       : db
-          .prepare('SELECT * FROM journal_connector_replies WHERE session_id=? AND sent_at IS NULL')
+          .prepare(
+            `SELECT ${REPLY_COLUMNS},prose,quiet_rule FROM journal_connector_replies WHERE session_id=? AND sent_at IS NULL`
+          )
           .all(sessionId)
   return rows.map(replyRowOf)
 }
@@ -39,11 +51,6 @@ export function hasUnsentJournalConnectorReply(
   )
 }
 
-// Every column a row reads but prose, which a page reads bounded.
-const OWED_COLUMNS = `account,delivery_id,source,external_id,session_id,epoch,message_id,queued,
-  outcome,answer_delivery_id,turn_item_id,failure_json,links_json,took_ms,turn_started_at,filled_at,cut_turn_id,
-  cut_kind,claim_message_id,tools_ran,empty_retried`
-
 /** One page of an account's filled, unsent rows after a delivery id, in key order: what the outbox
  *  sends. Paged so a backlog never outgrows one reader reply. A prose over the cap (kept whole by
  *  an older build) comes cut to one character past it, so the sender still sees it as too long and
@@ -52,23 +59,50 @@ export function readOwedJournalConnectorReplies(
   db: Database.Database,
   account: string,
   after: string | null,
-  limit: number
+  limit: number,
+  includePresentations = false
 ): JournalConnectorReplyRow[] {
-  return db
-    .prepare(`SELECT ${OWED_COLUMNS},
+  const cursor = after === null ? '' : 'AND delivery_id>?'
+  const rows = db
+    .prepare(`SELECT ${REPLY_COLUMNS},${includePresentations ? 'has_presentation,' : ''}
       CASE WHEN octet_length(prose)>? THEN substr(prose,1,?) ELSE prose END AS prose
-      FROM journal_connector_replies
-      WHERE account=? AND (? IS NULL OR delivery_id>?) AND outcome IS NOT NULL AND sent_at IS NULL
+      FROM journal_connector_replies INDEXED BY journal_connector_replies_owed
+      WHERE account=? ${cursor} AND outcome IS NOT NULL AND sent_at IS NULL
       ORDER BY delivery_id LIMIT ?`)
     .all(
       JOURNAL_CONNECTOR_REPLY_PROSE_BYTES,
       JOURNAL_CONNECTOR_REPLY_PROSE_BYTES + 1,
       account,
-      after,
-      after,
+      ...(after === null ? [] : [after]),
       limit
     )
-    .map(replyRowOf)
+  const presentations = new Map<string, SlackAnswerPresentation | undefined>()
+  return rows.map((row) => {
+    const reply = replyRowOf(row)
+    const { fill } = reply
+    if (
+      !includePresentations ||
+      row.has_presentation !== 1 ||
+      reply.conversation.source !== 'slack' ||
+      fill?.outcome !== 'answered' ||
+      !fill.turnItemId
+    ) {
+      return reply
+    }
+    const { sessionId, epoch } = reply
+    const key = JSON.stringify([sessionId, epoch, fill.turnItemId])
+    if (!presentations.has(key)) {
+      presentations.set(
+        key,
+        journalSlackAnswerPresentation(db, { sessionId, epoch, turnItemId: fill.turnItemId })
+      )
+    }
+    const presentation = presentations.get(key)
+    if (presentation) {
+      fill.presentation = presentation
+    }
+    return reply
+  })
 }
 
 function replyRowOf(row: Record<string, unknown>): JournalConnectorReplyRow {

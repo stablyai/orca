@@ -9,6 +9,7 @@ import type { ConnectorWebhookTrigger } from '../connector-webhook-contract'
 import type { ConnectorWorkLink } from '../connector-work-link-contract'
 import type { AutomationConnectorEventTrigger } from '../automation-event-triggers'
 import type { JournalConnectorReplyOutcome } from '../agent-session/journal/journal-connector-reply'
+import type { SlackAnswerPresentation } from './slack-answer-presentation'
 import type { ConnectorActsFor, ConnectorConversation } from './connector-cloud-schemas'
 
 export {
@@ -192,6 +193,7 @@ export type ConnectorEvent =
       at: number
       stopReason: string | null
       lastAssistantMessage?: string
+      presentation?: SlackAnswerPresentation
       /** Chats only; terminal turns omit it. */
       origin?: ConnectorTurnOrigin
       /** Why a failed chat turn failed. */
@@ -216,6 +218,7 @@ export type ConnectorEvent =
       answerDeliveryId: string
       outcome: JournalConnectorReplyOutcome
       prose?: string
+      presentation?: SlackAnswerPresentation
       failure?: ConnectorFailure
       links?: ConnectorWorkLink[]
       turnId?: number

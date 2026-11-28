@@ -1,12 +1,30 @@
 // What a bot's host sends toward Slack, with local paths reduced to file names (slack-local-paths.ts).
 // Files, ids and every other field stay as they are; other sources get the text untouched.
+import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import type { ConnectorActionArgs } from '../../shared/connector-action-contract'
 import type { ConnectorReview } from '../../shared/connector-review-contract'
 import { isRefOf, slackChannelIdOf } from '../../shared/connector-place-names'
 import { redactLocalPaths } from '../../shared/connectors/slack-local-paths'
+import {
+  slackAnswerText,
+  type SlackAnswerPresentation
+} from '../../shared/connectors/slack-answer-presentation'
 
 export const isSlackConversation = (conversation: { source: string } | null | undefined): boolean =>
   conversation?.source === 'slack'
+
+export function matchingSlackPresentation(
+  presentation: SlackAnswerPresentation,
+  text: string
+): boolean {
+  return (
+    presentation.visual !== undefined &&
+    !isQuietBotResult(presentation.text) &&
+    !isQuietBotResult(text) &&
+    slackAnswerText(presentation) === text &&
+    redactLocalPaths(text) === text
+  )
+}
 
 /** A review's notes as Slack shows them; their paths are repo paths, which stay. */
 export function slackReview(review: ConnectorReview): ConnectorReview {

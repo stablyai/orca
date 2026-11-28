@@ -1,4 +1,5 @@
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import type { ConnectorMessageTiming } from '../../shared/connector-asker-prompt'
 import {
   conversationPlaceText,
@@ -8,6 +9,7 @@ import {
 } from '../../shared/connectors/external-conversation-link'
 import type {
   ConnectorAsker,
+  ConnectorEvent,
   ConnectorFailure
 } from '../../shared/connectors/connector-cloud-contract'
 
@@ -18,6 +20,16 @@ export type ConversationPane = {
   worktreeId: string
   paneKey: string
 }
+
+type WireTurnEnd = Extract<ConnectorEvent, { kind: 'turn-ended' }>
+export type ConversationTurnEnd = ConversationPane &
+  Omit<WireTurnEnd, 'conversation' | 'paneKey' | 'turnId' | 'stopReason'> & {
+    /** Null when the turn began before this watch. */
+    turnId: number | null
+    stopReason: AgentTurnOutcome | null
+    /** Host-only capacity reservation consumed when this run's turn end joins the connector. */
+    slackAnswerRunId?: string
+  }
 
 export function conversationPane(
   link: ExternalConversationLink,

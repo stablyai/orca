@@ -6,6 +6,11 @@ import {
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorToken, ConnectorTokenMint } from './connector-transport'
+import {
+  CONNECTOR_SLACK_PRESENTATION_EVENTS_PATH,
+  SLACK_PRESENTATION_EVENT_VERSION,
+  SLACK_PRESENTATION_TURN_END_VERSION
+} from '../../shared/connectors/slack-answer-presentation'
 
 export type Reply = { status: number; body?: unknown; headers?: Record<string, string> }
 
@@ -16,6 +21,10 @@ export class FakeConnectorCloud {
   readonly requests: { path: string; body: unknown; token: string | null }[] = []
   /** Forces a status on every request to these paths, e.g. 404 from an older cloud. */
   readonly forced = new Map<string, Reply>()
+  /** A mixed receiver still accepts ordinary events but requires a hello for rich ones. */
+  refusePresentedEvents = false
+  refusePresentedVersion = false
+  presentedEventStatus: 400 | 413 | undefined
   online = true
   /** How long a poll answer takes to arrive once it is ready. */
   pollReplyDelayMs = 0
@@ -185,6 +194,7 @@ export class FakeConnectorCloud {
       case CONNECTOR_PATHS.poll:
       case CONNECTOR_PATHS.acks:
       case CONNECTOR_PATHS.events:
+      case CONNECTOR_SLACK_PRESENTATION_EVENTS_PATH:
         return this.machineCall(path, body, token, signal)
       case CONNECTOR_PATHS.replies:
         return this.reply(body, token)
@@ -292,7 +302,19 @@ export class FakeConnectorCloud {
       this.acks.push(...(Array.isArray(fields.acks) ? fields.acks : []))
       return { status: 204 }
     }
-    if (path === CONNECTOR_PATHS.events) {
+    if (path === CONNECTOR_PATHS.events || path === CONNECTOR_SLACK_PRESENTATION_EVENTS_PATH) {
+      const presented =
+        fields.v === SLACK_PRESENTATION_EVENT_VERSION ||
+        fields.v === SLACK_PRESENTATION_TURN_END_VERSION
+      if (presented && path === CONNECTOR_PATHS.events && this.refusePresentedVersion) {
+        return { status: 400, body: { error: 'invalid_request' } }
+      }
+      if (presented && this.presentedEventStatus) {
+        return { status: this.presentedEventStatus, body: { error: 'invalid_request' } }
+      }
+      if (this.refusePresentedEvents && presented) {
+        return { status: 409, body: { error: 'hello_required', reason: 'features' } }
+      }
       // Applied only above this hello's high-water mark; a late or repeated batch is dropped.
       const seq = typeof fields.seq === 'number' ? fields.seq : -1
       if (seq > hello.seq) {

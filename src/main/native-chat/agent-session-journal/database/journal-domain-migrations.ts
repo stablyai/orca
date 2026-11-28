@@ -28,7 +28,22 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
   ensureJournalTextTailTable(db)
   ensureJournalSubmissionWindowIndexes(db)
   ensureJournalConnectorRepliesSchema(db)
+  ensureJournalSlackAnswerPreparedColumn(db)
   ensureJournalRetirePending(db, (run) => runJournalTransaction(db, run))
+}
+
+function ensureJournalSlackAnswerPreparedColumn(db: Database.Database): void {
+  const present = db
+    .prepare("SELECT 1 FROM pragma_table_info('journal_items') WHERE name='slack_answer_prepared'")
+    .get()
+  if (!present) {
+    runJournalTransaction(db, () => {
+      db.exec(`ALTER TABLE journal_items ADD COLUMN slack_answer_prepared INTEGER;
+        UPDATE journal_items SET slack_answer_prepared=1
+        WHERE (session_id,epoch,item_id) IN
+          (SELECT session_id,epoch,turn_item_id FROM journal_slack_answer_presentations)`)
+    })
+  }
 }
 
 /** Added without a user_version change: released builds name their columns and never read it. */

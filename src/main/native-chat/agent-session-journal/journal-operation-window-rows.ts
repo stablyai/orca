@@ -1,6 +1,10 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { JournalOperationWindowAnchors } from './journal-domain-operation-window'
+import type {
+  JournalOperationWindow,
+  JournalOperationWindowAnchors
+} from './journal-domain-operation-window'
+import { readSlackAnswerPresentation } from './connector-replies/journal-slack-answer-presentation'
 import { JOURNAL_READER_REPLY_BYTE_LIMIT } from './journal-sql-reader-reply-limit'
 import { shortenedJsonSql } from './journal-stored-json-bounds'
 import { JournalWindowNotIndexed } from './journal-operation-window-sends'
@@ -33,7 +37,8 @@ export function readOperationWindowItems(
   start: number,
   anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape' | 'indexedOnly'>,
   /** Rows before this sequence only; null runs to the head. */
-  end: number | null = null
+  end: number | null = null,
+  slackAnswers?: JournalOperationWindow['slackAnswers']
 ): AgentJournalRenderItem[] {
   const projected = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
   const rows = `FROM journal_items INDEXED BY journal_items_visible_position
@@ -119,8 +124,26 @@ export function readOperationWindowItems(
     ? `CASE WHEN item_id IN (SELECT value FROM json_each(?))
         THEN COALESCE(${shortenedJsonSql(projected, JOURNAL_READER_REPLY_BYTE_LIMIT)}, ${projected}) ELSE ${projected} END`
     : projected
+  const answerColumns = slackAnswers
+    ? `,item_id,slack_answer_prepared,
+      CASE WHEN slack_answer_prepared=1 THEN (
+        SELECT presentation_json FROM journal_slack_answer_presentations p
+        WHERE p.session_id=journal_items.session_id AND p.epoch=journal_items.epoch
+          AND p.turn_item_id=journal_items.item_id
+      ) END AS slack_answer_json`
+    : ''
   return scope.db
-    .prepare(`SELECT ${value} AS payload_json ${rows} ORDER BY sequence,sequence_index,ordinal`)
+    .prepare(
+      `SELECT ${value} AS payload_json${answerColumns} ${rows} ORDER BY sequence,sequence_index,ordinal`
+    )
     .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, ...range)
-    .map((row) => scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json))
+    .map((row) => {
+      if (slackAnswers && row.slack_answer_prepared === 1) {
+        slackAnswers.push([
+          String(row.item_id),
+          readSlackAnswerPresentation(row.slack_answer_json) ?? null
+        ])
+      }
+      return scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json)
+    })
 }

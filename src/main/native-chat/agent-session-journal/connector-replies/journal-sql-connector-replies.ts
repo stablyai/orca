@@ -5,8 +5,10 @@ import type {
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
   JournalConnectorReplyRetryRows,
-  JournalConnectorReplyRow
+  JournalConnectorReplyRow,
+  JournalSlackAnswerTurn
 } from '../../../../shared/agent-session/journal/journal-connector-reply'
+import type { SlackAnswerPresentation } from '../../../../shared/connectors/slack-answer-presentation'
 import type { JournalSqlDatabase } from '../database/journal-sql-database'
 import type { JournalSqlMaintenance } from '../journal-sql-maintenance'
 
@@ -18,6 +20,13 @@ export class JournalSqlConnectorReplies {
   constructor(
     private readonly db: Pick<JournalSqlDatabase, 'readers' | 'serialize' | 'readOnly'>
   ) {}
+
+  prepareAnswer(
+    turn: JournalSlackAnswerTurn,
+    presentation: SlackAnswerPresentation
+  ): Promise<boolean> {
+    return this.maintain({ kind: 'slack-answer-prepare', turn, presentation })
+  }
 
   /** Rows not yet accepted: one chat's, or all of them. */
   async read(sessionId?: string): Promise<JournalConnectorReplyRow[]> {
@@ -53,13 +62,15 @@ export class JournalSqlConnectorReplies {
   async readOwed(
     account: string,
     after: string | null,
-    limit: number
+    limit: number,
+    includePresentations?: boolean
   ): Promise<JournalConnectorReplyRow[]> {
     const result = await this.db.readers.database({
       kind: 'connector-replies-owed',
       account,
       after,
-      limit
+      limit,
+      includePresentations
     })
     if (result.kind !== 'connector-replies') {
       throw new Error('journal reader returned no connector replies')

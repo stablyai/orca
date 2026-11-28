@@ -11,6 +11,8 @@ export const CONNECTOR_ACTIONS_PATH = '/v1/connector/actions'
 export const CONNECTOR_POST_METHOD_NAMES = [
   'connector.act',
   'connector.reply',
+  'connector.prepareSlackAnswer',
+  'connector.replySlackAnswer',
   'connector.react',
   'connector.leaveThread',
   'connector.wakeReplyPlace'

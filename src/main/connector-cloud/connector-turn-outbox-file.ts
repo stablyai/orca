@@ -13,6 +13,7 @@ import {
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
+import { SlackAnswerPresentationSchema } from '../../shared/connectors/slack-answer-presentation'
 import { CoalescingFileWriter } from '../filesystem/coalescing-file-writer'
 import { removeStaleDurableWriteTempFiles } from '../filesystem/durable-file-write'
 import {
@@ -22,6 +23,7 @@ import {
 import { isMissingFileError } from '../runtime/rpc/server/pairing/device-registry-corruption'
 
 type TurnEnded = Extract<ConnectorEvent, { kind: 'turn-ended' }>
+const MAX_PREPARED_TURN_ENDS = 200
 
 // Tagged with the account that produced them, so another account never sends them after a relaunch.
 const StoredOutbox = lazyZodSchema(() =>
@@ -36,11 +38,15 @@ const StoredOutbox = lazyZodSchema(() =>
         at: z.number(),
         stopReason: z.string().min(1).nullable(),
         lastAssistantMessage: z.string().optional(),
+        presentation: SlackAnswerPresentationSchema.optional().catch(undefined),
         origin: z.enum(CONNECTOR_TURN_ORIGINS).optional(),
         failure: ConnectorFailure.optional().catch(undefined),
         links: z.array(ConnectorWorkLink).optional().catch(undefined),
         mirror: z.literal(true).optional().catch(undefined),
         stateOnly: z.literal(true).optional().catch(undefined),
+        stateOnlyQueued: z.literal(true).optional().catch(undefined),
+        preparedStateOnly: z.literal(true).optional().catch(undefined),
+        turnFor: z.enum(['owner', 'someone_else', 'none']).optional().catch(undefined),
         resumes: z.literal(true).optional().catch(undefined)
       })
     )
@@ -114,6 +120,7 @@ export class ConnectorTurnEndFile {
   private saved: readonly TurnEnded[] | undefined
   // Cleared for a sign-out or another account: nothing it does reaches the file again.
   private retired = false
+  private readonly reserved = new Set<string>()
 
   constructor(
     path: string,
@@ -140,6 +147,27 @@ export class ConnectorTurnEndFile {
     return turnEnds ?? []
   }
 
+  reservePrepared(runId: string): boolean {
+    if (this.retired) {
+      return false
+    }
+    if (this.reserved.has(runId)) {
+      return true
+    }
+    const owed = this.saved?.filter((event) => event.presentation).length ?? 0
+    if (owed + this.reserved.size >= MAX_PREPARED_TURN_ENDS) {
+      return false
+    }
+    this.reserved.add(runId)
+    return true
+  }
+
+  releasePrepared(runId: string | undefined): void {
+    if (runId !== undefined) {
+      this.reserved.delete(runId)
+    }
+  }
+
   save(turnEnds: readonly TurnEnded[]): void {
     if (this.retired || sameTurnEnds(turnEnds, this.saved)) {
       return
@@ -150,6 +178,7 @@ export class ConnectorTurnEndFile {
 
   clear(): void {
     this.retired = true
+    this.reserved.clear()
     this.file.save(null)
   }
 

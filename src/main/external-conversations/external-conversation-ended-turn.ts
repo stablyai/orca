@@ -21,10 +21,14 @@ import {
 } from './external-conversation-turn-opener'
 import { journalTurnAnsweredMessages } from '../../shared/agent-session/journal/journal-turn-answered-messages'
 import { typedOnAnotherDevice } from '../bots/bot-typed-in-orca'
+import type { SlackAnswerPresentation } from '../../shared/connectors/slack-answer-presentation'
 
 // A chat's ended turn, read from its journal as of the turn's end.
 
 export type EndedChatTurn = {
+  /** Null when the turn prepared an answer but its presentation is unreadable. */
+  slackAnswer?: SlackAnswerPresentation | null
+  journalEpoch?: string
   opener?: AgentJournalRenderItem | null
   lastAssistantMessage?: string
   /** Why the turn failed, as the chat's typed failure says, when it did. */
@@ -50,7 +54,8 @@ export async function endedTurn(
   chat: ConversationChat,
   sessionId: string,
   turnId: string,
-  cursor?: AgentJournalCursor
+  cursor?: AgentJournalCursor,
+  slackAnswers = false
 ): Promise<EndedChatTurn> {
   // The ended turn (or its refused send's row) through the head, with the sends that place it: a
   // tail page can end before the message, and the whole journal can be hundreds of MB.
@@ -62,30 +67,35 @@ export async function endedTurn(
             turnIds: [turnId],
             itemIds: [turnId],
             anchorsOnly: true,
-            withoutToolOutput: true
+            withoutToolOutput: true,
+            ...(slackAnswers ? { slackAnswers: true } : {})
           })
         )
-        .then(({ snapshot }) => snapshot)
         .catch(() => null)
     : null
   if (
     !cursor ||
     !journal ||
-    journal.cursor.epoch !== cursor.epoch ||
-    journal.cursor.sequence < cursor.sequence
+    journal.snapshot.cursor.epoch !== cursor.epoch ||
+    journal.snapshot.cursor.sequence < cursor.sequence
   ) {
     return {}
   }
-  const items = journal.items.filter((item) => item.sequence <= cursor.sequence)
+  const { snapshot } = journal
+  const items = snapshot.items.filter((item) => item.sequence <= cursor.sequence)
   const opener = await readEndedChatTurnOpener(() => chat.journalReads(sessionId), items, turnId)
   const lastAssistantMessage = latestStructuredAgentSessionAssistantMessage(items)
-  const failure = latestStructuredAgentSessionFailure(items, journal.submissions)
+  const failure = latestStructuredAgentSessionFailure(items, snapshot.submissions)
+  const answered = outboxTurn(items, snapshot.submissions, opener, turnId)
+  const slackAnswer = journal.slackAnswers?.find(([id]) => id === answered.turnItemId)?.[1]
   return {
+    journalEpoch: cursor.epoch,
     ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
     ...(failure ? { failure } : {}),
     latestOpener: latestTurnOpener(items),
     ...(opener === undefined ? {} : { opener }),
-    ...outboxTurn(items, journal.submissions, opener, turnId)
+    ...(slackAnswer === undefined ? {} : { slackAnswer }),
+    ...answered
   }
 }
 

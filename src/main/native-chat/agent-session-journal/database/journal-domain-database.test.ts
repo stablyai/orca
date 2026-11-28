@@ -26,7 +26,7 @@ import {
 } from './journal-domain-database'
 import { readMailWithdrawal } from '../writing/mail-withdrawal-receipts'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
-import { migrateJournalDomainSchema } from '../journal-domain-schema'
+import { migrateJournalDomainSchema } from './journal-domain-migrations'
 import { JOURNAL_DOMAIN_SCHEMA_001 } from './journal-domain-schema-001'
 
 const cleanup: (() => void)[] = []

@@ -175,8 +175,6 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
     this.botChangeNotices.changed({ kinds: ['threads'] })
   }
 
-  private connectorCloud: ConnectorCloud | null = null
-
   declare protected readonly getPairedDeviceAccountFn: PairedDeviceAccountLookup
 
   /** The Orca account a paired device says it is signed in to; null when it named none. */

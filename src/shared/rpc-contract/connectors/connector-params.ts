@@ -2,6 +2,7 @@ import * as z from 'zod'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { ConnectorReview } from '../../connector-review-contract'
 import { CONNECTOR_ACTION_VERBS, ConnectorActionArgs } from '../../connector-action-contract'
+import { SlackAnswerPresentationSchema } from '../../connectors/slack-answer-presentation'
 
 /** Why `connector.reply` refused; connector_unavailable comes after the host's own retries. */
 export const CONNECTOR_REPLY_ERROR_CODES = [
@@ -40,6 +41,17 @@ export const ConnectorReply = lazyZodSchema(() =>
     z.object({ paneKey: z.string().min(1, 'Missing pane key'), ...createReplyText() }),
     z.object({ sessionId: z.string().min(1, 'Missing session id'), ...createReplyText() })
   ])
+)
+
+export const ConnectorPrepareSlackAnswer = lazyZodSchema(() =>
+  z.object({
+    sessionId: z.string().min(1),
+    presentation: SlackAnswerPresentationSchema
+  })
+)
+
+export const ConnectorReplySlackAnswer = lazyZodSchema(() =>
+  ConnectorPrepareSlackAnswer.extend({ replyId: z.string().min(1) })
 )
 
 /** A bot's shared verb in a source, from one of its chats; the cloud reads the ref, the host only who asks. */

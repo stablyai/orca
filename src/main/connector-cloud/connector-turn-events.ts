@@ -1,13 +1,23 @@
+import { isReplyEvent, replyDeliveryIds } from './connector-reply-events'
+import {
+  boundEvents,
+  deferPreparedTurnEnd,
+  eventsHeadSize,
+  isTurnEnded,
+  newestActivities,
+  presentationTransportChanged,
+  reportedTurnEnds
+} from './connector-event-queue'
 // The seam's watch, as the cloud reads it. Turn ends wait in an owner-only file so a restart still reports them.
 import { join } from 'node:path'
 import {
-  CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_AUDIENCE_EVENTS_VERSION,
   CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE,
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
   type ConnectorConversation,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
+import { takesSlackAnswerPresentation } from '../../shared/connectors/slack-answer-presentation'
 import type {
   ConversationEvent,
   ConversationSnapshot
@@ -15,34 +25,24 @@ import type {
 import { SIGNED_OUT, type ConnectorFailure } from './connector-cloud-request'
 import { ConnectorOutbox, type ConnectorOutboxHead, type ConnectorStamp } from './connector-outbox'
 import { ConnectorTurnEndFile } from './connector-turn-outbox-file'
-import { connectorSnapshot, jsonBytes } from './connector-snapshot'
+import { connectorSnapshot } from './connector-snapshot'
 import {
   ConnectorSnapshotTrace,
   type ConnectorSnapshotExpectation
 } from './connector-snapshot-trace'
 import { ConnectorPromptPublications } from './connector-prompt-publications'
-import { answerFor, answerTextFor, toConnectorEvent } from './connector-event-wire'
+import { answerTextFor, toConnectorEvent } from './connector-event-wire'
 import { slackReplyBody } from './connector-slack-text'
 import { installedLeaveLines } from '../external-conversations/external-conversation-leave-lines'
 import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
-  isReplyEvent,
-  replyDeliveryIds,
   type ConnectorReplyClient,
   type ConnectorReplyJournal,
   type ConnectorReplyRoute
 } from './connector-reply-outbox'
 
 const TURN_OUTBOX_FILE = 'connector-turn-outbox.json'
-const MAX_TURN_ENDS = 200
-// Live events past this are dropped oldest first; a fresh hello and snapshot then restate them.
-const MAX_LIVE_EVENTS = 500
-// Room for the request's own fields around its events.
-const EVENTS_BUDGET_BYTES = CONNECTOR_CLIENT_LIMITS.maxRequestBytes - 1024
-
-type TurnEnded = Extract<ConnectorEvent, { kind: 'turn-ended' }>
-
 /** The reply outbox's journal, the kill switch's /replies post, and a cold start's wake. */
 export type ConnectorTurnEventsReplies = Pick<ConnectorReplyClient, 'post' | 'hostName'> & {
   journal: () => ConnectorReplyJournal | null
@@ -57,56 +57,7 @@ const NO_REPLIES: ConnectorTurnEventsReplies = {
   hostName: () => ''
 }
 
-const isTurnEnded = (event: ConnectorEvent): event is TurnEnded => event.kind === 'turn-ended'
-// Reply events are the journal's rows in transit: never trimmed, never stored here.
-const isLive = (event: ConnectorEvent): boolean =>
-  event.kind !== 'turn-ended' && event.kind !== 'snapshot' && event.kind !== 'reply'
-
 export { capUtf8 } from './connector-snapshot'
-
-/** As many leading events as fit in one request, and at least one. */
-function eventsHeadSize(events: readonly ConnectorEvent[]): number {
-  let bytes = 0
-  for (const [index, event] of events.entries()) {
-    bytes += jsonBytes(event) + 1
-    if (bytes > EVENTS_BUDGET_BYTES) {
-      return Math.max(1, index)
-    }
-  }
-  return events.length
-}
-
-/** Only a pane's newest unsent activity is worth sending: each one replaces the last in the thread. */
-function newestActivities(events: ConnectorEvent[], sent: number): ConnectorEvent[] {
-  const newest = new Map<string, number>()
-  events.forEach((event, index) => {
-    if (event.kind === 'activity') {
-      newest.set(event.paneKey, index)
-    }
-  })
-  return newest.size === 0
-    ? events
-    : events.filter(
-        (event, index) =>
-          index < sent || event.kind !== 'activity' || newest.get(event.paneKey) === index
-      )
-}
-
-/**
- * Keeps the newest turn ends and live events within their caps, never trimming the first `sent`, so memory
- * and disk hold the same set. A snapshot is never dropped: it opens its hello.
- */
-function boundEvents(events: ConnectorEvent[], sent: number): ConnectorEvent[] {
-  let turnEndsOver = events.filter(isTurnEnded).length - MAX_TURN_ENDS
-  let liveOver = events.filter(isLive).length - MAX_LIVE_EVENTS
-  if (turnEndsOver <= 0 && liveOver <= 0) {
-    return events
-  }
-  return events.filter(
-    (event, index) =>
-      index < sent || (isTurnEnded(event) ? turnEndsOver-- <= 0 : !isLive(event) || liveOver-- <= 0)
-  )
-}
 
 /**
  * One account's events for the cloud, in order, owned once per process so a replacement client never
@@ -121,6 +72,7 @@ export class ConnectorTurnEvents {
   private warnedTrimmed = false
   // From the current hello's answer; empty before one.
   private cloudFeatures: ReadonlySet<string> = new Set()
+  presentationGeneration = 0
   private readonly requestVersions = new Map<number, 1 | 2>()
   private readonly replies: ConnectorReplyOutbox
   // Flushes the running client's events; null while none runs.
@@ -158,25 +110,38 @@ export class ConnectorTurnEvents {
       onAccepted: (batch, stamp) => {
         this.trace.accepted(batch, stamp)
         // A leave's line follows its turn's answer, once the cloud took it and its rows are sent.
-        void this.replies.accepted(batch).then(() => installedLeaveLines()?.turnEndsTaken(batch))
+        void this.replies
+          .accepted(batch)
+          .then(() => installedLeaveLines()?.turnEndsTaken(reportedTurnEnds(batch)))
       },
       onSplit: (batch) => this.trace.split(batch),
+      deferRefused: deferPreparedTurnEnd,
+      deferredReady: () => this.replyFlush?.(),
       onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
+        if (isReplyEvent(item) && item.presentation) {
+          this.replies.released(replyDeliveryIds([item]), true, failure)
+          return true
+        }
         // A turn end the cloud won't take lets its leave's line go.
-        if (isTurnEnded(item)) {
+        if (isTurnEnded(item) && !('preparedStateOnly' in item)) {
           installedLeaveLines()?.turnEndsTaken([item])
         }
         // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
         // until the next one (its row stays unsent). Any other refusal (a 413, or a 503 outcome
         // that doesn't stand yet) goes again later.
         if (failure?.status === 400) {
-          replyDeliveryIds([item]).forEach((id) => this.setAside.add(id))
-          return
+          const ids = replyDeliveryIds([item])
+          ids.forEach((id) => this.setAside.add(id))
+          this.replies.released(ids, false)
+          return false
         }
         // A sibling of a held reply (one answer split across events) leaves the held ids held.
-        this.replies.forget(replyDeliveryIds([item]).filter((id) => !this.setAside.has(id)))
-        this.replies.retryLater()
+        this.replies.released(
+          replyDeliveryIds([item]).filter((id) => !this.setAside.has(id)),
+          true
+        )
+        return false
       }
     })
   }
@@ -210,6 +175,9 @@ export class ConnectorTurnEvents {
 
   /** Set before the hello's watch starts, so its events match what that cloud reads. */
   useCloudFeatures(features: ReadonlySet<string>, helloRev?: number): void {
+    if (presentationTransportChanged(this.cloudFeatures, features)) {
+      this.resetPresentationTransport()
+    }
     this.cloudFeatures = features
     // Under a hello without it (the kill switch), this hello's snapshot lets replies in transit go,
     // and they drain through /replies instead.
@@ -228,6 +196,17 @@ export class ConnectorTurnEvents {
         }
       }
     }
+  }
+
+  /** A new transport or changed capabilities can take work this receiver could not. */
+  resetPresentationTransport(): void {
+    this.presentationGeneration++
+    this.outbox.retryDeferred(true)
+    this.replies.presentationTransportChanged()
+  }
+
+  get features(): ReadonlySet<string> {
+    return this.cloudFeatures
   }
 
   /** A hello's stamped version never downgrades a retained audience batch. */
@@ -276,7 +255,10 @@ export class ConnectorTurnEvents {
           flush()
         }
       },
-      outbox: this.repliesOutbox
+      outbox: this.repliesOutbox,
+      presentations: takesSlackAnswerPresentation(this.cloudFeatures),
+      presentationGeneration: this.presentationGeneration,
+      setAside: this.setAside
     }
   }
 
@@ -295,6 +277,7 @@ export class ConnectorTurnEvents {
     })
     this.replies.forget([...this.setAside, ...replyDeliveryIds(released)])
     this.setAside.clear()
+    this.replies.resetPages()
   }
 
   /** True until the next snapshot once the caps dropped an event. */
@@ -319,6 +302,9 @@ export class ConnectorTurnEvents {
       this.restart([built.snapshot], this.carried)
       return
     }
+    if (event.kind === 'turn-ended') {
+      this.stored.releasePrepared(event.slackAnswerRunId)
+    }
     const wire = toConnectorEvent(event, this.cloudFeatures)
     if (event.kind === 'turn-ended' && event.turnId === null) {
       // Its start predates the watch, so the cloud can't place it and nothing posts.
@@ -333,11 +319,12 @@ export class ConnectorTurnEvents {
     }
   }
 
+  reservePrepared(runId: string): (() => void) | null {
+    return this.stored.reservePrepared(runId) ? () => this.stored.releasePrepared(runId) : null
+  }
+
   next(helloRev: number): ConnectorOutboxHead<ConnectorEvent> | null {
-    const head = this.outbox.next(helloRev)
-    return (
-      head && { ...head, batch: head.batch.map((event) => answerFor(event, this.cloudFeatures)) }
-    )
+    return this.outbox.next(helloRev)
   }
 
   accepted(stamp: ConnectorStamp): void {
@@ -364,6 +351,7 @@ export class ConnectorTurnEvents {
     this.stored.clear()
     this.replies.retire()
     this.setAside.clear()
+    this.outbox.retryDeferred(true)
     this.outbox.restart([], () => false)
     this.trace.flush()
   }

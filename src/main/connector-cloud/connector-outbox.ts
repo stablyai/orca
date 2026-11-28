@@ -3,6 +3,16 @@ import { CONNECTOR_MAX_RETRY_AFTER_MS, type ConnectorFailure } from './connector
 const RETRY_BASE_MS = 1_000
 const RETRY_MAX_MS = 30_000
 
+/** Prepared answers can keep their bodies through transient refusal without fixed-rate retries. */
+export function deferredAnswerRetryMs(attempt: number, failure?: ConnectorFailure): number {
+  const delay = Math.min(30_000 * 2 ** attempt, CONNECTOR_MAX_RETRY_AFTER_MS)
+  return Math.max(delay, Math.min(failure?.retryAfterMs ?? 0, CONNECTOR_MAX_RETRY_AFTER_MS))
+}
+
+export function parkPreparedAnswer(failure?: ConnectorFailure): boolean {
+  return failure?.status === 400 || failure?.status === 413
+}
+
 /** Random doubling from 1 s to 30 s (or maxMs); a cloud's Retry-After wins when longer, up to 10 minutes. */
 export function connectorRetryDelayMs(
   failures: number,
@@ -31,6 +41,10 @@ export type ConnectorOutboxHead<T> = { stamp: ConnectorStamp; batch: T[] }
 export class ConnectorOutbox<T> {
   private items: T[]
   private stamp: ConnectorStamp | null = null
+  private readonly deferredItems = new Set<T>()
+  private readonly parkedItems = new Set<T>()
+  private deferredRetry: ReturnType<typeof setTimeout> | undefined
+  private deferredRetries = 0
 
   constructor(
     private readonly options: {
@@ -47,8 +61,20 @@ export class ConnectorOutbox<T> {
       onStamped?: (batch: readonly T[], stamp: ConnectorStamp) => void
       /** A refused head was halved, keeping its number. */
       onSplit?: (batch: readonly T[], from: ConnectorStamp, to: ConnectorStamp) => void
+      /** Keep a refused answer while later events can proceed. */
+      deferRefused?: (
+        item: T,
+        failure?: ConnectorFailure
+      ) =>
+        | {
+            answer: T
+            stateOnly?: T
+            untilChange?: boolean
+          }
+        | undefined
+      deferredReady?: () => void
       /** A single refused item was dropped, with why the cloud refused it. */
-      onDropped?: (item: T, stamp: ConnectorStamp, failure?: ConnectorFailure) => void
+      onDropped?: (item: T, stamp: ConnectorStamp, failure?: ConnectorFailure) => boolean | void
     }
   ) {
     this.items = options.initial ?? []
@@ -67,6 +93,16 @@ export class ConnectorOutbox<T> {
     this.replace([...this.items, ...items])
   }
 
+  retryDeferred(capabilityChanged = false): void {
+    clearTimeout(this.deferredRetry)
+    this.deferredRetry = undefined
+    this.deferredItems.clear()
+    if (capabilityChanged) {
+      this.parkedItems.clear()
+      this.deferredRetries = 0
+    }
+  }
+
   /** Numbering starts again from 0 with `first` in front, keeping what `keep` accepts. */
   restart(first: T[], keep: (item: T) => boolean): void {
     this.stamp = null
@@ -80,17 +116,32 @@ export class ConnectorOutbox<T> {
   next(helloRev: number): ConnectorOutboxHead<T> | null {
     let stamp = this.stamp
     if (stamp?.helloRev !== helloRev || stamp.size === 0) {
-      if (this.items.length === 0) {
+      const eligible = this.readyItems()
+      if (eligible.length === 0) {
         return null
       }
       stamp = this.stamp = {
         helloRev,
         seq: stamp?.helloRev === helloRev ? stamp.seq + 1 : 0,
-        size: Math.max(1, Math.min(this.options.headSize(this.items), this.items.length))
+        size: Math.max(1, Math.min(this.options.headSize(eligible), eligible.length))
       }
       this.options.onStamped?.(this.items.slice(0, stamp.size), stamp)
     }
     return { stamp, batch: this.items.slice(0, stamp.size) }
+  }
+
+  private readyItems(): readonly T[] {
+    if (this.deferredItems.size === 0 && this.parkedItems.size === 0) {
+      return this.items
+    }
+    const ready: T[] = []
+    const deferred: T[] = []
+    for (const item of this.items) {
+      const target = this.deferredItems.has(item) || this.parkedItems.has(item) ? deferred : ready
+      target.push(item)
+    }
+    this.items = [...ready, ...deferred]
+    return ready
   }
 
   /** The cloud took `stamp`'s head under the hello still current; a superseded stamp changes nothing. */
@@ -117,11 +168,35 @@ export class ConnectorOutbox<T> {
       this.options.onSplit?.(this.items.slice(0, stamp.size), stamp, halved)
       return null
     }
+    const head = this.items[0]
+    const held = head === undefined ? undefined : this.options.deferRefused?.(head, failure)
+    if (held) {
+      this.items.shift()
+      this.items.push(held.answer)
+      if (held.stateOnly !== undefined) {
+        this.items.unshift(held.stateOnly)
+      }
+      this.stamp = { ...stamp, size: held.stateOnly === undefined ? 0 : 1 }
+      const waiting = held.untilChange ? this.parkedItems : this.deferredItems
+      waiting.add(held.answer)
+      this.notify()
+      if (!held.untilChange && !this.deferredRetry) {
+        this.deferredRetry = setTimeout(
+          () => {
+            this.retryDeferred()
+            this.options.deferredReady?.()
+          },
+          deferredAnswerRetryMs(this.deferredRetries++, failure)
+        )
+        this.deferredRetry.unref?.()
+      }
+      return null
+    }
     const [dropped] = this.items.splice(0, 1)
     this.stamp = { ...stamp, size: 0 }
     this.notify()
-    if (dropped !== undefined) {
-      this.options.onDropped?.(dropped, stamp, failure)
+    if (dropped !== undefined && this.options.onDropped?.(dropped, stamp, failure)) {
+      return null
     }
     return dropped ?? null
   }
@@ -140,7 +215,10 @@ export class ConnectorOutbox<T> {
 // can't stand up yet is split down and set aside the same way, so the events behind it still go;
 // its row stays unsent and drains again later.
 const isRefusedAsSent = (failure: ConnectorFailure): boolean =>
-  failure.status === 413 || failure.status === 400 || failure.error === 'reply_not_accepted'
+  failure.status === 413 ||
+  failure.status === 400 ||
+  failure.error === 'reply_not_accepted' ||
+  failure.error === 'slack_answer_draining'
 
 /** Sends a head; null when the cloud answered 204. */
 export type ConnectorBatchSender<T> = (

@@ -1,10 +1,8 @@
 // The machine side of the connector: one held poll, two confirmations per delivery, and turn events back.
-import { z } from 'zod'
 import {
   CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_PATHS,
   ConnectorPollResponse,
-  type ConnectorCloudFeature,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
@@ -14,13 +12,8 @@ import { ConnectorActiveConversations } from './connector-active-conversations'
 import { ConnectorDeliveryAcks } from './connector-delivery-acks'
 import { connectorHelloSaid, sayConnectorHello } from './connector-hello'
 import type { ConnectorPollClientOptions, ConnectorTransport } from './connector-machine'
-import {
-  foldConnectorReview,
-  postConnectorBotMessage,
-  postConnectorReply,
-  type ConnectorBotPostBody,
-  type ConnectorReplyBody
-} from './connector-replies'
+import { ConnectorPostRequests } from './connector-post-requests'
+import { ConnectorPresentationRehello } from './connector-presentation-rehello'
 import * as pollControl from './connector-poll-control'
 import { ConnectorOutboxSender } from './connector-outbox'
 import { ConnectorEventRequests } from './connector-event-requests'
@@ -30,7 +23,6 @@ import { ConnectorWakePolls } from './connector-wake-channel'
 // The cloud forgets a machine's running workers once it has been silent 15 minutes (its last-seen is
 // a minute coarse); back from a silence near that, a fresh hello's snapshot restates them.
 const HELLO_AFTER_SILENCE_MS = 10 * 60_000
-const REVIEW_FEATURE: ConnectorCloudFeature = 'review'
 
 export type { ConnectorPollClientOptions } from './connector-machine'
 
@@ -55,14 +47,13 @@ export class ConnectorPollClient {
   private botsSaid = false
   // Hellos go one at a time, so a late answer never replaces a newer revision.
   private saying: Promise<ConnectorFailure | null> = Promise.resolve(null)
+  private readonly presentationRehello = new ConnectorPresentationRehello(this.stopped.signal)
   private failures = 0
   private readonly respread = new pollControl.ConnectorRehelloSpread()
   // When the last answered poll went out; failed ones don't count.
   private heardAt: number | null = null
   private warnedTrimmed = false
   private stopReason: string | null = null
-  // Replies and bot posts still in flight.
-  private posting = 0
   private readonly active = new ConnectorActiveConversations()
   // Why each snapshot this client takes was taken, for its trace.
   private readonly snapshots = new ConnectorClientSnapshots(() => this.options.events)
@@ -83,7 +74,8 @@ export class ConnectorPollClient {
       seam: this.seam,
       host: this.host,
       machine: options.machine,
-      send: (acks, rev) => this.post(CONNECTOR_PATHS.acks, rev, { v: 1, helloRev: rev, acks }),
+      send: (acks, rev) =>
+        this.postRequests.numbered(CONNECTOR_PATHS.acks, rev, { v: 1, helloRev: rev, acks }),
       helloRev,
       random: this.random,
       signal: this.stopped.signal,
@@ -95,7 +87,11 @@ export class ConnectorPollClient {
       watch: (listener) => this.seam.watch(this.host, listener),
       observe: (event) => this.active.observe(event),
       flush: () => this.eventSender.flush(),
-      post: (body, rev, batch) => this.post(CONNECTOR_PATHS.events, rev, body, batch),
+      post: (body, rev, batch, presented, path = CONNECTOR_PATHS.events) =>
+        this.postRequests.numbered(path, rev, body, {
+          requests: options.events.requestsFor(batch),
+          presented
+        }),
       rejected: (rev, failure) => {
         if (this.helloRev !== rev) {
           return null
@@ -115,6 +111,7 @@ export class ConnectorPollClient {
   }
 
   start(): void {
+    this.options.events.resetPresentationTransport()
     // A disable disposes the seam; nothing here may outlive it.
     this.seam.signal.addEventListener('abort', () => this.stop(), {
       once: true,
@@ -138,19 +135,20 @@ export class ConnectorPollClient {
     this.respread.cut()
   }
 
-  /** Posts an agent's reply to its conversation's thread while this client runs. */
-  reply(body: ConnectorReplyBody, proceed?: () => boolean) {
-    const sent = this.features?.has(REVIEW_FEATURE) ? body : foldConnectorReview(body)
-    const { transport, stopped, random } = this
-    return this.posted(postConnectorReply(transport, sent, stopped.signal, random, proceed))
-  }
+  /** Replies and configured results share this client's negotiated protocol. */
+  readonly postRequests = new ConnectorPostRequests({
+    transport: () => this.transport,
+    signal: this.stopped.signal,
+    random: () => this.random(),
+    features: () => this.features,
+    helloRev: () => this.helloRev,
+    refresh: (helloRev) => this.refreshPresentation(helloRev),
+    dropHello: () => this.dropPostHello(),
+    halt: (reason) => this.halt(reason)
+  })
 
-  /** Posts as a bot in one of its app's channels while this client runs. */
-  postAsBot(botId: string, body: ConnectorBotPostBody) {
-    return this.posted(
-      postConnectorBotMessage(this.transport, botId, body, this.stopped.signal, this.random)
-    )
-  }
+  reply = this.postRequests.reply
+  postAsBot = this.postRequests.postAsBot
 
   /** Resolves once the cloud took a hello from this client, once it stops, or once `signal` aborts. */
   helloTaken(signal: AbortSignal): Promise<void> {
@@ -172,14 +170,9 @@ export class ConnectorPollClient {
       JSON.stringify(connectorHelloSaid(this.options.machine, this.features)) === this.helloSaid &&
       this.deliveries.settled &&
       this.options.events.owed === 0 &&
-      this.posting === 0 &&
+      this.postRequests.idle &&
       this.active.idle
     )
-  }
-
-  private posted<T>(post: Promise<T>): Promise<T> {
-    this.posting++
-    return post.finally(() => this.posting--)
   }
 
   stop(): void {
@@ -272,10 +265,32 @@ export class ConnectorPollClient {
   }
 
   private sayHello(): Promise<ConnectorFailure | null> {
-    const say = (): Promise<ConnectorFailure | null> => this.helloIfOwed()
+    return (
+      this.presentationRehello.forPoll(this.helloRev) ?? this.queueHello(() => this.helloIfOwed())
+    )
+  }
+
+  private queueHello(
+    say: () => Promise<ConnectorFailure | null>
+  ): Promise<ConnectorFailure | null> {
     // A failed one does not hold up the next.
     this.saying = this.saying.then(say, say)
     return this.saying
+  }
+
+  private refreshPresentation(helloRev: number | null): Promise<ConnectorFailure | null> {
+    if (this.helloRev !== null && this.helloRev !== helloRev) {
+      return Promise.resolve(null)
+    }
+    return this.presentationRehello.request(() =>
+      this.queueHello(() => {
+        if (this.stopped.signal.aborted || (this.helloRev !== null && this.helloRev !== helloRev)) {
+          return Promise.resolve(null)
+        }
+        this.dropPostHello()
+        return this.helloIfOwed()
+      })
+    )
   }
 
   /** Null once the cloud took what this machine says now; otherwise why not. Each hello gets a fresh watch and snapshot. */
@@ -331,30 +346,9 @@ export class ConnectorPollClient {
   private readonly backoff = (failure: ConnectorFailure): Promise<null> =>
     pollControl.waitPollRetry(this.failures++, failure, this.random, this.stopped.signal)
 
-  private async post(
-    path: string,
-    helloRev: number,
-    body: unknown,
-    // An events batch: the request is watched for its snapshot's trace, if it carries one.
-    batch?: readonly ConnectorEvent[]
-  ): Promise<ConnectorFailure | null> {
-    const sent = await this.transport.call(path, body, z.undefined(), {
-      signal: this.stopped.signal,
-      requests: batch && this.options.events.requestsFor(batch)
-    })
-    if (sent.ok) {
-      return null
-    }
-    // That hello is no longer current, e.g. a retired client's late one landed after it: say hello again.
-    if (sent.status === 409 && this.helloRev === helloRev) {
-      this.helloRev = this.snapshots.drop('post-409')
-      this.wake.helloDropped()
-    }
-    const stop = connectorStop(sent)
-    if (stop) {
-      this.halt(stop)
-    }
-    return sent
+  private dropPostHello(): void {
+    this.helloRev = this.snapshots.drop('post-409')
+    this.wake.helloDropped()
   }
 
   /** Only a running client may stop for a reason; a retired one's late answers mean nothing. */

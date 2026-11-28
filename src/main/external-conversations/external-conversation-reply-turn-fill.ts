@@ -51,6 +51,7 @@ export async function fillRecoveredTurn(
     await deps.fillTurn({
       sessionId,
       turnItemId: turn.itemId,
+      journalEpoch: snapshot.cursor.epoch,
       stamps,
       ...(opener ? { openerItemId: opener.itemId } : {}),
       outcome,

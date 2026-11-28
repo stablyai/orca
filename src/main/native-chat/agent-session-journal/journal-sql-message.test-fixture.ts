@@ -12,7 +12,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { migrateJournalDomainSchema } from './database/journal-domain-migrations'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'

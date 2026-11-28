@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { ConnectorEvent } from '../../shared/connectors/connector-cloud-contract'
-import { answerFor } from './connector-event-wire'
+import { answerFor, toConnectorEvent } from './connector-event-wire'
 import { capAnswer } from './connector-snapshot'
+import {
+  CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
+  SlackAnswerPresentationSchema,
+  SLACK_PRESENTATION_UNCONFIRMED,
+  slackAnswerText
+} from '../../shared/connectors/slack-answer-presentation'
 
 const NOTE = '_… cut short here. The full answer is in Orca._'
 
@@ -55,5 +63,66 @@ describe('answerFor', () => {
     expect(cut.kind === 'reply' && cut.prose).toBe(
       `${'a'.repeat(8_137)}\n\n_… cut short here. The full answer is in Orca._`
     )
+  })
+
+  it('does not pass unchecked values to an older Slack service after renegotiation', () => {
+    const presentation = SlackAnswerPresentationSchema.parse({
+      v: 1,
+      text: 'Compile took longest.',
+      visual: {
+        kind: 'table',
+        title: 'Build stages',
+        source: 'Build report',
+        columns: [{ label: 'Stage' }, { label: 'Time', unit: 's' }],
+        rows: [
+          ['Install', 14],
+          ['Compile', 87]
+        ]
+      }
+    })
+    const rich = { ...reply, prose: slackAnswerText(presentation), presentation }
+    expect(answerFor(rich, new Set([CONNECTOR_SLACK_PRESENTATION_FEATURE]))).toBe(rich)
+    expect(answerFor(rich, new Set([CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE]))).toBe(rich)
+    expect(answerFor(rich, new Set())).toEqual({
+      ...reply,
+      prose: SLACK_PRESENTATION_UNCONFIRMED
+    })
+
+    const ended = toConnectorEvent(
+      {
+        kind: 'turn-ended',
+        conversation: reply.conversation,
+        paneKey: 'p',
+        worktreeId: 'w',
+        turnId: 1,
+        at: 2,
+        stopReason: 'success',
+        origin: 'delivery',
+        lastAssistantMessage: slackAnswerText(presentation),
+        presentation
+      },
+      new Set()
+    )
+    expect(ended).toMatchObject({
+      lastAssistantMessage: SLACK_PRESENTATION_UNCONFIRMED,
+      presentation
+    })
+    expect(
+      answerFor(ended!, new Set([CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE]))
+    ).not.toHaveProperty('presentation')
+    expect(
+      answerFor(
+        ended!,
+        new Set([
+          CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+          CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
+        ])
+      )
+    ).toMatchObject({
+      turnId: 1,
+      lastAssistantMessage: slackAnswerText(presentation),
+      presentation
+    })
+    expect(answerFor(ended!, new Set())).not.toHaveProperty('presentation')
   })
 })

@@ -104,9 +104,11 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
       'file',
       'choice',
       'react',
-      'leave-thread'
+      'leave-thread',
+      'presentation-file',
+      'prepare-final'
     ],
-    booleanFlags: ['leave-thread'],
+    booleanFlags: ['leave-thread', 'prepare-final'],
     repeatableFlags: ['note', 'file', 'choice'],
     notes: [
       'For a progress note, a question or line notes before your final message, which Orca posts there for you. Anywhere else, use `gh`, `orca linear` or `orca slack`.',

@@ -8,6 +8,11 @@ import {
   ConnectorPostNoticesSchema,
   ConnectorTurnForSchema
 } from './connector-wire-scalars.js'
+import {
+  SLACK_PRESENTATION_POST_VERSION,
+  SlackAnswerPresentationSchema,
+  slackAnswerText
+} from './slack-answer-presentation.js'
 
 // The shared verbs a bot takes in a source; a source that doesn't take one answers it as unsupported.
 // Reply is `orca bot reply`, listed so capabilities name it; it answers the run's own conversation,
@@ -61,7 +66,11 @@ export const workspaceRef = (source: ConnectorActionSource, workspaceId: string)
 // find acts on one.
 export const CONNECTOR_USER_CONTAINER = 'user'
 
-export const userRef = (source: ConnectorActionSource, workspaceId: string, userId: string): ConnectorRef => ({
+export const userRef = (
+  source: ConnectorActionSource,
+  workspaceId: string,
+  userId: string
+): ConnectorRef => ({
   source,
   workspaceId,
   containerId: CONNECTOR_USER_CONTAINER,
@@ -116,8 +125,14 @@ export function parseConnectorRef(raw: string): ConnectorRef | null {
   }
   const [workspaceId, containerId, threadId, messageId] = ids
   // Only a message's thread slot may be empty.
-  const threadOk = threadId === undefined || validId(threadId) || (threadId === '' && messageId !== undefined)
-  if (!validId(workspaceId) || !validId(containerId) || !threadOk || (messageId !== undefined && !validId(messageId))) {
+  const threadOk =
+    threadId === undefined || validId(threadId) || (threadId === '' && messageId !== undefined)
+  if (
+    !validId(workspaceId) ||
+    !validId(containerId) ||
+    !threadOk ||
+    (messageId !== undefined && !validId(messageId))
+  ) {
     return null
   }
   return {
@@ -223,6 +238,7 @@ export const ConnectorActionArgsSchema = z
     limit: z.number().int().min(1).max(100).optional(),
     before: z.string().min(1).max(2048).optional(),
     text: z.string().min(1).max(ACT_ARGS_MAX_TEXT).optional(),
+    presentation: SlackAnswerPresentationSchema.optional(),
     join: z.literal(true).optional(),
     // A post's idempotency key, minted once by the CLI: a retry with it never posts twice.
     postId: z.string().min(1).max(128).optional(),
@@ -273,21 +289,34 @@ export const ConnectorActionArgsSchema = z
   .strict()
 export type ConnectorActionArgs = z.infer<typeof ConnectorActionArgsSchema>
 
-export const ConnectorActionRequestSchema = z.object({
-  v: z.literal(1),
-  botId: z.string().min(1).max(CONNECTOR_LIMITS.maxBotIdLength),
-  // places: sent only to a cloud listing `places`.
-  verb: z.enum([...CONNECTOR_ACTION_VERBS, 'capabilities', 'places']),
-  // A ref, or input the cloud resolves to one: a link, a #name, an issue key.
-  ref: z.string().min(1).max(2048).optional(),
-  args: ConnectorActionArgsSchema.default({}),
-  // The conversation the calling run answers, if any: whose workspace a person lookup stays in.
-  conversation: ConnectorConversationSchema.optional(),
-  // The turn of it the run is in (its turn-started `at`): only that turn acts as whoever started it.
-  turnId: EpochMsSchema.optional(),
-  // Whom the run's turn acts for when no delivery started it (see ConnectorTurnForSchema).
-  turnFor: ConnectorTurnForSchema.optional()
-})
+export const ConnectorActionRequestSchema = z
+  .object({
+    v: z.union([z.literal(1), z.literal(SLACK_PRESENTATION_POST_VERSION)]),
+    botId: z.string().min(1).max(CONNECTOR_LIMITS.maxBotIdLength),
+    // places: sent only to a cloud listing `places`.
+    verb: z.enum([...CONNECTOR_ACTION_VERBS, 'capabilities', 'places']),
+    // A ref, or input the cloud resolves to one: a link, a #name, an issue key.
+    ref: z.string().min(1).max(2048).optional(),
+    args: ConnectorActionArgsSchema.default({}),
+    // The conversation the calling run answers, if any: whose workspace a person lookup stays in.
+    conversation: ConnectorConversationSchema.optional(),
+    // The turn of it the run is in (its turn-started `at`): only that turn acts as whoever started it.
+    turnId: EpochMsSchema.optional(),
+    // Whom the run's turn acts for when no delivery started it (see ConnectorTurnForSchema).
+    turnFor: ConnectorTurnForSchema.optional()
+  })
+  .refine(({ v, verb, ref, args }) =>
+    v === 1
+      ? !args.presentation
+      : Boolean(
+          args.presentation &&
+          verb === 'post' &&
+          ref?.startsWith('slack:') &&
+          args.postAt === undefined &&
+          args.title === undefined &&
+          args.text === slackAnswerText(args.presentation)
+        )
+  )
 export type ConnectorActionRequest = z.infer<typeof ConnectorActionRequestSchema>
 
 // A file posted on a message: its id downloads it (`read <message> --download <id>`).

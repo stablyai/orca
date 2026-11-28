@@ -1,3 +1,4 @@
+import { botSlackAnswerGuidance, slackAnswerRoute } from './bot-slack-answer-guidance'
 // A host's structured-session wiring for bots: preambles, own tools, the turn context, and look-around turns.
 import type { Bot } from '../../shared/bot-types'
 import { BoundedMap } from '../../shared/collections/bounded-map'
@@ -48,6 +49,7 @@ export type WiredBot = Bot
 export function botStructuredSessionWiring(deps: {
   /** The host's bots, and its projects, which bots link for skills. */
   store: () => { getBots?: () => readonly Bot[]; getRepos: () => readonly Repo[] }
+  slackAnswersAvailable?: () => boolean
   /** First-run setup's end, and each bot's MEMORY.md as Orca last recorded it. */
   bots: Pick<BotController, 'endFirstRun' | 'memory'>
   /** The bot's chats as a turn end reads them. */
@@ -251,6 +253,17 @@ export function botStructuredSessionWiring(deps: {
     },
     turnContext: {
       ...turnContext,
+      plan: async (sessionId, message, held) => {
+        const plan = await turnContext.plan(sessionId, message, held)
+        const route = deps.slackAnswersAvailable?.() ? slackAnswerRoute(message) : null
+        if (!route) {
+          return plan
+        }
+        const guidance = botSlackAnswerGuidance(route)
+        return plan
+          ? { ...plan, text: [plan.text, guidance].filter(Boolean).join('\n\n') }
+          : { text: guidance, given: () => {} }
+      },
       mentions,
       handedOver: (sessionId, message) => {
         deps.work.handedOver(sessionId, message)

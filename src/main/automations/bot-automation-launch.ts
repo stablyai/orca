@@ -62,7 +62,7 @@ export type BotAutomationSessions = {
 
 /** How a bot run ends: watch its turn from before the prompt is sent, then deliver its result. */
 export type BotRunResults = {
-  watch(): Promise<BotTurnWatch>
+  watch(slackRunId?: string, linkedThread?: boolean): Promise<BotTurnWatch>
   deliver(result: BotRunResult): Promise<BotRunCompletion>
   /** Its session refused the prompt or couldn't open, so no turn began. With `notStarted`, the chat
    *  the run was meant for (else the bot's Chat) shows the card. */
@@ -167,7 +167,17 @@ export function createBotAutomationDispatcher(
   threads?: BotRunThreads
 ): AutomationBotLauncher {
   return async ({ automation, run, target }) => {
-    const turns = await results.watch()
+    const saved = automation.bot?.resultsTo ?? 'chat'
+    const { runsIn } = target
+    const route: ThreadRoute =
+      saved === 'thread' ? await threadRoute(threads, run, runsIn) : { kind: 'take' }
+    const slackAnswer =
+      (typeof saved === 'object' && 'channel' in saved) ||
+      (route.kind !== 'take' && route.conversation.source === 'slack') ||
+      (saved === 'thread' &&
+        run.trigger === 'event' &&
+        run.event?.conversation?.source === 'slack' &&
+        threads !== undefined)
     const asker = run.event ? automationEventAsker(run.event, target.bot.members) : null
     const text =
       automation.once?.by !== undefined && run.trigger === 'scheduled'
@@ -184,11 +194,7 @@ export function createBotAutomationDispatcher(
       ...(automationRun ? { automationRun } : {}),
       messageId: automationRunOperationId(run, 'run-message')
     }
-    const { runsIn } = target
     const chosenChat = automation.bot?.chat?.sessionId
-    const saved = automation.bot?.resultsTo ?? 'chat'
-    const route: ThreadRoute =
-      saved === 'thread' ? await threadRoute(threads, run, runsIn) : { kind: 'take' }
     // A new conversation that never opened has no chat to show why: the bot's Chat does.
     const destination: BotRunChat =
       route.kind === 'owner'
@@ -196,6 +202,10 @@ export function createBotAutomationDispatcher(
         : runsIn === 'chat' && chosenChat
           ? { kind: 'bot-chat', chatId: chosenChat }
           : { kind: 'chat' }
+    const turns = await results.watch(
+      slackAnswer ? run.id : undefined,
+      saved === 'thread' && route.kind === 'take'
+    )
     let send: BotRunSend
     try {
       send =

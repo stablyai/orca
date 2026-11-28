@@ -12,6 +12,11 @@ describe('toolCallHasSideEffects', () => {
       ['Bash', { command: 'git log --oneline -5 && rg -n foo src | head' }],
       ['Bash', { command: 'gh pr view 12 --json state 2>&1' }],
       ['Bash', { command: '"${ORCA_CLI_COMMAND:-orca}" bot item show 4' }],
+      [
+        'Bash',
+        { command: 'orca bot reply --json --prepare-final --presentation-file answer.json' }
+      ],
+      ['Bash', { command: 'orca bot reply --presentation-file=answer.json --prepare-final' }],
       ['shell', { command: "/bin/zsh -lc 'cat a.txt'" }],
       ['read', { command: "bash -lc 'sed -n 1,20p a.ts'" }],
       ['read_file', { path: 'a.ts' }],
@@ -30,6 +35,7 @@ describe('toolCallHasSideEffects', () => {
       ['Bash', { command: 'git -c core.pager=x log' }],
       ['Bash', { command: 'git push' }],
       ['Bash', { command: '"${ORCA_CLI_COMMAND:-orca}" bot reply --text hi' }],
+      ['Bash', { command: 'orca bot reply --presentation-file answer.json' }],
       ['read', { command: "bash -lc 'cat a; npm install'" }],
       ['Bash', { command: 'cat $(make)' }],
       ['Bash', {}],

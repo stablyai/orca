@@ -5,13 +5,10 @@ import type { AgentJournalCursor } from '../../shared/agent-session/journal/agen
 import type { AgentPaneChange } from '../agent-hooks/observations/agent-transition-detector'
 import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { AgentTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type {
   ConnectorActsFor,
-  ConnectorFailure,
   ConnectorPrompt,
-  ConnectorTurnFor,
   ConnectorTurnOrigin
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
@@ -34,6 +31,7 @@ import {
   conversationPane,
   replyTargetOf,
   type ConversationPane,
+  type ConversationTurnEnd,
   type ReplyTarget
 } from './external-conversation-types'
 
@@ -55,30 +53,7 @@ export type ConversationEvent =
     })
   // deliveryId: the delivery the turn answers, when exactly one started it.
   | (ConversationPane & { kind: 'turn-started'; at: number; deliveryId?: string })
-  | (ConversationPane & {
-      kind: 'turn-ended'
-      /** The ended turn's turn-started `at`; null when its start predates this watch. The cloud ends
-       *  its open turn when that is no newer, so a restart's end can name this start as a fence. */
-      turnId: number | null
-      /** Host verdict; null means none was recorded. */
-      stopReason: AgentTurnOutcome | null
-      lastAssistantMessage?: string
-      at: number
-      /** Whether a connector delivery or someone in Orca asked for the turn. */
-      origin?: ConnectorTurnOrigin
-      /** Why a failed turn failed. */
-      failure?: ConnectorFailure
-      /** Pull requests the conversation's bot work opened. */
-      links?: ConnectorWorkLink[]
-      /** An Orca-typed turn whose owner's words posted to the Slack thread: its reply posts too. */
-      mirror?: true
-      /** Whom a turn no delivery started acts for, so its final post counts as them on Slack. */
-      turnFor?: ConnectorTurnFor
-      /** The thread's turn state only: its answer goes through the reply outbox. */
-      stateOnly?: true
-      /** Paused at a usage limit with a known reset: an automatic continue picks it up then. */
-      resumes?: true
-    })
+  | ConversationTurnEnd
   // Whether orchestration workers the chat started still run, told on each change.
   | (ConversationPane & { kind: 'workers'; running: boolean })
   // What a heard turn is doing now (the tool it is inside), a few seconds apart at most.

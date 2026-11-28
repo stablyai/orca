@@ -79,7 +79,7 @@ export type ChatNews =
       sessionId: string
       outcome: AgentJournalTurnOutcome
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
-      readTurn: () => Promise<EndedChatTurn>
+      readTurn: (slackAnswers?: boolean) => Promise<EndedChatTurn>
       /** Only whom the turn acts for (its opener, the deliveries it answered and who typed what it
        *  took), read by index. */
       readAttribution?: () => Promise<Pick<EndedChatTurn, 'opener' | 'stamps' | 'typedByAnother'>>
@@ -109,8 +109,14 @@ export function watchChatNews(
             kind: 'turn-ended',
             sessionId,
             outcome,
-            readTurn: () =>
-              endedTurn(chat, sessionId, event.completion.turnId, event.completion.journalCursor),
+            readTurn: (slackAnswers) =>
+              endedTurn(
+                chat,
+                sessionId,
+                event.completion.turnId,
+                event.completion.journalCursor,
+                slackAnswers
+              ),
             readAttribution: () =>
               endedTurnAttribution(
                 chat,

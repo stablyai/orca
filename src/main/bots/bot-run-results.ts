@@ -11,7 +11,6 @@ import {
   type ConnectorBotPostAnswer,
   type ConnectorTurnFor
 } from '../../shared/connectors/connector-cloud-contract'
-import { botTurnFor } from './bot-turn-for'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -21,32 +20,23 @@ import type { ConnectorResult } from '../connector-cloud/connector-cloud-request
 import type { ConnectorBotPostBody } from '../connector-cloud/connector-replies'
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
 import type { AutomationLaunch } from '../automations/launch/automation-launch'
-import type { BotRunResults } from '../automations/bot-automation-launch'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
-  alertBotCouldNotStart,
   BOT_COULD_NOT_FINISH_COPY,
-  botRunRefusalAlerts,
   notifyBotCouldNotFinish,
-  runtimeBotOwnerNotice,
   type BotOwnerNoticeDeps
 } from './bot-could-not-finish'
-import { chatThatTookIt } from './bot-automation-sessions'
 import { missedItsThread } from '../automations/bot-automation-launch'
-import { requireStructuredHost, runtimeBotChats } from './bot-chat-session'
-import { runtimeBotRunNotStarted, showBotRunNotStarted } from './bot-run-not-started'
 import { isQuietBotResult } from '../../shared/bot-quiet-result'
+import type { SlackAnswerPresentation } from '../../shared/connectors/slack-answer-presentation'
+import { matchingSlackPresentation } from '../connector-cloud/connector-slack-text'
 import { structuredAgentSessionRefusalLine } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { ANSWERED_TOGETHER_NOTICE } from '../../shared/automations/history/automation-run-answered-together'
 import * as resultNote from './bot-run-result-note'
-import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-session-wire/structured-agent-session-orca-note'
 import { resultPlaceValue } from '../automations/bot-automation-place-refs'
-import { watchBotTurnEnds, type BotRunUnavailable, type BotTurnEnd } from './bot-run-turn-watch'
-import { orcaSignInServer } from './orca-sign-in-server'
+import type { BotRunUnavailable, BotTurnEnd } from './bot-run-turn-watch'
 import {
   hostNotSignedIn,
-  orcaCloudNeedsSignIn,
   serverSignInSteps,
   type OrcaSignInServer
 } from '../../shared/bots/host-orca-sign-in'
@@ -73,7 +63,8 @@ export type BotRunDeliveryDependencies = BotOwnerNoticeDeps &
       conversation: ConversationKey,
       replyId: string,
       text: string,
-      turnFor: ConnectorTurnFor
+      turnFor: ConnectorTurnFor,
+      presentation?: SlackAnswerPresentation
     ): Promise<ConnectorResult<{ notices?: string[] }>> | null
     /** Whom the run's conversation acts for, so its Slack post counts as them (bot-turn-for.ts). */
     turnForOf(sessionId: string): Promise<ConnectorTurnFor>
@@ -171,6 +162,10 @@ export async function deliverBotRunResult(
     return { status: 'dispatch_failed', error: why ?? error }
   }
   const message = ended.message.trim()
+  const presentation =
+    ended.presentation && matchingSlackPresentation(ended.presentation, message)
+      ? ended.presentation
+      : undefined
   const completed: BotRunCompletion = {
     status: 'completed',
     outputSnapshot: message
@@ -182,12 +177,18 @@ export async function deliverBotRunResult(
     return { ...completed, error: COPY.notInThread }
   }
   if (message && !isQuietBotResult(message) && resultsTo === 'thread' && target.threadPost) {
+    if (ended.presentation === null && target.threadPost.source === 'slack') {
+      return { ...completed, error: COPY.postFailed }
+    }
     const text = capAnswer(message, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
     const posted = await deps.replyInThread(
       target.threadPost,
       `run-result:${result.run.id}`,
       text,
-      await deps.turnForOf(result.sessionId)
+      await deps.turnForOf(result.sessionId),
+      ...(presentation && target.threadPost.source === 'slack' && text === message
+        ? ([presentation] as const)
+        : [])
     )
     if (!posted?.ok) {
       return { ...completed, error: posted ? COPY.postFailed : COPY.cloudOff }
@@ -239,13 +240,18 @@ export async function deliverBotRunResult(
       )
     return { ...completed, error }
   }
+  if (ended.presentation === null && 'channel' in resultsTo) {
+    return { ...completed, error: COPY.postFailed }
+  }
   const turnFor = 'channel' in resultsTo ? await deps.turnForOf(result.sessionId) : undefined
+  const slackPresentation =
+    'channel' in resultsTo && presentation && text === message ? { presentation } : {}
   const posted = await deps.postAsBot(
     bot,
     resultsTo.ref
-      ? { postId, ref: resultsTo.ref, text, ...(turnFor ? { turnFor } : {}) }
+      ? { postId, ref: resultsTo.ref, text, ...(turnFor ? { turnFor } : {}), ...slackPresentation }
       : 'channel' in resultsTo
-        ? { postId, channelId: place, text, ...(turnFor ? { turnFor } : {}) }
+        ? { postId, channelId: place, text, ...(turnFor ? { turnFor } : {}), ...slackPresentation }
         : { postId, issue: place, text }
   )
   if (!posted?.ok) {
@@ -269,54 +275,4 @@ async function noteNotices(
     .catch((noteError: unknown) =>
       console.warn('[bots] could not note a result’s notices in its run', noteError)
     )
-}
-
-export function runtimeBotRunRefusals(
-  runtime: OrcaRuntimeService
-): (automation: Pick<Automation, 'name' | 'bot'>, error: string) => void {
-  return botRunRefusalAlerts(runtimeBotOwnerNotice(runtime), () => runtime.bots.list())
-}
-
-export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults {
-  const chats = runtimeBotChats(runtime)
-  return {
-    watch: async () => watchBotTurnEnds(await requireStructuredHost(runtime)),
-    couldNotStart: (bot, automation, notStarted) => {
-      alertBotCouldNotStart(runtimeBotOwnerNotice(runtime), bot, automation)
-      if (notStarted) {
-        void showBotRunNotStarted(
-          runtimeBotRunNotStarted(runtime, chats),
-          bot,
-          notStarted.destination,
-          notStarted.card
-        )
-      }
-    },
-    deliver: (result) =>
-      deliverBotRunResult(
-        {
-          sendToChat: async (bot, text, from) =>
-            chatThatTookIt(await chats.sendToChat(bot.id, text, from)),
-          noteToChat: resultNote.runtimeNoteToChat(runtime, chats),
-          postAsBot: (bot, body) => runtime.getConnectorCloud()?.postAsBot(bot.id, body) ?? null,
-          cloudSignedOut: () => orcaCloudNeedsSignIn(runtime.getConnectorCloud()?.status()),
-          signInServer: () => orcaSignInServer(runtime),
-          noteToRun: async (sessionId, noteId, text) =>
-            writeStructuredAgentSessionOrcaNote(
-              await requireStructuredHost(runtime),
-              sessionId,
-              noteId,
-              { kind: 'status', text }
-            ),
-          replyInThread: (conversation, replyId, text, turnFor) =>
-            runtime
-              .getConnectorCloud()
-              ?.reply({ replyId, conversation, turnId: Date.now(), text, turnFor }) ?? null,
-          // The host delivers the run's own result: no request to verify.
-          turnForOf: (sessionId) => botTurnFor(runtime, sessionId, 'host'),
-          ...runtimeBotOwnerNotice(runtime)
-        },
-        result
-      )
-  }
 }
