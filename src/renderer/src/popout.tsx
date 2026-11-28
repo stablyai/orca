@@ -69,6 +69,11 @@ function PopoutSettingsSync(): null {
       useAppStore.getState().setKeybindingSnapshot(snapshot)
     )
     void useAppStore.getState().fetchKeybindings()
+    const offKeybindingsChanged = window.api.keybindings?.onChanged((snapshot) => {
+      if (!disposed) {
+        useAppStore.getState().setKeybindingSnapshot(snapshot)
+      }
+    })
     const setSettings = (next: GlobalSettings): void => {
       if (!disposed) {
         useAppStore.setState({ settings: next })
