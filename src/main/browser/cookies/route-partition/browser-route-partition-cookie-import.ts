@@ -7,11 +7,8 @@ import {
   type BrowserCookieImportFailure
 } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { detectInstalledBrowsers, selectBrowserProfile } from '../sources/browser-cookie-detection'
-import { importCookiesFromBrowser } from '../browser-cookie-import'
-import { importCookiesFromFile } from '../imports/import-cookie-file'
 import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 import { errorMessage } from '../../../../shared/errors/error-message'
-import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-route-restore'
 
 export type RouteCookieImportSource = {
   importInto: (partition: string) => Promise<BrowserCookieImportResult>
@@ -56,6 +53,8 @@ export async function importIntoRoutePartition(
     return destination.routeChanged(null)
   }
   // Saved session cookies go back first, or the next page's restore would overwrite the import.
+  const { restoreBrowserRoutePartitionSessionCookies } =
+    await import('../session-restore/browser-session-cookie-route-restore')
   await restoreBrowserRoutePartitionSessionCookies(partition)
   const result = await source.importInto(partition)
   let settled: string | null
@@ -99,7 +98,8 @@ export function browserCookieImportSource(request: {
     browser = reselected
   }
   return {
-    importInto: (partition) => importCookiesFromBrowser(browser, partition),
+    importInto: async (partition) =>
+      (await import('../browser-cookie-import')).importCookiesFromBrowser(browser, partition),
     badge: {
       browserFamily: browser.family,
       profileName:
@@ -117,7 +117,8 @@ export async function cookieFileImportSource(
     return { ok: false, reason: 'canceled' }
   }
   return {
-    importInto: (partition) => importCookiesFromFile(filePath, partition),
+    importInto: async (partition) =>
+      (await import('../imports/import-cookie-file')).importCookiesFromFile(filePath, partition),
     badge: { browserFamily: 'manual' }
   }
 }
