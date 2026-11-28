@@ -6,7 +6,10 @@ import {
 } from '@/lib/files/os-open/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/links/ownership/link-source-local-open-owner'
 import { useAppStore } from '@/store/index'
-import { openMarkdownExternalUrl } from '../../markdown/link-routing/markdown-external-url-open'
+import {
+  openMarkdownExternalUrl,
+  resolveMarkdownHttpLinkDestination
+} from '../../markdown/link-routing/markdown-external-url-open'
 import {
   absolutePathToFileUri,
   resolveMarkdownLinkTarget
@@ -51,7 +54,11 @@ export function handleMarkdownPreviewSystemLinkClick({
       state: useAppStore.getState(),
       worktreeId: sourceRoutingWorktreeId,
       sourceOwner,
-      destination: 'system'
+      // Same routing as a plain click: Shift inverts the setting when that option is on (#44311).
+      destination: resolveMarkdownHttpLinkDestination(
+        useAppStore.getState().settings,
+        event.shiftKey
+      )
     })
     return true
   }
