@@ -5,9 +5,9 @@ export const METRICS = [
   { key: 'outPerSec', label: 'M→R msg/s', rel: 0.25, abs: 2 },
   { key: 'inPerSec', label: 'R→M msg/s', rel: 0.25, abs: 2 },
   { key: 'noopOutPerSec', label: 'no-op M→R msg/s', rel: 0.25, abs: 1 },
-  { key: 'pubsPerSec', label: 'store pubs/s', rel: 0.25, abs: 5 },
-  { key: 'noopPubsPerSec', label: 'no-op store pubs/s', rel: 0.25, abs: 2 },
-  { key: 'wakeupsPerSec', label: 'subscriber wakeups/s', rel: 0.25, abs: 500 },
+  { key: 'pubsPerSec', label: 'store pubs/s', rel: 0.25, abs: 5, store: true },
+  { key: 'noopPubsPerSec', label: 'no-op store pubs/s', rel: 0.25, abs: 2, store: true },
+  { key: 'wakeupsPerSec', label: 'subscriber wakeups/s', rel: 0.25, abs: 500, store: true },
   // Same-build runs differed by up to ~60 ms/s on Xvfb, so smaller long-task deltas are noise.
   { key: 'longTaskMsPerSec', label: 'long tasks ms/s', rel: 0.5, abs: 50 },
   { key: 'stalls100', label: 'main stalls >100ms', rel: 0.5, abs: 3 },
@@ -50,21 +50,34 @@ export function compareRuns(runs, scenarios) {
   const rows = []
   for (const scenario of scenarios) {
     for (const metric of METRICS) {
-      const values = (arm) =>
-        runs
-          .filter((run) => run.arm === arm)
-          // An undriven window's numbers are kept for diagnosis but never judged.
-          .filter((run) => !run.windows[scenario]?.undriven)
-          .map((run) => run.windows[scenario]?.metrics?.[metric.key])
-          .filter((value) => typeof value === 'number' && Number.isFinite(value))
-      const oldValues = values('old')
-      const newValues = values('new')
-      const scheduled = (arm) => runs.filter((run) => run.arm === arm).length
+      const sample = (run) => {
+        const window = run.windows[scenario]
+        // An undriven window's numbers are kept for diagnosis but never judged.
+        return window?.undriven ? undefined : window?.metrics?.[metric.key]
+      }
       // Every scheduled run must have a sample: a dropped NEW run could be the regressed one.
-      if (oldValues.length < scheduled('old') || newValues.length < scheduled('new')) {
-        rows.push({ scenario, metric, old: null, new: null, verdict: 'n/a' })
+      const missing = runs.filter((run) => !Number.isFinite(sample(run)))
+      if (missing.length > 0) {
+        const probeMissed =
+          metric.store &&
+          missing.every(
+            (run) =>
+              run.storeBreakpoints === 0 &&
+              run.windows[scenario]?.metrics &&
+              !run.windows[scenario].undriven
+          )
+        rows.push({
+          scenario,
+          metric,
+          old: null,
+          new: null,
+          verdict: probeMissed ? 'not measured' : 'n/a'
+        })
         continue
       }
+      const values = (arm) => runs.filter((run) => run.arm === arm).map(sample)
+      const oldValues = values('old')
+      const newValues = values('new')
       const oldWorst = Math.max(...oldValues)
       const newBest = Math.min(...newValues)
       let verdict = newBest > oldWorst * (1 + metric.rel) + metric.abs ? 'FAIL' : 'ok'
