@@ -2,6 +2,7 @@ import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/fla
 import type { RuntimeClient } from '../../runtime/client'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { getTerminalHandle } from '../../terminals/terminal-selector'
+import { wasForeignTerminalHandleDropped } from '../../runtime/connection/runtime-source-fence'
 import { hasStructuredSessionMarker } from '../../../shared/agent-launch/environment/structured-session-marker'
 import {
   injectedSessionAddress,
@@ -208,6 +209,16 @@ function structuredSessionRefusal(flagName: 'from' | 'terminal'): RuntimeClientE
 }
 
 export function throwNoActiveSenderTerminal(flagName: 'from' | 'terminal' = 'from'): never {
+  // A dropped foreign handle is not an env filter's doing; say which Orca the terminal belongs to.
+  if (wasForeignTerminalHandleDropped()) {
+    throw new RuntimeClientError(
+      'no_active_sender_terminal',
+      'This terminal was opened by a different Orca than the one this command reached (for example, ' +
+        'a WSL shell started from a Windows Orca pane), so its terminal handle means nothing here. ' +
+        `Run the command from a terminal of the Orca you want to reach, or pass --${flagName} with ` +
+        "your own terminal's handle on that Orca."
+    )
+  }
   // Lifecycle sends can refuse before the structured guard; distinguish missing identity from stale handles.
   if (hasStructuredSessionMarker() && !process.env.ORCA_TERMINAL_HANDLE) {
     throw structuredSessionRefusal(flagName)
