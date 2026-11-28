@@ -5,7 +5,10 @@ import type {
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 import { observeWorker } from './worker-presence-report'
-import { isWorkerStartOrStopUndecided } from '../lifecycle/worker-exit-observation'
+import {
+  isWorkerStartOrStopUndecided,
+  isWorkerStopRequested
+} from '../lifecycle/worker-exit-observation'
 
 /** A chat worker's provider died with no turn running: nothing else tells its coordinator. */
 export function reportChatWorkerProviderDeath(
@@ -65,7 +68,10 @@ export function reportChatWorkerClosedByPerson(
       return
     }
     for (const { dispatch, from } of chatWorkerDispatches(closed.sessionId, db)) {
-      if (isWorkerStartOrStopUndecided(db.getWorkerDispatch(dispatch.id)?.state)) {
+      // A start still running reports its own outcome, and a stop asked for is no news; a start
+      // left unknown has no one else to report the close.
+      const state = db.getWorkerDispatch(dispatch.id)?.state
+      if (state === 'starting' || isWorkerStopRequested(state)) {
         continue
       }
       const release = stop.releaseFor(dispatch.id)

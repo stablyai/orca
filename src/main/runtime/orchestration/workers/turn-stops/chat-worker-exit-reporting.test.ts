@@ -62,7 +62,11 @@ afterEach(async () => {
   db = undefined
 })
 
-function startWorkerDispatch(database: OrchestrationDb, taskId: string, keptOpen: boolean) {
+function startWorkerDispatch(
+  database: OrchestrationDb,
+  taskId: string,
+  { keptOpen, startUnknown }: { keptOpen: boolean; startUnknown: boolean }
+) {
   const { dispatch } = database.createStartingWorkerDispatch({
     creator: { kind: 'system' },
     maxDepth: 10,
@@ -81,7 +85,11 @@ function startWorkerDispatch(database: OrchestrationDb, taskId: string, keptOpen
     effects: [],
     setupState: 'not_applicable'
   })
-  database.markWorkerDispatchReady(dispatch.id)
+  if (startUnknown) {
+    database.markWorkerStartUnknown(dispatch.id, 'brief_unconfirmed', 'start never confirmed')
+  } else {
+    database.markWorkerDispatchReady(dispatch.id)
+  }
   if (keptOpen) {
     database.keepWorkerTerminalOpen(paneKey)
   }
@@ -92,13 +100,15 @@ async function startWorker({
   unavailableErrorRead = false,
   autoContinue = { enabled: false },
   assignee = 'worker',
-  keptOpen = false
+  keptOpen = false,
+  startUnknown = false
 }: {
   unavailableErrorRead?: boolean
   autoContinue?: { enabled: boolean }
   /** `chat`: the chat is assigned the task directly, with no worker row. */
   assignee?: 'worker' | 'chat'
   keptOpen?: boolean
+  startUnknown?: boolean
 } = {}) {
   const database = new OrchestrationDb(':memory:')
   db = database
@@ -116,7 +126,7 @@ async function startWorker({
           creator: { kind: 'system' },
           maxDepth: 10
         })
-      : startWorkerDispatch(database, task.id, keptOpen)
+      : startWorkerDispatch(database, task.id, { keptOpen, startUnknown })
   const forgottenMail: string[] = []
   const workerRuntime = {
     forgetStructuredSessionMail: (sessionId: string) => forgottenMail.push(sessionId),
@@ -544,4 +554,13 @@ it('keeps a chat tab in the window when its host close fails', async () => {
     closed: false
   })
   expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('ready')
+})
+
+it('stops a chat worker whose start was left unconfirmed once a person closes it', async () => {
+  const worker = await startWorker({ startUnknown: true })
+  await STRUCTURED_AGENT_SESSION_CLOSE_METHOD.handler({ sessionId: SESSION }, phoneClose('phone-7'))
+
+  expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('stopped')
+  const mail = worker.database.getUnreadRunMailbox(worker.run.id, 20, ['escalation'])
+  expect(mail.map(({ subject }) => subject)).toContain('Worker was closed before it finished')
 })
