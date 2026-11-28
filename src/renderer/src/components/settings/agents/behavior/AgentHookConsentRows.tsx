@@ -5,24 +5,16 @@ import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type {
   AgentHookInstallStatus,
   AgentHookTarget
 } from '../../../../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import {
-  isAgentHookTarget,
-  readAgentHookConsent
-} from '../../../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
+import { isAgentHookTarget } from '../../../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { SettingsGroupNestedRows } from '../../section-layout/SettingsGroup'
 
 /** One row per detected agent Orca has hooks for: installed or not, with Install or Remove. */
-export function AgentHookConsentRows({
-  settings
-}: {
-  settings: GlobalSettings
-}): React.JSX.Element | null {
+export function AgentHookConsentRows(): React.JSX.Element | null {
   const t = useTranslate()
   const detected = useAppStore((state) => state.detectedAgentIds)
   const ensureNativeDetectedAgents = useAppStore((state) => state.ensureNativeDetectedAgents)
@@ -64,9 +56,8 @@ export function AgentHookConsentRows({
     <SettingsGroupNestedRows>
       {agents.map((agent) => {
         const status = statuses.find((entry) => entry.agent === agent)
-        const installed =
-          readAgentHookConsent(settings, agent) === 'granted' &&
-          status?.managedHooksPresent === true
+        // Disk is the truth: a failed removal still shows Installed with Remove.
+        const installed = status?.managedHooksPresent === true
         return (
           <div key={agent} className="flex min-h-9 items-center gap-2.5 py-1.5 text-[13px]">
             <AgentTypeIcon agentType={agent} size={14} />

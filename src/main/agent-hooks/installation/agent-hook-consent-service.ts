@@ -56,7 +56,7 @@ export function createAgentHookConsentService(
     }
     // Why re-check here: a restored pane can appear before startup's adoption pass has run.
     adoptPresentAgentHooks(
-      { getSettings: store.getSettings, writeConsent },
+      { getSettings: () => store.getSettings(), writeConsent },
       getManagedAgentHookStatuses
     )
     const current = store.getSettings()
@@ -75,15 +75,14 @@ export function createAgentHookConsentService(
   }
 
   /** Granting installs right away and keeps consent only where the install worked; declining removes Orca's hooks. */
-  async function decide(
+  async function applyDecision(
     agents: readonly AgentHookTarget[],
     decision: AgentHookConsentDecision
   ): Promise<AgentHookInstallStatus[]> {
-    const before = store.getSettings().agentHookConsent
-    writeConsent(withAgentHookConsent(before, agents, decision))
+    writeConsent(withAgentHookConsent(store.getSettings().agentHookConsent, agents, decision))
     if (decision === 'declined') {
-      const wasGranted = agents.filter((agent) => before?.[agent] === 'granted')
-      return wasGranted.length > 0 ? await removeManagedAgentHooks({ agents: wasGranted }) : []
+      // Always attempt removal so a retry after a failed removal still cleans up.
+      return await removeManagedAgentHooks({ agents: [...agents] })
     }
     const statuses = await installManagedAgentHooks(store.getSettings(), {
       agents,
@@ -91,11 +90,28 @@ export function createAgentHookConsentService(
       shouldHydrateShellPath: options.shouldHydrateShellPath,
       onInstallError: recordManagedHookInstallFailure
     })
-    const failed = statuses.filter((status) => status.state === 'error').map((s) => s.agent)
+    const consent = store.getSettings().agentHookConsent
+    const failed = statuses
+      .filter((status) => status.state === 'error' && consent?.[status.agent] === 'granted')
+      .map((status) => status.agent)
     if (failed.length > 0) {
-      writeConsent(withoutAgentHookConsent(store.getSettings().agentHookConsent, failed))
+      writeConsent(withoutAgentHookConsent(consent, failed))
     }
     return statuses
+  }
+
+  // Why serialize: a decline must never be overtaken by an install still in flight.
+  let queue: Promise<unknown> = Promise.resolve()
+  function decide(
+    agents: readonly AgentHookTarget[],
+    decision: AgentHookConsentDecision
+  ): Promise<AgentHookInstallStatus[]> {
+    const next = queue.then(
+      () => applyDecision(agents, decision),
+      () => applyDecision(agents, decision)
+    )
+    queue = next.catch(() => undefined)
+    return next
   }
 
   return { resolveOffer, decide, statuses: getManagedAgentHookStatuses }

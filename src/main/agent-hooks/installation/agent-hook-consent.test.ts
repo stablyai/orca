@@ -66,10 +66,12 @@ vi.mock('../../claude/cli-capabilities/claude-hook-event-versions', () => ({
 }))
 
 vi.mock('./install-telemetry', () => ({ recordManagedHookInstallFailure: () => {} }))
+vi.mock('electron', () => ({ ipcMain: { handle: () => {} } }))
 
 const { applyAgentStatusHooksEnabled, installManagedAgentHooks } =
   await import('./managed-agent-hook-controls')
 const { reconcileStartupManagedAgentHooks } = await import('./managed-agent-hook-startup')
+const { createAgentHookConsentService } = await import('./agent-hook-consent-service')
 
 beforeEach(() => {
   calls.installed = []
@@ -114,5 +116,30 @@ describe('agent hook consent', () => {
     })
     expect(new Set(calls.installed)).toEqual(new Set(['claude', 'cursor']))
     expect(calls.removed).toEqual([])
+  })
+
+  it('offers an undecided agent and a decline never leaves hooks, with a class-backed store', async () => {
+    // Why a class: the real Store reads `this`, which a detached method reference loses.
+    class Store {
+      private settings = { ...settings, agentHookConsent: {} }
+      getSettings() {
+        return this.settings
+      }
+      updateSettings(updates: Partial<typeof settings>) {
+        this.settings = { ...this.settings, ...updates }
+      }
+    }
+    calls.present = new Set(['cursor'])
+    const store = new Store()
+    const service = createAgentHookConsentService(store, { shouldHydrateShellPath: false })
+
+    expect(service.resolveOffer('claude').ask).toBe(true)
+    const grant = service.decide(['claude'], 'granted')
+    const decline = service.decide(['claude'], 'declined')
+    await Promise.all([grant, decline])
+
+    expect(store.getSettings().agentHookConsent).toEqual({ claude: 'declined', cursor: 'granted' })
+    expect(calls.removed.at(-1)).toBe('claude')
+    expect(service.resolveOffer('claude').ask).toBe(false)
   })
 })

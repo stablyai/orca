@@ -50,17 +50,32 @@ async function showNext(): Promise<void> {
       publish({
         agent,
         agents: offer.agents.filter(
-          (other) => other === agent || (detected.has(other) && !laterThisRun.has(other))
+          (other) =>
+            other === agent ||
+            (detected.has(other) && !laterThisRun.has(other) && isUndecided(other))
         ),
         configPath: offer.configPath
       })
     }
   } catch (error) {
     console.warn('[agent-hook-consent] could not check hooks for', agent, error)
+    retryLater(agent)
   } finally {
     resolving = false
   }
   void showNext()
+}
+
+const failedChecks = new Map<AgentHookTarget, number>()
+const MAX_CHECK_ATTEMPTS = 3
+
+// The arrival watcher reports each agent once, so a failed check retries here with backoff.
+function retryLater(agent: AgentHookTarget): void {
+  const attempts = (failedChecks.get(agent) ?? 0) + 1
+  failedChecks.set(agent, attempts)
+  if (attempts < MAX_CHECK_ATTEMPTS) {
+    setTimeout(() => enqueue(agent), 5000 * attempts)
+  }
 }
 
 function enqueue(agent: string): void {

@@ -139,7 +139,7 @@ function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps
         ariaLabel={getAgentStatusHooksTitle(t)}
       />
       {/* Install and Remove act on this computer's agent configs, which a paired browser can't reach. */}
-      {enabled && !isPairedWebClientWindow() ? <AgentHookConsentRows settings={settings} /> : null}
+      {enabled && !isPairedWebClientWindow() ? <AgentHookConsentRows /> : null}
     </>
   )
 }

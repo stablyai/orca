@@ -180,8 +180,16 @@ function AgentHookConsentOfferCard({
   }
 
   const neverAsk = async (): Promise<void> => {
+    // Commit the decline before the next offer is built, and keep the card if it fails.
+    try {
+      await window.api.agentHookConsent.decide({ agents: [offer.agent], decision: 'declined' })
+    } catch (error) {
+      toast.error(t('agentHookConsent.declineFailed', 'Couldn’t save your choice'), {
+        description: error instanceof Error ? error.message : String(error)
+      })
+      return
+    }
     closeAgentHookConsentOffer({ later: false })
-    await window.api.agentHookConsent.decide({ agents: [offer.agent], decision: 'declined' })
     toast(
       t('agentHookConsent.declined.title', 'Didn’t install hooks for {{agent}}', { agent: name }),
       {
