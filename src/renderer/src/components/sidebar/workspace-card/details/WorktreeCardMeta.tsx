@@ -9,6 +9,7 @@ import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hove
 import type { WorktreeCardDetailsHoverProps } from '../metadata/worktree-card-meta-types'
 import { preloadCommentMarkdown } from '../../../comment-markdown/comment-markdown-lazy'
 import { useActivityThreadHoverCardIntent } from '@/components/activity/thread-preview/activity-thread-hover-card-intent'
+import { WorktreeCardReferencePeekContext } from './worktree-card-reference-peek-context'
 import type * as WorktreeCardHoverContentModule from './WorktreeCardHoverContent'
 
 const loadWorktreeCardHoverContent = (): Promise<typeof WorktreeCardHoverContentModule> =>
@@ -83,11 +84,17 @@ export function WorktreeCardDetailsHover({
     },
     [handleHoverOpenChange, workspaceTitleEditing]
   )
+  // Counted: one card can hold several reference peeks.
+  const [openReferencePeeks, setOpenReferencePeeks] = React.useState(0)
+  const handleReferencePeekOpenChange = React.useCallback((open: boolean): void => {
+    setOpenReferencePeeks((count) => Math.max(0, count + (open ? 1 : -1)))
+  }, [])
   // Same rest-to-peek intent as agent activity rows so passing pointers don't flash the card.
   const hoverIntent = useActivityThreadHoverCardIntent({
     open: hoverOpen || workspaceTitleEditing,
     onOpenChange: handleEffectiveHoverOpenChange,
-    openDelay
+    openDelay,
+    enabled: openReferencePeeks === 0
   })
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
   const attachments = getWorkspaceAttachments(workspace ?? {})
@@ -124,19 +131,21 @@ export function WorktreeCardDetailsHover({
       openDelay={0}
       closeDelay={closeDelay}
     >
-      <HoverCardTrigger
-        asChild
-        {...hoverIntent.triggerHandlers}
-        onPointerEnter={(event) => {
-          hoverIntent.triggerHandlers.onPointerEnter(event)
-          void loadWorktreeCardHoverContent().catch(() => {})
-          if (hasComment(comment)) {
-            preloadCommentMarkdown()
-          }
-        }}
-      >
-        {children}
-      </HoverCardTrigger>
+      <WorktreeCardReferencePeekContext value={handleReferencePeekOpenChange}>
+        <HoverCardTrigger
+          asChild
+          {...hoverIntent.triggerHandlers}
+          onPointerEnter={(event) => {
+            hoverIntent.triggerHandlers.onPointerEnter(event)
+            void loadWorktreeCardHoverContent().catch(() => {})
+            if (hasComment(comment)) {
+              preloadCommentMarkdown()
+            }
+          }}
+        >
+          {children}
+        </HoverCardTrigger>
+      </WorktreeCardReferencePeekContext>
       {hasOpenedHover ? (
         <React.Suspense fallback={null}>
           <LazyWorktreeCardHoverContent

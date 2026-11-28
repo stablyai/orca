@@ -15,6 +15,7 @@ import {
 } from './workspace-reference-details'
 import { workspaceAttachmentReferenceLabel } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { cn } from '@/lib/class-names'
+import { WorktreeCardReferencePeekContext } from '../details/worktree-card-reference-peek-context'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -299,14 +300,21 @@ function ReferencePeek({
   const [geometry, setGeometry] = React.useState<PeekGeometry | null>(null)
   const [open, setOpen] = React.useState(false)
   const front = ordered[0]
+  const reportPeekOpen = React.useContext(WorktreeCardReferencePeekContext)
+  // Why: a focus-opened peek must keep the card's details hover shut wherever the pointer rests.
+  React.useEffect(() => {
+    if (!open || !reportPeekOpen) {
+      return
+    }
+    reportPeekOpen(true)
+    return () => reportPeekOpen(false)
+  }, [open, reportPeekOpen])
   React.useEffect(() => {
     const trigger = triggerRef.current
     const card = trigger?.closest('[data-worktree-card-surface]')
     if (!open || !trigger || !card) {
       return
     }
-    // Why: a focus-opened peek must keep the card's details hover shut wherever the pointer rests.
-    card.setAttribute('data-activity-thread-control', '')
     // Re-clamp when the card resizes or its title row reflows the glyph.
     const remeasure = (): void =>
       setGeometry((previous) => {
@@ -325,7 +333,6 @@ function ReferencePeek({
     return () => {
       resize.disconnect()
       reflow.disconnect()
-      card.removeAttribute('data-activity-thread-control')
     }
   }, [open])
   return (
