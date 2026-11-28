@@ -5,6 +5,13 @@ import { Input } from '../../../ui/input'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  TERMINAL_FONT_SIZE_MAX,
+  TERMINAL_FONT_SIZE_MIN,
+  TERMINAL_FONT_SIZE_STEP,
+  parseTerminalFontSizeInput,
+  stepTerminalFontSize
+} from './terminal-font-size-steps'
 
 export function TerminalFontSizeSetting({
   settings,
@@ -38,10 +45,11 @@ export function TerminalFontSizeSetting({
               variant="outline"
               size="icon-sm"
               onClick={() => {
-                const next = Math.max(10, settings.terminalFontSize - 1)
-                updateSettings({ terminalFontSize: next })
+                updateSettings({
+                  terminalFontSize: stepTerminalFontSize(settings.terminalFontSize, -1)
+                })
               }}
-              disabled={settings.terminalFontSize <= 10}
+              disabled={settings.terminalFontSize <= TERMINAL_FONT_SIZE_MIN}
               aria-label={t('settings.terminal.fontSize.decrease', 'Decrease font size')}
             >
               <Minus className="size-3" />
@@ -49,13 +57,14 @@ export function TerminalFontSizeSetting({
             {/* Hide native spinners that overlap values and duplicate the custom steppers. */}
             <Input
               type="number"
-              min={10}
-              max={24}
+              min={TERMINAL_FONT_SIZE_MIN}
+              max={TERMINAL_FONT_SIZE_MAX}
+              step={TERMINAL_FONT_SIZE_STEP}
               aria-label={fontSizeLabel}
               value={settings.terminalFontSize}
               onChange={(e) => {
-                const value = Number.parseInt(e.target.value, 10)
-                if (!Number.isNaN(value) && value >= 10 && value <= 24) {
+                const value = parseTerminalFontSizeInput(e.target.value)
+                if (value !== null) {
                   updateSettings({ terminalFontSize: value })
                 }
               }}
@@ -65,10 +74,11 @@ export function TerminalFontSizeSetting({
               variant="outline"
               size="icon-sm"
               onClick={() => {
-                const next = Math.min(24, settings.terminalFontSize + 1)
-                updateSettings({ terminalFontSize: next })
+                updateSettings({
+                  terminalFontSize: stepTerminalFontSize(settings.terminalFontSize, 1)
+                })
               }}
-              disabled={settings.terminalFontSize >= 24}
+              disabled={settings.terminalFontSize >= TERMINAL_FONT_SIZE_MAX}
               aria-label={t('settings.terminal.fontSize.increase', 'Increase font size')}
             >
               <Plus className="size-3" />
