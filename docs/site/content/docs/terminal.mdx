@@ -100,7 +100,7 @@ To open a different shell, choose **Custom shell** under [Settings → Terminal 
 
 Under [Settings → Terminal](/docs/settings), choose PowerShell, Command Prompt, Git Bash when installed, or **Custom shell**. For a custom shell, enter the full executable path, such as `C:\msys64\usr\bin\zsh.exe`. Enter optional arguments one per line, for example `-l`. The custom shell applies to new local interactive panes.
 
-Custom shells run with the arguments you enter. The built-in PowerShell option adds command status and working-directory reports. A custom PowerShell setup can provide these through its profile (OSC 133 and OSC 7).
+Custom shells run with the arguments you enter. The built-in PowerShell option reports command status and directory changes and restores the starting directory after loading the profile. For a custom PowerShell executable, the profile controls these behaviors.
 
 Choose a WSL distribution in the project's runtime settings. The tab bar's **+** menu lets you open a terminal with a built-in shell for that tab.
 
