@@ -7,6 +7,9 @@ export type TerminalInputScreen = { draft: string | null; lines: readonly string
 export type TerminalInputScreenReader = (ptyId: string) => Promise<TerminalInputScreen>
 const unknownScreen: TerminalInputScreen = { draft: null, lines: [] }
 const normalize = (text: string) => text.trim().replace(/\s+/g, ' ')
+// Keep prompt glyphs escaped for the ASCII-only daemon bundle.
+const PROMPT_LINE = new RegExp(String.raw`^\s*[\u276f\u203a\u00bb]\s?(.*)$`)
+const PROMPT_PREFIX = new RegExp(String.raw`^\s*[\u276f\u203a\u00bb]`)
 
 type Pending = {
   revision: number
@@ -60,13 +63,13 @@ function echoCount(lines: readonly string[], text: string): number {
   const expected = normalize(text)
   let count = 0
   for (let index = 0; index < lines.length; index += 1) {
-    const prompt = /^\s*[❯›»]\s?(.*)$/.exec(lines[index])
+    const prompt = PROMPT_LINE.exec(lines[index])
     if (!prompt) {
       continue
     }
     let echo = normalize(prompt[1])
     for (let next = index + 1; echo.length < expected.length && next < lines.length; next += 1) {
-      if (!expected.startsWith(echo) || /^\s*[❯›»]/.test(lines[next])) {
+      if (!expected.startsWith(echo) || PROMPT_PREFIX.test(lines[next])) {
         break
       }
       echo = normalize(`${echo} ${lines[next]}`)
