@@ -212,14 +212,34 @@ export function createIncrementalNdjsonFramer(
     }
   }
 
+  const resume = (): void => {
+    if ((pendingInput === null && pausedCompleteInputBytes === 0) || options.shouldPause?.()) {
+      return
+    }
+    const input = pendingInput
+    pendingInput = null
+    if (pausedCompleteInput.length > 0) {
+      const queued = pausedCompleteInput
+      pausedCompleteInput = []
+      pausedCompleteInputBytes = 0
+      process(queued.join(''))
+    }
+    if (input !== null) {
+      if (options.shouldPause?.()) {
+        // Keep the suffix behind records newly queued by a consumer that pauses again.
+        const queuedSuffix = pendingInput
+        pendingInput = null
+        const suffix = `${queuedSuffix ?? ''}${input}`
+        retainPendingSuffix(suffix, suffix)
+      } else {
+        process(input)
+      }
+    }
+  }
+
   return {
     feed(chunk): void {
-      if (pausedCompleteInputBytes > 0 && !options.shouldPause?.()) {
-        const queued = pausedCompleteInput
-        pausedCompleteInput = []
-        pausedCompleteInputBytes = 0
-        process(queued.join(''))
-      }
+      resume()
       const endedPausedSuffix = discardingPausedSuffix
       // The dropped tail follows the queued records; only new bytes can finish it.
       if (discardingPausedSuffix) {
@@ -244,30 +264,7 @@ export function createIncrementalNdjsonFramer(
       }
       process(chunk)
     },
-    resume(): void {
-      if (options.shouldPause?.() || (pendingInput === null && pausedCompleteInputBytes === 0)) {
-        return
-      }
-      const input = pendingInput
-      pendingInput = null
-      if (pausedCompleteInput.length > 0) {
-        const queued = pausedCompleteInput
-        pausedCompleteInput = []
-        pausedCompleteInputBytes = 0
-        process(queued.join(''))
-      }
-      if (input !== null) {
-        if (options.shouldPause?.()) {
-          // Keep the suffix behind records newly queued by a consumer that pauses again.
-          const queuedSuffix = pendingInput
-          pendingInput = null
-          const suffix = `${queuedSuffix ?? ''}${input}`
-          retainPendingSuffix(suffix, suffix)
-        } else {
-          process(input)
-        }
-      }
-    },
+    resume,
     takeTail(): string {
       const tail =
         discardingOversizedLine || discardingPausedSuffix
