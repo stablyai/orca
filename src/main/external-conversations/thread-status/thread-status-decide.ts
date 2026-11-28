@@ -33,6 +33,8 @@ export type ThreadStatusInput = {
   view: ThreadStatusView | undefined
   /** Something the thread will see first is still on its way (§4.6). */
   held: boolean
+  /** The saved line may already be in the thread, with no answer seen for it. */
+  pendingMayHavePosted?: boolean
 }
 
 export type ThreadStatusDecision =
@@ -62,7 +64,8 @@ export function decideThreadStatus({
   eligible,
   fact,
   view,
-  held
+  held,
+  pendingMayHavePosted
 }: ThreadStatusInput): ThreadStatusDecision {
   const armed = fact?.armed
   if (!fact || !armed) {
@@ -77,12 +80,13 @@ export function decideThreadStatus({
   if (view.activity === 'none') {
     return DISARM
   }
-  // A run that posted no update ends without saying it stops them.
-  const stop: ThreadStatusDecision = !armed.lines
-    ? DISARM
-    : held
-      ? WAIT
-      : { kind: 'post', text: THREAD_STATUS_STOP_LINE, stop: true }
+  // A run that posted no update ends without saying it stops them; one that may have posted has.
+  const stop: ThreadStatusDecision =
+    !armed.lines && !(pendingMayHavePosted && fact.pending)
+      ? DISARM
+      : held
+        ? WAIT
+        : { kind: 'post', text: THREAD_STATUS_STOP_LINE, stop: true }
   if (!view.open || now - armed.turnEndAt >= THREAD_STATUS_MAX_MS) {
     return stop
   }

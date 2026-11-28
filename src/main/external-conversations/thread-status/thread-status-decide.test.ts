@@ -168,6 +168,24 @@ describe('decideThreadStatus', () => {
     })
   })
 
+  it('stops with the stop line when a saved update may have posted, quietly when it never went', () => {
+    const closed = { activity: 'idle', open: false, helpersRunning: false } as const
+    const pending = { replyId: 'status-1', text: 'Still working on this (30 min).', stop: false }
+    const saved = { ...armedAt(START), pending: { ...pending, at: START + 30 * MIN } }
+    const now = START + 31 * MIN
+    expect(decide({ now, fact: saved, view: closed, pendingMayHavePosted: true })).toEqual({
+      kind: 'post',
+      text: THREAD_STATUS_STOP_LINE,
+      stop: true
+    })
+    expect(decide({ now, fact: saved, view: closed, pendingMayHavePosted: false })).toEqual({
+      kind: 'disarm'
+    })
+    expect(
+      decide({ now: START + 6 * HOUR, fact: saved, pendingMayHavePosted: true })
+    ).toMatchObject({ kind: 'post', stop: true })
+  })
+
   it('arms only while the day leaves room for an update and its stop line', () => {
     expect(mayArm(undefined, START)).toBe(true)
     expect(mayArm({ seq: 10, day: utcDay(START), dayCount: 10 }, START)).toBe(true)

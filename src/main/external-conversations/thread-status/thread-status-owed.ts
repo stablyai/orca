@@ -23,6 +23,8 @@ export type SavedLineInput = {
   answerClear: boolean
   /** A client runs and has said hello. */
   cloudReady: boolean
+  /** The saved line may already be in the thread: any but one this process knows it never sent. */
+  mayHavePosted: boolean
 }
 
 /** `send` the saved line as it is; `drop` it (stale, overtaken or no longer what the workers'
@@ -30,7 +32,7 @@ export type SavedLineInput = {
 export type SavedLineNow = 'send' | 'drop' | 'disarm' | 'wait'
 
 export function savedLineNow(input: SavedLineInput): SavedLineNow {
-  const { now, fact, view, eligible, held } = input
+  const { now, fact, view, eligible, held, mayHavePosted } = input
   const pending = fact?.pending
   if (!fact?.armed || !pending) {
     return 'wait'
@@ -38,7 +40,14 @@ export function savedLineNow(input: SavedLineInput): SavedLineNow {
   if (stalePending(fact, now, THREAD_STATUS_PENDING_MAX_MS)) {
     return 'drop'
   }
-  const decided = decideThreadStatus({ now, fact, view, eligible, held })
+  const decided = decideThreadStatus({
+    now,
+    fact,
+    view,
+    eligible,
+    held,
+    pendingMayHavePosted: mayHavePosted
+  })
   if (decided.kind !== 'post') {
     return decided.kind
   }

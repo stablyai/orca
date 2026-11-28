@@ -443,6 +443,39 @@ describe('ThreadStatus', () => {
     expect(run.fact()?.armed?.lines).toBe(1)
   })
 
+  it('still posts the stop line when the first update went out with no answer', async () => {
+    // The first update may be in the thread; the workers read cap closes them before it settles.
+    const noAnswer = { ok: false as const, status: null, error: null }
+    const run = harness(botHome(), { answers: [noAnswer] })
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    await run.polled(view({ activity: 'idle', open: false }))
+    expect(run.fact()?.armed?.lines).toBe(1)
+    await run.advance(MIN)
+    expect(run.lines()).toEqual([
+      '02:39 Still working on this (30 min).',
+      `02:40 ${THREAD_STATUS_STOP_LINE}`
+    ])
+    expect(run.fact()).toEqual({ seq: 2, day: '2026-11-26', dayCount: 2 })
+
+    // An update this process saved and never sent is known absent: the run ends quietly.
+    const unsaved = botHome(DM)
+    const quiet = harness(unsaved, {
+      flush: () => Promise.reject(new Error('disk full'))
+    })
+    quiet.status.turnEnding(PANE)
+    quiet.status.applied(PANE, view(), new Set(['turn-ended']))
+    await quiet.advance(30 * MIN)
+    expect(findLink(unsaved, DM)?.link.threadStatus?.pending).toBeDefined()
+    await quiet.polled(view({ activity: 'idle', open: false }))
+    expect(quiet.sent).toHaveLength(0)
+    expect(findLink(unsaved, DM)?.link.threadStatus).toEqual({
+      seq: 1,
+      day: '2026-11-26',
+      dayCount: 0
+    })
+  })
+
   it('posts one line, not the missed ones, after the computer slept for 3 hours', async () => {
     const run = harness(botHome())
     await run.turnEnded()

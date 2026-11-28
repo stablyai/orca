@@ -197,7 +197,8 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       const current = read()
       const view = current ? this.views.get(current.link.paneKey) : undefined
       const eligible = !!current && threadStatusEligible(this.deps, current.link)
-      const input = { now: this.now(), fact: current?.fact, view, eligible }
+      const pendingMayHavePosted = this.waits.mayHavePosted(id, current?.fact.pending?.replyId)
+      const input = { now: this.now(), fact: current?.fact, view, eligible, pendingMayHavePosted }
       return {
         current,
         decided: decideThreadStatus({ ...input, held: !!current && held(current.link) })
@@ -296,6 +297,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
    *  owed is dropped, or its run stopped, at once rather than a tick later. */
   private settleSaved(link: ExternalConversationLink): SavedLineNow {
     const fact = link.threadStatus
+    const mayHavePosted = this.waits.mayHavePosted(idOf(link), fact?.pending?.replyId)
     const verdict = savedLineNow({
       now: this.now(),
       fact,
@@ -303,16 +305,11 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       eligible: threadStatusEligible(this.deps, link),
       held: this.heldNow(link),
       answerClear: this.waits.answerClearFor(idOf(link), this.answerKey(link), link.paneKey),
-      cloudReady: (this.deps.cloud()?.cloudFeatures() ?? null) !== null
+      cloudReady: (this.deps.cloud()?.cloudFeatures() ?? null) !== null,
+      mayHavePosted
     })
     const dropped =
-      fact && verdict === 'drop'
-        ? withoutSavedLine(
-            fact,
-            this.now(),
-            this.waits.mayHavePosted(idOf(link), fact.pending?.replyId)
-          )
-        : undefined
+      fact && verdict === 'drop' ? withoutSavedLine(fact, this.now(), mayHavePosted) : undefined
     if (fact && (verdict === 'disarm' || (dropped && !dropped.armed))) {
       this.disarm(link, dropped ?? fact)
     } else if (dropped) {
