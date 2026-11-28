@@ -26,6 +26,8 @@ export type ClaudeChildWakeHost = {
 
 /** Wakes by owner id, each with the moment it stops guessing, and the ones already spent. */
 export class ClaudeChildWake {
+  /** In deadline order: every lease is the same length on a clock that never goes back, and a
+   *  re-wake moves to the end, so the first entry is always the next to expire. */
   private readonly wakes = new Map<string, Wake>()
   /** Owners whose wake ran out, so a later confirmed running report can still restore them. */
   private readonly expired = new Set<string>()
@@ -56,6 +58,7 @@ export class ClaudeChildWake {
     this.host.showWorking(ownerId, owner.task)
     // Why: Claude does not resume an owner whose remaining descendants end later (or one whose
     // worktree is gone), so the guess must expire or the row stays working until the chat closes.
+    this.wakes.delete(ownerId)
     this.wakes.set(ownerId, { at: this.now() + CLAUDE_CHILD_WAKE_LEASE_MS, owner })
   }
 
@@ -75,12 +78,12 @@ export class ClaudeChildWake {
 
   /** Settle the wakes that ran out before anyone reads the row; no further frame need arrive. */
   settleExpired(): void {
-    if (this.wakes.size === 0) {
-      return
-    }
-    const now = this.now()
-    const due = [...this.wakes].filter(([, wake]) => wake.at <= now)
-    for (const [ownerId, wake] of due) {
+    // Runs on every drained frame: only the due front of the queue is touched.
+    const now = this.wakes.size > 0 ? this.now() : 0
+    for (const [ownerId, wake] of this.wakes) {
+      if (wake.at > now) {
+        return
+      }
       this.wakes.delete(ownerId)
       this.host.restore(ownerId, wake.owner)
       // Only an owner actually put back may later be revived; a real ending already settled it.
@@ -92,11 +95,10 @@ export class ClaudeChildWake {
 
   /** The next moment, on the monotonic clock, a wake stops guessing; the host restates the row then. */
   earliestExpiry(): number | undefined {
-    let earliest: number | undefined
     for (const { at } of this.wakes.values()) {
-      earliest = earliest === undefined ? at : Math.min(earliest, at)
+      return at
     }
-    return earliest
+    return undefined
   }
 
   clear(): void {
