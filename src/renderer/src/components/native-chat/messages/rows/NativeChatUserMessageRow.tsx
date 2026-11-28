@@ -1,3 +1,4 @@
+import { NativeChatSendingLabel } from './NativeChatProviderReceived'
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { NativeChatUserBubble } from './NativeChatUserBubble'
@@ -36,14 +37,15 @@ function UserMessageMeta({
   markdown,
   timestamp,
   sending,
+  itemId,
   rewind
 }: {
   markdown: string
   timestamp: number | null
   sending: boolean
+  itemId: string
   rewind?: { itemId: string; surface: NativeChatRewindSurface }
 }): React.JSX.Element | null {
-  const t = useTranslate()
   if (!markdown && timestamp === null && !sending && !rewind) {
     return null
   }
@@ -57,9 +59,7 @@ function UserMessageMeta({
         <NativeChatCopyButton text={markdown} className={sending ? USER_META_REVEAL : undefined} />
       ) : null}
       {sending ? (
-        <span className="text-xs whitespace-nowrap text-chat-foreground-faint">
-          {t('components.native-chat.messageSending', 'Sending…')}
-        </span>
+        <NativeChatSendingLabel itemId={itemId} />
       ) : (
         <NativeChatMessageTimestamp timestamp={timestamp} focusable />
       )}
@@ -184,6 +184,7 @@ export function NativeChatUserMessageRow({
           markdown={markdown}
           timestamp={message.timestamp}
           sending={sending}
+          itemId={message.id}
           {...(rewind ? { rewind: { itemId: message.id, surface: rewind } } : {})}
         />
       ) : null}

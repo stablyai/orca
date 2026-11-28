@@ -47,7 +47,12 @@ import type { JournalRewindCut } from './journal-domain-rewind-cut'
 /** A fence recovers the last run's obligations; `keptWriter`: its writer still runs, so nothing is settled. */
 export type JournalOpenRecovery = { fence: number } | 'keptWriter'
 
-export type JournalWriterTarget = { sessionId: string; epoch: string; ownerToken: string }
+export type JournalWriterTarget = {
+  sessionId: string
+  epoch: string
+  ownerToken: string
+  captureProviderReceipts?: true
+}
 
 export type JournalWriterCoreOperation =
   | ({ kind: 'item' } & JournalItemAppendInput)

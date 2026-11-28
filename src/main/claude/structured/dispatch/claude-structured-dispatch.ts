@@ -1,3 +1,5 @@
+import type { BeginProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
+import { AGENT_SESSION_DISPATCH_LIMITS } from '../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import { randomUUID } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from '../lifecycle/claude-structured-session-id'
@@ -48,7 +50,7 @@ import {
   type StructuredAgentSessionAdmitFreshInput
 } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 
-const MAX_ACTIVE_DISPATCH_WAITERS = 64
+const MAX_ACTIVE_DISPATCH_WAITERS = AGENT_SESSION_DISPATCH_LIMITS.claude
 
 export function settleCancelledClaudeDispatchWaiters(
   session: ClaudeSession,
@@ -133,6 +135,7 @@ export async function dispatchClaudeTurn(
     body: AgentJournalMessageItem
     requestedAt?: number
     sentUuid?: string
+    beginProviderReceipt?: BeginProviderReceipt
     signal?: AbortSignal
     admitFreshInput?: StructuredAgentSessionAdmitFreshInput
   },
@@ -169,6 +172,9 @@ export async function dispatchClaudeTurn(
       input.clientMessageId ?? null,
       input.requestedAt ?? null
     )
+    if (input.beginProviderReceipt) {
+      replay.waiter.providerReceived = input.beginProviderReceipt()
+    }
     if (renamesSession) {
       replay.waiter.renamesSession = true
     }
@@ -204,6 +210,7 @@ export async function dispatchClaudeTurn(
     await (authorize
       ? session.connection.send(message, authorize)
       : session.connection.send(message))
+    input.beginProviderReceipt?.written?.()
   } catch (error) {
     const replay = pending.replay
     if (!replay) {
@@ -241,6 +248,10 @@ export async function dispatchClaudeTurn(
       return { state: 'rejected', ...claudeWriteFailureRejection(error) }
     }
     const waiter = replay.waiter
+    const unwritten = claudeUserMessageWasProvablyUnwritten(error)
+    if (!unwritten || waiter.settledUuid || waiter.providerReceiptConfirmed) {
+      input.beginProviderReceipt?.written?.()
+    }
     if (waiter.settledUuid) {
       const uuid = await replay.promise
       if (uuid) {
@@ -250,7 +261,7 @@ export async function dispatchClaudeTurn(
         }
       }
     }
-    if (claudeUserMessageWasProvablyUnwritten(error)) {
+    if (unwritten) {
       forgetWaiter(session, waiter)
       forgetRetiredWaiter(session, waiter)
       waiter.resolve(null)

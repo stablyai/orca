@@ -20,7 +20,11 @@ import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 import type { JournalMailCustody } from './journal-writer-host-facts'
 
-export type JournalDomainSubmissionTarget = { sessionId: string; epoch: string }
+export type JournalDomainSubmissionTarget = {
+  sessionId: string
+  epoch: string
+  captureProviderReceipts?: true
+}
 
 export type JournalDomainSubmissionFacts = {
   identity: AgentSessionJournalIdentity

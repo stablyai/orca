@@ -1,68 +1,22 @@
-import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
+import type { StructuredAgentSessionLiveReadInput } from './structured-agent-session-live-read-contract'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import * as coalescing from './structured-agent-session-coalescer'
-import {
-  type AgentSessionTextAppendCapabilities,
-  createAgentSessionTextAppendReader
-} from './agent-session-text-append'
+import { createAgentSessionTextAppendReader } from './agent-session-text-append'
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
   agentSessionReadFailureText,
   isFinalAgentSessionReadRefusal,
   isUnattachedAgentSessionReadRefusal
 } from '../../failures/structured-agent-session-read-refusal'
-import type { AgentSessionRefusalReference } from '../../failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../failures/agent-session-write-failure'
 import { createAgentSessionCurrentRequestsReader } from '../../requests/agent-session-current-requests-reader'
-import type {
-  AgentSessionCurrentRequestsPiece,
-  AgentSessionCurrentRequestsRead
-} from '../../requests/agent-session-current-requests-wire'
-import type { StructuredAgentSessionAction } from './structured-agent-session-reducer'
 import { createReconnectScheduler } from './structured-agent-session-reconnect'
 import { createStructuredAgentSessionSubscribeAsks } from './structured-agent-session-subscribe-asks'
-import type { StructuredAgentSessionSubscribeCapabilities } from './structured-agent-session-subscribe-asks'
 
-/** One `agentSession.subscribe` stream, opened by whichever transport the client has. */
-export type StructuredAgentSessionLiveSubscribe = (
-  params: {
-    sessionId: string
-    cursor?: AgentJournalCursor
-    capabilities?: StructuredAgentSessionSubscribeCapabilities
-  },
-  onEvent: (event: AgentSessionSubscribeEvent) => void,
-  onError: (error: unknown) => void,
-  onClose: () => void
-) => Promise<{ unsubscribe: () => void }>
+export type { StructuredAgentSessionLiveSubscribe } from './structured-agent-session-live-read-contract'
 
 /** Resume from the last applied cursor after stream end/failure with capped exponential backoff. */
-export function startStructuredAgentSessionLiveRead(args: {
-  applyRequests?: (action: StructuredAgentSessionAction) => void
-  applyEvent: (event: AgentSessionSubscribeEvent, options?: { opensSubscription: true }) => void
-  /** `message` is the failure's own text, for logs; `refusal` is what a surface words. */
-  applyError: (message: string, refusal?: AgentSessionRefusalReference) => void
-  getCursor: () => AgentJournalCursor | null
-  /** Mark retained content stale until reconnect delivers. */
-  onContactLost: () => void
-  onHistoryReadInvalidated: () => void
-  hydrate?: (shouldStop: () => boolean) => Promise<void>
-  sessionId: string
-  subscribe: StructuredAgentSessionLiveSubscribe
-  /** How streamed text batches merge, and whether a hidden viewer holds them; defaults apply. */
-  coalesce?: coalescing.StructuredAgentSessionCoalescing
-  /** The appends the host advertises; opens wait for it, and null or a rejection means none. */
-  textAppend?:
-    | Promise<AgentSessionTextAppendCapabilities | null>
-    | AgentSessionTextAppendCapabilities
-  /** Whether this reader shows prompt suggestions and the host takes the param; a rejection means no. */
-  promptSuggestions?: Promise<boolean> | boolean
-  liveTextViewer?: Parameters<typeof createStructuredAgentSessionSubscribeAsks>[0]['liveTextViewer']
-  readCurrentRequests: (
-    request: AgentSessionCurrentRequestsRead
-  ) => Promise<AgentSessionCurrentRequestsPiece>
-  /** Calls `retryNow` when the host is likely reachable again; returns what stops listening. */
-  subscribeRetryNow: (retryNow: () => void) => () => void
-}): {
+export function startStructuredAgentSessionLiveRead(args: StructuredAgentSessionLiveReadInput): {
   captureHistoryReadGuard: () => () => boolean
   dispose: () => void
 } {
@@ -87,6 +41,12 @@ export function startStructuredAgentSessionLiveRead(args: {
       args.applyEvent(event)
     }
   }, args.coalesce)
+  const clearProviderReceived = (): void => {
+    if (args.clearProviderReceived) {
+      coalescer.clearProviderReceived()
+      args.clearProviderReceived()
+    }
+  }
   const reconnectScheduler = createReconnectScheduler({
     shouldStop: () => stopped || connected || failedFinally,
     reconnect: () => void open()
@@ -95,6 +55,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   const stopHostContactWatch = args.subscribeRetryNow(() => reconnectScheduler.retryNow())
   const loseContact = (): void => {
     connected = false
+    clearProviderReceived()
     // Flush before marking contact lost or buffered frames would appear to restore contact.
     coalescer.flush()
     requestReader.invalidate()
@@ -141,6 +102,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   const replaceStream = (eventOpenGeneration: number): void => {
     replacedOpenGeneration = eventOpenGeneration
     asks.refuseAppends()
+    clearProviderReceived()
     if (!connected) {
       // Still opening: retry later; the open drops its handle when it lands.
       loseContact()
@@ -169,6 +131,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       reconnectScheduler.noteDelivered()
     }
     if (event.type === 'snapshot' || event.type === 'reset') {
+      coalescer.clearProviderReceived()
       requestReader.invalidate()
       coalescer.flush()
       if (!isCurrentOpenGeneration(eventOpenGeneration)) {
@@ -315,6 +278,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       stopHostContactWatch()
       reconnectScheduler.dispose()
       coalescer.dispose()
+      clearProviderReceived()
       asks.dispose()
       unsubscribe()
     }

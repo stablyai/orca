@@ -1,3 +1,4 @@
+import { localReceiptProvider } from '../../journal-ingress/provider-receipt-publication'
 import { readForkMarker } from '../history/agent-session-fork-marker'
 import { structuredAgentSessionOwnerStatus } from '../../host/structured-agent-session-owner-status'
 import type { AgentSessionCurrentRequestsRead } from '../../../../../shared/agent-session/requests/agent-session-current-requests-wire'
@@ -124,6 +125,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const session = await this.conversation(input.sessionId)
     return this.subscribers.open({
       ...input,
+      readsProviderReceived: input.readsProviderReceived && !!localReceiptProvider(session.params),
       journal: session.journal,
       fence: structuredAgentSessionConversationFence(this.deps.store, input.sessionId)
     })

@@ -38,6 +38,7 @@ export type SubscriberDeliveryLaneRunners = {
   backgroundTasks: (fence: number) => Promise<unknown>
   liveText: (liveText: SubscriberLiveText) => Promise<unknown>
   /** Undefined when the two cannot be one delivery. */
+  sendReceipt?: () => void
   mergeCatchUp: (
     pending: SubscriberCatchUp,
     next: SubscriberCatchUp
@@ -76,6 +77,14 @@ export class SubscriberDeliveryLane {
   /** Catch-ups and refreshes never merge across ordered work: it may reset what they read from. */
   ordered(run: () => Promise<unknown>): void {
     this.add({ kind: 'ordered', since: this.runners.now(), run })
+  }
+
+  scheduleProviderReceipt(): boolean {
+    if (!this.idle) {
+      return false
+    }
+    this.schedule()
+    return true
   }
 
   catchUp(next: SubscriberCatchUp): void {
@@ -178,7 +187,11 @@ export class SubscriberDeliveryLane {
       }
     }
     const oldest = entries.reduce((since, entry) => Math.min(since, entry.since), now)
-    return { pending: entries.length, oldestMs: now - oldest, liveTextBytes }
+    return {
+      pending: entries.length,
+      oldestMs: now - oldest,
+      liveTextBytes
+    }
   }
 
   private openIndex(kind: LaneEntry['kind']): number | undefined {
@@ -196,6 +209,10 @@ export class SubscriberDeliveryLane {
 
   private add(entry: LaneEntry): void {
     this.pending.push(entry)
+    this.schedule()
+  }
+
+  private schedule(): void {
     if (!this.active && !this.scheduled) {
       this.scheduled = true
       queueMicrotask(() => void this.drain())
@@ -207,6 +224,10 @@ export class SubscriberDeliveryLane {
     while (!this.active) {
       const entry = this.pending.shift()
       if (!entry) {
+        // A receipt uses the idle slot only after ordinary delivery has had first claim.
+        if (this.runners.sendReceipt && this.runners.runnable()) {
+          this.runners.sendReceipt()
+        }
         return
       }
       this.active = entry

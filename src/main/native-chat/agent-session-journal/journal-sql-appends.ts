@@ -211,20 +211,39 @@ export abstract class SqlJournalAppends {
     await this.write({ kind: 'shutdown-cut', input })
   }
 
-  async prepareHandover(input: JournalHandoverInput): Promise<StoppedHistoryDelivery | null> {
-    const { value } = await this.write({ kind: 'handover', input })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handover returns only its stopped-history delivery result.
-    return value as StoppedHistoryDelivery | null
+  async prepareHandover(input: JournalHandoverInput) {
+    const { value, cursor } = await this.write({ kind: 'handover', input })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handover command returns its own placement and carried history.
+    const { carried, firstHandover, dispatchSequence } = value as {
+      carried: StoppedHistoryDelivery | null
+      firstHandover?: boolean
+      dispatchSequence?: number
+    }
+    return {
+      carried,
+      firstHandover: firstHandover === true,
+      dispatchCursor:
+        dispatchSequence === undefined
+          ? undefined
+          : { epoch: cursor.epoch, sequence: dispatchSequence }
+    }
   }
 
-  async openCommand(input: JournalCommandOpenInput): Promise<JournalCommandOpenResult> {
-    const { value } = await this.write({ kind: 'command-open', input })
+  async openCommand(input: JournalCommandOpenInput) {
+    const { value, cursor } = await this.write({ kind: 'command-open', input })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: command-open returns its typed settled result from the writer dispatcher.
     const result = value as JournalWriterSettled<JournalCommandOpenResult>
     if ('failure' in result) {
       throw restoreJournalSqlFailure(result.failure)
     }
-    return result.value
+    const { dispatchSequence, ...opened } = result.value
+    return {
+      ...opened,
+      dispatchCursor:
+        dispatchSequence === undefined
+          ? undefined
+          : { epoch: cursor.epoch, sequence: dispatchSequence }
+    }
   }
 
   async settleCommand(input: JournalCommandSettlementInput): Promise<void> {

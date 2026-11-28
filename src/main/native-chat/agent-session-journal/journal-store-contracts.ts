@@ -217,12 +217,12 @@ export type JournalShutdownCutInput = {
 export type JournalCommandOpenInput = Pick<
   Extract<ResolveDispatchInput, { state: 'pending' }>,
   'clientMessageId' | 'fence' | 'turnScope'
-> & { submittedAt: number }
+> & { submittedAt: number; captureProviderReceipt?: boolean }
 
 export type JournalHandoverInput = Pick<
   Extract<ResolveDispatchInput, { state: 'pending' }>,
   'clientMessageId' | 'fence' | 'turnScope'
-> & { body: AgentJournalMessageItem }
+> & { body: AgentJournalMessageItem; captureProviderReceipt?: boolean }
 
 export type JournalCommandSettlementInput = {
   dispatch: Extract<ResolveDispatchInput, { state: 'rejected' | 'unknown' }>
@@ -262,6 +262,7 @@ export type JournalStopAcceptance = {
 export type JournalCommandOpenResult = {
   turn: ReturnType<typeof structuredAgentSessionCommandTurn>
   running: AgentJournalTurnItem
+  dispatchSequence?: number
 }
 
 export type JournalAttachmentClaim = (

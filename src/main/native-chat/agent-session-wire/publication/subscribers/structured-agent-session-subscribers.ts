@@ -11,23 +11,21 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from '../../../../../shared/agent-session/agent-session-wire'
-import {
-  emitSubscriberFrame,
-  subscriberCommandsChanged
-} from './agent-session-subscriber-frame-fields'
+import { emitSubscriberFrame } from './agent-session-subscriber-frame-fields'
+import { subscriberCommandRefresh } from './agent-session-live-publications'
 import {
   publishSubscriberSnapshot,
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import * as liveText from './agent-session-subscriber-live-text'
-import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 import type { SubscriberDeliveryRetention } from './agent-session-subscriber-delivery-lane'
 import { SubscriberLanes } from './agent-session-subscriber-lane-runners'
 import { trackSubscriberRetention } from './agent-session-subscriber-retention'
+import { AgentSessionProviderReceipts } from './agent-session-provider-receipts'
 import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-suggestion-delivery'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
@@ -38,6 +36,8 @@ export class AgentSessionSubscribers {
   private readonly lanes = new SubscriberLanes({
     deliveryPort: () => this.deliveryPort(),
     now: () => this.now(),
+    sendReceipt: (subscriber) => this.providerReceipts.sendStandalone(subscriber),
+    caughtUp: (subscriber, journal) => this.providerReceipts.caughtUp(subscriber, journal),
     isActive: (subscriber) => this.isActive(subscriber),
     fail: (subscriber, error) => this.fail(subscriber, error)
   })
@@ -49,6 +49,9 @@ export class AgentSessionSubscribers {
     (id) => this.hooks.readForkJournal?.(id),
     (subscriber, journal) =>
       this.enqueue(subscriber, () => this.forkMarkers.refresh(subscriber, journal))
+  )
+  readonly providerReceipts = new AgentSessionProviderReceipts((sub) =>
+    this.lanes.of(sub).scheduleProviderReceipt()
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
   private readonly viewerShows = new liveText.LiveTextViewerShows({
@@ -97,6 +100,9 @@ export class AgentSessionSubscribers {
     if (replaced) {
       this.lanes.clear(replaced)
     }
+    if (subscriber.readsProviderReceived) {
+      this.providerReceipts.track(subscriber, journal)
+    }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
     liveText.noteLiveTextReadersChanged(session)
@@ -118,7 +124,7 @@ export class AgentSessionSubscribers {
     })
     this.promptSuggestions.opened(subscriber)
     const { sessionId, id } = subscriber
-    return () => this.close(sessionId, id)
+    return () => void (!subscriber.stopped?.aborted && this.close(sessionId, id))
   }
 
   close(sessionId: string, id: string): void {
@@ -219,18 +225,9 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     for (const sessionId of this.bySession.keys()) {
       for (const subscriber of this.subscribers(sessionId)) {
-        const invalidated = subscriber.commandsOnRequest && retired?.(sessionId)
-        if (invalidated || subscriberCommandsChanged(this.hooks, subscriber)) {
-          this.enqueue(subscriber, () =>
-            this.emit(subscriber, {
-              type: 'batch',
-              sessionId,
-              batch: emptyAgentSessionBatch(subscriber.cursor),
-              fence: subscriber.fence,
-              hostNow,
-              ...(invalidated ? { commandsChanged: true as const } : {})
-            })
-          )
+        const frame = subscriberCommandRefresh(this.hooks, subscriber, hostNow, retired)
+        if (frame) {
+          this.enqueue(subscriber, () => this.emit(subscriber, frame()))
         }
       }
     }
@@ -255,7 +252,10 @@ export class AgentSessionSubscribers {
     const items = sends && this.lanes.of(subscriber).sendsLiveText(taken) ? taken : []
     const [subscribers, hostNow] = [[subscriber], this.now()]
     const tail = { sessionId, journal, fence, items, subscribers, hostNow }
-    return liveText.publishSubscriberLiveText(this.deliveryPort(), tail)
+    const sent = liveText.publishSubscriberLiveText(this.deliveryPort(), tail)
+    return subscriber.readsProviderReceived
+      ? sent.then(() => this.providerReceipts.caughtUp(subscriber, journal))
+      : sent
   }
 
   private subscribers = (sessionId: string): Subscriber[] => [

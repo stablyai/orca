@@ -1,3 +1,5 @@
+import { localProviderReceipt } from '../journal-ingress/provider-receipt-publication'
+import type { AgentSessionProviderReceipts } from '../publication/subscribers/agent-session-provider-receipts'
 import { isStructuredAgentSessionStopNote } from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
 export {
   isStructuredAgentSessionStopNote,
@@ -129,6 +131,7 @@ export type StructuredAgentSessionCommandHandoverContext = {
   journal: AgentSessionJournal
   fence: number
   adapter: StructuredAgentSessionAdapter
+  providerReceipts?: AgentSessionProviderReceipts
   agents: StructuredAgentRegistry
   readWork?: JournalWorkReader
   failureTextContext?: AgentSessionFailureWordsContext
@@ -143,7 +146,8 @@ export type StructuredAgentSessionCommandHandoverContext = {
 export async function handOverStructuredAgentSessionCommand(
   ctx: StructuredAgentSessionCommandHandoverContext,
   submission: AgentJournalSubmission,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  isCurrent?: () => boolean
 ): Promise<void> {
   const { clientMessageId } = submission
   const blocked = await commandBlocked(ctx, body)
@@ -171,14 +175,27 @@ export async function handOverStructuredAgentSessionCommand(
     )
     return
   }
-  const { turn, running } = await openCommandTurn(ctx, submission)
+  const providerReceipt = localProviderReceipt(ctx, clientMessageId, isCurrent)
+  const { turn, running, dispatchCursor } = await openCommandTurn(
+    ctx,
+    submission,
+    !!providerReceipt
+  )
+  const beginProviderReceipt =
+    dispatchCursor && providerReceipt ? () => providerReceipt(dispatchCursor) : undefined
   const instructions = body.command?.instructions
   let admission: AgentSessionCommandAdmission
   try {
     admission = await ctx.adapter.compact!({
       sessionId: ctx.sessionId,
       fence: ctx.fence,
-      command: { clientMessageId, ...turn, running, ...(instructions ? { instructions } : {}) }
+      command: {
+        clientMessageId,
+        ...turn,
+        running,
+        ...(instructions ? { instructions } : {}),
+        ...(beginProviderReceipt ? { beginProviderReceipt } : {})
+      }
     })
   } catch (error) {
     // Ready-child writes can lose replies after running; never infer non-delivery from throws.
@@ -203,11 +220,13 @@ export async function handOverStructuredAgentSessionCommand(
 
 async function openCommandTurn(
   ctx: StructuredAgentSessionCommandHandoverContext,
-  submission: AgentJournalSubmission
+  submission: AgentJournalSubmission,
+  captureProviderReceipt: boolean
 ) {
   return ctx.journal.openCommand({
     clientMessageId: submission.clientMessageId,
     submittedAt: submission.submittedAt,
+    captureProviderReceipt,
     fence: ctx.fence,
     turnScope: (await contextStructuredAgentSessionCurrentWork(ctx)).turnScope()
   })

@@ -322,6 +322,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                                   structuredAttachments
                                   runtimeContext={imageRuntimeContext}
                                   deliveryNotices={deliveryNotices}
+                                  receipts={controller.receipts}
                                   {...{ turnBot, botHome: bot.kickoff, timedRows }}
                                   workerChip={<NativeChatWorkerChipSlot />}
                                 />

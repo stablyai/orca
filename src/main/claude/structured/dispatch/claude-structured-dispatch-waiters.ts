@@ -1,4 +1,32 @@
-import type { ClaudeDispatchWaiter, ClaudeSession } from '../claude-structured-session-state'
+import type { ProviderReceiptConfirmation } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
+import type { ClaudeSession } from '../claude-structured-session-state'
+
+export type ClaudeDispatchWaiter = {
+  resolve: (uuid: string | null) => void
+  acceptsResult: boolean
+  /** Submission settled by the replay, or null for provider-control turns. */
+  clientMessageId: string | null
+  /** Client uuid echoed by Claude so a replay is tied to its own dispatch. */
+  sentUuid: string
+  /** Sequence used to identify the latest pending dispatch for control ownership. */
+  dispatchSequence: number
+  /** Host submission instant owned by this exact dispatch. */
+  requestedAt: number | null
+  /** Set when the provider replay settled this waiter before send returned. */
+  settledUuid?: string
+  /** Sent with priority `now`: the step it interrupts hands its open turn to this send. */
+  steers?: true
+  /** Settled with no echo (failed write, child exit, doubt after start); a replay may name it. */
+  retired?: boolean
+  providerReceived?: ProviderReceiptConfirmation
+  providerReceiptConfirmed?: true
+  /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */
+  commandLifecycle?: 'queued' | 'started'
+  /** Sent as Claude's rename command; only its started window carries the user's new title. */
+  renamesSession?: true
+  /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
+  replayContentKey: string
+}
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
 
@@ -35,6 +63,9 @@ export function waitForReplay(
 }
 
 export function forgetWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
+  waiter.providerReceived?.cancel()
+  waiter.providerReceived = undefined
+  waiter.providerReceiptConfirmed = undefined
   const index = session.dispatchWaiters.indexOf(waiter)
   if (index !== -1) {
     session.dispatchWaiters.splice(index, 1)

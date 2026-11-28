@@ -29,6 +29,7 @@ export type AgentSessionSubscribeInput = {
   readQueueSourceIds?: HistoryReader['queueSourceIds']
   projectJournalEvent?: SubscriberFieldState['projectJournalEvent']
   readsCurrentRequests?: boolean
+  readsProviderReceived?: boolean
   /** False for desktops that need exact replay to keep send echoes and current requests. */
   snapshotCatchUp?: boolean
   /** The reader shows prompt suggestions on screen; only these receive them or keep them generated. */
@@ -59,6 +60,8 @@ export type Subscriber = {
   /** The fence of a snapshot whose capture was abandoned; the next delivery sends it, not a batch. */
   owedSnapshotFence?: number
   showsPromptSuggestions?: boolean
+  readsProviderReceived?: boolean
+  providerReceiptsRouting?: (event: AgentSessionSubscribeEvent) => boolean
   /** The current-work view the last frame's fields were read under
    *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
   workView?: string

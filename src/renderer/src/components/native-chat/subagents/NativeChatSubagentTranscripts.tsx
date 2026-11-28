@@ -1,3 +1,5 @@
+import { NativeChatProviderReceived } from '../messages/rows/NativeChatProviderReceived'
+import type { ProviderReceivedLabels } from '../../../../../shared/agent-session/view/live-read/agent-session-provider-received'
 import { NativeChatWaitingAgentMailRowsContext } from '../queue/NativeChatWaitingAgentMailActions'
 import { slackPeopleOf } from '../../../../../shared/connectors/slack-mention-tokens'
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -71,12 +73,16 @@ function useHeldWhileHidden<T extends readonly object[]>(
 export function NativeChatSubagentTranscripts({
   paneKey,
   find,
+  receipts,
   ...props
 }: React.ComponentProps<typeof NativeChatMessageList> & {
   /** The chat's status pane key, which also names it to the sidebar's subagent rows. */
   paneKey: string
   find: Pick<NativeChatFind, 'isOpen' | 'query'>
+  receipts?: ProviderReceivedLabels
 }): React.JSX.Element {
+  const { agent } = props.session
+  const receiptContext = useMemo(() => receipts && { labels: receipts, agent }, [receipts, agent])
   const host = useContext(NativeChatSubagentSheetHost)
   const stop = host?.stop
   // A terminal chat's waiting prompt is always its main agent's.
@@ -167,13 +173,15 @@ export function NativeChatSubagentTranscripts({
         <NativeChatSlackPeopleContext value={slackPeople}>
           {/* A sheet opened over an open image viewer takes the focus the viewer gives up. */}
           <NativeChatGalleryCoveredFocusContext value={sheetView}>
-            <NativeChatMessageList
-              {...props}
-              session={mainSession}
-              journalItems={mainItems}
-              isVisible={isVisible && shown === null}
-              subagentView={main}
-            />
+            <NativeChatProviderReceived value={receiptContext}>
+              <NativeChatMessageList
+                {...props}
+                session={mainSession}
+                journalItems={mainItems}
+                isVisible={isVisible && shown === null}
+                subagentView={main}
+              />
+            </NativeChatProviderReceived>
           </NativeChatGalleryCoveredFocusContext>
         </NativeChatSlackPeopleContext>
       </div>

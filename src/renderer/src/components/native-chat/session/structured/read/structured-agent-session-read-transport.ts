@@ -55,9 +55,18 @@ export function startStructuredAgentSessionReadTransport(
     showsPromptSuggestions?: boolean
     /** Whether a reader draws reply text; only then does a shown window take live text. */
     replyText?: StructuredAgentSessionReplyTextInterest
+    receiptLimit?: () => number
+    pendingReceiptSequence?: (itemId: string) => number | undefined
   }
 ): ReturnType<typeof startStructuredAgentSessionLiveRead> {
-  const { target, showsPromptSuggestions, replyText, ...read } = args
+  const {
+    target,
+    showsPromptSuggestions,
+    replyText,
+    receiptLimit,
+    pendingReceiptSequence,
+    ...read
+  } = args
   const asks = target.kind === 'environment' ? environmentSubscribeAsks(target.environmentId) : null
   const viewer = asks?.liveTextViewer ?? true
   let sendsShownTail = viewer === true
@@ -68,7 +77,11 @@ export function startStructuredAgentSessionReadTransport(
     // renderer, so it is asked without a check and the read still opens in the same turn.
     textAppend: asks ? asks.textAppend : LOCAL_TEXT_APPEND,
     ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
-    coalesce: { visibility: documentViewerVisibility(read.sessionId, () => sendsShownTail) },
+    coalesce: {
+      visibility: documentViewerVisibility(read.sessionId, () => sendsShownTail),
+      receiptLimit,
+      pendingReceiptSequence
+    },
     // Only a shown window takes live text; a hidden one gets saves, and the newest text on show.
     liveTextViewer: documentLiveTextViewer(
       viewer,

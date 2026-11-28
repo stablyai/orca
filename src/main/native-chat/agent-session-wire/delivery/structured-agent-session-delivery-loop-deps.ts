@@ -1,3 +1,4 @@
+import type { AgentSessionProviderReceipts } from '../publication/subscribers/agent-session-provider-receipts'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
@@ -24,6 +25,7 @@ import type {
 
 export type StructuredAgentSessionDeliveryLoopDeps = {
   startFlights?: Pick<StructuredAgentSessionStartFlights, 'get'>
+  providerReceipts?: AgentSessionProviderReceipts
   activityChanged?: (sessionId: string) => void
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>

@@ -15,6 +15,7 @@ export type JournalPromptDispatch = {
   clientMessageId: string
   queuedMessageId?: string
   state: 'pending' | 'accepted' | 'rejected' | 'unknown'
+  previousHandoverSequence?: number
 }
 
 export type JournalWriterPublication = {

@@ -287,14 +287,15 @@ export function applyJournalDomainDispatch(
     observedAt: savedAt,
     clientMessageId: input.clientMessageId
   })
-  const current = journalDomainSubmission(
-    new JournalSqlScope(db, target.sessionId, target.epoch),
-    input.clientMessageId
-  )
+  const scope = new JournalSqlScope(db, target.sessionId, target.epoch)
+  const current = journalDomainSubmission(scope, input.clientMessageId)
   result.promptDispatches = [
     {
       clientMessageId: input.clientMessageId,
       state: input.state,
+      ...(target.captureProviderReceipts && attempt?.handover
+        ? { previousHandoverSequence: attempt.handover.sequence }
+        : {}),
       ...(current?.queuedMessageId ? { queuedMessageId: current.queuedMessageId } : {})
     }
   ]

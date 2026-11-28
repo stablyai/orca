@@ -180,6 +180,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         },
         {
           signal: controller.signal,
+          localElectronIpc: true,
           clientId: 'desktop-renderer',
           caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',

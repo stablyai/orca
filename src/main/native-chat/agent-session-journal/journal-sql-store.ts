@@ -105,12 +105,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     this.queuedMessages.editLeases.adoptDeadline(opened.publication?.editDeadline ?? null)
   }
 
-  static async open(
-    options: Pick<
-      AgentSessionJournalOptions,
-      'database' | 'identity' | 'now' | 'recover' | 'keptWriter' | 'onRecoveryFailure'
-    >
-  ): Promise<SqlAgentSessionJournal> {
+  static async open(options: AgentSessionJournalOptions): Promise<SqlAgentSessionJournal> {
     const now = options.now ?? Date.now
     const { target, commit } = await options.database.openSession(
       options.identity,
@@ -128,6 +123,10 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       options.onRecoveryFailure?.(failure)
     }
     return journal
+  }
+
+  trackProviderReceiptSettlements(track: boolean): void {
+    this.target = { ...this.target, captureProviderReceipts: track ? true : undefined }
   }
 
   /** The immutable physical position this handle opened at; never the reopen floor. */

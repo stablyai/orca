@@ -49,7 +49,6 @@ export async function beginStructuredAgentSessionInputHandover(
   const isCurrent = () => isBound() && !binding.close
   const toolsRefresh = async () =>
     (await deps.launchToolsRefreshDue?.(sessionId, next.clientMessageId)) ?? 'not-due'
-  const toolsDue = async () => (await toolsRefresh()) === 'due'
   const validate = (signal?: AbortSignal) =>
     assertStructuredAgentSessionInputReady({
       deps,
@@ -80,6 +79,7 @@ export async function beginStructuredAgentSessionInputHandover(
       journal: session.journal,
       fence: awaitedChild.fence,
       adapter: deps.adapter,
+      providerReceipts: deps.providerReceipts,
       agents: deps.agents,
       failureTextContext: failureTextContext,
       record: () => deps.record(sessionId),
@@ -191,8 +191,8 @@ export async function beginStructuredAgentSessionInputHandover(
                     latest !== binding.permissionMode))
               // Past the hold a replay stays acked, so only 'due' (never 'pending') replaces a child.
               const acquire =
-                reason === 'tools' ? await toolsDue() : reason === 'replaced' || permissionAcquire
-              if (!acquire) {
+                reason === 'tools' ? (await toolsRefresh()) === 'due' : permissionAcquire
+              if (!acquire && reason !== 'replaced') {
                 return null
               }
               await (deps.stopPermissionTransitionChild
