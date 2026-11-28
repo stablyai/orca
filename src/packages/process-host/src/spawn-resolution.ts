@@ -1,6 +1,7 @@
 import type { SpawnOptions as NodeSpawnOptions } from 'node:child_process'
 import { buildWindowsCmdShimCommandLine, isCmdInterpretedProgram } from './windows-command-line'
-import { resolveWindowsCmdShim } from './windows-cmd-shim-resolution'
+import { readWindowsEnv, resolveWindowsCmdShim } from './windows-cmd-shim-resolution'
+import { windowsSystem32Binary } from './windows-system-binary'
 import type { ProcessSpec } from './process-spec'
 import { assertWslDistroAllowed } from './wsl-distro-allowlist'
 import { assertWslNotLatchedAbsent } from './wsl-not-installed-latch'
@@ -34,8 +35,10 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
     return { file: spec.program, args, options: base }
   }
 
+  const env = spec.env ?? process.env
+
   // Direct shim resolution avoids cmd escaping, EDR obfuscation flags, and multiline-argument limits.
-  const shim = resolveWindowsCmdShim(spec.program, spec.env ?? process.env)
+  const shim = resolveWindowsCmdShim(spec.program, env)
   if (shim) {
     return {
       file: shim.program,
@@ -50,7 +53,7 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
   }
 
   // Node rejects direct .cmd/.bat spawns; build the cmd line ourselves to preserve quoting and hiding.
-  const comSpec = spec.env?.ComSpec ?? process.env.ComSpec ?? 'cmd.exe'
+  const comSpec = readWindowsEnv(env, 'ComSpec') ?? windowsSystem32Binary('cmd.exe', env)
   return {
     file: comSpec,
     args: [buildWindowsCmdShimCommandLine(spec.program, args)],
