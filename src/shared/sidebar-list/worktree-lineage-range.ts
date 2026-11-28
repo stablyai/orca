@@ -79,34 +79,42 @@ export function buildWorktreeLineageRanges(
     const previousTree = previousTrees?.get(sectionKey)
     // Review/group labels and row replacements (unread, activity) rebuild the plan without
     // changing its lineage: same order, depth and identities keep the tree and its ranges.
-    if (
-      previous &&
-      previousRanges &&
-      previousTree &&
+    let canReusePrevious =
+      previous !== undefined &&
+      previousRanges !== undefined &&
+      previousTree !== undefined &&
       previous.length === occurrences.length &&
-      (previousTree.replacedRows?.length ?? 0) < MAX_ROW_REPLACEMENTS &&
-      occurrences.every((occurrence, index) => {
+      (previousTree.replacedRows?.length ?? 0) < MAX_ROW_REPLACEMENTS
+    if (canReusePrevious && previous && previousTree) {
+      for (let index = 0; index < occurrences.length; index += 1) {
+        const occurrence = occurrences[index]
         const before = previous[index]!
-        return (
-          before.depth === occurrence.depth &&
-          before.key === occurrence.key &&
-          (before.row === occurrence.row ||
-            previousTree.identities[index] === getWorktreeHostIdentity(occurrence.row))
-        )
-      })
-    ) {
-      const replaced: number[] = []
-      occurrences.forEach((occurrence, index) => {
+        if (
+          before.depth !== occurrence.depth ||
+          before.key !== occurrence.key ||
+          (before.row !== occurrence.row &&
+            previousTree.identities[index] !== getWorktreeHostIdentity(occurrence.row))
+        ) {
+          canReusePrevious = false
+          break
+        }
+      }
+    }
+    if (canReusePrevious && previousRanges && previousTree) {
+      let replaced: number[] | undefined
+      for (let index = 0; index < occurrences.length; index += 1) {
+        const occurrence = occurrences[index]
         if (previousTree.worktrees[index] !== occurrence.row) {
           previousTree.worktrees[index] = occurrence.row
-          replaced.push(index)
+          ;(replaced ??= []).push(index)
         }
-      })
-      if (replaced.length > 0) {
+      }
+      if (replaced) {
         ;(previousTree.replacedRows ??= []).push(replaced)
       }
       sectionTrees.set(sectionKey, previousTree)
-      for (const { key } of occurrences) {
+      for (let index = 0; index < occurrences.length; index += 1) {
+        const key = occurrences[index].key
         const previousRange = previousRanges.get(key)
         if (previousRange) {
           result.set(key, previousRange)
@@ -120,24 +128,25 @@ export function buildWorktreeLineageRanges(
       ends: []
     }
     const stack: number[] = []
-    occurrences.forEach((occurrence, index) => {
-      while (stack.length && occurrences[stack.at(-1)!]!.depth >= occurrence.depth) {
+    for (let index = 0; index < occurrences.length; index += 1) {
+      const occurrence = occurrences[index]
+      while (stack.length > 0 && occurrences[stack.at(-1)!]!.depth >= occurrence.depth) {
         tree.ends[stack.pop()!] = index
       }
       tree.identities.push(getWorktreeHostIdentity(occurrence.row))
       tree.worktrees.push(occurrence.row)
       stack.push(index)
-    })
-    for (const index of stack) {
-      tree.ends[index] = occurrences.length
+    }
+    for (let i = 0; i < stack.length; i += 1) {
+      tree.ends[stack[i]] = occurrences.length
     }
     sectionTrees.set(sectionKey, tree)
-    occurrences.forEach((occurrence, index) => {
+    for (let index = 0; index < occurrences.length; index += 1) {
       const length = tree.ends[index]! - index - 1
       if (length > 0) {
-        result.set(occurrence.key, { tree, index, length })
+        result.set(occurrences[index].key, { tree, index, length })
       }
-    })
+    }
   }
   rangesByPlan.set(plan, result)
   sectionTreesByPlan.set(plan, sectionTrees)
