@@ -58,6 +58,8 @@ function buildUniversalBinary() {
     ])
     return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
   })
+  // Replace SwiftPM's .build/release symlink with a real directory so CI caches archive the universal outputs.
+  rmSync(path.dirname(binaryPath), { recursive: true, force: true })
   mkdirSync(path.dirname(binaryPath), { recursive: true })
   run('lipo', ['-create', ...builtBinaries, '-output', binaryPath])
 }
