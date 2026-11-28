@@ -27,14 +27,25 @@ export async function disconnectRegisteredSshTarget(targetId: string): Promise<v
   await runTargetLifecycle(targetId, () => teardownSshTargetTransport(targetId))
 }
 
-export async function removeRegisteredSshTarget(targetId: string): Promise<void> {
+export async function removeRegisteredSshTarget(
+  targetId: string,
+  prepare?: () => Promise<void>
+): Promise<void> {
   const store = getSshTargetRegistryStore()
   if (!store) {
     return
   }
-  invalidateConnectAttempt(targetId)
-  clearSshHostServerStatus(targetId)
+  // A prepare step shares this lifecycle turn with the delete, so it must run before connect cancellation.
+  if (!prepare) {
+    invalidateConnectAttempt(targetId)
+    clearSshHostServerStatus(targetId)
+  }
   await runTargetLifecycle(targetId, async () => {
+    if (prepare) {
+      await prepare()
+      invalidateConnectAttempt(targetId)
+      clearSshHostServerStatus(targetId)
+    }
     try {
       await teardownSshTargetTransport(targetId)
     } catch (err) {

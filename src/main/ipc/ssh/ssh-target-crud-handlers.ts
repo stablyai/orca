@@ -11,6 +11,8 @@ import {
   listUserSshConfigHostSummaries,
   resolveUserSshConfigHost
 } from '../../ssh/config/ssh-config-host-picker'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { closeOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { rotateSshProviderAuthority } from '../../ssh/connection/authority/ssh-provider-authority'
@@ -20,8 +22,10 @@ import {
 } from '../../ssh/targets/ssh-target-registry'
 import {
   allowsDirectSshRelay,
+  decideManagedHostRemoval,
   isManagedOrcadSshTarget,
-  isRuntimeOwnedSshTarget
+  isRuntimeOwnedSshTarget,
+  MANAGED_HOST_REMOVAL_REFUSAL
 } from '../../ssh/targets/ssh-target-runtime-ownership'
 import { connectionManager } from './ssh-ipc-context'
 import { sshDesktopHost } from '../../ssh/application/ssh-desktop-host'
@@ -112,10 +116,38 @@ function assertNotRuntimeOwned(targetId: string, action: string): void {
 export function assertNotManagedServerHost(targetId: string): void {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (target && isManagedOrcadSshTarget(target)) {
-    throw new Error(
-      'Orca runs on this host. Use Stop… under Settings › Orca on your SSH hosts to stop it and remove it from the host first, or Forget… there if the host is gone.'
-    )
+    throw new Error(MANAGED_HOST_REMOVAL_REFUSAL)
   }
+}
+
+/** Unreadable catalog stays refused. An empty catalog is a real read. */
+async function readKnownEnvironmentIds(): Promise<ReadonlySet<string> | null> {
+  try {
+    const environments = await listEnvironments(getAppEnvironment().getPath('userData'))
+    return new Set(environments.map((environment) => environment.id))
+  } catch {
+    return null
+  }
+}
+
+/** Clear a fence whose environment is gone, then let the existing guard refuse a live server. */
+async function releaseDanglingManagedHostReference(targetId: string): Promise<void> {
+  const store = getSshTargetRegistryStore()
+  const target = store?.getTarget(targetId)
+  const decision = decideManagedHostRemoval(
+    target,
+    target && isManagedOrcadSshTarget(target) ? await readKnownEnvironmentIds() : null
+  )
+  if (decision.kind === 'clear-dangling-reference') {
+    const cleared = store?.updateTarget(targetId, {
+      orcadFence: undefined,
+      orcadProvisioning: undefined
+    })
+    if (!cleared || isManagedOrcadSshTarget(cleared)) {
+      throw new Error(MANAGED_HOST_REMOVAL_REFUSAL)
+    }
+  }
+  assertNotManagedServerHost(targetId)
 }
 
 function addSshTarget(input: SshTargetCreateInput): SshTargetAddResult {
@@ -155,8 +187,7 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
 
 async function removeSshTarget(id: string): Promise<void> {
   assertNotRuntimeOwned(id, 'removed')
-  assertNotManagedServerHost(id)
-  await removeRegisteredSshTarget(id)
+  await removeRegisteredSshTarget(id, () => releaseDanglingManagedHostReference(id))
   requestDesktopBrowserBridgeReconcile()
 }
 
