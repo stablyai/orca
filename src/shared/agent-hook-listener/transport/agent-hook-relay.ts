@@ -33,6 +33,7 @@ const AGENT_HOOK_SOURCES = [
   'grok',
   'copilot',
   'hermes',
+  'mistral-vibe',
   'devin',
   'kimi',
   'muse',

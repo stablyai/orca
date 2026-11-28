@@ -34,6 +34,7 @@ import { isCursorAcpSessionStorePath } from '../../../shared/ai-vault/session-di
 import {
   enrichSessionFromSidecar,
   reuseUnchangedSidecarSession,
+  sidecarAppliedByParser,
   sidecarEnrichesWithoutReparse,
   type SidecarEnrichment
 } from './session-scanner-sidecar-enrichment'
@@ -87,6 +88,7 @@ function resumableStateFactoryFor(
     case 'opencode2':
     case 'zcode':
     case 'rovo':
+    case 'mistral-vibe':
       return null
   }
 }
@@ -200,6 +202,11 @@ async function parseCachedInLane(
   const sessionForConsumers = async (
     session: AiVaultSession | null
   ): Promise<AiVaultSession | null> => {
+    // The vibe parser already merged meta.json into the fold, so a full parse skips the re-read.
+    if (sidecarAppliedByParser(candidate)) {
+      enriched = { session, refused: false }
+      return session
+    }
     enriched = await enrichSessionFromSidecar(candidate, session, platform, signal)
     return enriched.session
   }

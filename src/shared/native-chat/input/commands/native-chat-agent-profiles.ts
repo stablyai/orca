@@ -134,7 +134,9 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   codebuddy: {
     skillPrefix: '/',
     skillSourceOwner: 'codebuddy'
-  }
+  },
+  // Mistral Vibe reports skills as commands once a session starts; Orca knows no skill folders yet.
+  'mistral-vibe': null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots unless the profile sets

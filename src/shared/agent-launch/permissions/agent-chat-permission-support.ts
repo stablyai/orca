@@ -30,6 +30,10 @@ const EDIT_ACCEPTING_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'accept-edits', 'full-access']
 }
 
+const VIBE_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
+  modes: ['ask', 'accept-edits', 'auto', 'full-access']
+}
+
 /** Every agent that has a native chat. */
 export const NATIVE_CHAT_AGENTS = [
   'claude',
@@ -53,7 +57,8 @@ export const NATIVE_CHAT_AGENTS = [
   'qwen-code',
   'cline',
   'devin',
-  'codebuddy'
+  'codebuddy',
+  'mistral-vibe'
 ] as const
 
 export type NativeChatAgent = (typeof NATIVE_CHAT_AGENTS)[number]
@@ -88,7 +93,9 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   // Devin's own modes: Code approves edits, and Smart has a model approve what is safe.
   devin: CLAUDE_CHAT_PERMISSION_MODES,
   // CodeBuddy's own modes, as Claude Code's: Accept Edits, and Auto has a model review each action.
-  codebuddy: CLAUDE_CHAT_PERMISSION_MODES
+  codebuddy: CLAUDE_CHAT_PERMISSION_MODES,
+  // Vibe's own modes; the value mapping lives in the launch spec's permissionModeConfig.
+  'mistral-vibe': VIBE_CHAT_PERMISSION_MODES
 }
 
 export function isNativeChatAgent(agent: string): agent is NativeChatAgent {

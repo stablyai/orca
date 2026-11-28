@@ -14,7 +14,12 @@ import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { removeFolderContextFile, writeFolderContextFile } from './acp-folder-context-file'
+import {
+  acquireFolderContextSlot,
+  acquireFolderContextSlotChain,
+  removeFolderContextFile,
+  writeFolderContextFile
+} from './acp-folder-context-file'
 
 // Runs once right after the next read of the context file, as a user's editor saving meanwhile.
 let saveAfterNextRead: (() => Promise<void>) | null = null
@@ -45,6 +50,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   process.umask(previousUmask)
+  saveAfterNextRead = null
   await rm(dir, { recursive: true, force: true })
 })
 
@@ -151,6 +157,40 @@ it("takes Orca's text back out of a context file and keeps the user's", async ()
   expect(await readFile(join(dir, 'GEMINI.md'), 'utf8')).toBe('My own rules.\n')
 })
 
+it('reports Orca text verifiably gone after removal', async () => {
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  await expect(removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')).resolves.toBe(true)
+
+  await writeFile(join(dir, 'GEMINI.md'), 'My own rules.\n')
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  await expect(removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')).resolves.toBe(true)
+  expect(await readFile(join(dir, 'GEMINI.md'), 'utf8')).toBe('My own rules.\n')
+})
+
+it('reports false when a save lands on every pass so Orca block stays', async () => {
+  const path = join(dir, 'GEMINI.md')
+  await writeFile(path, 'My own rules.\n')
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  const withBlock = await readFile(path, 'utf8')
+  let saves = 0
+  const arm = () => {
+    saveAfterNextRead = () => writeFile(path, `${withBlock}# save ${++saves}\n`).then(arm)
+  }
+  arm()
+  await expect(removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')).resolves.toBe(false)
+  expect(await readFile(path, 'utf8')).toContain('bot preamble')
+  saveAfterNextRead = null
+})
+
+it('gives an empty user file back byte-for-byte after Orca text is taken out', async () => {
+  const path = join(dir, 'GEMINI.md')
+  await writeFile(path, '')
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  expect(await readFile(path, 'utf8')).toContain('bot preamble')
+  await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
+  expect(await readFile(path, 'utf8')).toBe('')
+})
+
 it("leaves every byte around Orca's block as the user wrote it", async () => {
   const path = join(dir, 'GEMINI.md')
   const user = '# Rules\r\n\n```\n    indented code\n```\n  \n'
@@ -181,4 +221,83 @@ it.each([
   await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
   expect(await readFile(path, 'utf8')).toBe(saved)
   expect(await readdir(dir)).toEqual(['GEMINI.md'])
+})
+
+describe('acquireFolderContextSlot', () => {
+  it('serializes slots for one file until the holder releases', async () => {
+    let secondAcquired = false
+    const first = await acquireFolderContextSlot(dir, 'AGENTS.md')
+    const second = acquireFolderContextSlot(dir, 'AGENTS.md').then((release) => {
+      secondAcquired = true
+      return release
+    })
+    // Let the second call's realpath settle; it must still be waiting on the held slot.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(secondAcquired).toBe(false)
+    first()
+    const secondRelease = await second
+    expect(secondAcquired).toBe(true)
+    secondRelease()
+  })
+
+  it('does not block slots for a different file in the same folder', async () => {
+    const first = await acquireFolderContextSlot(dir, 'AGENTS.md')
+    const second = await acquireFolderContextSlot(dir, '.hermes.md')
+    first()
+    second()
+  })
+})
+
+describe('acquireFolderContextSlotChain', () => {
+  it('holds the slot for the file in every ancestor folder, so a nested chat cannot read a parent write', async () => {
+    const nested = join(dir, 'repo', 'sub')
+    await mkdir(nested, { recursive: true })
+    const release = await acquireFolderContextSlotChain(nested, 'AGENTS.md')
+    // A chat in the parent folder must wait on the same AGENTS.md slot the chain holds.
+    let parentAcquired = false
+    const parent = acquireFolderContextSlot(join(dir, 'repo'), 'AGENTS.md').then((r) => {
+      parentAcquired = true
+      return r
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(parentAcquired).toBe(false)
+    release()
+    const parentRelease = await parent
+    expect(parentAcquired).toBe(true)
+    parentRelease()
+  })
+
+  it('releases every slot in the chain', async () => {
+    const nested = join(dir, 'a', 'b')
+    await mkdir(nested, { recursive: true })
+    const release = await acquireFolderContextSlotChain(nested, 'AGENTS.md')
+    release()
+    // After release, both the nested and the ancestor slot are free again.
+    const nestedAgain = await acquireFolderContextSlot(nested, 'AGENTS.md')
+    const rootAgain = await acquireFolderContextSlot(dir, 'AGENTS.md')
+    nestedAgain()
+    rootAgain()
+  })
+
+  it('releases the slots taken so far when the signal aborts mid-chain', async () => {
+    const nested = join(dir, 'a', 'b')
+    await mkdir(nested, { recursive: true })
+    const controller = new AbortController()
+    const pending = acquireFolderContextSlotChain(nested, 'AGENTS.md', controller.signal)
+    // Abort while the chain is still walking up: the leaf slot must be released again.
+    controller.abort(new Error('stop'))
+    await expect(pending).rejects.toThrow('stop')
+    const leaf = await acquireFolderContextSlot(nested, 'AGENTS.md')
+    const ancestor = await acquireFolderContextSlot(dir, 'AGENTS.md')
+    leaf()
+    ancestor()
+  })
+
+  it('reports not-clean when a stale block is readable through a symlinked context file', async () => {
+    const real = join(dir, 'real.md')
+    await writeFile(real, 'user notes\n<!-- orca:begin -->\nstale bot text\n<!-- orca:end -->\n')
+    await symlink(real, join(dir, 'AGENTS.md'))
+    // The removal leaves the symlink alone, but the block behind it is still readable.
+    await expect(removeFolderContextFile(dir, 'AGENTS.md', 'Gemini')).resolves.toBe(false)
+  })
 })

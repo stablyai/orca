@@ -26,7 +26,8 @@ import type { AiVaultScanOptions } from '../session-scanner-types'
 const AI_VAULT_WHOLE_DIRECTORY_DELETE_AGENTS = new Set<AiVaultDeletableAgent>([
   'rovo',
   'grok',
-  'cline'
+  'cline',
+  'mistral-vibe'
 ])
 
 export type ValidateAiVaultSessionDeleteTargetArgs = {

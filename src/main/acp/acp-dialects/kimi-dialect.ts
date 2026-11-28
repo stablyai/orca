@@ -1,7 +1,6 @@
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
-import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
-import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { AcpDialect, AcpRequestPresentation } from './acp-dialect'
+import { approvalNameFromToolCall, approvalRequestPresentation } from './acp-approval-presentation'
 
 const SHELL_FAILURE = /^(?:([\s\S]*)\n)?Command failed with exit code: (-?\d+)\.$/u
 const SHELL_SILENT_SUCCESS = 'Command executed successfully.'
@@ -55,21 +54,12 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 const APPROVAL_ACTION = /^Requesting approval to (.+)$/su
-const ACTION_MAX_CHARS = 512
 
 // Approvals are titled with the bare tool name; the command or path is only in this action line.
-function approvalRequest(method: string, params: unknown): AcpRequestPresentation | undefined {
-  const request =
-    method === 'session/request_permission' ? readAcpPermissionRequest(params, () => {}) : null
-  const action = request?.toolCall.content
-    ?.map((block) =>
-      block.type === 'content' && block.content.type === 'text'
-        ? APPROVAL_ACTION.exec(block.content.text)?.[1]?.trim()
-        : undefined
-    )
-    .find(Boolean)
-  return action ? acpPermissionPresentation(params, action.slice(0, ACTION_MAX_CHARS)) : undefined
-}
+const approvalRequest = (method: string, params: unknown): AcpRequestPresentation | undefined =>
+  approvalRequestPresentation(method, params, (request) =>
+    approvalNameFromToolCall(APPROVAL_ACTION, request)
+  )
 
 export const KIMI_ACP_DIALECT: AcpDialect = {
   // Without forms, Kimi drops every question after the first and offers no free-text answer.

@@ -164,7 +164,8 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
   devin: PARSE,
   kimi: PARSE,
   muse: PARSE,
-  jcode: PARSE
+  jcode: PARSE,
+  'mistral-vibe': PARSE
 }
 
 /** Answer from scope sources alone, without the global recency pass (Workspace and Project). */

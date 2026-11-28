@@ -45,6 +45,8 @@ export function agentCliProductName(
       return t('agentCliUpdate.devinProduct', 'Devin CLI')
     case 'codebuddy':
       return t('agentCliUpdate.codebuddyProduct', 'CodeBuddy Code')
+    case 'mistral-vibe':
+      return t('agentCliUpdate.mistralVibeProduct', 'Mistral Vibe')
     case 'antigravity':
       return t('agentCliUpdate.antigravityProduct', 'Antigravity CLI')
   }

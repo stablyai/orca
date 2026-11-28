@@ -141,14 +141,13 @@ export function ownOptionsInclude(args: readonly string[], flags: readonly strin
   )
 }
 
-/** Parse target-less flags or marker values, including --marker=value, with exact CLI option matching. */
+/** Parse marker values, including --marker=value, or target-less flags, with exact CLI option
+ *  matching. With `markerTargetWins`, a marker target beats a target-less flag (`--resume id -c`
+ *  resumed `id`); by default any target-less flag wins, as it always has. */
 export function resumeInvocationFromOptions(
   args: readonly string[],
-  options: { targetless: readonly string[]; markers: readonly string[] }
+  options: { targetless: readonly string[]; markers: readonly string[]; markerTargetWins?: boolean }
 ): StructuredAgentResumeInvocation | null {
-  if (args.some((token) => options.targetless.includes(token))) {
-    return { target: null }
-  }
   const inline = args.find((token) =>
     options.markers.some((marker) => token.startsWith(`${marker}=`))
   )
@@ -156,10 +155,17 @@ export function resumeInvocationFromOptions(
     const target = inline.slice(inline.indexOf('=') + 1)
     return { target: target.length > 0 ? target : null }
   }
-  return invocationAfter(
+  const marker = invocationAfter(
     args,
     args.findIndex((token) => options.markers.includes(token))
   )
+  if (options.markerTargetWins && marker?.target != null) {
+    return marker
+  }
+  if (args.some((token) => options.targetless.includes(token))) {
+    return { target: null }
+  }
+  return marker
 }
 
 /** Match session IDs, ID prefixes or transcript paths against History’s filename ID. */

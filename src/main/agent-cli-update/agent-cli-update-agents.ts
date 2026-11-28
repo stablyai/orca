@@ -160,7 +160,13 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
   // `codebuddy update` follows how it was installed (npm, Homebrew or its native installer).
   codebuddy: { latest: () => npm('@tencent-ai/codebuddy-code'), plan: selfUpdate('update') },
   // `agy update` installs the build Google's manifest names, as its own background updater does.
-  antigravity: { latest: () => ({ kind: 'agy' }), plan: selfUpdate('update') }
+  antigravity: { latest: () => ({ kind: 'agy' }), plan: selfUpdate('update') },
+  // Vibe publishes releases on GitHub (tags vX.Y.Z), not npm; `vibe update` needs a terminal for
+  // unpinned installs, so the plan is a manual command rather than a runnable one.
+  'mistral-vibe': {
+    latest: () => ({ kind: 'github', repo: 'mistralai/mistral-vibe', tagPrefix: 'v' }),
+    plan: () => ({ runnable: false, command: 'vibe update' })
+  }
 }
 
 export function agentCliUpdateDefinition(agent: AgentCliUpdateAgent): AgentCliUpdateDefinition {

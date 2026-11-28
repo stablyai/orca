@@ -7,9 +7,9 @@ import {
   ACP_FORM_ELICITATION_METHOD,
   acpFormElicitationPresentation
 } from '../requests/acp-form-elicitation'
-import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { StructuredAgentListedSelection } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
+import { approvalRequestPresentation } from './acp-approval-presentation'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
 import { antigravityExecutorErrorWords } from './antigravity-executor-error'
@@ -74,7 +74,6 @@ function questionRequest(method: string, params: unknown): AcpRequestPresentatio
   }
 }
 
-const WARNING_MAX_CHARS = 512
 const securityWarningSchema = lazyZodSchema(() =>
   z.looseObject({
     'agy.security.warning': z.looseObject({
@@ -85,17 +84,13 @@ const securityWarningSchema = lazyZodSchema(() =>
 )
 
 // Risky Allow Always options carry warnings in option metadata.
-function warnedApproval(method: string, params: unknown): AcpRequestPresentation | undefined {
-  const request =
-    method === 'session/request_permission' ? readAcpPermissionRequest(params, () => {}) : null
-  const warning = request?.options
-    .map((option) => securityWarningSchema.safeParse(option._meta).data?.['agy.security.warning'])
-    .map((found) => found?.message?.trim() || found?.title?.trim())
-    .find(Boolean)
-  return warning
-    ? acpPermissionPresentation(params, warning.slice(0, WARNING_MAX_CHARS))
-    : undefined
-}
+const warnedApproval = (method: string, params: unknown): AcpRequestPresentation | undefined =>
+  approvalRequestPresentation(method, params, (request) =>
+    request.options
+      .map((option) => securityWarningSchema.safeParse(option._meta).data?.['agy.security.warning'])
+      .map((found) => found?.message?.trim() || found?.title?.trim())
+      .find(Boolean)
+  )
 
 // Normalize the server's command-field variants to command/cwd and stdout/exitCode.
 const optionalText = lazyZodSchema(() => z.string().optional())

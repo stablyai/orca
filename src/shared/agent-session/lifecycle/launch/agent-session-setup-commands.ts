@@ -4,8 +4,9 @@ import {
   quoteStartupArg,
   type AgentStartupShell
 } from '../../../agent-launch/startup/tui-agent-startup-shell'
+import { encodePowerShellCommand } from '../../../shell/launch/powershell-command-encoding'
 
-/** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer. */
+/** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer URL; `windowsInstallCommand` is a direct PowerShell command line for installers that publish no .ps1. */
 export const AGENT_SESSION_SETUP_COMMANDS = [
   {
     agent: 'claude',
@@ -128,6 +129,20 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
     installCommand: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
     windowsInstallScript: 'https://antigravity.google/cli/install.ps1'
+  },
+  {
+    agent: 'mistral-vibe',
+    // Signs in via Mistral AI Studio OAuth (browser-auth) or MISTRAL_API_KEY.
+    loginCommand: ['vibe-acp', '--setup'],
+    // The documented POSIX install; it bootstraps uv itself, so it works without a prior uv.
+    installCommand: 'curl -LsSf https://mistral.ai/vibe/install.sh | bash',
+    // Vibe publishes no install.ps1; bootstrap uv, then install vibe through it.
+    // uv's installer edits only the registry PATH, not the running session, so call uv.exe by
+    // its install path; double quotes let PowerShell expand $env:USERPROFILE, and the whole line
+    // runs via -EncodedCommand, so no quoting is lost whatever shell types it in.
+    // uv's tool bin is %USERPROFILE%\.local\bin, which installDirectories already searches on win32.
+    windowsInstallCommand:
+      'irm https://astral.sh/uv/install.ps1 | iex; & "$env:USERPROFILE/.local/bin/uv.exe" tool install --python 3.12 mistral-vibe'
   }
 ] as const
 
@@ -205,9 +220,15 @@ export function agentSessionInstallCommand(
   }
   if (hostPlatform === 'win32') {
     // Why powershell.exe: one line that runs the same from PowerShell, cmd and Git Bash terminals.
-    return 'windowsInstallScript' in entry
-      ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm ${entry.windowsInstallScript} | iex"`
-      : null
+    if ('windowsInstallScript' in entry) {
+      return `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm ${entry.windowsInstallScript} | iex"`
+    }
+    if ('windowsInstallCommand' in entry) {
+      // EncodedCommand keeps the script intact whatever Windows shell types it in; cmd.exe does
+      // not expand $env: inside a -Command argument.
+      return `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(entry.windowsInstallCommand)}`
+    }
+    return null
   }
   return 'installCommand' in entry ? entry.installCommand : null
 }
