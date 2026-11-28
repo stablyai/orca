@@ -203,13 +203,16 @@ export function useBotItemQuestionSteps(
   ): void =>
     send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers, rideAlongText })
   // Held until the last open line has an answer: then every answer goes, the held copy kept to recover.
-  // A line reopened, or with words started in the box, waits for its new answer.
-  const holdOrSend = (index: number, answer: BotItemHeldAnswer): void => {
+  // What the card shows is what goes: a folded line counts as answered, while the line shown open to
+  // change, or one the box's unsent words name, waits for its new answer (only the box's own Enter,
+  // `fromBox`, uses those words up).
+  const holdOrSend = (index: number, answer: BotItemHeldAnswer, fromBox = false): void => {
     hold(stored(index, answer))
     const next = picks.map((pick, at) => (at === index ? answer : pick))
     const drafting = boxEmpty || target.hidden ? null : target.line?.id
     const settled = (at: number): boolean =>
-      at === index || (at !== reopened && drafting !== `${askId}:${at}`)
+      (at === index || at !== reopened) &&
+      ((fromBox && at === index) || drafting !== `${askId}:${at}`)
     if (lines.every((at) => next[at] && settled(at))) {
       post(botItemHeldAnswersComment(shape, next))
     }
@@ -294,7 +297,7 @@ export function useBotItemQuestionSteps(
       if (answering) {
         // Words, files and skills alike count as a pick: the line folds to them and the box names the
         // next open line, or, on the last open line, they all go.
-        holdOrSend(line, answer)
+        holdOrSend(line, answer, true)
         // Another line reopened still waits for its own new answer.
         if (line === reopened) {
           setReopenedAt(null)

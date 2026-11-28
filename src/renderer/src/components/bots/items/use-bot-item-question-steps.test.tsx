@@ -186,6 +186,16 @@ it("keeps a reopened line waiting when the box's Enter answers another line", ()
   expect(hook.result.current.steps!.reopened).toBe(0)
 })
 
+it("holds the set while the box's unsent words name the line a chip picks", () => {
+  const uid = 'draft-then-chip'
+  const words = 'Actually use private hosts'
+  const { hook, posted } = reopenedDraft(uid, words)
+  act(() => hook.result.current.steps!.pick(2, 'Yes'))
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  expect(posted).toEqual([])
+  expect(readNativeChatComposerDraft(botItemCommentDraftScope(bot, uid)).text).toBe(words)
+})
+
 it('posts the set once a reopened line is folded back by its own pick', () => {
   const { hook, posted } = steps('reopen-confirm-last')
   act(() => hook.result.current.steps!.pick(0, 'Yes'))
