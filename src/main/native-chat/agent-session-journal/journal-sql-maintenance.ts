@@ -1,3 +1,4 @@
+import { applyProtectedSessionGrant } from './protected-journal-session-grants'
 import type { ConnectorFailure } from '../../../shared/connectors/connector-cloud-contract'
 import { prepareJournalLegacyClaimsInsert } from './database/journal-legacy-claims'
 import { createHash } from 'node:crypto'
@@ -68,6 +69,14 @@ export type JournalPagedMaintenanceKind =
   | 'stored-output-compaction'
 
 export type JournalSqlMaintenance =
+  | {
+      kind: 'protected-founding'
+      sessionId: string
+      workspaceId: string
+      provider: string
+      operationId: string
+    }
+  | { kind: 'protected-session'; sessionId: string; workspaceId: string; provider?: string }
   | { kind: 'legacy-retirement-state' }
   | { kind: 'legacy-retirement-reported'; value: string }
   | { kind: 'legacy-claims-absorb'; claims: readonly LegacyClaim[] }
@@ -139,6 +148,9 @@ export function applyJournalSqlMaintenance(
   operation: JournalSqlMaintenance
 ): JournalSqlMaintenanceResult {
   switch (operation.kind) {
+    case 'protected-founding':
+    case 'protected-session':
+      return applyProtectedSessionGrant(db, operation)
     case 'legacy-retirement-state': {
       const value = (key: string) =>
         db

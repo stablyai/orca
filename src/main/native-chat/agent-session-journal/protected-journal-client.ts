@@ -125,6 +125,12 @@ export class ProtectedJournalClient implements SessionDatabase {
       recover
     })
   }
+  found(call: Extract<ProtectedJournalCall, { op: 'found' }>) {
+    return this.request(call)
+  }
+  placement(call: Extract<ProtectedJournalCall, { op: 'placement' }>) {
+    return this.request(call)
+  }
   upload(upload: ProtectedUpload) {
     return this.request({ op: 'upload', upload })
   }
@@ -140,7 +146,33 @@ export class ProtectedJournalClient implements SessionDatabase {
     const refuse = () => Promise.reject(new Error('operation unavailable on a protected journal'))
     const job = this.lane.then(() =>
       run({
-        write: (command) => this.request<JournalWriterCommit>({ op: 'write', command }),
+        write: (command) => {
+          const effects = command.effects?.map((effect) => {
+            if (
+              effect.kind !== 'store' ||
+              effect.mutation.input.kind !== 'command' ||
+              effect.mutation.input.command.kind !== 'found'
+            ) {
+              return effect
+            }
+            const found = effect.mutation.input.command
+            const { launchEnv: _env, ...request } = found.request
+            return {
+              ...effect,
+              mutation: {
+                ...effect.mutation,
+                input: {
+                  kind: 'command' as const,
+                  command: { ...found, request: { ...request, spawnToken: '' } }
+                }
+              }
+            }
+          })
+          return this.request<JournalWriterCommit>({
+            op: 'write',
+            command: { ...command, effects }
+          })
+        },
         effects: refuse,
         maintain: refuse
       })
@@ -172,7 +204,7 @@ async function protectedClient(selected: ProtectedJournalPolicy) {
       parent.uid !== 0 ||
       parent.mode & 0o022 ||
       !endpoint.isSocket() ||
-      endpoint.uid !== 0 ||
+      (endpoint.uid !== 0 && endpoint.uid !== selected.producerUid) ||
       selected.producerUid === process.getuid?.()
     ) {
       throw new Error('unprotected journal endpoint')
@@ -216,4 +248,29 @@ export async function retainSessionUpload(
   } finally {
     await fd.close()
   }
+}
+
+export async function reserveProtectedJournalSession(
+  workspaceId: string,
+  sessionId: string,
+  provider: string,
+  operationId: string
+) {
+  const selected = await policy()
+  if (!selected || selected.workspaceId !== workspaceId) {
+    return false
+  }
+  await (
+    await protectedClient(selected)
+  ).found({ op: 'found', workspaceId, sessionId, provider, operationId })
+  return true
+}
+export async function mirrorProtectedPlacement(
+  request: Extract<ProtectedJournalCall, { op: 'placement' }>['request']
+) {
+  const selected = await policy()
+  if (!selected || selected.workspaceId !== request.location.workspaceId) {
+    return
+  }
+  await (await protectedClient(selected)).placement({ op: 'placement', request })
 }

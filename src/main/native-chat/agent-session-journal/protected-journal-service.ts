@@ -25,7 +25,9 @@ export async function serveProtectedConnection(
       !input.call ||
       typeof input.call !== 'object' ||
       !('op' in input.call) ||
-      !['open', 'write', 'history', 'point', 'epoch', 'upload'].includes(String(input.call.op))
+      !['open', 'write', 'history', 'point', 'epoch', 'upload', 'found', 'placement'].includes(
+        String(input.call.op)
+      )
     ) {
       throw new Error('incompatible protected journal frame')
     }

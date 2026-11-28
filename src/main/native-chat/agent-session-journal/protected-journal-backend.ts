@@ -15,8 +15,69 @@ export class ProtectedJournalBackend {
     private readonly policy: ProtectedJournalPolicy
   ) {}
   async execute(call: ProtectedJournalCall): Promise<unknown> {
+    if (call.op === 'found') {
+      if (
+        call.workspaceId !== this.policy.workspaceId ||
+        !/^[\w-]{1,128}$/.test(call.sessionId) ||
+        !call.operationId
+      ) {
+        throw new Error('bad protected founding')
+      }
+      return this.db.serialize(call.sessionId, (writer) =>
+        writer.maintain({
+          kind: 'protected-founding',
+          sessionId: call.sessionId,
+          workspaceId: call.workspaceId,
+          provider: call.provider,
+          operationId: call.operationId
+        })
+      )
+    }
+    if (call.op === 'placement') {
+      const req = call.request
+      if (
+        req.location.workspaceId !== this.policy.workspaceId ||
+        req.location.executionHostId !== 'local' ||
+        req.forkedFrom ||
+        req.adoptedHandleLink
+      ) {
+        throw new Error('bad protected placement')
+      }
+      await this.db.serialize(req.sessionId, (writer) =>
+        writer.maintain({
+          kind: 'protected-session',
+          sessionId: req.sessionId,
+          workspaceId: req.location.workspaceId,
+          provider: req.provider
+        })
+      )
+      await this.db.effects([
+        {
+          kind: 'store',
+          mutation: {
+            input: {
+              kind: 'command',
+              command: {
+                kind: 'found',
+                request: { ...req, spawnToken: '' },
+                leaseTtlMs: 0,
+                legacyTabIds: []
+              }
+            }
+          }
+        }
+      ])
+      return null
+    }
     if (call.op === 'upload') {
       const upload = call.upload
+      await this.db.serialize(upload.sessionId, (writer) =>
+        writer.maintain({
+          kind: 'protected-session',
+          sessionId: upload.sessionId,
+          workspaceId: this.policy.workspaceId
+        })
+      )
       const retained = await retainProtectedUpload(
         this.db.stateDirectory,
         this.policy.workspaceId,
@@ -41,6 +102,14 @@ export class ProtectedJournalBackend {
       ) {
         throw new Error('wrong protected journal identity')
       }
+      await this.db.serialize(call.identity.sessionId, (writer) =>
+        writer.maintain({
+          kind: 'protected-session',
+          sessionId: call.identity.sessionId,
+          workspaceId: call.identity.workspaceId,
+          provider: call.identity.agent
+        })
+      )
       const result = await this.db.openSession(call.identity, Date.now(), call.recover)
       this.sessions.set(call.identity.sessionId, {
         identity: call.identity,
@@ -84,6 +153,18 @@ export class ProtectedJournalBackend {
             continue
           }
           if (effect.kind === 'store') {
+            const change = effect.mutation.input
+            if (
+              change.kind === 'command' &&
+              change.command.kind === 'found' &&
+              change.command.request.sessionId === id &&
+              change.command.request.provider === session.identity.agent &&
+              change.command.request.location.workspaceId === this.policy.workspaceId &&
+              !change.command.request.forkedFrom &&
+              !change.command.request.adoptedHandleLink
+            ) {
+              continue
+            }
             const keys = agentSessionStoreMutationKeys(effect.mutation.input)
             if (
               keys.recordIds.length === 1 &&

@@ -84,10 +84,20 @@ CREATE TABLE IF NOT EXISTS journal_submission_export (
   UNIQUE(session_id,epoch,journal_sequence));
 CREATE INDEX IF NOT EXISTS journal_submission_export_family
   ON journal_submission_export(session_id,epoch,family_id,cursor);
+CREATE TABLE IF NOT EXISTS journal_export_sessions (
+  session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, provider TEXT NOT NULL, founding_op TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS journal_export_upload_origins (
   upload_id TEXT PRIMARY KEY,session_id TEXT NOT NULL,source_path TEXT NOT NULL,name TEXT NOT NULL,sha256 TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS journal_export_upload_chat ON journal_export_upload_origins(session_id);
 CREATE TABLE IF NOT EXISTS journal_export_blobs (digest TEXT PRIMARY KEY, content BLOB NOT NULL);
+CREATE TRIGGER IF NOT EXISTS journal_export_no_update BEFORE UPDATE ON journal_submission_export
+ BEGIN SELECT RAISE(ABORT,'immutable committed export'); END;
+CREATE TRIGGER IF NOT EXISTS journal_export_no_delete BEFORE DELETE ON journal_submission_export
+ BEGIN SELECT RAISE(ABORT,'immutable committed export'); END;
+CREATE TRIGGER IF NOT EXISTS journal_export_blob_no_update BEFORE UPDATE ON journal_export_blobs
+ BEGIN SELECT RAISE(ABORT,'immutable committed content'); END;
+CREATE TRIGGER IF NOT EXISTS journal_export_blob_no_delete BEFORE DELETE ON journal_export_blobs
+ BEGIN SELECT RAISE(ABORT,'immutable committed content'); END;
 `)
 }
 

@@ -1,3 +1,4 @@
+import { prepareProtectedFounding } from '../../agent-session-journal/protected-journal-founding'
 import type { StructuredAgentSessionCreateOptions } from './structured-agent-session-create-options'
 import { settleOpeningThenRegister } from './structured-agent-session-opening-withdrawal'
 import {
@@ -152,6 +153,7 @@ export async function foundConversation(
             )
     }
   }
+  const place = prior || replayed ? null : await prepareProtectedFounding(request)
   const prepared = replayed
     ? { ok: true as const, items: null }
     : await prepareCreateTranscript(context, params)
@@ -262,6 +264,7 @@ export async function foundConversation(
           await store.founding.commit(request)
         }
       }
+      await place?.(options.firstMessage ? () => store.founding.commit(request) : undefined)
       committed = true
     }
     try {

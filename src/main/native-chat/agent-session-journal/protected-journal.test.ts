@@ -2,7 +2,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { connect, createServer, type Socket } from 'node:net'
 import { once } from 'node:events'
 import { expect, it } from 'vitest'
@@ -64,6 +64,7 @@ it('commits user submissions over the isolated writer connection for distinct pr
     const socket = connect(socketPath)
     sockets.push(socket)
     const port = new ProtectedJournalClient(socket, policy)
+    const uploadId = randomUUID()
     for (const agent of ['omp', 'antigravity'] as const) {
       const sessionId = randomUUID()
       const identity: AgentSessionJournalIdentity = {
@@ -73,12 +74,35 @@ it('commits user submissions over the isolated writer connection for distinct pr
         agent,
         providerHandle: null
       }
+      await expect(port.openSession(identity)).rejects.toThrow()
+      await port.found({
+        op: 'found',
+        sessionId,
+        workspaceId: policy.workspaceId,
+        provider: agent,
+        operationId: randomUUID()
+      })
       const journal = await openAgentSessionJournal({ identity, database: port })
       journals.push(journal)
       const body: AgentJournalMessageItem = {
         kind: 'message',
         role: 'user',
         blocks: [{ type: 'text', text: `Original ${agent}` }]
+      }
+      if (agent === 'omp') {
+        const bytes = Buffer.from([0, 1, 255])
+        const file = {
+          workspaceId: policy.workspaceId,
+          sessionId,
+          uploadId,
+          name: 'photo.bin',
+          bytes,
+          sourcePath: `/original/agent-session-attachments/${uploadId}/photo.bin`,
+          expectedHash: createHash('sha256').update(bytes).digest('hex')
+        }
+        await expect(port.upload({ ...file, name: '../else' })).rejects.toThrow()
+        await port.upload(file)
+        body.blocks.push({ type: 'image-ref', path: file.sourcePath })
       }
       await journal.write({
         kind: 'submission',
@@ -100,7 +124,10 @@ it('commits user submissions over the isolated writer connection for distinct pr
           .all()
           .map((r) => JSON.parse(String(r.original_json)))
       ).toEqual([
-        [{ type: 'text', text: 'Original omp' }],
+        [
+          { type: 'text', text: 'Original omp' },
+          { type: 'image-ref', upload: uploadId }
+        ],
         [{ type: 'text', text: 'Original antigravity' }]
       ])
     } finally {

@@ -1,3 +1,4 @@
+import type { AgentSessionReserveRequest } from '../../runtime/agent-session/ownership/agent-session-reservation-admission'
 import type { ProtectedUpload } from './protected-journal-uploads'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
@@ -12,6 +13,8 @@ export type SessionDatabase = Pick<
 }
 
 export type ProtectedJournalCall =
+  | { op: 'found'; sessionId: string; workspaceId: string; provider: string; operationId: string }
+  | { op: 'placement'; request: Omit<AgentSessionReserveRequest, 'spawnToken' | 'launchEnv'> }
   | { op: 'upload'; upload: ProtectedUpload }
   | { op: 'open'; identity: AgentSessionJournalIdentity; recover?: JournalOpenRecovery }
   | { op: 'write'; command: JournalWriterCommand }

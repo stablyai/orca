@@ -12,7 +12,7 @@ function publish() {
     try {
       const page = publishPending({
         database: `${root}/profile/agent-session-domain.db`,
-        directory: '/Library/Application Support/AgentWorkspace/Inbox/export',
+        directory: `${root}/export`,
         key: `${root}/identity/signing.pem`,
         checkpoint: `${root}/profile/published.cursor`
       })
