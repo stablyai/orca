@@ -8,8 +8,9 @@ import type {
 import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './build-headless-mobile-session-browser-tabs'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
-import { isUnclaimedRunningSleepRecord, markResumedRecordLive } from './sleep-record-pane-claim'
+import { markResumedRecordLive } from './sleep-record-pane-claim'
 import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace/lifecycle/workspace-sleep'
+import { mainHoldsSleptPane, workspaceWakePanes } from './slept-workspace-wake'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
@@ -21,6 +22,7 @@ import {
   RestoredPaneStarter,
   type RestoredPane,
   type StartedPty,
+  type RestoredPaneStartPlan,
   type RestoredPaneTrigger
 } from '../../terminal/recovery/restored-pane-start'
 import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-pane-reopen'
@@ -31,9 +33,8 @@ import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
 import { servesWslMovedPaneHistory } from '../../../orcad/migration/orcad-migration-wsl-destination'
 import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer'
-import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
-import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected abstract resolveAgentLaunchRuntime(
@@ -71,49 +72,50 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
         this.showRestoredPaneStart(`${target.tabId}:${target.leafId}`, 'starting'),
       failed: (target, error) =>
         this.showRestoredPaneStart(`${target.tabId}:${target.leafId}`, { failed: error }),
-      start: async (target, plan, startTrigger) => {
-        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(target.worktreeId)
-        // Read main's layout: relaunch clients may ask before graph sync, and projections are absent while a window is attached.
-        const session = this.getWorkspaceSessionForWorktree(target.worktreeId)
-        const tab = session
-          ? buildHeadlessMobileSessionTerminalTabs(
-              target.worktreeId,
-              session.tabsByWorktree?.[target.worktreeId] ?? [],
-              session
-            ).find(
-              (candidate) =>
-                candidate.parentTabId === target.tabId && candidate.leafId === target.leafId
-            )
-          : undefined
-        if (!tab) {
-          throw new Error('tab_not_found')
-        }
-        const started = await this.materializePendingMobileSessionTerminal(target.worktreeId, tab, {
-          ...startTrigger,
-          sessionId: plan.sessionId
-        })
-        // Use the registered start id; its durable bind may still be in flight, but delivery must already resolve its handle.
-        if (!started.tab.ptyId || !this.ptysById.has(started.tab.ptyId)) {
-          throw new Error('terminal_not_started')
-        }
-        return { id: started.tab.ptyId, startupCwdFallback: started.startupCwdFallback }
-      }
+      start: (...args) => this.startRestoredPaneTerminal(...args)
     })
     return this.restoredPanes.ensureStarted(pane, trigger)
   }
 
+  /** Starts a restored pane in place from main's layout, resuming its recorded agent. */
+  protected async startRestoredPaneTerminal(
+    target: RestoredPane,
+    plan: RestoredPaneStartPlan,
+    startTrigger: RestoredPaneTrigger
+  ): Promise<StartedPty> {
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(target.worktreeId)
+    // Read main's layout: relaunch clients may ask before graph sync, and projections are absent while a window is attached.
+    const session = this.getWorkspaceSessionForWorktree(target.worktreeId)
+    const tab = session
+      ? buildHeadlessMobileSessionTerminalTabs(
+          target.worktreeId,
+          session.tabsByWorktree?.[target.worktreeId] ?? [],
+          session
+        ).find(
+          (candidate) =>
+            candidate.parentTabId === target.tabId && candidate.leafId === target.leafId
+        )
+      : undefined
+    if (!tab) {
+      throw new Error('tab_not_found')
+    }
+    const started = await this.materializePendingMobileSessionTerminal(target.worktreeId, tab, {
+      ...startTrigger,
+      sessionId: plan.sessionId
+    })
+    // Use the registered start id; its durable bind may still be in flight, but delivery must already resolve its handle.
+    if (!started.tab.ptyId || !this.ptysById.has(started.tab.ptyId)) {
+      throw new Error('terminal_not_started')
+    }
+    return { id: started.tab.ptyId, startupCwdFallback: started.startupCwdFallback }
+  }
+
   /** Resume slept agents in their own panes and await every start; tabs closed in the meantime start nothing. */
   async resumeSleptWorkspaceAgents(worktreeId: string): Promise<void> {
-    const records = Object.values(
-      this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey ?? {}
-    ).filter(
-      (record) =>
-        worktreeIdsEqual(record.worktreeId, worktreeId) && isUnclaimedRunningSleepRecord(record)
+    const records = this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey
+    const panes = workspaceWakePanes(records, worktreeId, (paneKey) =>
+      this.mainHoldsSleptPane(worktreeId, paneKey)
     )
-    const panes = records.flatMap((record) => {
-      const pane = parsePaneKey(record.paneKey)
-      return pane ? [{ worktreeId, tabId: pane.tabId, leafId: pane.leafId }] : []
-    })
     const started = await Promise.allSettled(
       panes.map((pane) => this.ensureRestoredPaneStarted(pane))
     )
@@ -122,6 +124,15 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
         console.warn('[runtime] slept agent resume failed', result.reason)
       }
     }
+  }
+
+  protected mainHoldsSleptPane(worktreeId: string, paneKey: string): boolean {
+    return mainHoldsSleptPane(this.sleptPaneLayout, worktreeId, paneKey)
+  }
+
+  private readonly sleptPaneLayout = {
+    hostIdsForTab: (w: string, t: string) => this.getWorkspaceSessionHostIdsForTab(w, t),
+    binding: (pane: RestoredPane) => this.storedPaneBinding(pane)
   }
 
   /** Main is stopping this terminal to restart its pane: its earlier start no longer stands. */
@@ -208,7 +219,8 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       targetsHost = false,
       targetGroupId,
       sessionId,
-      wslUserAct
+      wslUserAct,
+      launchToken
     }: RestoredPaneTrigger & { sessionId?: string }
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     // Recover undelivered startup commands (#7587) or recorded agent sessions (#27147, #27777); live-session attach skips startup commands, preventing double launches.
@@ -262,6 +274,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           env: agentStartup.env,
           startupCommandDelivery: agentStartup.startupCommandDelivery,
           launchConfig: agentStartup.launchConfig,
+          ...(launchToken ? { launchToken } : {}),
           launchAgent: agentStartup.launchAgent ?? tab.launchAgent,
           // Restore admission must authorize resumes too.
           ...('resumeProviderSession' in agentStartup

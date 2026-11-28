@@ -64,6 +64,8 @@ export type OwnedMobileTerminalCreateOptions = {
   presentation?: RuntimeTerminalPresentation
   supportsSplitGroupPlacement?: boolean
   launchConfig?: SleepingAgentLaunchConfig
+  /** A mail wake's attempt id, so main can tell the process it started. */
+  launchToken?: string
   resumeProviderSession?: AgentProviderSessionMetadata
   resumeOrigin?: 'saved'
   spawnIntent?: SpawnIntent

@@ -14,6 +14,8 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { createHostRendererTerminalTab } from './helpers/host-created-terminal-retention-oracle'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
+import { pairMobileClient } from './helpers/paired-mobile-client'
+import { createDesktopMobilePairingOffer } from './helpers/paired-electron-client'
 
 // Long enough for every mounted pane's restore to have started on a build that resumes eagerly.
 const SETTLE_MS = 8_000
@@ -250,7 +252,7 @@ test('resumes only the visible sleeping agent, then each tab as it is opened, an
   await relaunchWithSleepingAgents(
     testInfo,
     { tabCount: 3 },
-    async ({ app, page, worktreeId, log }, panes) => {
+    async ({ page, worktreeId, log }, panes) => {
       const [visible, second, third] = panes
       await expect
         .poll(() => resumedPanes(log, panes), { timeout: 30_000 })
@@ -268,11 +270,12 @@ test('resumes only the visible sleeping agent, then each tab as it is opened, an
       expect(resumedPanes(log, panes)).toEqual([visible!.paneKey, second!.paneKey])
 
       // A phone opening the workspace wakes the rest without the user opening the tab.
-      await app.evaluate(({ BrowserWindow }, id) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.send('ui:resumeSleepingAgents', {
-          worktreeId: id
-        })
-      }, worktreeId)
+      const phone = pairMobileClient(await createDesktopMobilePairingOffer(page))
+      try {
+        await phone.call('worktree.activate', { worktree: `id:${worktreeId}` })
+      } finally {
+        phone.dispose()
+      }
       await expect
         .poll(() => resumedPanes(log, panes), { timeout: 30_000 })
         .toEqual([visible!.paneKey, second!.paneKey, third!.paneKey])

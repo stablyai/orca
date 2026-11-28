@@ -11,7 +11,6 @@ import {
 } from './main-pane-start-wait'
 import { startDeferredSessionReattach } from '../reattach/deferred-session-reattach-connect'
 import { mainStartsPane } from './main-starts-pane'
-import { takeSleepingAgentWakeRequest } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 type MainPaneStartHandlers = {
@@ -122,9 +121,7 @@ export function defersToMainPaneStart(
       today()
     }
   }
-  const record = session.getSleepingRecordForPane(useAppStore.getState())?.record
-  // A background wake (a phone opening the workspace) asked for this tab before it mounted.
-  if (session.deps.isVisibleRef.current || (record && takeSleepingAgentWakeRequest(record))) {
+  if (session.deps.isVisibleRef.current) {
     startOnView()
   } else {
     // Why: a hidden pane waits for its first view, as a hidden sleeping agent does (#29459).

@@ -5,13 +5,13 @@ import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
 import { mailWakeObligation, type SleptMailRecord } from './mail-wake-obligation'
 import { queueTerminalWorkspaceCommand } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { MailWakeInvocations } from './mail-wake-invocations'
-import { RuntimeMailWakeAdmission } from './runtime-mail-wake-admission'
+import { RuntimeSleptPaneResume } from './slept-pane-resume'
 import { SleptMailboxWake } from './slept-mailbox-wake'
 import { SleptPaneHost } from './slept-pane-host'
 
 const NO_RECORDS: Readonly<Record<string, SleptMailRecord>> = Object.freeze({})
 
-export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission {
+export abstract class RuntimeSleptMailboxWakes extends RuntimeSleptPaneResume {
   protected readonly mailWakeInvocations = new MailWakeInvocations()
   protected readonly sleptMailboxWake = new SleptMailboxWake({
     db: () => this._orchestrationDb,
@@ -20,15 +20,12 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     currentPane: (recorded) => this.sleepingRecordIndex.currentPane(recorded),
     waiters: (mailbox) => this.messageWaiters.get(mailbox),
     prepare: async (record) => {
-      if (this.graphStatus !== 'ready') {
-        throw new Error('Window is still restoring')
-      }
-      if (!(await this.notifier?.resumeSleepingAgents?.(record.worktreeId, record.paneKey, true))) {
+      const prepareOnly = { prepareOnly: true }
+      if (!(await this.resumeSleptPaneTerminal(record.worktreeId, record.paneKey, prepareOnly))) {
         throw new Error('Open the workspace to resume the agent')
       }
     },
-    // TODO(STA-15080): the window resumes the pane until main owns pane layout (phase F); then main
-    // ensures the agent runs and delivers, as host-owned wakes do. Desktop-owned resume has precedent.
+    // Main starts a pane its layout owns, under this attempt's id; the window resumes the rest.
     wake: async (record) => {
       const stop = new AbortController()
       const confirmed = this.mailWakeInvocations.wait(record, stop.signal)
@@ -56,15 +53,12 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
               return false
             }
             claimedId = claimed.mailWake?.id
-            const resumed =
-              (await Promise.resolve(
-                this.notifier?.resumeSleepingAgents?.(
-                  current.worktreeId,
-                  current.paneKey,
-                  false,
-                  claimed.mailWake?.id
-                )
-              ).catch(() => false)) === true
+            const launch = { launchToken: claimed.mailWake?.id }
+            const resumed = await this.resumeSleptPaneTerminal(
+              current.worktreeId,
+              current.paneKey,
+              launch
+            ).catch(() => false)
             if (!resumed) {
               // Nothing was launched, so a later edge may wake this pane again.
               this.settleMailWakeAttempt(claimed)

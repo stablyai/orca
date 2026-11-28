@@ -1,3 +1,4 @@
+import { mainPaneRecordFacts, noteMainPaneRecordChange } from '../surface/main-terminal-surfaces'
 import { RuntimeTerminalWorkerModelWait } from './terminal-worker-model-wait'
 
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
@@ -244,6 +245,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
         })
       }
       if (pty) {
+        // A certified exit re-composes main's panes even when the record was already disconnected.
+        const prior = processDeathCertified ? undefined : mainPaneRecordFacts(pty)
         this.terminalIdentity.setPtyConnected(pty, false)
         pty.runtimeSessionOwned = false
         this.setPairedRendererSessionOwnership(pty.ptyId, false)
@@ -254,6 +257,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
         pty.lastAgentStatusObservedLive = false
         this.resolvePtyExitWaiters(pty, ptyId)
         this.pruneDisconnectedPtyTranscript(pty)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          noteMainPaneRecordChange(this, prior, pty)
+        }
       }
       if (
         preservesIntentionallyStoppedSurface ||

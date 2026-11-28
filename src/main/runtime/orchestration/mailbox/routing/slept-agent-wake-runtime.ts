@@ -189,7 +189,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeUnmountedSleptAgents
       kind: 'wake',
       run: async () =>
         this.getPtyRecordForPaneKey(pane.paneKey)?.connected === true ||
-        (await this.notifier?.resumeSleepingAgents?.(pane.worktreeId, pane.paneKey)) === true
+        (await this.resumeSleptPaneTerminal(pane.worktreeId, pane.paneKey))
     })
     if (!woke) {
       throw new Error('agent_wake_failed')

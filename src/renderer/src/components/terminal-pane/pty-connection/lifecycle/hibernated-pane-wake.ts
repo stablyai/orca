@@ -92,10 +92,6 @@ export function wakeHibernatedPaneIfArmed(
   if (paneKey && paneKey !== session.cacheKey) {
     return null
   }
-  const startedThroughMain = startParkedMainPane(session, claimedProviderSessions, paneKey)
-  if (startedThroughMain) {
-    return startedThroughMain
-  }
   if (session.hibernatedWakeInFlightClaimKey) {
     if (claimedProviderSessions?.has(session.hibernatedWakeInFlightClaimKey)) {
       return null
@@ -145,29 +141,4 @@ export function wakeHibernatedPaneIfArmed(
     return claimKey
   }
   return null
-}
-
-/** A pane parked until its first view for main to start it: the wake has main start it now.
- *  A targeted wake follows the slept-agent rule; a workspace wake skips tab-open-only panes (#11598). */
-function startParkedMainPane(
-  session: ConnectPanePtySession,
-  claimedProviderSessions: Set<string> | undefined,
-  paneKey: string | undefined
-): string | null {
-  const start = session.mainPaneStartOnReveal
-  const record = start ? session.getSleepingRecordForPane(useAppStore.getState())?.record : null
-  if (
-    !start ||
-    !record ||
-    (paneKey ? !resumesSleptAgentRecord(record) : record.restoreOnTabOpenOnly === true)
-  ) {
-    return null
-  }
-  const claimKey = getProviderSessionClaimKey(record)
-  if (claimedProviderSessions?.has(claimKey)) {
-    return null
-  }
-  claimedProviderSessions?.add(claimKey)
-  start()
-  return claimKey
 }

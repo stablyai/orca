@@ -112,6 +112,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         env: opts.env,
         envToDelete: opts.envToDelete,
         ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+        ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
         ...(opts.resumeProviderSession
           ? { resumeProviderSession: opts.resumeProviderSession }
           : {}),

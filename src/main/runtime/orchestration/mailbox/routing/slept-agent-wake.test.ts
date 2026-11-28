@@ -54,6 +54,8 @@ describe('Agent-slept window pane wake', () => {
   it('settles under the same handle once the resumed agent is idle in the pane', async () => {
     const slept = await sleptPane()
     const { runtime, handle } = slept
+    let becomeIdle!: () => void
+    const idle = new Promise<void>((resolve) => (becomeIdle = resolve))
     const resume = vi.fn(async () => {
       registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
         tabId: TAB_ID,
@@ -62,16 +64,19 @@ describe('Agent-slept window pane wake', () => {
       })
       slept.rows = [statusRow({ receivedAt: 2 })]
       await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
-      runtime.onPtyData(WOKEN_PTY_ID, '\x1b]0;Codex done\x07', 1)
-      await runtime.serializeMainTerminalBuffer(WOKEN_PTY_ID)
+      void idle.then(async () => {
+        runtime.onPtyData(WOKEN_PTY_ID, '\x1b]0;Codex done\x07', 1)
+        await runtime.serializeMainTerminalBuffer(WOKEN_PTY_ID)
+      })
       return true
     })
-    runtime.setNotifier(wakeNotifier(resume))
+    resumeWith(runtime, resume)
 
     const first = runtime.wakeSleptAgentHandle(handle, { timeoutMs: 5_000 })
     await vi.waitFor(() => expect(resume).toHaveBeenCalled())
-    // A second act after the bind still joins the same wake rather than writing early.
+    // A second act after the bind, before the agent is idle, joins the same wake: one start.
     const second = runtime.wakeSleptAgentHandle(handle, { timeoutMs: 5_000 })
+    becomeIdle()
 
     await expect(first).resolves.toBe(handle)
     await expect(second).resolves.toBe(handle)
@@ -83,20 +88,18 @@ describe('Agent-slept window pane wake', () => {
   it('wakes a reused slept agent before a worker start reads its process', async () => {
     const slept = await sleptPane()
     const { runtime, handle } = slept
-    runtime.setNotifier(
-      wakeNotifier(async () => {
-        registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
-          tabId: TAB_ID,
-          leafId: LEAF_ID,
-          incarnationId: 'woken-incarnation'
-        })
-        slept.rows = [statusRow({ receivedAt: 2 })]
-        await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
-        runtime.onPtyData(WOKEN_PTY_ID, '\x1b]0;Codex done\x07', 1)
-        await runtime.serializeMainTerminalBuffer(WOKEN_PTY_ID)
-        return true
+    resumeWith(runtime, async () => {
+      registerBoundPty(runtime, WOKEN_PTY_ID, WORKTREE_ID, null, {
+        tabId: TAB_ID,
+        leafId: LEAF_ID,
+        incarnationId: 'woken-incarnation'
       })
-    )
+      slept.rows = [statusRow({ receivedAt: 2 })]
+      await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
+      runtime.onPtyData(WOKEN_PTY_ID, '\x1b]0;Codex done\x07', 1)
+      await runtime.serializeMainTerminalBuffer(WOKEN_PTY_ID)
+      return true
+    })
 
     await waitForWorkerAgentReady(runtime, handle, {
       agent: 'codex',
@@ -247,7 +250,7 @@ describe('Agent-slept window pane wake', () => {
   it("refuses a terminal's query reply to a slept agent without waking it", async () => {
     const slept = await sleptPane()
     const resume = vi.fn(async () => true)
-    slept.runtime.setNotifier(wakeNotifier(resume))
+    resumeWith(slept.runtime, resume)
 
     await expect(
       slept.runtime.sendTerminal(slept.handle, { text: '\x1b[1;1R' }, { inputKind: 'query-reply' })
@@ -259,7 +262,7 @@ describe('Agent-slept window pane wake', () => {
   it('refuses terminal input it can never accept without cold-resuming the slept agent', async () => {
     const slept = await sleptPane()
     const resume = vi.fn(async () => true)
-    slept.runtime.setNotifier(wakeNotifier(resume))
+    resumeWith(slept.runtime, resume)
     const dispatcher = new RpcDispatcher({ runtime: slept.runtime, methods: TERMINAL_SEND_METHODS })
     const send = (id: string, params: Record<string, unknown>, orchestrationRequestId?: string) =>
       dispatcher.dispatch({
@@ -576,7 +579,7 @@ async function expectListedThenWokenInPlace(slept: Awaited<ReturnType<typeof sle
     await runtime.serializeMainTerminalBuffer(WOKEN_PTY_ID)
     return true
   })
-  runtime.setNotifier(wakeNotifier(resume))
+  resumeWith(runtime, resume)
 
   await expect(runtime.wakeSleptAgentHandle(handle, { timeoutMs: 5_000 })).resolves.toBe(handle)
   expect(resume).toHaveBeenCalledTimes(1)
@@ -592,13 +595,24 @@ function statusRow(
   return { paneKey: PANE_KEY, ...fields } as AgentStatusIpcPayload
 }
 
-/** A notifier whose only live member is the pane resume; every other notification is a no-op. */
-function wakeNotifier(
-  resumeSleepingAgents: RuntimeNotifier['resumeSleepingAgents']
-): RuntimeNotifier {
+/** The pane resume, wherever it runs: the window's relay, or the process main starts into a pane
+ *  its layout owns. Every other notification is a no-op. */
+function resumeWith(
+  runtime: Awaited<ReturnType<typeof createRuntime>>['runtime'],
+  resumeSleepingAgents: NonNullable<RuntimeNotifier['resumeSleepingAgents']>
+): void {
   const members: Partial<RuntimeNotifier> = { resumeSleepingAgents }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every member the runtime calls is either resumeSleepingAgents or answered by a no-op stub.
-  return new Proxy(members, {
-    get: (_target, key) => (key === 'resumeSleepingAgents' ? resumeSleepingAgents : vi.fn())
-  }) as RuntimeNotifier
+  runtime.setNotifier(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every member the runtime calls is either resumeSleepingAgents or answered by a no-op stub.
+    new Proxy(members, {
+      get: (_target, key) => (key === 'resumeSleepingAgents' ? resumeSleepingAgents : vi.fn())
+    }) as RuntimeNotifier
+  )
+  runtime.startRestoredPane = async (pane, trigger) => {
+    const paneKey = `${pane.tabId}:${pane.leafId}`
+    if (!(await resumeSleepingAgents(pane.worktreeId, paneKey, false, trigger.launchToken))) {
+      throw new Error('terminal_not_started')
+    }
+    return WOKEN_PTY_ID
+  }
 }

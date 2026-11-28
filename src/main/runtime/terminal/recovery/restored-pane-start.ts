@@ -19,6 +19,8 @@ export type RestoredPaneTrigger = {
   wslUserAct?: true
   targetsHost?: boolean
   targetGroupId?: string
+  /** A mail wake's attempt id: the resumed process launches under it. */
+  launchToken?: string
 }
 
 export type RestoredPaneStartPorts = {
