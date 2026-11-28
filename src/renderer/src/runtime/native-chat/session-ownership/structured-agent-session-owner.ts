@@ -110,10 +110,38 @@ export function structuredAgentSessionCatalogOwnerInputs(
   ]
 }
 
+/** Zero-allocation equality check matching `structuredAgentSessionOwnerInputs`. */
+export function sameStructuredAgentSessionOwnerInputs(
+  left: WorktreeRuntimeOwnerState,
+  right: WorktreeRuntimeOwnerState
+): boolean {
+  return (
+    left.repos === right.repos &&
+    selectWorktreesByRepo(left) === selectWorktreesByRepo(right) &&
+    selectDetectedWorktreesByRepo(left) === selectDetectedWorktreesByRepo(right) &&
+    selectFolderWorkspaces(left) === selectFolderWorkspaces(right) &&
+    left.projectGroups === right.projectGroups &&
+    left.runtimeEnvironments === right.runtimeEnvironments &&
+    left.runtimeEnvironmentCatalogHydrated === right.runtimeEnvironmentCatalogHydrated &&
+    left.settings === right.settings &&
+    left.restoredRuntimeHostIdByWorkspaceSessionKey ===
+      right.restoredRuntimeHostIdByWorkspaceSessionKey &&
+    left.removedRuntimeEnvironmentIds === right.removedRuntimeEnvironmentIds &&
+    left.activeWorktreeId === right.activeWorktreeId &&
+    left.activeWorkspaceExecutionHostId === right.activeWorkspaceExecutionHostId
+  )
+}
+
 /** Inputs to the legacy workspace-owner resolver, compared before scanning chat tabs. */
 export function structuredAgentSessionOwnerInputs(state: WorktreeRuntimeOwnerState): unknown[] {
   return [
-    ...structuredAgentSessionCatalogOwnerInputs(state),
+    state.repos,
+    selectWorktreesByRepo(state),
+    selectDetectedWorktreesByRepo(state),
+    selectFolderWorkspaces(state),
+    state.projectGroups,
+    state.runtimeEnvironments,
+    state.runtimeEnvironmentCatalogHydrated,
     state.settings,
     state.restoredRuntimeHostIdByWorkspaceSessionKey,
     state.removedRuntimeEnvironmentIds,
