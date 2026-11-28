@@ -16,25 +16,34 @@ import { botWorkerLineRowKey } from '../../../../shared/sidebar-list/sidebar-rev
 import { botLineLanes, lanesNeedingYouFirst } from '../../../../shared/bots/bot-line-lanes'
 import { useWorktreeActivityStatuses } from './workspace-card/activity/use-worktree-activity-statuses'
 
-function BotLineageRail(): React.JSX.Element {
+/** A bot line's connector: a tee, or an elbow on the last line so the rail ends at its branch. */
+function BotLineageConnector({ last }: { last: boolean }): React.JSX.Element {
+  if (last) {
+    return (
+      <span
+        aria-hidden="true"
+        data-worktree-lineage-guides=""
+        data-worktree-lineage-guide="branch"
+        className="pointer-events-none absolute -left-1.5 top-0 h-[calc(0.75rem+1px)] w-4 rounded-bl-[6px] border-b border-l"
+      />
+    )
+  }
+  // Why: -bottom-1 bridges the space-y-1 gap to the next line.
   return (
     <span
       aria-hidden="true"
       data-worktree-lineage-guides=""
-      data-worktree-lineage-guide="rail"
-      className="pointer-events-none absolute -left-1.5 top-0 bottom-0 w-px"
-    />
-  )
-}
-
-function BotLineageBranch(): React.JSX.Element {
-  return (
-    <span
-      aria-hidden="true"
-      data-worktree-lineage-guides=""
-      data-worktree-lineage-guide="rail"
-      className="pointer-events-none absolute -left-1.5 top-3 h-px w-4"
-    />
+      className="pointer-events-none absolute inset-0"
+    >
+      <span
+        data-worktree-lineage-guide="rail"
+        className="absolute -left-1.5 top-0 -bottom-1 w-px"
+      />
+      <span
+        data-worktree-lineage-guide="rail"
+        className="absolute left-[-5px] top-3 h-px w-[15px]"
+      />
+    </span>
   )
 }
 
@@ -144,21 +153,20 @@ export function AttachedWorktreeCards({
         lineageCollapsed={collapsed}
         lineageChildren={
           !collapsed && children.length > 0
-            ? [
-                ...(compactLine ? [<BotLineageRail key="lineage-rail" />] : []),
-                ...children.map((child) => (
-                  <div
-                    key={child.id}
-                    className={compactLine ? 'relative' : undefined}
-                    onClick={stopNestedWorktreeCardBubble}
-                    onDoubleClick={stopNestedWorktreeCardBubble}
-                    onDragStart={stopNestedWorktreeCardBubble}
-                  >
-                    {compactLine ? <BotLineageBranch /> : null}
-                    {renderCard(child, nextAncestorIdentities, rootLanes !== undefined)}
-                  </div>
-                ))
-              ]
+            ? children.map((child, index) => (
+                <div
+                  key={child.id}
+                  className={compactLine ? 'relative' : undefined}
+                  onClick={stopNestedWorktreeCardBubble}
+                  onDoubleClick={stopNestedWorktreeCardBubble}
+                  onDragStart={stopNestedWorktreeCardBubble}
+                >
+                  {compactLine ? (
+                    <BotLineageConnector last={index === children.length - 1} />
+                  ) : null}
+                  {renderCard(child, nextAncestorIdentities, rootLanes !== undefined)}
+                </div>
+              ))
             : undefined
         }
         lineageChildrenStyle={
