@@ -64,7 +64,13 @@ export const BotOfferAnswerParams = lazyZodSchema(() =>
   })
 )
 
+/** `sent`: this request, or its replay, told the bot. Not sent with an `answer`: the card already had
+ *  that answer, which this request didn't tell. Not sent without one: the chat refused it. */
 export type BotOfferTold = { sent: boolean; answer?: BotOfferAnswer }
+
+export function botOfferToldOutcome(told: BotOfferTold): BotOfferAnswerOutcome {
+  return told.sent ? 'sent' : told.answer ? 'already_answered' : 'refused'
+}
 
 /** Replay the same request if its confirmation was lost, while the card is still busy. */
 export function confirmBotOfferAnswer(send: () => Promise<BotOfferTold>): Promise<BotOfferTold> {

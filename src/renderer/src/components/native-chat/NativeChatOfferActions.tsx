@@ -14,6 +14,7 @@ import {
   answerBotOffer,
   answerBotOfferAgain,
   BOT_OFFER_DISMISS_ANSWER,
+  botOfferToldOutcome,
   confirmBotOfferAnswer,
   type BotOfferAnswerOutcome,
   type BotOfferAnswerUpdate,
@@ -54,7 +55,7 @@ async function confirmAndRefresh(
     if (told.answer) {
       publishBotOfferAnswer(ref, told.answer)
     }
-    return told.sent ? 'sent' : 'refused'
+    return botOfferToldOutcome(told)
   } finally {
     await refreshBotHost(ref.hostId)
   }

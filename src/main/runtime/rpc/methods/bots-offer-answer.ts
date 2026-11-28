@@ -127,7 +127,8 @@ function confirmCardAnswer(
       }
       googleAction = { id: googleActionId, admissionCutoff }
     } else if (current?.sent || ('dismissed' in selection && current?.dismissed)) {
-      return { sent: true, answer: current }
+      // Not proof the bot heard it: an older client's claim can stand without a send.
+      return { sent: false, answer: current }
     }
 
     const sameGoogleAccount =

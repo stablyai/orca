@@ -10,7 +10,8 @@ export type PendingBotOfferAnswer = {
 }
 
 /** How long an older client's claim on a card counts as still being sent. Its success is never
- *  reported, so after this the claim is taken as told. */
+ *  reported, so after this the card keeps the claimed answer, reported as already answered, never as
+ *  heard. */
 export const LEGACY_OFFER_CLAIM_SEND_MS = 15_000
 
 export class BotOfferAnswerWrites {

@@ -8,6 +8,7 @@ import {
 import {
   answerBotOffer,
   BOT_OFFER_DISMISS_ANSWER,
+  botOfferToldOutcome,
   confirmBotOfferAnswer,
   type BotOfferSelection
 } from '../../../../../../src/shared/bots/bot-offer-answers'
@@ -76,7 +77,7 @@ export function useMobileBotOfferAnswer(botId: string, cardId: string): MobileBo
       if (told.answer) {
         publishHostBotOfferAnswer(host.hostKey, botId, told.answer)
       }
-      return told.sent ? 'sent' : 'refused'
+      return botOfferToldOutcome(told)
     }
     try {
       const outcome =

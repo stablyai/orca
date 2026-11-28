@@ -71,7 +71,7 @@ vi.mock('@/lib/bot-hosts', () => ({
     const saved = answer && host.answers.find((entry) => entry.cardId === answer.cardId)
     if (saved) {
       // The server already took this card's answer: it returns it and tells the agent nothing.
-      return { sent: true, answer: saved }
+      return { sent: false, answer: saved }
     }
     host.told.push(params.text)
     if (answer) {

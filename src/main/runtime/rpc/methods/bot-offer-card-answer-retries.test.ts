@@ -269,7 +269,7 @@ describe('host-confirmed offer answers', () => {
     expect(sends).toHaveLength(1)
   })
 
-  it("waits out an older client's claim instead of confirming it", async () => {
+  it("never confirms an older client's claim as heard", async () => {
     const now = Date.now()
     vi.spyOn(Date, 'now').mockReturnValue(now)
     await bots.update('b1', {
@@ -284,7 +284,7 @@ describe('host-confirmed offer answers', () => {
     })
     expect(sends.map((send) => send.body.blocks[0]?.text)).toEqual(['Import 2'])
 
-    // A claim never given back is taken as told once its send has had time to finish.
+    // A claim never given back, whose send never started: the card stays answered, but not as heard.
     await bots.update('b1', { offerAnswer: { cardId: 'other', dismissed: true, claim: true } })
     const other = () =>
       request(
@@ -299,7 +299,10 @@ describe('host-confirmed offer answers', () => {
       )
     await expect(other()).rejects.toThrow('still being answered')
     vi.spyOn(Date, 'now').mockReturnValue(now + LEGACY_OFFER_CLAIM_SEND_MS)
-    await expect(other()).resolves.toMatchObject({ sent: true, answer: { dismissed: true } })
+    await expect(other()).resolves.toEqual({
+      sent: false,
+      answer: { cardId: 'other', dismissed: true }
+    })
     expect(sends).toHaveLength(1)
   })
 
@@ -311,7 +314,7 @@ describe('host-confirmed offer answers', () => {
     await restartHost()
     const retry = await importItems(['1'])
     expect(sends.map((send) => send.body.blocks[0]?.text)).toEqual(['Import 1,2'])
-    expect(retry).toMatchObject({ sent: true, answer: { sent: { chosen: ['1', '2'] } } })
+    expect(retry).toMatchObject({ sent: false, answer: { sent: { chosen: ['1', '2'] } } })
     expect(persistedCard('plan')).toMatchObject({ sent: { chosen: ['1', '2'] } })
     await expect(importItems(['1'], 'foreign')).rejects.toThrow("isn't one of this bot's")
   })
