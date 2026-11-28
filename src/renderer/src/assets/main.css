@@ -2171,6 +2171,15 @@ html.native-shell .app-layout {
   border-color: var(--worktree-lineage-guide-color);
 }
 
+/* A bot's line has no nested lines, so its one card decides where the connector meets it. */
+[data-bot-lineage-line] {
+  --bot-lineage-title-center: 16px;
+}
+
+[data-bot-lineage-line]:has([data-worktree-card-single-line]) {
+  --bot-lineage-title-center: 12px;
+}
+
 /* Why: title-only cards use py-2 instead of pt-1.25, which drops the title center by 3px. */
 [data-worktree-lineage-row]:has(> * [data-worktree-card-single-line]) {
   --worktree-lineage-title-center: 19px;

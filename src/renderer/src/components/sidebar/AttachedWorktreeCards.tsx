@@ -24,7 +24,7 @@ function BotLineageConnector({ last }: { last: boolean }): React.JSX.Element {
         aria-hidden="true"
         data-worktree-lineage-guides=""
         data-worktree-lineage-guide="branch"
-        className="pointer-events-none absolute -left-1.5 top-0 h-[calc(0.75rem+1px)] w-4 rounded-bl-[6px] border-b border-l"
+        className="pointer-events-none absolute -left-1.5 top-0 h-[calc(var(--bot-lineage-title-center)+1px)] w-4 rounded-bl-[6px] border-b border-l"
       />
     )
   }
@@ -41,7 +41,7 @@ function BotLineageConnector({ last }: { last: boolean }): React.JSX.Element {
       />
       <span
         data-worktree-lineage-guide="rail"
-        className="absolute left-[-5px] top-3 h-px w-[15px]"
+        className="absolute left-[-5px] top-[var(--bot-lineage-title-center)] h-px w-[15px]"
       />
     </span>
   )
@@ -157,6 +157,7 @@ export function AttachedWorktreeCards({
                 <div
                   key={child.id}
                   className={compactLine ? 'relative' : undefined}
+                  data-bot-lineage-line={compactLine || undefined}
                   onClick={stopNestedWorktreeCardBubble}
                   onDoubleClick={stopNestedWorktreeCardBubble}
                   onDragStart={stopNestedWorktreeCardBubble}
