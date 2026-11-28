@@ -8,6 +8,7 @@ import {
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import { readAgentPaneForeground } from './agent-pane-foreground-read'
 import { AGY_HOST_SELECTION } from '../../../antigravity/agy-account-selection'
+import { agyTerminalIsForeign } from '../../../antigravity/agy-terminal-authority'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import type { ClaudeHostRunningSessionsMove } from '../../../../shared/agent-accounts/managed-account-types'
 import type {
@@ -262,6 +263,10 @@ export abstract class OrcaRuntimeWithAntigravityRunningPaneAccountMove extends O
     ) {
       return false
     }
+    const paneKey = this.paneOfPty(terminal.pty).paneKey
+    if (paneKey && (await agyTerminalIsForeign(paneKey))) {
+      return false
+    }
     return (await this.agyInFront(ptyId)) === true
   }
 
@@ -279,7 +284,10 @@ export abstract class OrcaRuntimeWithAntigravityRunningPaneAccountMove extends O
     const ptys = Array.from(this.ptysById.entries())
     for (const [ptyId, pty] of ptys) {
       const terminal = pty.connected ? this.agyTerminalOf(pty) : null
-      const running = terminal ? await this.agyInFront(ptyId) : false
+      const paneKey = terminal ? this.paneOfPty(pty).paneKey : null
+      // A terminal whose agy reads another home's or store's login keeps it across every switch.
+      const foreign = paneKey ? await agyTerminalIsForeign(paneKey) : false
+      const running = terminal && !foreign ? await this.agyInFront(ptyId) : false
       if (running === false) {
         this.agyTerminalNotes.delete(ptyId)
       }

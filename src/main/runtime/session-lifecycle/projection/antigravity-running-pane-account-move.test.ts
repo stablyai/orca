@@ -13,6 +13,7 @@ import {
   storeFolderWorkspace
 } from '../../construction/test-context/runtime-store-partial-fixture'
 import { withDurableRuntimeStore } from '../../construction/test-context/runtime-durable-store-fixture'
+import { noteAgyTerminalAuthority } from '../../../antigravity/agy-terminal-authority'
 
 const WORKSPACE = 'folder:ws'
 const TAB = 'tab-1'
@@ -315,4 +316,15 @@ it('moves, by the window’s rule, the terminals its window shows no pane for', 
     })
   ).toEqual({ restarting: 1, notMoved: 0 })
   await vi.waitFor(() => expect(events[0]).toBe(`stop ${AGY}`))
+})
+
+it('never lists a terminal whose agy reads another credential authority’s login', async () => {
+  const { runtime } = await runtimeWithAgyTerminal()
+  // Spawned without the host's HOME: agy there reads a login no saved account names.
+  noteAgyTerminalAuthority(`${TAB}:${LEAF}`, {}, ['HOME'])
+  try {
+    expect(await listedForWindow(runtime, 'prev', 'next')).toEqual([])
+  } finally {
+    noteAgyTerminalAuthority(`${TAB}:${LEAF}`, process.env)
+  }
 })
