@@ -5,7 +5,6 @@ import type { Translate } from '@/i18n/use-translate'
 import { getCodexAccountDisplayDetail } from '../../../../../../shared/agent-accounts/codex-account-display-label'
 import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
-import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { getCodexAccountAuthWarning } from '../../../../../../shared/agent-accounts/codex/codex-account-auth-warning'
 import {
@@ -16,6 +15,7 @@ import { formatAccountTimestamp, getCodexAccountRuntimeLabel } from '../scope/ac
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { getManagedAccountPrimaryLabel } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
+import { AccountCard, AccountCardTag } from '../account-card'
 import { getObservedCodexAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
 
 export function renderCodexAccountRow(
@@ -68,100 +68,70 @@ export function renderCodexAccountRow(
   const isBusy = codexAction !== 'idle' || accountRuntimeUnavailable
 
   return (
-    <div
+    <AccountCard
       key={account.id}
-      className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-        needsReauthentication
-          ? 'border-destructive/50 bg-destructive/5'
-          : isActive
-            ? 'border-foreground/20 bg-accent/15'
-            : 'border-border/70 hover:border-border hover:bg-accent/8'
-      }`}
-    >
-      <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
-        <button
-          type="button"
-          onClick={() => {
-            const accountRuntimeView = getProviderAccountRuntime(account)
-            void runCodexAccountAction(
-              `select:${account.id}`,
-              () =>
-                selectCodexProviderAccount(accountOwner, {
-                  accountId: account.id,
-                  ...accountRuntimeView
-                }),
-              accountRuntimeView
-            )
-          }}
-          disabled={isBusy}
-          className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-medium">
-              {getManagedAccountPrimaryLabel(account)}
-            </span>
-            <Badge
-              variant="outline"
-              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
-            >
-              {getCodexAccountRuntimeLabel(account, accountRuntime.label)}
-            </Badge>
-            {isActive ? (
-              <Badge
-                variant="outline"
-                className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
-              >
-                {t('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
-              </Badge>
-            ) : null}
-            {needsReauthentication ? (
-              <Badge
-                variant="destructive"
-                className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
-              >
-                {t('auto.components.settings.AccountsPane.589eba1eee', 'Needs re-auth')}
-              </Badge>
-            ) : null}
-          </div>
-          <div
-            className={`flex min-w-0 items-center gap-1.5 text-[11px] max-sm:flex-wrap ${
-              needsReauthentication ? 'text-destructive' : 'text-muted-foreground'
-            }`}
-          >
-            {accountDetail ? (
-              <>
-                <span className="min-w-0 break-words">{accountDetail}</span>
-                <span className="shrink-0 opacity-50">•</span>
-              </>
-            ) : null}
-            {plan ? (
-              <>
-                <span className="shrink-0">{plan}</span>
-                <span className="shrink-0 opacity-50">•</span>
-              </>
-            ) : null}
-            {account.displayName ? (
-              <>
-                <span className="min-w-0 truncate">{account.email}</span>
-                <span className="shrink-0 opacity-50">•</span>
-              </>
-            ) : null}
-            {needsReauthentication ? (
+      title={getManagedAccountPrimaryLabel(account)}
+      tags={
+        <AccountCardTag tone="runtime">
+          {getCodexAccountRuntimeLabel(account, accountRuntime.label)}
+        </AccountCardTag>
+      }
+      active={isActive}
+      attention={
+        needsReauthentication &&
+        t('auto.components.settings.AccountsPane.589eba1eee', 'Needs re-auth')
+      }
+      detail={
+        <>
+          {accountDetail ? (
+            <>
+              <span className="min-w-0 break-words">{accountDetail}</span>
+              <span className="shrink-0 opacity-50">•</span>
+            </>
+          ) : null}
+          {plan ? (
+            <>
+              <span className="shrink-0">{plan}</span>
+              <span className="shrink-0 opacity-50">•</span>
+            </>
+          ) : null}
+          {account.displayName ? (
+            <>
+              <span className="min-w-0 truncate">{account.email}</span>
+              <span className="shrink-0 opacity-50">•</span>
+            </>
+          ) : null}
+          {needsReauthentication ? (
+            <>
               <span className="truncate">
                 {t(
                   'auto.components.settings.AccountsPane.3d245ef7d9',
                   'Codex reported this sign-in is out of date'
                 )}
               </span>
-            ) : null}
-            {needsReauthentication ? <span className="shrink-0 opacity-50">•</span> : null}
-            <span className="shrink-0">
-              {formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}
-            </span>
-          </div>
-        </button>
-
-        <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
+              <span className="shrink-0 opacity-50">•</span>
+            </>
+          ) : null}
+          <span className="shrink-0">
+            {formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}
+          </span>
+        </>
+      }
+      onSelect={() => {
+        const accountRuntimeView = getProviderAccountRuntime(account)
+        void runCodexAccountAction(
+          `select:${account.id}`,
+          () =>
+            selectCodexProviderAccount(accountOwner, {
+              accountId: account.id,
+              ...accountRuntimeView
+            }),
+          accountRuntimeView
+        )
+      }}
+      selectDisabled={isBusy}
+      actions={
+        <>
           {/* Keep maintenance actions lighter so account selection remains primary in dense lists. */}
           <AccountRenameButton
             t={t}
@@ -172,7 +142,7 @@ export function renderCodexAccountRow(
             }
           />
           <Button
-            variant="ghost"
+            variant="ghost-muted"
             size="xs"
             onClick={(event) => {
               event.stopPropagation()
@@ -188,7 +158,6 @@ export function renderCodexAccountRow(
               )
             }}
             disabled={isBusy}
-            className="h-6 px-2 text-muted-foreground hover:text-foreground"
           >
             {isReauthing ? (
               <Loader2 className="size-3 animate-spin" />
@@ -198,7 +167,7 @@ export function renderCodexAccountRow(
             {t('auto.components.settings.AccountsPane.8a0f870153', 'Re-authenticate')}
           </Button>
           <Button
-            variant="ghost"
+            variant="ghost-muted-destructive"
             size="xs"
             onClick={(event) => {
               event.stopPropagation()
@@ -208,7 +177,6 @@ export function renderCodexAccountRow(
               })
             }}
             disabled={isBusy}
-            className="h-6 px-2 text-muted-foreground hover:text-destructive"
           >
             {isRemoving ? (
               <Loader2 className="size-3 animate-spin" />
@@ -217,8 +185,8 @@ export function renderCodexAccountRow(
             )}
             {t('auto.components.settings.AccountsPane.db209ee572', 'Remove')}
           </Button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    />
   )
 }

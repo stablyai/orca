@@ -25342,7 +25342,6 @@
       "currentNotSaved": "目前的 agy 登入帳戶 · 尚未儲存",
       "noEmailNotSaved": "agy 未提供電子郵件地址 · 尚未儲存",
       "saveShort": "儲存",
-      "active": "使用中",
       "chatTitle": "Antigravity 聊天",
       "terminalTitle": "終端機中的 agy",
       "terminalDescription": "使用 agy 本身已儲存的帳戶。切換後會套用至新的 agy 工作階段。",

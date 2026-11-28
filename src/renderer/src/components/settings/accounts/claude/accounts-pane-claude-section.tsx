@@ -7,7 +7,6 @@ import {
   clearsHiddenWslLanes,
   systemDefaultCandidates
 } from '../scope/system-default-lanes'
-import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
 import { Label } from '../../../ui/label'
@@ -30,6 +29,7 @@ import {
 } from '../sign-in/account-add-cancel-target'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { renderClaudeAccountRow } from './accounts-pane-claude-account-row'
+import { AccountCard, AccountCardPlaceholder } from '../account-card'
 
 export function renderClaudeAccountsSection(
   model: AccountsPaneSectionModel,
@@ -190,43 +190,17 @@ export function renderClaudeAccountsSection(
           ) : null}
 
           <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() =>
-                void runClaudeAccountAction('select:system', () =>
-                  selectClaudeProviderAccount(accountOwner, {
-                    accountId: null,
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
-                )
+            <AccountCard
+              title={
+                systemDefaultEmail
+                  ? t('accounts.claude.systemDefaultNamed', 'System default: {{value0}}', {
+                      value0: systemDefaultEmail
+                    })
+                  : t('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')
               }
-              disabled={claudeAction !== 'idle' || accountRuntimeUnavailable || shownLaneBlocked}
-              className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-                systemClaudeActive
-                  ? 'border-foreground/20 bg-accent/15'
-                  : 'border-border/70 hover:border-border hover:bg-accent/8'
-              } disabled:cursor-default disabled:opacity-100`}
-            >
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm font-medium">
-                    {systemDefaultEmail
-                      ? t('accounts.claude.systemDefaultNamed', 'System default: {{value0}}', {
-                          value0: systemDefaultEmail
-                        })
-                      : t('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')}
-                  </span>
-                  {systemClaudeActive ? (
-                    <Badge
-                      variant="outline"
-                      className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
-                    >
-                      {t('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
-                    </Badge>
-                  ) : null}
-                </div>
-                <span className="truncate text-[11px] text-muted-foreground">
+              active={systemClaudeActive}
+              detail={
+                <span className="truncate">
                   {skipsWslLanes || shownLaneBlocked
                     ? t(
                         'accounts.selection.claudeWslLanesNotReset',
@@ -238,8 +212,20 @@ export function renderClaudeAccountsSection(
                         { value0: accountRuntimeSentenceLabel }
                       )}
                 </span>
-              </div>
-            </button>
+              }
+              onSelect={() =>
+                void runClaudeAccountAction('select:system', () =>
+                  selectClaudeProviderAccount(accountOwner, {
+                    accountId: null,
+                    runtime: accountRuntime.runtime,
+                    wslDistro: accountRuntime.wslDistro
+                  })
+                )
+              }
+              selectDisabled={
+                claudeAction !== 'idle' || accountRuntimeUnavailable || shownLaneBlocked
+              }
+            />
             {systemDefaultIsSaved ? (
               <div className="flex items-start justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
@@ -259,7 +245,7 @@ export function renderClaudeAccountsSection(
               </div>
             ) : null}
             {visibleClaudeAccounts.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
+              <AccountCardPlaceholder>
                 {isRemoteAccountScope
                   ? t(
                       'auto.components.settings.AccountsPane.remoteEmptyClaudeAccounts',
@@ -271,7 +257,7 @@ export function renderClaudeAccountsSection(
                       "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
                       { value0: accountRuntimeSentenceLabel }
                     )}
-              </div>
+              </AccountCardPlaceholder>
             ) : (
               visibleClaudeAccounts.map((account) =>
                 renderClaudeAccountRow(account, model, t, intlLocale)

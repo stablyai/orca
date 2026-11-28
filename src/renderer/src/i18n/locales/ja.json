@@ -25160,7 +25160,6 @@
       "currentNotSaved": "現在の agy ログイン · 未保存",
       "noEmailNotSaved": "agy からメールアドレスが返されませんでした · 未保存",
       "saveShort": "保存",
-      "active": "アクティブ",
       "chatTitle": "Antigravity チャット",
       "terminalTitle": "ターミナルの agy",
       "terminalDescription": "agy 自身に保存されたアカウントを使用します。切り替えは新規 agy セッションに適用されます。",

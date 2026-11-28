@@ -1,12 +1,12 @@
-import { AlertCircle, Trash2, UserPlus } from 'lucide-react'
-import { cn } from '@/lib/class-names'
+import { AlertCircle, Eye, RefreshCw, Save, Trash2, UserPlus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
-import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
+import { Label } from '../../../ui/label'
 import { AntigravityChatSignInFlowPanel } from '../../../provider-accounts/AntigravityChatSignInFlowPanel'
 import type { AntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
+import { AccountCard, AccountCardPlaceholder } from '../account-card'
 
 export type AntigravityAccountAction = 'List' | 'ReadCurrent' | 'AddCurrent' | 'Select' | 'Remove'
 
@@ -45,6 +45,7 @@ export function AntigravityAgyAccountRows({
         'accounts.antigravity.changed',
         'The native account changed. Select a saved account again before launching agy.'
       )
+  const changedNote = <span className="text-status-warning-text">{changedText}</span>
   // A running agy on another saved account wrote its login back; the next launch restores the selection.
   const launchesUse =
     state?.restoresSelectionAtLaunch &&
@@ -53,52 +54,45 @@ export function AntigravityAgyAccountRows({
     state.accounts.some((account) => account.id === state.selectedAccountId)
       ? state.selectedAccountId
       : null
-  const terminalRows: React.ReactNode[] = []
-  if (error) {
-    terminalRows.push(
-      state ? (
-        <AntigravityAccountRow key="error" title={null} detail={<ActionError message={error} />} />
-      ) : (
-        <AntigravityAccountRow
-          key="error"
-          title={t('accounts.antigravity.loadFailed', "Couldn't load agy accounts")}
-          detail={<ActionError message={error} />}
-          actions={
-            <Button size="xs" variant="outline" disabled={busy} onClick={() => run('List')}>
-              {t('accounts.antigravity.retry', 'Retry')}
-            </Button>
-          }
-        />
-      )
+  // Another account is added from the header once agy holds a login, as Claude and Codex add theirs.
+  const addsAccount = Boolean(state?.currentAccount) && !signingIn
+  const cards: React.ReactNode[] = []
+  if (error && state) {
+    cards.push(
+      <p key="error" className="text-xs">
+        <ActionError message={error} />
+      </p>
     )
-  } else if (!state) {
-    terminalRows.push(
-      <AntigravityAccountRow
-        key="loading"
-        title={t('accounts.antigravity.loading', 'Loading accounts…')}
+  } else if (error) {
+    cards.push(
+      <AccountCard
+        key="error"
+        title={t('accounts.antigravity.loadFailed', "Couldn't load agy accounts")}
+        attention
+        detail={<ActionError message={error} />}
+        actions={
+          <Button size="xs" variant="ghost-muted" disabled={busy} onClick={() => run('List')}>
+            <RefreshCw />
+            {t('accounts.antigravity.retry', 'Retry')}
+          </Button>
+        }
       />
     )
-  }
-  if (signingIn) {
-    terminalRows.push(
-      <div key="signing-in" data-settings-row="" className="py-3">
-        <AntigravityChatSignInFlowPanel
-          signIn={signIn}
-          title={
-            <p className="text-sm font-medium">
-              {t('accounts.antigravity.signInGoogle', 'Sign in with Google')}
-            </p>
-          }
-        />
-      </div>
+  } else if (!state) {
+    cards.push(
+      <AccountCardPlaceholder key="loading">
+        {t('accounts.antigravity.loading', 'Loading accounts…')}
+      </AccountCardPlaceholder>
     )
-  } else if (state && !state.currentAccount) {
-    terminalRows.push(
-      <AntigravityAccountRow
+  }
+  // A running sign-in takes the current login's place; its panel sits under the header.
+  if (!signingIn && state && !state.currentAccount) {
+    cards.push(
+      <AccountCard
         key="signed-out"
         title={t('accounts.antigravity.notSignedIn', 'Not signed in')}
         detail={
-          <>
+          <DetailLines>
             {signInAlert ??
               (signIn ? null : (
                 <span>
@@ -115,8 +109,8 @@ export function AntigravityAgyAccountRows({
                   </a>
                 </span>
               ))}
-            {changed ? <span className="text-status-warning-text">{changedText}</span> : null}
-          </>
+            {changed ? changedNote : null}
+          </DetailLines>
         }
         actions={
           signIn ? (
@@ -127,40 +121,56 @@ export function AntigravityAgyAccountRows({
         }
       />
     )
-  } else if (unread) {
-    terminalRows.push(
-      <AntigravityAccountRow
+  } else if (!signingIn && unread) {
+    cards.push(
+      <AccountCard
         key="current"
         title={t('accounts.antigravity.signedInUnread', 'agy is signed in')}
-        detail={t(
-          'accounts.antigravity.unreadDetail',
-          'Show the account to see which one. macOS may ask you to allow keychain access.'
-        )}
+        detail={
+          <span className="min-w-0">
+            {t(
+              'accounts.antigravity.unreadDetail',
+              'Show the account to see which one. macOS may ask you to allow keychain access.'
+            )}
+          </span>
+        }
         actions={
-          <Button size="xs" variant="outline" disabled={busy} onClick={() => run('ReadCurrent')}>
+          <Button
+            size="xs"
+            variant="ghost-muted"
+            disabled={busy}
+            onClick={() => run('ReadCurrent')}
+          >
+            <Eye />
             {t('accounts.antigravity.showAccount', 'Show account')}
           </Button>
         }
       />
     )
-  } else if (state?.currentAccount && !state.activeAccountId) {
+  } else if (!signingIn && state?.currentAccount && !state.activeAccountId) {
     const { email } = state.currentAccount
-    terminalRows.push(
-      <AntigravityAccountRow
+    cards.push(
+      <AccountCard
         key="current"
         title={email ?? t('accounts.antigravity.currentLogin', 'Current agy login')}
         active
         detail={
           changed ? (
-            <span className="text-status-warning-text">{changedText}</span>
-          ) : email ? (
-            t('accounts.antigravity.currentNotSaved', 'Current agy login · not saved')
+            changedNote
           ) : (
-            t('accounts.antigravity.noEmailNotSaved', "agy didn't report an email · not saved")
+            <span className="truncate">
+              {email
+                ? t('accounts.antigravity.currentNotSaved', 'Current agy login · not saved')
+                : t(
+                    'accounts.antigravity.noEmailNotSaved',
+                    "agy didn't report an email · not saved"
+                  )}
+            </span>
           )
         }
         actions={
-          <Button size="xs" variant="outline" disabled={busy} onClick={() => run('AddCurrent')}>
+          <Button size="xs" variant="ghost-muted" disabled={busy} onClick={() => run('AddCurrent')}>
+            <Save />
             {t('accounts.antigravity.saveShort', 'Save')}
           </Button>
         }
@@ -169,24 +179,24 @@ export function AntigravityAgyAccountRows({
   }
   for (const account of state?.accounts ?? []) {
     const active = state?.activeAccountId === account.id
-    terminalRows.push(
-      <AntigravityAccountRow
+    const note =
+      account.id === launchesUse
+        ? t('accounts.antigravity.launchesUse', 'New agy launches use this account')
+        : launchesUse && active
+          ? t('accounts.antigravity.loginNow', "agy's login right now")
+          : null
+    cards.push(
+      <AccountCard
         key={account.id}
         title={account.email ?? t('accounts.antigravity.saved', 'Saved Google account')}
         active={active}
-        detail={
-          account.id === launchesUse
-            ? t('accounts.antigravity.launchesUse', 'New agy launches use this account')
-            : launchesUse && active
-              ? t('accounts.antigravity.loginNow', "agy's login right now")
-              : undefined
-        }
-        selectDisabled={busy}
+        detail={note ? <span className="truncate">{note}</span> : undefined}
         onSelect={() => run('Select', account.id)}
+        selectDisabled={busy}
         actions={
           active ? null : (
             <Button
-              variant="ghost"
+              variant="ghost-muted-destructive"
               size="xs"
               disabled={busy}
               onClick={() => run('Remove', account.id)}
@@ -199,121 +209,63 @@ export function AntigravityAgyAccountRows({
       />
     )
   }
-  if (state?.currentAccount && !signingIn) {
-    terminalRows.push(
-      signIn ? (
-        <AntigravityAccountRow
-          key="add-account"
-          title={null}
-          detail={
-            signInAlert ??
-            t(
-              'accounts.antigravity.addAccountInApp',
-              'Sign in to another Google account. Both stay saved here to switch between.'
-            )
-          }
-          actions={
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={busy || signIn.signInDisabled}
-              onClick={signIn.addAccount}
-            >
-              <UserPlus />
-              {t('accounts.antigravity.addAccount', 'Add account')}
-            </Button>
+  return (
+    <div data-settings-row="" className="space-y-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 space-y-0.5">
+          <Label>{t('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}</Label>
+          {addsAccount ? (
+            <p className="text-xs text-muted-foreground">
+              {signIn
+                ? (signInAlert ??
+                  t(
+                    'accounts.antigravity.addAccountInApp',
+                    'Sign in to another Google account. Both stay saved here to switch between.'
+                  ))
+                : t(
+                    'accounts.antigravity.addAccountHelp',
+                    'To add an account, run /logout in agy, sign in again, then Save it here.'
+                  )}
+            </p>
+          ) : null}
+        </div>
+        {addsAccount && signIn ? (
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={busy || signIn.signInDisabled}
+            onClick={signIn.addAccount}
+          >
+            <UserPlus />
+            {t('accounts.antigravity.addAccount', 'Add account')}
+          </Button>
+        ) : null}
+      </div>
+      {signingIn ? (
+        <AntigravityChatSignInFlowPanel
+          signIn={signIn}
+          title={
+            <p className="text-sm font-medium">
+              {t('accounts.antigravity.signInGoogle', 'Sign in with Google')}
+            </p>
           }
         />
-      ) : (
-        <div
-          key="add-account"
-          data-settings-row=""
-          className="flex items-center gap-2 py-3 text-xs text-muted-foreground"
-        >
-          <UserPlus className="size-3.5 shrink-0" />
-          <span>
-            {t(
-              'accounts.antigravity.addAccountHelp',
-              'To add an account, run /logout in agy, sign in again, then Save it here.'
-            )}
-          </span>
-        </div>
-      )
-    )
-  }
-  return <>{terminalRows}</>
+      ) : null}
+      {cards.length > 0 ? <div className="space-y-2">{cards}</div> : null}
+    </div>
+  )
+}
+
+/** Detail lines that each start on their own line once they don't fit side by side. */
+function DetailLines({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">{children}</span>
 }
 
 function ActionError({ message }: { message: string }): React.JSX.Element {
   return (
-    <span role="alert" className="flex items-center gap-1.5 text-destructive">
-      <AlertCircle className="size-3.5 shrink-0" />
+    <span role="alert" className="flex min-w-0 items-center gap-1.5 text-destructive">
+      <AlertCircle className="size-3 shrink-0" />
       {message}
     </span>
-  )
-}
-
-/** A settings row whose label selects the account, like Codex's account rows. */
-function AntigravityAccountRow({
-  title,
-  detail,
-  active = false,
-  actions,
-  onSelect,
-  selectDisabled
-}: {
-  title: string | null
-  detail?: React.ReactNode
-  active?: boolean
-  actions?: React.ReactNode
-  onSelect?: () => void
-  selectDisabled?: boolean
-}): React.JSX.Element {
-  const t = useTranslate()
-  const label = (
-    <>
-      {title ? (
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium">{title}</span>
-          {active ? (
-            <Badge variant="outline">{t('accounts.antigravity.active', 'Active')}</Badge>
-          ) : null}
-        </span>
-      ) : null}
-      {detail ? (
-        <span
-          className={cn(
-            'flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground',
-            title && 'mt-0.5'
-          )}
-        >
-          {detail}
-        </span>
-      ) : null}
-    </>
-  )
-  return (
-    <div data-settings-row="">
-      <div
-        className={cn(
-          '-mx-5 flex min-h-14 items-center justify-between gap-4 px-5 py-3',
-          onSelect && !selectDisabled && 'transition-colors hover:bg-accent/40'
-        )}
-      >
-        {onSelect ? (
-          <button
-            type="button"
-            onClick={onSelect}
-            disabled={selectDisabled}
-            className="flex min-w-0 flex-1 flex-col items-start text-left disabled:cursor-default"
-          >
-            {label}
-          </button>
-        ) : (
-          <div className="flex min-w-0 flex-1 flex-col items-start">{label}</div>
-        )}
-        {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
-      </div>
-    </div>
   )
 }

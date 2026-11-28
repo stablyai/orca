@@ -26,6 +26,14 @@ const badgeVariants = cva(
         /** An uppercase kind label set before a banner title; takes its color from the parent. */
         paneLabel:
           'h-4 border-current/30 px-1.5 py-0 align-[1px] text-3xs font-semibold tracking-wider uppercase',
+        /** A tag after a Settings account card's name, such as Active. */
+        accountTag: 'h-4 rounded border-border px-1.5 text-3xs leading-none text-foreground/80',
+        /** The account card's runtime tag, a step quieter than Active. */
+        accountRuntimeTag:
+          'h-4 rounded border-border px-1.5 text-3xs leading-none text-foreground/70',
+        /** An account card's sign-in to fix, such as Needs re-auth. */
+        accountAttentionTag:
+          'h-4 rounded bg-destructive px-1.5 text-3xs leading-none text-white dark:bg-destructive/60',
         /** A caution next to a name, such as a community plugin asking for trust. */
         warning:
           'border-status-warning-border bg-status-warning-background text-status-warning-text',
