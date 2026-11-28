@@ -206,7 +206,8 @@ it('turns the icon off, never in-process, when started helpers keep hanging', ()
     vi.advanceTimersByTime(15_000)
     expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
     helper.exit()
-    vi.advanceTimersByTime(60_000)
+    // Only the back-off delay: a helper that lived over a minute would count as healthy.
+    vi.advanceTimersByTime(5_000)
   }
   expect(onUnavailable.mock.calls).toEqual([['off']])
 })

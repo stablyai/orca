@@ -4,7 +4,7 @@ import { MacMenuBarTray } from './mac-menu-bar-tray'
 
 const { update } = vi.hoisted(() => ({ update: vi.fn() }))
 vi.mock('electron', () => ({
-  app: { isPackaged: true },
+  app: { isPackaged: true, on: vi.fn(), off: vi.fn() },
   powerMonitor: { on: vi.fn(), off: vi.fn() }
 }))
 vi.mock('./mac-menu-bar-process', () => ({
