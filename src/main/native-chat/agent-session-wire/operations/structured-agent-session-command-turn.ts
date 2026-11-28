@@ -1,6 +1,4 @@
-import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { BeginProviderReceipt } from '../journal-ingress/provider-receipt-publication'
-import { withProviderReceipt } from '../journal-ingress/provider-receipt-publication'
+import { localProviderReceipt } from '../journal-ingress/provider-receipt-publication'
 import type { AgentSessionProviderReceipts } from '../publication/subscribers/agent-session-provider-receipts'
 import { isStructuredAgentSessionStopNote } from '../../../../shared/agent-session/view/structured-agent-session-stop-note-identity'
 export {
@@ -214,52 +212,6 @@ export async function handOverStructuredAgentSessionCommand(
     // Unknown writes leave lifecycle settlement to provider frames or child exit.
     await ctx.journal.resolveDispatch({ clientMessageId, ...admission, fence: ctx.fence })
   }
-}
-
-export function localProviderReceipt(
-  ctx: Pick<
-    StructuredAgentSessionCommandHandoverContext,
-    'providerReceipts' | 'journal' | 'record' | 'fence'
-  >,
-  clientMessageId: string,
-  isCurrent?: () => boolean,
-  signal?: AbortSignal
-):
-  | ((cursor: AgentJournalCursor, claudeUuidUnused?: boolean) => ReturnType<BeginProviderReceipt>)
-  | undefined {
-  const { providerReceipts, journal } = ctx
-  if (!providerReceipts || !isCurrent) {
-    return undefined
-  }
-  const record = ctx.record()
-  const provider = record?.provider
-  if (
-    !record ||
-    record.location.executionHostId !== 'local' ||
-    record.location.wslDistro !== null ||
-    (provider !== 'claude' && provider !== 'codex')
-  ) {
-    return undefined
-  }
-  return (cursor, claudeUuidUnused = true) =>
-    withProviderReceipt(() => {
-      const fence = ctx.fence
-      if (provider === 'claude' && !claudeUuidUnused) {
-        return undefined
-      }
-      return providerReceipts.bind({
-        journal,
-        clientMessageId,
-        cursor,
-        fence,
-        provider,
-        owns: () =>
-          !signal?.aborted &&
-          ctx.fence === fence &&
-          isCurrent() &&
-          ctx.record()?.lease.runtimeFence === fence
-      })
-    })
 }
 
 async function openCommandTurn(

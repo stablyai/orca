@@ -28,17 +28,17 @@ export function subscriberLaneRunners(
 ): SubscriberDeliveryLaneRunners {
   const { sessionId } = subscriber
   return {
-    catchUp: async ({ journal, port, hostNow, activity }) => {
-      await deliverToSubscriber(port, {
+    catchUp: ({ journal, port, hostNow, activity }) => {
+      const delivering = deliverToSubscriber(port, {
         subscriber,
         journal,
         hostNow,
         emitCheckpoint: false,
         activity
       })
-      if (subscriber.readsProviderReceived) {
-        owner.caughtUp(subscriber, journal)
-      }
+      return subscriber.readsProviderReceived
+        ? delivering.then(() => owner.caughtUp(subscriber, journal))
+        : delivering
     },
     backgroundTasks: (fence) =>
       republishSubscriberBackgroundTasks(

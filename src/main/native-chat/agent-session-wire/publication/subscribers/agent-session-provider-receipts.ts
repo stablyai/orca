@@ -1,6 +1,6 @@
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
-import { MAX_AGENT_SESSION_PROVIDER_RECEIPTS } from '../../../../../shared/agent-session/view/live-read/agent-session-provider-received'
+import { AGENT_SESSION_DISPATCH_LIMITS } from '../../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import type { JournalWriterCommit } from '../../../agent-session-journal/journal-writer-changes'
 import { sameJournalCursor } from '../../../agent-session-journal/replay/journal-cursor'
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
@@ -29,6 +29,12 @@ export class AgentSessionProviderReceipts {
 
   constructor(private readonly schedule: (sub: Subscriber, send: () => void) => void) {}
 
+  track(subscriber: Subscriber): void {
+    const post = subscriber.emit
+    subscriber.emit = (event) => this.emit(subscriber, post, event)
+    subscriber.stopped?.addEventListener('abort', () => this.drop(subscriber), { once: true })
+  }
+
   caughtUp(subscriber: Subscriber, journal: SqlAgentSessionJournal): void {
     const emitted = this.emitted.get(subscriber)
     if (subscriber.stopped?.aborted || !emitted || !sameJournalCursor(emitted, journal.cursor())) {
@@ -39,7 +45,7 @@ export class AgentSessionProviderReceipts {
     this.live.set(subscriber.sessionId, readers)
   }
 
-  drop(subscriber: Subscriber): void {
+  private drop(subscriber: Subscriber): void {
     const { sessionId } = subscriber
     const readers = this.live.get(sessionId)
     if (readers?.delete(subscriber) && readers.size === 0) {
@@ -59,7 +65,7 @@ export class AgentSessionProviderReceipts {
       return undefined
     }
     const attempts = this.attempts.get(sessionId) ?? new Map<string, Attempt>()
-    if (attempts.size >= MAX_AGENT_SESSION_PROVIDER_RECEIPTS && !attempts.has(clientMessageId)) {
+    if (attempts.size >= AGENT_SESSION_DISPATCH_LIMITS[dispatch.provider] && !attempts.has(clientMessageId)) {
       return undefined
     }
     const readers = new Set(
@@ -156,13 +162,19 @@ export class AgentSessionProviderReceipts {
   }
 
   /** Called after projection, at the same post guard as ordinary frames. */
-  emit(subscriber: Subscriber, event: AgentSessionSubscribeEvent): void {
+  private emit(
+    subscriber: Subscriber,
+    post: Subscriber['emit'],
+    event: AgentSessionSubscribeEvent
+  ): void {
     if (event.type === 'snapshot' || event.type === 'reset') {
       this.drop(subscriber)
     }
     const providerReceived =
-      event.type === 'batch' ? this.take(subscriber, event.batch.cursor, event.fence) : undefined
-    subscriber.emit(
+      event.type === 'batch' && !event.providerReceived
+        ? this.take(subscriber, event.batch.cursor, event.fence)
+        : undefined
+    post(
       providerReceived && event.type === 'batch' ? { ...event, providerReceived } : event
     )
     if (event.type === 'batch') {

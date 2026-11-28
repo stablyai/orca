@@ -14,26 +14,27 @@ import { rowsBesideStreamedText } from '../../../../../../../shared/agent-sessio
 
 /** The structured chat's delivery notices, by the message id each row renders under. */
 export function useStructuredAgentSessionDeliveryNotices(args: {
-  pending: readonly StructuredAgentSessionPendingSend[]
-  submissions: readonly AgentJournalSubmission[]
-  journalItems: readonly AgentJournalRenderItem[]
+  source: {
+    pending: readonly StructuredAgentSessionPendingSend[]
+    submissions: readonly AgentJournalSubmission[]
+    journalItems: readonly AgentJournalRenderItem[]
+    providerReceived?: ReadonlyMap<string, number>
+  }
   agentName: string
-  provider?: string
-  providerReceived?: ReadonlyMap<string, number>
   startFailures?: readonly AgentSessionFailureFact[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
-  const { agentName, pending, submissions } = args
+  const { agentName } = args
+  const { pending, submissions, journalItems, providerReceived } = args.source
   // Only rejection wording needs journal items; pending delivery comes from submissions alone.
   const hasRejected = submissions.some(
     (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
   )
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(
-    args.journalItems,
+    journalItems,
     hasRejected && args.startFailures === undefined
   )
   const startFailures = args.startFailures ?? loadedFailures
-  const commandItemIds = useCommandItemIds(args.journalItems, hasRejected)
-  const { provider, providerReceived } = args
+  const commandItemIds = useCommandItemIds(journalItems, hasRejected)
   const notices = useMemo(
     () =>
       structuredAgentSessionDeliveryNotices({
@@ -42,10 +43,9 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
         agentName,
         startFailures,
         commandItemIds,
-        provider,
         providerReceived
       }),
-    [pending, submissions, agentName, startFailures, commandItemIds, provider, providerReceived]
+    [pending, submissions, agentName, startFailures, commandItemIds, providerReceived]
   )
   // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
   const previousRef = useRef(notices)

@@ -1,4 +1,5 @@
 import type { BeginProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
+import { AGENT_SESSION_DISPATCH_LIMITS } from '../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import { randomUUID } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from '../lifecycle/claude-structured-session-id'
@@ -49,7 +50,7 @@ import {
   type StructuredAgentSessionAdmitFreshInput
 } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 
-const MAX_ACTIVE_DISPATCH_WAITERS = 64
+const MAX_ACTIVE_DISPATCH_WAITERS = AGENT_SESSION_DISPATCH_LIMITS.claude
 
 export function settleCancelledClaudeDispatchWaiters(
   session: ClaudeSession,

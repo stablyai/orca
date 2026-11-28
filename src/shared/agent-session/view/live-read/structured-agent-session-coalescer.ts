@@ -1,4 +1,4 @@
-import { MAX_AGENT_SESSION_PROVIDER_RECEIPTS } from './agent-session-provider-received'
+import { AGENT_SESSION_DISPATCH_LIMITS } from '../../journal/agent-session-dispatch-limits'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
@@ -58,7 +58,7 @@ function holdProviderReceived(held: HeldBatches, event: Batch): void {
   }
   const received = (held.providerReceived ??= new Set())
   for (const sequence of event.providerReceived) {
-    if (received.size >= MAX_AGENT_SESSION_PROVIDER_RECEIPTS) {
+    if (received.size >= AGENT_SESSION_DISPATCH_LIMITS.codex) {
       break
     }
     received.add(sequence)

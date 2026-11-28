@@ -63,11 +63,11 @@ function UserMessageMeta({
       ) : null}
       {sending ? (
         <span className="text-xs whitespace-nowrap text-chat-foreground-faint">
-          {receivedBy === 'claude'
-            ? t('components.native-chat.messageReceivedByClaude', 'Received by Claude')
-            : receivedBy === 'codex'
-              ? t('components.native-chat.messageReceivedByCodex', 'Received by Codex')
-              : t('components.native-chat.messageSending', 'Sending…')}
+          {receivedBy
+            ? t('components.native-chat.messageReceivedBy', 'Received by {{agent}}', {
+                agent: receivedBy
+              })
+            : t('components.native-chat.messageSending', 'Sending…')}
         </span>
       ) : (
         <NativeChatMessageTimestamp timestamp={timestamp} focusable />

@@ -10,7 +10,7 @@ import type { AgentSessionRecord } from '../../../../../../shared/agent-session/
 import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { localProviderReceipt } from '../../../operations/structured-agent-session-command-turn'
+import { localProviderReceipt } from '../../../journal-ingress/provider-receipt-publication'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
 import {
   fixture,

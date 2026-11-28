@@ -1,4 +1,6 @@
-import type { BeginProviderReceipt } from '../journal-ingress/provider-receipt-publication'
+import type { StructuredAgentSessionCommandRun } from './structured-agent-session-command-run'
+export type { StructuredAgentSessionCommandRun } from './structured-agent-session-command-run'
+import type { ProviderReceiptInput } from '../journal-ingress/provider-receipt-publication'
 import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionMcpOperation,
@@ -22,8 +24,7 @@ import type { AgentSessionRewindReason } from '../../../../shared/agent-session/
 
 import type {
   AgentJournalAnsweredTurnIdentity,
-  AgentJournalMessageItem,
-  AgentJournalTurnItem
+  AgentJournalMessageItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
@@ -74,18 +75,6 @@ export type AgentSessionAcquisition = {
   accountHome?: AgentSessionAccountHome
   /** The home a chat with no conversation yet moved to at this launch, which it keeps. */
   movedAccountHome?: AgentSessionAccountHome
-}
-
-/** The host creates the command’s running turn; the child translator ends it and writes its result. */
-export type StructuredAgentSessionCommandRun = {
-  clientMessageId: string
-  turnId: string
-  identity: AgentJournalItemIdentity
-  resultIdentity: AgentJournalItemIdentity
-  running: AgentJournalTurnItem
-  beginProviderReceipt?: BeginProviderReceipt
-  /** Only agents declaring `compactInstructions` receive this. */
-  instructions?: string
 }
 
 /** Commands may answer in place without echoing provider items. */
@@ -231,8 +220,7 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     onInputPreparation?: () => void
     /** Checkpoint between choice application and execution-evidence capture. */
     onExecutionSnapshot?: () => void
-    beginProviderReceipt?: BeginProviderReceipt
-  }): Promise<AgentSessionDispatchOutcome>
+  } & ProviderReceiptInput): Promise<AgentSessionDispatchOutcome>
   /** Narrow declared rewind per session; agent supplies the resting-session answer. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
   prepareRewind?: PrepareStructuredRewind

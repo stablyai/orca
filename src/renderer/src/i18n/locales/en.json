@@ -22200,8 +22200,7 @@
       "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
       "messageNotSent": "Message not sent",
-      "messageReceivedByClaude": "Received by Claude",
-      "messageReceivedByCodex": "Received by Codex",
+      "messageReceivedBy": "Received by {{agent}}",
       "messageSending": "Sending…",
       "userMessage": {
         "showFull": "Show full message",

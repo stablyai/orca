@@ -178,7 +178,6 @@ export async function emitSubscriberFrame(
     journal?: AgentSessionJournal
     queuePublication?: { value: QueuePublication | undefined }
     isActive?: () => boolean
-    post?: (event: AgentSessionSubscribeEvent) => void
   }
 ): Promise<void> {
   const marker =
@@ -203,8 +202,7 @@ export async function emitSubscriberFrame(
     if (options?.isActive && !options.isActive()) {
       return
     }
-    const post = options?.post ?? subscriber.emit
-    post(outgoing)
+    subscriber.emit(outgoing)
   }
   if (includeMarker) {
     subscriber.requestVersion = marker.version

@@ -1,6 +1,8 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnJoin } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-export const MAX_CODEX_PENDING_DISPATCH_ECHOES = 256
+import { AGENT_SESSION_DISPATCH_LIMITS } from '../../../../shared/agent-session/journal/agent-session-dispatch-limits'
+
+export const MAX_CODEX_PENDING_DISPATCH_ECHOES = AGENT_SESSION_DISPATCH_LIMITS.codex
 export const MAX_CODEX_RECORDED_TURN_ENDS = 64
 
 export type CodexExpectedDispatchReceipt = {

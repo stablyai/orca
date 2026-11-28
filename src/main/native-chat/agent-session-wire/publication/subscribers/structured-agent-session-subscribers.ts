@@ -11,17 +11,14 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from '../../../../../shared/agent-session/agent-session-wire'
-import {
-  emitSubscriberFrame,
-  subscriberCommandsChanged
-} from './agent-session-subscriber-frame-fields'
+import { emitSubscriberFrame } from './agent-session-subscriber-frame-fields'
+import { subscriberCommandRefresh } from './agent-session-live-publications'
 import {
   publishSubscriberSnapshot,
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import * as liveText from './agent-session-subscriber-live-text'
-import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
@@ -100,10 +97,10 @@ export class AgentSessionSubscribers {
     subscriber.stopped = this.lanes.of(subscriber).stopped
     const replaced = session.get(input.id)
     if (replaced) {
-      if (replaced.readsProviderReceived) {
-        this.providerReceipts.drop(replaced)
-      }
       this.lanes.clear(replaced)
+    }
+    if (subscriber.readsProviderReceived) {
+      this.providerReceipts.track(subscriber)
     }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
@@ -123,17 +120,10 @@ export class AgentSessionSubscribers {
         subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       }
       await this.sendLiveTail(subscriber, journal, input.fence)
-      if (subscriber.readsProviderReceived) {
-        this.providerReceipts.caughtUp(subscriber, journal)
-      }
     })
     this.promptSuggestions.opened(subscriber)
     const { sessionId, id } = subscriber
-    return () => {
-      if (this.isActive(subscriber)) {
-        this.close(sessionId, id)
-      }
-    }
+    return () => void (!subscriber.stopped?.aborted && this.close(sessionId, id))
   }
 
   close(sessionId: string, id: string): void {
@@ -219,9 +209,6 @@ export class AgentSessionSubscribers {
       this.enqueue(subscriber, async () => {
         await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
         await this.sendLiveTail(subscriber, journal, fence)
-        if (subscriber.readsProviderReceived) {
-          this.providerReceipts.caughtUp(subscriber, journal)
-        }
       })
     }
     this.hooks.onJournalPublished?.(sessionId, journal)
@@ -237,18 +224,9 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     for (const sessionId of this.bySession.keys()) {
       for (const subscriber of this.subscribers(sessionId)) {
-        const invalidated = subscriber.commandsOnRequest && retired?.(sessionId)
-        if (invalidated || subscriberCommandsChanged(this.hooks, subscriber)) {
-          this.enqueue(subscriber, () =>
-            this.emit(subscriber, {
-              type: 'batch',
-              sessionId,
-              batch: emptyAgentSessionBatch(subscriber.cursor),
-              fence: subscriber.fence,
-              hostNow,
-              ...(invalidated ? { commandsChanged: true as const } : {})
-            })
-          )
+        const frame = subscriberCommandRefresh(this.hooks, subscriber, hostNow, retired)
+        if (frame) {
+          this.enqueue(subscriber, () => this.emit(subscriber, frame()))
         }
       }
     }
@@ -273,7 +251,10 @@ export class AgentSessionSubscribers {
     const items = sends && this.lanes.of(subscriber).sendsLiveText(taken) ? taken : []
     const [subscribers, hostNow] = [[subscriber], this.now()]
     const tail = { sessionId, journal, fence, items, subscribers, hostNow }
-    return liveText.publishSubscriberLiveText(this.deliveryPort(), tail)
+    const sent = liveText.publishSubscriberLiveText(this.deliveryPort(), tail)
+    return subscriber.readsProviderReceived
+      ? sent.then(() => this.providerReceipts.caughtUp(subscriber, journal))
+      : sent
   }
 
   private subscribers = (sessionId: string): Subscriber[] => [
@@ -316,9 +297,6 @@ export class AgentSessionSubscribers {
       }
       await emitSubscriberFrame(hooks, subscriber, event, {
         ...options,
-        ...(subscriber.readsProviderReceived
-          ? { post: (frame) => this.providerReceipts.emit(subscriber, frame) }
-          : {}),
         isActive: () => this.isActive(subscriber)
       })
       liveText.forgetEndedTurnRows(subscriber, event)
@@ -351,9 +329,6 @@ export class AgentSessionSubscribers {
   }
 
   private drop(subscriber: Subscriber): void {
-    if (subscriber.readsProviderReceived) {
-      this.providerReceipts.drop(subscriber)
-    }
     this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)

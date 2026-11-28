@@ -127,7 +127,9 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       : undefined
     return this.subscribers.open({
       ...input,
-      readsProviderReceived: location?.executionHostId === 'local' && location.wslDistro === null,
+      ...(input.readsProviderReceived
+        ? { readsProviderReceived: location?.executionHostId === 'local' && location.wslDistro === null }
+        : {}),
       journal: session.journal,
       fence: structuredAgentSessionConversationFence(this.deps.store, input.sessionId)
     })

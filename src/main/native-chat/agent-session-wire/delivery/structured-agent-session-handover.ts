@@ -1,7 +1,9 @@
 // Commit pending/settlement around an external provider call so concurrent sends remain acceptable.
 
-import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { BeginProviderReceipt } from '../journal-ingress/provider-receipt-publication'
+import {
+  providerHandoverReceipt,
+  type BeginProviderReceipt
+} from '../journal-ingress/provider-receipt-publication'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -24,7 +26,6 @@ import type { AgentSessionDispatchOutcome } from '../providers/structured-agent-
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   handOverStructuredAgentSessionCommand,
-  localProviderReceipt,
   structuredAgentSessionHandoverOrigin
 } from '../operations/structured-agent-session-command-turn'
 import type { StoppedHistoryDelivery } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
@@ -92,32 +93,15 @@ export async function beginSubmissionHandover(
   )
   const attempt = ctx.acquireAborts?.begin(ctx.sessionId, true, false, isBound)
   const queued = submission.queuedMessageId !== undefined
-  let dispatchCursor: AgentJournalCursor | undefined
-  let claudeUuidUnused: boolean
-  const providerReceipt = localProviderReceipt(
-    ctx,
-    clientMessageId,
-    () => ownsChild(),
-    attempt?.signal
-  )
-  const beginProviderReceipt: BeginProviderReceipt | undefined = providerReceipt
-    ? () => {
-        const unused = claudeUuidUnused
-        claudeUuidUnused = false
-        return dispatchCursor ? providerReceipt(dispatchCursor, unused) : undefined
-      }
-    : undefined
-  try {
-    const prepared = await ctx.journal.prepareHandover({
-      clientMessageId,
-      fence: ctx.fence,
-      turnScope,
-      body
-    })
+  const receipt = providerHandoverReceipt(ctx, clientMessageId, () => ownsChild(), attempt?.signal)
+  const prepare = async (fence: number, scope: typeof turnScope) => {
+    const prepared = await ctx.journal.prepareHandover({ clientMessageId, fence, turnScope: scope, body })
     carried = prepared.carried
-    dispatchCursor = prepared.dispatchCursor
-    claudeUuidUnused = prepared.firstHandover
-    await rideAlong.claim(ctx.fence, turnScope)
+    receipt?.committed(prepared)
+    await rideAlong.claim(fence, scope)
+  }
+  try {
+    await prepare(ctx.fence, turnScope)
   } catch (error) {
     attempt?.end()
     release?.()
@@ -126,15 +110,7 @@ export async function beginSubmissionHandover(
   }
   const prepareFresh = async (fence: number): Promise<AgentJournalMessageItem> => {
     ctx.fence = fence
-    const prepared = await ctx.journal.prepareHandover({
-      clientMessageId,
-      fence,
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE,
-      body
-    })
-    carried = prepared.carried
-    dispatchCursor = prepared.dispatchCursor
-    await rideAlong.claim(fence, AGENT_JOURNAL_THREAD_SCOPE)
+    await prepare(fence, AGENT_JOURNAL_THREAD_SCOPE)
     return outgoing()
   }
   // Preserve handover time so turn-open cannot re-anchor elapsed work.
@@ -174,7 +150,7 @@ export async function beginSubmissionHandover(
                       ownsChild,
                       prepareFresh,
                       attempt?.signal,
-                      beginProviderReceipt
+                      receipt?.begin
                     )
                   : null
               break

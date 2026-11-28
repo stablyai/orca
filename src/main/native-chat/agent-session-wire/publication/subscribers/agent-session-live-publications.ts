@@ -2,7 +2,12 @@ import type { AgentJournalRenderItem } from '../../../../../shared/agent-session
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
-import { backgroundTaskFingerprint } from './agent-session-subscriber-frame-fields'
+import {
+  backgroundTaskFingerprint,
+  subscriberCommandsChanged,
+  type SubscriberFieldHooks
+} from './agent-session-subscriber-frame-fields'
+import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { publishSubscriberLiveText } from './agent-session-subscriber-live-text'
 
@@ -54,4 +59,25 @@ export function createSubscriberLiveTextPublisher(
       subscribers: targets,
       hostNow: now()
     })
+}
+
+export function subscriberCommandRefresh(
+  hooks: SubscriberFieldHooks,
+  subscriber: Subscriber,
+  hostNow: number,
+  retired?: (sessionId: string) => boolean
+): (() => AgentSessionSubscribeEvent) | undefined {
+  const { sessionId, commandsOnRequest } = subscriber
+  const invalidated = commandsOnRequest && retired?.(sessionId)
+  if (invalidated || subscriberCommandsChanged(hooks, subscriber)) {
+    return () => ({
+      type: 'batch',
+      sessionId,
+      batch: emptyAgentSessionBatch(subscriber.cursor),
+      fence: subscriber.fence,
+      hostNow,
+      ...(invalidated ? { commandsChanged: true as const } : {})
+    })
+  }
+  return undefined
 }

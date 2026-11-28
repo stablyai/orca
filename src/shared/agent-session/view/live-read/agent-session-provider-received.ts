@@ -5,8 +5,8 @@ import type {
   AgentJournalSubmission
 } from '../../journal/agent-session-journal-types'
 
-// Claude's MAX_ACTIVE_DISPATCH_WAITERS and Codex's pending dispatch echo cap.
-export const MAX_AGENT_SESSION_PROVIDER_RECEIPTS = 64
+import { AGENT_SESSION_DISPATCH_LIMITS } from '../../journal/agent-session-dispatch-limits'
+const MAX_AGENT_SESSION_PROVIDER_RECEIPTS = AGENT_SESSION_DISPATCH_LIMITS.codex
 
 export function providerReceivedAfterBatch(
   previous: ReadonlyMap<string, number> | undefined,
