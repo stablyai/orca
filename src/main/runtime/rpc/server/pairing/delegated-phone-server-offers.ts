@@ -65,7 +65,8 @@ async function mintOffer(
   address: string | null,
   params: DelegatedPhoneServerOfferParams
 ): Promise<DelegatedPhoneServerOfferResult> {
-  if (params.connectionMode !== 'local-only') {
+  // Only a mode the relaying desktop stamped opens Relay; anything else stays on the LAN.
+  if (params.connectionMode === 'automatic') {
     // The server's own Relay sign-in and team policy decide whether it can mint here.
     const relayed = await server.createMobilePairingOffer({ ...offer, connectionMode: 'automatic' })
     // A newer request took the mint's turn: retrying beats a LAN-only pairing that refuses Relay.
@@ -82,7 +83,7 @@ async function mintOffer(
       available: false,
       reason: 'no_route',
       // Relay is off for this phone, so only a listener that answers off this host would help.
-      guidance: params.connectionMode === 'local-only' ? NO_LAN_ROUTE_GUIDANCE : NO_ROUTE_GUIDANCE
+      guidance: params.connectionMode === 'automatic' ? NO_ROUTE_GUIDANCE : NO_LAN_ROUTE_GUIDANCE
     }
   }
   return answer(await server.createMobilePairingOffer({ ...offer, connectionMode: 'local-only' }))

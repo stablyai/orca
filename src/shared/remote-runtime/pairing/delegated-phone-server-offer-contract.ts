@@ -12,7 +12,7 @@ export const DELEGATED_PHONE_SERVER_OFFER_RUNTIME_CAPABILITY =
 export const DelegatedPhoneServerOfferParamsSchema = lazyZodSchema(() =>
   z
     .object({
-      // Stamped by the relaying desktop from the phone's own pairing there; never the phone's pick.
+      // Stamped by the relaying desktop from the phone's own pairing there; absent means LAN only.
       connectionMode: z.enum(['automatic', 'local-only']).optional()
     })
     .strict()
