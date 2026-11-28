@@ -39,6 +39,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
+  // Resources matches Accounts: Back and the shared layout wall, plus the haptics seam grant.
+  {
+    pathname: '/h/[hostId]/resources',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    optionalGrants: [DEVICE_STORE_GRANT]
+  },
   // MCP servers needs navigate/storage for Back and the shared layout wall, externalLink for a server's sign-in page.
   // A sign-in link too long for an older shell is copied instead; without the clipboard the page says it couldn't.
   {

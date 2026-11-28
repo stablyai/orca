@@ -15,6 +15,10 @@ export const HOST_STACK_SCREENS = [
     title: (t: Translate) => t('navigation.hostStackScreens.accounts', 'Accounts')
   },
   {
+    name: '[hostId]/resources',
+    title: (t: Translate) => t('navigation.hostStackScreens.resources', 'Resources')
+  },
+  {
     name: '[hostId]/mcp',
     title: (t: Translate) => t('navigation.hostStackScreens.mcpServers', 'MCP servers')
   },

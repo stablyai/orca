@@ -53,6 +53,11 @@ export function formatUsageBarValue(
     : `${shown}%`
 }
 
+// Same consumption bands as usageBarFill, for meters that are not a usage bar.
+export function usageBandColor(usedPercent: number | null, colors: MobilePalette): string {
+  return usageBarFill(usedPercent, false, 'used', colors).color
+}
+
 // Match desktop/harness consumption meters: fresh empty/green, depleted full/red.
 export function UsageBar({
   label,
