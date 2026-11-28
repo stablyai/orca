@@ -49,7 +49,7 @@ type MovedSince = {
   cut: string
   to: AgentSessionAccountHome
   at: number
-  /** The name of the account moved to, when it is out of quota too. */
+  /** The name of the account moved to, when it is out of quota too; '' when it has none. */
   label?: string
 } & Partial<UsageLimitSavedAccountMove>
 
@@ -158,14 +158,14 @@ export class UsageLimitAccountHolds {
       // A move onto an account still out of quota frees the chat when that account resets.
       const label =
         record && savedMove?.limitedUntil !== undefined
-          ? host.usageLimitAutoContinue?.accountLabel?.(record.provider, savedMove.account)
+          ? (host.usageLimitAutoContinue?.accountLabel?.(record.provider, savedMove.account) ?? '')
           : undefined
       this.movedSince.set(id, {
         cut: hit.cut,
         to: movedTo,
         at: savedMove?.limitedUntil ?? now,
         ...savedMove,
-        ...(label ? { label } : {})
+        ...(label !== undefined ? { label } : {})
       })
     }
     this.relaunched.note(

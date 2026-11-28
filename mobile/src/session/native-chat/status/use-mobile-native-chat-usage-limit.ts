@@ -6,6 +6,7 @@ import {
 import {
   nativeChatUsageLimitAutoContinueKind,
   usageLimitContinueAtForCut,
+  usageLimitLimitedAccountForCut,
   usageLimitContinueResetForCut,
   usageLimitContinueStateForCut,
   type NativeChatUsageLimitAutoContinueKind
@@ -28,6 +29,8 @@ export type MobileNativeChatUsageLimit = {
   autoContinue: Exclude<NativeChatUsageLimitAutoContinueKind, 'off'> | null
   /** The reset the host's automatic continue waits for; later than the cut's while the account is spent. */
   continueAt: number | undefined
+  /** The account the chat moved to, itself out of quota until `continueAt`. */
+  limitedAccount: string | undefined
   /** Null on a host that refuses "Don't continue" from a phone. */
   cancel: (() => void) | null
   cancelling: boolean
@@ -105,6 +108,14 @@ export function useMobileNativeChatUsageLimit(
     [feed, sessionId, cut]
   )
   const continueAt = useSyncExternalStore(subscribe, readContinueAt, readContinueAt)
+  const readLimitedAccount = useCallback(
+    () =>
+      feed && sessionId
+        ? usageLimitLimitedAccountForCut(feed.getSnapshot().get(sessionId)?.usageLimitContinue, cut)
+        : undefined,
+    [feed, sessionId, cut]
+  )
+  const limitedAccount = useSyncExternalStore(subscribe, readLimitedAccount, readLimitedAccount)
   // The host publishes no state for a cut it can't schedule and republishes one that ages out.
   const kind = nativeChatUsageLimitAutoContinueKind(state, { schedulable: true, localHost: false })
   // The chat's last options answer predates the cut (the host says no until one exists), so ask
@@ -183,6 +194,7 @@ export function useMobileNativeChatUsageLimit(
       turnItemId,
       autoContinue: kind === 'off' ? null : kind,
       continueAt,
+      limitedAccount,
       cancel: kind === 'scheduled' && canCancel ? cancel : null,
       cancelling,
       cancelFailed: failedCut === turnItemId && kind === 'scheduled',
@@ -195,6 +207,7 @@ export function useMobileNativeChatUsageLimit(
     turnItemId,
     kind,
     continueAt,
+    limitedAccount,
     canCancel,
     cancel,
     cancelling,

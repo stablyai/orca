@@ -22650,6 +22650,8 @@
         "srSummary": "{{sentence}} {{status}}",
         "accountOutOfQuota": "{{account}} is out of quota until {{time}}",
         "statusAccountOutOfQuota": "{{account}} is out of quota until {{time}}.",
+        "unnamedAccountOutOfQuota": "That account is out of quota until {{time}}",
+        "statusUnnamedAccountOutOfQuota": "That account is out of quota until {{time}}.",
         "canContinueAt": "Can continue at {{time}}",
         "titleWeeklyReached": "{{agent}} weekly limit reached",
         "titleExtraUsageReached": "{{agent}} extra usage limit reached",
