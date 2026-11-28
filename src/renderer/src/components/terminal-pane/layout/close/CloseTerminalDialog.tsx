@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,11 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
+import { useAppStore } from '@/store/index'
+import { isTerminalPaneCloseChord } from '../../input/keyboard/terminal-shortcut-policy'
 
 export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'chat-agent'
 
@@ -37,6 +41,7 @@ export default function CloseTerminalDialog({
   onConfirm: (dontAskAgain: boolean) => void
 }): React.JSX.Element {
   const checkboxId = useId()
+  const contentRef = useRef<HTMLDivElement>(null)
   // Why: no Radix trigger, so dismiss would leave focus on body; Stop/Sleep move focus themselves, and Cancel re-arms after a queued Stop.
   const { captureReturnFocus, skipReturnFocus, rearmReturnFocus } = useModalReturnFocus(open, {
     preferCapturedElement: true
@@ -65,6 +70,39 @@ export default function CloseTerminalDialog({
     }
   }
 
+  // Confirm on a second close chord while open; register first so workspace/terminal close handlers cannot preempt the dialog.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.isComposing) {
+        return
+      }
+      if (
+        !isTerminalPaneCloseChord(event, getShortcutPlatform(), useAppStore.getState().keybindings)
+      ) {
+        return
+      }
+
+      // Only the dialog that holds focus consumes the chord, so re-registering cannot hand it to another open prompt.
+      if (!(event.target instanceof Node) || !contentRef.current?.contains(event.target)) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      if (event.repeat) {
+        return
+      }
+      skipReturnFocus()
+      onConfirm(dontAskAgain)
+    }
+    addAppKeyListener('keydown', onKeyDown, { first: true })
+    return () => removeAppKeyListener('keydown', onKeyDown)
+  }, [open, dontAskAgain, onConfirm, skipReturnFocus])
+
   return (
     <Dialog
       open={open}
@@ -74,7 +112,13 @@ export default function CloseTerminalDialog({
         }
       }}
     >
-      <DialogContent size="confirm" initialFocus="cancel" onOpenAutoFocus={captureReturnFocus}>
+      <DialogContent
+        ref={contentRef}
+        size="confirm"
+        initialFocus="cancel"
+        onOpenAutoFocus={captureReturnFocus}
+        data-close-terminal-dialog="true"
+      >
         <CloseTerminalDialogBody
           copyKind={copyKind}
           workspaceName={workspaceName}

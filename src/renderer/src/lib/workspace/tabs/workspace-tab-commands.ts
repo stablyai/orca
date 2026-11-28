@@ -163,11 +163,24 @@ export function moveActiveTab(worktreeId: string | null, direction: -1 | 1): boo
   return true
 }
 
+/** Whether keyboard focus sits inside a running-terminal close prompt, which owns repeated close chords. */
+export function isTerminalClosePromptFocused(): boolean {
+  return (
+    typeof document !== 'undefined' &&
+    document.activeElement instanceof HTMLElement &&
+    document.activeElement.closest('[data-close-terminal-dialog="true"]') !== null
+  )
+}
+
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
   if (command.type === 'close') {
     if (!command.target) {
+      // While a close prompt owns focus, leave untargeted close chords to the dialog rather than opening a competing tab prompt.
+      if (isTerminalClosePromptFocused()) {
+        return false
+      }
       if (selectEmptyFloatingWorkspacePanelVisible(state)) {
         window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
         return true

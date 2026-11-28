@@ -65,6 +65,22 @@ export function guardRunningTerminalClose(params: {
 }): void {
   const { terminalTabId, worktreeId, consentedPtyId, onClose, onCancel } = params
   const state = useAppStore.getState()
+  // A second close while this tab's prompt is already visible confirms without starting another PTY probe.
+  const pendingConfirm = useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
+  if (pendingConfirm?.terminalTabId === terminalTabId && state.pinnedTabCloseConfirm === null) {
+    useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm(
+      {
+        terminalTabId,
+        copyKind: pendingConfirm.copyKind,
+        ...(pendingConfirm.worktreeId ? { worktreeId: pendingConfirm.worktreeId } : {}),
+        ...(pendingConfirm.canSleepInstead ? { canSleepInstead: true } : {}),
+        onConfirm: onClose,
+        ...(onCancel ? { onCancel } : {})
+      },
+      { confirmDuplicate: true }
+    )
+    return
+  }
   const settings = state.settings
   const ptyIds = collectTabPtyIds(state, terminalTabId).filter((id) => id !== consentedPtyId)
   // Opt-out and no-PTY closes stay synchronous.

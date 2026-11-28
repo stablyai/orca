@@ -14,9 +14,17 @@ export type RunningTerminalCloseConfirmRequest = {
   onCancel?: () => void
 }
 
+export type RunningTerminalCloseConfirmOptions = {
+  /** Confirm when the same tab's prompt is already visible; leave false on async probe completions so pre-prompt double-clicks fold safely. */
+  confirmDuplicate?: boolean
+}
+
 export type RunningTerminalCloseConfirmState = {
   runningTerminalCloseConfirm: RunningTerminalCloseConfirmRequest | null
-  requestRunningTerminalCloseConfirm: (request: RunningTerminalCloseConfirmRequest) => void
+  requestRunningTerminalCloseConfirm: (
+    request: RunningTerminalCloseConfirmRequest,
+    options?: RunningTerminalCloseConfirmOptions
+  ) => void
   confirmRunningTerminalClose: () => void
   /** Opting out accepts visible and queued requests; no disabled confirmation may remain waiting. */
   confirmAllRunningTerminalCloses: () => void
@@ -67,11 +75,14 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
   return {
     runningTerminalCloseConfirm: null,
 
-    requestRunningTerminalCloseConfirm: (request) => {
+    requestRunningTerminalCloseConfirm: (request, options) => {
       const visible = get().runningTerminalCloseConfirm
-      // Async process probes allow duplicate clicks before opening; share one prompt while resolving both closes.
       if (visible?.terminalTabId === request.terminalTabId) {
+        // Only an already-visible prompt opts into duplicate confirmation; async probe completions still fold safely.
         set({ runningTerminalCloseConfirm: mergeRequests(visible, request) })
+        if (options?.confirmDuplicate === true) {
+          get().confirmRunningTerminalClose()
+        }
         return
       }
       const queuedIndex = queuedRequests.findIndex(
