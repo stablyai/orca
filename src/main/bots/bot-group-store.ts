@@ -41,7 +41,8 @@ export class BotGroupStore {
   listing(): BotGroup[] {
     const rows = new Map(
       this.db
-        .prepare('SELECT group_id, sidebar_order, latest FROM bot_group_sidebar')
+        .prepare(`SELECT group_id, sidebar_order,
+          CASE WHEN json_valid(latest) THEN latest END AS latest FROM bot_group_sidebar`)
         .all()
         .map((row) => [String(row.group_id), row])
     )
@@ -110,7 +111,7 @@ export class BotGroupStore {
 
   private records(): unknown[] {
     return this.db
-      .prepare('SELECT record FROM bot_groups ORDER BY rowid')
+      .prepare('SELECT record FROM bot_groups WHERE json_valid(record) ORDER BY rowid')
       .all()
       .map((row) => JSON.parse(String(row.record)))
   }
