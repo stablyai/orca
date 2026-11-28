@@ -95,6 +95,16 @@ describe('a relayed phone minting its own server pairing', () => {
 
       expect(server.revokeRuntimeAccess(desktop.deviceId)).toBe(true)
       expect(registry.getDevice(minted!.deviceId)).toBeNull()
+
+      // A request still in flight when its row was revoked leaves no offer the cascade can't reach.
+      const late = await createDelegatedPhoneServerOffer(
+        server,
+        relayed!,
+        { connectionMode: 'automatic' },
+        async () => null
+      )
+      expect(late).toMatchObject({ available: false, reason: 'revoked' })
+      expect(registry.listDevices().filter((device) => device.scope === 'mobile')).toEqual([])
     } finally {
       await server.stop()
       rmSync(userDataPath, { recursive: true, force: true })

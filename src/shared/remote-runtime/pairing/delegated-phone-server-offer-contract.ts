@@ -21,5 +21,11 @@ export const DelegatedPhoneServerOfferParamsSchema = lazyZodSchema(() =>
 export type DelegatedPhoneServerOfferParams = z.infer<typeof DelegatedPhoneServerOfferParamsSchema>
 
 export type DelegatedPhoneServerOfferResult =
-  | { available: true; pairingUrl: string; connectionMode: MobilePairingConnectionMode }
+  | {
+      available: true
+      pairingUrl: string
+      /** The offer's own row, which pairing the phone signs in as. */
+      deviceId: string
+      connectionMode: MobilePairingConnectionMode
+    }
   | { available: false; reason: string; guidance: string }

@@ -303,7 +303,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   }
 
   /** Drop a never-scanned mobile pending credential after a failed Anywhere mint. */
-  protected discardPendingMobilePairingDevice(deviceId: string): void {
+  discardPendingMobilePairingDevice(deviceId: string): void {
     const device = this.deviceRegistry?.getDevice(deviceId)
     if (!device || device.scope !== 'mobile' || device.lastSeenAt !== 0) {
       return

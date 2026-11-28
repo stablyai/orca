@@ -12,16 +12,25 @@ import {
   pinnedListenerAddress,
   type DefaultRouteInterfaceLookup
 } from './network/pairing-network-interfaces'
-import type { PairingOfferServer } from './pairing-offer-requests'
+import type { RuntimeRpcMobilePairing } from '../runtime-rpc-mobile-pairing'
 
 // The phone confirms it right away; a leaked offer stops working soon after.
 const DELEGATED_OFFER_TTL_MS = 10 * 60 * 1000
+
+const NO_LAN_ROUTE_GUIDANCE =
+  'This server only listens on itself, so your phone can’t reach it on your network. Pair your phone with Orca Relay on your computer, or open this server to your network.'
 
 const NO_ROUTE_GUIDANCE =
   'Sign this server in to Orca so your phone can reach it through Orca Relay while your computer sleeps.'
 
 export async function createDelegatedPhoneServerOffer(
-  server: Pick<PairingOfferServer, 'createMobilePairingOffer' | 'getBoundWebSocketHost'>,
+  server: Pick<
+    RuntimeRpcMobilePairing,
+    | 'createMobilePairingOffer'
+    | 'getBoundWebSocketHost'
+    | 'getDeviceRegistry'
+    | 'discardPendingMobilePairingDevice'
+  >,
   caller: DeviceEntry,
   params: DelegatedPhoneServerOfferParams,
   lookup?: DefaultRouteInterfaceLookup
@@ -41,6 +50,21 @@ export async function createDelegatedPhoneServerOffer(
     reach: caller.pairingReach ?? 'network',
     exposure: 'as-bound'
   } as const
+  const offered = await mintOffer(server, offer, address, params)
+  // Revoked while the offer was minted: the cascade already ran and would never reach it.
+  if (offered.available && !server.getDeviceRegistry()?.getDevice(caller.deviceId)) {
+    server.discardPendingMobilePairingDevice(offered.deviceId)
+    return { available: false, reason: 'revoked', guidance: 'This phone was unpaired.' }
+  }
+  return offered
+}
+
+async function mintOffer(
+  server: Pick<RuntimeRpcMobilePairing, 'createMobilePairingOffer'>,
+  offer: Omit<Parameters<RuntimeRpcMobilePairing['createMobilePairingOffer']>[0], 'connectionMode'>,
+  address: string | null,
+  params: DelegatedPhoneServerOfferParams
+): Promise<DelegatedPhoneServerOfferResult> {
   if (params.connectionMode !== 'local-only') {
     // The server's own Relay sign-in and team policy decide whether it can mint here.
     const relayed = await server.createMobilePairingOffer({ ...offer, connectionMode: 'automatic' })
@@ -54,7 +78,12 @@ export async function createDelegatedPhoneServerOffer(
     }
   }
   if (!address) {
-    return { available: false, reason: 'no_route', guidance: NO_ROUTE_GUIDANCE }
+    return {
+      available: false,
+      reason: 'no_route',
+      // Relay is off for this phone, so only a listener that answers off this host would help.
+      guidance: params.connectionMode === 'local-only' ? NO_LAN_ROUTE_GUIDANCE : NO_ROUTE_GUIDANCE
+    }
   }
   return answer(await server.createMobilePairingOffer({ ...offer, connectionMode: 'local-only' }))
 }
@@ -66,6 +95,7 @@ function answer(offer: MobilePairingOffer): DelegatedPhoneServerOfferResult {
   return {
     available: true,
     pairingUrl: offer.pairingUrl,
+    deviceId: offer.deviceId,
     connectionMode: offer.connectionMode
   }
 }
