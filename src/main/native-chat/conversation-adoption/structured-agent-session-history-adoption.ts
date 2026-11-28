@@ -30,6 +30,8 @@ export type StructuredAgentSessionAdoption = {
   /** The home where lookup actually found the transcript. */
   accountHome: AgentSessionAccountHome
   transcriptPath: string
+  /** Preparation copied the transcript here just now, so a create that refuses may remove it. */
+  copiedRollout?: boolean
 }
 
 export type CommittedStructuredAgentSessionAdoptionReplay = {

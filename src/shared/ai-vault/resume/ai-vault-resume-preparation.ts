@@ -40,6 +40,8 @@ export type AiVaultPrepareSessionResumeResult = {
   substituteCodexHome?: string
   /** Chat-made fork identity and actual launch agent (opencode2 chats run opencode); older hosts omit it and make no copy. */
   forkedSession?: AiVaultConversationCopy & { agent: AiVaultAgent }
+  /** This call copied the rollout into the real home (no hard link there), so the source's later appends miss it. */
+  copiedRollout?: boolean
 }
 
 export type AiVaultSessionResumePreparation = (

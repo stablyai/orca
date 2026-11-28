@@ -63,5 +63,9 @@ export async function prepareCodexAdoption(
   if (!prepared || !(await stat(prepared.path)).isFile()) {
     throw new Error('The prepared conversation history is unavailable.')
   }
-  return { accountHome: { variable: 'CODEX_HOME', path: home }, transcriptPath: prepared.path }
+  return {
+    accountHome: { variable: 'CODEX_HOME', path: home },
+    transcriptPath: prepared.path,
+    ...(result.copiedRollout ? { copiedRollout: true } : {})
+  }
 }

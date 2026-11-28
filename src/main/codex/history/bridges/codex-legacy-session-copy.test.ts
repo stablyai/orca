@@ -31,10 +31,17 @@ import {
   prepareLegacySharedCodexSessionResume
 } from '../resume/codex-legacy-session-resume'
 
-const renameHook = vi.hoisted((): { beforeAside: (() => void) | null; failAsideStat: boolean } => ({
-  beforeAside: null,
-  failAsideStat: false
-}))
+const renameHook = vi.hoisted(
+  (): {
+    beforeAside: (() => void) | null
+    failAsideStat: boolean
+    refuseLinkFrom: string | null
+  } => ({
+    beforeAside: null,
+    failAsideStat: false,
+    refuseLinkFrom: null
+  })
+)
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
@@ -52,7 +59,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         renameHook.beforeAside?.()
       }
       return actual.rename(from, to)
-    }
+    },
+    // A source on another volume, where `link` cannot reach the target.
+    link: (...args: Parameters<typeof actual.link>) =>
+      args[0] === renameHook.refuseLinkFrom
+        ? Promise.reject(Object.assign(new Error('EXDEV: cross-device link'), { code: 'EXDEV' }))
+        : actual.link(...args)
   }
 })
 
@@ -133,6 +145,7 @@ beforeEach(() => {
   markerPath = join(runtimeHome(), '.orca-session-copies', `${RELATIVE_PATH}.json`)
   renameHook.beforeAside = null
   renameHook.failAsideStat = false
+  renameHook.refuseLinkFrom = null
   // A Codex that keeps thread-writer locks ran in both homes, and holds none now.
   mkdirSync(join(runtimeHome(), 'thread-writer-locks'), { recursive: true })
   mkdirSync(join(systemHome, 'thread-writer-locks'), { recursive: true })
@@ -506,6 +519,35 @@ describe('legacy session copy swap', () => {
 
     expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS + NEW_TURNS)
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
+  })
+
+  it('reports only a copy it published, which a refused resume may then remove', async () => {
+    writeFile(copyPath, OLD_TURNS)
+    renameHook.refuseLinkFrom = copyPath
+    const args = {
+      agent: 'codex',
+      executionHostId: 'local',
+      filePath: copyPath,
+      codexHome: runtimeHome()
+    } as const
+    const options = {
+      isHostSystemDefaultRealHomeSelected: () => true,
+      systemCodexHomePath: systemHome
+    }
+
+    expect(await prepareLegacySharedCodexSessionResume(args, options)).toEqual({
+      useRealCodexHome: true,
+      copiedRollout: true
+    })
+    expect(readFileSync(sourcePath, 'utf-8')).toBe(OLD_TURNS)
+    expect(lstatSync(sourcePath).ino).not.toBe(lstatSync(copyPath).ino)
+
+    // A matching file found in place is shared with whoever wrote it, not this call's to remove.
+    renameHook.refuseLinkFrom = null
+    expect(await prepareLegacySharedCodexSessionResume(args, options)).toEqual({
+      useRealCodexHome: true,
+      copiedRollout: false
+    })
   })
 
   it('swaps for a resume that arrives while a pass protects the same copy', async () => {

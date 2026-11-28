@@ -33,7 +33,7 @@ import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-acco
 const RETRYABLE_RESUME_ERROR =
   'Orca could not safely move this legacy Codex session into your system Codex home. Retry resume; if it still fails, check that both Codex session folders are readable and writable.'
 
-const materializations = new Map<string, Promise<void>>()
+const materializations = new Map<string, Promise<boolean>>()
 
 /** A resume must not find a legacy copy's name missing just because a swap is moving it. */
 export async function settleLegacySessionCopyBeforeResume(
@@ -115,12 +115,11 @@ export async function prepareLegacySharedCodexSessionResume(
   }
 
   try {
-    await task
+    return { useRealCodexHome: true, copiedRollout: await task }
   } catch (error) {
     console.warn('[codex-legacy-session-resume] Targeted session migration failed:', error)
     throw new Error(RETRYABLE_RESUME_ERROR, { cause: error })
   }
-  return { useRealCodexHome: true }
 }
 
 // The Codex about to start takes the coordination lock this swap's hold would otherwise keep.
@@ -212,20 +211,21 @@ async function resolveSelectedAccountCodexHomeForResume(
   }
 }
 
+/** Resolves true when this call published a copy; a caller that then refuses removes only that. */
 async function materializeLegacyRollout(
   sourcePath: string,
   targetPath: string,
   auditLogPath: string
-): Promise<void> {
+): Promise<boolean> {
   const sourceStat = await lstat(sourcePath)
   if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
     throw new Error('Legacy rollout source is not a regular file.')
   }
   // A cleanup deleting every name of this rollout would miss one installed meanwhile.
-  if (
-    (await linkCodexRolloutUnlessHeld(sourcePath, () => installRollout(sourcePath, targetPath))) ===
-    'held'
-  ) {
+  const copied = await linkCodexRolloutUnlessHeld(sourcePath, () =>
+    installRollout(sourcePath, targetPath)
+  )
+  if (copied === 'held') {
     throw new Error('This rollout is being deleted with its workspace.')
   }
 
@@ -247,9 +247,11 @@ async function materializeLegacyRollout(
     summary,
     { action: 'targeted-resume', source: sourcePath, target: targetPath }
   )
+  return copied
 }
 
-async function installRollout(sourcePath: string, targetPath: string): Promise<void> {
+/** Only a copy made here belongs to this call; a link, or a file found in place, is shared. */
+async function installRollout(sourcePath: string, targetPath: string): Promise<boolean> {
   await mkdir(dirname(targetPath), { recursive: true })
   try {
     await link(sourcePath, targetPath)
@@ -258,9 +260,10 @@ async function installRollout(sourcePath: string, targetPath: string): Promise<v
       await assertMatchingExistingTarget(sourcePath, targetPath)
     } else {
       try {
-        const outcome = await copyCodexRolloutWithoutOverwrite(sourcePath, targetPath)
-        if (outcome === 'existing') {
+        if ((await copyCodexRolloutWithoutOverwrite(sourcePath, targetPath)) === 'existing') {
           await assertMatchingExistingTarget(sourcePath, targetPath)
+        } else {
+          return true
         }
       } catch (copyError) {
         if (copyError instanceof AtomicNoReplaceUnsupportedError) {
@@ -272,6 +275,7 @@ async function installRollout(sourcePath: string, targetPath: string): Promise<v
       }
     }
   }
+  return false
 }
 
 async function assertMatchingExistingTarget(sourcePath: string, targetPath: string): Promise<void> {

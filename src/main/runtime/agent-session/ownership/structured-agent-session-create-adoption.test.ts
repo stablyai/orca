@@ -1,4 +1,4 @@
-import { appendFile, copyFile, link, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, copyFile, link, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -56,4 +56,29 @@ it('refuses an adopted copy when the source changes before the writer gate finis
       details: { reason: 'transcriptUnreadable' }
     }
   })
+})
+
+// Kept, a refused copy fails every later attempt as a different rollout occupying the path.
+it('removes a refused copy only when this create installed it', async () => {
+  const source = join(dir, 'source.jsonl')
+  const copied = join(dir, 'copied.jsonl')
+  await copyFile(source, copied)
+  const writerGate = async () => {
+    throw new Error('a terminal still writes the conversation')
+  }
+
+  await expect(
+    assertAdoptedSnapshotCurrent({ sourcePath: source, preparedPath: copied, writerGate })
+  ).rejects.toThrow('a terminal still writes the conversation')
+  expect(await isSnapshotOfSource(source, copied)).toBe(true)
+
+  await expect(
+    assertAdoptedSnapshotCurrent({
+      sourcePath: source,
+      preparedPath: copied,
+      writerGate,
+      removeCopyOnRefusal: true
+    })
+  ).rejects.toThrow('a terminal still writes the conversation')
+  await expect(stat(copied)).rejects.toMatchObject({ code: 'ENOENT' })
 })

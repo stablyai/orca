@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { rm, stat } from 'node:fs/promises'
 import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
@@ -154,7 +154,8 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
     await assertAdoptedSnapshotCurrent({
       sourcePath: adoption.transcriptPath,
       preparedPath: prepared.transcriptPath,
-      writerGate: writerGate ? () => writerGate(input.providerSessionId) : undefined
+      writerGate: writerGate ? () => writerGate(input.providerSessionId) : undefined,
+      removeCopyOnRefusal: prepared.copiedRollout === true
     })
     return { ...prepared, conversationName, folder }
   } catch (error) {
@@ -174,17 +175,29 @@ export async function assertAdoptedSnapshotCurrent(input: {
   sourcePath: string
   preparedPath: string
   writerGate?: () => Promise<void>
+  /** Only a copy this create installed is its own to remove; a link or a file found in place is shared. */
+  removeCopyOnRefusal?: boolean
 }): Promise<void> {
   if (!(await isSnapshotOfSource(input.sourcePath, input.preparedPath))) {
     return
   }
-  await input.writerGate?.()
-  if (!(await transcriptFilesHaveSameContents(input.sourcePath, input.preparedPath))) {
-    throw agentSessionRefusalError(
-      'agent_session_identity_required',
-      { reason: 'transcriptUnreadable' },
-      'The conversation changed after its transcript copy was prepared.'
-    )
+  try {
+    await input.writerGate?.()
+    if (!(await transcriptFilesHaveSameContents(input.sourcePath, input.preparedPath))) {
+      throw agentSessionRefusalError(
+        'agent_session_identity_required',
+        { reason: 'transcriptUnreadable' },
+        'The conversation changed after its transcript copy was prepared.'
+      )
+    }
+  } catch (error) {
+    if (input.removeCopyOnRefusal) {
+      // Kept, a refused copy fails every later attempt as a different rollout occupying the path.
+      await rm(input.preparedPath, { force: true }).catch((cleanupError: unknown) => {
+        console.warn('[agent-session] A refused transcript copy stays in place:', cleanupError)
+      })
+    }
+    throw error
   }
 }
 
