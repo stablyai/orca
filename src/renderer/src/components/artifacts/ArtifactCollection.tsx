@@ -100,6 +100,14 @@ export function ArtifactCollection({
 
   const { clear: clearSelection } = selection
   const selecting = selection.checkedSlugs.size > 0
+  // Why: a bulk delete prunes one checked row at a time; holding the announced count until the batch
+  // settles reads it once (the final count, or nothing once all are gone), not once per removed row.
+  const liveSelectedCount = selecting ? checkedItems.length : 0
+  const [announcedSelectedCount, setAnnouncedSelectedCount] = useState(liveSelectedCount)
+  const deletingChecked = checkedItems.some(({ artifact }) => deletingSlugs.has(artifact.slug))
+  if (!deletingChecked && announcedSelectedCount !== liveSelectedCount) {
+    setAnnouncedSelectedCount(liveSelectedCount)
+  }
   useEffect(() => {
     clearSelectionRef.current = selecting
       ? () => {
@@ -152,9 +160,9 @@ export function ArtifactCollection({
       />
       {/* Mounted before any row is checked so the first count is announced, not just inserted. */}
       <span className="sr-only" aria-live="polite">
-        {selecting
+        {announcedSelectedCount > 0
           ? t('auto.components.artifacts.ArtifactListSelectionBar.selected', '{{count}} selected', {
-              count: checkedItems.length,
+              count: announcedSelectedCount,
               defaultValue_one: '{{count}} selected'
             })
           : ''}

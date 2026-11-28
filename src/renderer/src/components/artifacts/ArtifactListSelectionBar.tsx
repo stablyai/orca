@@ -23,12 +23,17 @@ export function ArtifactListSelectionBar({
           defaultValue_one: '{{count}} selected'
         })}
       </span>
+      {/* Why aria-disabled, not disabled: the pressed Delete keeps focus while its batch runs. */}
       <Button
         type="button"
         variant="outline"
         size="toolbar"
-        disabled={deleteDisabled}
-        onClick={onDelete}
+        aria-disabled={deleteDisabled || undefined}
+        onClick={() => {
+          if (!deleteDisabled) {
+            onDelete()
+          }
+        }}
       >
         <Trash2 className="size-3.5" />
         {t('auto.components.artifacts.ArtifactListSelectionBar.delete', 'Delete')}

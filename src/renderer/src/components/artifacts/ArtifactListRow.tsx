@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import {
   Copy,
   ExternalLink,
@@ -125,6 +125,11 @@ export function ArtifactListRow({
   const expiryLabel = formatArtifactExpiryCompact(item.artifact.expiresAt, t, intlLocale)
   const sizeLabel = formatByteSize(item.artifact.byteSize)
   const rowActions = artifactRowActions(item, deleting, deleteArtifact, t)
+  // Why: the checkbox shows on hover, focus-within or while selecting; it joins the tab order only
+  // while shown from the keyboard, so Shift+Tab from the focused name reaches it and Tab skips it otherwise.
+  const [focusWithin, setFocusWithin] = useState(false)
+  // Why scroll-mt-12 on each row control: they take focus, not the row, so the row's scroll-mt-8 never
+  // applies. 12 clears the sticky h-8 header plus the row's top padding, so the focused control's row stays in view.
 
   return (
     // Non-modal, so scrolling is never blocked: windowing unmounting an open menu mid-scroll reads as dismissal.
@@ -134,6 +139,13 @@ export function ArtifactListRow({
             so none is nested in another; a click anywhere on the row still opens it. */}
         <div
           data-current={isSelected ? 'true' : undefined}
+          onFocus={() => setFocusWithin(true)}
+          onBlur={(event) => {
+            const next = event.relatedTarget
+            if (!(next instanceof Node) || !event.currentTarget.contains(next)) {
+              setFocusWithin(false)
+            }
+          }}
           onMouseDown={(event) => {
             // Shift-click extends the check range; keep it from also selecting row text.
             if (event.shiftKey) {
@@ -179,6 +191,8 @@ export function ArtifactListRow({
               >
                 <Checkbox
                   checked={checked}
+                  tabIndex={selecting || focusWithin ? undefined : -1}
+                  className="scroll-mt-12"
                   aria-label={t(
                     'auto.components.artifacts.ArtifactListRow.select',
                     'Select {{name}}',
@@ -197,7 +211,7 @@ export function ArtifactListRow({
             {/* The keyboard path to open the row: Enter/Space click it and the click reaches the row. */}
             <button
               type="button"
-              className="min-w-0 truncate rounded-sm text-left font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="min-w-0 scroll-mt-12 truncate rounded-sm text-left font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               title={name}
             >
               {name}
@@ -239,7 +253,7 @@ export function ArtifactListRow({
                 type="button"
                 variant="ghost-muted"
                 size="icon-toolbar"
-                className="justify-self-end"
+                className="scroll-mt-12 justify-self-end"
                 aria-label={t('auto.components.artifacts.actions', 'Artifact actions')}
                 onClick={(event) => event.stopPropagation()}
               >

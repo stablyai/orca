@@ -93,3 +93,21 @@ describe('filterArtifactList expires', () => {
     expect(run('week')).toEqual(['soon'])
   })
 })
+
+describe('filterArtifactList updated today', () => {
+  // Built from local fields: Today starts at local midnight, so a UTC fixture would shift by timezone.
+  const now = new Date(2026, 5, 15, 12, 0, 0).getTime()
+  const midnight = new Date(2026, 5, 15, 0, 0, 0).getTime()
+  const at = (ms: number): string => new Date(ms).toISOString()
+  const rows = [
+    item('yesterday', at(midnight - 1), at(now + DAY)),
+    item('midnight', at(midnight), at(now + DAY)),
+    item('now', at(now), at(now + DAY)),
+    item('bad', 'not-a-date', at(now + DAY))
+  ]
+
+  it('keeps rows from local midnight on and drops earlier or unparseable updates', () => {
+    const filter = { ...EMPTY_ARTIFACT_LIST_FILTER, updated: 'today' as const }
+    expect(slugs(filterArtifactList(rows, filter, now))).toEqual(['midnight', 'now'])
+  })
+})
