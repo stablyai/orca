@@ -171,7 +171,7 @@ describe('mail to a terminal working another Orca Task', () => {
     expect(db.getMessageById(question.id)?.read).toBeFalsy()
   })
 
-  it('refuses a reply routed to the sender\'s former Run once it attached while the reply awaited', async () => {
+  it("refuses a reply routed to the sender's former Run once it attached while the reply awaited", async () => {
     setup()
     const former = db.createRun({
       objective: 'Former Run',

@@ -277,10 +277,7 @@ export function resolveBareOrchestrationRecipient(params: {
           ? db.runsBoundToPane(paneKey)
           : [],
     dispatches,
-    legacyAttachment: () =>
-      params.keepLegacyAttachedRouting
-        ? undefined
-        : legacyAttachedRecipient(db, params.handle, party.terminalHandle, paneKey),
+    legacyAttachment: () => legacyAttachedRecipient(db, params, party.terminalHandle, paneKey),
     ownerRunIds: () => db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner),
     fallback: () => {
       if (session) {

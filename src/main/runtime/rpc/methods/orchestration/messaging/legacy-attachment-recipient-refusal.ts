@@ -48,13 +48,15 @@ function retainedLiveAttachment(db: OrchestrationDb, terminalHandle: string) {
 /** The resolver step: a bare terminal another Orca's Task holds, by live pane or recorded handle. */
 export function legacyAttachedRecipient(
   db: OrchestrationDb,
-  recipient: string,
+  recipient: { handle: string; keepLegacyAttachedRouting?: true },
   terminalHandle: string | null,
   livePaneKey: string | undefined
 ): BareRecipientResolution | undefined {
   const refusal =
-    terminalHandle === null ? undefined : legacyAttachmentRefusal(db, terminalHandle, livePaneKey)
-  return refusal && refusedRecipient(recipient, refusal)
+    terminalHandle === null || recipient.keepLegacyAttachedRouting
+      ? undefined
+      : legacyAttachmentRefusal(db, terminalHandle, livePaneKey)
+  return refusal && refusedRecipient(recipient.handle, refusal)
 }
 
 export function refusedRecipient(
