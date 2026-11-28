@@ -11,7 +11,7 @@ const HIGH_WATER_BYTES = 4 * 1024 * 1024
 const LOW_WATER_BYTES = 1024 * 1024
 const PRESSURED_SESSION_HIGH_WATER_BYTES = 64 * 1024
 const PRESSURED_SESSION_LOW_WATER_BYTES = 32 * 1024
-// A stalled session resumes without shedding only when its client completed a socket write this recently.
+// A stalled session resumes without shedding only when its own output was delivered this recently.
 const DELIVERY_PROGRESS_WINDOW_MS = 10_000
 
 type StallReason = 'input' | 'timeout'
@@ -20,14 +20,6 @@ type ClientBacklog = {
   queuedChars: Map<string, number>
   queuedMetadataBytes: Map<string, number>
   pendingWriteBytes: Map<string, number>
-}
-
-function holdsSessionOutput(client: ClientBacklog, sessionId: string): boolean {
-  return (
-    client.queuedChars.has(sessionId) ||
-    client.queuedMetadataBytes.has(sessionId) ||
-    client.pendingWriteBytes.has(sessionId)
-  )
 }
 
 /** Counts held strings and socket writes together, including small writes that bypass the hold. */
@@ -39,8 +31,8 @@ export class DaemonStreamBackpressure {
   // Keep-tail dropping bounds stalled consumers; pausing again would freeze the shell behind them.
   private readonly stallReleasedSessions = new Set<string>()
   private pressured = false
-  // Only real socket write completions count; kept apart from pruned backlogs so recreation never looks like progress.
-  private readonly lastWriteCompletedAtByClient = new Map<string, number>()
+  // A paused session's own completed writes since it paused; cleared on resume, so it never outlives the pause.
+  private readonly deliveredAtByPausedSession = new Map<string, number>()
   private readonly longPauseLog = new LongPauseLogLimiter()
 
   constructor(
@@ -84,8 +76,12 @@ export class DaemonStreamBackpressure {
     socket.write(line, (error?: Error | null) => {
       // A disconnected client's callbacks must not debit a replacement connection's writes.
       if (this.clients.get(clientId) === client) {
-        if (!error) {
-          this.lastWriteCompletedAtByClient.set(clientId, Date.now())
+        if (
+          !error &&
+          this.pausedAtBySession.has(sessionId) &&
+          this.ownsSession(clientId, sessionId)
+        ) {
+          this.deliveredAtByPausedSession.set(sessionId, Date.now())
         }
         const remaining = (client.pendingWriteBytes.get(sessionId) ?? 0) - bytes
         if (remaining > 0) {
@@ -102,6 +98,18 @@ export class DaemonStreamBackpressure {
 
   refresh(): void {
     const bytesBySession = new Map<string, number>()
+    // Sessions big enough to pause at either watermark; the decision pass visits only these and the paused ones.
+    const pauseCandidates: string[] = []
+    const addSessionBytes = (sessionId: string, bytes: number): void => {
+      const before = bytesBySession.get(sessionId) ?? 0
+      bytesBySession.set(sessionId, before + bytes)
+      if (
+        before < PRESSURED_SESSION_HIGH_WATER_BYTES &&
+        before + bytes >= PRESSURED_SESSION_HIGH_WATER_BYTES
+      ) {
+        pauseCandidates.push(sessionId)
+      }
+    }
     // Include droppable data: stall release ends only when all queued and in-flight bytes leave.
     const accountedSessions = new Set<string>()
     let total = 0
@@ -115,7 +123,7 @@ export class DaemonStreamBackpressure {
         const bytes = 2 * chars
         total += bytes
         if (this.ownsSession(clientId, sessionId)) {
-          bytesBySession.set(sessionId, (bytesBySession.get(sessionId) ?? 0) + bytes)
+          addSessionBytes(sessionId, bytes)
         }
       }
       for (const counts of [client.queuedMetadataBytes, client.pendingWriteBytes]) {
@@ -123,7 +131,7 @@ export class DaemonStreamBackpressure {
           accountedSessions.add(sessionId)
           total += bytes
           if (this.ownsSession(clientId, sessionId)) {
-            bytesBySession.set(sessionId, (bytesBySession.get(sessionId) ?? 0) + bytes)
+            addSessionBytes(sessionId, bytes)
           }
         }
       }
@@ -143,20 +151,18 @@ export class DaemonStreamBackpressure {
         this.resume(sessionId, 'drained')
       }
     }
-    for (const [sessionId, bytes] of bytesBySession) {
+    for (const sessionId of pauseCandidates) {
       if (
-        bytes < pauseAt ||
+        this.pausedAtBySession.has(sessionId) ||
+        (bytesBySession.get(sessionId) ?? 0) < pauseAt ||
         this.stallReleasedSessions.has(sessionId) ||
         // Background output has its own keep-tail budget; pause it only as the last resort.
         (!this.pressured && this.isDroppable(sessionId))
       ) {
         continue
       }
-      // Detach/termination may have released the session's pause since the last update.
-      const paused = this.setPaused(sessionId, true, (reason) => this.onStall(sessionId, reason))
-      if (paused === false) {
-        this.pausedAtBySession.delete(sessionId)
-      } else if (!this.pausedAtBySession.has(sessionId)) {
+      // Sent once per pause; a detach that releases the producer meanwhile is settled when the backlog drains.
+      if (this.setPaused(sessionId, true, (reason) => this.onStall(sessionId, reason)) !== false) {
         this.pausedAtBySession.set(sessionId, Date.now())
       }
     }
@@ -186,20 +192,8 @@ export class DaemonStreamBackpressure {
   }
 
   private deliveryProgressed(sessionId: string): boolean {
-    // Only clients still holding this session's output can prove it is draining; an idle sibling can't.
-    const now = Date.now()
-    for (const [clientId, client] of this.clients) {
-      const completedAt = this.lastWriteCompletedAtByClient.get(clientId)
-      if (
-        completedAt !== undefined &&
-        now - completedAt < DELIVERY_PROGRESS_WINDOW_MS &&
-        this.ownsSession(clientId, sessionId) &&
-        holdsSessionOutput(client, sessionId)
-      ) {
-        return true
-      }
-    }
-    return false
+    const deliveredAt = this.deliveredAtByPausedSession.get(sessionId)
+    return deliveredAt !== undefined && Date.now() - deliveredAt < DELIVERY_PROGRESS_WINDOW_MS
   }
 
   /** Release a stalled producer into keep-tail dropping; lost contact does not prove child exit. */
@@ -219,11 +213,9 @@ export class DaemonStreamBackpressure {
   clear(clientId?: string): void {
     if (clientId === undefined) {
       this.clients.clear()
-      this.lastWriteCompletedAtByClient.clear()
       this.stallReleasedSessions.clear()
     } else {
       this.clients.delete(clientId)
-      this.lastWriteCompletedAtByClient.delete(clientId)
     }
     this.refresh()
   }
@@ -231,6 +223,7 @@ export class DaemonStreamBackpressure {
   private resume(sessionId: string, reason: string): void {
     const pausedAt = this.pausedAtBySession.get(sessionId)
     this.pausedAtBySession.delete(sessionId)
+    this.deliveredAtByPausedSession.delete(sessionId)
     this.setPaused(sessionId, false)
     const pausedMs = pausedAt === undefined ? 0 : Date.now() - pausedAt
     const suppressed = this.longPauseLog.admit(pausedMs, reason.startsWith('timeout'))

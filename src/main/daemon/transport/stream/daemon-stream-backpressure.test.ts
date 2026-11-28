@@ -1,4 +1,4 @@
-import { PassThrough } from 'node:stream'
+import { Writable } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonStreamBackpressure } from './daemon-stream-backpressure'
 import { SessionProducerPause } from '../../sessions/session-producer-pause'
@@ -83,15 +83,57 @@ describe('DaemonStreamBackpressure', () => {
 
   it('resumes a draining consumer on typed input without shedding', async () => {
     const { backpressure, paused, stall } = recordingBackpressure()
-    const socket = new PassThrough()
-    socket.resume()
-    backpressure.write('client', 'tui', socket, 'x')
-    await new Promise((resolve) => setImmediate(resolve))
     backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
     expect(paused.get('tui')).toBe(true)
+    backpressure.write('client', 'tui', completingSocket(), 'x')
+    await new Promise((resolve) => process.nextTick(resolve))
 
     stall()?.('input')
     expect(paused.get('tui')).toBe(false)
     expect(backpressure.isStallReleased('tui')).toBe(false)
   })
+
+  it("sheds a held session at 60 s even while a sibling's writes keep completing", async () => {
+    const { backpressure, stall } = recordingBackpressure()
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    backpressure.write('client', 'echo', completingSocket(), 'x')
+    await new Promise((resolve) => process.nextTick(resolve))
+
+    stall()?.('timeout')
+    expect(backpressure.isStallReleased('tui')).toBe(true)
+  })
+
+  it.each([300, 3_000])(
+    'an unrelated update makes no pause calls with %i quiet sessions and 10 paused floods',
+    (quietSessions) => {
+      let pauseCalls = 0
+      const backpressure = new DaemonStreamBackpressure(
+        () => {
+          pauseCalls += 1
+        },
+        () => false
+      )
+      const queued = new Map<string, number>()
+      for (let i = 0; i < quietSessions; i++) {
+        queued.set(`quiet-${i}`, 100)
+      }
+      for (let i = 0; i < 10; i++) {
+        queued.set(`flood-${i}`, 200 * 1024)
+      }
+      backpressure.setQueued('client', queued)
+      expect(pauseCalls).toBe(10)
+
+      queued.set('quiet-0', 101)
+      backpressure.setQueued('client', queued)
+      expect(pauseCalls).toBe(10)
+    }
+  )
 })
+
+function completingSocket(): Writable {
+  return new Writable({
+    write(_chunk, _encoding, done) {
+      done()
+    }
+  })
+}
