@@ -9,7 +9,6 @@ import { expect, test } from './helpers/orca-app'
 import { waitForActiveTerminalManager } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
 import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 const execFileAsync = promisify(execFile)
@@ -123,10 +122,6 @@ test('a CLI split runs its command while the window is stalled, and the window s
   electronApp,
   orcaPage
 }, testInfo) => {
-  // Fails on darwin every run; passed on the Linux lane.
-  if (process.platform === 'darwin') {
-    knownSwitchOnFailure('A3')
-  }
   test.skip(!LAYOUT_OWNER_SWITCH_ON, 'layout-owner path only')
   test.setTimeout(180_000)
   await waitForSessionReady(orcaPage)

@@ -1,3 +1,5 @@
+// First: config loads in the runner and every worker, before any seeding git call or app launch.
+import '../config/scripts/test-runtime/environment/inherited-git-env-setup'
 import { defineConfig } from '@stablyai/playwright-test'
 import { isAgent } from 'std-env'
 import { resolveBuildSourceCommit } from '../config/scripts/build-identity/build-source-commit.mjs'

@@ -17,6 +17,7 @@ import { retireTerminalSurfaceFromPersistence } from '../../terminal/surface/mob
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import { attachRetirementProofsToSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement-proof'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import { fenceExitClosedPane } from '../../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
 
 export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntimeWithTouchMobileSessionTabsForWorktree {
   protected abstract findHandleForPtyRecord(
@@ -66,6 +67,9 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
         // The existing catch handles a missing store setter.
         this.store!.setWorkspaceSession!(next, hostId)
         accepted.push(surface)
+        if (exit) {
+          fenceExitClosedPane(`${surface.parentTabId}:${surface.leafId}`)
+        }
       } catch (error) {
         // The process is gone even when quit/maintenance prevents profile writes.
         console.error('[runtime] could not stage terminal retirement:', error)

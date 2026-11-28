@@ -94,7 +94,15 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
       stopBeforeWrite: (ptyIds) =>
         stopReplacedTerminals(ptyIds, (ptyId) => {
           this.forgetRestoredPaneStart(ptyId)
-          return this.ptyController?.kill(ptyId) ?? false
+          // 'replaced': a late exit must leave the pane for the start that replaces this terminal.
+          const settleStop = this.intentionalPtyStops.mark(
+            ptyId,
+            'replaced',
+            this.ptysById.get(ptyId)?.incarnationId ?? null
+          )
+          const killed = this.ptyController?.kill(ptyId) ?? false
+          settleStop(killed)
+          return killed
         }),
       onEffects: (effects) =>
         runLayoutPaneStarts({ type: command.type, workspace }, effects, (pane) =>
