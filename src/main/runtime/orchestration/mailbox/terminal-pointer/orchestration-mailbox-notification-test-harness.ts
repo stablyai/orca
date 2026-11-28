@@ -93,7 +93,11 @@ class MailboxRuntime extends OrcaRuntimeService {
   }
 
   /** The one resume every slept-pane wake takes. */
-  resumeSleptPane(worktreeId: string, paneKey: string, opts: SleptPaneResume): Promise<boolean> {
+  resumeSleptPaneForTest(
+    worktreeId: string,
+    paneKey: string,
+    opts: SleptPaneResume
+  ): Promise<boolean> {
     return this.resumeSleptPaneTerminal(worktreeId, paneKey, opts)
   }
 

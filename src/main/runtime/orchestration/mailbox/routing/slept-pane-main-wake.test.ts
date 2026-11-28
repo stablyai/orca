@@ -48,7 +48,7 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('main wakes a slept pane it owns', () 
     const starts = recordStarts(slept.runtime)
 
     await expect(
-      slept.runtime.resumeSleptPane(WORKTREE_ID, PANE_KEY, { launchToken: 'mail-wake-1' })
+      slept.runtime.resumeSleptPaneForTest(WORKTREE_ID, PANE_KEY, { launchToken: 'mail-wake-1' })
     ).resolves.toBe(true)
     expect(starts).toEqual([{ paneKey: PANE_KEY, launchToken: 'mail-wake-1' }])
     slept.db.close()
@@ -72,7 +72,9 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('main wakes a slept pane it owns', () 
     const starts = recordStarts(slept.runtime)
     closeTabFirst(slept.runtime, { worktreeId: WORKTREE_ID, tabId: TAB_ID })
 
-    await expect(slept.runtime.resumeSleptPane(WORKTREE_ID, PANE_KEY, {})).resolves.toBe(false)
+    await expect(slept.runtime.resumeSleptPaneForTest(WORKTREE_ID, PANE_KEY, {})).resolves.toBe(
+      false
+    )
     await slept.runtime.resumeSleptWorkspaceAgents(WORKTREE_ID)
     expect(starts).toEqual([])
     slept.db.close()
