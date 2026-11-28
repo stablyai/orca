@@ -5247,7 +5247,7 @@
       "started": "Iniciado",
       "trigger": "Desencadenante",
       "output": "Salida",
-      "noOutput": "Sin salida.",
+      "noOutput": "Salida no disponible.",
       "loadingRuns": "Cargando ejecuciones…",
       "loading": "Cargando…",
       "hourly": "Cada hora",

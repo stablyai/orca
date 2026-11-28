@@ -5253,7 +5253,7 @@
       "started": "Iniciado",
       "trigger": "Acionador",
       "output": "Saída",
-      "noOutput": "Sem saída.",
+      "noOutput": "Saída indisponível.",
       "loadingRuns": "Carregando execuções…",
       "loading": "Carregando…",
       "hourly": "De hora em hora",

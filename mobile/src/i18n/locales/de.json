@@ -5099,7 +5099,7 @@
       "started": "Gestartet",
       "trigger": "Auslöser",
       "output": "Ausgabe",
-      "noOutput": "Keine Ausgabe.",
+      "noOutput": "Keine Ausgabe verfügbar.",
       "loadingRuns": "Ausführungen werden geladen…",
       "loading": "Wird geladen…",
       "hourly": "Stündlich",

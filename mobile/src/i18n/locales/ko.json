@@ -5102,7 +5102,7 @@
       "started": "시작됨",
       "trigger": "트리거",
       "output": "출력",
-      "noOutput": "출력이 없습니다.",
+      "noOutput": "볼 수 있는 출력이 없습니다.",
       "loadingRuns": "실행 로드 중…",
       "loading": "로드 중…",
       "hourly": "매시간",

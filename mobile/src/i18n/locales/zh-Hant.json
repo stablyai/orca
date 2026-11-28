@@ -5096,7 +5096,7 @@
       "started": "開始",
       "trigger": "觸發",
       "output": "輸出",
-      "noOutput": "沒有輸出。",
+      "noOutput": "沒有可用輸出。",
       "loadingRuns": "正在載入執行...",
       "loading": "載入中…",
       "hourly": "每小時",

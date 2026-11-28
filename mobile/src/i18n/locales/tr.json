@@ -5445,7 +5445,7 @@
       "started": "Başladı",
       "trigger": "Tetikleyici",
       "output": "Çıktı",
-      "noOutput": "Çıktı yok.",
+      "noOutput": "Gösterilecek çıktı yok.",
       "loadingRuns": "Çalıştırmalar yükleniyor…",
       "loading": "Yükleniyor…",
       "hourly": "Saatlik",

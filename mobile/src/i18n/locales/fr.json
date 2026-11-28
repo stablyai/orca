@@ -5246,7 +5246,7 @@
       "started": "Démarré",
       "trigger": "Déclenchement",
       "output": "Sortie",
-      "noOutput": "Aucune sortie.",
+      "noOutput": "Aucune sortie disponible.",
       "loadingRuns": "Chargement des exécutions…",
       "loading": "Chargement…",
       "hourly": "Toutes les heures",

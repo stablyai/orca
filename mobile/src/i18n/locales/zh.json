@@ -5307,7 +5307,7 @@
       "started": "开始",
       "trigger": "触发",
       "output": "输出",
-      "noOutput": "没有输出",
+      "noOutput": "没有可用输出",
       "loadingRuns": "正在加载运行…",
       "loading": "加载中…",
       "hourly": "每小时",
