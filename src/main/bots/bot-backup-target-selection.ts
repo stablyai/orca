@@ -52,12 +52,17 @@ export async function pickReadyBotBackup(
     if (attempted?.has(botModelTargetKey(candidate))) {
       continue
     }
+    const sameAgentSession = candidate.agent === current.agent ? current.sessionId : undefined
+    if (
+      candidate.model &&
+      deps.isBackupModelOffered &&
+      !(await deps.isBackupModelOffered(bot, candidate, sameAgentSession))
+    ) {
+      continue
+    }
     const key: BotUsageLimitKey = {
       agent: candidate.agent,
-      accountHomeKey: await deps.resolveAccountHomeKey(
-        candidate.agent,
-        candidate.agent === current.agent ? current.sessionId : undefined
-      ),
+      accountHomeKey: await deps.resolveAccountHomeKey(candidate.agent, sameAgentSession),
       model: candidate.model ?? ''
     }
     if (await deps.gate.verifyReturnReady(key)) {
@@ -105,7 +110,8 @@ export async function resolveBotLaunchSetup(
         await deps.updateBot(bot.id, (stored) =>
           !stored.activeBackup &&
           sameBackupPolicy(current, stored) &&
-          !deps.gate.isLimited(ready.key)
+          !deps.gate.isLimited(ready.key) &&
+          deps.gate.isLimited(primaryKey)
             ? {
                 activeBackup: {
                   target: ready.target,
@@ -131,16 +137,13 @@ export async function isCurrentBotCut(
   session: BotFailoverSessionInfo,
   cut: HostUsageLimitCut
 ): Promise<boolean> {
-  const liveCut = await deps.readSessionCut(session.sessionId)
-  if (liveCut?.turnItemId !== cut.turnItemId) {
-    return false
-  }
   const liveSession = await deps.getSessionInfo(session.sessionId)
   return (
     liveSession?.isIdle === true &&
     liveSession.runtimeFence === session.runtimeFence &&
     liveSession.provider === session.provider &&
-    liveSession.model === session.model
+    liveSession.model === session.model &&
+    (await deps.readSessionCut(session.sessionId))?.turnItemId === cut.turnItemId
   )
 }
 
@@ -219,7 +222,7 @@ export async function selectAndSwitchBotBackup(
       }
     } catch (error) {
       if (error instanceof BotHandoffRollbackError) {
-        console.warn('[bots] could not restore routing after backup handoff', error)
+        console.warn('[bots] could not complete a backup switch safely', error)
         return { state: 'backups-exhausted', bot }
       }
       attempted.add(targetKey)

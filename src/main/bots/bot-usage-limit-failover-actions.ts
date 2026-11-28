@@ -89,15 +89,16 @@ export async function returnBackupToPrimary(
     pendingForcedReturns.delete(botId)
     return false
   }
+  const active = bot.activeBackup
   const primaryModel = bot.launch?.model ?? bot.activeBackup.primaryModel
-  if (
-    !force &&
-    !(await deps.gate.verifyReturnReady({
-      agent: bot.agent,
-      accountHomeKey: await deps.resolveAccountHomeKey(bot.agent, bot.chatSessionId ?? undefined),
-      model: primaryModel ?? ''
-    }))
-  ) {
+  const primaryKey = force
+    ? null
+    : {
+        agent: bot.agent,
+        accountHomeKey: await deps.resolveAccountHomeKey(bot.agent, bot.chatSessionId ?? undefined),
+        model: primaryModel ?? ''
+      }
+  if (primaryKey && !(await deps.gate.verifyReturnReady(primaryKey))) {
     return false
   }
   const home = bot.chatSessionId ? await deps.getSessionInfo(bot.chatSessionId) : null
@@ -107,7 +108,20 @@ export async function returnBackupToPrimary(
     }
     return false
   }
-  pendingForcedReturns.delete(botId)
+  const isSameBackup = (latest: typeof bot) =>
+    latest.activeBackup?.switchedAt === active.switchedAt &&
+    sameBotModelTarget(latest.activeBackup.target, active.target)
+  const mayReturn = async () => {
+    const live = home ? await deps.getSessionInfo(home.sessionId) : null
+    const latest = deps.listBots().find((entry) => entry.id === botId)
+    return (
+      !!latest &&
+      latest.chatSessionId === bot.chatSessionId &&
+      isSameBackup(latest) &&
+      (!home || (live?.isIdle === true && live.runtimeFence === home.runtimeFence)) &&
+      (!primaryKey || !deps.gate.isLimited(primaryKey))
+    )
+  }
   if (
     home &&
     !(await returnHomeChatToPrimary(deps, withProgrammaticOptions, {
@@ -116,18 +130,21 @@ export async function returnBackupToPrimary(
       fromTarget: bot.activeBackup.target,
       primaryModel,
       manual: force,
-      now: now()
+      now: now(),
+      mayReturn
     }))
   ) {
     return false
   }
-  const active = bot.activeBackup
-  await deps.updateBot(botId, (latest) =>
-    latest.activeBackup?.switchedAt === active.switchedAt &&
-    sameBotModelTarget(latest.activeBackup.target, active.target)
+  const returned = await deps.updateBot(botId, (latest) =>
+    isSameBackup(latest) && (home || !primaryKey || !deps.gate.isLimited(primaryKey))
       ? { activeBackup: null }
       : {}
   )
+  if (returned.activeBackup) {
+    return false
+  }
+  pendingForcedReturns.delete(botId)
   return true
 }
 

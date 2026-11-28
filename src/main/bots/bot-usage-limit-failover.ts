@@ -15,6 +15,7 @@ import type {
   BotUsageLimitFailoverDeps
 } from './bot-usage-limit-failover-execution'
 import {
+  isCurrentBotCut,
   resolveBotLaunchSetup,
   selectAndSwitchBotBackup,
   type BotLaunchSelection
@@ -33,6 +34,7 @@ export class BotUsageLimitFailover {
   private readonly cutStates = new Map<string, BotCutBackupState>()
   private readonly attemptedByCut = new Map<string, { turnItemId: string; targets: Set<string> }>()
   private readonly inFlightCuts = new Set<string>()
+  private readonly pendingRechecks = new Set<string>()
   private readonly switchingCuts = new Set<string>()
   private readonly observedCuts = new Map<
     string,
@@ -74,7 +76,9 @@ export class BotUsageLimitFailover {
 
   /** Resolves the setup a new bot session or automation run should launch with. */
   async resolveLaunchSetup(bot: Bot): Promise<BotLaunchSelection> {
-    return resolveBotLaunchSetup(this.deps, bot, this.now())
+    return runKeyedSerializedOperation(this.botQueues, bot.id, () =>
+      resolveBotLaunchSetup(this.deps, bot, this.now())
+    )
   }
 
   /** Called when a structured session observes a usage-limit cut. */
@@ -85,6 +89,9 @@ export class BotUsageLimitFailover {
     }
     const dedupeKey = `${sessionId}:${cut.turnItemId}`
     if (this.inFlightCuts.has(dedupeKey)) {
+      if (recheck) {
+        this.pendingRechecks.add(dedupeKey)
+      }
       return
     }
     const state = this.readCutBackupState(sessionId, cut.turnItemId)
@@ -109,6 +116,12 @@ export class BotUsageLimitFailover {
       this.inFlightCuts.delete(dedupeKey)
       this.switchingCuts.delete(dedupeKey)
       releaseWatch?.()
+      if (this.pendingRechecks.delete(dedupeKey)) {
+        const live = await this.deps.readSessionCut(sessionId)
+        if (live?.turnItemId === cut.turnItemId) {
+          await this.onUsageLimitCut(sessionId, live, true)
+        }
+      }
     }
   }
 
@@ -200,6 +213,9 @@ export class BotUsageLimitFailover {
       return
     }
     const accountHomeKey = await this.deps.resolveAccountHomeKey(session.provider, sessionId)
+    if (!(await isCurrentBotCut(this.deps, session, cut))) {
+      return
+    }
     const key = {
       agent: session.provider,
       accountHomeKey,

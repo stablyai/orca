@@ -21,6 +21,7 @@ import { checkStartupBackupReturns, readBotBackupStatus } from './bot-backup-sta
 import { BotUsageLimitGate, type BotUsageLimitKey } from './bot-usage-limit-gate'
 import { BotUsageLimitFailover } from './bot-usage-limit-failover'
 import { applySameAgentOptionsOnHost } from './bot-backup-session-options'
+import { botHomeFolder } from './bot-home'
 
 const AVAILABLE_AGENTS_CACHE_MS = 15_000
 
@@ -124,6 +125,7 @@ export function createRuntimeBotUsageLimitFailover(
         sessionId,
         provider: record.provider,
         ...(record.options?.model ? { model: record.options.model } : {}),
+        options: record.options,
         isIdle: !work || (!work.working() && !work.hasActionablePrompt()),
         runtimeFence: record.lease.runtimeFence
       }
@@ -131,6 +133,26 @@ export function createRuntimeBotUsageLimitFailover(
     resolveAccountHomeKey,
     holdTurnWatch: holdBotTurnWatch,
     availableAgents,
+    isBackupModelOffered: async (bot, target, sessionId) => {
+      const catalog = await runtime.structuredAgentModelCatalog().catch(() => null)
+      const listing = await catalog
+        ?.read({
+          agent: target.agent,
+          ...(sessionId ? { sessionId } : { workspacePath: botHomeFolder(bot) }),
+          waitForListing: false,
+          verifiedOnly: true
+        })
+        .catch(() => null)
+      // A cold or provisional listing does not prove that a configured model disappeared.
+      return (
+        !listing ||
+        listing.origin === 'unknown' ||
+        listing.listingInProgress === true ||
+        listing.models.some(
+          (model) => model.id === target.model || model.resolvedModel === target.model
+        )
+      )
+    },
     applySameAgentOptions: applySameAgentOptionsOnHost,
     sendSameAgentContinuation: async (sessionId, cut, runtimeFence) => {
       const host = getStructuredAgentSessionHost()

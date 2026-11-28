@@ -397,21 +397,25 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     h.gate.dispose()
   })
 
-  it('pre-routes resolveLaunchSetup to ready backup when primary is currently held', async () => {
-    const h = createHarness(createBot())
-    h.gate.recordLimit({
-      agent: 'claude',
+  it('skips a delisted model and keeps a launched backup inactive if the primary recovered', async () => {
+    const h = createHarness(createBot(), [], {
+      isBackupModelOffered: async (_bot, target) => target.agent === 'codex'
+    })
+    const primary = {
+      agent: 'claude' as const,
       accountHomeKey: 'acct-a',
       model: 'claude-sonnet-4-5',
       resetsAt: NOW + 600_000
-    })
+    }
+    h.gate.recordLimit(primary)
 
     const resolved = await h.failover.resolveLaunchSetup(h.getBot())
-    expect(resolved.agent).toBe('claude')
-    expect(resolved.launch?.model).toBe('claude-haiku-4-5')
+    expect(resolved.agent).toBe('codex')
+    expect(resolved.launch?.model).toBe('gpt-5-codex')
     expect(h.getBot().activeBackup).toBeUndefined()
+    h.gate.recordSuccess(primary)
     await resolved.markActive?.()
-    expect(h.getBot().activeBackup?.target.model).toBe('claude-haiku-4-5')
+    expect(h.getBot().activeBackup).toBeUndefined()
     h.gate.dispose()
   })
 
@@ -444,6 +448,18 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
       chain: 1
     })
     expect(h.getBot().activeBackup?.target).toEqual({ agent: 'claude', model: 'claude-haiku-4-5' })
+    expect(h.startedSessions).toEqual([])
+    h.gate.dispose()
+  })
+
+  it('does not change the session or try a second backup when recording the switch fails', async () => {
+    const h = createHarness(createBot(), [], {
+      updateBot: async () => {
+        throw new Error('storage offline')
+      }
+    })
+    await h.observeCut('session-home', { turnItemId: 'turn-1', chain: 1 })
+    expect(h.sessions.get('session-home')?.model).toBe('claude-sonnet-4-5')
     expect(h.startedSessions).toEqual([])
     h.gate.dispose()
   })

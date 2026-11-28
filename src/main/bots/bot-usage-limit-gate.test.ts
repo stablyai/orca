@@ -37,7 +37,17 @@ describe('BotUsageLimitGate', () => {
     expect(gate.isLimited(CLAUDE_SONNET)).toBe(false)
 
     const defaultKey = { ...CLAUDE_SONNET, model: '' }
-    gate.recordLimit({ ...defaultKey, observedModel: CLAUDE_SONNET.model })
+    gate.recordLimit({
+      ...defaultKey,
+      observedModel: 'claude-haiku-4-5',
+      resetsAt: Date.now() + 90_000
+    })
+    gate.recordLimit({
+      ...defaultKey,
+      observedModel: CLAUDE_SONNET.model,
+      resetsAt: Date.now() + 20_000
+    })
+    expect(gate.limitResetAt(defaultKey)).toBe(Date.now() + 20_000)
     gate.recordSuccess({ ...CLAUDE_SONNET, model: 'claude-haiku-4-5' })
     expect(gate.isLimited(defaultKey)).toBe(true)
     gate.recordSuccess(CLAUDE_SONNET)

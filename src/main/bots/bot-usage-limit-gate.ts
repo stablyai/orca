@@ -56,7 +56,11 @@ export class BotUsageLimitGate {
     if (existing?.timer) {
       clearTimeout(existing.timer)
     }
-    const latestReset = Math.max(validReset ?? 0, existing?.resetsAt ?? 0)
+    const previousReset =
+      input.observedModel && input.observedModel !== existing?.observedModel
+        ? null
+        : existing?.resetsAt
+    const latestReset = Math.max(validReset ?? 0, previousReset ?? 0)
     const held: HeldLimit = {
       key: { agent: input.agent, accountHomeKey: input.accountHomeKey, model: input.model },
       observedModel: input.observedModel ?? existing?.observedModel,
