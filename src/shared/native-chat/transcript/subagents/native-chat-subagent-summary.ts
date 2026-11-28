@@ -194,3 +194,33 @@ const SUBAGENT_GROUP_FALLBACK_PATTERN =
 export function isSubagentGroupFallbackText(text: string): boolean {
   return SUBAGENT_GROUP_FALLBACK_PATTERN.test(text)
 }
+
+export type NativeChatSubagentElapsedTiming = {
+  startedAt: number
+  settledAt: number | null
+  counting: boolean
+}
+
+/** Resolve elapsed-clock bounds: live runs fall back to client mount time; settled runs require both timestamps. */
+export function subagentElapsedTiming(
+  agent: Pick<NativeChatSubagentEntry, 'state' | 'startedAt' | 'settledAt'>,
+  fallbackStartedAt?: number | null
+): NativeChatSubagentElapsedTiming | null {
+  const counting = normalizeSubagentState(agent.state) === 'working'
+  const startedAt =
+    typeof agent.startedAt === 'number' && Number.isFinite(agent.startedAt) ? agent.startedAt : null
+  if (counting) {
+    const liveStart =
+      startedAt ??
+      (typeof fallbackStartedAt === 'number' && Number.isFinite(fallbackStartedAt)
+        ? fallbackStartedAt
+        : null)
+    return liveStart === null ? null : { startedAt: liveStart, settledAt: null, counting: true }
+  }
+  const settledAt =
+    typeof agent.settledAt === 'number' && Number.isFinite(agent.settledAt) ? agent.settledAt : null
+  if (startedAt === null || settledAt === null) {
+    return null
+  }
+  return { startedAt, settledAt: Math.max(startedAt, settledAt), counting: false }
+}

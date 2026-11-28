@@ -1,11 +1,16 @@
+import { useState } from 'react'
 import { Bot } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useNow } from '@/lib/window-activity/use-now'
 import {
   formatSubagentTokens,
-  nativeChatSubagentGroupHeader
+  nativeChatSubagentGroupHeader,
+  subagentGroupElapsedTiming
 } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
-import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
+import {
+  normalizeSubagentState,
+  subagentElapsedTiming
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import {
   subagentEntryDetail,
   subagentEntryRunsOn,
@@ -72,8 +77,10 @@ function NativeChatSubagentRow({
   onOpen?: (agentId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const [mountedAt] = useState(() => Date.now())
   const state = normalizeSubagentState(agent.state)
   const details = subagentDetails(agent)
+  const elapsed = subagentElapsedTiming(agent, mountedAt)
   return (
     <NativeChatEventRow
       icon={<Bot aria-hidden className="size-3.5" />}
@@ -111,6 +118,19 @@ function NativeChatSubagentRow({
       }
     >
       <span className="text-chat-foreground">{agent.label}</span>
+      {elapsed ? (
+        <span
+          aria-hidden={elapsed.counting || undefined}
+          className="shrink-0 whitespace-nowrap tabular-nums"
+        >
+          {' · '}
+          <SubagentElapsed
+            startedAt={elapsed.startedAt}
+            settledAt={elapsed.settledAt}
+            counting={elapsed.counting}
+          />
+        </span>
+      ) : null}
     </NativeChatEventRow>
   )
 }
@@ -130,6 +150,7 @@ export function NativeChatSubagentRun({
 }): React.JSX.Element | null {
   // `t` changes with the UI language and its catalogs, so the derived words follow them.
   const t = useTranslate()
+  const [mountedAt] = useState(() => Date.now())
   const header = nativeChatSubagentGroupHeader(block.agents, sayNativeChatSubagentGroupWith(t))
   if (header.total === 0) {
     return null
@@ -140,7 +161,8 @@ export function NativeChatSubagentRun({
       <NativeChatSubagentRows block={block} disclosureId={disclosureId} onOpen={onOpenSubagent} />
     )
   }
-  const { working, headline, verdict, alertState, alert, clockStartedAt } = header
+  const { working, headline, verdict, alertState, alert } = header
+  const elapsed = subagentGroupElapsedTiming(header, mountedAt)
   const summary = alert === null ? verdict : `${verdict} +${alert}`
   return (
     // Closed until the reader opens it: a turn can start many subagents, and the reply matters more.
@@ -161,13 +183,13 @@ export function NativeChatSubagentRun({
       <span className="text-chat-foreground">{headline}</span>
       <span className="tabular-nums">
         {` · ${summary}`}
-        {clockStartedAt !== null ? (
+        {elapsed ? (
           <>
             {' · '}
             <SubagentElapsed
-              startedAt={clockStartedAt}
-              settledAt={header.settledAt}
-              counting={working}
+              startedAt={elapsed.startedAt}
+              settledAt={elapsed.settledAt}
+              counting={elapsed.counting}
             />
           </>
         ) : null}
