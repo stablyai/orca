@@ -22,8 +22,8 @@ export type DispatchedDelivery = {
   deliveryId: string
   received: boolean
   done: Promise<ConnectorDeliveryResult>
-  /** Admitted through the reply outbox: `received` follows its admission. */
-  viaOutbox?: true
+  /** Confirm pickup only after the delivery's admission is known. */
+  waitForAdmission?: true
   /** Held by a thread's mute: whether it went on carrying its batch's later sends, once decided. */
   carriedLater?: Promise<boolean>
 }
@@ -294,13 +294,15 @@ export function dispatchDelivery(
       done = settle(() => seam.cancel(host, key, deliveryId, delivery.turnId))
       break
   }
+  const waitForAdmission =
+    (outboxAccount && (delivery.kind === 'start' || delivery.kind === 'send')) ||
+    // A saved start can replay a muted outcome even when the reply outbox is off.
+    (delivery.kind === 'start' && knownRequest)
   return {
     deliveryId,
     received: true,
     done,
-    ...(outboxAccount && (delivery.kind === 'start' || delivery.kind === 'send')
-      ? { viaOutbox: true as const }
-      : {})
+    ...(waitForAdmission ? { waitForAdmission: true as const } : {})
   }
 }
 

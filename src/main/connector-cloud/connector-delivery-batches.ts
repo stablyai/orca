@@ -140,7 +140,7 @@ export function dispatchBatch(
       ? later.map((delivery): DispatchedDelivery => ({
           deliveryId: delivery.deliveryId,
           received: true,
-          ...(first.viaOutbox ? { viaOutbox: true as const } : {}),
+          ...(first.waitForAdmission ? { waitForAdmission: true as const } : {}),
           done: carriedBy(first.done)(delivery)
         }))
       : // Refused before the seam (expired, unsupported): the later ones go on as their own batch.
