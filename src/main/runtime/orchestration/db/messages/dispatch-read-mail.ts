@@ -141,6 +141,37 @@ export function coordinatorRecipients(
   return recipients
 }
 
+/** Mail to another Run's mailbox reaches this coordinator when that Run is coordinated by it too. */
+export function reachesCoordinator(
+  db: OrchestrationDb,
+  recipients: ReadonlySet<string>,
+  to: string
+): boolean {
+  if (recipients.has(to)) {
+    return true
+  }
+  if (!to.startsWith('run:')) {
+    return false
+  }
+  const runId = to.slice('run:'.length)
+  const run = db.getRun(runId)
+  if (!run) {
+    return false
+  }
+  const session = currentRunCoordinatorOrcaSessionId(run)
+  const coordinators = [
+    run.coordinator_handle,
+    session && formatOrcaSessionAddress(session),
+    ...db.db
+      .prepare('SELECT terminal_handle FROM run_coordinator_handles WHERE run_id = ?')
+      .all(runId)
+      .map((row) => text(row.terminal_handle))
+  ]
+  return coordinators.some(
+    (handle) => !!handle && !handle.startsWith('run:') && recipients.has(handle)
+  )
+}
+
 function nonCreatorRunWorkers(db: OrchestrationDb, dispatchId: string) {
   return db.db
     .prepare(

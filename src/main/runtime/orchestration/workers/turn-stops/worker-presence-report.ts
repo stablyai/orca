@@ -24,6 +24,7 @@ import {
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { finishedStopReportedRecently } from './finished-stop-cooldown'
 import { awaitsAPerson, isWorkerGone, isWorkerStartRest } from './worker-turn-stop-wording'
 
 const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES
@@ -285,6 +286,7 @@ function reconcileWorkerReport(
     (finishedMail !== undefined &&
       row.reportedMailCount !== null &&
       finishedMail <= row.reportedMailCount) ||
+    finishedStopReportedRecently(db, target, rest) ||
     reportedByEarlierBuild(db, target, rest, row, finishedMail)
   ) {
     writeWorkerPresence(db, dispatchId, decided(finishedMail))

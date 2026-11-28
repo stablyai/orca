@@ -6,6 +6,7 @@ import {
   coordinatorRecipients,
   latestConsumedCoordinatorMessage,
   parseDispatchUtcMs,
+  reachesCoordinator,
   type ConsumedCoordinatorMessage
 } from './dispatch-read-mail'
 
@@ -64,7 +65,7 @@ export function hasOutboundCoordinatorReport(
   const { candidates, provenanceIds } = readWorkerOutboundCandidates(
     db,
     dispatch,
-    latest?.sequence ?? 0
+    stop.turnStartedAfterSequence ?? latest?.sequence ?? 0
   )
   const dispatchCreatedAt = parseDispatchUtcMs(dispatch.created_at)
   const dispatchCompletedAt = Date.parse(dispatch.completed_at ?? '')
@@ -72,27 +73,28 @@ export function hasOutboundCoordinatorReport(
     ? formatOrcaSessionAddress(dispatch.assignee_orca_session_id)
     : null
   return candidates.some((candidate) => {
-    if (!isWorkerReportCandidate(db, dispatch.id, candidate) || !recipients.has(candidate.to)) {
+    if (
+      !isWorkerReportCandidate(db, dispatch.id, candidate) ||
+      !reachesCoordinator(db, recipients, candidate.to)
+    ) {
       return false
     }
     const sentAt = parseDispatchUtcMs(candidate.createdAt)
     const fromThisDispatch =
       provenanceIds.has(candidate.id) ||
       candidate.from === `dispatch:${dispatch.id}` ||
-      ((latest ? candidate.sequence > latest.sequence : sentAt >= dispatchCreatedAt) &&
+      (sentAt >= dispatchCreatedAt &&
         (Number.isNaN(dispatchCompletedAt) || sentAt <= dispatchCompletedAt) &&
         (isDispatchAssignee(dispatch, candidate.from, candidate.senderPaneKey) ||
           assigneeSession === candidate.from))
     if (!fromThisDispatch) {
       return false
     }
-    if (latest) {
-      return (
-        answersCoordinatorMessage(candidate, latest) ||
-        (candidate.sequence > latest.sequence && sentInCurrentLocalTurn(candidate, stop))
-      )
-    }
-    return sentAt >= dispatchCreatedAt && sentInCurrentLocalTurn(candidate, stop)
+    // Any report this turn counts, even one sent before coordinator mail the turn took later.
+    return (
+      (latest !== undefined && answersCoordinatorMessage(candidate, latest)) ||
+      sentInCurrentLocalTurn(candidate, stop)
+    )
   })
 }
 
@@ -211,8 +213,6 @@ function hasRemoteOutboundReport(
   dispatchId: string,
   stop: OutboundReportStop
 ): boolean {
-  const latest = latestConsumedCoordinatorMessage(db, dispatchId, stop)
-  const latestSec = latest ? Math.floor(parseDispatchUtcMs(latest.createdAt) / 1000) : null
   return db.db
     .prepare(
       "SELECT sequence, message_id, kind, created_at FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home' ORDER BY sequence ASC"
@@ -224,9 +224,6 @@ function hasRemoteOutboundReport(
       const kind = text(row.kind) ?? ''
       const createdAt = text(row.created_at) ?? ''
       if (!OUTBOUND_REPORT_TYPES.has(kind) || isSystemReportId(messageId)) {
-        return false
-      }
-      if (latestSec !== null && Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec) {
         return false
       }
       if (stop.turnStartedAfterSequence !== undefined) {
