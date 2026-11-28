@@ -6,7 +6,7 @@ import { withCookieMutationLock } from './mutation/cookie-mutation-lock'
 import { admittedSessionCookieTracker } from './session-restore/browser-session-cookie-tracker'
 import { cookieRemovalUrl } from './storage/cookie-removal-url'
 import { isNonTransplantableCookieDomain } from './policy/cookie-import-exclusions'
-import { normalizeCookieDomain } from './policy/cookie-domain'
+import { normalizeCookieDomain } from './policy/cookie-domain-normalization'
 
 export async function clearGoogleCookies(
   target: { cookies: Pick<Cookies, 'get' | 'remove'> },

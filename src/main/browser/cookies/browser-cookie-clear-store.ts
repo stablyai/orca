@@ -3,7 +3,7 @@ import {
   openCookieDebuggerSession,
   type CookieClearDebugger
 } from './browser-cookie-debugger-session'
-import { normalizeCookieDomain } from './policy/cookie-domain'
+import { normalizeCookieDomain } from './policy/cookie-domain-normalization'
 import type {
   CookieClearIdentity,
   CookieClearPartitionKey,

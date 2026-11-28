@@ -13,7 +13,7 @@ import { identityFromCdpCookie, openCookieClearStore } from './browser-cookie-cl
 import { withCookieMutationLock } from './mutation/cookie-mutation-lock'
 import type { CookieClearIdentity } from './storage/cookie-store-contracts'
 import { isNonTransplantableCookieDomain } from './policy/cookie-import-exclusions'
-import { normalizeCookieDomain } from './policy/cookie-domain'
+import { normalizeCookieDomain } from './policy/cookie-domain-normalization'
 
 export type BrowserPartitionCookieCopyPlan = {
   writes: CookieClearIdentity[]

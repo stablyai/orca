@@ -2,7 +2,7 @@ import type { BrowserCookieDeleteResult } from '../../../shared/browser/runtime/
 import { BrowserError } from '../browser-error'
 import type { CdpCommandSender } from '../cdp/debugger/cdp-command-sender'
 import { cdpCookiesFromCommand } from './browser-cdp-cookie'
-import { normalizeCookieDomain } from './policy/cookie-domain'
+import { normalizeCookieDomain } from './policy/cookie-domain-normalization'
 
 type CookieDeleteTarget = {
   domain?: string

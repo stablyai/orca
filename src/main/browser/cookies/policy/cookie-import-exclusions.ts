@@ -1,4 +1,4 @@
-import { normalizeCookieDomain } from './cookie-domain'
+import { normalizeCookieDomain } from './cookie-domain-normalization'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
   'SIDCC',
