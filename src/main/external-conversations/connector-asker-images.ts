@@ -1,14 +1,20 @@
 import { extname } from 'node:path'
 import type { ConnectorAsker } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorActionResponse } from '../../shared/connector-action-contract'
+import { detectImageFileSignature } from '../../shared/file-content/image-file-signature'
 import type { ConnectorResult } from '../connector-cloud/connector-cloud-request'
+import { PI_UNSHRUNK_IMAGE_LIMITS } from '../pi/rpc/prompts/rpc-prompt'
 
 /** The images on a request, saved where a chat's attachments live; each path is one the agent can
  *  read as an image. Never throws: an image that can't be had is left to the agent's own download. */
 export type AskerImages = (request: {
   botId: string
   conversation: { source: string; externalId: string }
-  asker: ConnectorAsker
+  asker?: ConnectorAsker
+  /** Follow-up messages carried in the same turn; their images share the turn's cap and budget. */
+  later?: readonly { asker?: ConnectorAsker }[]
+  /** The chat's agent, so auto-attached images stay within its own inline image limits. */
+  agent?: string
   signal: AbortSignal
 }) => Promise<string[]>
 
@@ -35,21 +41,10 @@ export function askerImageIds(text: string): string[] {
   return ids.slice(0, MAX_ASKER_IMAGES)
 }
 
-// What an image's first bytes say it is; the agent is told this, never the name Slack gave.
-const SIGNATURES: readonly { extension: string; starts: readonly number[]; at?: number }[] = [
-  { extension: '.png', starts: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
-  { extension: '.jpg', starts: [0xff, 0xd8, 0xff] },
-  { extension: '.gif', starts: [0x47, 0x49, 0x46, 0x38] },
-  // RIFF....WEBP
-  { extension: '.webp', starts: [0x57, 0x45, 0x42, 0x50], at: 8 }
-]
-
 /** The extension of the image these bytes are, or null when they are not one a turn can show. */
 export function imageExtension(bytes: Uint8Array): string | null {
-  return (
-    SIGNATURES.find(({ starts, at = 0 }) => starts.every((byte, i) => bytes[at + i] === byte))
-      ?.extension ?? null
-  )
+  const signature = detectImageFileSignature(bytes)
+  return signature ? `.${signature.extension}` : null
 }
 
 type Download = { name?: unknown; size?: unknown; url?: unknown; ticket?: unknown }
@@ -60,12 +55,13 @@ const isDownload = (value: unknown): value is Download =>
 async function imageBytes(
   download: Download,
   request: typeof fetch,
+  maxBytes: number,
   signal: AbortSignal
 ): Promise<Buffer | null> {
   if (typeof download.url !== 'string' || typeof download.ticket !== 'string') {
     return null
   }
-  if (typeof download.size === 'number' && download.size > MAX_ASKER_IMAGE_BYTES) {
+  if (typeof download.size === 'number' && download.size > maxBytes) {
     return null
   }
   const response = await request(download.url, {
@@ -80,7 +76,7 @@ async function imageBytes(
   for await (const chunk of response.body) {
     size += chunk.length
     // A file that says no size, or lies about it, still stops here.
-    if (size > MAX_ASKER_IMAGE_BYTES) {
+    if (size > maxBytes) {
       await response.body.cancel().catch(() => {})
       return null
     }
@@ -102,6 +98,27 @@ function within<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
+/** Fetches a bot delivery's head and carried follow-up images; returns empty when unavailable. */
+export async function fetchAskerImages(
+  askerImages: AskerImages | undefined,
+  chat: { bot?: { botId: string }; agent: string },
+  conversation: { source: string; externalId: string },
+  message: { asker?: ConnectorAsker; later?: readonly { asker?: ConnectorAsker }[] },
+  signal: AbortSignal
+): Promise<string[]> {
+  if (!chat.bot || !askerImages || (!message.asker && !message.later?.length)) {
+    return []
+  }
+  return await askerImages({
+    botId: chat.bot.botId,
+    conversation,
+    asker: message.asker,
+    later: message.later,
+    agent: chat.agent,
+    signal
+  }).catch(() => [])
+}
+
 /** Fetches a request's images through Orca Cloud, as the bot's own `read --download` would. */
 export function connectorAskerImages(deps: {
   /** A read of one file on the request's message, answered with where to stream it from. */
@@ -118,26 +135,56 @@ export function connectorAskerImages(deps: {
   fetch?: typeof fetch
   budgetMs?: number
 }): AskerImages {
-  return async ({ botId, conversation, asker, signal }) => {
-    const ids = asker.messageRef ? askerImageIds(asker.text) : []
-    if (ids.length === 0 || !asker.messageRef) {
+  return async ({ botId, conversation, asker, later, agent, signal }) => {
+    const askers = [
+      ...(asker ? [asker] : []),
+      ...(later ?? []).flatMap((next) => (next.asker ? [next.asker] : []))
+    ]
+    const requests: { ref: string; fileId: string }[] = []
+    for (const from of askers) {
+      if (!from.messageRef) {
+        continue
+      }
+      for (const fileId of askerImageIds(from.text)) {
+        requests.push({ ref: from.messageRef, fileId })
+        if (requests.length >= MAX_ASKER_IMAGES) {
+          break
+        }
+      }
+      if (requests.length >= MAX_ASKER_IMAGES) {
+        break
+      }
+    }
+    if (requests.length === 0) {
       return []
     }
+    // Supported Pi before 1.5.1 enforces tighter unshrunk image limits; exceeding them rejects the whole turn.
+    const maxImageBytes =
+      agent === 'pi'
+        ? Math.min(MAX_ASKER_IMAGE_BYTES, PI_UNSHRUNK_IMAGE_LIMITS.image)
+        : MAX_ASKER_IMAGE_BYTES
+    let remainingTotalBytes =
+      agent === 'pi' ? PI_UNSHRUNK_IMAGE_LIMITS.total : MAX_ASKER_IMAGES * MAX_ASKER_IMAGE_BYTES
     const bounded = AbortSignal.any([
       signal,
       AbortSignal.timeout(deps.budgetMs ?? ASKER_IMAGES_BUDGET_MS)
     ])
     const paths: string[] = []
-    for (const fileId of ids) {
+    for (const { ref, fileId } of requests) {
+      const limit = Math.min(maxImageBytes, remainingTotalBytes)
+      if (limit <= 0) {
+        break
+      }
       try {
         const answer = await within(
-          deps.read({ botId, ref: asker.messageRef, fileId, conversation }, bounded),
+          deps.read({ botId, ref, fileId, conversation }, bounded),
           bounded
         )
         const told = answer?.ok && answer.value.ok ? answer.value.result.download : undefined
         const download = isDownload(told) ? told : undefined
         const bytes =
-          download && (await within(imageBytes(download, deps.fetch ?? fetch, bounded), bounded))
+          download &&
+          (await within(imageBytes(download, deps.fetch ?? fetch, limit, bounded), bounded))
         const extension = bytes && imageExtension(bytes)
         if (!bytes || !extension) {
           continue
@@ -146,6 +193,7 @@ export function connectorAskerImages(deps: {
         const base = named.slice(0, named.length - extname(named).length) || fileId
         // The disk is bounded too: a write that hangs must not hold the turn.
         paths.push(await within(deps.store(`${base}${extension}`, bytes), bounded))
+        remainingTotalBytes -= bytes.byteLength
       } catch {
         // Out of time, or the cloud or the disk refused: the turn goes on with what it has.
         if (bounded.aborted) {

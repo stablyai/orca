@@ -10,6 +10,11 @@ import {
 } from './folder-workspace-lanes'
 
 const FOLDER_LANE_SECTION_PREFIX = 'folder-lane:'
+const EMPTY_WORKTREES: Worktree[] = []
+const EMPTY_FOLDER_PAIR_MAP = new Map<string, RenderableFolderWorkspace>()
+const returnFalse = (): boolean => false
+const returnEmptyWorktrees = (): Worktree[] => EMPTY_WORKTREES
+const returnNull = (): null => null
 
 /** A project group's folder workspaces and the rows nested under them, under that group's header. */
 export function getFolderLaneSectionKey(projectGroupId: string): string {
@@ -78,6 +83,23 @@ export function getSidebarFolderOccurrences(
   renderable: readonly RenderableFolderWorkspace[],
   hiddenProjects: HiddenProjects = NO_HIDDEN_PROJECTS
 ) {
+  if (renderable.length === 0) {
+    return {
+      rows: EMPTY_WORKTREES,
+      pairByIdentity: EMPTY_FOLDER_PAIR_MAP,
+      isFolder: returnFalse,
+      withPlacedRows: (worktrees: readonly Worktree[]): readonly Worktree[] =>
+        hiddenProjects.any
+          ? worktrees.filter((row) => !hiddenProjects.isRowHidden(row))
+          : worktrees,
+      projectRows: (rows: readonly Worktree[], projectGrouping: boolean): Worktree[] =>
+        projectGrouping && hiddenProjects.any
+          ? rows.filter((row) => !hiddenProjects.isRowHidden(row))
+          : [...rows],
+      rowsOf: returnEmptyWorktrees,
+      boundRowsByGroupId: returnNull
+    }
+  }
   const sorted = [...renderable].sort((left, right) =>
     compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
   )
@@ -101,7 +123,7 @@ export function getSidebarFolderOccurrences(
     withPlacedRows: (
       worktrees: readonly Worktree[],
       childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
-    ): Worktree[] =>
+    ): readonly Worktree[] =>
       keepHiddenRowsBelowFolders({
         rows: [...worktrees, ...folderRows],
         folderRows,
@@ -115,23 +137,30 @@ export function getSidebarFolderOccurrences(
       rows.filter((row) => !isFolder(row) && !(projectGrouping && hiddenProjects.isRowHidden(row))),
     /** A lane's folder rows, already in display order. */
     rowsOf: (pairs: readonly RenderableFolderWorkspace[] | undefined): Worktree[] =>
-      (pairs ?? []).map(rowOf),
+      pairs && pairs.length > 0 ? pairs.map(rowOf) : EMPTY_WORKTREES,
     /** Project grouping: each group's folders, then the rows whose top shown ancestor is one of them,
      * and each such row's grouping root below the folder, so it still counts in its own project. */
     boundRowsByGroupId(
       natural: readonly Worktree[],
       displayRootByIdentity: ReadonlyMap<string, Worktree>,
       childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
-    ) {
+    ): {
+      bound: Set<Worktree>
+      sectionItemsByGroupId: Map<string, Worktree[]>
+      groupingRootByIdentity: ReadonlyMap<string, Worktree>
+    } | null {
       const sectionItemsByGroupId = new Map<string, Worktree[]>()
       for (const pair of sorted) {
-        const items = sectionItemsByGroupId.get(pair.projectGroup.id) ?? []
-        items.push(rowOf(pair))
-        sectionItemsByGroupId.set(pair.projectGroup.id, items)
+        const items = sectionItemsByGroupId.get(pair.projectGroup.id)
+        if (items) {
+          items.push(rowOf(pair))
+        } else {
+          sectionItemsByGroupId.set(pair.projectGroup.id, [rowOf(pair)])
+        }
       }
-      const groupingRootByIdentity = new Map(displayRootByIdentity)
       const bound = new Set<Worktree>()
-      for (const row of natural) {
+      for (let i = 0; i < natural.length; i += 1) {
+        const row = natural[i]
         const root = displayRootByIdentity.get(getWorktreeHostIdentity(row))
         const groupId = root ? groupIdByIdentity.get(getWorktreeHostIdentity(root)) : undefined
         if (groupId === undefined || isFolder(row)) {
@@ -140,14 +169,28 @@ export function getSidebarFolderOccurrences(
         bound.add(row)
         sectionItemsByGroupId.get(groupId)?.push(row)
       }
+      if (bound.size === 0) {
+        return { bound, sectionItemsByGroupId, groupingRootByIdentity: displayRootByIdentity }
+      }
+      const listed = new Set<Worktree>()
+      for (let i = 0; i < natural.length; i += 1) {
+        const row = natural[i]
+        if (!hiddenProjects.isRowHidden(row)) {
+          listed.add(row)
+        }
+      }
       const roots = getFolderBoundGroupingRoots({
         folderIdentities: pairByIdentity.keys(),
         childrenByParentIdentity,
         identityOf: getWorktreeHostIdentity,
         // A hidden row never roots a shown row's project (#43083).
-        listed: new Set(natural.filter((row) => !hiddenProjects.isRowHidden(row))),
+        listed,
         bound
       })
+      if (roots.size === 0) {
+        return { bound, sectionItemsByGroupId, groupingRootByIdentity: displayRootByIdentity }
+      }
+      const groupingRootByIdentity = new Map(displayRootByIdentity)
       for (const [identity, top] of roots) {
         groupingRootByIdentity.set(identity, top)
       }
@@ -161,14 +204,25 @@ export function getFolderLaneSections(
   folderBound: { sectionItemsByGroupId: ReadonlyMap<string, Worktree[]> } | null,
   projectGroupPaths: ReadonlyMap<string, OccurrenceSectionPath>
 ) {
-  return [...(folderBound?.sectionItemsByGroupId ?? [])].map(([groupId, items]) => {
+  if (!folderBound || folderBound.sectionItemsByGroupId.size === 0) {
+    return []
+  }
+  const sections: {
+    key: string
+    group: { label: string; items: Worktree[]; repoIds: Set<string> }
+    placement: 'natural'
+    items: Worktree[]
+    revealPath: { key: string; parent: OccurrenceSectionPath | undefined }
+  }[] = []
+  for (const [groupId, items] of folderBound.sectionItemsByGroupId) {
     const key = getFolderLaneSectionKey(groupId)
-    return {
+    sections.push({
       key,
       group: { label: '', items: [], repoIds: new Set<string>() },
       placement: 'natural' as const,
       items,
       revealPath: { key, parent: projectGroupPaths.get(groupId) }
-    }
-  })
+    })
+  }
+  return sections
 }

@@ -18,16 +18,20 @@ export function pairedDeviceTypistOf(
     return connectionClaim ? withComputer(connectionClaim, device) : null
   }
   const ownerId = device.parentDeviceId ?? device.createdByDeviceId
-  const owner = ownerId ? getDevice(ownerId) : null
-  const claim =
-    owner && device.originClientInstanceId
-      ? claimOfInstance(owner.deviceId, device.originClientInstanceId)
-      : null
+  let owner = ownerId ? getDevice(ownerId) : null
+  let origin = device.originClientInstanceId
+  // A phone's own pairing, minted through its relayed row, speaks for that row's desktop.
+  const mintedThroughRelay = owner?.scope === 'mobile' && owner.parentDeviceId !== undefined
+  if (mintedThroughRelay && owner?.parentDeviceId) {
+    origin ??= owner.originClientInstanceId
+    owner = getDevice(owner.parentDeviceId)
+  }
+  const claim = owner && origin ? claimOfInstance(owner.deviceId, origin) : null
   if (!owner || !claim) {
     return null
   }
   const account = withComputer(claim, owner)
-  const phone = phoneNameOf(device, account.computer)
+  const phone = phoneNameOf(device, account.computer, mintedThroughRelay)
   return { ...account, ...(phone ? { phone } : {}) }
 }
 
@@ -42,9 +46,13 @@ function withComputer(account: DeviceOrcaAccount, device: DeviceEntry): DeviceOr
 
 // A relayed phone's row reads "<phone> via <its computer>", named by the relay from its own machine
 // name, which may differ from the claim's computer (an older relay declares none); keep the phone.
-function phoneNameOf(device: DeviceEntry, computer: string | undefined): string | undefined {
+function phoneNameOf(
+  device: DeviceEntry,
+  computer: string | undefined,
+  mintedThroughRelay: boolean
+): string | undefined {
   const exact = computer ? ` via ${computer}` : null
-  const relayed = device.parentDeviceId !== undefined
+  const relayed = device.parentDeviceId !== undefined || mintedThroughRelay
   const name =
     relayed && exact && device.name.endsWith(exact)
       ? device.name.slice(0, -exact.length)

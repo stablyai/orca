@@ -21,6 +21,8 @@ import {
   a11yAnnounceResultSchema,
   clipboardWriteResultSchema,
   pdfViewResultSchema,
+  fileShareResultSchema,
+  type BridgeFileShareParams,
   type BridgeClipboardMime,
   type BridgeNativeVerb,
   type BridgePdfOpenParams
@@ -61,6 +63,9 @@ export type NativeVerbs = {
   canOpenPdf: boolean
   openPdf: (params: BridgePdfOpenParams) => Promise<void>
   cancelPdf: () => Promise<void>
+  canShareFiles: boolean
+  shareFile: (params: BridgeFileShareParams) => Promise<void>
+  cancelFileShare: () => Promise<void>
   canActOnImages: boolean
   stageImage: (offset: number, base64: string) => Promise<void>
   runImageAction: (params: BridgeImageRunParams) => Promise<void>
@@ -109,6 +114,7 @@ export const NATIVE_VERB_REASONS = [
   'native_audio_not_capturing',
   'native_pdf_no_viewer',
   'native_pdf_host_outdated',
+  'native_file_host_outdated',
   'native_image_permission_denied',
   'native_verb_not_a_verb',
   'bridge_cap_exceeded',
@@ -192,6 +198,13 @@ export function useNativeVerbs(): NativeVerbs {
       },
       cancelPdf: async () => {
         await call('native.pdf.view', { action: 'cancel' }, pdfViewResultSchema)
+      },
+      canShareFiles: has('native.file.share'),
+      shareFile: async (params) => {
+        await call('native.file.share', { action: 'open', ...params }, fileShareResultSchema)
+      },
+      cancelFileShare: async () => {
+        await call('native.file.share', { action: 'cancel' }, fileShareResultSchema)
       },
       canActOnImages: has('native.image.act'),
       stageImage: async (offset, base64) => {

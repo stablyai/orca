@@ -1,91 +1,53 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { Store } from '../../persistence/loading-store/store'
 import type { PluginHostCallOutcome } from '../../../shared/plugins/frames/plugin-protocol'
-import { getUserPluginsDir, getPluginsDataDir } from '../../plugins/discovery/plugin-discovery'
-import {
-  installPluginFromGit,
-  installPluginFromLocalPath
-} from '../../plugins/installation/plugin-install'
-import { uninstallInstalledPlugin } from '../../plugins/installation/plugin-uninstall'
+import { getPluginsDataDir } from '../../plugins/discovery/plugin-discovery'
 import { takeRequiredPluginFailures } from '../../plugins/catalog/required-plugin-failures'
-import { assertTeamAllowsUncatalogedPlugin } from '../../plugins/installation/plugin-team-install-policy'
-import {
-  applyPluginConsent,
-  applyPluginEnablement
-} from '../../plugins/activation/plugin-enablement'
-import { readApprovedPluginNewFileTemplate } from '../../plugins/contributions/plugin-new-file-template'
-import { handlePluginPanelStateRequest } from '../../plugins/panels/panel-lifetime/plugin-panel-state'
 import type { PluginService } from '../../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
-import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
 import { registerPluginStatusBarHandlers } from './plugin-status-bar-ipc'
-import { registerPluginEditorSaveHookHandler } from './plugin-editor-save-hook-ipc'
-import { readPluginPanelImage } from '../../plugins/panels/panel-lifetime/plugin-panel-image'
-import {
-  bindPluginFrameGuests,
-  clearPluginFrameStorage
-} from '../../plugins/panels/guest-isolation/plugin-frame-guest-sessions'
+import { bindPluginFrameGuests } from '../../plugins/panels/guest-isolation/plugin-frame-guest-sessions'
 import { isQualifiedPluginKey } from '../../../shared/plugins/frames/plugin-tab-key'
 import { pluginConsentRequestSchema } from '../../../shared/plugins/approval/plugin-consent-request'
-import {
-  isAllowedPluginGitUrl,
-  PLUGIN_COMMIT_PATTERN
-} from '../../../shared/plugins/installation/plugin-install-lockfile'
-import { resolvePluginGitSource } from '../../plugins/installation/plugin-git-ref-resolution'
-import {
-  registerPluginMarketplaceHandlers,
-  type PluginMarketplaceHandlerServices
-} from './plugin-marketplaces'
+import type { PluginMarketplaceHandlerServices } from './plugin-marketplaces'
+import { registerLazyPluginMarketplaceHandlers } from './lazy-plugin-marketplaces-ipc'
+import { registerLazyIpcHandleGroup } from '../lazy-ipc-handle-group'
+
+const PLUGIN_MANAGEMENT_IPC_CHANNELS = [
+  'plugins:readNewFileTemplate',
+  'plugins:panelImage',
+  'plugins:resolveGitSource',
+  'plugins:install',
+  'plugins:remove'
+] as const
+const PLUGIN_SETTINGS_IPC_CHANNELS = ['plugins:getSettings', 'plugins:setSetting'] as const
+const PLUGIN_EDITOR_SAVE_HOOK_IPC_CHANNELS = ['plugins:editorSaveHook'] as const
 
 export function parsePluginConsentArgs(args: unknown): z.infer<typeof pluginConsentRequestSchema> {
   return pluginConsentRequestSchema.parse(args)
 }
 
-const setEnabledArgsSchema = z.object({
-  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
-  enabled: z.boolean()
-})
-
-const readNewFileTemplateArgsSchema = z.object({
-  pluginKey: z.string().min(1),
-  newFileId: z.string().min(1)
-})
-
-const invokeCommandArgsSchema = z.object({
-  pluginKey: z.string().min(1),
-  commandId: z.string().min(1),
-  args: z.unknown().optional(),
-  /** Run only if the worker can start it within this many ms (a replacement's fallback). */
-  timeoutMs: z.number().int().positive().max(60_000).optional()
-})
-
-const installArgsSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('local-path'), path: z.string().min(1) }),
+const setEnabledArgsSchema = lazyZodSchema(() =>
   z.object({
-    kind: z.literal('git'),
-    url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
-    // Why: installs must stay reproducible even when callers bypass renderer validation.
-    ref: z.string().trim().min(1),
-    /** The commit the dialog showed; install fails if the ref moved since. */
-    expectedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN).optional()
+    pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
+    enabled: z.boolean()
   })
-])
+)
 
-const resolveGitSourceArgsSchema = z.object({
-  url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
-  ref: z.string().trim().max(4096)
-})
+const invokeCommandArgsSchema = lazyZodSchema(() =>
+  z.object({
+    pluginKey: z.string().min(1),
+    commandId: z.string().min(1),
+    args: z.unknown().optional(),
+    /** Run only if the worker can start it within this many ms (a replacement's fallback). */
+    timeoutMs: z.number().int().positive().max(60_000).optional()
+  })
+)
 
-export function parsePluginInstallArgs(args: unknown): z.infer<typeof installArgsSchema> {
-  return installArgsSchema.parse(args)
-}
-
-const removeArgsSchema = z.object({
-  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
-})
-const logsArgsSchema = z.object({ pluginKey: z.string().min(1) })
+const logsArgsSchema = lazyZodSchema(() => z.object({ pluginKey: z.string().min(1) }))
 
 // Preserve import compatibility; runtime RPC uses the Electron-free client-list module.
 import {
@@ -126,6 +88,7 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:consent', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)
+    const { applyPluginConsent } = await import('../../plugins/activation/plugin-enablement')
     await applyPluginConsent({
       store,
       pluginService,
@@ -139,6 +102,7 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:setEnabled', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = setEnabledArgsSchema.parse(args)
+    const { applyPluginEnablement } = await import('../../plugins/activation/plugin-enablement')
     await applyPluginEnablement({
       store,
       pluginService,
@@ -152,13 +116,18 @@ export function registerPluginHandlers(
   registerPluginFrameEntryHandlers(store, pluginService)
   registerPluginPanelPushHandlers(pluginService)
   registerPluginStatusBarHandlers(pluginService)
-  registerPluginEditorSaveHookHandler()
-  registerPluginSettingsHandlers(pluginService)
 
-  ipcMain.handle('plugins:readNewFileTemplate', async (_event, args: unknown) => {
-    const parsed = readNewFileTemplateArgsSchema.parse(args)
-    await pluginService.whenReady()
-    return readApprovedPluginNewFileTemplate(pluginService, parsed.pluginKey, parsed.newFileId)
+  registerLazyIpcHandleGroup(PLUGIN_EDITOR_SAVE_HOOK_IPC_CHANNELS, async (ipc) => {
+    const { registerPluginEditorSaveHookHandler } = await import('./plugin-editor-save-hook-ipc')
+    registerPluginEditorSaveHookHandler(ipc)
+  })
+  registerLazyIpcHandleGroup(PLUGIN_SETTINGS_IPC_CHANNELS, async (ipc) => {
+    const { registerPluginSettingsHandlers } = await import('./plugin-settings-ipc')
+    registerPluginSettingsHandlers(pluginService, ipc)
+  })
+  registerLazyIpcHandleGroup(PLUGIN_MANAGEMENT_IPC_CHANNELS, async (ipc) => {
+    const { registerPluginManagementHandlers } = await import('./plugin-management-ipc')
+    registerPluginManagementHandlers(store, pluginService, ipc)
   })
 
   // Renderer forwards frame host calls; main enforces capabilities and surfaces.
@@ -177,23 +146,12 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:panelState', async (event, args: unknown) => {
     await pluginService.whenReady()
     const owner = rendererPanelOwner(event.sender.id)
+    const { handlePluginPanelStateRequest } =
+      await import('../../plugins/panels/panel-lifetime/plugin-panel-state')
     return handlePluginPanelStateRequest(
       {
         pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
         resolveComponentsPanel: (token) => pluginService.panels.componentsPanelPlugin(owner, token)
-      },
-      args
-    )
-  })
-
-  // Components panels' Image files: bytes from inside the plugin, never a URL the renderer loads.
-  ipcMain.handle('plugins:panelImage', async (event, args: unknown) => {
-    await pluginService.whenReady()
-    const owner = rendererPanelOwner(event.sender.id)
-    return readPluginPanelImage(
-      {
-        resolveComponentsPanelRoot: (token) =>
-          pluginService.panels.componentsPanelRoot(owner, token)
       },
       args
     )
@@ -208,57 +166,6 @@ export function registerPluginHandlers(
     return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args, startBy)
   })
 
-  ipcMain.handle('plugins:resolveGitSource', async (_event, args: unknown) =>
-    resolvePluginGitSource(resolveGitSourceArgsSchema.parse(args))
-  )
-
-  ipcMain.handle('plugins:install', async (_event, args: unknown) => {
-    assertTeamAllowsUncatalogedPlugin()
-    await pluginService.whenReady()
-    const parsed = parsePluginInstallArgs(args)
-    const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
-    const hostVersion = pluginService.options.hostVersion
-    const blockedPluginReason = (pluginKey: string): string | null => {
-      const block = pluginService.options.getPluginKillListEntry?.(pluginKey)
-      return block?.team ? null : (block?.reason ?? null)
-    }
-    const result =
-      parsed.kind === 'local-path'
-        ? await installPluginFromLocalPath({
-            pluginsDir,
-            sourcePath: parsed.path,
-            hostVersion,
-            blockedPluginReason
-          })
-        : await installPluginFromGit({
-            pluginsDir,
-            url: parsed.url,
-            ref: parsed.ref,
-            ...(parsed.expectedCommit ? { expectedCommit: parsed.expectedCommit } : {}),
-            hostVersion,
-            blockedPluginReason
-          })
-    if (result.ok) {
-      await pluginService.refresh()
-    }
-    return result
-  })
-
-  ipcMain.handle('plugins:remove', async (_event, args: unknown) => {
-    await pluginService.whenReady()
-    const parsed = removeArgsSchema.parse(args)
-    const removed = await uninstallInstalledPlugin({
-      pluginService,
-      store,
-      pluginKey: parsed.pluginKey,
-      afterRemove: clearPluginFrameStorage
-    })
-    if (!removed) {
-      throw new Error(`cannot remove protected or non-installed plugin ${parsed.pluginKey}`)
-    }
-    return listPluginsForClients(pluginService)
-  })
-
   ipcMain.handle('plugins:getLogs', async (_event, args: unknown) => {
     const parsed = logsArgsSchema.parse(args)
     return pluginService.getLogs(parsed.pluginKey)
@@ -269,18 +176,20 @@ export function registerPluginHandlers(
     return listPluginsForClients(pluginService)
   })
   if (marketplaceServices) {
-    registerPluginMarketplaceHandlers(
+    registerLazyPluginMarketplaceHandlers(
       pluginService,
       marketplaceServices,
       () => store.getSettings(),
-      (pluginKey, reviewedFingerprint) =>
-        applyPluginConsent({
+      async (pluginKey, reviewedFingerprint) => {
+        const { applyPluginConsent } = await import('../../plugins/activation/plugin-enablement')
+        await applyPluginConsent({
           store,
           pluginService,
           pluginKey,
           reviewedFingerprint,
           decision: 'approve'
         })
+      }
     )
   }
 }

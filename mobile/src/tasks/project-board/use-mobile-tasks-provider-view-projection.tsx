@@ -5,13 +5,13 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { PickerOption } from '../../components/sheets/PickerModal'
 import { githubProjectIdentityKey as githubProjectKey } from '../../../../src/shared/github/projects/project-identity'
 import { useCallback, useMemo } from 'react'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import {
-  GITLAB_FILTER_OPTIONS,
-  ISSUE_PRESETS,
-  LINEAR_FILTER_OPTIONS,
+  gitlabFilterOptions,
+  issuePresetOptions,
+  linearFilterOptions,
   type LinearListEntry,
-  PR_PRESETS
+  prPresetOptions
 } from '../task-list/mobile-tasks-options'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import {
@@ -21,10 +21,9 @@ import {
 
 export function useMobileTasksProviderViewProjection(model: PickerProjectionModel) {
   const t = useMobileTranslation()
-  const colorScheme = useMobileColorScheme()
+  const colors = useMobileColors()
   const {
     activeGitHubProject,
-    defaultGitHubPreset,
     githubKind,
     githubMode,
     githubPreset,
@@ -52,28 +51,12 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     setSelectedRepoIds,
     effectiveRepoIds
   } = model
-  const githubPresetOptions = githubKind === 'prs' ? PR_PRESETS : ISSUE_PRESETS
-  const githubPresetPickerOptions = useMemo(
-    () =>
-      githubPresetOptions.map((option) =>
-        option.value === defaultGitHubPreset
-          ? {
-              ...option,
-              subtitle: option.subtitle
-                ? t('tasks.providerViewProjection.defaultSubtitle', '{{subtitle}} · Default', {
-                    subtitle: option.subtitle
-                  })
-                : t('tasks.providerViewProjection.default', 'Default')
-            }
-          : option
-      ),
-    [defaultGitHubPreset, githubPresetOptions, t]
-  )
+  const githubPresetOptions = githubKind === 'prs' ? prPresetOptions(t) : issuePresetOptions(t)
   const githubPresetLabel =
     githubPresetOptions.find((preset) => preset.value === githubPreset)?.label ??
     t('tasks.providerViewProjection.openState', 'Open')
   const gitlabFilterLabel =
-    GITLAB_FILTER_OPTIONS.find((filter) => filter.value === gitlabFilter)?.label ??
+    gitlabFilterOptions(t).find((filter) => filter.value === gitlabFilter)?.label ??
     t('tasks.providerViewProjection.openState', 'Open')
   const jiraFilterLabel = JIRA_FILTER_LABELS[jiraFilter]
   const jiraSelectedSite =
@@ -84,7 +67,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     ? jiraSiteLabel(jiraSelectedSite)
     : t('tasks.providerViewProjection.allSites', 'All sites')
   const linearFilterLabel =
-    LINEAR_FILTER_OPTIONS.find((filter) => filter.value === linearFilter)?.label ??
+    linearFilterOptions(t).find((filter) => filter.value === linearFilter)?.label ??
     t('tasks.providerViewProjection.all', 'All')
   const linearWorkspaceLabel =
     selectedLinearWorkspaceId === 'all'
@@ -151,8 +134,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     [items, linearOrderBy]
   )
   const linearIssueSections = useMemo(
-    () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy),
-    [colorScheme, linearGroupBy, linearIssuesForView, t]
+    () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy, t, colors),
+    [colors, linearGroupBy, linearIssuesForView, t]
   )
   // Preserve FlatList data identity across unrelated renders.
   const linearListEntries = useMemo<LinearListEntry[]>(
@@ -171,9 +154,9 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
   const linearBoardSections = useMemo(
     () =>
       linearGroupBy === 'none'
-        ? groupSortedLinearIssues(linearIssuesForView, 'status')
+        ? groupSortedLinearIssues(linearIssuesForView, 'status', t, colors)
         : linearIssueSections,
-    [linearGroupBy, linearIssueSections, linearIssuesForView, t]
+    [colors, linearGroupBy, linearIssueSections, linearIssuesForView, t]
   )
   const githubModeLabel =
     githubMode === 'project'
@@ -264,9 +247,9 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     const next = githubProjectSearch
     setAppliedGithubProjectSearch(next === viewFilter ? undefined : next)
   }, [githubProjectSearch, githubProjectTable?.selectedView.filter])
-  return Object.assign(model, {
+  return {
+    ...model,
     githubPresetOptions,
-    githubPresetPickerOptions,
     githubPresetLabel,
     gitlabFilterLabel,
     jiraFilterLabel,
@@ -289,7 +272,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     browseGitHubProjects,
     toggleRepoSelection,
     applyGitHubProjectSearch
-  })
+  }
 }
 
 export type ProviderViewProjectionModel = ReturnType<typeof useMobileTasksProviderViewProjection>

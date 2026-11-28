@@ -1,4 +1,4 @@
-import { linkRecordWrite } from '../../../record-transitions/keyed-record-transitions'
+import { removeChatReadMark } from '../structured-sessions/chat-read-mark-aliases'
 import type {
   DropAgentStatusByTabPrefixOptions,
   DropAgentStatusOptions
@@ -13,18 +13,6 @@ import {
   agentProcessRetirementPatch,
   isSleepingAgentStatus
 } from './agent-status-process-retirement'
-
-function removeAcknowledgement(
-  acknowledgements: Record<string, number>,
-  paneKey: string
-): Record<string, number> {
-  if (!(paneKey in acknowledgements)) {
-    return acknowledgements
-  }
-  const next = { ...acknowledgements }
-  delete next[paneKey]
-  return linkRecordWrite(next, acknowledgements, [paneKey])
-}
 
 export function createAgentStatusDropActions(
   runtime: AgentStatusRuntime
@@ -80,13 +68,21 @@ export function createAgentStatusDropActions(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
         )
-        const nextAck = removeAcknowledgement(s.acknowledgedAgentsByPaneKey, paneKey)
+        const nextAck = removeChatReadMark(
+          s.acknowledgedAgentsByPaneKey,
+          'acknowledgedAgentsByPaneKey',
+          paneKey
+        )
         // Dismissal preserves cutoff/manual-unread because live panes can republish cleared history.
         const nextClearedAt = opts?.paneRemoved
-          ? removeAcknowledgement(s.activityClearedAtByPaneKey, paneKey)
+          ? removeChatReadMark(s.activityClearedAtByPaneKey, 'activityClearedAtByPaneKey', paneKey)
           : s.activityClearedAtByPaneKey
         const nextManualUnread = opts?.paneRemoved
-          ? removeAcknowledgement(s.manuallyUnreadTurnsByPaneKey, paneKey)
+          ? removeChatReadMark(
+              s.manuallyUnreadTurnsByPaneKey,
+              'manuallyUnreadTurnsByPaneKey',
+              paneKey
+            )
           : s.manuallyUnreadTurnsByPaneKey
         const nextConversations = opts?.paneRemoved
           ? removePaneKeys(s.agentConversationsByPaneKey, new Set([paneKey]))

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { BrowserPageAnnotation } from '../element-grab/browser-grab-types'
+import { redactBrowserMetadata } from '../browser-metadata-redaction'
 
 const rectSchema = lazyZodSchema(() =>
   z.object({
@@ -13,16 +14,18 @@ const rectSchema = lazyZodSchema(() =>
 
 const payloadSchema = lazyZodSchema(() =>
   z.object({
-    page: z.object({
-      sanitizedUrl: z.string(),
-      title: z.string(),
-      viewportWidth: z.number(),
-      viewportHeight: z.number(),
-      scrollX: z.number(),
-      scrollY: z.number(),
-      devicePixelRatio: z.number(),
-      capturedAt: z.string()
-    }),
+    page: z
+      .object({
+        sanitizedUrl: z.string(),
+        title: z.string(),
+        viewportWidth: z.number(),
+        viewportHeight: z.number(),
+        scrollX: z.number(),
+        scrollY: z.number(),
+        devicePixelRatio: z.number(),
+        capturedAt: z.string()
+      })
+      .transform(redactBrowserMetadata),
     target: z.object({
       tagName: z.string(),
       selector: z.string(),

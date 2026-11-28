@@ -5,6 +5,7 @@ import {
   type PairedServerSavedPortForwards
 } from '../../../shared/remote-runtime/host-catalog/paired-server-saved-port-forwards'
 import { persistedStore } from '../../ipc/ssh/ssh-ipc-context'
+import { pairedPortForwardSession } from './paired-port-forward-sessions'
 import {
   nextSavedPortForwards,
   type ForwardMapping
@@ -68,7 +69,8 @@ export function savePairedPortForwards(
     return
   }
   const kept = existing?.hostKeyFingerprint === key ? existing.forwards : []
-  const forwards = nextSavedPortForwards(active, kept, dropped)
+  const saved = active.filter((forward) => pairedPortForwardSession(forward.id) === undefined)
+  const forwards = nextSavedPortForwards(saved, kept, dropped)
   store.set(environmentId, forwards.length > 0 ? { hostKeyFingerprint: key, forwards } : null)
 }
 

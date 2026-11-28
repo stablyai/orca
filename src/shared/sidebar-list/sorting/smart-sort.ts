@@ -7,6 +7,7 @@ import { tabHasLivePty } from '../../workspace-layout/terminal-surfaces/tab-has-
 import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 import {
   buildWorkspaceRowComparator,
+  compareRecentActivityWithCreateGrace,
   recentActivityWithCreateGrace,
   type WorkspaceSortBy as SortBy
 } from '../../workspace-view/workspace-row-sort'
@@ -18,10 +19,10 @@ import {
   type SmartAttentionTab,
   type WorktreeAttention
 } from './smart-attention'
-import { buildAttentionByWorktree } from './smart-attention-scan'
+import { EMPTY_ATTENTION_MAP, buildSparseAttentionByWorktree } from './smart-attention-scan'
 import { smartSortPhase } from './smart-sort-phase'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../feed/sidebar-inputs-switch'
-import { compareSmartStamps, recentStamp } from './stamp-order'
+import { compareRecentStamps, compareSmartStamps, recentStamp } from './stamp-order'
 
 /** Recent-sort rank: `lastActivityAt`, floored at `createdAt + CREATE_GRACE_MS` while that window is open. */
 export function effectiveRecentActivity(worktree: Worktree, now: number): number {
@@ -30,15 +31,29 @@ export function effectiveRecentActivity(worktree: Worktree, now: number): number
 
 export type WorktreeSortLabelInput = Pick<Worktree, 'displayName' | 'path' | 'id' | 'hostId'>
 
+function trimIfNeeded(value: string): string {
+  const len = value.length
+  if (len === 0) {
+    return ''
+  }
+  const first = value.charCodeAt(0)
+  const last = value.charCodeAt(len - 1)
+  if (first > 32 && first < 127 && last > 32 && last < 127) {
+    return value
+  }
+  return value.trim()
+}
+
 export function getWorktreeSortLabel(worktree: WorktreeSortLabelInput): string {
-  const displayName = typeof worktree.displayName === 'string' ? worktree.displayName.trim() : ''
+  const displayName =
+    typeof worktree.displayName === 'string' ? trimIfNeeded(worktree.displayName) : ''
   if (displayName) {
     return displayName
   }
 
   // Persisted/remote rows may omit displayName briefly after a rename clear; keep sorting render-safe.
   const pathLabel =
-    typeof worktree.path === 'string' ? getRuntimePathBasename(worktree.path).trim() : ''
+    typeof worktree.path === 'string' ? trimIfNeeded(getRuntimePathBasename(worktree.path)) : ''
   return pathLabel || worktree.id
 }
 
@@ -72,8 +87,19 @@ function worktreeSortReads(
   repoMap: Map<string, Pick<Repo, 'displayName'>>,
   labels: WorktreeSortLabels | undefined
 ) {
+  let lazyLabels: Map<WorktreeSortLabelInput, string> | undefined
+  const label = labels
+    ? (worktree: Worktree): string => labels.get(worktree) ?? getWorktreeSortLabel(worktree)
+    : (worktree: Worktree): string => {
+        let cached = lazyLabels?.get(worktree)
+        if (cached === undefined) {
+          cached = getWorktreeSortLabel(worktree)
+          ;(lazyLabels ??= new Map()).set(worktree, cached)
+        }
+        return cached
+      }
   return {
-    label: (worktree: Worktree): string => labels?.get(worktree) ?? getWorktreeSortLabel(worktree),
+    label,
     identity: getWorktreeHostIdentity,
     repoLabel: (worktree: Worktree) => repoMap.get(worktree.repoId)?.displayName ?? '',
     // Legacy users have sortOrder but no manualOrder; seed Manual from saved order instead of alphabetizing.
@@ -89,6 +115,7 @@ function buildStampComparator(
   return buildWorkspaceRowComparator<Worktree>(sortBy, {
     ...worktreeSortReads(repoMap, labels),
     recentActivity: recentStamp,
+    compareRecent: compareRecentStamps,
     compareSmart: compareSmartStamps
   })
 }
@@ -99,7 +126,7 @@ export function sortWorktreesByStamps<W extends Worktree>(
   sortBy: SortBy,
   repoMap: Map<string, Pick<Repo, 'displayName'>>
 ): W[] {
-  return worktrees.sort(buildStampComparator(sortBy, repoMap, buildWorktreeSortLabels(worktrees)))
+  return worktrees.sort(buildStampComparator(sortBy, repoMap, undefined))
 }
 
 /** Require the precomputed attention map: omission would silently reduce Smart to idle/recent ordering. */
@@ -117,16 +144,35 @@ export function buildWorktreeComparator(
   return buildWorkspaceRowComparator<Worktree>(sortBy, {
     ...worktreeSortReads(repoMap, labels),
     recentActivity: (worktree) => effectiveRecentActivity(worktree, now),
+    compareRecent: (a, b) =>
+      compareRecentActivityWithCreateGrace(
+        a.lastActivityAt,
+        a.createdAt,
+        b.lastActivityAt,
+        b.createdAt,
+        now
+      ),
     compareSmart: (a, b) => {
       const aw = attentionByWorktree.get(a.id) ?? IDLE
       const bw = attentionByWorktree.get(b.id) ?? IDLE
-      return (
+      if (aw.cls !== bw.cls) {
         // Lower class outranks higher.
-        aw.cls - bw.cls ||
-        // Latest attention wins within a class.
-        bw.attentionTimestamp - aw.attentionTimestamp ||
-        // Idle falls back to recency/create grace before labels.
-        effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now)
+        return aw.cls - bw.cls
+      }
+      if (aw.attentionTimestamp > bw.attentionTimestamp) {
+        // Latest attention wins within a class (Smi return avoids HeapNumber boxing).
+        return -1
+      }
+      if (aw.attentionTimestamp < bw.attentionTimestamp) {
+        return 1
+      }
+      // Idle falls back to recency/create grace before labels.
+      return compareRecentActivityWithCreateGrace(
+        a.lastActivityAt,
+        a.createdAt,
+        b.lastActivityAt,
+        b.createdAt,
+        now
       )
     }
   })
@@ -190,6 +236,24 @@ export type WorktreeSortRanking<W extends Worktree> = {
   detectedLiveSmartSignal: boolean
 }
 
+function hasAnyLivePtyInTabs(
+  tabsByWorktree: Record<string, readonly SmartAttentionTab[]>,
+  ptyIdsByTabId: Record<string, string[]>
+): boolean {
+  for (const worktreeId in tabsByWorktree) {
+    if (!Object.hasOwn(tabsByWorktree, worktreeId)) {
+      continue
+    }
+    const tabs = tabsByWorktree[worktreeId]
+    for (let i = 0; i < tabs.length; i += 1) {
+      if (tabHasLivePty(ptyIdsByTabId, tabs[i].id)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 /** One frozen order for the active mode; the window and main both sort through here. */
 export function rankWorktreesForSort<W extends Worktree>(args: {
   /** Non-archived rows; sorted in place. */
@@ -201,11 +265,9 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
   sources: SmartSortSources
 }): WorktreeSortRanking<W> {
   const { worktrees, sortBy, now, sources } = args
-  // Why precompute: the label tiebreaker runs on every comparison in every mode.
-  const labels = buildWorktreeSortLabels(worktrees)
   // Switch point: stamps need no cold phase, latch or attention map.
   if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-    worktrees.sort(buildStampComparator(sortBy, args.repoMap, labels))
+    worktrees.sort(buildStampComparator(sortBy, args.repoMap, undefined))
     return { sorted: worktrees, detectedLiveSmartSignal: false }
   }
   let detectedLiveSmartSignal = false
@@ -213,9 +275,7 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
   // Why cold-start detection: agent-status hydrates async, so the warm comparator would collapse all to Class 4; keep the persisted order until a live signal appears.
   if (smartSortPhase(sortBy, args.latched) === 'cold') {
     // Why tabHasLivePty over tab.ptyId: slept terminals keep tab.ptyId as a wake hint, so it'd falsely keep cold-start ordering off.
-    const hasAnyLivePty = Object.values(sources.tabsByWorktree).some((tabs) =>
-      tabs.some((tab) => tabHasLivePty(sources.ptyIdsByTabId, tab.id))
-    )
+    const hasAnyLivePty = hasAnyLivePtyInTabs(sources.tabsByWorktree, sources.ptyIdsByTabId)
     if (
       hasAnyLivePty ||
       (sources.hasFreshAttributedStatus?.() ??
@@ -223,29 +283,30 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
     ) {
       detectedLiveSmartSignal = true
     } else {
-      worktrees.sort((a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b, labels))
+      let lazyLabels: Map<WorktreeSortLabelInput, string> | undefined
+      const labelOf = (w: Worktree): string => {
+        let cached = lazyLabels?.get(w)
+        if (cached === undefined) {
+          cached = getWorktreeSortLabel(w)
+          ;(lazyLabels ??= new Map()).set(w, cached)
+        }
+        return cached
+      }
+      worktrees.sort(
+        (a, b) =>
+          b.sortOrder - a.sortOrder ||
+          compareSidebarText(labelOf(a), labelOf(b)) ||
+          compareCodePoints(getWorktreeHostIdentity(a), getWorktreeHostIdentity(b))
+      )
       return { sorted: worktrees, detectedLiveSmartSignal: false }
     }
   }
 
-  // Why precompute: hot sort — build the attention map once so the O(N log N) comparator does O(1) lookups.
+  // Why precompute: hot sort — build the sparse attention map once so the O(N log N) comparator does O(1) lookups; absent entries default to IDLE.
   const attentionByWorktree =
     sortBy === 'smart'
-      ? sources.attentionForWorktree
-        ? new Map(
-            worktrees.map((worktree) => [worktree.id, sources.attentionForWorktree!(worktree, now)])
-          )
-        : buildAttentionByWorktree(
-            worktrees,
-            sources.tabsByWorktree,
-            sources.agentStatusByPaneKey,
-            sources.runtimePaneTitlesByTabId,
-            sources.ptyIdsByTabId,
-            now,
-            sources.migrationUnsupportedByPtyId,
-            sources.terminalLayoutsByTabId
-          )
-      : new Map<string, WorktreeAttention>()
-  worktrees.sort(buildWorktreeComparator(sortBy, args.repoMap, now, attentionByWorktree, labels))
+      ? buildSparseAttentionByWorktree(worktrees, sources, now)
+      : EMPTY_ATTENTION_MAP
+  worktrees.sort(buildWorktreeComparator(sortBy, args.repoMap, now, attentionByWorktree, undefined))
   return { sorted: worktrees, detectedLiveSmartSignal }
 }

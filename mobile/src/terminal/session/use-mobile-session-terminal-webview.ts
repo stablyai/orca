@@ -1,7 +1,9 @@
 import type { terminalInputSend } from '../host-operations/mobile-terminal-operations'
 import { MobileTerminalInputSender } from '../input-delivery/mobile-terminal-input-sender'
-import '../input-delivery/mobile-terminal-input-owner'
-import type { TerminalInputEnqueueOptions } from '../input-delivery/mobile-terminal-input-owner'
+import {
+  refused,
+  type TerminalInputEnqueueOptions
+} from '../input-delivery/mobile-terminal-input-owner'
 import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../../src/shared/terminal/input/terminal-ordered-input'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-workspace-client'
 import { pendingSelectionWantsHandle } from '../../session/tabs/pending-session-selection'
@@ -71,16 +73,10 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       params: Parameters<typeof terminalInputSend.request>[1],
       options?: Parameters<typeof terminalInputSend.request>[2],
       enqueue?: TerminalInputEnqueueOptions
-    ) => {
-      if (!client || rpc !== client) {
-        return Promise.resolve({
-          id: 'retired-input',
-          ok: true as const,
-          result: { send: { accepted: false } }
-        })
-      }
-      return inputSender.request(client, params, options, orderedInputSupported, enqueue)
-    },
+    ) =>
+      !client || rpc !== client
+        ? Promise.resolve(refused(params.terminal))
+        : inputSender.request(client, params, options, orderedInputSupported, enqueue),
     [client, inputSender, orderedInputSupported]
   )
   const sendTerminalUserInput = useCallback<typeof terminalInputSend.request>(
@@ -89,6 +85,20 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       return sendTerminalOrderedInput(client, params, options)
     },
     [terminalRefs, sendTerminalOrderedInput]
+  )
+  const sendTerminalUserInputChunks = useCallback(
+    (
+      rpc: Parameters<typeof terminalInputSend.request>[0],
+      chunks: readonly Parameters<typeof terminalInputSend.request>[1][],
+      options?: Parameters<typeof terminalInputSend.request>[2]
+    ) => {
+      if (!client || rpc !== client || chunks.length === 0) {
+        return Promise.resolve(chunks.map((chunk) => refused(chunk.terminal)))
+      }
+      terminalRefs.current.get(chunks[0].terminal)?.scrollToBottom()
+      return inputSender.requestSequence(client, chunks, options, orderedInputSupported)
+    },
+    [client, inputSender, orderedInputSupported, terminalRefs]
   )
   // Store the ref but subscribe only after web-ready so init cannot precede xterm loading.
   const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
@@ -291,6 +301,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   }, [activeSessionTab, fileDocs, readFileTab])
   return {
     sendTerminalUserInput,
+    sendTerminalUserInputChunks,
     sendTerminalOrderedInput,
     setTerminalWebViewRef,
     handleTerminalWebReady,

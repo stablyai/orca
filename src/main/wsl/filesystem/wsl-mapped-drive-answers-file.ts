@@ -5,6 +5,7 @@
  */
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
@@ -22,28 +23,32 @@ import {
 const FILE_NAME = 'wsl-mapped-drive-answers.json'
 const MAX_FILE_BYTES = 64 * 1024
 
-const AnswersSchema = z.object({
-  version: z.literal(1),
-  answers: z
-    .array(
-      z.object({
-        letter: z.string().regex(/^[A-Z]$/),
-        share: z
-          .string()
-          .max(4_096)
-          .refine((share) => parseWslUncPath(share) !== null)
-          .nullable(),
-        at: z.number().finite()
-      })
-    )
-    .max(26)
-})
+const AnswersSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    answers: z
+      .array(
+        z.object({
+          letter: z.string().regex(/^[A-Z]$/),
+          share: z
+            .string()
+            .max(4_096)
+            .refine((share) => parseWslUncPath(share) !== null)
+            .nullable(),
+          at: z.number().finite(),
+          // Optional, and older builds strip keys they do not know, so either build reads the file.
+          lookup: z.enum(['read', 'failed']).optional()
+        })
+      )
+      .max(26)
+  })
+)
 
 function sharesOf(answers: readonly WslMappedDriveAnswer[]): string {
   return JSON.stringify(
     [...answers]
       .sort((left, right) => left.letter.localeCompare(right.letter))
-      .map(({ letter, share }) => [letter, share])
+      .map(({ letter, share, lookup }) => [letter, share, lookup ?? null])
   )
 }
 
@@ -76,7 +81,7 @@ export async function loadWslMappedDriveAnswers(
   let pending: WslMappedDriveAnswer[] | null = null
   let savedShares = sharesOf(wslMappedDriveAnswers())
   setWslMappedDriveAnswerSink((answers) => {
-    // Only where letters point counts: a re-read that changed only the time isn't worth a write.
+    // Only where letters point and how it was learned count: a time-only change isn't worth a write.
     const shares = sharesOf(answers)
     if (shares === savedShares) {
       return

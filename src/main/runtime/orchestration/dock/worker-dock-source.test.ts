@@ -12,10 +12,7 @@ import { createAgentChildWorkAdmission } from '../../../../shared/agent-status/c
 import { reconcileAgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-reconciliation'
 import { makeStructuredAgentStatusSubject } from '../../../../shared/agent-status/contracts/agent-status-subject'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const hostRef: { current: unknown } = { current: null }
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
@@ -188,7 +185,7 @@ describe('worker dock source of a cleared chat', () => {
       .run(dispatchId)
     // Dispatch authority records the worker's minted pane; its status rows live at the session's own.
     const minted = mintStructuredWorkerPaneKey(WORKER)
-    const derived = structuredAgentSessionPaneKey(structuredAgentSessionTabId(WORKER), WORKER)
+    const derived = chatPaneKey(WORKER)
     expect(minted).not.toBe(derived)
     db.db
       .prepare(
@@ -242,7 +239,7 @@ describe('worker dock source of a cleared chat', () => {
     db.db
       .prepare("UPDATE worker_dispatches SET state = 'ready' WHERE dispatch_id = ?")
       .run(dispatchId)
-    const derived = structuredAgentSessionPaneKey(structuredAgentSessionTabId(WORKER), WORKER)
+    const derived = chatPaneKey(WORKER)
     db.db
       .prepare(
         'UPDATE dispatch_contexts SET assignee_handle = ?, assignee_pane_key = ?, process_incarnation = ? WHERE id = ?'

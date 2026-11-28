@@ -68,6 +68,9 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
     if (published?.state === 'refused' && published.reason === 'windows') {
       return 'windows'
     }
+    if (published?.state === 'refused' && published.reason === 'too-old') {
+      return 'too-old'
+    }
     return !published || published.state === 'refused' ? 'not-on-host' : 'yes'
   }
   const chatAgents = [

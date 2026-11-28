@@ -35,18 +35,36 @@ export const WslHostPendingStopSchema = lazyZodSchema(() =>
 
 export type WslHostPendingStop = z.infer<typeof WslHostPendingStopSchema>
 
-export const WslHostDeploymentRecordSchema = OrcadWslDeploymentLinkSchema.extend({
-  environmentId: z.string().min(1),
-  createdAt: z.number().finite(),
-  /**
-   * The paired orcad's host key, so a stale record cannot claim a server re-paired under the same
-   * id and bridge port. Optional: records written before it are bound by port only until refreshed.
-   */
-  pairingPublicKeyB64: z.string().min(1).optional(),
-  /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
-  previousPairingPublicKeyB64: z.string().min(1).optional(),
-  pendingStop: WslHostPendingStopSchema.optional()
-})
+// Never a leading `-`, so wsl.exe can't read it as a flag.
+export const WslLinuxUserNameSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .max(64)
+    .regex(/^[A-Za-z0-9_][A-Za-z0-9_.-]*\$?$/)
+)
+
+/** A launch-reported account name, or undefined when it isn't one a record can pin. */
+export function pinnableWslLinuxUser(name: string | null | undefined): string | undefined {
+  const parsed = WslLinuxUserNameSchema.safeParse(name)
+  return parsed.success ? parsed.data : undefined
+}
+
+export const WslHostDeploymentRecordSchema = lazyZodSchema(() =>
+  OrcadWslDeploymentLinkSchema.extend({
+    environmentId: z.string().min(1),
+    createdAt: z.number().finite(),
+    /**
+     * The paired orcad's host key, so a stale record cannot claim a server re-paired under the same
+     * id and bridge port. Optional: records written before it are bound by port only until refreshed.
+     */
+    pairingPublicKeyB64: z.string().min(1).optional(),
+    /** The key a refresh replaced, accepted until the pairing write that follows it lands. */
+    previousPairingPublicKeyB64: z.string().min(1).optional(),
+    /** orcad's pinned Linux account (`wsl -u`); older records are pinned on their next verified connect. */
+    linuxUser: WslLinuxUserNameSchema.optional(),
+    pendingStop: WslHostPendingStopSchema.optional()
+  })
+)
 
 export type WslHostDeploymentRecord = z.infer<typeof WslHostDeploymentRecordSchema>
 

@@ -50,31 +50,49 @@ export type SectionAppendContext = {
   folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
 }
 
+const EMPTY_REPOS: readonly Repo[] = []
+
 function getProjectHeaderHostScope(
   ctx: SectionAppendContext,
   group: WorktreeGroupEntry
-): Pick<GroupHeaderRow, 'hostRepos' | 'hostWorktreeCounts' | 'hostWorktreeIds'> {
+): Pick<GroupHeaderRow, 'hostRepos' | 'hostWorktreeCounts' | 'hostWorktreeIds'> | undefined {
+  const hasNoticeRepos =
+    ctx.importedWorktreesByRepo.size > 0 || ctx.newExternalWorktreesInboxByRepo.size > 0
   const hostRepos = getProjectHeaderHostRepos({
     group,
     repoMap: ctx.repoMap,
     repoOf: ctx.repoOf,
-    noticeRepoOf: (repoId) =>
-      [
-        ctx.importedWorktreesByRepo.get(repoId)?.repo,
-        ctx.newExternalWorktreesInboxByRepo.get(repoId)?.repo
-      ].filter((repo) => repo !== undefined),
-    hasPendingCreation: (repoId) => ctx.pendingByRepo.has(repoId),
+    noticeRepoOf: hasNoticeRepos
+      ? (repoId) => {
+          const imported = ctx.importedWorktreesByRepo.get(repoId)?.repo
+          const inbox = ctx.newExternalWorktreesInboxByRepo.get(repoId)?.repo
+          if (imported && inbox) {
+            return [imported, inbox]
+          }
+          if (imported) {
+            return [imported]
+          }
+          return inbox ? [inbox] : EMPTY_REPOS
+        }
+      : () => EMPTY_REPOS,
+    hasPendingCreation:
+      ctx.pendingByRepo.size > 0 ? (repoId) => ctx.pendingByRepo.has(repoId) : () => false,
     defaultHostId: ctx.defaultHostId
   })
   if (!hostRepos) {
-    return {}
+    return undefined
   }
   const hostWorktreeIds = getHostWorktreeIds(group.items, ctx.repoOf, ctx.defaultHostId)
+  let hostWorktreeCounts: Map<ExecutionHostId, number> | undefined
+  if (hostWorktreeIds) {
+    hostWorktreeCounts = new Map()
+    for (const [hostId, ids] of hostWorktreeIds) {
+      hostWorktreeCounts.set(hostId, ids.length)
+    }
+  }
   return {
     hostRepos,
-    hostWorktreeCounts: hostWorktreeIds
-      ? new Map([...hostWorktreeIds].map(([hostId, ids]) => [hostId, ids.length]))
-      : undefined,
+    hostWorktreeCounts,
     hostWorktreeIds
   }
 }
@@ -100,54 +118,61 @@ export function appendOrderedGroups(
     mixedWorktreeHostContextLabels,
     occurrencePlan
   } = ctx
+  const hasNoticesOrPending =
+    importedWorktreesByRepo.size > 0 ||
+    newExternalWorktreesInboxByRepo.size > 0 ||
+    pendingByRepo.size > 0
   for (const [key, group] of groupsToAppend) {
     const isCollapsed = collapsedGroups.has(key)
     const repo = group.repo
     const folderPairs = group.folderWorkspaces ?? []
-    const header =
-      groupBy === 'repo'
-        ? {
-            type: 'header' as const,
-            key,
-            label: group.label,
-            count: group.items.length,
-            icon: { kind: 'project' as const },
-            repo,
-            projectGroupDepth,
-            ...getProjectHeaderHostScope(ctx, group)
-          }
-        : groupBy === 'workspace-status'
-          ? (() => {
-              const workspaceStatus =
-                getWorkspaceStatusFromGroupKey(key, workspaceStatuses) ??
-                workspaceStatuses[0]?.id ??
-                'in-progress'
-              const definition = workspaceStatuses.find((status) => status.id === workspaceStatus)
-              return {
-                type: 'header' as const,
-                key,
-                label: definition?.label ?? workspaceStatus,
-                count: group.items.length + folderPairs.length,
-                icon: { kind: 'workspace-status' as const, status: workspaceStatus },
-                ...getLaneHostWorktreeScope(group.items, folderPairs, repoOf, defaultHostId),
-                worktreeIds: group.items.map((worktree) => worktree.id)
-              }
-            })()
-          : (() => {
-              const prGroup = key.replace(/^pr:/, '') as PRGroupKey
-              return {
-                type: 'header' as const,
-                key,
-                count: group.items.length + folderPairs.length,
-                icon: { kind: 'pr-status' as const, prGroup },
-                ...getLaneHostWorktreeScope(group.items, folderPairs, repoOf, defaultHostId),
-                worktreeIds: group.items.map((worktree) => worktree.id)
-              }
-            })()
+    let header: GroupHeaderRow
+    if (groupBy === 'repo') {
+      const hostScope = getProjectHeaderHostScope(ctx, group)
+      header = {
+        type: 'header',
+        key,
+        label: group.label,
+        count: group.items.length,
+        icon: { kind: 'project' },
+        repo,
+        projectGroupDepth
+      }
+      if (hostScope) {
+        header.hostRepos = hostScope.hostRepos
+        header.hostWorktreeCounts = hostScope.hostWorktreeCounts
+        header.hostWorktreeIds = hostScope.hostWorktreeIds
+      }
+    } else if (groupBy === 'workspace-status') {
+      const workspaceStatus =
+        getWorkspaceStatusFromGroupKey(key, workspaceStatuses) ??
+        workspaceStatuses[0]?.id ??
+        'in-progress'
+      const definition = workspaceStatuses.find((status) => status.id === workspaceStatus)
+      header = {
+        type: 'header',
+        key,
+        label: definition?.label ?? workspaceStatus,
+        count: group.items.length + folderPairs.length,
+        icon: { kind: 'workspace-status', status: workspaceStatus },
+        ...getLaneHostWorktreeScope(group.items, folderPairs, repoOf, defaultHostId),
+        worktreeIds: group.items.map((worktree) => worktree.id)
+      }
+    } else {
+      const prGroup = key.replace(/^pr:/, '') as PRGroupKey
+      header = {
+        type: 'header',
+        key,
+        count: group.items.length + folderPairs.length,
+        icon: { kind: 'pr-status', prGroup },
+        ...getLaneHostWorktreeScope(group.items, folderPairs, repoOf, defaultHostId),
+        worktreeIds: group.items.map((worktree) => worktree.id)
+      }
+    }
 
     result.push(header)
     if (!isCollapsed) {
-      if (groupBy === 'repo') {
+      if (groupBy === 'repo' && hasNoticesOrPending) {
         const repoIds =
           group.repoIds.size > 0
             ? [...group.repoIds]

@@ -1,16 +1,21 @@
 import { useState } from 'react'
-import { View, Text, Pressable, type KeyboardTypeOptions } from 'react-native'
+import { Text, View, type KeyboardTypeOptions } from 'react-native'
 import type { LucideIcon } from 'lucide-react-native'
-import { colors, spacing, radii, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { SettingsNote, settingsScreenStylesSheet } from '../../settings/settings-screen-frame'
 import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
 import { TextField } from '../composer-input/TextField'
-import { MobilePendingButton } from '../controls/MobilePendingButton'
+import { groupFieldStylesSheet } from '../composer-input/composer-input-styles'
+import { SheetHeader } from '../nav-bar/SheetHeader'
 
 type SheetProps = {
   title: string
+  /** What the text is for, e.g. the item being renamed; one line under the title. */
+  subtitle?: string
+  /** A hint under the field. */
   message?: string
   value: string
   onChangeText: (value: string) => void
@@ -19,6 +24,8 @@ type SheetProps = {
   /** The back-out's label, when "Cancel" would read as the submit itself. */
   cancelLabel?: string
   selectTextOnFocus?: boolean
+  /** Part of the text selected when the field opens, e.g. a file's name without its extension; wins over selectTextOnFocus. */
+  initialSelection?: { start: number; end: number }
   allowEmpty?: boolean
   keyboardType?: KeyboardTypeOptions
   /** Shown under the field; the text stays so the user can retry. */
@@ -79,6 +86,7 @@ export function TextInputModal({
 /** The text sheet's body, for a drawer that is already open (e.g. a menu that swaps to it). */
 export function TextInputSheetContent({
   title,
+  subtitle,
   message,
   value,
   onChangeText,
@@ -86,6 +94,7 @@ export function TextInputSheetContent({
   submitLabel,
   cancelLabel,
   selectTextOnFocus = false,
+  initialSelection,
   allowEmpty = false,
   keyboardType,
   error,
@@ -95,9 +104,14 @@ export function TextInputSheetContent({
   onSubmit,
   onCancel
 }: SheetProps) {
-  useMobileColorScheme()
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
+  const settingsScreenStyles = useThemedStyles(settingsScreenStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
 
+  // Applied once: the user's first move of the caret or selection takes over.
+  const [selection, setSelection] = useState(initialSelection)
   const filled = !submitBlocked && (allowEmpty || value.trim().length > 0)
   const canSubmit = !busy && filled
   const NoticeIcon = notice?.icon
@@ -110,11 +124,17 @@ export function TextInputSheetContent({
 
   return (
     <>
-      <View style={styles.header}>
-        <Text style={styles.title}>{title}</Text>
-        {message ? <Text style={styles.message}>{message}</Text> : null}
-      </View>
-
+      <SheetHeader
+        title={title}
+        {...(subtitle !== undefined ? { subtitle } : {})}
+        leading={{ label: cancelLabel ?? t('common.cancel', 'Cancel'), onPress: onCancel }}
+        trailing={{
+          label: submitLabel ?? t('common.save', 'Save'),
+          onPress: handleSubmit,
+          disabled: !filled,
+          busy
+        }}
+      />
       <TextField
         value={value}
         onChangeText={onChangeText}
@@ -122,113 +142,37 @@ export function TextInputSheetContent({
         autoFocus
         autoCapitalize="none"
         autoCorrect={false}
-        selectTextOnFocus={selectTextOnFocus}
+        selectTextOnFocus={selectTextOnFocus && !initialSelection}
+        selection={selection}
+        onSelectionChange={selection ? () => setSelection(undefined) : undefined}
         keyboardType={keyboardType}
         returnKeyType="done"
         onSubmitEditing={handleSubmit}
+        style={groupFieldStyles.underHeader}
       />
-
       {error ? (
-        <Text style={styles.error}>{error}</Text>
+        <SettingsNote error>{error}</SettingsNote>
       ) : notice && NoticeIcon ? (
-        <View style={styles.notice}>
+        // A note with the reason's icon: Save is off or waiting until the computer is back.
+        <View style={styles.notice} accessibilityRole="alert">
           <NoticeIcon size={13} color={colors.textSecondary} style={styles.noticeIcon} />
-          <Text style={styles.noticeText}>{notice.text}</Text>
+          <Text style={[settingsScreenStyles.note, styles.noticeText]}>{notice.text}</Text>
         </View>
+      ) : message ? (
+        <SettingsNote>{message}</SettingsNote>
       ) : null}
-
-      <View style={styles.actions}>
-        <Pressable
-          style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
-          onPress={onCancel}
-        >
-          <Text style={styles.cancelText}>{cancelLabel ?? t('common.cancel', 'Cancel')}</Text>
-        </Pressable>
-        <MobilePendingButton
-          label={submitLabel ?? t('common.save', 'Save')}
-          style={styles.submitButton}
-          labelStyle={styles.submitText}
-          disabledStyle={styles.submitButtonDisabled}
-          spinnerColor={colors.bgBase}
-          pending={busy}
-          disabled={!filled}
-          onPress={handleSubmit}
-        />
-      </View>
     </>
   )
 }
 
-const styles = themedStyleSheet(() => ({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  message: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  error: {
-    color: colors.statusRed,
-    fontSize: typography.metaSize,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
+const stylesSheet = themedStyleSheet(() => ({
+  // The note's inset moves to the row, so the icon sits where note text starts.
   notice: {
     flexDirection: 'row',
     gap: 6,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  noticeIcon: {
-    marginTop: 2
-  },
-  noticeText: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: 17
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.md
-  },
-  cancelButton: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control
+    paddingTop: spacing.sm
   },
-  submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control
-  },
-  buttonPressed: {
-    opacity: 0.7
-  },
-  submitButtonDisabled: {
-    opacity: 0.4
-  },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  submitText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
+  noticeIcon: { marginTop: 3 },
+  noticeText: { flex: 1, paddingHorizontal: 0, paddingTop: 0 }
 }))

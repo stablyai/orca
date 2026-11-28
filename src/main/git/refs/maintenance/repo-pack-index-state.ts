@@ -1,6 +1,7 @@
-import { open, opendir, stat } from 'node:fs/promises'
+import { open, stat } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
+import { openDirectory } from '../../../../shared/open-directory'
 
 export const PACK_INDEX_PROBE_ENTRY_LIMIT = 65_536
 export const PACK_INDEX_PROBE_TIMEOUT_MS = 1_000
@@ -64,7 +65,7 @@ export async function probeRepoPackIndexDirectory(
   packThreshold: number,
   signal: AbortSignal
 ): Promise<{ packCountFloor: number; protected: boolean }> {
-  const entries = await opendir(directory)
+  const entries = await openDirectory(directory)
   const startedAt = Date.now()
   let visited = 0
   let packCountFloor = 0

@@ -1,36 +1,34 @@
 import { useContext } from 'react'
-import { Pressable } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { Undo2 } from 'lucide-react-native'
 import { MobileNativeChatRewindContext } from './mobile-native-chat-rewind-context'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, radii } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 
 /** Desktop's "Rewind to here" beside a user row's time; renders nothing where the chat can't rewind to it. */
 export function MobileNativeChatRewindButton({ itemId }: { itemId: string }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const rewind = useContext(MobileNativeChatRewindContext)
   const { openRewind } = useContext(MobileNativeChatRowOverlaysContext)
   if (!rewind?.eligibleItemIds.has(itemId)) {
     return null
   }
+  // Offered only while the chat can rewind now; its slot stays so the row never jumps at turn start or end.
+  if (rewind.disabledReason !== null) {
+    return <View style={styles.button} />
+  }
   const label = t('chat.messageActionsSheet.rewind', 'Rewind to here')
-  const { disabledReason } = rewind
   return (
     <Pressable
-      style={({ pressed }) => [
-        styles.button,
-        disabledReason !== null && styles.disabled,
-        pressed && styles.pressed
-      ]}
+      style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       hitSlop={10}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint={disabledReason ?? undefined}
-      accessibilityState={{ disabled: disabledReason !== null }}
       onPress={() => openRewind(itemId)}
     >
       <Undo2 size={14} color={colors.textMuted} />
@@ -38,7 +36,7 @@ export function MobileNativeChatRewindButton({ itemId }: { itemId: string }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   button: {
     width: 24,
     height: 24,
@@ -46,6 +44,5 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     borderRadius: radii.control
   },
-  disabled: { opacity: 0.5 },
   pressed: { backgroundColor: colors.bgRaised }
 }))

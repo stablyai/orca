@@ -11,11 +11,13 @@ import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
 import { removeFolderContextFile, writeFolderContextFile } from './acp-folder-context-file'
+import { clearEarlierRunsOnce } from './acp-instructions-earlier-runs'
 import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
   writeOpenCodeInstructionsConfigDir
 } from '../../opencode/opencode-instructions-config-dir'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 /** What a launch adds so the agent's own system prompt carries the instructions. */
 export type AcpInstructionsLaunch = {
@@ -93,9 +95,11 @@ export const deliverGrokInstructions = keptWithSession(async ({ text }) => ({
   sessionMeta: { rules: text }
 }))
 
-const AntigravitySystemPromptCapability = z.object({
-  antigravity: z.object({ systemPrompt: z.object({ append: z.literal(true) }) })
-})
+const AntigravitySystemPromptCapability = lazyZodSchema(() =>
+  z.object({
+    antigravity: z.object({ systemPrompt: z.object({ append: z.literal(true) }) })
+  })
+)
 
 /** Whether the Antigravity server appends `_meta.antigravity.systemPrompt.append` to its system prompt. */
 export function antigravityTakesSystemPrompt(initialized: InitializeResponse): boolean {
@@ -243,18 +247,9 @@ export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, 
   return { env: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: inherited ? `${inherited},${dir}` : dir } }
 })
 
-const cleared = new Map<string, Promise<void>>()
-
-/** Stdio children never outlive the host, and one host holds a profile, so the folder is cleared
- *  on its first use in a run. */
-async function instructionsRoot(dataDirectory: string): Promise<string> {
+async function instructionsRoot(dataDirectory: string, sessionId: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')
-  let clearing = cleared.get(root)
-  if (!clearing) {
-    clearing = rm(root, { recursive: true, force: true }).catch(() => undefined)
-    cleared.set(root, clearing)
-  }
-  await clearing
+  await clearEarlierRunsOnce(root, sessionId, (path) => rm(path, { recursive: true, force: true }))
   await mkdir(root, { recursive: true, mode: 0o700 })
   return root
 }
@@ -273,7 +268,7 @@ export async function writeAcpInstructionsFile(
   text: string
 ): Promise<string> {
   const path = join(
-    await instructionsRoot(dataDirectory),
+    await instructionsRoot(dataDirectory, sessionId),
     `${nativeChatScratchFolderName(sessionId)}.md`
   )
   await replaceFile(path, text)
@@ -287,7 +282,10 @@ export async function writeAcpInstructionsFolder(
   path: string,
   content: string
 ): Promise<string> {
-  const dir = join(await instructionsRoot(dataDirectory), nativeChatScratchFolderName(sessionId))
+  const dir = join(
+    await instructionsRoot(dataDirectory, sessionId),
+    nativeChatScratchFolderName(sessionId)
+  )
   const target = join(dir, path)
   await mkdir(dirname(target), { recursive: true, mode: 0o700 })
   await replaceFile(target, content)
@@ -310,8 +308,6 @@ async function removeTreeKeepingLinkTargets(path: string): Promise<void> {
   await rmdir(path).catch(() => undefined)
 }
 
-const clearedFolders = new Map<string, Promise<void>>()
-
 /** A new folder per launch, so a child still running from an earlier one keeps reading its own.
  *  Folders may link into the user's files, so clearing never follows a link (#1083). */
 export async function makeAcpInstructionsFolder(
@@ -319,13 +315,9 @@ export async function makeAcpInstructionsFolder(
   sessionId: string
 ): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions-folders')
-  let clearing = clearedFolders.get(root)
-  if (!clearing) {
-    clearing = removeTreeKeepingLinkTargets(root)
-    clearedFolders.set(root, clearing)
-  }
-  await clearing
-  const path = join(root, `${nativeChatScratchFolderName(sessionId)}-${randomUUID()}`)
+  const name = `${nativeChatScratchFolderName(sessionId)}-${randomUUID()}`
+  await clearEarlierRunsOnce(root, sessionId, removeTreeKeepingLinkTargets, name)
+  const path = join(root, name)
   await mkdir(path, { recursive: true, mode: 0o700 })
   return path
 }

@@ -46,7 +46,10 @@ export function resolveWorkspaceReferenceObservationOwner(
     const tab = findAgentSessionTab(state, worktreeId, context.tabId)
     return tab ? resolveNotificationTabOwner(state, tab) : null
   }
-  return resolveTerminalNotificationOwner(state, worktreeId, context)
+  // PR attachment admission requires proven PTY/tab ownership; never use the notification-mute remote fallback.
+  return resolveTerminalNotificationOwner(state, worktreeId, context, {
+    allowRemoteWorkspaceFallback: false
+  })
 }
 
 export function getWorkspaceAttachmentObservedOrigin(

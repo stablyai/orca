@@ -10,6 +10,10 @@ import type {
 } from '../../../../../preload/api/preflight/preflight-api'
 import type { AppState } from '../../types'
 import type { LocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context-cache'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+
+/** The host a preflight answer came from, so a card can save to the host it shows. */
+export type PreflightStatusHost = { target: RuntimeClientTarget; followsWorkspace: boolean }
 
 export type PreflightSlice = {
   preflightStatus: PreflightStatus | null
@@ -17,6 +21,7 @@ export type PreflightSlice = {
   preflightStatusContextKey: string | null
   preflightStatusLoading: boolean
   preflightStatusError: string | null
+  preflightStatusHost: PreflightStatusHost | null
 
   /** `wakeWslDistro`: a user act (window focus, a click) that may start the focused workspace's stopped WSL distro. */
   refreshPreflightStatus: (options?: { force?: boolean; wakeWslDistro?: boolean }) => Promise<void>
@@ -61,6 +66,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
   preflightStatusContextKey: null,
   preflightStatusLoading: false,
   preflightStatusError: null,
+  preflightStatusHost: null,
 
   invalidatePreflightStatus: () => {
     latestPreflightRequestId += 1
@@ -71,7 +77,8 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
       preflightStatusChecked: false,
       preflightStatusContextKey: null,
       preflightStatusLoading: false,
-      preflightStatusError: null
+      preflightStatusError: null,
+      preflightStatusHost: null
     })
   },
 
@@ -98,11 +105,14 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     const requestId = ++latestPreflightRequestId
     const contextChanged = get().preflightStatusContextKey !== contextKey
     // Why: the host the context key names: the focused workspace's owner, else the default scope host.
-    const runtimeTarget = getActiveWorkspaceOwnerTarget(get()) ?? defaultScopeHost(get().settings)
+    const workspaceTarget = getActiveWorkspaceOwnerTarget(get())
+    const runtimeTarget = workspaceTarget ?? defaultScopeHost(get().settings)
+    const statusHost = { target: runtimeTarget, followsWorkspace: workspaceTarget !== null }
     const preflightArgs = buildPreflightArgs(force, wake, context)
     set({
       preflightStatus: contextChanged ? null : get().preflightStatus,
       preflightStatusChecked: contextChanged ? false : get().preflightStatusChecked,
+      preflightStatusHost: contextChanged ? null : get().preflightStatusHost,
       preflightStatusLoading: true,
       preflightStatusError: null
     })
@@ -124,7 +134,8 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
           preflightStatusChecked: true,
           preflightStatusContextKey: contextKey,
           preflightStatusLoading: false,
-          preflightStatusError: null
+          preflightStatusError: null,
+          preflightStatusHost: statusHost
         })
       })
       .catch((error) => {
@@ -135,7 +146,8 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
           preflightStatusChecked: true,
           preflightStatusContextKey: contextKey,
           preflightStatusLoading: false,
-          preflightStatusError: getErrorMessage(error)
+          preflightStatusError: getErrorMessage(error),
+          preflightStatusHost: statusHost
         })
       })
       .finally(() => {

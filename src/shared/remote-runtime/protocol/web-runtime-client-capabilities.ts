@@ -1,3 +1,4 @@
+import { AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY } from '../../ai-vault/contracts/ai-vault-runtime-capabilities'
 import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from '../../git/commands/git-commit-action'
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../source-control/runtime/git-graph-capabilities'
 import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../agent-session/capabilities/structured-agent-session-renderer-client-capabilities'
@@ -21,6 +22,7 @@ import {
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
 } from '../../terminal/quick-commands/terminal-quick-command-capabilities'
 import { GOOGLE_TRIGGERS_RUNTIME_CAPABILITY } from '../../google/google-connect-types'
+import { ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY } from '../../orchestration/orchestration-runtime-capabilities'
 
 /** What the browser client advertises in its handshake with the host it is paired to. */
 export const WEB_RUNTIME_CLIENT_CAPABILITIES = [
@@ -42,5 +44,9 @@ export const WEB_RUNTIME_CLIENT_CAPABILITIES = [
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
   // Same renderer as the desktop: a restored, unconfirmed agent row shows as identity only.
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
-  GOOGLE_TRIGGERS_RUNTIME_CAPABILITY
+  GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+  // History's Show more counts the rows a host hid, so a chat may list once.
+  AI_VAULT_CHAT_ROWS_CLIENT_CAPABILITY,
+  // Browser window driven by the user: worker approvals and dock owner actions count as a person.
+  ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY
 ] as const

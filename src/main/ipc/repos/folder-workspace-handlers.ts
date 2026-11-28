@@ -2,11 +2,6 @@ import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { FolderWorkspacePathStatusRequest } from '../../../shared/folder-workspaces/folder-workspace-path-status'
-import {
-  assertFolderWorkspacePathUsable,
-  getFolderWorkspacePathStatus,
-  getFolderWorkspacePathStatusForPath
-} from '../../project-groups/folder-workspace-path-status'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -25,7 +20,8 @@ import {
 export function registerFolderWorkspaceHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: Pick<OrcaRuntimeService, 'deleteFolderWorkspace' | 'createFolderWorkspace'>
+  runtime: Pick<OrcaRuntimeService, 'deleteFolderWorkspace' | 'createFolderWorkspace'> &
+    Partial<Pick<OrcaRuntimeService, 'getExistingOrchestrationDb'>>
 ): void {
   ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => visibleFolderWorkspaces(store))
 
@@ -35,6 +31,8 @@ export function registerFolderWorkspaceHandlers(
       rawArgs,
       'invalid_folder_workspace_path_status_args'
     ) as FolderWorkspacePathStatusRequest
+    const { getFolderWorkspacePathStatus } =
+      await import('../../project-groups/folder-workspace-path-status')
     return getFolderWorkspacePathStatus(store, args)
   })
 
@@ -77,6 +75,8 @@ export function registerFolderWorkspaceHandlers(
           return null
         }
         const projectGroups = store.getProjectGroups()
+        const { assertFolderWorkspacePathUsable, getFolderWorkspacePathStatusForPath } =
+          await import('../../project-groups/folder-workspace-path-status')
         const status = await getFolderWorkspacePathStatusForPath({
           folderPath: args.updates.folderPath,
           projectGroupId: workspace.projectGroupId,
@@ -104,6 +104,8 @@ export function registerFolderWorkspaceHandlers(
       'invalid_folder_workspace_delete_args'
     )
     // Runtime owns teardown of PTYs, browsers and sessions, plus success notifications.
+    const { assertNotBotGroupHomeFolderWorkspace } = await import('../../bots/bot-group-runtime')
+    assertNotBotGroupHomeFolderWorkspace(runtime, args.folderWorkspaceId)
     return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId, args)).deleted
   })
 }

@@ -6,8 +6,7 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import { MobileAgentTileGrid } from '../session/agent-launch/MobileAgentTileGrid'
 import type { MobileNewTabAgentOption } from '../session/agent-launch/mobile-new-tab-agent-options'
 import { useMobileNewTabAgentOptions } from '../session/agent-launch/use-mobile-new-tab-agent-options'
@@ -44,7 +43,7 @@ export function AgentHistoryHandoffSheet({
   onClosed,
   onPick
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const pickedRef = useRef<MobileNewTabAgentOption | null>(null)
   return (
@@ -142,6 +141,6 @@ export function AgentHistoryHandoffDrawer({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   context: { marginBottom: spacing.sm }
 }))

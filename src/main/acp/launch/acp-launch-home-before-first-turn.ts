@@ -6,6 +6,8 @@ import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle
 import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { selectAcpHostAccountHome } from './acp-launch-command'
+import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
+import type { AcpLaunchInvocationDeps } from './acp-structured-launch-resolution'
 
 type LaunchBasis = Parameters<StructuredAgentLaunchPartResolver<unknown>>[0]
 
@@ -34,4 +36,27 @@ export async function homeBeforeFirstTurn(
     basis.commandSettings?.() ?? {}
   )
   return selected && !agentSessionAccountHomesEqual(selected, record.accountHome) ? selected : null
+}
+
+/** The home a start of this chat would use now, for work done for it before it starts. */
+export async function acpChatHomeNow(
+  agentSpec: AcpLaunchSpec,
+  record: AgentSessionRecord,
+  deps: Pick<
+    AcpLaunchInvocationDeps,
+    'resolveEnvironment' | 'resolveLaunchEnv' | 'resolveCommandSettings' | 'dataDirectory'
+  >
+): Promise<AgentSessionAccountHome> {
+  const basis = {
+    environment: async () =>
+      overlayEnvironmentVariables(
+        await deps.resolveEnvironment(),
+        deps.resolveLaunchEnv?.(agentSpec.agent),
+        process.platform
+      ),
+    commandSettings: () => deps.resolveCommandSettings?.() ?? {}
+  }
+  return (
+    (await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)) ?? record.accountHome
+  )
 }

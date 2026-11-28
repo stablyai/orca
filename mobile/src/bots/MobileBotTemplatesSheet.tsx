@@ -12,9 +12,9 @@ import { FilterChip } from '../components/nav-bar/FilterChip'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { templateProposal, type BotProposal } from '../../../src/shared/bots/bot-proposal'
 import {
   BOT_TEMPLATE_CATEGORIES,
@@ -43,7 +43,8 @@ export function MobileBotTemplatesSheet(props: {
   onClose: () => void
   onPick: (pick: BotTemplatePick) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const label = useBotTemplateCategoryLabel()
   const [query, setQuery] = useState('')
@@ -181,7 +182,7 @@ export function MobileBotTemplatesSheet(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   page: { flex: 1 },
   pills: { flexGrow: 0, marginTop: spacing.xs },
   pillRow: { gap: spacing.sm }

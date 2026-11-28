@@ -19,6 +19,8 @@ export type HostChatAnswer =
   | 'not-on-host'
   /** The host is Windows, where this agent has no chat. */
   | 'windows'
+  /** The installed CLI on the host is older than chat requires. */
+  | 'too-old'
   | 'no-chats'
 export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'
 const chatProgramOffered = (program: ChatProgramObservation) =>
@@ -48,6 +50,7 @@ export type ChatUnavailableReason =
   | 'subfolder'
   | 'not-on-host'
   | 'windows'
+  | 'too-old'
 
 export type NewTabAgentMenuRow =
   /** `setup`: the agent isn't installed there, so its chat opens with an offer to install it. */

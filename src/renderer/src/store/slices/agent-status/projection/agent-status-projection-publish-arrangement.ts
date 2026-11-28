@@ -1,3 +1,4 @@
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { resolveNativeChatActiveLayoutLeafId } from '@/components/native-chat/pane/routing/native-chat-leaf-routing'
 import { isTerminalTabWideFallbackSafe as isNativeChatTabWideFallbackSafe } from '../../../../../../shared/agent-status/mobile-terminal-status-shaping'
 import type { AppState } from '../../../types'
@@ -7,6 +8,18 @@ import { applyAgentRowLineage } from '@/components/dashboard/rows/agent-row-line
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 import type { ProjectionTopology } from './agent-status-projection-topology'
 import type { ProjectionRows } from './agent-status-projection-rows'
+
+function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) {
+      return false
+    }
+  }
+  return true
+}
 
 export function publishProjectionArrangement(
   data: AgentStatusProjectionState,
@@ -18,10 +31,18 @@ export function publishProjectionArrangement(
   const { changedTabs } = topology
   const { prepared } = rows
   let changedIdentity = false
-  const identityTabs = new Set([
-    ...changedTabs,
-    ...[...prepared.values()].flatMap((row) => (row.tabId ? [row.tabId] : []))
-  ])
+  let identityTabs: ReadonlySet<string>
+  if (prepared.size === 0) {
+    identityTabs = changedTabs
+  } else {
+    const combined = new Set<string>(changedTabs)
+    for (const row of prepared.values()) {
+      if (row.tabId) {
+        combined.add(row.tabId)
+      }
+    }
+    identityTabs = combined
+  }
   for (const tabId of identityTabs) {
     const layout = state.terminalLayoutsByTabId[tabId]
     const leaf =
@@ -57,18 +78,23 @@ export function publishProjectionArrangement(
   for (const owner of arrange) {
     data.touchedWorktrees.add(owner)
     const b = data.worktrees.get(owner)!
-    const rows = applyAgentRowLineage(
-      [...b.keys].map((key) => data.rows.get(key)!).sort(compareWorktreeAgentRows)
-    )
-    for (const row of rows) {
+    const sortedRows: DashboardAgentRow[] = []
+    for (const key of b.keys) {
+      sortedRows.push(data.rows.get(key)!)
+    }
+    sortedRows.sort(compareWorktreeAgentRows)
+    const rows = applyAgentRowLineage(sortedRows)
+    const keys: string[] = []
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i]
+      keys.push(row.paneKey)
       const previous = data.rows.get(row.paneKey)!
       if (!equal(previous.lineage, row.lineage)) {
         data.rows.set(row.paneKey, row)
         data.notices.add(`row\0${row.paneKey}`)
       }
     }
-    const keys = rows.map((row) => row.paneKey)
-    if (!equal(b.arrangement, keys)) {
+    if (!sameStringArray(b.arrangement, keys)) {
       b.arrangement = keys
     }
     const changedChildren = data.display.arrange(owner, rows)

@@ -67,7 +67,7 @@ export async function findOpenMRByHeadBase(args: {
     {
       ...glabRepoExecOptions(args.repoPath, args.connectionId),
       ...(args.connectionId ? {} : getHostedReviewLocalGitOptions(args.options)),
-      ...glabHostEnvOptions(args.projectRef, args.connectionId)
+      ...glabHostEnvOptions(args.projectRef)
     }
   )
   const list = JSON.parse(stdout) as {

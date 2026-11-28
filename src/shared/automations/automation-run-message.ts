@@ -5,6 +5,7 @@ import type { AutomationRunEvent } from '../automation-event-triggers'
 import type { WaitEnding } from '../automation-once'
 import type { BotAutomationFacts } from '../bots/bot-automation-rows'
 import type { AutomationRunTrigger } from './history/automation-run'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** Who the event's person was to the bot when the run was delivered; never recomputed later. */
 export type AutomationRunEventAsker = 'owner' | 'member' | 'other'
@@ -43,14 +44,16 @@ export type AutomationRunMessage = {
   instructionsLength: number
 }
 
-const finite = z.number().finite()
-const optionalText = z.string().optional()
+const finite = lazyZodSchema(() => z.number().finite())
+const optionalText = lazyZodSchema(() => z.string().optional())
 
-const WaitEndingSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('event'), at: finite, actor: optionalText }),
-  z.object({ kind: z.literal('deadline'), at: finite }),
-  z.object({ kind: z.literal('expired'), at: finite })
-])
+const WaitEndingSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('event'), at: finite, actor: optionalText }),
+    z.object({ kind: z.literal('deadline'), at: finite }),
+    z.object({ kind: z.literal('expired'), at: finite })
+  ])
+)
 
 // Every source, so a new one fails to compile until it's read here too.
 const EVENT_SOURCES: Record<AutomationRunEvent['source'], true> = {
@@ -62,53 +65,61 @@ const EVENT_SOURCES: Record<AutomationRunEvent['source'], true> = {
   calendar: true
 }
 
-const EventSourceSchema = z.custom<AutomationRunEvent['source']>(
-  (value) => typeof value === 'string' && Object.hasOwn(EVENT_SOURCES, value)
+const EventSourceSchema = lazyZodSchema(() =>
+  z.custom<AutomationRunEvent['source']>(
+    (value) => typeof value === 'string' && Object.hasOwn(EVENT_SOURCES, value)
+  )
 )
 
 // The facts cards read (id, name) are checked; the rest of the snapshot rides along as saved.
-const AutomationFactsSchema = z.custom<BotAutomationFacts>(
-  (value) =>
-    typeof value === 'object' &&
-    value !== null &&
-    'id' in value &&
-    typeof value.id === 'string' &&
-    value.id.length > 0 &&
-    'name' in value &&
-    typeof value.name === 'string'
+const AutomationFactsSchema = lazyZodSchema(() =>
+  z.custom<BotAutomationFacts>(
+    (value) =>
+      typeof value === 'object' &&
+      value !== null &&
+      'id' in value &&
+      typeof value.id === 'string' &&
+      value.id.length > 0 &&
+      'name' in value &&
+      typeof value.name === 'string'
+  )
 )
 
-const EventSchema = z.object({
-  source: EventSourceSchema,
-  event: z.string().min(1),
-  occurredAt: finite,
-  place: optionalText,
-  url: optionalText,
-  actor: optionalText,
-  replayed: z.literal(true).optional(),
-  text: optionalText,
-  textShortened: z.literal(true).optional(),
-  asker: z.enum(['owner', 'member', 'other']).optional(),
-  webhook: z
-    .object({
-      hookId: z.string(),
-      callId: z.string(),
-      sample: z.literal(true).optional(),
-      firstCall: z.literal(true).optional()
-    })
-    .optional()
-})
+const EventSchema = lazyZodSchema(() =>
+  z.object({
+    source: EventSourceSchema,
+    event: z.string().min(1),
+    occurredAt: finite,
+    place: optionalText,
+    url: optionalText,
+    actor: optionalText,
+    replayed: z.literal(true).optional(),
+    text: optionalText,
+    textShortened: z.literal(true).optional(),
+    asker: z.enum(['owner', 'member', 'other']).optional(),
+    webhook: z
+      .object({
+        hookId: z.string(),
+        callId: z.string(),
+        sample: z.literal(true).optional(),
+        firstCall: z.literal(true).optional()
+      })
+      .optional()
+  })
+)
 
-export const AutomationRunMessageSchema = z.object({
-  runId: z.string().min(1),
-  automation: AutomationFactsSchema,
-  trigger: z.enum(['scheduled', 'event', 'manual']),
-  scheduledFor: finite.optional(),
-  wait: WaitEndingSchema.optional(),
-  toConversation: z.literal(true).optional(),
-  event: EventSchema.optional(),
-  instructionsLength: z.number().int().nonnegative()
-})
+export const AutomationRunMessageSchema = lazyZodSchema(() =>
+  z.object({
+    runId: z.string().min(1),
+    automation: AutomationFactsSchema,
+    trigger: z.enum(['scheduled', 'event', 'manual']),
+    scheduledFor: finite.optional(),
+    wait: WaitEndingSchema.optional(),
+    toConversation: z.literal(true).optional(),
+    event: EventSchema.optional(),
+    instructionsLength: z.number().int().nonnegative()
+  })
+)
 
 /** The run a message records, read from a host of any version; anything malformed is no run. */
 export function readAutomationRunMessage(value: unknown): AutomationRunMessage | undefined {

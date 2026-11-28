@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
-import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { ConnectionState } from '../../../../transport/connection/connection-state'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import {
@@ -17,7 +16,6 @@ import {
 import type { GitHubPrRepoSlug } from '../../github-operations/github-pr-repo-slug'
 import type { UnvalidatedRpcRequestPort } from '../../../../transport/rpc/unvalidated-rpc-request-port'
 import { PrActionsEngine, type PrActionBusyKey } from './pr-actions-engine'
-import './pr-action-mutation-contract'
 import type { PrActionMutations } from './pr-action-mutation-contract'
 
 export type PrActionsInput = {
@@ -45,7 +43,6 @@ function realMutations(client: UnvalidatedRpcRequestPort, worktreeId: string): P
 }
 
 export function useMobilePrActions(input: PrActionsInput) {
-  useMobileTranslation()
   const { client, connState, worktreeId, prNumber, headSha, prRepo, refetch } = input
   const [, forceRender] = useReducer((n: number) => n + 1, 0)
 

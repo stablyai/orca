@@ -1,7 +1,30 @@
-import React from 'react'
+import React, { Suspense } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { ProjectPeek } from './ProjectPeek'
+
+const ProjectPeek = lazy(() =>
+  import('./ProjectPeek').then((module) => ({ default: module.ProjectPeek }))
+)
+
+/** On the first-ever open, onOpenAutoFocus fires before the lazy chunk renders a tab to land on;
+ *  once the peek mounts, move focus off the container onto the active style tab it meant to reach. */
+function FocusActiveTabAfterLateMount({
+  contentRef
+}: {
+  contentRef: React.RefObject<HTMLDivElement | null>
+}): null {
+  React.useEffect(() => {
+    const content = contentRef.current
+    if (!content || document.activeElement !== content) {
+      return
+    }
+    content
+      .querySelector<HTMLElement>('[role="tab"][data-state="active"]')
+      ?.focus({ preventScroll: true })
+  }, [contentRef])
+  return null
+}
 
 // Why: the content portals out of the DOM but React still bubbles its events to the card underneath,
 // which would select, drag, or rename the workspace on every edit click.
@@ -20,7 +43,9 @@ function cycleFocus(event: React.KeyboardEvent, root: HTMLElement | null): void 
   const active = document.activeElement
   const index = active instanceof HTMLElement ? focusables.indexOf(active) : -1
   const step = event.shiftKey ? -1 : 1
-  focusables[(index + step + focusables.length) % focusables.length]?.focus()
+  const next = focusables[(index + step + focusables.length) % focusables.length]
+  // Why: Radix's focus loop runs after this on the same keydown; moving first made it skip the last control.
+  queueMicrotask(() => next?.focus())
 }
 
 /** Clicking a project's mark opens its card to change the icon and color. */
@@ -113,7 +138,12 @@ export function ProjectPeekPopover({
         }}
         onDragStart={stopPropagation}
       >
-        <ProjectPeek repo={repo} onRequestClose={requestClose} />
+        {open ? (
+          <Suspense fallback={null}>
+            <ProjectPeek repo={repo} onRequestClose={requestClose} />
+            <FocusActiveTabAfterLateMount contentRef={contentRef} />
+          </Suspense>
+        ) : null}
       </PopoverContent>
     </Popover>
   )

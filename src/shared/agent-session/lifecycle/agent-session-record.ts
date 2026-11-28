@@ -2,8 +2,7 @@ import { isOptionalUsageLimitContinueCancel } from './stopping/agent-session-usa
 import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evidence'
 import { isAgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import type { AgentSessionRewindRecord } from './rewind/agent-session-rewind'
-import { isAgentSessionLaunchArgs } from './records/agent-session-launch-args'
-import { isAgentCopyId } from '../../agent-launch/catalog/agent-copies'
+import { isPersistedAgentSessionLaunchSetup } from './records/agent-session-launch-args'
 import { isAgentSessionConversationName } from '../conversation-naming/agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -37,6 +36,8 @@ import {
   type AgentSessionAccountHome,
   type AgentSessionLaunchedAccount
 } from './accounts/agent-session-account-home'
+
+import type { AgentSessionRunPlacement } from './agent-session-run-placement'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
@@ -117,6 +118,9 @@ export type AgentSessionRecord = {
   accountHome: AgentSessionAccountHome
   /** Where the latest proven runtime actually launched; absent before any or from older hosts. */
   launchedAccount?: AgentSessionLaunchedAccount
+  /** Where the last run started (in this app or under which daemon start); read through
+   *  `agentSessionRunPlacement`, which drops a malformed one. */
+  lastRunPlacement?: AgentSessionRunPlacement
   /** Optional host-written construction observation; checked independently of record readability. */
   acquiredAccount?: unknown
   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
@@ -262,6 +266,7 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
     isBoundedString(evidence.detail, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS) &&
     isNonNegativeSafeInteger(observedAt) &&
     (ownerFence === undefined || isNonNegativeSafeInteger(ownerFence)) &&
+    (evidence.resumeByMail === undefined || evidence.resumeByMail === true) &&
     (lastProvenAliveAt === undefined ||
       (isNonNegativeSafeInteger(lastProvenAliveAt) && lastProvenAliveAt <= observedAt)) &&
     (runtimeEnd === undefined || isBoundedString(runtimeEnd, MAX_ID_LENGTH))
@@ -331,8 +336,7 @@ export function isPersistedAgentSessionObservationRecord(
       (record.conversationName === undefined ||
         isAgentSessionConversationName(record.conversationName)) &&
       (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&
-      (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
-      (record.agentCopy === undefined || isAgentCopyId(record.agentCopy)) &&
+      isPersistedAgentSessionLaunchSetup(record) &&
       !Object.hasOwn(record, 'launchEnv') &&
       isPersistedAgentSessionObservationLease(record.lease) &&
       record.lease.sessionId === record.sessionId &&

@@ -32,6 +32,10 @@ export class SessionSearchStore {
   private closed = false
   private retentionCutoffMs: number | null = null
   private readonly orphanCleanup: SessionSearchOrphanCleanup
+  private coversTranscriptStmt: ReturnType<SyncDatabase['prepare']> | null = null
+  private resumableCursorStmt: ReturnType<SyncDatabase['prepare']> | null = null
+  private markFailedFileStmt: ReturnType<SyncDatabase['prepare']> | null = null
+  private updateFileStateStmt: ReturnType<SyncDatabase['prepare']> | null = null
 
   constructor(
     path: string,
@@ -90,22 +94,21 @@ export class SessionSearchStore {
     }
     const identity = fileIdentity(file)
     try {
-      return (
-        this.db
-          .prepare(
-            // With a known file identity, a missing stored identity must force a rewrite.
-            `SELECT 1 FROM files WHERE path = ? AND state = 'current'
+      this.coversTranscriptStmt ??= this.db.prepare(
+        // With a known file identity, a missing stored identity must force a rewrite.
+        `SELECT 1 FROM files WHERE path = ? AND state = 'current'
            AND mtime_ms = ? AND size_bytes = ? AND byte_offset = size_bytes
            AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
-          )
-          .get(
-            file.path,
-            file.mtimeMs,
-            file.sizeBytes,
-            identity?.dev ?? null,
-            identity?.dev ?? null,
-            identity?.ino ?? null
-          ) !== undefined
+      )
+      return (
+        this.coversTranscriptStmt.get(
+          file.path,
+          file.mtimeMs,
+          file.sizeBytes,
+          identity?.dev ?? null,
+          identity?.dev ?? null,
+          identity?.ino ?? null
+        ) !== undefined
       )
     } catch (error) {
       this.onError(error)
@@ -121,21 +124,20 @@ export class SessionSearchStore {
     }
     const identity = fileIdentity(file)
     try {
-      const row = asRecord(
-        this.db
-          .prepare(
-            `SELECT byte_offset AS byteOffset, prefix_hash AS prefixHash FROM files
+      this.resumableCursorStmt ??= this.db.prepare(
+        `SELECT byte_offset AS byteOffset, prefix_hash AS prefixHash FROM files
              WHERE path = ? AND state = 'current' AND prefix_hash IS NOT NULL
              AND byte_offset > 0 AND byte_offset <= ?
              AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
-          )
-          .get(
-            file.path,
-            file.sizeBytes,
-            identity?.dev ?? null,
-            identity?.dev ?? null,
-            identity?.ino ?? null
-          )
+      )
+      const row = asRecord(
+        this.resumableCursorStmt.get(
+          file.path,
+          file.sizeBytes,
+          identity?.dev ?? null,
+          identity?.dev ?? null,
+          identity?.ino ?? null
+        )
       )
       return typeof row?.byteOffset === 'number' && typeof row.prefixHash === 'string'
         ? { byteOffset: row.byteOffset, prefixHash: row.prefixHash }
@@ -209,23 +211,21 @@ export class SessionSearchStore {
     try {
       if (state === 'failed') {
         // Persist initial failures too, or unreadable new files retry forever.
-        this.db
-          .prepare(
-            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
+        this.markFailedFileStmt ??= this.db.prepare(
+          `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
              VALUES (?, 0, ?, 'failed', 1, ?)
              ON CONFLICT(path) DO UPDATE SET
                state = 'failed',
                fail_count = files.fail_count + 1,
                failed_mtime_ms = excluded.failed_mtime_ms`
-          )
-          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
+        )
+        this.markFailedFileStmt.run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
         return
       }
-      this.db
-        .prepare(
-          'UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL WHERE path = ?'
-        )
-        .run(state, path)
+      this.updateFileStateStmt ??= this.db.prepare(
+        'UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL WHERE path = ?'
+      )
+      this.updateFileStateStmt.run(state, path)
     } catch (error) {
       this.onError(error)
     }
@@ -300,6 +300,10 @@ export class SessionSearchStore {
       return
     }
     this.closed = true
+    this.coversTranscriptStmt = null
+    this.resumableCursorStmt = null
+    this.markFailedFileStmt = null
+    this.updateFileStateStmt = null
     this.orphanCleanup.close()
     this.writer.close()
     this.db.close()

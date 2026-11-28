@@ -63,3 +63,37 @@ export function claudeWaitRequest(
       : undefined
   return waitingToolUseId !== undefined ? { waitingToolUseId } : {}
 }
+
+/** Stashes the displaced lead state for child, elicitation, or plugin-tool waits so clearing them never invents work. */
+export function claudeStateBeforeWait(
+  eventName: unknown,
+  isWaitingInducing: boolean,
+  eventAgentId: string | undefined,
+  isPluginTool: boolean,
+  previousLead: ClaudeLeadTurnState | undefined
+): ClaudeLeadTurnState['stateBeforeWait'] {
+  const isPluginWait = isWaitingInducing && isPluginTool
+  if ((eventName === 'Elicitation' || isPluginWait) && !previousLead) {
+    return { state: 'done' as const, stateStartedAt: Date.now() }
+  }
+  if (
+    !isWaitingInducing ||
+    !(eventAgentId || eventName === 'Elicitation' || isPluginWait) ||
+    !previousLead
+  ) {
+    return undefined
+  }
+  if (previousLead.state === 'waiting') {
+    return previousLead.stateBeforeWait
+  }
+  return {
+    state: previousLead.state,
+    ...(previousLead.outcome ? { outcome: previousLead.outcome } : {}),
+    ...(previousLead.failure ? { failure: previousLead.failure } : {}),
+    stateStartedAt: previousLead.stateStartedAt,
+    ...(previousLead.taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
+    ...(previousLead.turnCompletedAt !== undefined
+      ? { turnCompletedAt: previousLead.turnCompletedAt }
+      : {})
+  }
+}

@@ -10,15 +10,16 @@ import { defineFixture } from '../../../../../component-fixtures/component-fixtu
 import { workerDockFixturePane } from './worker-dock-pane-fixture'
 import { NativeChatBackgroundTasksStatus } from '../NativeChatBackgroundTasksStatus'
 import type { WorkerDockRowView } from './WorkerDockRow'
-import { SOURCE, savedResult, seed, worker, type Seed } from './worker-dock-seed-fixture'
+import { SOURCE, seed, worker, type Seed } from './worker-dock-seed-fixture'
 import { WorkerDockProviderDetailsDialog } from './WorkerDockProviderDetailsDialog'
-import { WorkerDockResultDialogSlot } from './WorkerDockResultDialogSlot'
+import { openWorkerDockRow } from './worker-dock-open'
+import { Toaster } from '@/components/ui/sonner'
 
 // A live strip for the rendered interaction suite (tests/tools/worker-dock-rendered): it keeps its
 // own open state and answers Stop, Clear and Clear all the way the host does, a moment later.
 const LOCAL = { kind: 'local' } as const
 type WorkerDockHarnessEvent = {
-  action: 'remote-stop' | 'stop-all' | 'stop' | 'clear' | 'clear-all' | 'open' | 'restore'
+  action: 'remote-stop' | 'stop-all' | 'stop' | 'clear' | 'clear-all' | 'open'
   id: string
 }
 type HarnessApi = {
@@ -51,7 +52,7 @@ function Harness({
   lazy = 0,
   failReads = 0,
   details = false,
-  result,
+  realOpen = false,
   ...options
 }: {
   count: number
@@ -69,9 +70,8 @@ function Harness({
   failReads?: number
   /** Opening a command shows its details dialog, as a chat does. */
   details?: boolean
-  /** The saved result a failed row's card reads: the worker's own Markdown report, or a raw
-   *  error. Without it the read comes back empty, as an unreadable result does. */
-  result?: 'report' | 'raw' | 'legacy'
+  /** A row click goes through the real worker open, whose failure toast shows. */
+  realOpen?: boolean
 } & Seed) {
   const [rows, setRows] = useState(() => seed(count, failed, remote, options))
   const [detailed, setDetailed] = useState(() => new Set(rows.slice(0, lazy).map((row) => row.id)))
@@ -141,44 +141,17 @@ function Harness({
       all.splice(all.indexOf(api), 1)
     }
   }, [count, events, remote, reads])
-  const [cleared] = useState(() => new Map<string, WorkerDockRowView>())
   const record = (event: WorkerDockHarnessEvent) => events.push(event)
   const rpc = useLatestHandler(
     async ({ method, params }: Parameters<typeof window.api.runtime.call>[0]) => {
       if (method === 'orchestration.workerDockAcknowledge') {
-        const { settlements, acknowledged } = WorkerDockAcknowledge.parse(params)
+        const { settlements } = WorkerDockAcknowledge.parse(params)
         const ids = new Set(settlements.map((item) => item.dispatchId))
         record({
-          action: acknowledged ? (ids.size > 1 ? 'clear-all' : 'clear') : 'restore',
+          action: ids.size > 1 ? 'clear-all' : 'clear',
           id: settlements.map((item) => item.dispatchId).join(',')
         })
-        if (acknowledged) {
-          for (const row of rows) {
-            if (ids.has(row.dispatchId)) {
-              cleared.set(row.dispatchId, row)
-            }
-          }
-          setRows((current) => current.filter((row) => !ids.has(row.dispatchId)))
-        } else {
-          const restored = [...ids].flatMap((id) => cleared.get(id) ?? [])
-          setRows((current) => [...restored, ...current])
-        }
-      } else if (method === 'orchestration.workerDockResult') {
-        // A moment, as a host takes: a row can leave while its result is still on the way.
-        await new Promise((resolve) => setTimeout(resolve, 300))
-        const dispatch =
-          typeof params === 'object' && params !== null && 'dispatch' in params
-            ? params.dispatch
-            : null
-        const row = rows.find((item) => item.dispatchId === dispatch)
-        if (result && row) {
-          return {
-            id: 'dock-fixture',
-            ok: true as const,
-            result: savedResult(row, result),
-            _meta: { runtimeId: 'fixture' }
-          }
-        }
+        setRows((current) => current.filter((row) => !ids.has(row.dispatchId)))
       } else if (method === 'orchestration.workerDockStop') {
         const { dispatch } = WorkerDockStop.parse(params)
         const row = rows.find((item) => item.dispatchId === dispatch)
@@ -201,9 +174,7 @@ function Harness({
     () => rows.map((row) => ({ ...row, hasModel: Boolean(row.model) })),
     [rows]
   )
-  const owner = useWorkerDockOwnerActions(LOCAL, `orca_session_id:${SOURCE}`, identities, (row) =>
-    record({ action: 'open', id: row.id })
-  )
+  const owner = useWorkerDockOwnerActions(LOCAL, `orca_session_id:${SOURCE}`, identities)
   return (
     <>
       <NativeChatBackgroundTasksStatus
@@ -233,20 +204,16 @@ function Harness({
         loadWindow={lazy ? loadWindow : undefined}
         onShowProviderDetails={details ? (row, opener) => setShown({ row, opener }) : undefined}
         workerIdentities={identities}
-        onOpenWorker={owner.open}
+        onOpenWorker={(row) => {
+          record({ action: 'open', id: row.id })
+          if (realOpen) {
+            openWorkerDockRow(row, LOCAL)
+          }
+        }}
         onWorkerAction={owner.action}
         onClearAll={owner.clearAll}
       />
-      {details ? (
-        <WorkerDockResultDialogSlot
-          dialog={owner.dialog}
-          hostId="local"
-          ownerActionsAvailable
-          onClose={owner.close}
-          onOpen={(row) => record({ action: 'open', id: row.id })}
-          onRestore={owner.restore}
-        />
-      ) : null}
+      {realOpen ? <Toaster toastOptions={{ className: 'font-sans text-sm' }} /> : null}
       {shown ? (
         <WorkerDockProviderDetailsDialog
           row={shown.row}
@@ -286,27 +253,25 @@ export const lazyHundredOpen720 = defineFixture({
   width: 720,
   render: () => workerDockFixturePane(<Harness count={100} failed={0} lazy={50} open />)
 })
-// The only worker has failed; opening it shows its result.
+// The only worker has failed.
 export const lastFailedDetails720 = defineFixture({
   width: 720,
-  render: () => workerDockFixturePane(<Harness count={1} failed={1} details open />)
+  render: () => workerDockFixturePane(<Harness count={1} failed={1} open />)
 })
-// The only worker failed; its card reads the saved result the host returns: its own Markdown report
-// in full, the same report from an older host with no report mark (still Markdown), or a raw error
-// with one reason line and Show details.
-function failedCard(width: number, result: 'report' | 'legacy' | 'raw') {
+// Failed rows with long titles, to check the row wraps cleanly at narrow widths.
+function failedRow(width: number) {
   return defineFixture({
     width,
-    render: () =>
-      workerDockFixturePane(<Harness count={1} failed={1} details result={result} open />)
+    render: () => workerDockFixturePane(<Harness count={3} failed={2} long open />)
   })
 }
-export const failedReport720 = failedCard(720, 'report')
-export const failedReport320 = failedCard(320, 'report')
-export const failedLegacy720 = failedCard(720, 'legacy')
-export const failedLegacy320 = failedCard(320, 'legacy')
-export const failedRaw720 = failedCard(720, 'raw')
-export const failedRaw320 = failedCard(320, 'raw')
+export const failedLong720 = failedRow(720)
+export const failedLong320 = failedRow(320)
+// A failed row whose worker can't be opened here: the click shows the open-failure toast.
+export const failedOpenToast720 = defineFixture({
+  width: 720,
+  render: () => workerDockFixturePane(<Harness count={1} failed={1} realOpen open />)
+})
 // The first two detail reads fail; a later key press recovers the last row.
 export const lazyFailingOpen720 = defineFixture({
   width: 720,
@@ -338,6 +303,14 @@ export const oneFolded720 = defineFixture({
 export const threeFolded720 = defineFixture({
   width: 720,
   render: () => workerDockFixturePane(<Harness count={3} failed={0} variety />)
+})
+export const hostedTwentyFolded720 = defineFixture({
+  width: 720,
+  render: () =>
+    workerDockFixturePane(<Harness count={20} failed={3} />, undefined, {
+      hosted: true,
+      tasks: true
+    })
 })
 export const threeOpen720 = defineFixture({
   width: 720,

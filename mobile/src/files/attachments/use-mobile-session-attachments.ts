@@ -54,13 +54,13 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   )
   const handlePaste = useMobileTerminalPaste({
     sendTerminalUserInput: scope.sendTerminalUserInput,
+    sendTerminalUserInputChunks: scope.sendTerminalUserInputChunks,
     client,
     agent,
     activeHandle,
     activeHandleRef,
     activeSessionTabTypeRef,
     canSend,
-    connState,
     connStateRef,
     clientRef,
     deviceTokenRef,

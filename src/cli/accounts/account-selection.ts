@@ -2,9 +2,10 @@ import type { HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
-import type {
-  AntigravityAccountState,
-  AntigravityAccountTarget
+import {
+  ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS,
+  type AntigravityAccountState,
+  type AntigravityAccountTarget
 } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type {
   ClaudeRateLimitAccountsState,
@@ -163,9 +164,11 @@ function antigravityAccounts(ctx: HandlerContext): ProviderAccounts {
     }
     return client.call<AntigravityAccountState>('accounts.antigravityList', target)
   }
+  // Selecting or removing reads agy's login, which may wait on a macOS keychain dialog.
+  const timeoutMs = ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS
   const print = async (method: string, accountId: string) =>
     printResult(
-      await client.call<AntigravityAccountState>(method, { target, accountId }),
+      await client.call<AntigravityAccountState>(method, { target, accountId }, { timeoutMs }),
       json,
       formatAntigravityAccounts
     )

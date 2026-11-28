@@ -1,7 +1,8 @@
 import type { BotAccessCopyId } from '../../../src/shared/bots/bot-access-copy'
 import { botAccessAdvice, botStartingPermission } from '../../../src/shared/bots/bot-access-reach'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { ListRow } from '../components/list/ListGroup'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import type { PhoneAccessBot } from './bot-access-request-copy'
@@ -62,13 +63,17 @@ export function MobileAccessFixConfirm(props: {
   onConfirm: () => void
 }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { bot } = props
   const name = bot.name
   return props.fix === 'only-me' ? (
     <ConfirmContent
       title={mobileBotAccessCopy(t, 'fixOnlyMeConfirm', { name })}
       message={mobileBotAccessCopy(t, 'fixOnlyMeConfirmDetail', {
-        people: mobileBotAccessNames(bot.members.map((member) => member.name || member.id)),
+        people: mobileBotAccessNames(
+          bot.members.map((member) => member.name || member.id),
+          intlLocale
+        ),
         name
       })}
       confirmLabel={mobileBotAccessCopy(t, 'fixOnlyMeAction')}

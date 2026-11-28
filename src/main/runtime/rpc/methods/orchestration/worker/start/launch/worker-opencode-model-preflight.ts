@@ -2,9 +2,22 @@ import {
   prepareFederationConfiguredWorkerStart,
   resolveWorkerConfiguredAgentParams
 } from './worker-configured-agent-preflight'
-import type { prepareFederationAttachmentWorkerStart } from './worker-start-validation'
-import { agentCopyBase } from '../../../../../../../../shared/agent-launch/catalog/agent-copies'
+import { formatDroppedRetryLaunchWarning } from './worker-launch-preferences'
+import {
+  prepareLocalWorkerStart,
+  type prepareFederationAttachmentWorkerStart
+} from './worker-start-validation'
+import {
+  refuseUnmatchedWorkerSelector,
+  type WorkerStartSelectorLabel
+} from '../worker-start-selector-refusal'
+import type { WorkerStartInput } from '../worker-start-input'
+import {
+  agentCopyBase,
+  selectsAgent
+} from '../../../../../../../../shared/agent-launch/catalog/agent-copies'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
+import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 
 export async function probeWorkerOpenCodeModelLaunchSupport(
   runtime: Pick<
@@ -27,6 +40,49 @@ export async function probeWorkerOpenCodeModelLaunchSupport(
       ...(copyBase ? { agentCopy: params.agent } : {})
     }))
   )
+}
+
+export async function resolveLocalWorkerStartLaunch(args: {
+  params: WorkerStartInput
+  createsWorktree: boolean
+  existingWorktree: string
+  targetLabel: WorkerStartSelectorLabel
+  runtime: OrcaRuntimeService
+  resolveTarget: () => Promise<{ repo?: string; worktree?: string }>
+}) {
+  const { createsWorktree, existingWorktree, targetLabel, runtime, resolveTarget } = args
+  const launchParams = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+    resolveWorkerConfiguredAgentParams(runtime, args.params, resolveTarget)
+  )
+  let openCodeModelLaunchSupported = false
+  let probeDropWarning: string | undefined
+  if (!createsWorktree && selectsAgent(launchParams.agent, 'opencode') && launchParams.model) {
+    try {
+      openCodeModelLaunchSupported = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+        probeWorkerOpenCodeModelLaunchSupport(runtime, launchParams, { worktree: existingWorktree })
+      )
+    } catch (error) {
+      if (
+        launchParams.inheritedLaunchPreferences &&
+        error instanceof OrchestrationError &&
+        error.code === 'capability_unsupported'
+      ) {
+        probeDropWarning = formatDroppedRetryLaunchWarning(launchParams, error.message)
+      } else {
+        throw error
+      }
+    }
+  }
+  const prepared = prepareLocalWorkerStart({
+    params: probeDropWarning
+      ? { ...launchParams, model: undefined, effort: undefined, inheritedLaunchPreferences: false }
+      : launchParams,
+    createsWorktree,
+    runtime,
+    openCodeModelLaunchSupported
+  })
+  const warning = probeDropWarning ?? prepared.launch.warning
+  return { ...prepared, ...(warning ? { warning } : {}) }
 }
 
 export async function prepareFederationWorkerLaunchOnHost(

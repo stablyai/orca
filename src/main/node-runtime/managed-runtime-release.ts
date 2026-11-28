@@ -4,6 +4,7 @@ import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'no
 import { lstat, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
 import type { ArchiveDigest } from './runtime-archive-download'
@@ -49,8 +50,6 @@ export type ManagedAgentCli = {
   /** Whether this host has a build to download. */
   available: () => boolean
   executable: (folder: string) => string
-  /** The one stock command it stands in for, when the agent's launches name other programs too. */
-  standsInFor?: string
 }
 
 const serverUseListeners = new Set<(agent: string) => void>()
@@ -96,13 +95,17 @@ export const RUNTIME_RELEASE_RECEIPT = '.install-complete.json'
 const RECEIPT_MAX_BYTES = 8 * 1024
 const VERSION_ORDER = new Intl.Collator(undefined, { numeric: true })
 
-const runtimeReleaseReceiptSchema = z.object({
-  releaseId: z.string().regex(/^[a-f0-9]{64}(?:[a-f0-9]{64})?$/),
-  version: z.string().min(1),
-  platform: z.string(),
-  arch: z.string(),
-  members: z.array(z.object({ path: z.string().min(1), bytes: z.number().int().positive() })).min(1)
-})
+const runtimeReleaseReceiptSchema = lazyZodSchema(() =>
+  z.object({
+    releaseId: z.string().regex(/^[a-f0-9]{64}(?:[a-f0-9]{64})?$/),
+    version: z.string().min(1),
+    platform: z.string(),
+    arch: z.string(),
+    members: z
+      .array(z.object({ path: z.string().min(1), bytes: z.number().int().positive() }))
+      .min(1)
+  })
+)
 
 export type InstalledRuntimeRelease = {
   folder: string

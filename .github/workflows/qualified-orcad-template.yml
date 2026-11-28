@@ -6,10 +6,10 @@ on:
       ref:
         required: true
         type: string
-      fast_runners:
-        description: Qualify on Blacksmith; disable inside the SignPath signing workflow.
+      reuse_windows_prebuild_cache:
+        description: Reuse the validated Windows node-pty prebuild cache on unsigned dev builds
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -46,8 +46,7 @@ jobs:
         id: identity
         shell: bash
         env:
-          RUNNER_PROFILE: ${{ inputs.fast_runners && 'fast' || 'github-hosted' }}
-        # Production must never reuse qualification from the adhoc runner pool.
+          RUNNER_PROFILE: github-hosted
         run: echo "key=orcad-qualified-template-v2-$RUNNER_PROFILE-$(git -C .build/workflow-policy rev-parse HEAD:.github)-$(git rev-parse HEAD)-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v5
         id: restore
@@ -86,7 +85,7 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       build_template: true
-      fast_runners: ${{ inputs.fast_runners }}
+      reuse_windows_prebuild_cache: ${{ inputs.reuse_windows_prebuild_cache }}
 
   save:
     needs: [cache, qualify]

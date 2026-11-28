@@ -15,6 +15,7 @@ import {
   applyAgentCopyFromOptions,
   withAgentCopyOption
 } from '../../../../../shared/agent-launch/catalog/agent-copies'
+import { assertTuiAgentLaunchEnabled } from '../../../../agent-launch/disabled-agent-launch-refusal'
 
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 
@@ -94,6 +95,13 @@ export async function resolveUnlaunchedIntent(
   early: EarlyAgentLaunchTab | null,
   modeOptions: { terminalOnly?: boolean; callerRendersStructured?: boolean } = {}
 ): Promise<{ intent: ResolvedAgentLaunchIntent; decidedMode: AgentLaunchModeReceipt }> {
+  // Before any workspace exists; a reused terminal already runs its agent, so only new launches refuse.
+  if (!params.reuseTerminal) {
+    assertTuiAgentLaunchEnabled(
+      params.agent,
+      runtime.requireStore().getSettings().disabledTuiAgents
+    )
+  }
   const intent = await agentLaunchIntent(params, runtime, early?.paneKey)
   // A copy this host does not have refuses here, before anything is created.
   applyAgentCopyFromOptions(

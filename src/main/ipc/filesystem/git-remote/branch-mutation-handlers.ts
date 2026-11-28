@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { gitFastForward, gitPull, gitPush } from '../../../git/remotes/remote'
 import { gitPullRebaseFromBase } from '../../../git/remotes/remote-rebase'
@@ -14,10 +15,13 @@ import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
-export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandlerContext): void {
+export function registerGitRemoteBranchMutationHandlers(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'git:push',
     async (
       _event,
@@ -63,7 +67,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:pull',
     async (
       _event,
@@ -104,7 +108,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:fastForward',
     async (
       _event,
@@ -145,7 +149,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:rebaseFromBase',
     async (
       _event,

@@ -11,44 +11,16 @@ import {
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
+import { appendUsageLimitedTurn } from './structured-agent-session-usage-limited-turn.test-fixture'
 import { childRecord } from '../../recovery/testing/structured-agent-session-restart-resume.test-fixture'
 import { releaseIdleChatsOnOtherAccount } from '../structured-agent-session-account-switch'
+import { moveChatsToSelectedAccount } from '../structured-agent-session-saved-account-switch'
+import { readAgentAccountSwitchFrame } from '../../../../../shared/native-chat/transcript/notices/agent-account-switch-notice'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 
 let rig: QueuedMessageTestRig | undefined
 afterEach(async () => rig?.dispose())
-
-/** A finished root turn ended by its account's usage limit, resetting a minute after `clock`. */
-async function appendUsageLimitedTurn(journal: AgentSessionJournal, clock: number, name: string) {
-  const turnItemId = agentJournalItemKey({ provider: 'orca', clientMessageId: `limited-${name}` })
-  await journal.appendItem(
-    { provider: 'orca', clientMessageId: `limited-${name}` },
-    {
-      kind: 'turn',
-      turnId: name,
-      providerTurnId: name,
-      state: 'completed',
-      outcome: 'failure',
-      startedAt: clock,
-      completedAt: clock
-    },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
-  await journal.appendItem(
-    { provider: 'orca', clientMessageId: `${name}-limit` },
-    {
-      kind: 'status',
-      ...agentSessionFailureWords(
-        agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: clock + 60_000 } }),
-        { surface: 'row' }
-      )
-    },
-    { fence: 1, turnScope: { kind: 'turn', turnItemId } }
-  )
-}
 
 const home = (path: string) => ({ variable: 'CLAUDE_CONFIG_DIR', path })
 const settledTask = () =>
@@ -115,7 +87,13 @@ async function idleClaudeChat() {
       childWork = next
     },
     /** The agent's last turn ended on its account's usage limit. */
-    hitUsageLimit: () => appendUsageLimitedTurn(journal(), NOW + 1, 'spent'),
+    hitUsageLimit: () =>
+      appendUsageLimitedTurn(journal(), {
+        fence: 1,
+        resetsAt: NOW + 60_001,
+        name: 'spent',
+        at: NOW + 1
+      }),
     journal,
     openTurn: async () => {
       current
@@ -352,4 +330,124 @@ it('keeps the agent when a background task settles after its check, before it is
   expect(chat.child()).toBe(idle)
   expect(chat.child()?.close).toBeUndefined()
   expect(chat.rig.closeSession).not.toHaveBeenCalled()
+})
+
+/** An idle chat whose agent keeps one home, telling saved accounts apart only by the key each
+ *  start records (agy's accounts swap one login inside that home). */
+async function idleChatOnSavedAccount() {
+  await rig?.dispose()
+  let selected = 'account-a'
+  const current = await createQueuedMessageTestRig({
+    agent: 'claude',
+    restartable: true,
+    accountKey: () => selected
+  })
+  rig = current
+  await current.settleAccepted(await current.workingSend(), 'one')
+  await eventually(() =>
+    expect(current.host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(
+      false
+    )
+  )
+  return {
+    rig: current,
+    child: () => current.host.collaboratorsForTests().sessions.get(SESSION)?.child,
+    select: (key: string) => {
+      selected = key
+    },
+    moveChats: () => releaseIdleChatsOnOtherAccount(current.host, 'claude', () => true)
+  }
+}
+
+it('stops an idle agent that launched on another saved account in the same home, and keeps one on the selected account', async () => {
+  const chat = await idleChatOnSavedAccount()
+  const idle = chat.child()
+  expect(idle?.accountKey).toBe('account-a')
+  expect(idle?.accountHome).toBeUndefined()
+
+  await chat.moveChats()
+  expect(chat.child()).toBe(idle)
+
+  chat.select('account-b')
+  await chat.moveChats()
+  expect(chat.child()).toBeNull()
+})
+
+it("replaces an agent on another saved account at the next send's handover", async () => {
+  const chat = await idleChatOnSavedAccount()
+  const starts = chat.rig.starts.mock.calls.length
+  chat.select('account-b')
+  await chat.rig.settleAccepted(await chat.rig.workingSend(), 'two')
+  expect(chat.rig.starts.mock.calls.length).toBe(starts + 1)
+  expect(chat.child()?.accountKey).toBe('account-b')
+})
+
+it('keeps a chat a failed move held back on its account at each send, and moves it at the first send after agy holds the selected one', async () => {
+  await rig?.dispose()
+  let selected = 'account-a'
+  // In memory only: a launch, listing, restore or the switch itself found agy's login on it.
+  let held = false
+  const current = await createQueuedMessageTestRig({
+    agent: 'claude',
+    restartable: true,
+    accountKey: () => selected,
+    launchAccountKey: () => (held ? null : selected)
+  })
+  rig = current
+  await current.settleAccepted(await current.workingSend(), 'one')
+  const child = () => current.host.collaboratorsForTests().sessions.get(SESSION)?.child
+  const starts = current.starts.mock.calls.length
+  selected = 'account-b'
+  held = true
+
+  await current.settleAccepted(await current.workingSend(), 'two')
+  await current.settleAccepted(await current.workingSend(), 'three')
+  expect(current.starts.mock.calls.length).toBe(starts)
+  expect(child()?.accountKey).toBe('account-a')
+
+  held = false
+  await current.settleAccepted(await current.workingSend(), 'four')
+  expect(current.starts.mock.calls.length).toBe(starts + 1)
+  expect(child()?.accountKey).toBe('account-b')
+})
+
+it('lets a running turn finish on its saved account, and keeps one note in the chat that follows the selection', async () => {
+  const chat = await idleChatOnSavedAccount()
+  await chat.rig.workingSend()
+  chat.rig
+    .providerEvents()
+    .appendItem(
+      { provider: 'claude', sessionId: THREAD, uuid: 'working' },
+      { kind: 'turn', turnId: 'working', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  await chat.rig.host.flushStreamedEvents(SESSION)
+  const running = chat.child()
+  const journal = chat.rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const appended = vi.spyOn(journal, 'appendItem')
+  const removed = vi.spyOn(journal, 'appendTombstone')
+  const select = async (key: string) => {
+    chat.select(key)
+    await moveChatsToSelectedAccount(
+      chat.rig.host,
+      'claude',
+      { target: () => key, email: (account) => `${account}@example.com` },
+      () => true
+    )
+  }
+  await select('account-b')
+  await select('account-c')
+  expect(chat.child()).toBe(running)
+  const notes = appended.mock.calls.flatMap(([identity, body]) =>
+    body.kind === 'status' ? [[identity, readAgentAccountSwitchFrame(body.providerFrame)]] : []
+  )
+  expect(notes.map(([, note]) => note)).toEqual([
+    { from: 'account-a@example.com', to: 'account-b@example.com' },
+    { from: 'account-a@example.com', to: 'account-c@example.com' }
+  ])
+  // Revised in place, then gone once the selection is back on the account the turn runs on.
+  expect(notes[1]![0]).toEqual(notes[0]![0])
+  expect(removed).not.toHaveBeenCalled()
+  await select('account-a')
+  expect(removed.mock.calls.map(([identity]) => identity)).toEqual([notes[0]![0]])
 })

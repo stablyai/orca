@@ -22,7 +22,8 @@ import {
 import { resolveNativeChatComposerDraftOwner } from '../../drafts/native-chat-composer-draft-memory'
 import {
   chipScopes,
-  nativeChatPendingAttachmentScope
+  nativeChatPendingAttachmentScope,
+  pendingClipboardImages
 } from './native-chat-pending-attachment-scopes'
 
 const EMPTY: readonly NativeChatComposerImageAttachment[] = Object.freeze([])
@@ -253,10 +254,21 @@ export function settleNativeChatPendingAttachmentReferences(
   return true
 }
 
-export function clearNativeChatPendingAttachments(scopeKey: string): void {
+export function clearNativeChatPendingAttachments(
+  scopeKey: string,
+  keepClipboardImages = false
+): void {
   scopeKey = currentDraftScope(scopeKey)
-  if (pendingCache.has(scopeKey)) {
-    writePending(scopeKey, [])
+  const pending = pendingCache.get(scopeKey)
+  if (pending) {
+    writePending(
+      scopeKey,
+      keepClipboardImages
+        ? trimSettled(
+            pending.filter((chip) => !chip.pending || pendingClipboardImages.has(chip.id))
+          )
+        : []
+    )
   }
 }
 

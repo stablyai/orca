@@ -28,6 +28,25 @@ export function inspectRetiredBrowserSessionProfileUserAgentModes(
   return { noticePending, degraded }
 }
 
+export function recordRetiredBrowserSessionProfileUserAgentMigration(
+  profiles: readonly unknown[],
+  activeOrcaProfileId: string
+): void {
+  const migration = inspectRetiredBrowserSessionProfileUserAgentModes(profiles, activeOrcaProfileId)
+  if (!migration.noticePending) {
+    return
+  }
+  // Migration bookkeeping must not block session startup.
+  void Promise.all([
+    import('./browser-identity-mode-store'),
+    import('../../../persistence/loading-store/user-data-path')
+  ])
+    .then(([{ markBrowserIdentityMigrationNoticePending }, { getCanonicalUserDataPath }]) =>
+      markBrowserIdentityMigrationNoticePending(getCanonicalUserDataPath(), migration.degraded)
+    )
+    .catch((error) => console.error('[browser-identity] Migration notice failed:', error))
+}
+
 function hasPersistedProfileUserAgentMode(
   profile: Record<string, unknown>
 ): profile is PersistedProfileWithUserAgentMode {

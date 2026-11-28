@@ -1,5 +1,5 @@
 import type { WslHostDistro } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
-import { canAddWslDistro } from '@/components/sidebar/host-admission/wsl/AddWslHostFormPanel'
+import { canAddWslDistro } from '@/components/sidebar/host-admission/wsl/wsl-host-distro-model'
 
 export type WslDistroMenuRow = { distro: WslHostDistro; disabled: boolean }
 

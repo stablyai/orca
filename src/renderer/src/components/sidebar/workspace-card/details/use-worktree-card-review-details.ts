@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
 import { getWorkspaceAttachmentSourceContext } from '../review/workspace-attachment-source-result'
 import { getWorkspaceReferenceLinearWorkspaceId } from '../review/workspace-reference-details'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { useAppStore } from '@/store'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
 import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
-import { areTaskSourceContextsEqual } from '../../../../../../shared/work-items/task-source-context'
+import {
+  areTaskSourceContextsEqual,
+  getTaskSourceCacheScope
+} from '../../../../../../shared/work-items/task-source-context'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import {
@@ -23,21 +25,22 @@ export function useWorktreeCardReviewDetails({
   worktree,
   repo,
   settings,
-  projectGroups,
+  hasProjectGroups,
   cardProps,
   newCardStyle
 }: Pick<WorktreeCardProps, 'worktree' | 'repo'> &
-  Pick<Foundation, 'settings' | 'projectGroups' | 'cardProps' | 'newCardStyle'>) {
+  Pick<Foundation, 'settings' | 'hasProjectGroups' | 'cardProps' | 'newCardStyle'>) {
   const t = useTranslate()
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
-  const workspaceScope = parseWorkspaceKey(worktree.id)
-  const folderWorkspaceId =
-    workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
+  const folderWorkspaceId = worktree.id.startsWith('folder:')
+    ? parseWorkspaceKey(worktree.id)?.type === 'folder'
+      ? worktree.id.slice('folder:'.length)
+      : null
+    : null
   const isFolder = repo ? isFolderRepo(repo) : folderWorkspaceId !== null
   // Why: project groups gate folder workspaces, so folder paths stay hidden from identity surfaces until that capability exists.
-  const hasProjectGroups = projectGroups.length > 0
   const branchIdentityDisplay = !isFolder && branch.length > 0 ? branch : undefined
   const folderPathIdentityDisplay =
     isFolder && hasProjectGroups && worktree.path.trim().length > 0 ? worktree.path : undefined
@@ -66,7 +69,9 @@ export function useWorktreeCardReviewDetails({
         )
       : ''
   // Saved workspace bindings keep equal Linear identifiers separate.
-  const nextLinearSourceContext = getWorkspaceAttachmentSourceContext('linear', repo, worktree)
+  const nextLinearSourceContext = worktree.linkedLinearIssue
+    ? getWorkspaceAttachmentSourceContext('linear', repo, worktree)
+    : null
   // Preserve equal source-context identity so metadata writes do not retrigger Linear fetches.
   const [linearSourceContext, setLinearSourceContext] = useState(nextLinearSourceContext)
   if (!areTaskSourceContextsEqual(linearSourceContext, nextLinearSourceContext)) {
@@ -76,11 +81,13 @@ export function useWorktreeCardReviewDetails({
     worktree.linkedLinearIssueWorkspaceId,
     linearSourceContext
   )
+  const linearCachePrefix = linearSourceContext
+    ? getTaskSourceCacheScope(linearSourceContext)
+    : null
   const linearIssueCacheKey = worktree.linkedLinearIssue
-    ? scopedLinearCacheKey(
-        getLinearReadScope(settings, linearSourceContext),
-        `${linearWorkspaceId}::${worktree.linkedLinearIssue}`
-      )
+    ? linearCachePrefix
+      ? `${linearCachePrefix}::${linearWorkspaceId}::${worktree.linkedLinearIssue}`
+      : `${linearWorkspaceId}::${worktree.linkedLinearIssue}`
     : ''
 
   // Subscribe to ONLY the specific cache entry, not entire review/issue caches.

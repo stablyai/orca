@@ -20,3 +20,16 @@ export async function writeStructuredAgentSessionOrcaNote(
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
 }
+
+/** Removes a note written under `clientMessageId`. */
+export async function removeStructuredAgentSessionOrcaNote(
+  host: Pick<StructuredAgentSessionHost, 'deps' | 'conversation'>,
+  sessionId: string,
+  clientMessageId: string
+): Promise<void> {
+  const { journal } = await host.conversation(sessionId)
+  await journal.appendTombstone(
+    { provider: 'orca', clientMessageId },
+    { fence: structuredAgentSessionConversationFence(host.deps.store, sessionId) }
+  )
+}

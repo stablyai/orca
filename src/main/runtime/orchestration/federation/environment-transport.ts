@@ -21,6 +21,8 @@ export type OrchestrationEnvironmentCallOptions = {
   prepareGuard?: RuntimeRequestGuard
   contractVerified?: boolean
   expectedEnvironmentPairingRevision?: number
+  /** Only send if this host already has a ready connection; never wake an idle or disconnected server. */
+  readyOnly?: boolean
 }
 
 export type OrchestrationEnvironmentSendOptions = {
@@ -28,6 +30,8 @@ export type OrchestrationEnvironmentSendOptions = {
   prepareGuard?: RuntimeRequestGuard
   /** Send only to this host incarnation; any other answers runtime_environment_changed before sending. */
   expectedRuntimeId?: string
+  /** Only send if this host already has a ready connection; never wake an idle or disconnected server. */
+  readyOnly?: boolean
 }
 
 export type OrchestrationEnvironmentTransport = {

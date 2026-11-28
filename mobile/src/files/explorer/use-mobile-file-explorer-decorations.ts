@@ -19,6 +19,7 @@ import {
   gitStatusSummaryQuery,
   serverGitStatusSummaryQuery
 } from '../../source-control/changes/mobile-git-status-query'
+import { isMobileGitUnavailableReply } from '../../source-control/changes/mobile-git-status'
 import {
   getDirectoryCacheState,
   joinRelativePath,
@@ -55,25 +56,42 @@ const ignoredPathsQuery = defineHostQuery({
   staleTime: 30_000,
   refetchOnWindowFocus: true,
   fetch: async (client: RpcClient, target, input: { folder: string; names: string }) => {
-    const reply = gitCheckIgnoredRead.interpret(
-      await gitCheckIgnoredRead.request(client, {
-        worktree: `id:${target.worktree ?? ''}`,
-        paths: input.names.split(NAME_SEPARATOR).map((name) => joinRelativePath(input.folder, name))
-      })
+    const outcome = await gitCheckIgnoredRead.request(client, {
+      worktree: `id:${target.worktree ?? ''}`,
+      paths: input.names.split(NAME_SEPARATOR).map((name) => joinRelativePath(input.folder, name))
+    })
+    const reply = gitCheckIgnoredRead.interpret(outcome)
+    if (reply.accepted) {
+      return reply.value
+    }
+    // Older desktops without git.checkIgnored return method_not_found; transient failures must retry, not cache [].
+    if (isMobileGitUnavailableReply(outcome)) {
+      return []
+    }
+    throw new Error(
+      outcome.ok
+        ? 'Invalid git.checkIgnored reply'
+        : outcome.error.message || 'git.checkIgnored failed'
     )
-    return reply.accepted ? reply.value : []
   }
 })
 
-function foldersWithShownRows(rows: readonly FileExplorerRow[]): string[] {
-  const folders = new Set<string>()
+function shownRowsByFolder(rows: readonly FileExplorerRow[]): Map<string, string[]> {
+  const byFolder = new Map<string, string[]>()
   for (const row of rows) {
     if (row.kind === 'directory' || row.kind === 'text' || row.kind === 'binary') {
       const slash = row.relativePath.lastIndexOf('/')
-      folders.add(slash === -1 ? '' : row.relativePath.slice(0, slash))
+      const folder = slash === -1 ? '' : row.relativePath.slice(0, slash)
+      const name = slash === -1 ? row.relativePath : row.relativePath.slice(slash + 1)
+      const list = byFolder.get(folder)
+      if (list) {
+        list.push(name)
+      } else {
+        byFolder.set(folder, [name])
+      }
     }
   }
-  return [...folders]
+  return byFolder
 }
 
 function combineIgnored(results: UseQueryResult<string[]>[]): Set<string> {
@@ -104,17 +122,18 @@ export function useMobileFileExplorerDecorations(args: {
   const folderStatusByPath = useMemo(() => buildFolderStatusMap(entries ?? []), [entries])
 
   // Only a repository answers status, and only folders with rows on screen are asked about.
-  const repository = status?.kind === 'ready' && !status.status.readError
-  const shownFolders = useMemo(
-    () => (repository ? foldersWithShownRows(rows) : []),
+  const repository = enabled && status?.kind === 'ready' && !status.status.readError
+  const shownByFolder = useMemo(
+    () => (repository ? shownRowsByFolder(rows) : new Map<string, string[]>()),
     [repository, rows]
   )
   const ignoredInputs = useMemo(
     () =>
-      shownFolders.flatMap((folder) => {
-        const names = (getDirectoryCacheState(directoryCache, folder)?.entries ?? [])
-          .filter(shouldIncludeMobileFileExplorerEntry)
-          .map((entry) => entry.name)
+      [...shownByFolder.entries()].flatMap(([folder, visibleNames]) => {
+        const cachedEntries = getDirectoryCacheState(directoryCache, folder)?.entries
+        const names = cachedEntries
+          ? cachedEntries.filter(shouldIncludeMobileFileExplorerEntry).map((entry) => entry.name)
+          : visibleNames
         const slices = []
         for (let start = 0; start < names.length; start += MAX_IGNORED_QUERY_PATHS) {
           const slice = names.slice(start, start + MAX_IGNORED_QUERY_PATHS)
@@ -122,7 +141,7 @@ export function useMobileFileExplorerDecorations(args: {
         }
         return slices
       }),
-    [directoryCache, shownFolders]
+    [directoryCache, shownByFolder]
   )
   const ignored = useHostQueries(ignoredPathsQuery, host, target, ignoredInputs, combineIgnored)
 

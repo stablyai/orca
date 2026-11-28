@@ -15,6 +15,7 @@ import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallbac
 import type { CrossStoreWorkspaceLineage } from '../../../shared/worktree/lineage-types'
 
 const PAIRED_READ_TIMEOUT_MS = 5_000
+const PAIRED_READ_CONCURRENCY = 4
 
 // A worker's lineage: a folder's other members don't hold a disposable checkout, nor it them.
 export function isOrchestrationLineage(
@@ -64,22 +65,33 @@ export async function readPairedFolderChildren(
   if (!own) {
     return { complete: false, children: [] }
   }
-  const answers = await Promise.all(
-    servers.map(({ environmentId }) =>
-      // The call's own timeout starts after it reaches the server; connecting (an SSH tunnel) can take longer.
-      withTimeout(
-        runtime
-          .callOrchestrationWorkerServer(
-            environmentId,
-            'worktree.lineageList',
-            undefined,
-            PAIRED_READ_TIMEOUT_MS
-          )
-          .then((result) => ({ environmentId, result })),
-        PAIRED_READ_TIMEOUT_MS,
-        null
-      )
-    )
+  const answers: ({ environmentId: string; result: unknown } | null)[] = Array.from({
+    length: servers.length
+  })
+  let nextIndex = 0
+  const workerCount = Math.min(PAIRED_READ_CONCURRENCY, servers.length)
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < servers.length) {
+        const index = nextIndex++
+        const { environmentId } = servers[index]
+        // Only query already-connected servers so cleanup never wakes idle managed SSH or WSL hosts.
+        answers[index] = await withTimeout(
+          runtime
+            .callOrchestrationWorkerServer(
+              environmentId,
+              'worktree.lineageList',
+              undefined,
+              PAIRED_READ_TIMEOUT_MS,
+              undefined,
+              { readyOnly: true }
+            )
+            .then((result) => ({ environmentId, result })),
+          PAIRED_READ_TIMEOUT_MS,
+          null
+        )
+      }
+    })
   )
   const paired: PairedFolderChildren = { complete: true, children: [] }
   for (const answer of answers) {

@@ -1,5 +1,4 @@
-import type { Dir } from 'node:fs'
-import { opendir } from 'node:fs/promises'
+import { openDirectory, type DirectoryHandle } from '../../../shared/open-directory'
 
 /** `denied` is the only outcome that proves a permission refusal; `other` keeps unknown errors apart. */
 export type DirectoryEnumerationOutcome = 'ok' | 'denied' | 'missing' | 'other'
@@ -35,9 +34,9 @@ export function enumerateDirectoryOnce(path: string): Promise<DirectoryEnumerati
 }
 
 async function enumerateDirectory(path: string): Promise<DirectoryEnumerationOutcome> {
-  let dir: Dir | undefined
+  let dir: DirectoryHandle | undefined
   try {
-    dir = await opendir(path)
+    dir = await openDirectory(path)
     await dir.read()
     return 'ok'
   } catch (error) {

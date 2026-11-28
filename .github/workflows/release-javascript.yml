@@ -12,7 +12,7 @@ on:
         default: false
       runner:
         type: string
-        default: blacksmith-8vcpu-ubuntu-2404
+        default: ubuntu-24.04
     outputs:
       supported:
         value: ${{ jobs.bundle.outputs.supported }}

@@ -2,7 +2,6 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import { waitForRpcClientReconnected } from '../../transport/rpc/rpc-client-reconnect-wait'
-import '../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
 import {
   getWorktreeCreateReplayWindowMs,

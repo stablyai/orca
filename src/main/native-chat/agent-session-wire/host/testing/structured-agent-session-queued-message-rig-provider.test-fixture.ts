@@ -21,6 +21,10 @@ import {
 
 export type QueuedRigProviderOptions = {
   acquiredAccountHome?: () => AgentSessionAccountHome
+  /** The saved account each child launches on, and what a start would record now. */
+  accountKey?: () => string
+  /** What a running child should match, when not `accountKey` (null: hold it where it is). */
+  launchAccountKey?: () => string | null
   agent?: 'claude'
   rewind?: NonNullable<StructuredAgentSessionAdapter['rewind']>
   recoverRewind?: NonNullable<StructuredAgentSessionAdapter['recoverRewind']>
@@ -33,7 +37,12 @@ export type QueuedRigProviderOptions = {
   /** The model its child reports running; otherwise the agent's own `default`. */
   reportsModel?: string
   reportsEffort?: string
+  /** The first acquisition hands back a kept agent that had already ended (`KEPT_ENDED`);
+   *  `during-startup`: its open fails as its connection closes. */
+  endedBeforeAcquire?: true | 'during-startup'
 }
+
+export const KEPT_ENDED_GENERATION = 'kept-ended'
 
 /** How long a winding-down child is given after the interrupt before the Stop ends it. */
 export const QUEUED_RIG_STOP_GRACE_MS = 2_000
@@ -72,12 +81,15 @@ export function createQueuedRigProvider(
     ...(options.reportsEffort ? { effort: options.reportsEffort } : {})
   })
   const scripted: StructuredAgentSessionAdapter = {
-    open: () =>
-      options.starting
-        ? new Promise((resolve) => {
-            proveOpen = () => resolve({ reportedOptions: reported() })
-          })
-        : Promise.resolve({ reportedOptions: reported() }),
+    open: (input) =>
+      options.endedBeforeAcquire === 'during-startup' &&
+      input.acquisitionGeneration === KEPT_ENDED_GENERATION
+        ? Promise.reject(new Error('kept agent connection closed'))
+        : options.starting
+          ? new Promise((resolve) => {
+              proveOpen = () => resolve({ reportedOptions: reported() })
+            })
+          : Promise.resolve({ reportedOptions: reported() }),
     acquire: async ({ identity, fence, spawnToken, events: sink }) => {
       starts()
       const hold = startHold
@@ -96,6 +108,7 @@ export function createQueuedRigProvider(
         ? `${THREAD}-context-${record!.providerContextBoundary!.operationId}`
         : (context?.head?.handle.nativeId ?? THREAD)
       const accountHome = options.acquiredAccountHome?.()
+      const accountKey = options.accountKey?.()
       return {
         process: {
           hostId: 'local',
@@ -103,8 +116,12 @@ export function createQueuedRigProvider(
           processStartTimeMs: 1_700_000_000_000,
           spawnToken
         },
-        acquisitionGeneration: 'generation-1',
+        acquisitionGeneration:
+          options.endedBeforeAcquire && starts.mock.calls.length === 1
+            ? KEPT_ENDED_GENERATION
+            : 'generation-1',
         ...(accountHome ? { accountHome } : {}),
+        ...(accountKey === undefined ? {} : { accountKey }),
         link: {
           linkId: `link-${fence}`,
           handle:
@@ -118,6 +135,9 @@ export function createQueuedRigProvider(
       }
     },
     dispatch,
+    ...(options.accountKey
+      ? { launchAccountKey: options.launchAccountKey ?? options.accountKey }
+      : {}),
     captureMessageSteeringInputs: () => ({
       kind: 'codex',
       compiler: {
@@ -134,6 +154,12 @@ export function createQueuedRigProvider(
     cancelTurn,
     answerPrompt: vi.fn(async ({ commit }) => commit()),
     setOption,
+    ...(options.endedBeforeAcquire
+      ? {
+          endedBeforeAcquire: (_id: string, generation: string) =>
+            generation === KEPT_ENDED_GENERATION
+        }
+      : {}),
     ...(options.rewind
       ? {
           rewind: options.rewind,

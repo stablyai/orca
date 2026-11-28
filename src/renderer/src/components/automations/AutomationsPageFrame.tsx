@@ -1,40 +1,21 @@
-import React, { createContext, useContext, useLayoutEffect, useRef, useState } from 'react'
+import React, { createContext, useContext, useRef } from 'react'
 import { cn } from '@/lib/class-names'
+import { RAIL_PAGE_GUTTER_X, RailPageBody } from '@/components/rail-page/RailPage'
+import { useIsNarrowerThan } from '@/components/rail-page/use-is-narrower-than'
+import { RailPageBand } from '@/components/rail-page/RailPageHeader'
 
 /**
  * One column for every Automations page: the header and the body share width and gutter.
  * Full width with no cap, so tables use wide and ultra-wide windows; the list's Name
  * column absorbs the extra space while the data columns keep their bounded widths.
  */
-export const AUTOMATIONS_PAGE_CONTAINER_CLASS = 'w-full px-3 md:px-5'
+const AUTOMATIONS_PAGE_CONTAINER_CLASS = `w-full ${RAIL_PAGE_GUTTER_X}`
 
 /** Page-wide notices (an owner conflict) that every sub-page shows above its content. */
 export const AutomationsPageNoticeContext = createContext<React.ReactNode>(null)
 
 // Below this header width, secondary header actions fold into the overflow menu.
 export const COMPACT_HEADER_WIDTH_PX = 576
-
-function useIsNarrowerThan(ref: React.RefObject<HTMLElement | null>, widthPx: number): boolean {
-  const [narrow, setNarrow] = useState(false)
-  useLayoutEffect(() => {
-    const element = ref.current
-    if (!element) {
-      return
-    }
-    const measure = (): void => {
-      const next = element.getBoundingClientRect().width < widthPx
-      setNarrow((current) => (current === next ? current : next))
-    }
-    measure()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [ref, widthPx])
-  return narrow
-}
 
 export function AutomationsPageFrame({
   nav,
@@ -60,17 +41,14 @@ export function AutomationsPageFrame({
   const pageNotice = useContext(AutomationsPageNoticeContext)
   return (
     <>
-      <header className="shrink-0 border-b border-border/60">
-        <div
-          ref={headerRef}
-          className={cn(AUTOMATIONS_PAGE_CONTAINER_CLASS, 'flex min-h-12 items-center gap-3')}
-        >
+      <RailPageBand>
+        <div ref={headerRef} className="flex min-w-0 flex-1 items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center">{nav}</div>
           {actions ? (
             <div className="flex shrink-0 items-center gap-2">{actions({ compact })}</div>
           ) : null}
         </div>
-      </header>
+      </RailPageBand>
       {bodyScroll === 'page' ? (
         <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto">
           <div className={cn(AUTOMATIONS_PAGE_CONTAINER_CLASS, 'pb-10')}>
@@ -80,11 +58,11 @@ export function AutomationsPageFrame({
           </div>
         </div>
       ) : (
-        <div className={cn(AUTOMATIONS_PAGE_CONTAINER_CLASS, 'flex min-h-0 flex-1 flex-col pb-4')}>
+        <RailPageBody className={cn(AUTOMATIONS_PAGE_CONTAINER_CLASS, 'pb-4')}>
           {pageNotice}
           {notice}
           {children}
-        </div>
+        </RailPageBody>
       )}
     </>
   )

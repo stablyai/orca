@@ -2,6 +2,7 @@
 // finds the text in a fresh read and refuses an edit whose text isn't there exactly once (unless
 // --all). With --suggest, edits land as suggestions the doc's owner accepts or rejects in Docs.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { DocsReadView, DocsWriteView } from '../../shared/google/google-files-types'
 import { pageOfText } from '../../shared/tool-output-limits'
 import { GoogleToolError, parseGoogleJson, type GoogleApi } from './google-api-client'
@@ -48,9 +49,11 @@ export async function readDoc(
   args: { ref: string; offset?: number }
 ): Promise<DocsReadView> {
   const doc = await getDocument(api, args.ref)
-  const [rendered, comments] = await Promise.all([
+  const laterPage = (args.offset ?? 0) > 0
+  // Later pages show no comments, so one comment page is enough for their count.
+  const [rendered, { comments, more }] = await Promise.all([
     Promise.resolve(renderDocument(doc)),
-    openComments(api, doc.documentId)
+    openComments(api, doc.documentId, laterPage ? 1 : undefined)
   ])
   const page = pageOfText(rendered.text, args.offset)
   return {
@@ -59,7 +62,7 @@ export async function readDoc(
     title: doc.title,
     link: docLink(doc.documentId),
     text: page.text,
-    ...(page.nextOffset !== undefined || (args.offset ?? 0) > 0
+    ...(page.nextOffset !== undefined || laterPage
       ? {
           part: {
             from: Math.min(args.offset ?? 0, page.total),
@@ -71,8 +74,9 @@ export async function readDoc(
     ...(page.nextOffset !== undefined ? { nextOffset: page.nextOffset } : {}),
     suggestions: rendered.suggestions,
     // Later pages repeat no comments: the first page already showed what fits.
-    comments: (args.offset ?? 0) > 0 ? [] : commentsInBudget(comments),
-    openComments: comments.length
+    comments: laterPage ? [] : commentsInBudget(comments),
+    openComments: comments.length,
+    ...(more ? { moreComments: true } : {})
   }
 }
 
@@ -112,17 +116,19 @@ export async function createDoc(
   }
 }
 
-const BatchSchema = z.object({
-  replies: z
-    .array(
-      z.object({
-        replaceAllText: z.object({ occurrencesChanged: z.number().optional() }).optional()
-      })
-    )
-    .default([]),
-  // A comment request answers 200 even when Google didn't keep the comment; this says which.
-  commentUpdateState: z.string().optional()
-})
+const BatchSchema = lazyZodSchema(() =>
+  z.object({
+    replies: z
+      .array(
+        z.object({
+          replaceAllText: z.object({ occurrencesChanged: z.number().optional() }).optional()
+        })
+      )
+      .default([]),
+    // A comment request answers 200 even when Google didn't keep the comment; this says which.
+    commentUpdateState: z.string().optional()
+  })
+)
 
 async function batchUpdate(api: GoogleApi, id: string, requests: unknown[], suggest = false) {
   return api.send(

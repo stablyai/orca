@@ -39,12 +39,25 @@ export async function startAcpStructuredSession(
   const generation = deps.mintGeneration?.() ?? randomUUID()
   children.endings.admit(sessionId, generation)
   try {
+    // The selection is read before the spawn; the key is the login preparation left, else the
+    // selection as the child spawns.
+    await deps.spec.launchAccount?.atLaunch()
+    let accountKey: string | undefined
     const { acquisition, session } = await acquireAcpStructuredSession({
       acquire: input,
       deps: deps,
       generation,
       abandoned: () => attempt.signal.aborted,
-      track: (connection) => {
+      track: (connection, launch) => {
+        const { launchAccount: account } = launch.spec
+        const prepared = launch.preparedAccount
+        // A launch on another home or store, which no saved account names, records none.
+        const foreign = prepared !== undefined && 'foreign' in prepared
+        const login = prepared && !('foreign' in prepared) ? prepared : undefined
+        accountKey =
+          account?.usedBy?.(launch) === false || foreign
+            ? undefined
+            : (login?.key ?? account?.current() ?? undefined)
         connection.onExit((_exit, requested, lost) => {
           if (!requested) {
             input.events?.observeRootExit?.()
@@ -53,6 +66,11 @@ export async function startAcpStructuredSession(
         })
         children.starts.track(attempt, connection)
         deps.spec.launchGate?.retain(connection)
+        account?.spawned?.(connection, {
+          sessionId,
+          ...(accountKey === undefined ? {} : { key: accountKey }),
+          ...(login ? { prepared: login } : {})
+        })
       },
       onExit: (session) => {
         if (session && children.sessions.get(sessionId) === session) {
@@ -69,7 +87,14 @@ export async function startAcpStructuredSession(
       throw new Error('closed while starting')
     }
     children.sessions.set(sessionId, session)
-    return acquisition
+    // Snapshot: a kept agent that exits later did take what this app sent it.
+    if (session.connection.kept?.agentExited) {
+      session.endedBeforeAcquire = true
+      children.endedBeforeAcquire.set(sessionId, generation)
+    } else {
+      children.endedBeforeAcquire.delete(sessionId)
+    }
+    return accountKey === undefined ? acquisition : { ...acquisition, accountKey }
   } catch (error) {
     children.endings.retire(sessionId, generation)
     const { connection } = attempt

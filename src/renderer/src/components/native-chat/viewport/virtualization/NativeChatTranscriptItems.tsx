@@ -49,23 +49,24 @@ export function NativeChatTranscriptItems({
     () => (placed ? { ...context, timedRows: placed.afterMessage } : context),
     [context, placed]
   )
+  const { sizerRef, virtualItems, scrollMargin, measureRow, totalSize } = window
   return (
     <NativeChatReplyRevealsContext.Provider value={replyReveals}>
       <NativeChatHeldTextSessionContext.Provider value={context.heldTextSession}>
         <NativeChatSaveFallbackContext.Provider value={context.savesAsRepliesGrow ?? false}>
           <NativeChatImageGallery loadedMessageIds={loadedMessageIds}>
             <div
-              ref={window.sizerRef}
+              ref={sizerRef}
               data-native-chat-window
               data-native-chat-gallery-root=""
               className="relative w-full"
             >
-              {window.virtualItems.map((item, position) => {
+              {virtualItems.map((item, position) => {
                 const slot = slots[item.index]
                 if (!slot) {
                   return null
                 }
-                const previousEnd = window.virtualItems[position - 1]?.end ?? window.scrollMargin
+                const previousEnd = virtualItems[position - 1]?.end ?? scrollMargin
                 const leavesWhole = nativeChatSlotLeavesWhole(slot)
                 return (
                   <Fragment key={item.key}>
@@ -73,7 +74,8 @@ export function NativeChatTranscriptItems({
                     {/* A leaving row's negative top margin passes through to close the gap before it. */}
                     <div
                       data-index={item.index}
-                      ref={window.measureRow}
+                      data-native-chat-row-key={rowKeys[item.index]}
+                      ref={measureRow}
                       className={leavesWhole ? 'w-full' : 'flow-root w-full'}
                     >
                       <NativeChatTranscriptRow
@@ -103,9 +105,7 @@ export function NativeChatTranscriptItems({
                 style={{
                   height: Math.max(
                     0,
-                    window.totalSize -
-                      ((window.virtualItems.at(-1)?.end ?? window.scrollMargin) -
-                        window.scrollMargin)
+                    totalSize - ((virtualItems.at(-1)?.end ?? scrollMargin) - scrollMargin)
                   )
                 }}
               />
@@ -133,20 +133,30 @@ export function NativeChatWaitingTranscriptItems({
 }): React.JSX.Element {
   return (
     <>
-      {slots.map((slot, index) => (
-        <NativeChatTranscriptRow
-          key={nativeChatSlotKey(slot)}
-          slot={slot}
-          context={context}
-          joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
-            slot,
-            previous: slots[index - 1],
-            timedRowsAfter: context.timedRows,
-            markerKey: undefined,
-            leavesWhole: nativeChatSlotLeavesWhole(slot)
-          })}
-        />
-      ))}
+      {slots.map((slot, index) => {
+        const leavesWhole = nativeChatSlotLeavesWhole(slot)
+        return (
+          // Wrapped as windowed rows are, and indexed so a returning reader's place names this message.
+          <div
+            key={nativeChatSlotKey(slot)}
+            data-native-chat-waiting-index={index}
+            data-native-chat-row-key={nativeChatSlotKey(slot)}
+            className={leavesWhole ? 'w-full' : 'flow-root w-full'}
+          >
+            <NativeChatTranscriptRow
+              slot={slot}
+              context={context}
+              joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
+                slot,
+                previous: slots[index - 1],
+                timedRowsAfter: context.timedRows,
+                markerKey: undefined,
+                leavesWhole
+              })}
+            />
+          </div>
+        )
+      })}
       {agentMail ? <NativeChatWaitingAgentMailRows /> : null}
     </>
   )

@@ -1,10 +1,12 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import {
   useStructuredAgentSessionQueuedReorder,
   type QueuedMessageReorder
 } from './use-structured-agent-session-queued-reorder'
 // Host owns durable queued drafts; this pane routes card/header actions and holds only open-edit typing.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -92,6 +94,8 @@ function alreadySentNotice(): void {
   )
 }
 
+const NONE_IN_FLIGHT: ReadonlyMap<string, QueuedMessagesPendingAction> = new Map()
+
 export function useStructuredAgentSessionQueuedMessages(args: {
   /** Host advertises `agent-session.queued-messages.v2` and the transport has a fence. */
   enabled: boolean
@@ -166,10 +170,11 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     heldRef.current = allCards
   }, [allCards])
 
-  // Refs close same-frame double-click/chord races before disabled state renders.
-  const inFlightRef = useRef(new Map<string, QueuedMessagesPendingAction>())
-  const [inFlight, setInFlight] = useState<ReadonlyMap<string, QueuedMessagesPendingAction>>(
-    () => new Map()
+  // Kept with the chat tab: a view released mid-request returns still excluding what that request holds.
+  // Read synchronously, so same-frame double clicks and chords are refused before disabled state renders.
+  const [inFlight, setInFlight, readInFlight] = useNativeChatViewGuard(
+    'queue-in-flight',
+    NONE_IN_FLIGHT
   )
   const run = useCallback(
     async <T>(
@@ -177,20 +182,19 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       pending: QueuedMessagesPendingAction,
       action: () => Promise<T>
     ): Promise<T | false> => {
-      const held = inFlightRef.current
+      const held = readInFlight()
       if (keys.some((key) => held.has(key))) {
         return false
       }
-      keys.forEach((key) => held.set(key, pending))
-      setInFlight(new Map(held))
-      try {
-        return await action()
-      } finally {
-        keys.forEach((key) => held.delete(key))
-        setInFlight(new Map(held))
-      }
+      setInFlight((current) => new Map([...current, ...keys.map((key) => [key, pending] as const)]))
+      return await runWithFinally(action, () => {
+        setInFlight((current) => {
+          const next = new Map([...current].filter(([key]) => !keys.includes(key)))
+          return next.size === 0 ? NONE_IN_FLIGHT : next
+        })
+      })
     },
-    []
+    [readInFlight, setInFlight]
   )
 
   const steer = useCallback(
@@ -231,12 +235,12 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       return false
     }
     const head = headSteerableQueuedMessageCard(steerOrder)
-    if (!head || editingMessageId === head.messageId || inFlightRef.current.has(head.messageId)) {
+    if (!head || editingMessageId === head.messageId || readInFlight().has(head.messageId)) {
       return false
     }
     void steer(head.messageId)
     return true
-  }, [editingMessageId, enabled, steerOrder, steer])
+  }, [editingMessageId, enabled, readInFlight, steerOrder, steer])
   const steerableHead = enabled ? headSteerableQueuedMessageCard(steerOrder) : null
   // The same checks as the press, read from rendered state, so the composer never offers a dead steer.
   const headSteers =

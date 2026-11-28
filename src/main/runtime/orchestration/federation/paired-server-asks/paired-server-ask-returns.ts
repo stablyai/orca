@@ -1,18 +1,21 @@
 // Replies and notices this computer's agents owe asks from a paired server's agents wait in its
 // relay queue; it hands them back as soon as one is queued, since the server can't pull from here.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { PairedServerAsks } from './paired-server-asks-pull'
 
 const RETURN_TIMEOUT_MS = 15_000
 const PAGE = 50
 
-const Returned = z.object({
-  acknowledgments: z.array(
-    z.object({ conversationId: z.string(), throughSequence: z.number().int().nonnegative() })
-  ),
-  gone: z.array(z.string())
-})
+const Returned = lazyZodSchema(() =>
+  z.object({
+    acknowledgments: z.array(
+      z.object({ conversationId: z.string(), throughSequence: z.number().int().nonnegative() })
+    ),
+    gone: z.array(z.string())
+  })
+)
 
 // Per server: a flush is running, and whether a wake landed while it ran.
 type Flush = { again: boolean; done: Promise<void> }
@@ -36,6 +39,13 @@ async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): 
   if (items.length === 0) {
     return false
   }
+  const sentThrough = new Map<string, number>()
+  for (const item of items) {
+    sentThrough.set(
+      item.dispatch_id,
+      Math.max(sentThrough.get(item.dispatch_id) ?? 0, item.sequence)
+    )
+  }
   const returned = Returned.parse(
     await runtime.callOrchestrationWorkerServer(
       asks.environmentId,
@@ -53,21 +63,26 @@ async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): 
     )
   )
   for (const ack of returned.acknowledgments) {
+    const sentMax = sentThrough.get(ack.conversationId)
+    if (sentMax === undefined) {
+      continue
+    }
     db.acknowledgeFederationRelay({
       dispatchId: ack.conversationId,
       direction: 'to_home',
-      throughSequence: ack.throughSequence
+      throughSequence: Math.min(ack.throughSequence, sentMax)
     })
   }
   // A conversation the server no longer has under this pairing: its askers were told there.
   for (const conversationId of returned.gone) {
-    const through = Math.max(
-      ...items.filter((item) => item.dispatch_id === conversationId).map((item) => item.sequence)
-    )
+    const sentMax = sentThrough.get(conversationId)
+    if (sentMax === undefined) {
+      continue
+    }
     db.acknowledgeFederationRelay({
       dispatchId: conversationId,
       direction: 'to_home',
-      throughSequence: through
+      throughSequence: sentMax
     })
   }
   return items.length === PAGE

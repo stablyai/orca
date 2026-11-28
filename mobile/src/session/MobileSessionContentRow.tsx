@@ -1,19 +1,24 @@
+import { useContext } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { AlertTriangle, X } from 'lucide-react-native'
 import { SessionDockColumn } from './SessionDockColumn'
+import { SidebarPageDragContext } from './tabs/sidebar-page-drag'
+import { useSidebarContentSwipe } from './tabs/use-sidebar-content-swipe'
 import { dismissMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
-import { colors, pressedStyle } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../theme/mobile-theme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-session-styles'
+import { stylesSheet } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const {
     hostId,
@@ -30,9 +35,17 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     handleSessionContentRowLayout
   } = controller
   const dictationLive = useMobileDictationLive(dictation, cancelDictation, hostId)
+  // A leftward swipe across a chat, a note or a terminal opens the tabs sidebar (a terminal decides
+  // its own touches and hands the swipe over). A browser tab's page and diffs take their own swipes.
+  const swipeOpensSidebar = useSidebarContentSwipe(
+    useContext(SidebarPageDragContext),
+    controller.showNativeChat ||
+      controller.activeMarkdownTab != null ||
+      controller.activeSessionTab?.type === 'terminal'
+  )
   return (
     <View style={styles.sessionContentRow} onLayout={handleSessionContentRowLayout}>
-      <View style={styles.sessionContentMain}>
+      <View ref={swipeOpensSidebar} style={styles.sessionContentMain}>
         {createWarning ? (
           <View style={styles.createWarningBanner}>
             <AlertTriangle size={16} color={colors.statusAmber} strokeWidth={2.2} />

@@ -38,31 +38,41 @@ async function sweepTemps(folder: string): Promise<void> {
 /** Keeps an Orca home holding a private copy of agy's own login file for a Google method, and none
  *  for a key or gcloud, which mustn't find one, nor once agy has no login (signed out). Orca's
  *  server never wrote this file, so whatever is there is Orca's copy. Keyring hosts have no login
- *  file and share the OS login. Never fails the launch. */
+ *  file and share the OS login. Never fails the launch; false when the home may not hold agy's
+ *  current login. */
 export async function copyAgyLoginIntoOrcaHome(
   chatHome: string,
   userHome: string,
   google: boolean
-): Promise<void> {
+): Promise<boolean> {
   const folder = join(chatHome, ANTIGRAVITY_ACP_HOME)
   const file = join(folder, TOKEN_FILE)
   const target = join(userHome, '.gemini', 'antigravity-cli', TOKEN_FILE)
   try {
     await sweepTemps(folder)
     const entry = await lstat(file).catch(() => null)
-    const login = google ? wholeLogin(await readFile(target).catch(() => null)) : null
+    // Only a missing file means agy has no login; any other read error keeps the copy as it is.
+    const source = google
+      ? await readFile(target).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') {
+            return null
+          }
+          throw error
+        })
+      : null
+    const login = wholeLogin(source)
     if (login === 'unreadable') {
-      return
+      return false
     }
     if (!login) {
       if (entry) {
         await rm(file, { force: true })
       }
-      return
+      return true
     }
     if (entry?.isFile() && (await readFile(file)).equals(login)) {
       await chmod(file, 0o600)
-      return
+      return true
     }
     // Written aside and renamed in, so an agy reading it never sees half a file; a link is replaced.
     const temp = `${file}.${process.pid}-${randomUUID()}.tmp`
@@ -71,7 +81,9 @@ export async function copyAgyLoginIntoOrcaHome(
       await rm(temp, { force: true })
       throw error
     })
+    return true
   } catch (error) {
     console.warn("[antigravity] agy's login not copied into the chat home:", error)
+    return false
   }
 }

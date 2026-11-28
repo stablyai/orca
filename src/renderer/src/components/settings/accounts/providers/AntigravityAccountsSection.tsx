@@ -3,54 +3,31 @@ import { Loader2, RefreshCw } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
+import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
 } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
-import type {
-  ProviderRateLimits,
-  RateLimitState
-} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { localAccountRuntimeTargetKey } from '../../../../../../shared/agent-accounts/local-account-runtime'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
-import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
-import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { AntigravityChatAuthRows } from '../../../provider-accounts/AntigravityChatAuthRows'
-import { antigravityChatSignInBlocked } from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useAntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { useOnLaterChange } from './use-on-later-change'
 import { useAntigravityAccountRun } from './use-antigravity-account-run'
+import {
+  announceAntigravityAccountSwitch,
+  announceAntigravityAccountSwitchFailure
+} from '@/lib/provider-accounts/antigravity-account-switch-toasts'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
   AntigravityAgyAccountRows,
   type AntigravityAccountAction
 } from './AntigravityAgyAccountRows'
-
-function usageMatchesTarget(provenance: string, target: AntigravityAccountTarget): boolean {
-  if (target.runtime === 'host' || target.wslDistro) {
-    return (
-      provenance ===
-      localAccountRuntimeTargetKey({
-        runtime: target.runtime,
-        wslDistro: target.wslDistro ?? null
-      })
-    )
-  }
-  // The host names the default distro; this client does not know it.
-  return provenance.startsWith('wsl:')
-}
-
-// Why a helper: React Compiler cannot compile a throw statement inside try/catch.
-function staleUsageRead(message: string): never {
-  throw new Error(message)
-}
+import { AntigravityAgyCliRow } from './AntigravityAgyCliRow'
 
 export function AntigravityAccountsSection({
   owner,
@@ -65,7 +42,6 @@ export function AntigravityAccountsSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const [state, setState] = useState<AntigravityAccountState | null>(null)
-  const [usage, setUsage] = useState<ProviderRateLimits | null>(null)
   const [error, setError] = useState<string | null>(null)
   const mounted = useRef(true)
   const { busy, run } = useAntigravityAccountRun(perform, mounted)
@@ -76,16 +52,29 @@ export function AntigravityAccountsSection({
   const wslDistro = target.wslDistro ?? null
   // Chats run on the host itself, never in a WSL distro.
   const chats = runtime !== 'wsl'
-  const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
-  // Install and Remove wait for a sign-in, which runs agy.
-  const chatSignIn = chats && chatRuntime.kind === 'active'
-  // Signing agy in runs on this host, never in a WSL distro, and needs agy installed.
+  const chatsHere = chats && !structuredChatUnavailableOnPlatform('antigravity', ownerPlatform)
+  // The host finds agy as its chats do; an older host doesn't say, so its agent list answers.
+  const hostSays = state === null || state.agyInstalled !== undefined
+  const agents = useDetectedAgents(
+    !chats || hostSays
+      ? undefined
+      : environmentId
+        ? { kind: 'runtime', environmentId }
+        : { kind: 'local' },
+    'all'
+  )
+  // The user installs agy; signing it in runs it, so that waits until the host finds it.
+  const agyInstalled = !chats
+    ? null
+    : hostSays
+      ? (state?.agyInstalled ?? null)
+      : (agents.detectedIds?.includes('antigravity') ?? null)
   const signIn = useAntigravityChatSignInControls({
     owner,
     label,
-    disabled: chatRuntime.kind !== 'active' || !chats || antigravityChatSignInBlocked(chatRuntime)
+    disabled: !chatsHere || agyInstalled !== true
   })
-  const signInControls = chatSignIn ? signIn : undefined
+  const signInControls = chatsHere && agyInstalled === true ? signIn : undefined
 
   useEffect(() => {
     mounted.current = true
@@ -114,7 +103,7 @@ export function AntigravityAccountsSection({
     }
   }, [ownerKind, environmentId, runtime, wslDistro])
 
-  /** `keepShown`: a background re-read, which leaves a Usage reading or error on screen. */
+  /** `keepShown`: a background re-read, which leaves an error on screen. */
   async function perform(
     action: AntigravityAccountAction,
     accountId: string | undefined,
@@ -122,48 +111,19 @@ export function AntigravityAccountsSection({
   ) {
     if (!keepShown) {
       setError(null)
-      setUsage(null)
     }
     try {
-      if (action === 'Usage') {
-        const before = await callAntigravityAccounts(owner, target, 'List')
-        const snapshot = await callRuntimeRpc<{ rateLimits: RateLimitState }>(
-          owner,
-          'accounts.list',
-          { refreshUsage: true }
-        )
-        const after = await callAntigravityAccounts(owner, target, 'List')
-        if (mounted.current) {
-          setState(after)
-        }
-        const account = before.currentAccount
-        // Native credentials may expose no subject, making two unidentified logins indistinguishable.
-        if (
-          !account ||
-          !after.currentAccount ||
-          account.subject !== after.currentAccount.subject ||
-          account.authMethod !== after.currentAccount.authMethod
-        ) {
-          staleUsageRead('The native account changed while reading usage. Refresh usage again.')
-        }
-        const usage = snapshot.rateLimits.antigravity
-        const provenance = usage?.usageMetadata?.authProvenance
-        // Usage follows the Accounts location; a reading from another runtime is another login's.
-        if (provenance && !usageMatchesTarget(provenance, target)) {
-          staleUsageRead(
-            'Antigravity usage was read from a different location. Refresh usage again.'
-          )
-        }
-        if (mounted.current) {
-          setUsage(usage)
-        }
-      } else {
-        const next = await callAntigravityAccounts(owner, target, action, accountId)
-        if (mounted.current) {
-          setState(next)
-        }
+      const next = await callAntigravityAccounts(owner, target, action, accountId)
+      if (mounted.current) {
+        setState(next)
+      }
+      if (action === 'Select' && accountId) {
+        announceAntigravityAccountSwitch(next, accountId, target.runtime === 'host')
       }
     } catch (cause) {
+      if (action === 'Select') {
+        announceAntigravityAccountSwitchFailure(cause)
+      }
       if (action === 'Select' || action === 'Remove' || action === 'AddCurrent') {
         try {
           const observed = await callAntigravityAccounts(owner, target, 'List')
@@ -176,8 +136,8 @@ export function AntigravityAccountsSection({
           }
         }
       }
-      // A background re-read fails quietly; the next one or Refresh shows the answer.
-      if (mounted.current && !keepShown) {
+      // A background re-read fails quietly, and a failed switch says why in its toast.
+      if (mounted.current && !keepShown && action !== 'Select') {
         setError(cause instanceof Error ? cause.message : 'Antigravity account action failed.')
       }
     }
@@ -189,33 +149,8 @@ export function AntigravityAccountsSection({
       {title}
     </span>
   )
-  const runtimeRow =
-    chats && chatRuntime.kind === 'active' ? (
-      <ManagedRuntimeInstallRow
-        observation={chatRuntime}
-        agentLabel={t('accounts.antigravity.title', 'Antigravity')}
-        signInRunning={antigravityChatSignInRunning(signIn.flow)}
-      >
-        {(line, actions) => (
-          <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{t('accounts.antigravity.runtime', 'Runtime')}</p>
-              <div className="mt-0.5">{line}</div>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">{actions}</div>
-          </div>
-        )}
-      </ManagedRuntimeInstallRow>
-    ) : null
-
   // A pick moves new chats between agy's own home and Orca's, which the description follows.
   const reread = () => void run('List', undefined, true)
-  // Installing or removing agy changes what its account rows can read.
-  const installKey =
-    chatRuntime.kind === 'active' && chatRuntime.snapshot.kind === 'known'
-      ? `${chatRuntime.snapshot.state.program}:${chatRuntime.snapshot.state.source}`
-      : null
-  useOnLaterChange(installKey, reread)
   // Signing in or adding an account changes agy's login, which the account rows read again.
   // 'idle' once the status is read is a first value, so the first sign-in after mount re-reads too.
   const signedInFlow = !signIn.known
@@ -267,23 +202,31 @@ export function AntigravityAccountsSection({
           </Tooltip>
         }
       >
-        {chats && chatRuntime.kind === 'active' ? (
-          <AntigravityChatAuthRows owner={owner} onSaved={reread} />
-        ) : null}
+        {chatsHere ? <AntigravityChatAuthRows owner={owner} onSaved={reread} /> : null}
         <AntigravityAgyAccountRows
           state={state}
-          usage={usage}
           error={error}
           busy={busy}
           windowsHost={windowsHost}
           run={(action, accountId) => void run(action, accountId)}
           {...(signInControls ? { signIn: signInControls } : {})}
         />
-        {runtimeRow}
+        {chats ? (
+          <AntigravityAgyCliRow
+            owner={owner}
+            installed={agyInstalled}
+            checking={busy || agents.isRefreshing}
+            onCheckAgain={() => {
+              // An older host answers from its agent list, which a re-list alone doesn't refresh.
+              if (!hostSays) {
+                void agents.refresh()
+              }
+              void run('List')
+            }}
+          />
+        ) : null}
       </SettingsGroup>
-      {chats &&
-      chatRuntime.kind !== 'active' &&
-      structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
+      {chats && !chatsHere ? (
         <ChatUnavailableOnWindowsNote label={t('accounts.antigravity.title', 'Antigravity')} />
       ) : null}
     </div>

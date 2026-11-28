@@ -263,3 +263,30 @@ export async function agyUsesApiKey(homePath: string): Promise<boolean> {
     return true
   }
 }
+
+/** Whether agy's own settings leave it on personal Google sign-in: no model provider and no other
+ *  auth type. Settings JSON.parse can't read count as something else. */
+export async function agySignsInWithPersonalGoogle(homePath: string): Promise<boolean> {
+  const text = await readFile(
+    join(homePath, AGY_HOME_FOLDER, 'antigravity-cli', 'settings.json'),
+    'utf8'
+  ).catch((error: NodeJS.ErrnoException) => (error.code === 'ENOENT' ? null : undefined))
+  // Missing: agy's defaults. Unreadable: unknown, so not the same sign-in.
+  if (text === null || text === undefined) {
+    return text === null
+  }
+  try {
+    const settings: unknown = JSON.parse(text)
+    if (typeof settings !== 'object' || settings === null) {
+      return false
+    }
+    const auth = 'auth' in settings ? settings.auth : undefined
+    const type = typeof auth === 'object' && auth !== null && 'type' in auth ? auth.type : undefined
+    return (
+      !('modelProvider' in settings && settings.modelProvider) &&
+      (auth === undefined || type === undefined || type === 'oauth-personal')
+    )
+  } catch {
+    return false
+  }
+}

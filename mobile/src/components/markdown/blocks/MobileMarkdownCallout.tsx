@@ -8,32 +8,37 @@ import {
   TriangleAlert
 } from 'lucide-react-native'
 import type { GitHubCalloutKind } from '../../../../../src/shared/github/markdown/github-callouts'
-import { translate } from '../../../i18n/mobile-i18n'
-import { styles } from '../mobile-markdown-styles'
-import { colors } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { stylesSheet } from '../mobile-markdown-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
+import type { MobilePalette } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 
 // Desktop's markdown-github-callout.tsx in the phone's tokens.
-const CALLOUTS: Record<GitHubCalloutKind, { color: () => string; label: () => string }> = {
+const CALLOUTS: Record<
+  GitHubCalloutKind,
+  { color: (colors: MobilePalette) => string; label: (t: Translate) => string }
+> = {
   note: {
-    color: () => colors.accentBlue,
-    label: () => translate('components.markdownCallout.note', 'Note')
+    color: (colors) => colors.accentBlue,
+    label: (t) => t('components.markdownCallout.note', 'Note')
   },
   tip: {
-    color: () => colors.statusGreen,
-    label: () => translate('components.markdownCallout.tip', 'Tip')
+    color: (colors) => colors.statusGreen,
+    label: (t) => t('components.markdownCallout.tip', 'Tip')
   },
   important: {
-    color: () => colors.statusPurple,
-    label: () => translate('components.markdownCallout.important', 'Important')
+    color: (colors) => colors.statusPurple,
+    label: (t) => t('components.markdownCallout.important', 'Important')
   },
   warning: {
-    color: () => colors.statusAmber,
-    label: () => translate('components.markdownCallout.warning', 'Warning')
+    color: (colors) => colors.statusAmber,
+    label: (t) => t('components.markdownCallout.warning', 'Warning')
   },
   caution: {
-    color: () => colors.statusRed,
-    label: () => translate('components.markdownCallout.caution', 'Caution')
+    color: (colors) => colors.statusRed,
+    label: (t) => t('components.markdownCallout.caution', 'Caution')
   }
 }
 
@@ -71,19 +76,22 @@ export function MobileMarkdownCallout({
   textScale: number
   children: ReactNode
 }) {
-  useMobileColorScheme()
-  const { color, label } = CALLOUTS[kind]
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
+  const t = useMobileTranslation()
+  const callout = CALLOUTS[kind]
+  const color = callout.color(colors)
   return (
-    <View style={[styles.callout, { borderLeftColor: color() }]}>
+    <View style={[styles.callout, { borderLeftColor: color }]}>
       <View style={styles.calloutTitle}>
-        <CalloutIcon kind={kind} color={color()} size={14 * textScale} />
+        <CalloutIcon kind={kind} color={color} size={14 * textScale} />
         <Text
           style={[
             styles.calloutTitleText,
-            { color: color(), fontSize: styles.calloutTitleText.fontSize * textScale }
+            { color: color, fontSize: styles.calloutTitleText.fontSize * textScale }
           ]}
         >
-          {label()}
+          {callout.label(t)}
         </Text>
       </View>
       {children}

@@ -268,9 +268,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
-  /** Main-side kill switch for Orca's copy of agy. Off, it runs no chat and isn't updated: chats
-   *  run the user's own agy or, where there is none, refuse as agy not found. Absent means on. */
-  antigravityManagedAgyEnabled?: boolean
   /** No longer read: Orca's Antigravity ACP server is retired. Kept so older clients' updates of
    *  this host-owned key are still accepted. */
   antigravityServerAutoUpdateEnabled?: boolean
@@ -442,6 +439,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   mobilePairingCustomAddress?: string | null
   /** Saved custom addresses available in both mobile pairing pickers. */
   mobilePairingCustomAddresses?: string[]
+  /** Share this computer: interface picked for "Another device", kept while it is briefly disconnected. */
+  runtimePairingInterface?: { name: string; address: string } | null
   /** Name this runtime reports to paired clients; empty uses the host's detected name. */
   machineName: string
   /** Opt-in animated pet overlay; off unmounts it and renderer toggles apply immediately. */

@@ -1,20 +1,13 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
-import {
-  createRejectedNativeFileDropPayload,
-  validateNativeFileDropPaths
-} from '../../../shared/file-import/native-file-drop'
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
 } from '../../../shared/file-import/native-file-drop-preparation'
-import { abortWhenRendererGone } from '../../ipc/renderer-requests/renderer-lifetime-abort'
-import { getDragTempCopyRoot } from './dragged-temp-file-copy'
-import {
-  createDroppedPathPreparationQueue,
-  windowDragTempCopyLane,
-  type DroppedPathPreparationDeps
-} from './dropped-path-preparation'
-import { getDarwinUserTempDir } from './darwin-user-temp-dir'
+import type { DroppedPathPreparationDeps } from './dropped-path-preparation'
+
+type DroppedPathPreparer = (
+  request: PrepareDroppedPathsRequest
+) => PreparedDroppedPaths | Promise<PreparedDroppedPaths>
 
 export function registerDroppedPathPreparation(
   mainWindow: BrowserWindow,
@@ -24,20 +17,39 @@ export function registerDroppedPathPreparation(
   const mainWebContents = mainWindow.webContents
   const isWindowGone = (): boolean => mainWindow.isDestroyed() || mainWebContents.isDestroyed()
   ipcMain.removeHandler(prepareChannel)
-  const prepare = createDroppedPathPreparationQueue(
-    {
-      platform: process.platform,
-      localChatAttachmentStore,
-      getCopyEnvironment: async () => ({
-        platform: process.platform,
-        sourceTempRoot: await getDarwinUserTempDir(),
-        copyRoot: getDragTempCopyRoot(app.getPath('temp'))
-      }),
-      watchRenderer: () => abortWhenRendererGone(mainWebContents)
-    },
-    windowDragTempCopyLane
-  )
-  const prepareHandler = (
+  let preparePromise: Promise<DroppedPathPreparer> | null = null
+  const getPreparer = (): Promise<DroppedPathPreparer> => {
+    if (!preparePromise) {
+      preparePromise = Promise.all([
+        import('./dropped-path-preparation'),
+        import('./dragged-temp-file-copy'),
+        import('./darwin-user-temp-dir'),
+        import('../../ipc/renderer-requests/renderer-lifetime-abort')
+      ]).then(
+        ([
+          { createDroppedPathPreparationQueue, windowDragTempCopyLane },
+          { getDragTempCopyRoot },
+          { getDarwinUserTempDir },
+          { abortWhenRendererGone }
+        ]) =>
+          createDroppedPathPreparationQueue(
+            {
+              platform: process.platform,
+              localChatAttachmentStore,
+              getCopyEnvironment: async () => ({
+                platform: process.platform,
+                sourceTempRoot: await getDarwinUserTempDir(),
+                copyRoot: getDragTempCopyRoot(app.getPath('temp'))
+              }),
+              watchRenderer: () => abortWhenRendererGone(mainWebContents)
+            },
+            windowDragTempCopyLane
+          )
+      )
+    }
+    return preparePromise
+  }
+  const prepareHandler = async (
     event: Electron.IpcMainInvokeEvent,
     args: unknown
   ): Promise<PreparedDroppedPaths> => {
@@ -47,14 +59,17 @@ export function registerDroppedPathPreparation(
     if (!isPrepareDroppedPathsRequest(args)) {
       throw new Error('Invalid dropped paths request')
     }
+    const { createRejectedNativeFileDropPayload, validateNativeFileDropPaths } =
+      await import('../../../shared/file-import/native-file-drop')
     const validation = validateNativeFileDropPaths(args.paths)
     if (validation.status === 'rejected') {
-      return Promise.resolve({
+      return {
         paths: [],
         failures: [createRejectedNativeFileDropPayload(validation)]
-      })
+      }
     }
-    return Promise.resolve(prepare(args))
+    const prepare = await getPreparer()
+    return prepare(args)
   }
   ipcMain.handle(prepareChannel, prepareHandler)
   activePrepareHandler = prepareHandler

@@ -1,4 +1,3 @@
-import { closeDesktopCoreAfterStartupFailure } from '../core-desktop/desktop-core-startup-failure'
 import { initializeMainProcessI18nAndMenu } from './main-window/main-process-i18n-menu'
 import { mainProcessState as state } from './main-process-state'
 import { markHostShuttingDown } from './quit/host-shutdown-state'
@@ -41,6 +40,8 @@ export async function initializeMainProcessReady(
     // Startup now exits after failure; reopening would use a closing profile writer.
     markHostShuttingDown()
     state.desktopActivationGate = null
+    const { closeDesktopCoreAfterStartupFailure } =
+      await import('../core-desktop/desktop-core-startup-failure')
     await closeDesktopCoreAfterStartupFailure(state.core, {
       store: state.store,
       releaseAdmission: () => {
