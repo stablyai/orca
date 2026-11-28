@@ -187,7 +187,8 @@ export class BotGroupRuntime {
     threadId?: string,
     knownReplyKeys?: readonly string[],
     updatedPostIds?: readonly string[],
-    updatesOnly?: true
+    updatesOnly?: true,
+    signal?: AbortSignal
   ) =>
     readBotGroup(
       this,
@@ -196,7 +197,8 @@ export class BotGroupRuntime {
       threadId,
       knownReplyKeys,
       updatedPostIds,
-      updatesOnly
+      updatesOnly,
+      signal
     )
   turnRows = (
     input: Parameters<typeof readBotGroupTurnRows>[1],

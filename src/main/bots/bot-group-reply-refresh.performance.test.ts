@@ -9,7 +9,7 @@ import { BotGroupStore } from './bot-group-store'
 import { readBotGroupTurnSource } from '../runtime/orchestration/db/reader-worker/bot-group-turn-source'
 
 // #47176: a matching room notice only carries preview bodies the reader does not hold.
-it('recovers the page with zero repeated reply bodies and one changed body at both sizes', () => {
+it('recovers the page with zero repeated reply bodies and one changed body at both sizes', async () => {
   for (const count of [100, 1_000]) {
     const db = new OrchestrationDb(':memory:')
     try {
@@ -52,10 +52,10 @@ it('recovers the page with zero repeated reply bodies and one changed body at bo
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only store-backed posts are seeded.
       const runtime = { store, mailTurnChecks: new Map() } as unknown as BotGroupRuntime
       const load = (keys?: string[]) => readBotGroup(runtime, group.id, undefined, undefined, keys)
-      const initial = load([])
+      const initial = await load([])
       const held = botGroupReplyBodies(initial)
       expect(held.size).toBe(count)
-      const unchanged = load([...held.keys()])
+      const unchanged = await load([...held.keys()])
       expect(botGroupReplyBodies(unchanged).size).toBe(0)
       expect(restoreBotGroupReplies(unchanged, held)).toEqual(initial)
 
@@ -64,10 +64,10 @@ it('recovers the page with zero repeated reply bodies and one changed body at bo
         ...changed,
         turns: [{ ...changed.turns[0], reply: 'Updated answer.' }, ...changed.turns.slice(1)]
       })
-      const delta = load([...held.keys()])
+      const delta = await load([...held.keys()])
       expect([...botGroupReplyBodies(delta).values()]).toEqual(['Updated answer.'])
-      expect(restoreBotGroupReplies(delta, held)).toEqual(load([]))
-      expect(load().messages.at(-1)?.turns[0].reply).toBeUndefined()
+      expect(restoreBotGroupReplies(delta, held)).toEqual(await load([]))
+      expect((await load()).messages.at(-1)?.turns[0].reply).toBeUndefined()
     } finally {
       db.close()
     }
@@ -109,7 +109,8 @@ it('reads the frozen source once across consecutive detail pages at both sizes',
       const source = vi.spyOn(db.db, 'prepare')
       const read = (before?: number) =>
         readBotGroupTurnSource(db.db, {
-          ...store.detailSource(operationId)!,
+          messageId: stored.id,
+          version: store.detailVersion(stored.id),
           groupId: 'room',
           operationId,
           before
@@ -155,7 +156,8 @@ it('reads the frozen source once across consecutive detail pages at both sizes',
         })
         expect(
           readBotGroupTurnSource(db.db, {
-            ...store.detailSource(nextOperationId)!,
+            messageId: `next-post-${index}`,
+            version: store.detailVersion(`next-post-${index}`),
             groupId: 'room',
             operationId: nextOperationId
           })?.kind
@@ -168,7 +170,8 @@ it('reads the frozen source once across consecutive detail pages at both sizes',
       const interleaved = 'next-frozen-1'
       expect(
         readBotGroupTurnSource(db.db, {
-          ...store.detailSource(interleaved)!,
+          messageId: 'next-post-1',
+          version: store.detailVersion('next-post-1'),
           groupId: 'room',
           operationId: interleaved
         })?.kind

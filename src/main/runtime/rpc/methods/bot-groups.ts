@@ -88,7 +88,8 @@ export const BOT_GROUP_METHODS = [
         params.threadId,
         params.knownReplyKeys,
         params.updatedPostIds,
-        params.updatesOnly
+        params.updatesOnly,
+        context.signal
       )
     }
   }),

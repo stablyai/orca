@@ -218,11 +218,8 @@ export class BotGroupStore {
     return id === undefined ? null : this.posts.message(id)
   }
 
-  detailSource(operationId: string): { messageId: string; version: number } | undefined {
-    const messageId = this.posts.operationMessageId(operationId)
-    return messageId === undefined
-      ? undefined
-      : { messageId, version: this.posts.detailVersion(messageId) }
+  detailVersion(messageId: string): number {
+    return this.posts.detailVersion(messageId)
   }
 
   /** Stores a post with each turn's pending context, owed until native admission. */

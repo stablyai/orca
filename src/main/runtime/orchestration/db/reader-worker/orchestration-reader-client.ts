@@ -13,6 +13,7 @@ import type {
 } from '../../../../worker-threads/worker-thread-transport'
 import { readConnectorWorkerCandidates } from '../connector-workers/connector-worker-candidates'
 import type { OrchestrationDbConnection } from '../orchestration-db'
+import { readBotGroupPosts } from './bot-group-post-read'
 import type {
   OrchestrationReadName,
   OrchestrationReaderRequest,
@@ -44,7 +45,8 @@ const IN_PLACE: {
     readConnectorWorkerCandidates(connection, args.sessionIds, args.now),
   botGroupTurnSource: () => {
     throw new Error('Group turn detail reads need an injected in-memory reader.')
-  }
+  },
+  botGroupPosts: (connection, args) => readBotGroupPosts(connection.db, args)
 }
 
 /** The file a connection reads; empty for an in-memory database. */

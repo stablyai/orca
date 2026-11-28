@@ -33,7 +33,7 @@ const turn = (operationId: string, saved: Partial<BotGroupTurn> = {}): BotGroupT
   ...saved
 })
 
-it("sends each ended turn's saved reply and end, cut per turn, and never stores the cut", () => {
+it("sends each ended turn's saved reply and end, cut per turn, and never stores the cut", async () => {
   const orchestration = new OrchestrationDb(':memory:')
   databases.push(orchestration)
   const store = new BotGroupStore(orchestration.db)
@@ -64,7 +64,7 @@ it("sends each ended turn's saved reply and end, cut per turn, and never stores 
     ]
   })
 
-  const [message] = readBotGroup(groups, 'group-1', undefined, undefined, []).messages
+  const [message] = (await readBotGroup(groups, 'group-1', undefined, undefined, [])).messages
   const [finished, stopped, running] = message.turns
   expect(finished.reply).toBe(botGroupPageReply(long))
   expect(finished.reply!.length).toBeLessThan(BOT_GROUP_PAGE_REPLY_MAX + 10)
@@ -88,12 +88,12 @@ it("sends each ended turn's saved reply and end, cut per turn, and never stores 
       turns: []
     })
   }
-  const refreshed = readBotGroup(groups, 'group-1', undefined, undefined, [], ['message-1'])
+  const refreshed = await readBotGroup(groups, 'group-1', undefined, undefined, [], ['message-1'])
   expect(refreshed.messages.some(({ id }) => id === 'message-1')).toBe(false)
   expect(refreshed.updatedPosts?.[0].turns[0].reply).toBe(finished.reply)
 })
 
-it('keeps a removed member’s frozen result rows in the bounded room page', () => {
+it('keeps a removed member’s frozen result rows in the bounded room page', async () => {
   const orchestration = new OrchestrationDb(':memory:')
   databases.push(orchestration)
   const store = new BotGroupStore(orchestration.db)
@@ -141,7 +141,7 @@ it('keeps a removed member’s frozen result rows in the bounded room page', () 
     createdAt: 1,
     turns: [turn('removed', { revoked: true, frozenItems })]
   })
-  const [page] = readBotGroup(groups, 'group-1', undefined, undefined, []).messages
+  const [page] = (await readBotGroup(groups, 'group-1', undefined, undefined, [])).messages
   expect(page.turns[0]).toMatchObject({ revoked: true, end: 'failed', frozenItems })
 })
 
@@ -171,7 +171,7 @@ it('keeps a closing fence and the following prose when the opening is outside th
   )
 })
 
-it('keeps the recent page when named older updates fill the transport budget', () => {
+it('keeps the recent page when named older updates fill the transport budget', async () => {
   const orchestration = new OrchestrationDb(':memory:')
   databases.push(orchestration)
   const store = new BotGroupStore(orchestration.db)
@@ -209,7 +209,7 @@ it('keeps the recent page when named older updates fill the transport budget', (
           : []
     })
   }
-  const page = readBotGroup(groups, groupId, undefined, undefined, [], olderIds)
+  const page = await readBotGroup(groups, groupId, undefined, undefined, [], olderIds)
   expect(page.messages.map(({ id }) => id)).toEqual(recent)
   expect(page.updatedPosts?.length).toBeGreaterThan(0)
   expect(page.deferredPostIds?.length).toBeGreaterThan(0)

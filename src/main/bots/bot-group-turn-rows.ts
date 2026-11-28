@@ -123,9 +123,19 @@ async function readTurnPage(
   { groupId, threadId, operationId, before }: z.infer<typeof BotGroupTurnRows>,
   signal: AbortSignal
 ): Promise<BotGroupTurnDetailPage> {
-  const source = groups.store.detailSource(operationId)
-  if (!source) {
+  const post = await orchestrationReader().read(
+    groups.store,
+    'botGroupPosts',
+    { kind: 'operation', operationId },
+    signal
+  )
+  signal.throwIfAborted()
+  if (post.kind !== 'post' || !post.message) {
     return { items: [] }
+  }
+  const source = {
+    messageId: post.message.id,
+    version: groups.store.detailVersion(post.message.id)
   }
   const turn = await orchestrationReader().read(
     groups.store,

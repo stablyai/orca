@@ -3,20 +3,35 @@ import { collectRemoteAnswers, presentPageAnswers } from './bot-group-remote-ans
 import { presentBotGroupPage, projectBotGroupRoomPost } from './bot-group-page-replies'
 import { settleDeadGroupMailTurns } from './bot-group-dead-mail-turns'
 import type { BotGroupRuntime } from './bot-group-runtime'
+import { orchestrationReader } from '../runtime/orchestration/db/reader-worker/orchestration-reader-client'
 
 /** One room's latest page; its `group` carries that room's member sessions. */
-export function readBotGroup(
+export async function readBotGroup(
   groups: BotGroupRuntime,
   groupId: string,
   beforeSequence?: number,
   threadId?: string,
   knownReplyKeys?: readonly string[],
   updatedPostIds?: readonly string[],
-  updatesOnly?: true
-): BotGroupTranscript {
+  updatesOnly?: true,
+  signal?: AbortSignal
+): Promise<BotGroupTranscript> {
   const group = groups.store.room(groupId, threadId)
+  const readPage = async (limit: number) => {
+    const result = await orchestrationReader().read(
+      groups.store,
+      'botGroupPosts',
+      { kind: 'page', groupId, threadId, limit, beforeSequence },
+      signal
+    )
+    signal?.throwIfAborted()
+    if (result.kind !== 'page') {
+      throw new Error('The room reader returned a post for a page request.')
+    }
+    return result.messages
+  }
   if (knownReplyKeys === undefined) {
-    const stored = groups.store.roomMessages(groupId, threadId, 41, beforeSequence)
+    const stored = await readPage(41)
     const messages = collectRemoteAnswers(groups, stored.slice(-40))
     settleDeadGroupMailTurns(groups, messages)
     return {
@@ -39,17 +54,34 @@ export function readBotGroup(
       hasEarlier: stored.length > messages.length
     }
   }
-  const stored = updatesOnly
-    ? []
-    : groups.store.roomPageMessages(groupId, threadId, 41, beforeSequence)
+  const stored = updatesOnly ? [] : await readPage(41)
   const recent = stored.slice(-40)
   const recentIds = new Set(recent.map(({ id }) => id))
-  const updates = [...new Set(updatedPostIds)].flatMap((id) => {
-    if (recentIds.has(id)) {
+  const updates = (
+    await Promise.all(
+      [...new Set(updatedPostIds)].map(async (id) => {
+        if (recentIds.has(id)) {
+          return null
+        }
+        const result = await orchestrationReader().read(
+          groups.store,
+          'botGroupPosts',
+          { kind: 'post', id },
+          signal
+        )
+        signal?.throwIfAborted()
+        if (result.kind !== 'post') {
+          throw new Error('The room reader returned a page for a post request.')
+        }
+        const post = result.message
+        return post?.groupId === groupId && post.threadId === threadId ? post : null
+      })
+    )
+  ).flatMap((post) => {
+    if (!post) {
       return []
     }
-    const post = groups.store.roomPageMessage(id)
-    return post?.groupId === groupId && post.threadId === threadId ? [post] : []
+    return [post]
   })
   // Admission runs backward. Give the requested page first claim on the transport.
   const candidates = [...updates.sort((left, right) => left.sequence - right.sequence), ...recent]
