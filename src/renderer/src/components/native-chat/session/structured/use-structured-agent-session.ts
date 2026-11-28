@@ -115,6 +115,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     providerStarting,
     ...(args.providerRunning ? { providerRunning: true } : {}),
     ...(args.hostOptionStamp ? { hostOptionStamp: args.hostOptionStamp } : {}),
+    reportedCommands: state.commands,
     fence: state.fence,
     turnId: transportState.turnId,
     hasTurn: transportState.latestTurn != null || transportState.submissions.length > 0,

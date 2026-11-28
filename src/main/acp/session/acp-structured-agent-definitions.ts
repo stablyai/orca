@@ -26,6 +26,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     handleTransport: ACP_HANDLE_TRANSPORT,
     ...spec.account.pin,
     instructionsEachStart: spec.instructions?.eachStart ?? false,
+    ...(spec.compaction === 'reported' ? { compactRequiresCommandReport: true } : {}),
     capabilities: {
       // ACP has no stable rewind or goal methods.
       rewind: false,
@@ -33,7 +34,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       ...(spec.transcriptImport && ['omp', 'opencode', 'opencode2'].includes(spec.agent)
         ? { fork: 'tip' as const }
         : {}),
-      compact: spec.compaction === true,
+      compact: spec.compaction !== undefined,
       compactInstructions: spec.compactionInstructions === true,
       threadGoal: false,
       contextUsage: true,

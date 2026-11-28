@@ -76,8 +76,8 @@ export type AcpLaunchSpec = {
     /** The modes govern only some requests; under full access Orca answers the rest itself. */
     fullAccessAnswersRequests?: true
   }
-  /** Enables /compact as a prompt command. */
-  compaction?: true
+  /** Enables /compact as a prompt command, optionally requiring the running session to report it. */
+  compaction?: true | 'reported'
   /** The agent's `/compact` honours text after the command; others would silently drop it. */
   compactionInstructions?: true
   /** Rejects copy arguments that route the CLI away from the copy's store. */

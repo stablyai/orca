@@ -64,7 +64,20 @@ export class StructuredAgentRegistry {
   }
 
   /** Live sessions may narrow declared capabilities, never widen them. */
-  capabilities(agent: string): AgentSessionCapabilities | null {
-    return this.definition(agent)?.capabilities ?? null
+  capabilities(agent: string, sessionId?: string): AgentSessionCapabilities | null {
+    const registration = this.registration(agent)
+    if (!registration) {
+      return null
+    }
+    const { definition, adapter } = registration
+    if (!definition.compactRequiresCommandReport || !definition.capabilities.compact) {
+      return definition.capabilities
+    }
+    const compact =
+      sessionId !== undefined &&
+      adapter
+        .readCommands?.(sessionId)
+        ?.some(({ kind, name }) => kind === 'command' && name === 'compact') === true
+    return { ...definition.capabilities, compact }
   }
 }

@@ -105,6 +105,7 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'system' },
   loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   modelDiscovery: AGY_SESSION_MODEL_DISCOVERY,
+  compaction: 'reported',
   account: {
     pin: { accountHomeVariable: 'GEMINI_HOME' },
     resolve: async ({ launchEnv }) =>
