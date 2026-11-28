@@ -64,12 +64,15 @@ function journal() {
   const read = (between?: () => void) =>
     readJournalSqlProjection(reader, 'chat', (scope) => {
       between?.()
-      const { itemId, greatestTimedId } = readJournalDomainEntity(scope, {
+      const result = readJournalDomainEntity(scope, {
         kind: 'newest-item-id',
         prefix: JOURNAL_CLAUDE_REFUSAL_PREFIX,
         timedFrom: 't'
-      }) as { itemId: string | null; greatestTimedId: string | null }
-      return { itemId, greatestTimedId }
+      })
+      if (result.kind !== 'newest-item-id') {
+        throw new Error(`unexpected ${result.kind} result`)
+      }
+      return { itemId: result.itemId, greatestTimedId: result.greatestTimedId }
     })
   // A build that never names these indexes, writing through its own connection.
   const older = new Database(filename)
