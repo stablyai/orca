@@ -13,7 +13,7 @@ import { getOptionalStringFlag } from '../arguments/flags'
 import { mayNameFolderWorkspace } from '../workspace-selection/folder-workspace-selector'
 import { isLocalEnvironmentSelector, LOCAL_ENVIRONMENT } from '../hosts/local-environment-selector'
 import { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/connection/types'
+import { RuntimeClientError, type RuntimeCallOptions } from '../runtime/connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import { describeClientEnvironment, environmentLabel } from './workspace-address'
@@ -265,10 +265,13 @@ export async function callNamingParentEnvironment<
 >(
   client: RuntimeClient,
   method: 'worktree.create' | 'worktree.set',
-  params: Params
+  params: Params,
+  options?: RuntimeCallOptions
 ): Promise<RuntimeRpcSuccess<T>> {
   try {
-    return await client.call<T>(method, params)
+    return await (options
+      ? client.call<T>(method, params, options)
+      : client.call<T>(method, params))
   } catch (error) {
     const parentSelector = params.parentWorktree ?? params.parentWorkspace
     // A selector_* error here may be the child's own selector; only lineage codes name the parent.

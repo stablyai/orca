@@ -24,6 +24,7 @@ import {
 import { formatWorktreeShow } from './workspace-format'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { getWorktreeCreateCallOptions } from './worktree-create-request-timeout'
 import type { RuntimeClient } from '../runtime/client'
 import { printLineageSummary } from './worktree-lineage-summary'
 import { printHookWarning } from './worktree-removal-warnings'
@@ -48,6 +49,7 @@ export async function createWorktreeWithAgent(args: {
   rawArgs?: readonly string[]
 }): Promise<void> {
   const { client, flags, create, launch, json, rawArgs } = args
+  const callOptions = getWorktreeCreateCallOptions(flags)
   const capabilities = await getAgentLaunchCapabilities(client)
   if (
     !capabilities?.includes(AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY) ||
@@ -76,7 +78,9 @@ export async function createWorktreeWithAgent(args: {
     }
     const response = await withSetupDecisionRecovery(
       withCliAgentLaunchRecovery(
-        client.call<RuntimeWorktreeCreateResult>('worktree.create', params),
+        callOptions
+          ? client.call<RuntimeWorktreeCreateResult>('worktree.create', params, callOptions)
+          : client.call<RuntimeWorktreeCreateResult>('worktree.create', params),
         {
           rawArgs,
           params
@@ -101,7 +105,8 @@ export async function createWorktreeWithAgent(args: {
         presentation: create.activate === true ? 'focused' : 'background'
       },
       capabilities,
-      rawArgs
+      rawArgs,
+      callOptions
     ),
     launch.operationId !== undefined
   )
