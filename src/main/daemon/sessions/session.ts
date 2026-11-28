@@ -192,7 +192,7 @@ export class Session extends SessionProcessInspection {
     return this.termination.forceKillAndWaitForExit(timeoutMs, idleGuard)
   }
 
-  cancelTermination = (): void => this.termination.clearTerminating()
+  cancelTermination = (): void => this.termination.cancelTermination()
 
   signal(sig: string): void {
     this.termination.signal(sig)

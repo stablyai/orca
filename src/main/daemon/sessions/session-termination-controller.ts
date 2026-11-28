@@ -58,6 +58,20 @@ export class SessionTerminationController {
     this._isTerminating = false
   }
 
+  /** A refused guarded teardown keeps the child: drop the claim and let its stream owner pause it again. */
+  cancelTermination(): void {
+    if (!this._isTerminating || this.deps.isExited()) {
+      return
+    }
+    const released = this.gaveUp
+    this._isTerminating = false
+    this.gaveUp = false
+    this.cancelForceKillFallback()
+    if (!released) {
+      this.deps.releaseProducerPause({ resume: false, reason: 'released' })
+    }
+  }
+
   /** Claim synchronously before async teardown; false means exited or already claimed. */
   beginTermination(): boolean {
     if (this.deps.isExited() || this._isTerminating) {
