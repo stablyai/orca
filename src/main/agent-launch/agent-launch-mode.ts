@@ -3,7 +3,12 @@
 import { requestsCwdOutsideWorkspaceRoot } from '../../shared/shell/launch/terminal-startup-cwd'
 import type { AgentLaunchModeReceipt } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { RUNTIME_CAPABILITIES } from '../../shared/remote-runtime/protocol/protocol-version'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
+import {
+  readStructuredCreateSupport,
+  REGISTERED_STRUCTURED_AGENTS,
+  type AgentLaunchSupportPlace,
+  type CreateSupportRuntime
+} from './agent-launch-support-place'
 import {
   nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
@@ -16,7 +21,6 @@ import type {
   StructuredAgentCreateSupportReply
 } from '../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 import type { WorkspaceLaunchKind } from '../../shared/agent-launch/contracts/workspace-launch-kind'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
@@ -59,10 +63,6 @@ export type AgentLaunchModePlacement = {
   /** False if the client cannot display this chat; host callers may omit it. */
   callerRendersStructured?: boolean
 }
-
-const REGISTERED_STRUCTURED_AGENTS: readonly string[] = STRUCTURED_AGENT_RUNTIME_METADATA.map(
-  ({ definition }) => definition.agent
-)
 
 const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeReason> = {
   'reused-terminal': 'reused_terminal',
@@ -173,16 +173,17 @@ export function decideAgentLaunchMode(args: {
 }
 
 /** Refuse explicit chat only before effects; a created workspace keeps its terminal fallback. */
+export type { AgentLaunchSupportPlace }
+
 export async function resolveAgentLaunchModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'> &
-    WslHostChatSettingsSource,
+  runtime: CreateSupportRuntime & WslHostChatSettingsSource,
   receipt: AgentLaunchModeReceipt,
-  worktreeId: string | undefined,
+  place: AgentLaunchSupportPlace | undefined,
   agent: TuiAgent | undefined,
   vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
   context?: AgentLaunchModeSettlement
 ): Promise<AgentLaunchModeReceipt> {
-  if (receipt.mode !== 'structured' || !worktreeId) {
+  if (receipt.mode !== 'structured' || !place) {
     return receipt
   }
   if (context && launchCwdRelation(context) !== 'root') {
@@ -197,31 +198,12 @@ export async function resolveAgentLaunchModeOnHost(
       launchCwdRelation(context) === 'custom'
     )
   }
-  const support = await readStructuredCreateSupport(runtime, worktreeId, agent)
+  const support = await readStructuredCreateSupport(runtime, place, agent)
   const settlement = context ? { ...context, agent } : undefined
   try {
     return downgradeAgentLaunchModeForHost(receipt, support, vocabulary, settlement)
   } catch (error) {
     throw await withWslHostChatRecovery(error, context?.workspacePath, runtime)
-  }
-}
-
-/** Unknown host support must fall back to a terminal. */
-async function readStructuredCreateSupport(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
-  worktreeId: string,
-  agent: TuiAgent | undefined
-): Promise<StructuredAgentCreateSupportReply | null> {
-  if (!agent || !REGISTERED_STRUCTURED_AGENTS.includes(agent)) {
-    return { supported: false, reason: 'agent' }
-  }
-  try {
-    // These launches have no chat tab to offer the install, so they keep the agent's own CLI.
-    return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent, {
-      requireInstalledChatProgram: true
-    })
-  } catch {
-    return null
   }
 }
 

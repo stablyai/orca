@@ -14,7 +14,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
+import {
+  botItemsPersonPick,
+  botPickedOther,
+  sameBotPersonPick,
+  type BotChatPersonPick
+} from '../../../../../shared/bots/bot-chat-people'
 import { BotAvatar } from '../BotAvatar'
+import {
+  BotPersonPickItems,
+  botPersonPickName,
+  type BotPersonPickLabelled
+} from '../BotPersonPickItems'
 import { isBotItemFilterOn, type BotItemFilter } from '../../../../../shared/bots/bot-item-groups'
 
 /** A chat's name as a group's rows say it: Home Chat, else its title. */
@@ -37,22 +48,37 @@ export type BotItemsFilterGroup = {
   named: string | null
 }
 
+/** A shared bot's person pick, leading the bot page's menu. */
+export type BotItemsPeople = {
+  /** The viewer first, then everyone else. */
+  entries: readonly BotPersonPickLabelled[]
+  pick: BotChatPersonPick
+  onPick: (pick: BotChatPersonPick) => void
+}
+
 export function BotItemsFilterButton({
   items,
   filter,
   onFilter,
-  group = null
+  group = null,
+  people = null
 }: {
   /** The items "Needs you only" counts. */
   items: readonly BotItem[]
   filter: BotItemFilter
   onFilter: (filter: BotItemFilter) => void
   group?: BotItemsFilterGroup | null
+  people?: BotItemsPeople | null
 }): React.JSX.Element {
   const t = useTranslate()
   const needsYou = items.filter((item) => item.status === 'needs_you').length
   const label = t('bots.items.filter.label', 'Filter items')
-  const on = group ? group.named !== null : isBotItemFilterOn(filter)
+  const person = people ? botPersonPickName(people.pick, people.entries) : null
+  const named = group?.named ?? person
+  const on = group
+    ? group.named !== null
+    : isBotItemFilterOn(filter) ||
+      (people !== null && !sameBotPersonPick(people.pick, botItemsPersonPick(people.entries, null)))
   // Checked bots lead, in the order they had as the menu opened, so rows don't jump under the pointer.
   const [botOrder, setBotOrder] = useState<readonly string[]>([])
   const orderBots = (): void =>
@@ -82,9 +108,9 @@ export function BotItemsFilterButton({
               variant="ghost"
               size="icon-sm"
               aria-label={
-                group?.named
+                named
                   ? t('bots.groups.items.filterNamed', 'Filter items, filtered by {{filter}}', {
-                      filter: group.named
+                      filter: named
                     })
                   : label
               }
@@ -101,7 +127,7 @@ export function BotItemsFilterButton({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {group?.named ? `${label} · ${group.named}` : label}
+          {named ? `${label} · ${named}` : label}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-52">
@@ -127,6 +153,16 @@ export function BotItemsFilterButton({
             <DropdownMenuSeparator />
           </>
         ) : null}
+        {people ? (
+          <>
+            <BotPersonPickItems
+              entries={people.entries}
+              pick={people.pick}
+              onPick={people.onPick}
+            />
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuCheckboxItem
           checked={filter.needsYou}
           onCheckedChange={(checked) => onFilter({ ...filter, needsYou: checked === true })}
@@ -148,33 +184,53 @@ export function BotItemsFilterButton({
   )
 }
 
-/** The bot page's chip for Needs you only, removing it. */
+function FilterChip({ name, onRemove }: { name: string; onRemove: () => void }): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <span className="inline-flex h-6 min-w-0 items-center gap-1 rounded-md border border-input pl-2 pr-0.5 text-xs">
+      <span className="min-w-0 truncate">{name}</span>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="size-5"
+        aria-label={t('bots.items.filter.remove', 'Remove filter {{name}}', { name })}
+        onClick={onRemove}
+      >
+        <X className="size-3" />
+      </Button>
+    </span>
+  )
+}
+
+/** The bot page's chips, each removing its filter: another person picked (back to the viewer's own, the
+ *  default) and Needs you only. */
 export function BotItemsFilterChips({
   filter,
-  onFilter
+  onFilter,
+  people = null
 }: {
   filter: BotItemFilter
   onFilter: (filter: BotItemFilter) => void
+  people?: BotItemsPeople | null
 }): React.JSX.Element | null {
   const t = useTranslate()
-  if (!filter.needsYou) {
+  // Another person than the viewer's own, the default: by name, removing back to the viewer's own.
+  const own = people?.entries[0]
+  const other = people ? (botPickedOther(people.pick, people.entries)?.label ?? null) : null
+  if (!filter.needsYou && !other) {
     return null
   }
-  const name = t('bots.items.status.needsYou', 'Needs you')
   return (
     <div className="flex flex-wrap gap-1 px-2">
-      <span className="inline-flex h-6 min-w-0 items-center gap-1 rounded-md border border-input pl-2 pr-0.5 text-xs">
-        <span className="min-w-0 truncate">{name}</span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="size-5"
-          aria-label={t('bots.items.filter.remove', 'Remove filter {{name}}', { name })}
-          onClick={() => onFilter({ ...filter, needsYou: false })}
-        >
-          <X className="size-3" />
-        </Button>
-      </span>
+      {other && people && own ? (
+        <FilterChip name={other} onRemove={() => people.onPick(own.pick)} />
+      ) : null}
+      {filter.needsYou ? (
+        <FilterChip
+          name={t('bots.items.status.needsYou', 'Needs you')}
+          onRemove={() => onFilter({ ...filter, needsYou: false })}
+        />
+      ) : null}
     </div>
   )
 }

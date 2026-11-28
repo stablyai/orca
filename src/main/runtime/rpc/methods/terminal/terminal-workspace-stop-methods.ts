@@ -20,7 +20,8 @@ export const TERMINAL_WORKSPACE_STOP_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: TerminalStop,
-    handler: async (params, { runtime }) => runtime.stopTerminalsForWorktree(params.worktree)
+    handler: async (params, { runtime }) =>
+      runtime.stopTerminalsForWorktree(params.worktree, { list: 'host' })
   }),
   defineMethod({
     name: 'terminal.closeAll',

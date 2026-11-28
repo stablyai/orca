@@ -13,6 +13,9 @@ import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
 import { useBotForWorkspace } from '../../../bots/bot-workspace'
 import { BotHomeBanner } from '../../../bots/home-chat/BotHomeBanner'
+import { botHomeOfSession, botSharePersonName } from '../../../../../../shared/bots/bot-home-of'
+import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { isHostedBotChatTab } from '../../../../../../shared/bots/bot-home-tab'
 import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
 import { NativeChatSettingsButton } from '../../appearance/NativeChatSettingsButton'
@@ -69,7 +72,19 @@ export function NativeChatPaneHeader({
     'components.agentSessionContinuation.handOffToAnotherAgent',
     'Hand off to agent'
   )
-  const homeBot = hostedChat && homeRule && bot?.chatSessionId === nativeChat.sessionId ? bot : null
+  // Whose Home this chat is: on a shared agent the Home slot is the viewer's own.
+  const homeOf = hostedChat && homeRule && bot ? botHomeOfSession(bot, nativeChat.sessionId) : null
+  const sharedHost = useSharedBotHostOf(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID)
+  const homeNote =
+    homeOf === null || !bot
+      ? undefined
+      : homeOf !== 'owner'
+        ? t('bots.chats.personHome', '{{name}}’s Home', {
+            name: botSharePersonName(bot, homeOf.accountId)
+          })
+        : sharedHost
+          ? t('bots.share.sharedBy', 'Shared by {{name}}', { name: sharedHost.ownerName })
+          : undefined
   return (
     <div
       className="pane-title-bar z-20"
@@ -78,7 +93,9 @@ export function NativeChatPaneHeader({
       data-pane-title-surface={light ? 'light' : 'dark'}
       style={HEADER_STYLE}
     >
-      {homeBot ? <BotHomeBanner bot={homeBot} /> : null}
+      {homeOf !== null && bot ? (
+        <BotHomeBanner bot={bot} note={homeNote} opensPage={sharedHost === null} />
+      ) : null}
       <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
         {handOff && focused ? (
           <Tooltip>

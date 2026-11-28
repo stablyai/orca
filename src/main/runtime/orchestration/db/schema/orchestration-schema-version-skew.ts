@@ -58,7 +58,10 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 47, table: 'dispatch_contexts', column: 'creator_turn_source' },
   { version: 48, table: 'dispatch_contexts', column: 'origin_ref' },
   { version: 50, table: 'dispatch_contexts', column: 'for_message_id' },
-  { version: 51, table: 'dispatch_contexts', column: 'chat_lineage' }
+  { version: 51, table: 'dispatch_contexts', column: 'chat_lineage' },
+  { version: 52, table: 'dispatch_contexts', column: 'progress_note' },
+  { version: 52, table: 'dispatch_contexts', column: 'progress_updated_at' },
+  { version: 53, table: 'dispatch_contexts', column: 'acts_for' }
 ] as const
 
 // v34 stamps can lack these repairs; v35 probes must verify their stored defaults.
@@ -169,13 +172,21 @@ function hasConsistentLegacyAdoption(db: Database.Database): boolean {
   return true
 }
 
-function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): boolean {
-  return (
+// From v51 on every step only adds a column it finds missing, so a database missing one of these
+// (an earlier sharing build stamped v52 with acts_for but not main's progress columns) resumes just
+// before that column's step instead of replaying old migrations over its live data.
+const ADD_MISSING_COLUMN_STEPS_FROM = 51
+
+/** Where a stamp's migration resumes: the stamp, or just before the earliest add-a-column step whose
+ *  column it lacks; null when anything older is missing. */
+function postV6ResumeStep(db: Database.Database, storedVersion: number): number | null {
+  const missing = VERSIONED_POST_V6_COLUMNS.filter(
+    ({ version, table, column }) =>
+      version <= storedVersion && !hasOrchestrationColumn(db, table, column)
+  ).map(({ version }) => version)
+  const complete =
+    missing.every((version) => version >= ADD_MISSING_COLUMN_STEPS_FROM) &&
     POST_V6_COLUMNS.every(([table, column]) => hasOrchestrationColumn(db, table, column)) &&
-    VERSIONED_POST_V6_COLUMNS.every(
-      ({ version, table, column }) =>
-        storedVersion < version || hasOrchestrationColumn(db, table, column)
-    ) &&
     (storedVersion < 34 || hasNotNullOrchestrationColumn(db, 'deliveries', 'mailbox_handle')) &&
     VERSIONED_POST_V6_COLUMN_DEFAULTS.every(
       ({ version, table, column, defaultValue }) =>
@@ -188,7 +199,7 @@ function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): 
     POST_V6_INDEXES.every((index) => hasOrchestrationIndex(db, index)) &&
     messagesAllowQuestions(db) &&
     hasConsistentLegacyAdoption(db)
-  )
+  return complete ? Math.min(storedVersion, ...missing.map((version) => version - 1)) : null
 }
 
 export function resolveOrchestrationMigrationStartVersion(
@@ -199,9 +210,6 @@ export function resolveOrchestrationMigrationStartVersion(
   if (storedVersion > schemaVersion) {
     return storedVersion
   }
-  if (hasCompletePostV6Schema(db, storedVersion)) {
-    return storedVersion
-  }
   // Pre-Run databases may claim post-v6 versions while retaining the old tables.
-  return Math.min(storedVersion, schemaVersion, 6)
+  return postV6ResumeStep(db, storedVersion) ?? Math.min(storedVersion, schemaVersion, 6)
 }

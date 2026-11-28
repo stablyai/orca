@@ -1,22 +1,21 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-export const browserExtensionsBannerSchema = z.enum([
-  'none',
-  'plain_bring',
-  'colored_bring',
-  'plain_everyday',
-  'colored_everyday'
-])
+export const browserExtensionsBannerSchema = lazyZodSchema(() =>
+  z.enum(['none', 'plain_bring', 'colored_bring', 'plain_everyday', 'colored_everyday'])
+)
 export type BrowserExtensionsBanner = z.infer<typeof browserExtensionsBannerSchema>
 export type BrowserExtensionsBannerLook = Exclude<BrowserExtensionsBanner, 'none'>
 
-export const browserExtensionsBannerAssignmentSchema = z.object({
-  banner: browserExtensionsBannerSchema,
-  assignedAt: z.number().int().positive(),
-  hadExtensions: z.boolean(),
-  /** Set once the assignment event was accepted; only then does the banner follow it. */
-  reported: z.boolean().optional()
-})
+export const browserExtensionsBannerAssignmentSchema = lazyZodSchema(() =>
+  z.object({
+    banner: browserExtensionsBannerSchema,
+    assignedAt: z.number().int().positive(),
+    hadExtensions: z.boolean(),
+    /** Set once the assignment event was accepted; only then does the banner follow it. */
+    reported: z.boolean().optional()
+  })
+)
 export type BrowserExtensionsBannerAssignment = z.infer<
   typeof browserExtensionsBannerAssignmentSchema
 >

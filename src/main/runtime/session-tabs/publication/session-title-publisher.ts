@@ -54,8 +54,9 @@ export abstract class OrcaRuntimeWithSessionTitleAuthority extends OrcaRuntimeWi
         !alreadyChanged.has(worktreeId) &&
         (previous?.size !== next?.size || (previous && [...previous].some((id) => !next?.has(id))))
       ) {
-        // Retained rows can stay identical while their publisher stops resolving titles.
-        this.touchMobileSessionTabsForWorktree(worktreeId)
+        // Retained rows can stay identical while their publisher stops resolving titles. Title
+        // publishers are the host's windows, whose snapshots are the host's list.
+        this.touchSessionTabList({ workspaceId: worktreeId, holder: undefined })
       }
     }
   }

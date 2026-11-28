@@ -18,6 +18,10 @@ import {
 } from '../../../../../shared/agent-session/requests/structured-chat-dispatch-telemetry'
 import { subscribeStructuredChatTelemetry } from '../../../../telemetry/structured-chat-dispatch'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
+import {
+  AgentWorkspaceTracker,
+  workspaceTeammateOf
+} from '../../../../bots/team-share/agent-workspace-tracker'
 
 let clientEventSubscriptionSeq = 0
 
@@ -29,6 +33,15 @@ export const CLIENT_EVENT_METHODS = [
     params: ClientEventsSubscribeParams,
     handler: async (params, ctx, emit) => {
       const { runtime, connectionId, clientKind, pairedDeviceId, clientCapabilities } = ctx
+      const teammate = workspaceTeammateOf(ctx)
+      // Built before this stream listens, so its re-reads run ahead of the events they decide.
+      const tracker = teammate ? new AgentWorkspaceTracker(runtime, teammate) : null
+      await tracker?.ready()
+      if (ctx.signal?.aborted) {
+        tracker?.dispose()
+        return
+      }
+      const deliver = tracker ? tracker.orderedClientEvents(emit) : emit
       await new Promise<void>((resolve) => {
         // Mobile discards terminalSideEffects; filter per-OSC batch frames before they cross the relay.
         const unsubscribe = runtime.onClientEvent(
@@ -42,12 +55,14 @@ export const CLIENT_EVENT_METHODS = [
             ) {
               return
             }
-            emit(event)
+            deliver(event)
           },
           { consumesTerminalSideEffects: clientKind !== 'mobile' }
         )
+        // The server asks only the owner's computers to host a page no one placed.
         const unregisterHostVolunteer =
           params.browserHostRequests === true &&
+          ctx.callerScope?.kind !== 'bot-share' &&
           clientKind === 'runtime' &&
           pairedDeviceId &&
           clientCapabilities?.includes(BROWSER_CLIENT_HOST_REQUEST_CAPABILITY)
@@ -86,6 +101,7 @@ export const CLIENT_EVENT_METHODS = [
             unregisterHostVolunteer?.()
             unregisterCardRenderer?.()
             unsubscribeTelemetry?.()
+            tracker?.dispose()
             emit({ type: 'end' })
             resolve()
           },
@@ -94,11 +110,11 @@ export const CLIENT_EVENT_METHODS = [
 
         // Listen before snapshotting to close the subscribe race and replay sleep state missed during disconnect.
         for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
-          emit(event)
+          deliver(event)
         }
         for (const event of runtime.getNativeChatLaunchDraftResolutionClientEventSnapshot?.() ??
           []) {
-          emit(event)
+          deliver(event)
         }
         const sshStates = listRegisteredSshTargets().flatMap((target) => {
           const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)
@@ -110,7 +126,8 @@ export const CLIENT_EVENT_METHODS = [
           type: 'ready',
           subscriptionId,
           snapshot: {
-            sshStates,
+            // The host's SSH targets are its own, as `sshStateChanged` is.
+            sshStates: teammate ? [] : sshStates,
             nativeChatQueueFollowUps: settings.nativeChatQueueFollowUps,
             nativeChatCiResultLines: settings.nativeChatCiResultLines
           }

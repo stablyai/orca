@@ -59,7 +59,7 @@ export function runtimeBotConversations(runtime: OrcaRuntimeService): Conversati
   const chats = runtimeBotChats(runtime)
   return botConversations({
     bots: runtime.bots,
-    ensureChat: chats.ensure,
+    ensureChat: (botId) => chats.ensure(botId, 'owner'),
     startSession: (bot) => startBotSession(runtime, bot, { background: true }),
     botWork: runtime.botWork
   })

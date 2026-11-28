@@ -39,7 +39,14 @@ import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
 import { PAIRED_SERVER_ASKS_METHODS } from '../../paired-server-asks/paired-server-asks-methods'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
 import type * as RecipientRouting from '../messaging/recipient-routing'
-import { DOCS_CHAT, RANGER_THREAD, withChat } from '../messaging/bot-recipient.test-fixture'
+import {
+  DOCS_CHAT,
+  journals,
+  RANGER_THREAD,
+  withChat
+} from '../messaging/bot-recipient.test-fixture'
+import { DANA_ASKER, DANA_OPENER, runningTurnItems } from './sending-bot-turn.test-fixture'
+import { turnActsForOwner } from '../../../../../bots/bot-request-asker'
 
 vi.mock(
   '../../../../orchestration/federation/relay/federation-relay-scheduler',
@@ -204,7 +211,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     pulls = []
     dir = mkdtempSync(join(tmpdir(), 'orca-paired-server-asks-'))
     withChat.mockReset()
-    withChat.mockImplementation((_botId, work) => work(DOCS_CHAT))
+    withChat.mockImplementation((_botId, _of, work) => work(DOCS_CHAT))
     server = openSide('server', 'Build Box', [makeTestBot({ id: 'ranger', name: 'Ranger' })])
     computer = openSide(
       'computer',
@@ -381,6 +388,22 @@ describe('agents on a paired server messaging an agent on this computer', () => 
 
     await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(2))
     expect(await cards()).toEqual([])
+  })
+
+  it("holds a teammate's turn on the server to the teammate on this computer", async () => {
+    journals[RANGER_THREAD] = runningTurnItems(DANA_OPENER)
+    try {
+      await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
+      await listening()
+      const sent = await ask()
+
+      await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+      const record = JSON.parse(computer.db.getBotRequest(sent.message.id)!.record)
+      expect(record.askers).toEqual([{ kind: 'owner' }, DANA_ASKER])
+      expect(turnActsForOwner({ askers: record.askers })).toBe(false)
+    } finally {
+      delete journals[RANGER_THREAD]
+    }
   })
 
   it("names the sender by this computer's name for the server, in the request and its header", async () => {

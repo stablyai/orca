@@ -221,7 +221,7 @@ export async function actAsBot(
   const actsFor = await botTurnFor(
     runtime,
     sessionId,
-    sessionCallerOf(context.orchestrationCaller)?.sessionId,
+    { verifiedSessionId: sessionCallerOf(context.orchestrationCaller)?.sessionId },
     turn
   )
   // A post (its words, or a file and its comment) shows another Orca bot whom its turn acts for.

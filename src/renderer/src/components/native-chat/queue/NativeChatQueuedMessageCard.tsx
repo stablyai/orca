@@ -27,7 +27,10 @@ import {
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { NativeChatAgentMessageSenders } from '@/components/native-chat/messages/agent-senders/NativeChatAgentMessageSenders'
-import { NativeChatTypedByQueuedLine } from '@/components/native-chat/NativeChatTypedByTag'
+import {
+  NativeChatTypedByQueuedLine,
+  useOtherPersonTypist
+} from '@/components/native-chat/NativeChatTypedByTag'
 import { NativeChatPendingIcon } from '@/components/native-chat/queue/NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from '@/components/native-chat/queue/use-structured-agent-session-queued-messages'
 import { useNativeChatClippedLine } from '@/components/native-chat/queue/use-native-chat-clipped-line'
@@ -171,10 +174,11 @@ export function NativeChatQueuedMessageCard({
   const [expanded, setExpanded] = useState(false)
   const [clipped, measureLine] = useNativeChatClippedLine(false)
   const textId = useId()
+  const typist = useOtherPersonTypist(card.typist)
   const sender = card.from ? (
     <NativeChatAgentMessageSenders from={card.from} chatWorktreeId={chatWorktreeId} queued />
-  ) : card.typedByOther ? (
-    <NativeChatTypedByQueuedLine typist={card.typedByOther} />
+  ) : typist ? (
+    <NativeChatTypedByQueuedLine typist={typist} />
   ) : null
   if (editor) {
     return (

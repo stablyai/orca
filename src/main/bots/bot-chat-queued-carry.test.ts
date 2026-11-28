@@ -19,6 +19,7 @@ import { QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED } from '../native-chat/agent-s
 import { replyEventsOf } from '../connector-cloud/connector-reply-outbox'
 import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sentence'
 import { botChatSessions } from './bot-chat-session'
+import { withBotHome } from '../../shared/bots/bot-home-of'
 import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
@@ -102,8 +103,8 @@ describe('replacing a chat carries its unsent queued messages', () => {
     const chats = botChatSessions({
       bots: {
         list: () => [bot],
-        setChatSession: async (_id, sessionId) => {
-          bot = { ...bot, chatSessionId: sessionId }
+        setHome: async (_id, of, sessionId) => {
+          bot = { ...bot, ...withBotHome(bot, of, sessionId) }
           return bot
         }
       },
@@ -174,7 +175,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
 
   it('moves them, in order with sender and images, out of the old chat', async () => {
     const { chats } = await setup()
-    const next = await chats.reset('bot-1')
+    const next = await chats.reset('bot-1', 'owner')
     expect(next).not.toBe(HOST_TEST_SESSION)
     const bodies = await received(next)
     expect(bodies.map(textOf)).toEqual([
@@ -193,7 +194,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
 
   it('tells a queued direct message it stopped instead of moving it', async () => {
     const { chats } = await setup()
-    const next = await chats.reset('bot-1')
+    const next = await chats.reset('bot-1', 'owner')
     expect((await received(next)).map(textOf)).not.toContain('slack dm')
     expect((await queuedTexts(HOST_TEST_SESSION)).map(textOf)).not.toContain('slack dm')
     const owed = await rig!.store.connectorReplies().readOwed(DM_DELIVERY.account, null, 10)
@@ -211,7 +212,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
 
   it('keeps a held card held in the new chat', async () => {
     const { chats } = await setup()
-    const next = await chats.reset('bot-1')
+    const next = await chats.reset('bot-1', 'owner')
     const { journal } = await rig!.host.conversation(next)
     expect(await journal.queuedMessages.get('unconfirmed')).toMatchObject({
       state: 'waiting',
@@ -227,7 +228,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
       (card) => card.messageId !== 'plan' && card.messageId !== 'editing'
     )
     await queuedMessages.withdraw(others.map((card) => card.messageId))
-    const next = await chats.reset('bot-1')
+    const next = await chats.reset('bot-1', 'owner')
     expect(rig!.store.getConversation(next)?.provider).toBe(newChatAgent)
     const { journal } = await rig!.host.conversation(next)
     expect((await journal.queuedMessages.get('plan'))?.deliveryMode).not.toBe('steer')
@@ -262,7 +263,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
     const { chats } = await setup(async () => {
       throw new Error('start failed')
     })
-    await expect(chats.reset('bot-1')).rejects.toThrow('start failed')
+    await expect(chats.reset('bot-1', 'owner')).rejects.toThrow('start failed')
     expect((await queuedTexts(HOST_TEST_SESSION)).map(textOf)).toEqual([
       'owner text',
       'run result',

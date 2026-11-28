@@ -6,6 +6,7 @@ import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createInheritedOrcaIdentityFirstGuardPlugin } from './config/build-plugins/inherited-orca-identity-banner'
+import { createMainCjsEntryShimPlugin } from './config/build-plugins/main-cjs-entry-shim'
 import { createMainEntryPostBanner } from './config/build-plugins/main-entry-post-banner'
 import {
   createSandboxedScriptBundlesPlugin,
@@ -217,6 +218,7 @@ export const electronViteConfig: UserConfig = {
         plugins: [
           createPlainNodeEntryGuardPlugin(),
           createInheritedOrcaIdentityFirstGuardPlugin(),
+          createMainCjsEntryShimPlugin(),
           createProcessHostDevRebuildPlugin(),
           createDarkBuildMarkerPlugin(),
           createSandboxedScriptBundlesPlugin(),

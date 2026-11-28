@@ -73,11 +73,15 @@
                   "props": { "dimWhenRead": "=vars.newStyle", "tooltip": "=!vars.hoverDetails" }
                 },
                 {
+                  "el": "RenameError",
+                  "when": "ws.hasRenameError && !ws.isRenaming",
+                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
+                {
                   "el": "HostBadge",
                   "when": "place.lineHostLabel != null",
                   "props": { "label": "=place.lineHostLabel" }
                 },
-                { "el": "RenameError", "when": "ws.hasRenameError && !ws.isRenaming" },
                 {
                   "el": "PrimaryBadge",
                   "when": "!vars.compact && ws.isMain && !vars.folder",

@@ -1,3 +1,5 @@
+import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
+
 export type RuntimeEnvironmentRegistration = Readonly<{ revision: number }>
 
 const registrations = new Map<string, RuntimeEnvironmentRegistration>()
@@ -96,8 +98,31 @@ export function onRuntimeEnvironmentRevisionsChanged(
   return () => revisionChangeListeners.delete(listener)
 }
 
+// A shared agent's host has no saved pairing to fence: main routes it over its share, whatever the
+// revision, and it is gone when the share is.
+const SHARED_BOT_HOST_REVISION = 0
+
 export function getRuntimeEnvironmentRevision(environmentId: string): number | undefined {
-  return registrations.get(environmentId)?.revision
+  return (
+    registrations.get(environmentId)?.revision ??
+    (sharedBotHostFor({ kind: 'environment', environmentId })
+      ? SHARED_BOT_HOST_REVISION
+      : undefined)
+  )
+}
+
+/** A host's revision as its catalog row gives it, or a shared agent's host's (which has no row). */
+export function listedRuntimeEnvironmentRevision(
+  environment: { createdAt: number; pairingRevision?: number } | undefined,
+  environmentId: string,
+  isSharedHost: (environmentId: string) => boolean = (id) =>
+    sharedBotHostFor({ kind: 'environment', environmentId: id }) !== null
+): number | undefined {
+  return environment
+    ? (environment.pairingRevision ?? environment.createdAt)
+    : isSharedHost(environmentId)
+      ? SHARED_BOT_HOST_REVISION
+      : undefined
 }
 
 /** Identity survives equal-revision publications, but never removal or a pairing transition. */

@@ -66,7 +66,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
           devMode: params.devMode,
-          ...(assignee ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(assignee) } : {})
+          ...(assignee ? runtime.getTerminalOrchestrationCliTarget(assignee) : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
@@ -158,7 +158,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
         workerHandle: orcaSessionIdOrHandle(to, db),
         devMode: params.devMode,
-        cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
+        ...runtime.getTerminalOrchestrationCliTarget(to)
       })
 
       let injected = false
@@ -242,7 +242,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           coordinatorHandle,
           workerHandle: orcaSessionIdOrHandle(workerHandle, db),
           devMode: params.devMode,
-          ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
+          ...(ctx ? runtime.getTerminalOrchestrationCliTarget(workerHandle) : {})
         })
         return { dispatch: ctx ?? null, preamble }
       }

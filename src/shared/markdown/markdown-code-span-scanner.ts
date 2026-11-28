@@ -11,25 +11,32 @@ import {
 
 const BLANK_LINE = /^[ \t\r]*$/
 const BLOCKQUOTE_PREFIX = /^(?: {0,3}>[ \t]?)+/
+const INDENTED_CODE = /^(?: {4}| {0,3}\t)/
+const LEADING_WHITESPACE = /^[ \t]*/
 
 // Match marked’s block tags: div interrupts a paragraph, while br stays inline.
 const HTML_BLOCK_TAG =
   'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|meta|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul'
 
+const HEADING_OR_BREAK = '#{1,6}(?:\\s|$)|(?:-[\\t ]*){3,}$|(?:_[ \\t]*){3,}$|(?:\\*[ \\t]*){3,}$'
+const HTML_BLOCK_START = [
+  `</?(?:${HTML_BLOCK_TAG})(?: +|/?>|$)`,
+  '<(?:script|pre|style|textarea|!--)' // a declaration or PI does not interrupt
+].join('|')
+
 // These single-line blocks force the next line into a new block.
-const SINGLE_LINE_BLOCK =
-  /^ {0,3}(?:#{1,6}(?:\s|$)|(?:-[\t ]*){3,}$|(?:_[ \t]*){3,}$|(?:\*[ \t]*){3,}$|(?:=+|-+)[ \t]*$)/
+const SINGLE_LINE_BLOCK = new RegExp(`^ {0,3}(?:${HEADING_OR_BREAK}|(?:=+|-+)[ \\t]*$)`)
 
 // Match marked’s paragraph interruptions so backticks cannot pair across leaf blocks.
+// Later ordinals open list items even though only 1 interrupts paragraphs; extra splitting only costs a check.
 const LEAF_BLOCK_START = new RegExp(
-  [
-    '^ {0,3}(?:',
-    // Later ordinals open list items even though only 1 interrupts paragraphs; extra splitting only costs a check.
-    '(?:[*+-]|\\d{1,9}[.)])(?:[ \\t]|$)',
-    `|</?(?:${HTML_BLOCK_TAG})(?: +|/?>|$)`,
-    '|<(?:script|pre|style|textarea|!--)', // a declaration or PI does not interrupt
-    ')'
-  ].join(''),
+  `^ {0,3}(?:(?:[*+-]|\\d{1,9}[.)])(?:[ \\t]|$)|${HTML_BLOCK_START})`,
+  'i'
+)
+
+// marked ends table body rows only at these blocks, so later ordinals and setext-like lines stay rows.
+const TABLE_BODY_END = new RegExp(
+  `^ {0,3}(?:${HEADING_OR_BREAK}|(?:[*+-]|1[.)])[ \\t]|${HTML_BLOCK_START})`,
   'i'
 )
 
@@ -50,12 +57,16 @@ function splitBlockquotePrefix(line: string): { depth: number; rest: string } {
   return { depth, rest: line.slice(prefix.length) }
 }
 
-function hasTableDelimiterAhead(content: string, start: number): boolean {
+function findTableDelimiterAhead(
+  content: string,
+  start: number
+): { depth: number; rest: string } | null {
   if (start >= content.length) {
-    return false
+    return null
   }
   const next = content.slice(start, findMarkdownLineEnd(content, start))
-  return TABLE_DELIMITER_ROW.test(splitBlockquotePrefix(next).rest)
+  const quote = splitBlockquotePrefix(next)
+  return TABLE_DELIMITER_ROW.test(quote.rest) ? quote : null
 }
 
 function isEscapedAt(content: string, index: number, lineStart: number): boolean {
@@ -64,6 +75,31 @@ function isEscapedAt(content: string, index: number, lineStart: number): boolean
     cursor -= 1
   }
   return (index - cursor) % 2 === 1
+}
+
+function endsTableRows(line: string): boolean {
+  return BLANK_LINE.test(line) || INDENTED_CODE.test(line) || TABLE_BODY_END.test(line)
+}
+
+function leadingWhitespace(line: string): string {
+  return LEADING_WHITESPACE.exec(line)?.[0] ?? ''
+}
+
+function countTableCells(line: string): number {
+  const trimmed = line.trim()
+  let count = 1
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (trimmed[index] === '|' && !isEscapedAt(trimmed, index, 0)) {
+      count += 1
+    }
+  }
+  if (trimmed.startsWith('|')) {
+    count -= 1
+  }
+  if (trimmed.endsWith('|') && !isEscapedAt(trimmed, trimmed.length - 1, 0)) {
+    count -= 1
+  }
+  return count
 }
 
 /** Index backtick runs once so each lookup binary-searches instead of rescanning the remaining document. */
@@ -80,6 +116,10 @@ export function createMarkdownCodeSpanScanner(content: string): MarkdownCodeSpan
   let previousWasBoundary = true
   let previousQuoteDepth = 0
   let insideTable = false
+  let insideTableCells = false
+  // Inside a list item, any list marker opens the next item and so ends the table.
+  let tableInListItem = false
+  let leafBlockSinceBlank = false
 
   forEachMarkdownLine(content, (lineStart, lineEnd, nextLineStart) => {
     const line = content.slice(lineStart, lineEnd)
@@ -91,16 +131,44 @@ export function createMarkdownCodeSpanScanner(content: string): MarkdownCodeSpan
     const quote = isBoundary ? null : splitBlockquotePrefix(line)
     const quoteDepth = quote ? quote.depth : previousQuoteDepth
     const isDelimiterRow = quote !== null && TABLE_DELIMITER_ROW.test(quote.rest)
-    const isTableHeader =
-      quote !== null && !isDelimiterRow && hasTableDelimiterAhead(content, nextLineStart)
+    const delimiter =
+      quote !== null && !isDelimiterRow ? findTableDelimiterAhead(content, nextLineStart) : null
+    const isTableHeader = delimiter !== null
+    const opensLeafBlock = quote !== null && LEAF_BLOCK_START.test(quote.rest)
+    if (
+      insideTableCells &&
+      (quote === null ||
+        quote.depth !== previousQuoteDepth ||
+        endsTableRows(quote.rest) ||
+        (tableInListItem && opensLeafBlock))
+    ) {
+      insideTableCells = false
+    }
+    // marked only builds a table when the header and delimiter rows have the same cell count. A setext
+    // underline header or a `- |---|` delimiter after a lazy line is not a table there, so skip those.
+    // Differing indents usually mean a lazy continuation whose container layout this scanner does not model.
+    if (
+      quote !== null &&
+      delimiter !== null &&
+      quote.depth === delimiter.depth &&
+      leadingWhitespace(quote.rest) === leadingWhitespace(delimiter.rest) &&
+      !endsTableRows(quote.rest) &&
+      !SINGLE_LINE_BLOCK.test(quote.rest) &&
+      !opensLeafBlock &&
+      !LEAF_BLOCK_START.test(delimiter.rest) &&
+      countTableCells(quote.rest) === countTableCells(delimiter.rest)
+    ) {
+      insideTableCells = true
+      tableInListItem = leafBlockSinceBlank || /^[ \t]/.test(quote.rest)
+    }
+    leafBlockSinceBlank = !isBoundary && (leafBlockSinceBlank || opensLeafBlock)
     insideTable = insideTable || isDelimiterRow
-    // marked parses every cell on its own, so each row is its own inline context.
+    // marked parses every cell on its own, so each row and each cell is its own inline context.
     const endsWithLine =
       quote !== null && (SINGLE_LINE_BLOCK.test(quote.rest) || isTableHeader || insideTable)
     // A deeper quote opens a block; a shallower one can be a lazy continuation.
     const startsLeafBlock =
-      quote !== null &&
-      (endsWithLine || quote.depth > previousQuoteDepth || LEAF_BLOCK_START.test(quote.rest))
+      quote !== null && (endsWithLine || quote.depth > previousQuoteDepth || opensLeafBlock)
     if (isBoundary || previousWasBoundary || startsLeafBlock) {
       blockId += 1
     }
@@ -112,6 +180,9 @@ export function createMarkdownCodeSpanScanner(content: string): MarkdownCodeSpan
 
     let index = lineStart
     while (index < lineEnd) {
+      if (insideTableCells && content[index] === '|' && !isEscapedAt(content, index, lineStart)) {
+        blockId += 1
+      }
       if (content[index] !== '`') {
         index += 1
         continue

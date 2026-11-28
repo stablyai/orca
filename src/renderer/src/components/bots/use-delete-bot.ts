@@ -8,7 +8,6 @@ import { useAppStore } from '@/store'
 import { selectFolderWorkspaceOnHost } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { Bot } from '../../../../shared/bot-types'
 import { botErrorMessage, botFolderDisplay } from './bot-presentation'
-import { botHomeHostId } from '../../../../shared/bots/bot-home-host'
 
 /** Asks, then deletes; resolves true once the bot is gone. The folder stays on disk. */
 export function useDeleteBot(bot: Bot): () => Promise<boolean> {
@@ -18,7 +17,7 @@ export function useDeleteBot(bot: Bot): () => Promise<boolean> {
     const home = selectFolderWorkspaceOnHost(
       useAppStore.getState(),
       bot.folderWorkspaceId,
-      botHomeHostId(bot)
+      bot.hostId
     )
     const confirmed = await confirm({
       title: t('bots.row.deleteTitle', 'Delete {{name}}?', { name: bot.name }),

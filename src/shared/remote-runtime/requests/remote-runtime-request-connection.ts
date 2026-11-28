@@ -33,6 +33,7 @@ import * as sealedFrame from '../remote-runtime-sealed-frame'
 import { sendRemoteRuntimeTokenAuth } from '../remote-runtime-client-handshake'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import type { RuntimeCapability } from '../protocol/protocol-version'
+import { pairedRuntimeConnectionToken } from '../pairing/paired-runtime-connection'
 type ConnectionState = 'closed' | 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 const IDLE_CLOSE_MS = 60_000
 
@@ -69,7 +70,7 @@ export class RemoteRuntimeRequestConnection {
       preparedRequest = prepareRemoteRuntimeRequest(this.pendingRequests, () =>
         serializeRemoteRuntimeRpcRequest({
           requestId,
-          deviceToken: this.connection.credential.deviceToken,
+          deviceToken: pairedRuntimeConnectionToken(this.connection),
           method,
           params
         })
@@ -231,7 +232,7 @@ export class RemoteRuntimeRequestConnection {
     this.state = 'awaiting_authenticated'
     void sendRemoteRuntimeTokenAuth({
       handshake,
-      deviceToken: this.connection.credential.deviceToken,
+      deviceToken: pairedRuntimeConnectionToken(this.connection),
       clientCapabilities: remoteRuntimeClientCapabilities(this.additionalClientCapabilities),
       stillAwaiting: () => this.handshake === handshake && this.state === 'awaiting_authenticated',
       send: (authFrame) => this.ws?.send(authFrame),

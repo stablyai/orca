@@ -31,6 +31,11 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       if (value.dispatch?.followUpOf) {
         lines.push(`Follow-up of: dispatch:${value.dispatch.followUpOf}`)
       }
+      if (value.dispatch?.progressNote) {
+        lines.push(
+          `Progress: ${value.dispatch.progressNote}${value.dispatch.progressUpdatedAt ? ` (at ${value.dispatch.progressUpdatedAt})` : ''}`
+        )
+      }
       // This Orca's record of a worker on a server that did not answer.
       if (value.server) {
         lines.push(

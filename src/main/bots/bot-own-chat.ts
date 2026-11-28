@@ -30,7 +30,7 @@ export function isBotOwnChat(
   // Whether the list shows a record does not depend on which root it is listed under.
   return (
     isOrcaSessionId(record.sessionId) &&
-    botChatRecordRow(record, (id) => id, null) !== null &&
+    botChatRecordRow(record, (id) => id, new Map()) !== null &&
     !isStructuredWorkerSession(record.sessionId, db, store)
   )
 }

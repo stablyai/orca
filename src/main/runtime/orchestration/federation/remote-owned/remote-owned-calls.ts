@@ -11,6 +11,7 @@ import {
   remoteServerPin,
   type RemoteRunLinkRow
 } from '../../db/remote-owned/remote-run-links'
+import { pairedRuntimeConnectionIdentity } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 export type RemoteOwnedRuntime = Pick<
   OrcaRuntimeService,
@@ -84,7 +85,8 @@ export async function callRemoteOwnedServer(
     const generation = environmentStoreWriteCount()
     const peers = pairedOrchestrationPeers(
       connection.hostPublicKeyB64,
-      connection.credential.deviceToken
+      pairedRuntimeConnectionIdentity(connection),
+      { share: now.sharedHost === true }
     )
     return () => {
       if (generation !== environmentStoreWriteCount()) {

@@ -32,7 +32,8 @@ export function botHostHasCapability(
   )
 }
 
-/** Whether `bot`'s host keeps its Home pinned first; an older paired server leaves its pages as they were. */
+/** Whether `bot`'s host keeps its Home pinned first; an older paired server leaves its pages as they
+ *  were. */
 export function botHomeRuleApplies(
   bot: { hostId: ExecutionHostId } | null,
   statuses: RuntimeStatuses

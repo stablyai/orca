@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
 import type { PluginHookName } from '../contributions/plugin-hook-contribution'
 import { PLUGIN_TERMINAL_ID_MAX_LENGTH } from '../workers/plugin-host-api'
@@ -6,10 +7,12 @@ import { PLUGIN_TERMINAL_ID_MAX_LENGTH } from '../workers/plugin-host-api'
 /** How long Orca waits on one plugin's hook before it carries on as if the plugin passed. */
 export const PLUGIN_HOOK_DEFAULT_DEADLINE_MS = 2_000
 
-const denyResultSchema = z.strictObject({
-  /** Why Orca refused; shown to whoever asked for the action. */
-  deny: z.string().min(1).max(500)
-})
+const denyResultSchema = lazyZodSchema(() =>
+  z.strictObject({
+    /** Why Orca refused; shown to whoever asked for the action. */
+    deny: z.string().min(1).max(500)
+  })
+)
 
 type PluginHookSpec = {
   payload: z.ZodObject
@@ -21,75 +24,87 @@ type PluginHookSpec = {
   summary: string
 }
 
-export const terminalSendHookPayloadSchema = z.object({
-  /** As `workspace.readContext` and `terminal.sendText` name it. */
-  terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
-  text: z.string().max(TERMINAL_INPUT_MAX_BYTES),
-  /** Whether Enter follows the text. */
-  enter: z.boolean(),
-  /** `driving`: the CLI or a plugin sending on someone's behalf; `orchestration`: Orca's own
-   *  dispatches and relayed messages; `launch`: startup commands and drafts. */
-  inputKind: z.enum(['driving', 'orchestration', 'launch'])
-})
+export const terminalSendHookPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    /** As `workspace.readContext` and `terminal.sendText` name it. */
+    terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
+    text: z.string().max(TERMINAL_INPUT_MAX_BYTES),
+    /** Whether Enter follows the text. */
+    enter: z.boolean(),
+    /** `driving`: the CLI or a plugin sending on someone's behalf; `orchestration`: Orca's own
+     *  dispatches and relayed messages; `launch`: startup commands and drafts. */
+    inputKind: z.enum(['driving', 'orchestration', 'launch'])
+  })
+)
 
-export const workspaceCreateBeforeHookPayloadSchema = z.object({
-  kind: z.enum(['worktree', 'folder']),
-  /** The project the workspace is created in. */
-  projectId: z.string().min(1).max(2048),
-  name: z.string().min(1).max(1024),
-  /** Branch to create or open; absent when Orca derives it from `name`. Worktrees only. */
-  branch: z.string().min(1).max(1024).optional(),
-  /** Ref the new branch starts from; absent for the project's default. Worktrees only. */
-  base: z.string().min(1).max(1024).optional()
-})
+export const workspaceCreateBeforeHookPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    kind: z.enum(['worktree', 'folder']),
+    /** The project the workspace is created in. */
+    projectId: z.string().min(1).max(2048),
+    name: z.string().min(1).max(1024),
+    /** Branch to create or open; absent when Orca derives it from `name`. Worktrees only. */
+    branch: z.string().min(1).max(1024).optional(),
+    /** Ref the new branch starts from; absent for the project's default. Worktrees only. */
+    base: z.string().min(1).max(1024).optional()
+  })
+)
 
-export const workspaceCreateAfterHookPayloadSchema = z.object({
-  workspaceId: z.string().min(1).max(2048),
-  kind: z.enum(['worktree', 'folder']),
-  path: z
-    .string()
-    .min(1)
-    .max(32 * 1024),
-  /** Empty for folder workspaces. */
-  branch: z.string().max(1024)
-})
+export const workspaceCreateAfterHookPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    workspaceId: z.string().min(1).max(2048),
+    kind: z.enum(['worktree', 'folder']),
+    path: z
+      .string()
+      .min(1)
+      .max(32 * 1024),
+    /** Empty for folder workspaces. */
+    branch: z.string().max(1024)
+  })
+)
 
 /** Variables a hook may add or override; Orca's own (`ORCA_*`) stay Orca's. */
-export const pluginHookEnvSchema = z
-  .record(
-    z
-      .string()
-      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
-      .max(256)
-      .refine((key) => !key.toUpperCase().startsWith('ORCA_'), 'ORCA_* variables are reserved'),
-    z.string().max(32 * 1024)
-  )
-  .refine((env) => Object.keys(env).length <= 64, 'at most 64 variables')
+export const pluginHookEnvSchema = lazyZodSchema(() =>
+  z
+    .record(
+      z
+        .string()
+        .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+        .max(256)
+        .refine((key) => !key.toUpperCase().startsWith('ORCA_'), 'ORCA_* variables are reserved'),
+      z.string().max(32 * 1024)
+    )
+    .refine((env) => Object.keys(env).length <= 64, 'at most 64 variables')
+)
 
-const workspaceKindSchema = z.enum(['worktree', 'folder'])
+const workspaceKindSchema = lazyZodSchema(() => z.enum(['worktree', 'folder']))
 
-export const agentLaunchBeforeHookPayloadSchema = z.object({
-  /** The agent CLI, e.g. `claude` or `codex`. */
-  agent: z.string().min(1).max(64),
-  /** Null for a terminal outside any workspace. */
-  workspaceId: z.string().min(1).max(2048).nullable(),
-  workspaceKind: workspaceKindSchema.nullable(),
-  /** As `terminal.sendText` names it, when Orca has one before the process starts. */
-  terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH).optional(),
-  /** The command line Orca runs in the terminal's shell; a prompt given at launch is part of it. */
-  command: z.string().min(1).max(TERMINAL_INPUT_MAX_BYTES),
-  /** Starts empty: variables to add or override. Orca never shows the agent's environment. */
-  env: pluginHookEnvSchema
-})
+export const agentLaunchBeforeHookPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    /** The agent CLI, e.g. `claude` or `codex`. */
+    agent: z.string().min(1).max(64),
+    /** Null for a terminal outside any workspace. */
+    workspaceId: z.string().min(1).max(2048).nullable(),
+    workspaceKind: workspaceKindSchema.nullable(),
+    /** As `terminal.sendText` names it, when Orca has one before the process starts. */
+    terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH).optional(),
+    /** The command line Orca runs in the terminal's shell; a prompt given at launch is part of it. */
+    command: z.string().min(1).max(TERMINAL_INPUT_MAX_BYTES),
+    /** Starts empty: variables to add or override. Orca never shows the agent's environment. */
+    env: pluginHookEnvSchema
+  })
+)
 
-export const agentPromptBeforeHookPayloadSchema = z.object({
-  /** The agent running in the terminal, when Orca knows it. */
-  agent: z.string().min(1).max(64).nullable(),
-  terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
-  prompt: z.string().max(TERMINAL_INPUT_MAX_BYTES),
-  /** `launch`: the prompt an agent starts with; `driving`/`orchestration` as for `terminal.send`. */
-  inputKind: z.enum(['driving', 'orchestration', 'launch'])
-})
+export const agentPromptBeforeHookPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    /** The agent running in the terminal, when Orca knows it. */
+    agent: z.string().min(1).max(64).nullable(),
+    terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
+    prompt: z.string().max(TERMINAL_INPUT_MAX_BYTES),
+    /** `launch`: the prompt an agent starts with; `driving`/`orchestration` as for `terminal.send`. */
+    inputKind: z.enum(['driving', 'orchestration', 'launch'])
+  })
+)
 
 const agentToolCall = {
   /** The agent CLI whose hook reported the call, e.g. `claude` or `codex`. */
@@ -104,26 +119,30 @@ const agentToolCall = {
   callId: z.string().min(1).max(256).optional()
 }
 
-export const agentToolBeforeHookPayloadSchema = z.object(agentToolCall)
+export const agentToolBeforeHookPayloadSchema = lazyZodSchema(() => z.object(agentToolCall))
 
-export const agentToolAfterHookPayloadSchema = z.object({
-  ...agentToolCall,
-  /** The tool's result as the agent reports it, when it does. */
-  output: z.unknown().optional()
-})
+export const agentToolAfterHookPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    ...agentToolCall,
+    /** The tool's result as the agent reports it, when it does. */
+    output: z.unknown().optional()
+  })
+)
 
-export const editorSaveBeforeHookPayloadSchema = z.object({
-  /** The editor tab's workspace; null for a file outside any workspace. */
-  workspaceId: z.string().min(1).max(2048).nullable(),
-  /** Relative to the workspace root (or the absolute path outside one). */
-  path: z
-    .string()
-    .min(1)
-    .max(32 * 1024),
-  /** The editor's language, e.g. `typescript`, when it has one. */
-  languageId: z.string().min(1).max(128).optional(),
-  text: z.string().max(TERMINAL_INPUT_MAX_BYTES)
-})
+export const editorSaveBeforeHookPayloadSchema = lazyZodSchema(() =>
+  z.object({
+    /** The editor tab's workspace; null for a file outside any workspace. */
+    workspaceId: z.string().min(1).max(2048).nullable(),
+    /** Relative to the workspace root (or the absolute path outside one). */
+    path: z
+      .string()
+      .min(1)
+      .max(32 * 1024),
+    /** The editor's language, e.g. `typescript`, when it has one. */
+    languageId: z.string().min(1).max(128).optional(),
+    text: z.string().max(TERMINAL_INPUT_MAX_BYTES)
+  })
+)
 
 export const PLUGIN_HOOK_SPECS = {
   'terminal.send': {

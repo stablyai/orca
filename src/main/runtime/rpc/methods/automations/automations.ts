@@ -15,7 +15,7 @@ import { recordAutomationSavedCard } from '../../../automation-saved-card'
 import { deleteAutomationRecordingCancelledWait } from '../../../../bots/bot-wait-cancel'
 import { LOOK_AROUND_REFUSAL } from '../../../../bots/bot-look-around-policy'
 import { automationForClient, readsGoogleRules } from '../../google-rules-for-client'
-import { targetInCallerChat } from './runs-in-caller-chat'
+import { targetInCallerChat, withCallerHome } from './runs-in-caller-chat'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { onceClaimed } from '../../../../../shared/automation-once'
 
@@ -114,10 +114,11 @@ export const AUTOMATION_METHODS = [
     handler: async ({ callerSessionId, runsInDefault, waitInCallerChat, ...params }, context) => {
       refuseFromLookAround(callerSessionId, context)
       const caller = chatOfCaller(callerSessionId, context)
-      const bot =
+      const inChat =
         params.bot && (runsInDefault || (waitInCallerChat && params.once))
           ? await targetInCallerChat(context.runtime, caller, params.bot, Boolean(params.once))
           : params.bot
+      const bot = inChat && withCallerHome(context.runtime, caller, inChat)
       const { plugin } = context
       const input = { ...params, bot }
       const automation = plugin

@@ -9,8 +9,7 @@ import {
   BotSessionStart,
   BotSkillProjectsScan,
   BotUpdate,
-  type BotChatResetParams,
-  type BotUpdateParams
+  type BotChatResetParams
 } from '../../../../shared/rpc-contract/bots-params'
 import {
   BotSlackIconUpload,
@@ -24,22 +23,23 @@ import { botOfSession } from '../../../bots/bot-session-tabs'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
 import { forgetDeletedBotTools } from './bots-tools'
 import { composioBotsOf } from './bots-composio'
-import { ownerOnly } from './bots-caller-gates'
 import { BOT_CREATE_METHOD } from './bots-create'
-import { BOT_AGENT_CHOICES_METHOD } from './bots-agent-choices'
+import { updateBot } from './bots-update'
+import { BOT_AGENT_CHOICES_METHOD, hostOffersNewChatAgent } from './bots-agent-choices'
 import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
 import { BOT_CHAT_TREE_METHODS } from './bots-chat-tree'
 import { BOT_MEMORY_METHODS } from './bots-memory'
 import { BOT_KICKOFF_METHODS } from './bots-kickoff'
+import { newHomeChatOf } from './bots-caller-home'
+import { createChatOrcaSessionIdResolver } from '../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { namedOrCallerBot } from './bots-caller-bot'
 import { releaseDeletedBotLinks } from './bots-home-release'
 import { dropUnreadBotRequests } from './orchestration/messaging/bot-request-outcome'
-import { releaseHeldBotMail } from '../../../bots/bot-paused-mail'
-import { defineMethod, InvalidArgumentError, type RpcContext, notShared } from '../core'
-import { botSkillProjectViews, relinkBotSkills } from '../../../bots/bot-skill-projects'
-import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills'
+import { defineMethod, type RpcContext, notShared } from '../core'
+import { botSkillProjectViews } from '../../../bots/bot-skill-projects'
+import { botOwnSkillsView } from '../../../bots/bot-own-skills'
 import { botHomeFolder } from '../../../bots/bot-home'
-import { listedBotsFacts } from './bots-list-facts'
+import { listedBotsFacts, listedNeedsYouFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
 import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
@@ -48,56 +48,20 @@ import { botShareScopeOf, emptyChatReusableBy } from '../../../bots/team-share/b
 import { startBotShareSession } from '../../../bots/team-share/bot-share-session-start'
 import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
 
-async function updateBot(params: BotUpdateParams, context: RpcContext) {
-  if (params.updates.slackMirror !== undefined) {
-    ownerOnly(context, 'Only the owner can change what posts to Slack')
-  }
-  const { members, addMembers: added, permissionMode } = params.updates
-  if (members !== undefined || added !== undefined || permissionMode !== undefined) {
-    ownerOnly(context, 'Only your owner changes your Who can ask or permissions, in Orca.')
-  }
-  const bot = await context.runtime.bots.update(params.botId, params.updates)
-  if (params.updates.skillProjects !== undefined) {
-    relinkBotSkills(bot, context.runtime.listRepos())
-  }
-  if (params.updates.agent !== undefined) {
-    void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})
-  }
-  if (params.updates.paused === true) {
-    await dropUnreadBotRequests(context.runtime, bot.id, 'paused')
-  } else if (params.updates.paused === false && !bot.paused) {
-    // Every resume, not only a seen transition: a pause still being saved reads as unpaused here.
-    releaseHeldBotMail(context.runtime, bot)
-  }
-  const { removeMember, removeMembers = [], addMembers = [] } = params.updates
-  // Who can ask decides who may make this host run commands, so the device that changed it is kept on record.
-  const removed = [...(removeMember ? [removeMember] : []), ...removeMembers]
-  const changes = [
-    ...removed.map((key) => ({ change: 'removed', key })),
-    ...addMembers.map((member) => ({ change: 'added', key: member }))
-  ]
-  for (const { change, key } of changes) {
-    console.info(`[bots] person ${change} ${change === 'added' ? 'to' : 'from'} Who can ask`, {
-      botId: params.botId,
-      source: key.source ?? 'slack',
-      memberId: key.id,
-      deviceId: context.pairedDeviceId ?? null
-    })
-  }
-  return { bot }
-}
-
 /** New Home Chat: from Orca, a script, or the bot's own Home Chat, whatever started its turn. */
 async function newHomeChat(params: BotChatResetParams, context: RpcContext) {
   const { runtime } = context
   runtime.bots.assertEnabled()
   const { bot, caller, callerBot } = namedOrCallerBot(params, context)
-  // Another chat ending this one's Home Chat would cut off a conversation it isn't part of.
-  if (caller && callerBot && (callerBot.id !== bot.id || caller !== bot.chatSessionId)) {
-    throw new InvalidArgumentError('Only the bot’s own Home Chat can start a new Home Chat.')
-  }
-  // Its old Chat's queued messages move over; bot requests it never read are dropped.
-  const sessionId = await runtimeBotChats(runtime).reset(bot.id)
+  const of = newHomeChatOf({
+    scope: botShareScopeOf(context),
+    bot,
+    caller,
+    callerBot,
+    rootOf: createChatOrcaSessionIdResolver()
+  })
+  // Its old Home's queued messages move over; requests it never read are dropped.
+  const sessionId = await runtimeBotChats(runtime).reset(bot.id, of)
   return { sessionId }
 }
 
@@ -123,9 +87,14 @@ export const BOT_METHODS = [
       const { runtime } = context
       const listing = runtime.bots.listing()
       const share = botShareScopedView(context)
-      if (share) {
-        // None of this host's own state.
-        return { bots: share['bots.list'](listing.bots), botsEnabled: listing.botsEnabled }
+      const scope = botShareScopeOf(context)
+      if (share && scope) {
+        // None of this host's own state; the teammate's own Needs you count.
+        return {
+          bots: share['bots.list'](listing.bots),
+          botsEnabled: listing.botsEnabled,
+          ...(await listedNeedsYouFacts(runtime, scope))
+        }
       }
       const webhooks = runtime.getWebhooks()
       const signInServer = orcaSignInServer(runtime)
@@ -258,10 +227,13 @@ export const BOT_METHODS = [
   }),
   defineMethod({
     name: 'bots.activity',
-    ...notShared('workspace'),
+    permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: BotActivityRead,
-    handler: async (params, { runtime }) => ({
-      activity: await readSharedBotActivity(runtime, params.botId)
+    handler: async (params, context) => ({
+      activity:
+        (await botShareScopedView(context)?.['bots.activity']()) ??
+        (await readSharedBotActivity(context.runtime, params.botId))
     })
   }),
   defineMethod({
@@ -290,7 +262,8 @@ export const BOT_METHODS = [
   ...BOT_KICKOFF_METHODS,
   defineMethod({
     name: 'bots.chat.reset',
-    ...notShared('workspace'),
+    permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: BotChatReset,
     handler: newHomeChat
   }),
@@ -307,11 +280,18 @@ export const BOT_METHODS = [
       if (!bot) {
         throw new Error('bot_not_found')
       }
+      const onAgent = botOnAgent(bot, params.agent)
       const share = botShareScopeOf(context)
       if (share) {
-        return { sessionId: await startBotShareSession(runtime, bot, share, params.newChatId) }
+        // A teammate picks from the agents the owner's + menu offers, and no other.
+        if (
+          onAgent.agent !== bot.agent &&
+          !(await hostOffersNewChatAgent(runtime, onAgent.agent))
+        ) {
+          throw new Error('agent_not_offered')
+        }
+        return { sessionId: await startBotShareSession(runtime, onAgent, share, params.newChatId) }
       }
-      const onAgent = botOnAgent(bot, params.agent)
       // Like a blank page: an empty chat already open is the new chat, not one more.
       const empty = await openEmptyBotChat(
         runtimeBotChatTreeHost(runtime),

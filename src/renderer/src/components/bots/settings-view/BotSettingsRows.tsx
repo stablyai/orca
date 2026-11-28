@@ -20,7 +20,8 @@ export function SettingsInsetGroup({
   action,
   foot,
   children,
-  className
+  className,
+  overflowVisible = false
 }: {
   title?: React.ReactNode
   /** At the heading's end, such as Add. */
@@ -28,6 +29,8 @@ export function SettingsInsetGroup({
   foot?: React.ReactNode
   children: React.ReactNode
   className?: string
+  /** Lets a popup open past the card; only for groups whose rows draw no edge-to-edge fill. */
+  overflowVisible?: boolean
 }): React.JSX.Element {
   return (
     <section className={cn('flex min-w-0 flex-col gap-1.5', className)}>
@@ -39,7 +42,7 @@ export function SettingsInsetGroup({
           {action}
         </div>
       ) : null}
-      <div className={INSET_GROUP}>{children}</div>
+      <div className={cn(INSET_GROUP, overflowVisible && 'overflow-visible')}>{children}</div>
       {foot ? <p className="px-3 text-xs leading-[17px] text-muted-foreground">{foot}</p> : null}
     </section>
   )

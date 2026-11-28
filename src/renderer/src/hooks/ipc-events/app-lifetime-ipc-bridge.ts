@@ -1,4 +1,6 @@
 import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
+import { followSharedHostsInRepoCatalog } from '@/store/repos/shared-host-repo-catalog'
+import { applySleepingMailWorktrees } from '@/attention/sleeping-mail-worktrees'
 import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -74,6 +76,11 @@ function remountTerminalTabsAwaitingHostHydration(): void {
 
 export function installAppLifetimeIpcEvents(): () => void {
   const unsubs: (() => void)[] = [installBrowserInitializationPresentationLifetime()]
+  if (window.api.ui.onSleepingMailChanged) {
+    unsubs.push(window.api.ui.onSleepingMailChanged(applySleepingMailWorktrees))
+    // Changes sent while no listener was attached were lost; start from the whole set.
+    window.api.ui.requestSleepingMailSnapshot?.()
+  }
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)
   unsubs.push(
@@ -86,7 +93,10 @@ export function installAppLifetimeIpcEvents(): () => void {
     )
   )
   if (!isPairedWebClientWindow()) {
-    unsubs.push(installSharedBotHostCatalog(), installSharedBotNewChatSwap())
+    unsubs.push(
+      installSharedBotHostCatalog(followSharedHostsInRepoCatalog(useAppStore)),
+      installSharedBotNewChatSwap()
+    )
   }
   unsubs.push(installBotHostListing(useAppStore, isPairedWebClientWindow()))
   const stopSessionWorkerNotices = window.api.runtime.onOrchestrationSessionWorkersChanged?.(
@@ -116,7 +126,16 @@ export function installAppLifetimeIpcEvents(): () => void {
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
   const statusApi = window.api.runtimeEnvironments
   if (statusApi?.onStatusChanged) {
+    const availableHosts = new Set<string>()
     const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
+      if (snapshot.transport === 'ready' && snapshot.verification === 'verified') {
+        if (!availableHosts.has(snapshot.environmentId)) {
+          availableHosts.add(snapshot.environmentId)
+          window.api.ui.notifySleepingMailAvailability?.(undefined, snapshot.environmentId)
+        }
+      } else {
+        availableHosts.delete(snapshot.environmentId)
+      }
       useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
       observeRuntimeHostStatusForPendingRemovals(snapshot)
       remoteRuntimeTerminalColorPush.observeStatusSnapshot(snapshot)

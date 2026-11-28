@@ -15,6 +15,9 @@ import { botChatTreeCursor, mergeShownFinished } from '../../../../shared/bots/b
 import { createBotHostRead, useBotHostRead, type BotHostReadState } from './use-bot-host-read'
 import { useBotHostReadState } from './use-bot-host-read-state'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
+import { sharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { withViewerChatTabs } from '../../../../shared/bots/bot-sidebar-chat-groups'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
 /** Work changes come in bursts, so reads start at most this often. */
 const CHAT_TREE_MIN_READ_GAP_MS = 1000
@@ -178,6 +181,8 @@ function useChangeUnread(bot: Bot | null): boolean {
 
 /** The bot's chats with their workers, from its host (a paired server's too); empty until read.
  *  Pass null to read nothing, for a surface that shows no chats (a folded bot, say). */
+const NO_TABS: string[] = []
+
 export function useBotChatTree(bot: Bot | null): BotChatTree {
   const read = useBotHostRead(chatTreeRead, bot)
   const { state, refreshFailed, landed, retry } = useBotHostReadState(chatTreeRead, bot)
@@ -190,13 +195,28 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
   const acks = useAppStore(
     useShallow((s) => turnPanes.map((paneKey) => s.acknowledgedAgentsByPaneKey[paneKey] ?? 0))
   )
+  // A shared agent's host lists its owner's tabs; this window's own say which of this account's
+  // chats have one.
+  const sharedHome =
+    bot && sharedBotHostOf(bot.hostId) ? folderWorkspaceKey(bot.folderWorkspaceId) : null
+  const localTabs = useAppStore(
+    useShallow((s) =>
+      sharedHome
+        ? (s.unifiedTabsByWorktree[sharedHome] ?? []).flatMap((tab) =>
+            tab.contentType === 'agent-session' && tab.entityId ? [tab.entityId] : []
+          )
+        : NO_TABS
+    )
+  )
   const botKey = bot ? botRefKey(bot) : ''
   const [pages, setPages] = useState<LoadedPages>({ botKey, byChat: {} })
   const byChat = pages.botKey === botKey ? pages.byChat : NO_PAGES
 
   const chats = useMemo(() => {
     const ackOf = new Map(turnPanes.map((paneKey, index) => [paneKey, acks[index] ?? 0]))
-    const entries = read?.chats ?? []
+    const entries = sharedHome
+      ? withViewerChatTabs(read?.chats ?? [], new Set(localTabs))
+      : (read?.chats ?? [])
     const runningKeys = Object.keys(byChat).length
       ? new Set(entries.flatMap((chat) => chat.running.map((worker) => worker.key)))
       : undefined
@@ -216,7 +236,7 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
         }
       })
     )
-  }, [read, byChat, turnPanes, acks])
+  }, [read, byChat, turnPanes, acks, sharedHome, localTabs])
   const loading = useRef(new Set<string>())
 
   const hostId = bot?.hostId ?? null

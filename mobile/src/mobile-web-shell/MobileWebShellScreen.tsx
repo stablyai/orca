@@ -43,7 +43,7 @@ import {
   storageReadParamsSchema,
   type BridgeNativeVerb
 } from './bridge/native-capabilities/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
+import { ShellPageCover } from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
 import {
   useReportedShellOverlayLoad,
@@ -162,7 +162,7 @@ export function MobileWebShellScreen({
     readWorkspaceKey
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; staged files belong to this page session.
-  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
+  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId, hostId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
   // Read the shell's storage for this host.
@@ -426,9 +426,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
-      )}
+      {overlay ? null : <ShellPageCover visible={pageFrame === 'unpainted'} />}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )

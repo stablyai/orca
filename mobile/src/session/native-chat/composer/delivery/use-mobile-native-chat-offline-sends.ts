@@ -38,6 +38,8 @@ export type MobileNativeChatOfflineQueue = {
   lockReason: MobileNativeChatInputLockReason | null
   /** The composer's lock: a chat waiting on its terminal takes no input; an offline one queues. */
   composerLock: { disabled: boolean; offline: boolean }
+  /** No composer at all: nothing typed now could reach the chat or wait for it. */
+  composerHidden: boolean
   /** The composer's Send: queues while offline or behind earlier queued messages, else sends. */
   send: Send
   sendNow: (id: string) => Promise<boolean>
@@ -201,6 +203,7 @@ export function useMobileNativeChatOfflineQueue(args: {
       disabled: lockReason === 'waiting',
       offline: lockReason === 'disconnected'
     },
+    composerHidden: inputLockReason === 'unreachable' || lockReason === 'unreachable',
     send: queueSend,
     sendNow,
     remove,

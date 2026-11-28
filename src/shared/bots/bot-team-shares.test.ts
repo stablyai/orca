@@ -9,6 +9,13 @@ import {
   withBotSharesEmailed,
   type BotShare
 } from './bot-team-shares'
+import {
+  automationActsFor,
+  botHome,
+  botHomeName,
+  botSharePersonName,
+  withBotHome
+} from './bot-home-of'
 
 let next = 0
 const mint = () => ({ shareId: `share-${++next}`, addedAt: 1 })
@@ -70,5 +77,115 @@ describe('bot share list', () => {
     const marked = withBotSharesEmailed([invite, account], new Set(['a', 'b']), 7)
     expect(marked).toEqual([{ ...invite, emailedAt: 7 }, account])
     expect(BotSharesSchema.parse(JSON.parse(JSON.stringify(marked)))).toEqual(marked)
+  })
+})
+
+// An agent's file as an Orca before per-person Homes wrote it: no Home pointer on any share.
+const OLD_BOT_FILE = {
+  id: 'bot-1',
+  name: 'Reviewer',
+  hostId: 'local',
+  folder: 'reviewer',
+  folderWorkspaceId: 'w1',
+  agent: 'codex',
+  avatar: null,
+  paused: false,
+  notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+  members: [],
+  slack: null,
+  chatSessionId: 'owner-home',
+  shares: [
+    {
+      kind: 'account',
+      shareId: 'share-alice',
+      accountId: 'acct-alice',
+      name: 'Alice',
+      email: 'alice@example.com',
+      addedAt: 1,
+      acceptedAt: 2
+    }
+  ],
+  createdAt: 1,
+  updatedAt: 1
+}
+const ALICE = { accountId: 'acct-alice' }
+
+describe('a Home Chat for each person, as the bot file keeps them', () => {
+  it('reads an older bot file unchanged: the owner’s Home where it was, no teammate Home yet', () => {
+    const bot = BotSchema.parse(OLD_BOT_FILE)
+    expect(bot.chatSessionId).toBe('owner-home')
+    expect(botHome(bot, 'owner')).toBe('owner-home')
+    expect(botHome(bot, ALICE)).toBeNull()
+    expect(bot.shares).toEqual(OLD_BOT_FILE.shares)
+  })
+
+  it('keeps a teammate’s Home pointer through a save and read', () => {
+    const bot = BotSchema.parse(OLD_BOT_FILE)
+    const saved = { ...bot, ...withBotHome(bot, ALICE, 'alice-home') }
+    const read = BotSchema.parse(JSON.parse(JSON.stringify(saved)))
+    expect(botHome(read, ALICE)).toBe('alice-home')
+    expect(read.chatSessionId).toBe('owner-home')
+  })
+
+  it('never writes a Home for a removed or declined share, leaving the list as it was', () => {
+    const bot = BotSchema.parse(OLD_BOT_FILE)
+    const removed = { ...bot, shares: [] }
+    expect(() => withBotHome(removed, ALICE, 'alice-home')).toThrow('bot_not_shared')
+    expect(removed.shares).toEqual([])
+    const declined = BotSchema.parse({
+      ...OLD_BOT_FILE,
+      shares: [{ ...OLD_BOT_FILE.shares[0], acceptedAt: undefined, declinedAt: 3 }]
+    })
+    expect(() => withBotHome(declined, ALICE, 'alice-home')).toThrow('bot_not_shared')
+    expect(botHome({ ...declined, ...withBotHome(declined, 'owner', 'x') }, ALICE)).toBeNull()
+  })
+
+  it('an automation saved before stamping acts for the owner; a stamped one never does', () => {
+    const bot = BotSchema.parse(OLD_BOT_FILE)
+    expect(automationActsFor(bot, {})).toEqual([{ kind: 'owner' }])
+    // Removed since: still that member, by id alone, never the owner.
+    expect(automationActsFor({ shares: [] }, { home: 'acct-alice' })).toEqual([
+      { kind: 'person', source: 'orca', userId: 'acct-alice', workspaceId: null, role: 'member' }
+    ])
+  })
+})
+
+describe('a teammate share stored before names', () => {
+  it('reads by its email until a repeat resolve names it; a repeat never clears or rewrites', () => {
+    // A row an older build wrote: an account share with no name.
+    const stored = BotSharesSchema.parse([
+      {
+        kind: 'account',
+        shareId: 'a',
+        accountId: 'acct-alice',
+        email: 'alice@example.com',
+        addedAt: 1
+      }
+    ])
+    expect(botSharePersonName({ shares: stored }, 'acct-alice')).toBe('alice@example.com')
+    expect(botHomeName({ shares: stored }, { accountId: 'acct-alice' })).toBe(
+      'alice@example.com’s Home'
+    )
+
+    const again = { shareId: 'a', email: 'alice@example.com', accountId: 'acct-alice' }
+    expect(withBotShareResolved(stored, again)).toBe(stored)
+    expect(
+      withBotShareResolved(stored, { ...again, accountId: 'acct-bob', name: 'Bob' })
+    ).toBeNull()
+
+    const named = withBotShareResolved(stored, { ...again, name: 'Alice Kim' })!
+    expect(botHomeName({ shares: [...named] }, { accountId: 'acct-alice' })).toBe(
+      'Alice Kim’s Home'
+    )
+    expect(withBotShareResolved(named, { ...again, name: 'Alice Kim' })).toBe(named)
+    expect(withBotShareResolved(named, again)).toBe(named)
+    // The teammate's sign-in email changed since they accepted: still their share, by account.
+    const moved = withBotShareResolved(named, {
+      ...again,
+      email: 'alice@new.example',
+      name: 'Alice K'
+    })
+    expect(botSharePersonName({ shares: [...moved!] }, 'acct-alice')).toBe('Alice K')
+    expect(BotSharesSchema.parse(JSON.parse(JSON.stringify(named)))).toEqual(named)
   })
 })

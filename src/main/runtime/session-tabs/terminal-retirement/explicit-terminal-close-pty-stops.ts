@@ -1,4 +1,9 @@
 import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../../../daemon/sessions/immediate-kill-reply-budget'
+import { HOST_STATE_PERSON } from '../../../bots/team-share/teammate-rules'
+import type {
+  MobileSessionTabCloseOptions,
+  MobileSessionTabCloseOutcome
+} from '../../session-lifecycle/close/mobile-session-tab-close-outcome'
 import { OrcaRuntimeWithFocusTerminal } from '../../terminal/focus/focus-terminal'
 
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
@@ -28,6 +33,18 @@ function isSuccessor(
 }
 
 export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntimeWithFocusTerminal {
+  /** The host closing its own terminal's tab (its PTY exited or was stopped): the host's write. */
+  protected closeHostTerminalTab(
+    worktreeSelector: string,
+    tabId: string,
+    options: Omit<MobileSessionTabCloseOptions, 'person'>
+  ): Promise<MobileSessionTabCloseOutcome> {
+    return this.closeMobileSessionTab(worktreeSelector, tabId, {
+      person: HOST_STATE_PERSON,
+      ...options
+    })
+  }
+
   /** Captured before asking the window, so a failed close never stops a successor reusing a PTY id. */
   protected captureOwedPtyStops(ptyIds: Iterable<string>): OwedPtyIncarnations {
     return new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)?.incarnationId]))
@@ -90,7 +107,7 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
         owed.set(ptyId, incarnationId)
       }
       try {
-        const result = await this.closeMobileSessionTab(`id:${worktreeId}`, parentTabId, {
+        const result = await this.closeHostTerminalTab(`id:${worktreeId}`, parentTabId, {
           reason: 'user',
           force: true,
           localPtyTeardownOwnedExternally: true

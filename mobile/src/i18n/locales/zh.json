@@ -378,7 +378,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "附件图片",
-      "image": "图片",
       "openImageHint": "以原尺寸打开图片"
     },
     "nativeChatToolLine": {
@@ -4496,9 +4495,6 @@
       "agentCouldNotStart": "无法启动 {{label}}。请在设置中检查智能体命令后重试",
       "agentFailedToStart": "{{label}} 启动失败。请在设置中检查智能体命令后重试",
       "agentReportedError": "{{label}} 报告了错误",
-      "antigravityInvalidEvents": "Antigravity 返回了无效的 JSON 事件",
-      "antigravityInvalidResult": "Antigravity 返回了无效的结果",
-      "antigravityNoFinalResult": "Antigravity 未返回最终结果",
       "chatNameAgentUnsupported": "请在设置 -> 聊天 -> 聊天名称中为此操作选择支持的聊天命名智能体。支持的智能体：{{agents}}，或选择“自定义命令”",
       "chatNameCustomCommandEmpty": "自定义命令为空。请在设置 -> 聊天 -> 聊天名称中添加",
       "cliFailed": "{{label}} CLI 命令执行失败，退出码为 {{exitCode}}",
@@ -5305,6 +5301,9 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "正在检查主机",
       "connectToDownload": "连接到此主机以下载最新版本的应用",
@@ -5317,7 +5316,9 @@
       "openingWorkspace": "正在打开工作区",
       "renderProcessGone": "工作区已停止响应",
       "statusUnreadable": "无法读取此主机的状态。请返回后重新打开",
-      "tryAgain": "重试"
+      "tryAgain": "重试",
+      "downloadingLatestApp": "正在下载最新版本的应用",
+      "downloadProgressFromHost": "来自 {{host}} · {{progress}}"
     }
   },
   "workspace": {
@@ -7714,7 +7715,7 @@
       "copyFailed": "无法复制链接",
       "previewChanged": "预览已更改。请先查看再发布",
       "movedHere": "此链接已在其他地方更新",
-      "shareBot": "分享 bot…",
+      "shareBot": "发送副本…",
       "countOf": "已选 {{picked}}/{{all}}",
       "removeSecret": "移除密钥后才能发布",
       "title": "分享 bot",
@@ -7726,7 +7727,6 @@
       "updatedAt": "更新于 {{date}}",
       "upToDate": "已是最新",
       "changedSince": "Bot 此后已更改",
-      "copy": "复制",
       "copyLink": "复制链接",
       "secretFoundTitle": "发现密钥",
       "secretWhere": "{{flag}}，位于 {{where}} 第 {{line}} 行",
@@ -7831,9 +7831,23 @@
       "linkNoLongerAvailable": "此分享链接已不可用",
       "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。",
       "original": {
-        "sharedBy": "由 {{who}} 分享",
         "viewOriginal": "查看原始版本",
-        "originalGone": "已不可用"
+        "originalGone": "已不可用",
+        "copiedFrom": "复制自 {{who}}"
+      },
+      "invite": {
+        "invitedYou": "{{owner}} 邀请了你",
+        "view": "查看邀请",
+        "sharedWithYou": "{{owner}} 与你共享了它",
+        "runsOn": "{{owner}} 的智能体，运行在 {{owner}} 的电脑上。",
+        "chatFrom": "你可以在自己的 Orca 和手机上与它聊天。",
+        "ownChats": "你只能看到自己的聊天。",
+        "ownerSees": "{{owner}} 可以看到你与它的聊天。",
+        "actsAs": "它可以在 {{owner}} 的电脑上使用 {{owner}} 的账号执行操作。",
+        "pauses": "{{owner}} 的电脑关机时它会暂停。",
+        "messagesWait": "消息会等它恢复后再处理。",
+        "leave": "你可以随时退出。",
+        "uses": "使用"
       },
       "sameLinkShort": "已制作的副本保持不变"
     },
@@ -8207,7 +8221,8 @@
       "moreMatches_one": "还有 {{count}} 个匹配结果。输入更完整的名称以缩小范围",
       "moreMatches_other": "还有 {{count}} 个匹配项。输入更完整的名称以缩小范围",
       "readFailedTitle": "无法加载聊天",
-      "runningCount": "{{count}} 个运行中"
+      "runningCount": "{{count}} 个运行中",
+      "noMessages": "暂无消息"
     },
     "row": {
       "replyingIn": "正在 {{place}} 中回复",

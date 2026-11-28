@@ -9,6 +9,7 @@ import {
 import { CONNECTOR_SOURCE_NAMES } from '../connectors/external-conversation-link'
 import type { BotChatSearchResult } from './bot-chat-search'
 import { isBotGroupMemberSession } from './bot-group'
+import { botChatPickHas, type BotChatPersonPick } from './bot-chat-people'
 
 /** A chat a search found; `matches` lists only the workers that hit when the chat itself didn't. */
 export type BotChatSearchHit = { chat: BotChatTreeChat; matches: ReadonlySet<string> | null }
@@ -96,6 +97,8 @@ export type BotChatListView = {
   searchFailed: boolean
   /** Chats a search matched past the ones it lists. */
   moreMatches: number
+  /** A person is picked who has no chats. */
+  noneFromPick: boolean
 }
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string
@@ -171,18 +174,25 @@ export function botChatListView(
     steps,
     query,
     search,
-    first = CHAT_TREE_CAPS.step
+    first = CHAT_TREE_CAPS.step,
+    pick = { kind: 'everyone' }
   }: {
     steps: number
     query: string
     search: BotChatSearchState | null
     /** Chats shown before the first step; each step adds `CHAT_TREE_CAPS.step`. */
     first?: number
+    /** Whose chats show; everyone's by default. */
+    pick?: BotChatPersonPick
   }
 ): BotChatListView {
   const searching = query.trim() !== ''
+  const picked = pick.kind !== 'everyone'
+  if (picked) {
+    chats = chats.filter((chat) => botChatPickHas(pick, chat))
+  }
   const found = searching
-    ? (search?.hits ?? [])
+    ? (search?.hits ?? []).filter((hit) => !picked || botChatPickHas(pick, hit.chat))
     : chats.slice(0, first + CHAT_TREE_CAPS.step * steps).map((chat) => ({ chat, matches: null }))
   return {
     found,
@@ -191,7 +201,8 @@ export function botChatListView(
     noMatch:
       searching && search !== null && !search.pending && !search.failed && found.length === 0,
     searchFailed: searching && search?.failed === true,
-    moreMatches: searching ? (search?.more ?? 0) : 0
+    moreMatches: searching ? (search?.more ?? 0) : 0,
+    noneFromPick: picked && !searching && chats.length === 0
   }
 }
 

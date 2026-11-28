@@ -16,7 +16,7 @@ export type RendererRecoveryPromptDeps = {
   /** Re-checks spawn headroom so a launch-failed prompt can name the process limit. */
   probeLaunchCapacity?: () => Promise<RendererLaunchProbeResult>
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
-  copyToClipboard: (text: string) => void
+  copyToClipboard: (text: string) => void | Promise<void>
   reload: () => void
   quit: () => void
 }
@@ -60,7 +60,7 @@ export async function presentRendererRecoveryPrompt(
       ...content
     })
     if (response === 1 && diagnosis) {
-      deps.copyToClipboard(diagnosis.commands.join('\r\n'))
+      await deps.copyToClipboard(diagnosis.commands.join('\r\n'))
       continue
     }
     if (response === 0) {

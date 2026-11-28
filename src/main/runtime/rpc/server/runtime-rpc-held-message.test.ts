@@ -116,15 +116,11 @@ beforeEach(async () => {
   )
   server = new HeldMessageServer({ runtime, userDataPath, enableWebSocket: true, wsPort: 0 })
   await server.start()
-  for (const [accountId, name] of [
-    ['acct-alice', 'Alice'],
-    ['acct-bob', 'Bob']
-  ] as const) {
+  for (const accountId of ['acct-alice', 'acct-bob']) {
     const keys = nacl.sign.keyPair()
     const row = await server.getBotShareDevices()!.add({
       botId: 'bot-1',
       accountId,
-      name,
       scope: 'runtime',
       devicePublicKeyB64: b64(keys.publicKey)
     })

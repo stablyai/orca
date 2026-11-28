@@ -1,4 +1,5 @@
 import React, { useId, useMemo, useState } from 'react'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -31,7 +32,7 @@ const HiddenProjectsSection = React.memo(function HiddenProjectsSection() {
   // Own language subscription: this memo boundary would otherwise keep the boot language.
   useTranslation()
   const listId = useId()
-  const repos = useAppStore((state) => state.repos)
+  const repos = useUserManagedRepos()
   const hiddenRepos = useMemo(() => selectHiddenRepos(repos), [repos])
   const [expanded, setExpanded] = useState(false)
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set())

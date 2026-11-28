@@ -1,3 +1,4 @@
+import { agentSessionRecordShownName } from '../../../runtime/agent-session/records/agent-session-record-shown-name'
 import { isInheritedAgentSessionItem } from '../../../../shared/agent-session/lifecycle/records/agent-session-fork'
 import {
   agentJournalItemKey,
@@ -95,7 +96,7 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
             : failureReason === 'turnActive'
               ? 'forkOriginalLatestOnly'
               : 'forkOriginalUnavailable'
-        const title = record.conversationName?.trim()
+        const title = agentSessionRecordShownName(host.deps.store, record)?.trim()
         refusal.refusal.message = sayAgentSessionFailureEnglish(title ? `${piece}Named` : piece, {
           agent: name,
           detail: title

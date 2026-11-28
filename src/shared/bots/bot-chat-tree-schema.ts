@@ -89,6 +89,7 @@ const chatSchema = z.looseObject({
     })
   ),
   preview: salvagedOptional('preview', z.string()),
+  person: salvagedOptional('person', z.looseObject({ accountId: z.string(), name: z.string() })),
   running: salvagingArray(workerSchema),
   runningTotal: z.number(),
   finished: salvagingArray(workerSchema),

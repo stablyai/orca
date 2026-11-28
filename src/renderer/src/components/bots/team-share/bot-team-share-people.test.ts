@@ -15,15 +15,23 @@ const hasAccess: BotShare = {
   shareId: 'c',
   accountId: 'acct-cy',
   email: 'cy@example.com',
-  addedAt: 1
+  addedAt: 1,
+  acceptedAt: 2
 }
 
 describe('share dialog rows', () => {
-  it('reads Invited, Email not sent yet and Has access from the share list', () => {
+  it('reads invites, emailed or not, and Has access from the share list', () => {
     expect(teamSharePeople([invited, waiting, hasAccess])).toEqual([
-      { kind: 'invite', key: 'a', email: 'alice@example.com', emailSent: true },
-      { kind: 'invite', key: 'b', email: 'bo@example.com', emailSent: false },
-      { kind: 'account', key: 'c', name: 'cy@example.com', email: 'cy@example.com', links: [] }
+      { kind: 'invite', key: 'a', email: 'alice@example.com' },
+      { kind: 'invite', key: 'b', email: 'bo@example.com' },
+      {
+        kind: 'account',
+        key: 'c',
+        name: 'cy@example.com',
+        email: 'cy@example.com',
+        links: [],
+        answer: 'accepted'
+      }
     ])
   })
 

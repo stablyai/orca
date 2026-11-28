@@ -56,6 +56,10 @@ import {
   runtimeWorktreeListingFor
 } from './runtime-worktree-catalog-read'
 import * as ScanCache from './runtime-worktree-scan-cache'
+import {
+  collectAgentWorkspaceSet,
+  type AgentWorkspaceSet
+} from '../process-listing/agent-workspace-set'
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
@@ -110,6 +114,12 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
   /** A warm fleet snapshot already answers any selector for free, so scoped scanning must yield to it. */
   protected hasFreshResolvedWorktreeCache(): boolean {
     return this.resolvedWorktrees.isFresh(getWorktreeScanMutationRevision())
+  }
+
+  /** A shared agent's workspaces on this host, from the cached worktree snapshot; null for no such bot. */
+  async readAgentWorkspaceSet(botId: string): Promise<AgentWorkspaceSet | null> {
+    const { worktrees } = await this.listResolvedWorktreeSnapshot()
+    return collectAgentWorkspaceSet(this.store, worktrees, botId)
   }
 
   protected async listResolvedWorktrees(): Promise<ResolvedWorktree[]> {

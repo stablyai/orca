@@ -27,6 +27,9 @@ import {
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readBots } from '@/lib/bot-catalog'
+import { readStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import { findBotByWorkspace } from '@/components/bots/bot-workspace'
+import { isOwnBotHome } from '../../../../../../shared/bots/bot-home-of'
 import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import {
   botGroupRoomMembers,
@@ -112,6 +115,13 @@ function dispatchStructuredAttention(
     return
   }
   const row = state.agentStatusByPaneKey.get(paneKey)
+  // The viewer's own Home is "Home"; every other chat, a teammate's Home too, by the host's name.
+  const tabLabel = isOwnBotHome(
+    findBotByWorkspace(readBots(), tab.worktreeId, tab.executionHostId),
+    tab.entityId
+  )
+    ? 'Home'
+    : readStructuredChatTabName(tab, state)
   const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   applyAgentAttention(decision, {
     unread: state.markAgentAttentionUnread,
@@ -148,9 +158,9 @@ function dispatchStructuredAttention(
           workspaceExecutionHostId: notificationWorkspaceExecutionHostForOwner(owner),
           ...(executionHost ? { executionHost } : {}),
           paneKey: request.subjectKey ?? undefined,
-          ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),
+          ...getNotificationWorkspaceLabels(state, request.workspaceId, tabLabel),
           notificationSourceId: notificationSourceForOwner(owner, state),
-          terminalTitle: tab.label,
+          terminalTitle: tabLabel,
           isActiveWorktree: request.workspaceIsActive,
           ...(row?.agentType ? { agentType: row.agentType } : {}),
           agentState: news.agentState,

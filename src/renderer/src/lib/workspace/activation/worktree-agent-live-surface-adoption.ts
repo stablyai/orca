@@ -217,6 +217,10 @@ export async function adoptLiveWorkspacePtySurfaces(
       declinedPtyIds.push(ptyId)
       continue
     }
+    // A teammate's own list shows it; this window never does.
+    if ('heldByTeammate' in owner) {
+      continue
+    }
     const mainPlaces =
       ORCA_LAYOUT_OWNER_IS_MAIN && runtimeEnvironmentIdUnlessTwin(getState(), worktreeId) === null
     // Main places unshown terminals before answering, so its named pane/frame owns presentation. Window writes nothing; paired servers retain their existing path.

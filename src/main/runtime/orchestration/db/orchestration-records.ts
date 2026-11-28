@@ -255,6 +255,7 @@ export type MessageRow = {
   delivered_at: string | null
   sender_pane_key: string | null
   answer_sender_snapshot?: string | null
+  reply_to?: string | null
   pointer_enter_pending?: number
   pointer_pty_id?: string | null
   pointer_process_incarnation?: string | null
@@ -315,6 +316,9 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  /** Concise passive progress note set by `orchestration task-update --note`; never mailed. */
+  progress_note: string | null
+  progress_updated_at: string | null
   /** The settled Dispatch whose worker this follow-up continues. */
   follow_up_of_dispatch_id: string | null
   /** When its worker reported with coordinator mail unread, until that mail continues it. */
@@ -327,6 +331,10 @@ export type DispatchContextRow = {
   for_message_id: string | null
   /** 1 when this worker, and every worker it starts, starts as a chat wherever one can run. */
   chat_lineage: 1 | null
+  /** Whom it acts for (JSON, as `bot_conversation_acts_for`), stamped when it was made from its
+   *  creator: the creating Dispatch's stamp, else the creating chat's record. Null: the owner, as
+   *  every Dispatch from before teammates. */
+  acts_for: string | null
 }
 
 export type DecisionGateRow = {

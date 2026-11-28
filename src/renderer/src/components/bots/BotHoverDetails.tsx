@@ -1,4 +1,4 @@
-import { Circle, House, Laptop, Pause, Server, Unplug } from 'lucide-react'
+import { Circle, House, Laptop, Loader2, Pause, Server, Unplug } from 'lucide-react'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -6,7 +6,7 @@ import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusI
 import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
 import { useWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/useWorktreeAgentRows'
 import { useTranslate } from '@/i18n/use-translate'
-import { useBotHostOffline } from '@/lib/bot-host-views'
+import { useBotHostDown } from '@/lib/bot-host-views'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { useAppStore } from '@/store'
@@ -23,7 +23,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { BotAvatar } from './BotAvatar'
 import { BotHoverNeedsYou } from './BotHoverNeedsYou'
-import { BotHoverLatestLine, useBotRowLine } from './BotRowActivityLine'
+import { BotHoverLatestLine, botHostDownText, useBotRowLine } from './BotRowActivityLine'
 import { useBotSoulDescription } from './bot-soul-description'
 import { useBotHostLabel } from './use-bot-host-label'
 import { BotHoverShareLine, useBotShareLine } from './sharing/BotShareMark'
@@ -34,10 +34,11 @@ export function useBotRowDetails(bot: Bot, home: FolderWorkspace) {
   const workspaceId = folderWorkspaceKey(home.id)
   const status = foldBotStatus(useWorktreeActivityStatus(workspaceId), bot.paused)
   const hostLabel = useBotHostLabel(bot.hostId)
-  const offline = useBotHostOffline(bot.hostId)
+  const down = useBotHostDown(bot.hostId)
+  const offline = down !== null
   const description = useBotSoulDescription({ bot, folderPath: home.folderPath })
   const { line, limit, now } = useBotRowLine(bot, home)
-  return { workspaceId, status, hostLabel, offline, description, line, limit, now }
+  return { workspaceId, status, hostLabel, down, offline, description, line, limit, now }
 }
 
 export function BotHoverDetails({
@@ -51,7 +52,7 @@ export function BotHoverDetails({
   showHostOnFocus: boolean
   onOpenHome: () => void
 }): React.JSX.Element {
-  const { workspaceId, status, hostLabel, offline, description, line, now } = details
+  const { workspaceId, status, hostLabel, down, description, line, now } = details
   const t = useTranslate()
   const shareLine = useBotShareLine(bot)
   const current = useWorktreeAgentRows(workspaceId).find((row) => row.state === 'working')
@@ -60,14 +61,23 @@ export function BotHoverDetails({
     : ''
   const liveStatus = status === 'permission' ? status : action ? 'working' : status
   const homeLabel = t('bots.hover.openHome', 'Open {{name}}’s Home', { name: bot.name })
-  const state = offline
-    ? t('bots.row.disconnected', 'Disconnected')
+  const state = down
+    ? botHostDownText(t, down)
     : bot.paused
       ? t('bots.row.paused', 'Paused')
       : liveStatus === 'active'
         ? t('bots.row.idle', 'Idle')
         : (liveStatus === 'working' && action) || getWorktreeStatusLabel(liveStatus)
-  const StatusIcon = offline ? Unplug : bot.paused ? Pause : liveStatus === 'active' ? Circle : null
+  const StatusIcon =
+    down === 'connecting'
+      ? Loader2
+      : down
+        ? Unplug
+        : bot.paused
+          ? Pause
+          : liveStatus === 'active'
+            ? Circle
+            : null
   return (
     <div className="flex flex-col">
       <div className="flex items-start gap-2.5">
@@ -95,7 +105,15 @@ export function BotHoverDetails({
               <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
                 {StatusIcon ? (
                   <span className="flex size-3 shrink-0 items-center justify-center" aria-hidden>
-                    <StatusIcon className={StatusIcon === Circle ? 'size-2' : 'size-3'} />
+                    <StatusIcon
+                      className={
+                        StatusIcon === Circle
+                          ? 'size-2'
+                          : StatusIcon === Loader2
+                            ? 'size-3 animate-spin'
+                            : 'size-3'
+                      }
+                    />
                   </span>
                 ) : (
                   <StatusIndicator status={liveStatus} showTooltip={false} aria-hidden />
@@ -132,7 +150,7 @@ export function BotHoverDetails({
       {line?.kind === 'needYouElsewhere' ? null : (
         <BotHoverLatestLine line={line} now={now} belowShareLine={shareLine !== null} />
       )}
-      {offline || bot.paused ? null : <BotHoverNeedsYou bot={bot} onReview={onOpenHome} />}
+      {down || bot.paused ? null : <BotHoverNeedsYou bot={bot} onReview={onOpenHome} />}
     </div>
   )
 }

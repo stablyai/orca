@@ -9,7 +9,6 @@ type SecondaryAgentSpecDeps = {
   BASIC_THINKING_LEVELS: ThinkingLevel[]
   OPENAI_THINKING_LEVELS: ThinkingLevel[]
   parseCursorModels: (stdout: string) => CommitMessageModel[]
-  parseAntigravityModels: (stdout: string) => CommitMessageModel[]
   parseLineModels: (stdout: string) => CommitMessageModel[]
 }
 
@@ -17,7 +16,6 @@ export function buildSecondaryCommitMessageAgentSpecs({
   BASIC_THINKING_LEVELS,
   OPENAI_THINKING_LEVELS,
   parseCursorModels,
-  parseAntigravityModels,
   parseLineModels
 }: SecondaryAgentSpecDeps): Partial<Record<TuiAgent, CommitMessageAgentSpec>> {
   return {
@@ -258,28 +256,6 @@ export function buildSecondaryCommitMessageAgentSpecs({
       ],
       // Plans hide models they do not offer; Auto runs on any plan.
       defaultModelId: 'auto'
-    },
-    antigravity: {
-      id: 'antigravity',
-      modelFlag: [{ aliases: ['--model'] }],
-      effortFlag: [{ aliases: ['--effort'] }],
-      label: 'Antigravity',
-      binary: 'agy',
-      // Empty --print selects stream input without consuming the next flag (agy >= 1.1.15).
-      promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel }) => [
-        '--print=',
-        '--input-format=stream-json',
-        '--output-format=stream-json',
-        '--sandbox',
-        ...(model && model !== 'default' ? ['--model', model] : []),
-        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
-      ],
-      singletonOptions: [['--model'], ['--effort']],
-      modelSource: 'dynamic',
-      modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
-      models: [{ id: 'default', label: 'Config default' }],
-      defaultModelId: 'default'
     },
     jcode: {
       id: 'jcode',

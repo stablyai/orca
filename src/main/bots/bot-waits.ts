@@ -1,5 +1,5 @@
-// A bot's waits: one that ends unrun says so as a card in the chat it would have run in (its Chat
-// when that is gone), and is deleted. One whose run started needs no card: its run row says so.
+// An agent's waits: one that ends unrun says so as a card in the chat it would have run in (its
+// person's Home Chat when that is gone), and is deleted. One whose run started needs no card: its run row says so.
 import type { Automation } from '../../shared/automations/automation-definition'
 import { botAutomationFacts } from '../../shared/bots/bot-automation-rows'
 import type { AutomationOnceEffects } from '../automations/automation-trigger-runs'
@@ -7,6 +7,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { appendOrcaChatCard } from '../runtime/orca-chat-card'
 import { runtimeBotChats } from './bot-chat-session'
 import { botChatTakingMail } from '../runtime/rpc/methods/bots-chats'
+import { automationHome } from './bot-conversation-acts-for'
 
 export function runtimeBotWaits(runtime: OrcaRuntimeService): AutomationOnceEffects {
   const chats = runtimeBotChats(runtime)
@@ -21,7 +22,8 @@ export function runtimeBotWaits(runtime: OrcaRuntimeService): AutomationOnceEffe
       const chosen = target.chat
         ? await botChatTakingMail(runtime, bot, target.chat.sessionId)
         : null
-      const sessionId = chosen?.sessionId ?? (await chats.ensure(bot.id))
+      const sessionId =
+        chosen?.sessionId ?? (await chats.ensure(bot.id, automationHome(runtime, bot, target)))
       appendOrcaChatCard(
         sessionId,
         {

@@ -15,7 +15,7 @@ export function closeClientHostedBrowserPagesForWorktree(
   runtime: WorktreeBrowserClientPageCloseHost,
   worktreeId: string
 ): void {
-  const openPages = getRuntimeBrowserPageRegistry(runtime).listPages(worktreeId)
+  const openPages = getRuntimeBrowserPageRegistry(runtime).everyPage(worktreeId)
   if (openPages.length === 0) {
     return
   }

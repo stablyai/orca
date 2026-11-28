@@ -15,15 +15,11 @@ import {
 import { WebhookNotice, type ConnectorWebhookTrigger } from '../connector-webhook-contract'
 import { PrEvent } from '../connector-pr-event-contract'
 import { ConnectorAsker } from '../connector-asker-contract'
+import type { AgentCard } from '../bots/agent-card-contract'
 import type { ConnectorWorkLink } from '../connector-work-link-contract'
 import type { AutomationConnectorEventTrigger } from '../automation-event-triggers'
 import type { JournalConnectorReplyOutcome } from '../agent-session/journal/journal-connector-reply'
-import {
-  ShareAcceptDelivery,
-  ShareResolvedDelivery,
-  ShareSendDelivery,
-  type ConnectorBotShare
-} from '../connector-share-contract'
+import { SHARE_DELIVERIES, type ConnectorBotShare } from '../connector-share-contract'
 
 export const CONNECTOR_CONTRACT_VERSION = 1
 
@@ -229,9 +225,7 @@ export const ConnectorDelivery = z.discriminatedUnion('kind', [
   // An event on a pull request this machine's bots' owner opened; its conversation is the PR's own.
   z.object({ ...DeliveryBase, kind: z.literal('pr_event'), event: PrEvent }),
   // A shared bot's people (connector-share-contract.ts), on the share's own conversation.
-  ShareResolvedDelivery,
-  ShareAcceptDelivery,
-  ShareSendDelivery
+  ...SHARE_DELIVERIES
 ])
 export type ConnectorDelivery = z.infer<typeof ConnectorDelivery>
 
@@ -295,6 +289,10 @@ export type ConnectorBot = {
   sharedAppWorkspaces?: ConnectorBotWorkspace[]
   /** The Orca accounts and invited emails it is shared with; absent, it isn't shared. */
   sharedWith?: ConnectorBotShare[]
+  /** What it is for, shown to the people it is shared with; absent when it says nothing. */
+  botPurpose?: string
+  /** Its mascot and services, for the invite of someone it is shared with; absent when not shared. */
+  agentCard?: AgentCard
 }
 
 /** One event rule of a bot automation here; the cloud sends a match to this machine alone. */

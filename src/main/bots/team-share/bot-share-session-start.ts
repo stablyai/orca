@@ -1,5 +1,6 @@
-// A teammate's New chat on a shared bot: their own chat on the bot's agent, acting for them. An empty
-// chat is reused only when it is already theirs, never the owner's or another teammate's.
+// A teammate's New chat on a shared bot: their own chat on the agent they picked (else the bot's),
+// acting for them, with no tab on the host: its tab is on their computer. An empty chat is reused
+// only when it is already theirs, never the owner's or another teammate's.
 import type { Bot } from '../../../shared/bot-types'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -39,6 +40,7 @@ async function startNewBotShareSession(
     return null
   })
   return (
-    empty ?? (await startBotSession(runtime, bot, { actsFor: { actsFor: [botShareAsker(scope)] } }))
+    empty ??
+    (await startBotSession(runtime, bot, { actsFor: { actsFor: [botShareAsker(bot, scope)] } }))
   )
 }

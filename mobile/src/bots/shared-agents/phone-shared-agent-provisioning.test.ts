@@ -23,6 +23,11 @@ import { sealBotTeamShareOffer } from '../../../../src/shared/bots/bot-team-shar
 import { hashRelayCredential } from '../../../../src/shared/remote-runtime/relay/relay-credential-hash'
 import type { RpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
 import { MOBILE_PAIRED_E2EE_PRIMITIVES as PRIMITIVES } from '../../transport/encryption/mobile-paired-e2ee-primitives'
+import {
+  personTypistOf,
+  typistOtherThanViewer
+} from '../../../../src/shared/agent-session/journal/agent-journal-typed-by'
+import { sharedBotHostView } from '../../../../src/shared/bots/shared-bot-hosts'
 import { syncComputerShares } from './phone-shared-agent-provisioning'
 import { PhoneSharedAgentStore } from './phone-shared-agent-store'
 
@@ -119,5 +124,39 @@ describe('a phone’s key to a shared agent', () => {
     expect(store.list()).toEqual([])
     await store.flushed()
     expect(keychain.size).toBe(0)
+  })
+
+  it('an entry kept from before names no account, so its chat keeps the host’s label until the next list fills it in', async () => {
+    // The teammate's own message, which the owner's host compared with its own account.
+    const own = personTypistOf({
+      by: 'device',
+      deviceId: 'phone-key-1',
+      account: 'teammate@example.com',
+      accountId: 'acct-teammate',
+      own: false
+    })
+    const viewer = (store: PhoneSharedAgentStore) =>
+      sharedBotHostView(store.get(share.shareId)!, {
+        link: 'offline',
+        holds: false,
+        held: []
+      }).accountId ?? null
+    const { computer: pinned } = computer()
+    const store = new PhoneSharedAgentStore()
+    await store.load()
+    // An older computer's list, or this build's store from before: no account.
+    await syncComputerShares(store, pinned, [share], () => true)
+    await store.flushed()
+    const kept = new PhoneSharedAgentStore()
+    await kept.load()
+    expect(kept.get(share.shareId)?.accountId).toBeUndefined()
+    expect(typistOtherThanViewer(own, viewer(kept))?.accountId).toBe('acct-teammate')
+
+    await syncComputerShares(kept, pinned, [{ ...share, accountId: 'acct-teammate' }], () => false)
+    await kept.flushed()
+    const filled = new PhoneSharedAgentStore()
+    await filled.load()
+    expect(filled.get(share.shareId)?.accountId).toBe('acct-teammate')
+    expect(typistOtherThanViewer(own, viewer(filled))).toBeUndefined()
   })
 })

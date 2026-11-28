@@ -134,7 +134,6 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     onCardDragEnd: props.onCardDragEnd,
     onContextMenuSelect: props.onContextMenuSelect,
     folderWorkspaceId: review.folderWorkspaceId,
-    setShowRenameErrorDialog: foundation.setShowRenameErrorDialog,
     isDeleting: linked.isDeleting,
     showDeleteQuickAction
   })

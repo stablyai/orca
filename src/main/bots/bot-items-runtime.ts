@@ -23,6 +23,7 @@ import {
   type BotItemGitHubCache
 } from './bot-items-link-join'
 import type { BotItemsRemote } from './bot-items-ops'
+import { botItemListScope, botItemsOfPeople } from './bot-item-access'
 import { eventViewOf } from './bot-items-rows'
 import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-schema'
 import type { BotWorkRuntime } from './bot-work-runtime'
@@ -98,12 +99,20 @@ export class BotItemsHost {
   }
 
   /** The store only when this profile already has an items file: nothing links work before one. */
-  private openedStore(): BotItemsRemote | null {
+  openedStore(): BotItemsRemote | null {
     return this.openedTracked()?.remote ?? null
   }
 
   private openedTracked(): TrackedBotItems | null {
     return this.stores.get(botItemsStoreFile(getProfileUserDataPath())) ?? null
+  }
+
+  async owedCommentAttachmentUploads(
+    stateDirectory: string,
+    root: string
+  ): Promise<ReadonlySet<string>> {
+    const tracked = this.stores.get(botItemsStoreFile(stateDirectory))
+    return new Set(await tracked?.remote.owedCommentAttachmentUploads(root))
   }
 
   /** Once the runtime has its bot hooks: an existing items file sends what a crash left owed and
@@ -233,10 +242,18 @@ export class BotItemsHost {
     }
   }
 
-  /** Each bot's unstale Needs you items, counted at `now`; null when unreadable, never a false zero. */
-  async needsYouCounts(now: number): Promise<BotNeedsYouCounts | null> {
+  /** Each bot's unstale Needs you items, counted at `now`; null when unreadable, never a false zero.
+   *  One person's own, as their list's default shows: the owner's (null), or a teammate's. */
+  async needsYouCounts(
+    now: number,
+    account: string | null = null
+  ): Promise<BotNeedsYouCounts | null> {
     const store = this.openedStore()
-    const rows = store ? await store.needsYou().catch(warn) : []
+    const rows = store
+      ? await store
+          .needsYou(botItemListScope(botItemsOfPeople(account === null ? null : [account])))
+          .catch(warn)
+      : []
     return rows && { ...botItemsNeedingOwnerByBot(rows, this.deps.bots(), now), at: now }
   }
 
@@ -246,14 +263,17 @@ export class BotItemsHost {
     items: readonly BotItemRecord[],
     summary = false,
     /** Each Needs you item's waiting ask too: for the item's own view. */
-    withWaitingAsks = false
+    withWaitingAsks = false,
+    /** Whose unseen marks `othersLastEventId` carries (`botItemAuthorViewer`): the owner's by default. */
+    viewer?: string
   ): Promise<BotItem[]> {
     if (items.length === 0) {
       return []
     }
     const rows = await this.store().viewRows(
       items.map((item) => item.uid),
-      withWaitingAsks
+      withWaitingAsks,
+      viewer
     )
     const refs = Object.values(rows.links)
       .flat()

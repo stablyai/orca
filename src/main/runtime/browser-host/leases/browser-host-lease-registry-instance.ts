@@ -15,8 +15,13 @@ export function getBrowserHostLeaseRegistry(
   if (!registry) {
     registry = new BrowserHostLeaseRegistry({
       authorityRuntimeId: runtime.getRuntimeId(),
-      onClientPageInitializationChanged: (workspaceId) =>
-        runtime.notifyMobileSessionTabsChanged?.(workspaceId),
+      // Lists show published pages alone: one not published yet, or retired, is in no list.
+      onClientPageInitializationChanged: ({ browserPageId }) => {
+        const page = getRuntimeBrowserPageRegistry(runtime).getPage(browserPageId)
+        if (page) {
+          runtime.notifyBrowserPageList(page)
+        }
+      },
       onClientPageReleased: (browserPageId, pageHostGeneration) => {
         void releaseBrowserClientDownloadTransfersForPage(
           runtime,

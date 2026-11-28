@@ -50,6 +50,8 @@ async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Prom
       },
       pairing,
       peerMailSenderSnapshot(ask.senderLabel, ask.sender),
+      // Asks a server sends this computer are admitted as its own bot mail is, whoever's they are.
+      null,
       {
         environmentId: row.environment_id,
         serverName,

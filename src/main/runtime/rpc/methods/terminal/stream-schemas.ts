@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import { requiredString } from '../../../../../shared/rpc-contract/rpc-param-primitives'
 import { TerminalViewport } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
@@ -34,13 +35,17 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
   inputSessionId: z.string().min(1).max(128).optional()
 })
 
-export const TerminalMultiplexLegacyAckFrame = z
-  .object({
-    bytes: z.number().int().nonnegative()
-  })
-  .strict()
+export const TerminalMultiplexLegacyAckFrame = lazyZodSchema(() =>
+  z
+    .object({
+      bytes: z.number().int().nonnegative()
+    })
+    .strict()
+)
 
-export const TerminalMultiplexSnapshotRequestFrame = z.object({
-  requestId: z.number().int().positive().optional(),
-  scrollbackRows: z.number().finite().optional()
-})
+export const TerminalMultiplexSnapshotRequestFrame = lazyZodSchema(() =>
+  z.object({
+    requestId: z.number().int().positive().optional(),
+    scrollbackRows: z.number().finite().optional()
+  })
+)

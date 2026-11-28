@@ -1,6 +1,7 @@
 import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
 import type { RuntimeTerminalClose } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimePtyTabCloseAuthority } from '../../terminal/records/runtime-terminal-state-records'
+import type { TeammateTabListKey } from '../../../bots/team-share/teammate-rules'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -23,6 +24,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
   ): Promise<Set<string> | null>
   protected abstract getLivePtyIdsForWorktree(
     worktreeId: string,
+    list: 'host' | TeammateTabListKey | 'every',
     freshPtyIds?: ReadonlySet<string>,
     hostFence?: WorktreePtyHostFence
   ): Set<string>
@@ -107,7 +109,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
         const owed = this.captureOwedPtyStops(ptyIdsToKill)
         try {
-          await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+          await this.closeHostTerminalTab(`id:${pty.pty.worktreeId}`, tabId, {
             localPtyTeardownOwnedExternally: true
           })
         } catch (error) {
@@ -128,7 +130,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         // The window can republish this tab during the close, which then goes through its relay.
         const owed = this.captureOwedPtyStops([pty.pty.ptyId])
         try {
-          await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+          await this.closeHostTerminalTab(`id:${pty.pty.worktreeId}`, tabId, {
             reason: 'user',
             localPtyTeardownOwnedExternally: true,
             expectedPtyCloseAuthority: closeAuthority
@@ -188,7 +190,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
       } else if (surface) {
         // Paired viewers retain ended streams until HUB removal; use durable host close instead of viewer-local exit handling.
         try {
-          await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+          await this.closeHostTerminalTab(`id:${pty.pty.worktreeId}`, tabId, {
             localPtyTeardownOwnedExternally: true
           })
         } catch (error) {
@@ -290,7 +292,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         return this.closeTerminal(handle)
       }
       // Handle-addressed CLI/automation close is user intent under lifecycle-echo adjudication.
-      await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+      await this.closeHostTerminalTab(`id:${pty.pty.worktreeId}`, tabId, {
         reason: 'user',
         expectedPtyCloseAuthority: closeAuthority
       })
@@ -303,7 +305,9 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     if (hostClose && !hostClose.stillBound) {
       return { handle, tabId: leaf.tabId, ...hostClose.close, closeMode: 'tab' }
     }
-    await this.closeMobileSessionTab(`id:${leaf.worktreeId}`, leaf.tabId, { reason: 'user' })
+    await this.closeHostTerminalTab(`id:${leaf.worktreeId}`, leaf.tabId, {
+      reason: 'user'
+    })
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     return { handle, tabId: leaf.tabId, ptyKilled: false, ...hostClose?.close, closeMode: 'tab' }
   }

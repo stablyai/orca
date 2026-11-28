@@ -1,5 +1,6 @@
 import type * as core from './runtime-environment-store-operations'
 import { submitEnvironmentStoreCommand } from './runtime-environment-store-worker-client'
+import { sharedHostEnvironment } from '../pairing/shared-host-keys'
 
 export async function listEnvironments(
   ...args: Parameters<typeof core.listEnvironments>
@@ -87,6 +88,11 @@ export { getPairingConnectionDependency } from './runtime-environment-selection'
 export async function resolveEnvironment(
   ...args: Parameters<typeof core.resolveEnvironment>
 ): Promise<ReturnType<typeof core.resolveEnvironment>> {
+  // A shared agent's host resolves as a paired server, from its share rather than the store.
+  const sharedHost = sharedHostEnvironment(args[1])
+  if (sharedHost) {
+    return sharedHost
+  }
   const reply = await submitEnvironmentStoreCommand({ operation: 'resolveEnvironment', args })
   if (reply.operation !== 'resolveEnvironment') {
     throw new Error('Unexpected environment store response')

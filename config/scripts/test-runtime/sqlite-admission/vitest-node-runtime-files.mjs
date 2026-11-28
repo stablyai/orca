@@ -6,6 +6,10 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
   // The relay's backpressure rides on Node's fetch; Bun's fetch reads a body ahead of its reader.
   'src/main/bots/tool-relay/bot-tool-relay.test.ts',
+  // The stand-in Relay cell pauses its sockets' TCP reads as the real cell does, which needs Node's net.
+  'src/main/runtime/rpc/server/runtime-one-link-relay-fault.test.ts',
+  'src/main/runtime/rpc/server/runtime-one-link-stream-lifecycle.test.ts',
+  'src/main/runtime/rpc/server/runtime-one-link-relay-e2ee-fault.test.ts',
   // A failed write must surface as Node's async stream 'error', as on Electron main's stdio.
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
   'src/cli/**/*.test.ts',

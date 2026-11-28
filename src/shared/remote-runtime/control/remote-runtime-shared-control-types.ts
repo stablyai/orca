@@ -8,6 +8,7 @@ import type {
 } from '../remote-runtime-socket-liveness'
 import type { RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
 import type { SharedControlAppHeartbeatOptions } from './remote-runtime-shared-control-app-heartbeat'
+import type { AuthenticatedRuntimeChannelOpener } from './remote-runtime-authenticated-channel'
 
 /** Text, or binary that may carry compressed text; nothing else reaches the shared control socket. */
 export type SharedControlFrame = RemoteRuntimeSealedFrame
@@ -49,6 +50,15 @@ export type SharedControlLogicalSubscription<TResult = unknown> = {
   pendingReplayTag?: boolean
   // While resubscribe awaits its ID, close must defer cleanup or leak the server’s new subscription.
   awaitingResubscribe?: boolean
+  /**
+   * The binary channel of a stream that would have had a socket of its own. Such a stream ends
+   * when the connection's socket does, as its own socket's stream did; its owner reopens it.
+   */
+  binaryChannel?: number
+  /** What the stream's own socket would have declared; the host reads the channel's calls by it. */
+  channelCapabilities?: readonly RuntimeCapability[]
+  /** Background traffic, as the stream's own socket marked its opening request. */
+  idlePassive?: boolean
 }
 
 export type SharedControlReadyWaiter = {
@@ -60,6 +70,12 @@ export type RemoteRuntimeSharedSubscription = {
   requestId: string
   close: () => void
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
+  /** A call on the stream's own channel, as it was sent on the stream's own socket. */
+  sendRequest?: (
+    method: string,
+    params: unknown,
+    timeoutMs: number
+  ) => Promise<RuntimeRpcResponse<unknown>>
 }
 
 export type RemoteRuntimeSharedConnectionDiagnostics = {
@@ -142,4 +158,11 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   appHeartbeat?: SharedControlAppHeartbeatOptions
   /** Null uses normal retry; a promise owns token recovery and decides whether this connection retries. */
   onAuthenticationRejected?: () => Promise<'retry' | 'stop' | null> | null
+  /**
+   * Opens the authenticated channel declaring these capabilities, e.g. over Relay; absent opens a
+   * direct socket to the endpoint.
+   */
+  openChannel?: (clientCapabilities: readonly string[]) => AuthenticatedRuntimeChannelOpener
+  /** Carry streams' binary on this one connection (both sides must support binary channels). */
+  binaryChannels?: boolean
 }

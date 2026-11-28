@@ -10,6 +10,12 @@ import {
 import type { StoredClientSessionTabSelection } from './client-session-tab-closed-selection'
 import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
 import {
+  isTeammateTabList,
+  TEAMMATE_MOVED_HOMES_ROW,
+  type TabOwner,
+  type TeammateTabListKey
+} from '../../../bots/team-share/teammate-rules'
+import {
   deriveClientSessionTabSelection,
   emptyClientSessionTabSelection,
   projectClientSessionTabSelection,
@@ -18,15 +24,46 @@ import {
   type ClientSessionTabSelection
 } from './client-session-tab-selection-projection'
 
+/** A workspace's tab list: the host's (everyone's but teammates' in their own Home), or one teammate's. */
+export type SessionTabListName = 'host' | TeammateTabListKey
+
+export function sessionTabListName(owner: TabOwner): SessionTabListName {
+  return isTeammateTabList(owner) ? owner : 'host'
+}
+
 export class ClientSessionTabSelectionStore {
   private statesByClient = new Map<string, Map<string, StoredClientSessionTabSelection>>()
   private persistListener: ((state: PersistedMobileClientTabSelections) => void) | null = null
+  // Whose list each client sees in a workspace (`tabOwnerOf`); a list's change touches only its clients.
+  // null: not known yet (an agent's Home before the share devices load), so no bulk change touches it.
+  private listOf: (clientNavigationId: string, worktreeId: string) => TabOwner | null = () =>
+    'shared'
+
+  setTabOwnerResolver(
+    listOf: (clientNavigationId: string, worktreeId: string) => TabOwner | null
+  ): void {
+    this.listOf = listOf
+  }
+
+  private seesList(worktreeId: string, list: SessionTabListName): (client: string) => boolean {
+    return (client) => {
+      const owner = this.listOf(client, worktreeId)
+      return owner !== null && sessionTabListName(owner) === list
+    }
+  }
 
   // Persist across host restart so phones do not snap back to the first tab.
   hydrate(persisted: PersistedMobileClientTabSelections): void {
     for (const [clientNavigationId, selectionsByWorktree] of Object.entries(
       normalizePersistedMobileClientTabSelections(persisted)
     )) {
+      // A teammate's own tab list, not a device: `PersonSessionTabLists` reads it.
+      if (
+        isTeammateTabList(clientNavigationId) ||
+        clientNavigationId === TEAMMATE_MOVED_HOMES_ROW
+      ) {
+        continue
+      }
       const statesByWorktree = this.getStatesByWorktree(clientNavigationId)
       for (const [worktreeId, selection] of Object.entries(selectionsByWorktree)) {
         statesByWorktree.set(worktreeId, {
@@ -190,13 +227,59 @@ export class ClientSessionTabSelectionStore {
     return this.project(snapshot, clientNavigationId)
   }
 
-  forgetTabs(worktreeId: string, tabIds: readonly string[]): void {
+  /** The host published this tab again (a chat keeps its id), so no client may keep hiding it. */
+  reopenForAllClients(worktreeId: string, tabId: string, list: SessionTabListName = 'host'): void {
+    const sees = this.seesList(worktreeId, list)
+    for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
+      if (!sees(clientNavigationId)) {
+        continue
+      }
+      const state = statesByWorktree.get(worktreeId)
+      if (!state?.closedTabIds.has(tabId)) {
+        continue
+      }
+      const closedTabIds = new Set(state.closedTabIds)
+      closedTabIds.delete(tabId)
+      statesByWorktree.set(worktreeId, { ...state, revision: state.revision + 1, closedTabIds })
+    }
+  }
+
+  forgetTabs(
+    worktreeId: string,
+    tabIds: readonly string[],
+    list: SessionTabListName = 'host'
+  ): void {
     if (tabIds.length === 0) {
       return
     }
-    if (forgetClosedClientSessionTabsByWorktree(this.statesByClient, worktreeId, tabIds)) {
+    const sees = this.seesList(worktreeId, list)
+    if (forgetClosedClientSessionTabsByWorktree(this.statesByClient, worktreeId, tabIds, sees)) {
       this.persistNow()
     }
+  }
+
+  /** After a close: every client of the list (offline ones too) moves its pick by the close rule now,
+   *  so none returns to the closed tab when it opens again. */
+  settleClosedTabs(snapshot: RuntimeMobileSessionTabsResult, list: SessionTabListName): void {
+    const sees = this.seesList(snapshot.worktree, list)
+    for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
+      const state = statesByWorktree.get(snapshot.worktree)
+      if (!state || !sees(clientNavigationId)) {
+        continue
+      }
+      if (snapshot.tabs.length === 0) {
+        // Nothing is left to hide, so a tab that opens here again shows on every device.
+        statesByWorktree.set(snapshot.worktree, {
+          ...state,
+          selection: emptyClientSessionTabSelection(),
+          closedTabIds: new Set(),
+          revision: state.revision + 1
+        })
+      } else {
+        this.project(snapshot, clientNavigationId)
+      }
+    }
+    this.persistNow()
   }
 
   forgetClient(clientNavigationId: string): void {
@@ -228,9 +311,13 @@ export class ClientSessionTabSelectionStore {
     }
   }
 
-  forgetWorktree(worktreeId: string): void {
+  forgetWorktree(worktreeId: string, list: SessionTabListName = 'host'): void {
+    const sees = this.seesList(worktreeId, list)
     let changed = false
     for (const [clientNavigationId, statesByWorktree] of this.statesByClient) {
+      if (!sees(clientNavigationId)) {
+        continue
+      }
       const state = statesByWorktree.get(worktreeId)
       changed = Boolean(state?.shouldPersist) || changed
       statesByWorktree.delete(worktreeId)

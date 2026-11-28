@@ -266,7 +266,8 @@
       "clearSearch": "Clear search"
     },
     "waitingForHost": "Waiting for host…",
-    "connectingToHost": "Connecting to host…"
+    "connectingToHost": "Connecting to host…",
+    "loading": "Loading…"
   },
   "host": {
     "edit": {
@@ -1027,7 +1028,9 @@
       "tryAgain": "Try again",
       "connectToDownload": "Connect to this host to download the latest app",
       "openingWorkspace": "Opening workspace",
-      "checkingHost": "Checking host"
+      "checkingHost": "Checking host",
+      "downloadingLatestApp": "Downloading the latest app",
+      "downloadProgressFromHost": "from {{host}} · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "Update Orca",
@@ -1035,6 +1038,9 @@
       "updateMessageNoHost": "This screen needs a newer Orca.",
       "serverTitle": "Can’t reach this server",
       "serverMessage": "Your phone can’t reach this workspace’s server through {{host}}."
+    },
+    "downloadProgress": {
+      "megabytes": "{{received}} of {{total}} MB"
     }
   },
   "navigation": {
@@ -3563,8 +3569,9 @@
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
-      "image": "image",
-      "openImageHint": "Opens the image full size"
+      "openImageHint": "Opens the image full size",
+      "pastedImage": "Pasted image",
+      "imageCount": "{{count}} images"
     },
     "nativeChatToolLine": {
       "durationMilliseconds": "{{milliseconds}}ms",
@@ -4307,6 +4314,13 @@
       "always": "Always allow {{server}}",
       "deny": "Deny",
       "thisServer": "this server"
+    },
+    "sharedHeld": {
+      "waiting": "Waiting for {{owner}}’s computer",
+      "notSent": "Not sent",
+      "notHeld": "Couldn’t send it again",
+      "waitingShort": "Waiting",
+      "sendAgain": "Send again"
     }
   },
   "sourceControl": {
@@ -4704,9 +4718,6 @@
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
-      "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
-      "antigravityInvalidResult": "Antigravity returned an invalid result.",
-      "antigravityNoFinalResult": "Antigravity returned no final result.",
       "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
       "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
       "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
@@ -6368,7 +6379,8 @@
       "runningCount": "{{count}} running",
       "needsYouCount": "{{count}} needs you",
       "open": "Open",
-      "delete": "Delete chat"
+      "delete": "Delete chat",
+      "noMessages": "No messages yet"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -7468,7 +7480,7 @@
       "copyFailed": "Couldn’t copy the link",
       "previewChanged": "The preview changed. Review it before publishing.",
       "movedHere": "This link was updated somewhere else.",
-      "shareBot": "Share bot…",
+      "shareBot": "Send a copy…",
       "countOf": "{{picked}} of {{all}}",
       "removeSecret": "Remove the secret to publish",
       "title": "Share bot",
@@ -7480,7 +7492,6 @@
       "updatedAt": "Updated {{date}}",
       "upToDate": "Up to date",
       "changedSince": "Bot changed since",
-      "copy": "Copy",
       "copyLink": "Copy link",
       "secretFoundTitle": "Secret found",
       "secretWhere": "{{flag}} in {{where}}, line {{line}}",
@@ -7585,9 +7596,27 @@
       "linkNoLongerAvailable": "This share link is no longer available.",
       "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened.",
       "original": {
-        "sharedBy": "Shared by {{who}}",
         "viewOriginal": "View original",
-        "originalGone": "No longer available"
+        "originalGone": "No longer available",
+        "copiedFrom": "Copied from {{who}}"
+      },
+      "sharedBy": "Shared by {{name}}",
+      "requestFailed": "Couldn’t answer the request. Try again.",
+      "accept": "Accept",
+      "decline": "Decline",
+      "invite": {
+        "invitedYou": "{{owner}} invited you",
+        "view": "View invite",
+        "sharedWithYou": "{{owner}} shared it with you",
+        "runsOn": "{{owner}}’s agent. It runs on {{owner}}’s computer.",
+        "chatFrom": "You chat with it from your Orca and your phone.",
+        "ownChats": "You see only your own chats.",
+        "ownerSees": "{{owner}} can see your chats with it.",
+        "actsAs": "It can act on {{owner}}’s computer, with {{owner}}’s accounts.",
+        "pauses": "It pauses while {{owner}}’s computer is off.",
+        "messagesWait": "Messages wait until it’s back.",
+        "leave": "You can leave anytime.",
+        "uses": "Uses"
       },
       "sameLinkShort": "Copies already made stay as they are."
     },
@@ -7973,7 +8002,10 @@
       "groupReplierNotMember": "Choose a current room member in Room replies.",
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
-      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs."
     },
     "pairedServers": {
       "heading": "Paired servers",
@@ -7986,6 +8018,19 @@
       "continuesAt": "Continues at {{time}}",
       "continues": "Continues {{time}}",
       "hitLimit": "Hit limit · resets {{time}}"
+    },
+    "shared": {
+      "chatOf": "{{name}} · Shared by {{owner}}",
+      "offline": "{{owner}}’s computer is offline. Messages wait and send when it’s back.",
+      "back": "Back to bots",
+      "removedTitle": "You no longer have access to {{name}}",
+      "removedTitleUnnamed": "You no longer have access to this bot",
+      "removedBody": "{{owner}} stopped sharing it with you.",
+      "backToBots": "Back to bots",
+      "newChat": "New chat",
+      "yourChats": "Your chats",
+      "backLabel": "Bots",
+      "reconnecting": "Reconnecting to {{owner}}’s computer…"
     },
     "upcoming": {
       "needsSignIn": "Needs sign-in"
@@ -8656,7 +8701,7 @@
     "agentFilesMessage": "Orca will keep your MCP servers in their settings files. Your own entries stay as they are.",
     "allow": "Allow",
     "removeTitle": "Remove {{name}}?",
-    "removeMessage": "New sessions won’t have it. You can add it again any time.",
+    "removeMessageSavedData": "Sessions using it may lose access now. This can delete any saved headers, environment variables or sign-in for it. If so, you may need to re-enter them or sign in again to get that access back.",
     "remove": "Remove",
     "moveTitle": "Move {{name}} to Orca?",
     "moveMessage": "Orca removes it from {{agents}} settings and keeps a backup.",

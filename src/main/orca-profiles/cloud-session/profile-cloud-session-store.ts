@@ -21,6 +21,7 @@ import {
   type PersistedPlaintextSession
 } from './profile-cloud-session-codec'
 import { observeActiveTeamSession } from '../cloud-auth/active-team-capabilities'
+import type { OrcaCloudWakeToken } from './profile-cloud-session-exchange'
 
 export type OrcaCloudSession = {
   accessToken: string
@@ -30,6 +31,8 @@ export type OrcaCloudSession = {
   organizations?: OrcaCloudOrgSummary[]
   /** Whose tokens these are, so a profile linked to someone else never uses them. Absent on older files. */
   identity?: OrcaCloudSessionIdentity
+  /** The last refresh's wake token, kept so a launch can dial before the next refresh. */
+  wakeToken?: OrcaCloudWakeToken
 }
 
 export type OrcaCloudSessionIdentity = { userId: string; cloudProfileId: string }

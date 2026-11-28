@@ -8,6 +8,9 @@ import {
 
 export type TeamShareLinkSource = 'slack' | 'github' | 'linear'
 
+/** An Orca account's answer to the share: not yet, Accept, or Decline. */
+export type TeamShareAnswer = 'pending' | 'accepted' | 'declined'
+
 export type TeamSharePerson =
   | {
       kind: 'account'
@@ -16,13 +19,13 @@ export type TeamSharePerson =
       email: string
       /** Accounts this person linked to their Orca account themselves. */
       links: readonly TeamShareLinkSource[]
+      /** Their answer to the share; a person found through a connector has access as found. */
+      answer?: TeamShareAnswer
     }
   | {
       kind: 'invite'
       key: string
       email: string
-      /** False while the invite email waits on its hourly limit. */
-      emailSent: boolean
     }
   | {
       kind: 'slack'
@@ -71,7 +74,7 @@ export function teamSharePersonName(person: TeamSharePerson): string {
   }
 }
 
-/** The bot's share list as rows, keyed by shareId: Has access for an account, Invited for an email. */
+/** The bot's share list as rows, keyed by shareId: an account with its answer, an invite for an email. */
 export function teamSharePeople(shares: readonly BotShare[] | undefined): TeamSharePerson[] {
   return (shares ?? []).map((share) =>
     share.kind === 'account'
@@ -80,14 +83,15 @@ export function teamSharePeople(shares: readonly BotShare[] | undefined): TeamSh
           key: share.shareId,
           name: share.name ?? share.email,
           email: share.email,
-          links: []
+          links: [],
+          answer:
+            share.declinedAt !== undefined
+              ? 'declined'
+              : share.acceptedAt !== undefined
+                ? 'accepted'
+                : 'pending'
         }
-      : {
-          kind: 'invite',
-          key: share.shareId,
-          email: share.email,
-          emailSent: share.emailedAt !== undefined
-        }
+      : { kind: 'invite', key: share.shareId, email: share.email }
   )
 }
 

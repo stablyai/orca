@@ -6,8 +6,12 @@ import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
 import { SourceControlChangeScopeBar } from './change-scope-bar'
 import { GitGraphOpenButton, useGitGraphSupport } from '../sync/git-graph-open-button'
+import type { SourceControlRowOpenEvent } from '../listing/split-open'
 import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { cn } from '@/lib/class-names'
+import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
+import { useSourceControlScope } from './worktree-scope'
 
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { currentWorktreeId, model, worktreePath } = props
@@ -61,6 +65,58 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   } = model
   // One probe per panel: the header Graph button and the scope menu's Graph item share it.
   const graphSupport = useGitGraphSupport(currentWorktreeId, isGitHistoryVisible)
+  // A folder card's header owns filter, Graph and overflow; the selected panel's file-list header does.
+  const scope = useSourceControlScope()
+  const embedded = scope !== null
+  // A folder card's Graph opens in the folder workspace that shows the card.
+  const placementWorkspaceId = scope?.placementWorkspaceId
+  const panelActions = {
+    sourceControlViewMode,
+    viewModeToggleDisabled: settings === null,
+    onToggleViewMode: handleToggleSourceControlViewMode,
+    onChangeBaseRef: () => setBaseRefDialogOpen(true),
+    onRefreshBranchCompare: () => void refreshBranchCompare(),
+    branchCompareRefreshDisabled: !branchSummary || branchSummary.status === 'loading',
+    diffCommentCount,
+    onExpandNotes: () => setDiffCommentsExpanded(true)
+  }
+  const filter = {
+    filterQuery,
+    filterExpanded,
+    onFilterQueryChange: setFilterQuery,
+    onFilterExpandedChange: setFilterExpanded
+  }
+  const openGraph = (event: SourceControlRowOpenEvent): void => {
+    void openGitGraph(
+      currentWorktreeId,
+      () => resolveSplitTargetGroupId(event),
+      placementWorkspaceId
+    )
+  }
+
+  // Sits under the commit composer, so it renders inside the scrolling content.
+  const fileListHeader = isGitHistoryVisible ? (
+    <SourceControlChangeScopeBar
+      {...props}
+      graphSupported={graphSupport.support === true}
+      filter={embedded ? null : filter}
+      graphControl={
+        embedded ? null : (
+          <GitGraphOpenButton
+            worktreeId={currentWorktreeId}
+            support={graphSupport}
+            onOpen={openGraph}
+            iconOnly
+          />
+        )
+      }
+      overflowMenu={
+        embedded ? null : (
+          <SourceControlHeaderOverflowMenu panelActions={panelActions} triggerClassName="size-5" />
+        )
+      }
+    />
+  ) : null
 
   return (
     <>
@@ -79,10 +135,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
               <SourceControlBranchPicker model={model} />
             ) : undefined
           }
-          filterQuery={filterQuery}
-          filterExpanded={filterExpanded}
-          onFilterQueryChange={setFilterQuery}
-          onFilterExpandedChange={setFilterExpanded}
+          {...filter}
           visibleCreatePrHeaderAction={visibleCreatePrHeaderAction}
           hostedReview={hostedReview}
           isCreatePrIntentInFlight={isCreatePrIntentInFlight}
@@ -93,14 +146,8 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
             suppressedGitHubPRState?.status === 'matched' ? suppressedGitHubPRState.number : null
           }
           onRelinkSuppressedGitHubPR={handleRelinkSuppressedGitHubPR}
-          sourceControlViewMode={sourceControlViewMode}
-          viewModeToggleDisabled={settings === null}
-          onToggleViewMode={handleToggleSourceControlViewMode}
-          onChangeBaseRef={() => setBaseRefDialogOpen(true)}
-          onRefreshBranchCompare={() => void refreshBranchCompare()}
-          branchCompareRefreshDisabled={!branchSummary || branchSummary.status === 'loading'}
-          diffCommentCount={diffCommentCount}
-          onExpandNotes={() => setDiffCommentsExpanded(true)}
+          panelActions={panelActions}
+          onRefreshBranchCompare={panelActions.onRefreshBranchCompare}
           branchSummary={branchSummary}
           branchLineTotal={branchLineTotal}
           compareBaseRef={compareBaseRef}
@@ -111,13 +158,10 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
               ? null
               : {
                   state: model.baseRebaseState,
-                  isRebasing:
-                    model.isRemoteOperationActive && model.inFlightRemoteOpKind === 'rebase',
                   isAbortingRebase: model.isAbortingOperation,
                   isContinuingRebase: model.isContinuingRebase,
                   isRetryingRebaseInspect: model.isRetryingRebaseInspect,
                   hasGitOwner: !!model.activeRepoTarget,
-                  onRebase: () => model.handleActionInvoke('rebase_base'),
                   onAbortRebase: () => void model.handleAbortRebase(),
                   onContinueRebase: () => void model.handleContinueRebase(),
                   onRetryRebaseInspect: model.handleRetryRebaseInspect
@@ -128,17 +172,12 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
               <GitGraphOpenButton
                 worktreeId={currentWorktreeId}
                 support={graphSupport}
-                onOpen={(event) => {
-                  void openGitGraph(currentWorktreeId, () => resolveSplitTargetGroupId(event))
-                }}
+                onOpen={openGraph}
               />
             ) : null
           }
+          toolsInFileListHeader={isGitHistoryVisible}
         />
-
-        {isGitHistoryVisible ? (
-          <SourceControlChangeScopeBar {...props} graphSupported={graphSupport.support === true} />
-        ) : null}
 
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <SourceControlNotesShelf
@@ -158,10 +197,16 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
 
         <div
           ref={setFileListScrollElement}
-          className="relative flex flex-1 flex-col overflow-auto scrollbar-sleek pt-1"
+          className={cn(
+            // Focused controls after the sticky file-list header scroll clear of it. Sections stay
+            // direct children: the virtualized lists re-measure their offset from scroller children.
+            'relative flex flex-1 flex-col overflow-auto scrollbar-sleek pt-1 [&>[data-file-list-header]~*_*]:scroll-mt-[38px]',
+            // Scroll anchoring would re-anchor to a vanished result row and move the stuck filter input.
+            !embedded && (filterExpanded || filterQuery.trim()) && '[overflow-anchor:none]'
+          )}
           style={{ paddingBottom: selectedKeys.size > 0 ? 50 : undefined }}
         >
-          <SourceControlPanelContent {...props} />
+          <SourceControlPanelContent {...props} fileListHeader={fileListHeader} />
         </div>
 
         {selectedKeys.size > 0 && (

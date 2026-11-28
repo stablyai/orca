@@ -6,6 +6,7 @@ import {
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
 import { defineMethod } from '../../../core'
+import { SHARE_BY_SESSION } from '../../../../../../shared/bots/bot-share-rpc-methods'
 import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 import { isFloatingWorkspaceSelector } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-listing-waiters'
@@ -62,7 +63,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
     name: 'agentSession.options',
     permission: 'workspace',
-    share: 'not-shared',
+    share: SHARE_BY_SESSION,
     params: OptionsParams,
     handler: async (params, ctx) => {
       const readsWithoutModel = clientReadsOptionsWithoutModel(ctx)
@@ -86,7 +87,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
     name: 'agentSession.modelCatalog',
     permission: 'workspace',
-    share: 'not-shared',
+    share: SHARE_BY_SESSION,
     params: ModelCatalogParams,
     // Session reads may build the host; session-less terminal reads must not open unused structured journals.
     handler: async ({ worktree, ...params }, ctx) => {

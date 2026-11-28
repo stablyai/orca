@@ -38,22 +38,50 @@ export const B = 'chat-b-0002',
   C = 'chat-c-0003',
   G = 'chat-gone-0004'
 export let root: string
+// A restore's launch continuation runs on its own and reads the recovery capsule under a lock file in `root`.
+const launchContinuations = new Set<Promise<unknown>>()
+async function launchContinuationsSettled(): Promise<void> {
+  const pending = [...launchContinuations]
+  launchContinuations.clear()
+  await Promise.all(pending)
+}
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-tab-authority-'))
   testState.dir = root
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
+// Every runtime a test opened, a reloaded one's predecessor too: each holds `root`'s orchestration
+// database open until its process would exit.
+const runtimes = new Set<AuthorityRuntime>()
+
 afterEach(async () => {
   await chatTabCommandsSettled()
+  await launchContinuationsSettled()
   await stopStructuredAgentSessionRuntime()
   await closeTestStores()
   await closeTestJournalHostDatabases()
+  // A connection left open writes its WAL while `root` is removed (ENOTEMPTY on CI).
+  for (const runtime of runtimes) {
+    runtime.closeOrchestrationDb()
+  }
+  runtimes.clear()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
 
 export class AuthorityRuntime extends OrcaRuntimeService {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeService>) {
+    super(...args)
+    runtimes.add(this)
+  }
+
+  /** As its process exiting would: the orchestration database's connection, and its threads. */
+  closeOrchestrationDb(): void {
+    this._orchestrationDb?.close()
+    this._orchestrationDb = null
+  }
+
   protected override structuredAgentCatalogDependencies() {
     const missing = () => ({ command: join(root, 'agent-not-installed'), prefixArgs: [] })
     return {
@@ -61,6 +89,14 @@ export class AuthorityRuntime extends OrcaRuntimeService {
       resolveClaudeCommand: missing,
       resolveCodexCommand: missing
     }
+  }
+
+  protected override continueAfterStartupRestoration(restoration: Promise<void>) {
+    const continuing = super.continueAfterStartupRestoration(restoration)
+    launchContinuations.add(
+      continuing.catch(() => {}).then(() => this.structuredAgentSessionLaunchContinuation.done)
+    )
+    return continuing
   }
 
   protected override async refreshMobileSessionPtyRecords() {
@@ -148,6 +184,7 @@ export async function openAuthorityRuntime(
     stateDirectory: root,
     hostId: 'local',
     legacySessionTabIds: runtime.capturedSelection(),
+    teammateHomeBots: () => [],
     logger: createStructuredAgentSessionLogger()
   })
   // Exercise the production admission route before the real host installer reuses its slot.
@@ -237,6 +274,7 @@ export async function createC(
     ...(first ? { firstMessage: first } : {}),
     publishTab: () =>
       rig.runtime.publishStructuredAgentSessionTab({
+        person: 'owner',
         workspaceId: rig.workspace,
         sessionId: C,
         agent: 'codex',
@@ -245,15 +283,19 @@ export async function createC(
       })
   })
 }
-export async function physicalReload(rig: AuthorityRig) {
+/** `restore: false` leaves the restore to the first call that needs it, as a host's cold start does. */
+export async function physicalReload(rig: AuthorityRig, options: { restore?: false } = {}) {
   await chatTabCommandsSettled()
+  await launchContinuationsSettled()
   await stopStructuredAgentSessionRuntime()
   rig.profile.flushOrThrow()
   await closeTestStores()
   await closeTestJournalHostDatabases()
   const profile = createStore()
   const fresh = await openAuthorityRuntime({ ...rig, profile }, new AuthorityRuntime(profile))
-  await fresh.runtime.restoreStructuredAgentSessionTabs()
+  if (options.restore !== false) {
+    await fresh.runtime.restoreStructuredAgentSessionTabs()
+  }
   await chatTabCommandsSettled()
   return fresh
 }

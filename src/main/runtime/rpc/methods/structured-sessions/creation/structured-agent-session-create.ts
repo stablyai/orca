@@ -1,4 +1,5 @@
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
+import type { TabPerson } from '../../../../../bots/team-share/teammate-rules'
 import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { seededPermissionMode } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
@@ -177,6 +178,9 @@ export async function commitStructuredAgentSessionCreate(args: {
   placedByWindow?: boolean
   /** Where the creating client opens the chat, in this host's ids. */
   tabPlacement?: ChatTabPlacement
+  /** Whom the chat's tab is for: a client's create the caller's (`callerTabPerson`), a system
+   *  create the new chat's stamp (`chatTabPerson`). */
+  personOf: (sessionId: string) => TabPerson
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
   const tab = prepared.tab
@@ -207,6 +211,7 @@ export async function commitStructuredAgentSessionCreate(args: {
                 return Promise.resolve()
               }
               return args.runtime.publishStructuredAgentSessionTab({
+                person: args.personOf(sessionId),
                 workspaceId: tab.workspaceId,
                 sessionId,
                 agent: tab.agent,
@@ -242,6 +247,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   }
   try {
     await args.runtime.publishStructuredAgentSessionTab({
+      person: args.personOf(result.value.sessionId),
       workspaceId: prepared.tab.workspaceId,
       sessionId: result.value.sessionId,
       agent: prepared.tab.agent,
@@ -308,6 +314,8 @@ export async function createStructuredAgentSessionForWorktree(args: {
     runtime: args.runtime,
     caller: args.caller,
     prepared: args.publishTab === false ? { ...prepared, tab: null } : prepared,
-    activate: args.activate
+    activate: args.activate,
+    // A bot's, a worker's or an automation's chat: its tab is for whom it was created.
+    personOf: (sessionId) => args.runtime.chatTabPerson(sessionId)
   })
 }

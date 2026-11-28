@@ -13,6 +13,13 @@ import { readAgentSessionRecordStore } from '../../orchestration/addressing/sess
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { InvalidArgumentError, type RpcContext } from '../core'
 import { isBotOwnChat } from '../../../bots/bot-own-chat'
+import {
+  botItemAccessOfCaller,
+  botItemPeopleOfChat,
+  type BotItemAccess
+} from '../../../bots/bot-item-access'
+import { botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
+import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 
 export type BotItemWriter = {
   bot: Bot
@@ -20,12 +27,38 @@ export type BotItemWriter = {
   /** The calling session itself (a /clear moves it on; the chat id is its lineage's root). */
   sessionId: string
   source: BotItemSource
+  /** Whom an item this chat adds acts for: its teammates' accounts, or null for the owner. */
+  actsForAccounts: readonly string[] | null
 }
 
 type CallerRuntime = Pick<
   OrcaRuntimeService,
-  'bots' | 'lookAround' | 'botItems' | 'getOrchestrationDb'
+  | 'bots'
+  | 'lookAround'
+  | 'botItems'
+  | 'getOrchestrationDb'
+  | 'listAutomationRuns'
+  | 'showAutomation'
 >
+
+/** The items a call may reach, by the caller the host verified (a chat's or worker's session, a
+ *  paired Orca), else the terminal its call names; never a claimed session id. */
+export function itemsAccess(
+  context: Pick<RpcContext, 'runtime' | 'orchestrationCaller'> &
+    Partial<Pick<RpcContext, 'callerScope' | 'orchestrationCompatibilityEvidence'>>
+): BotItemAccess {
+  const session = sessionCallerOf(context.orchestrationCaller)
+  const terminal = context.orchestrationCompatibilityEvidence
+  return botItemAccessOfCaller(context.runtime, {
+    share: botShareScopeOf(context),
+    peer: context.orchestrationCaller?.kind === 'peer',
+    identity: session
+      ? { handle: session.address, paneKey: session.paneKey, sessionId: session.sessionId }
+      : terminal?.terminalHandle || terminal?.paneKey
+        ? { handle: terminal.terminalHandle ?? '', paneKey: terminal.paneKey ?? null }
+        : null
+  })
+}
 
 const ONLY_BOT_CHATS =
   "Only a bot writes items, from one of its own chats. Run this from the bot's chat; your owner changes items in Orca."
@@ -93,6 +126,7 @@ export function itemsWriter(
     bot,
     actor: { kind: 'bot', botId: bot.id, chatId },
     sessionId,
+    actsForAccounts: botItemPeopleOfChat(runtime, chatId),
     // Read only by writes that make an item or ask on one: it lists the bot's thread chats and runs.
     get source() {
       return runtime.botItems.chatSource(bot, chatId, root, record?.conversationName ?? null)

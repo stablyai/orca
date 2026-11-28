@@ -17,12 +17,8 @@ import {
   getIndexedWorktreeMap
 } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
-import {
-  readBotHostIds,
-  readBotHostState,
-  readBots,
-  subscribeToBotChanges
-} from '@/lib/bot-catalog-snapshot'
+import { readBotHostIds, readBots, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
+import { isBotHostDown } from '@/lib/bot-host-views'
 import { readBotGroups, subscribeToBotGroupChanges } from '@/lib/bot-group-catalog-snapshot'
 import { withKeptBotHomes } from '@/lib/bot-host-kept-homes'
 import { getHostKeyedBotSidebarEntries } from '@/components/bots/bot-sidebar-entry-keys'
@@ -132,7 +128,7 @@ function ownerInputs(
     entryKey: entry.entryKey,
     home: entry.home,
     hidden: hidePausedBots && entry.paused,
-    hostDown: readBotHostState(entry.hostId) === 'offline'
+    hostDown: isBotHostDown(entry.hostId)
   }))
   return {
     botsEnabled,

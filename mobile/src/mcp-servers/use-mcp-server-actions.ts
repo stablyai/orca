@@ -227,9 +227,11 @@ export function useMcpServerActions(args: {
     (server: PhoneMcpServer, onRemoved: () => void) =>
       setConfirm({
         title: t('mcpServers.removeTitle', 'Remove {{name}}?', { name: mcpServerTitle(server) }),
+        // One line for every server: what goes depends on host state the phone can't see for sure
+        // (a credential another entry shares, one this host can't open, a read still pending).
         message: t(
-          'mcpServers.removeMessage',
-          'New sessions won’t have it. You can add it again any time.'
+          'mcpServers.removeMessageSavedData',
+          'Sessions using it may lose access now. This can delete any saved headers, environment variables or sign-in for it. If so, you may need to re-enter them or sign in again to get that access back.'
         ),
         confirmLabel: t('mcpServers.remove', 'Remove'),
         destructive: true,
@@ -270,7 +272,13 @@ export function useMcpServerActions(args: {
         onConfirm: () =>
           void run(async (live) => {
             applyServer(
-              mcpServerMove.interpret(await mcpServerMove.request(live, { key: entry.key })).server
+              mcpServerMove.interpret(
+                await mcpServerMove.request(live, {
+                  key: entry.key,
+                  // The agents this confirm named: the host takes it out of no other.
+                  ...(entry.removesFrom ? { agents: entry.removesFrom } : {})
+                })
+              ).server
             )
           })
       }),

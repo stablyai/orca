@@ -10,7 +10,6 @@ const HOST: SharedBotHostView = {
   botId: 'ivy',
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
-  homeWorkspaceId: null,
   link: 'offline',
   holds: true,
   held: [

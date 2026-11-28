@@ -32,7 +32,6 @@ export type RightSidebarState = {
   setRightSidebarOpen: (open: boolean) => void
   setRightSidebarWidth: (width: number) => void
   setRightSidebarTab: (tab: ActiveRightSidebarTab, options?: { focusVaultSearch?: boolean }) => void
-  setRightSidebarExplorerView: (view: RightSidebarExplorerView) => void
   showRightSidebarFiles: () => void
   showRightSidebarSearch: (payload?: {
     query?: string | null
@@ -73,19 +72,6 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
         rightSidebarRouteFocusesVaultSearch: tab === 'vault' && options?.focusVaultSearch === true,
         ...(tab === 'explorer' ? { rightSidebarExplorerView: 'files' as const } : {})
       })),
-    setRightSidebarExplorerView: (view) =>
-      set((s) => ({
-        rightSidebarExplorerView: view,
-        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
-        ...(s.activeWorktreeId
-          ? {
-              rightSidebarExplorerViewByWorktree: {
-                ...s.rightSidebarExplorerViewByWorktree,
-                [s.activeWorktreeId]: view
-              }
-            }
-          : {})
-      })),
     showRightSidebarFiles: () =>
       set((s) => ({
         rightSidebarOpen: true,
@@ -106,13 +92,13 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
         const next = {
           rightSidebarOpen: true,
           rightSidebarTab: 'explorer' as const,
-          rightSidebarExplorerView: 'search' as const,
+          rightSidebarExplorerView: 'files' as const,
           rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
           ...(s.activeWorktreeId
             ? {
                 rightSidebarExplorerViewByWorktree: {
                   ...s.rightSidebarExplorerViewByWorktree,
-                  [s.activeWorktreeId]: 'search' as const
+                  [s.activeWorktreeId]: 'files' as const
                 }
               }
             : {})
@@ -136,7 +122,14 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
                 resultOwner: null,
                 loading: false,
                 collapsedFiles: new Set<string>(),
-                seedRequestId: (current.seedRequestId ?? 0) + 1
+                seedRequestId: (current.seedRequestId ?? 0) + 1,
+                // A filters-only seed must not demote a still-pending query seed.
+                seedKind:
+                  query || (current.seedRequestId !== undefined && current.seedKind === 'query')
+                    ? ('query' as const)
+                    : ('filters' as const),
+                // Why: results cover the tree from this commit, so the hidden tree never loads first.
+                active: true
               }
             : {}),
           ...(shouldFocus ? { focusRequestId: (current.focusRequestId ?? 0) + 1 } : {})

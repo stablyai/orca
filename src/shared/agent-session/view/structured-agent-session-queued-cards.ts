@@ -1,6 +1,6 @@
 // Derive hold labels on the client; the wire carries queue state, not presentation wording.
 
-import { otherPersonTypistOf, type OtherPersonTypist } from '../journal/agent-journal-typed-by'
+import { personTypistOf, type PersonTypist } from '../journal/agent-journal-typed-by'
 import { agentMessageDisplayText } from './messages/agent-message-display-text'
 import { readAutomationRunMessage } from '../../automations/automation-run-message'
 import { queuedMessageEditableText } from '../../native-chat/input/queued-messages/queued-message-edit'
@@ -69,8 +69,8 @@ export type QueuedMessageCard = {
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
   returnedRejection?: UnreadAgentSessionFailureFact
   from?: AgentMessageSource
-  /** Typed by someone other than the host's owner, on their paired computer. */
-  typedByOther?: OtherPersonTypist
+  /** Who typed it on a paired computer; drawn only when not the viewer (`typistOtherThanViewer`). */
+  typist?: PersonTypist
 }
 
 export function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string {
@@ -138,7 +138,7 @@ export function projectQueuedMessageCards(
             ? 'queue-paused'
             : 'turn'
     const from = readAgentMessageSource(message.body.from)
-    const typedByOther = from ? undefined : otherPersonTypistOf(message.body.typedBy)
+    const typist = from ? undefined : personTypistOf(message.body.typedBy)
     // A queued automation run reads as its automation, never as the owner's prompt.
     const run =
       message.body.origin === 'automation-run'
@@ -174,7 +174,7 @@ export function projectQueuedMessageCards(
         ? { returnedRejection: message.returnedRejection }
         : {}),
       ...(from ? { from } : {}),
-      ...(typedByOther ? { typedByOther } : {})
+      ...(typist ? { typist } : {})
     }
   })
   return cards.filter((card) => card.state === 'returned' || !handedOff.has(card.messageId))

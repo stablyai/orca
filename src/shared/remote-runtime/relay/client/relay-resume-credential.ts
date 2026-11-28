@@ -11,7 +11,7 @@ import {
 import type { RelayRpcClient } from './relay-rpc-client'
 
 // Any client that can send a host request: the phone's RpcClient or a relay RPC client.
-type RelayRequestPort = Pick<RelayRpcClient, 'sendRequest'>
+export type RelayRequestPort = Pick<RelayRpcClient, 'sendRequest'>
 
 /** A minted resume credential the caller may persist before installing, so a lost reply retries the same reqId. */
 export type PendingRelayResumeCredential = { token: string; hash: string; reqId: string }

@@ -37,12 +37,17 @@ export type BotChatTreeWorker = {
   run?: { automationId: string; runId: string }
 }
 
+/** A teammate the bot is shared with, by Orca account, as their share names them (name, else email). */
+export type BotChatPerson = { accountId: string; name: string }
+
 export type BotChatTreeChat = {
   chatId: string
   title: string
   origin: BotChatOrigin
   /** The thread's place or the automation's name, e.g. '#orca'. */
   originLabel?: string
+  /** Another person's Home Chat, by their name; the row draws a house. Absent from older hosts. */
+  homeOf?: string
   live: 'replying' | 'needs-you' | 'idle'
   /** The session running the chat now, when a /clear moved it past `chatId`: its status is keyed
    *  by this id. Absent from older hosts. */
@@ -54,7 +59,9 @@ export type BotChatTreeChat = {
   turnDone?: { paneKey: string; at: number }
   closed: boolean
   closedAt?: number
-  /** Its tab is open on the bot's host; absent from an older host. */
+  /** Its tab is open where it is viewed: the host's own tabs for the owner; a teammate's client fills
+   *  it from its own tabs (`withViewerChatTabs`), since the host never sends its tabs to them. Absent
+   *  from an older host. */
   tab?: boolean
   /** A thread the bot started on its own that the owner has not opened yet. */
   unseen?: boolean
@@ -62,6 +69,8 @@ export type BotChatTreeChat = {
   run?: { automationId: string; runId: string; worktreeId?: string; paneKey?: string }
   /** Line 2: the last thing said. */
   preview?: string
+  /** The teammate it acts for, on the owner's list; absent for the owner's own and unrecorded chats. */
+  person?: BotChatPerson
   /** Needs-you first, then newest; up to the page the host was asked for. */
   running: BotChatTreeWorker[]
   runningTotal: number

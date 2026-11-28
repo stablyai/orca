@@ -1,21 +1,21 @@
 import type { AgentJournalRenderItem } from './agent-session/journal/agent-session-journal-types'
 import { readAgentMessageSource } from './agent-session/journal/agent-session-message-source'
-import { otherPersonTypistOf } from './agent-session/journal/agent-journal-typed-by'
+import { personTypistOf } from './agent-session/journal/agent-journal-typed-by'
 import { readConnectorMessageAsker } from './connector-message-asker'
 import { readTookOverNotice } from './native-chat/took-over-notice'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
 import { readAutomationRunMessage } from './automations/automation-run-message'
 
-/** Who sent a user-role message other than the person typing it here: another agent (`from`),
- *  someone Orca delivered for through a connector (`asker`), a bot automation's run
- *  (`automationRun`), or another person on their paired computer (`typedByOther`). Each is read
- *  from a host of any version, and only beside its origin. */
+/** Who sent a user-role message: another agent (`from`), someone Orca delivered for through a
+ *  connector (`asker`), a bot automation's run (`automationRun`), or a person on a paired computer
+ *  (`typist`, drawn only when not the viewer). Each is read from a host of any version, and only
+ *  beside its origin. */
 export function nativeChatMessageSenderFields(
   body: AgentJournalRenderItem['body'],
   role: NativeChatMessage['role']
 ): Pick<
   NativeChatMessage,
-  'from' | 'asker' | 'typedByOther' | 'orcaNotice' | 'tookOver' | 'automationRun'
+  'from' | 'asker' | 'typist' | 'orcaNotice' | 'tookOver' | 'automationRun'
 > {
   if (body.kind !== 'message' || role !== 'user') {
     return {}
@@ -35,10 +35,10 @@ export function nativeChatMessageSenderFields(
   }
   const from = readAgentMessageSource(body.from)
   const asker = body.origin === 'connector' ? readConnectorMessageAsker(body.asker) : undefined
-  const typedByOther = from || asker ? undefined : otherPersonTypistOf(body.typedBy)
+  const typist = from || asker ? undefined : personTypistOf(body.typedBy)
   return {
     ...(from ? { from } : {}),
     ...(asker ? { asker } : {}),
-    ...(typedByOther ? { typedByOther } : {})
+    ...(typist ? { typist } : {})
   }
 }

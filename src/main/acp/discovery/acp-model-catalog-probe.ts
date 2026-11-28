@@ -81,7 +81,7 @@ export function createAcpModelCatalogProbe(
     }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
-    const { command, prefixArgs, env, envToDelete, version, antigravityChatAuth } =
+    const { command, prefixArgs, env, envToDelete, antigravityChatAuth } =
       await resolveAcpLaunchInvocation(spec, accountHome, {
         ...deps,
         ...(lookup !== 'recover'
@@ -146,7 +146,7 @@ export function createAcpModelCatalogProbe(
               : { env, envToDelete })
           }
           // Chats send this identity, and some servers list models only to clients they allowlist.
-          const connectionOptions = { clientInfo: acpClientInfo(spec, version ?? release.version) }
+          const connectionOptions = { clientInfo: acpClientInfo(spec) }
           const run = { label: spec.agent, signal: gate.signal, timeoutMs: null }
           // OMP records every model switch as account usage; starting on the picked model records none.
           const launchedModel =

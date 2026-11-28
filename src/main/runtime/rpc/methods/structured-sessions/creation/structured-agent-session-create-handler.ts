@@ -1,4 +1,6 @@
 import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
+import { callerTabPerson } from '../../../../../bots/team-share/teammate-rules'
+import { stampTeammateHomeChat } from '../../../../../bots/team-share/bot-share-chats'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
 import type { z } from 'zod'
 import { agentSessionRefusalError } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -136,12 +138,16 @@ async function resolveAndCommitStructuredAgentSessionCreate(
     ) {
       return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
     }
+    if ('worktree' in params) {
+      await stampTeammateHomeChat(ctx, params.worktree, params.envelope.sessionId)
+    }
     return projectReceiptDeviceAttach(
       await commitStructuredAgentSessionCreate({
         runtime: ctx.runtime,
         caller: callerFor(ctx),
         prepared,
         activate: true,
+        personOf: () => callerTabPerson(ctx.callerScope),
         placedByWindow: ctx.caller?.kind === 'desktop',
         ...(capture ? { capture } : {}),
         ...('tabPlacement' in params && params.tabPlacement

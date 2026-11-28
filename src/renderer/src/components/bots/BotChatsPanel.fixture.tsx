@@ -327,3 +327,89 @@ function usageLimitFixture(auto: boolean) {
 
 export const usageLimitWaiting = usageLimitFixture(false)
 export const usageLimitContinues = usageLimitFixture(true)
+
+// Shared with two teammates: their chats name them, and the search field ends in a person filter.
+const ALICE = { accountId: 'acc-alice', name: 'Alice Park' }
+const sharedBot = {
+  ...bot,
+  shares: [
+    {
+      kind: 'account' as const,
+      shareId: 's-alice',
+      accountId: ALICE.accountId,
+      name: ALICE.name,
+      email: 'alice@example.com',
+      addedAt: 1
+    },
+    {
+      kind: 'account' as const,
+      shareId: 's-bo',
+      accountId: 'acc-bo',
+      email: 'bo@example.com',
+      addedAt: 1
+    }
+  ]
+}
+const SHARED_CHATS = [
+  {
+    ...home,
+    preview: 'The plugin cleanup fix is ready to merge and needs your OK.',
+    running: home.running.slice(1, 3),
+    runningTotal: 2
+  },
+  draft,
+  chat('claude', 'Claude Chat', {
+    lastActiveAt: now - min,
+    person: { accountId: 'acc-bo', name: 'bo@example.com' }
+  }),
+  chat('installer', 'Why the Windows installer still asks for admin', {
+    lastActiveAt: now - 20 * min,
+    person: ALICE,
+    preview: 'Fixed in 1.4.231: a per-user install no longer asks for admin rights.'
+  }),
+  chat('crashes', 'Check the crash reports for 1.4.231', {
+    origin: 'slack',
+    originLabel: '#releases',
+    lastActiveAt: now - 50 * min,
+    person: ALICE,
+    preview: 'Three new crashes since Tuesday, all in the updater on Windows 10.'
+  }),
+  chat('notes', 'Plan the 1.4.232 cut', {
+    lastActiveAt: now - 3 * 60 * min,
+    preview: 'Three fixes are queued; the updater one goes first.'
+  }),
+  digest
+]
+const openPersonFilter = async (frame: HTMLElement): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  frame
+    .querySelector('button[aria-label^="Filter by person"]')
+    ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  await new Promise((resolve) => setTimeout(resolve, 200))
+}
+
+export const sharedFilterOpen = defineFixture({
+  width: 420,
+  store: chatsTab('working'),
+  setup: stubBotPanel(ACTIVITY, sharedBot, SHARED_CHATS),
+  render: () => <BotPanelFrame />,
+  interact: openPersonFilter
+})
+
+export const sharedPersonPicked = defineFixture({
+  width: 420,
+  store: chatsTab('working'),
+  setup: stubBotPanel(ACTIVITY, sharedBot, SHARED_CHATS),
+  render: () => <BotPanelFrame />,
+  interact: async (frame) => {
+    await openPersonFilter(frame)
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (entry) => entry.textContent?.trim() === ALICE.name
+    )
+    item?.click()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+  }
+})

@@ -44,7 +44,8 @@ function buildPidRelayScript(
     `$Arguments = @(${encodedArgs})`,
     `[IO.File]::WriteAllText((Read-OrcaValue '${encodeUtf8(pidFilePath)}'), [string]$PID)`,
     '& $Command @Arguments',
-    '$OrcaExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }',
+    // A command that never starts (CommandNotFound) sets no $LASTEXITCODE; only $? reports it.
+    '$OrcaExitCode = if ($?) { 0 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 1 }',
     `[IO.File]::WriteAllText((Read-OrcaValue '${encodeUtf8(exitCodeFilePath)}'), [string]$OrcaExitCode)`,
     'exit $OrcaExitCode'
   ].join('; ')

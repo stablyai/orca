@@ -28,6 +28,12 @@ export function getActiveTeamCapabilities(): OrcaCloudCapabilities | undefined {
   return getGoverningTeamCapabilities(getActiveCloudSession()?.capabilities)
 }
 
+/** A flag of the signed-in account's own session (not only a governing team's). */
+export function isActiveCloudFlagOn(flag: string): boolean {
+  const flags = getActiveCloudSession()?.capabilities?.flags
+  return flags !== undefined && flags !== null && Object.hasOwn(flags, flag) && flags[flag] === true
+}
+
 export function getActivePolicyRefreshState(): 'governed' | 'member' | 'personal' | undefined {
   const session = getActiveCloudSession()
   if (!session) {

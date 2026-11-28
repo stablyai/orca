@@ -24,6 +24,7 @@ import {
 } from '../security/web-runtime-credential-source'
 import { migrateWebRuntimeToDeviceKey } from '../security/web-runtime-device-key-migration'
 import { WebTokenFraming } from '../security/web-token-framing'
+import { pairedRuntimeConnectionToken } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 const UNSUPPORTED_HELLO_CLOSE_CODE = 4001
 
@@ -57,7 +58,7 @@ export class WebRuntimeConnectionAuth {
   ) {
     // Why: an invalid host key fails construction, not the first connect.
     WEB_PAIRED_E2EE_PRIMITIVES.publicKeyFromBase64(connection.hostPublicKeyB64)
-    const deviceToken = connection.credential.deviceToken
+    const deviceToken = pairedRuntimeConnectionToken(connection)
     this.retryLater = options.retryLater
     // Absent: the pairing token over legacy framing, as before device keys.
     this.credential = options.credential ?? tokenOnlyCredentialSource(deviceToken)

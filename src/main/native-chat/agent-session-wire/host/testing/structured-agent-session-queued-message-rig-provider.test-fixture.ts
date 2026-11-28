@@ -1,3 +1,4 @@
+import type { TestAgentSessionRecordStoreOptions } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
@@ -19,7 +20,8 @@ import {
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data.test-fixture'
 
-export type QueuedRigProviderOptions = {
+// With how the rig opens its record store, such as the bots teammates' Homes are titled by.
+export type QueuedRigProviderOptions = TestAgentSessionRecordStoreOptions & {
   acquiredAccountHome?: () => AgentSessionAccountHome
   agent?: 'claude'
   rewind?: NonNullable<StructuredAgentSessionAdapter['rewind']>

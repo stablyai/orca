@@ -1,29 +1,34 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpAgentError } from '../transport/acp-errors'
 import type { AcpCompactionReply, AcpDialect, AcpModelCommandReply } from './acp-dialect'
 
 // Read raw result text instead of the repeated command echo in content.
 // Only timed foreground completion implies exit zero; service/background launches prove no exit.
-const textBlockSchema = z.looseObject({ type: z.literal('text'), text: z.string() })
-const promptErrorDataSchema = z.looseObject({ details: z.string() })
+const textBlockSchema = lazyZodSchema(() =>
+  z.looseObject({ type: z.literal('text'), text: z.string() })
+)
+const promptErrorDataSchema = lazyZodSchema(() => z.looseObject({ details: z.string() }))
 // "No model selected" is not one: a launch selector OMP never resolved says it too (modelNotSelected).
 const SIGNED_OUT_DETAIL_PREFIXES = ['No API key found for ']
 const CANCEL_CLEANUP_TIMED_OUT = 'ACP cancel cleanup timed out'
-const toolResultSchema = z.looseObject({
-  content: z.array(z.unknown()),
-  details: z
-    .looseObject({
-      exitCode: z.number().int().safe().optional(),
-      wallTimeMs: z.number().nonnegative().optional(),
-      timedOut: z.unknown().optional(),
-      signal: z.unknown().optional(),
-      async: z.unknown().optional(),
-      service: z.unknown().optional()
-    })
-    .optional()
-})
-const asyncInputSchema = z.looseObject({ async: z.literal(true) })
+const toolResultSchema = lazyZodSchema(() =>
+  z.looseObject({
+    content: z.array(z.unknown()),
+    details: z
+      .looseObject({
+        exitCode: z.number().int().safe().optional(),
+        wallTimeMs: z.number().nonnegative().optional(),
+        timedOut: z.unknown().optional(),
+        signal: z.unknown().optional(),
+        async: z.unknown().optional(),
+        service: z.unknown().optional()
+      })
+      .optional()
+  })
+)
+const asyncInputSchema = lazyZodSchema(() => z.looseObject({ async: z.literal(true) }))
 
 function contentText(block: ToolCallContent | undefined): string | undefined {
   return block?.type === 'content' && block.content.type === 'text' ? block.content.text : undefined

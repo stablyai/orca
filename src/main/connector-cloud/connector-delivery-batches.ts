@@ -22,6 +22,7 @@ const THREADLESS_KINDS = [
   'pr_event',
   'share_resolved',
   'share_accept',
+  'share_declined',
   'share_send'
 ] as const
 const THREADLESS: ReadonlySet<string> = new Set(THREADLESS_KINDS)

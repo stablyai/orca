@@ -166,7 +166,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcDeviceDispatch {
         parentDeviceId: shareDevice.parentDeviceId,
         scope: shareDevice.scope,
         principal: botSharePrincipalOf(shareDevice),
-        callerScope: botShareCallerScopeOf(shareDevice)
+        callerScope: botShareCallerScopeOf(shareDevice, authenticatedSocket.clientCapabilities)
       })
       return
     }

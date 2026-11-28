@@ -425,7 +425,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "Ekli görsel",
-      "image": "görsel",
       "openImageHint": "Görseli tam boyutta açar"
     },
     "nativeChatToolLine": {
@@ -4617,9 +4616,6 @@
       "agentCouldNotStart": "{{label}} başlatılamadı. Ayarlar bölümündeki ajan komutunu kontrol edip yeniden deneyin.",
       "agentFailedToStart": "{{label}} başlatılamadı. Ayarlar bölümündeki ajan komutunu kontrol edip yeniden deneyin.",
       "agentReportedError": "{{label}} bir hata bildirdi.",
-      "antigravityInvalidEvents": "Antigravity geçersiz JSON olayları döndürdü.",
-      "antigravityInvalidResult": "Antigravity geçersiz bir sonuç döndürdü.",
-      "antigravityNoFinalResult": "Antigravity nihai bir sonuç döndürmedi.",
       "chatNameAgentUnsupported": "Bu eylem için Ayarlar -> Sohbet -> Sohbet adları bölümünde desteklenen bir sohbet adı oluşturma ajanı seçin. Desteklenen ajanlar: {{agents}} veya Özel komut.",
       "chatNameCustomCommandEmpty": "Özel komut boş. Ayarlar -> Sohbet -> Sohbet adları bölümünde bir komut ekleyin.",
       "cliFailed": "{{label}} CLI komutu {{exitCode}} hata koduyla sonlandı.",
@@ -5454,7 +5450,9 @@
       "statusUnreadable": "Bu sunucunun durumu okunamadı. Geri dönüp yeniden açın.",
       "tryAgain": "Tekrar dene",
       "isolationUnavailableAndroid": "Orca için Android System WebView veya Chrome 101 ya da daha yeni bir sürüm gerekir. Play Store’dan güncelleyin veya Geliştirici seçenekleri > WebView uygulaması bölümünden daha yeni bir sürüm seçin.",
-      "webViewInUse": "Bu cihazda {{name}} {{version}} var."
+      "webViewInUse": "Bu cihazda {{name}} {{version}} var.",
+      "downloadingLatestApp": "Uygulamanın son sürümü indiriliyor",
+      "downloadProgressFromHost": "{{host}} sunucusundan · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "Orca’yı güncelleyin",
@@ -5462,6 +5460,9 @@
       "updateMessageNoHost": "Bu ekran için daha yeni bir Orca sürümü gerekiyor.",
       "serverTitle": "Bu sunucuya ulaşılamıyor",
       "serverMessage": "Telefonunuz bu çalışma alanının sunucusuna {{host}} üzerinden ulaşamıyor."
+    },
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
     }
   },
   "workspace": {
@@ -7982,7 +7983,8 @@
       "runningCount": "{{count}} çalışıyor",
       "needsYouCount": "{{count}} sizi bekliyor",
       "open": "Aç",
-      "delete": "Sohbeti sil"
+      "delete": "Sohbeti sil",
+      "noMessages": "Henüz mesaj yok"
     },
     "panel": {
       "backTo": "{{name}} ekranına dön",
@@ -8203,10 +8205,24 @@
     },
     "share": {
       "signInOtherSite": "Bilgisayar başka bir site için oturum açma bağlantısı gönderdi, bu yüzden açılmadı.",
+      "invite": {
+        "invitedYou": "{{owner}} sizi davet etti",
+        "view": "Daveti gör",
+        "sharedWithYou": "{{owner}} sizinle paylaştı",
+        "runsOn": "{{owner}} adlı kişinin ajanı. {{owner}} adlı kişinin bilgisayarında çalışır.",
+        "chatFrom": "Onunla Orca’nızdan ve telefonunuzdan sohbet edersiniz.",
+        "ownChats": "Yalnızca kendi sohbetlerinizi görürsünüz.",
+        "ownerSees": "{{owner}}, onunla yaptığınız sohbetleri görebilir.",
+        "actsAs": "{{owner}} adlı kişinin bilgisayarında, {{owner}} adlı kişinin hesaplarıyla işlem yapabilir.",
+        "pauses": "{{owner}} adlı kişinin bilgisayarı kapalıyken duraklar.",
+        "messagesWait": "Mesajlar o dönene kadar bekler.",
+        "leave": "İstediğiniz zaman ayrılabilirsiniz.",
+        "uses": "Kullanır"
+      },
       "original": {
-        "sharedBy": "Paylaşan: {{who}}",
         "viewOriginal": "Orijinali görüntüle",
-        "originalGone": "Artık kullanılamıyor"
+        "originalGone": "Artık kullanılamıyor",
+        "copiedFrom": "Kopyalandığı kişi: {{who}}"
       },
       "sameLinkShort": "Daha önce oluşturulan kopyalar olduğu gibi kalır.",
       "receive": {
@@ -8248,7 +8264,6 @@
       "updatedAt": "Güncelleme: {{date}}",
       "upToDate": "Güncel",
       "changedSince": "Bot o zamandan beri değişti",
-      "copy": "Kopyala",
       "copyLink": "Bağlantıyı kopyala",
       "secretFoundTitle": "Gizli bilgi bulundu",
       "secretWhere": "{{where}}, satır {{line}}: {{flag}}",

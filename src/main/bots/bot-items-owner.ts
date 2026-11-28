@@ -11,6 +11,11 @@ import {
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
 import { BotItemError } from './bot-item-error'
+import {
+  BOT_ITEM_EVENT_NOT_BY_VIEWER,
+  BOT_ITEM_OWNER_VIEWER,
+  botItemAuthorViewer
+} from './bot-item-author'
 import { BotItemsWrites } from './bot-items-writes'
 import {
   assertBotItemText,
@@ -141,7 +146,7 @@ export class BotItemsOwner extends BotItemsWrites {
     return event?.actor.kind === 'bot' ? event : null
   }
 
-  private ownerCommentByRequest(uid: string, requestId: string): number | null {
+  ownerCommentByRequest(uid: string, requestId: string): number | null {
     const row: unknown = this.db
       .prepare(
         `SELECT id FROM item_events WHERE item_uid = ? AND kind = 'commented'
@@ -244,7 +249,7 @@ export class BotItemsOwner extends BotItemsWrites {
         if (!isOpenBotItemStatus(item.status)) {
           throw new BotItemError('item_closed', `Item ${item.number} is closed.`)
         }
-        if (until !== null && this.movedBySomeoneElse(uid, othersLastEventId)) {
+        if (until !== null && this.movedBySomeoneElse(uid, othersLastEventId, actor)) {
           throw new BotItemError(
             'item_changed',
             `Item ${item.number} changed since you looked. Check it, then snooze it again.`
@@ -265,13 +270,13 @@ export class BotItemsOwner extends BotItemsWrites {
 
   /** A status change by anyone but the owner after the event the owner's view showed: a new question,
    *  a close or a move. Comments, edits and links neither wake a snooze nor refuse one. */
-  private movedBySomeoneElse(uid: string, afterEventId: number): boolean {
+  private movedBySomeoneElse(uid: string, afterEventId: number, actor: BotItemOwnerActor): boolean {
     const row = this.db
       .prepare(
         `SELECT 1 FROM item_events WHERE item_uid = ? AND id > ? AND kind = 'status'
-           AND json_extract(actor, '$.kind') != 'owner' LIMIT 1`
+           AND ${BOT_ITEM_EVENT_NOT_BY_VIEWER} LIMIT 1`
       )
-      .get(uid, afterEventId)
+      .get(uid, afterEventId, botItemAuthorViewer(actor) ?? BOT_ITEM_OWNER_VIEWER)
     return row !== undefined
   }
 

@@ -49,6 +49,8 @@ import {
   CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE,
   type ConnectorCloudFeature
 } from '../../shared/connector-cloud-features'
+import { ownsHostReadMarks } from '../bots/team-share/teammate-rules'
+import type { RpcCallerScope } from '../runtime/rpc/callers/rpc-caller-scope'
 
 /** The seam is local and subscribes to nothing until watched, so it lives for the process, built on first use. */
 export function installExternalConversations(
@@ -83,8 +85,8 @@ export function installExternalConversations(
   current(): ExternalConversationSeam | null
   /** Posts the owner's Orca-typed messages to their bot chats' Slack threads; lives with the seam. */
   slackMirror(): SlackMirror | null
-  /** A bot thread in this chat is no longer new, on every client. */
-  threadSeen(sessionId: string): void
+  /** A bot thread in this chat is no longer new, on every client; a teammate's read leaves it (rule 6). */
+  threadSeen(sessionId: string, reader: RpcCallerScope | undefined): void
 } {
   if (!store) {
     return { current: () => null, slackMirror: () => null, threadSeen: () => {} }
@@ -218,8 +220,8 @@ export function installExternalConversations(
   return {
     current,
     slackMirror: () => (current(), mirror),
-    threadSeen: (sessionId) => {
-      if (markThreadSeen(store, sessionId)) {
+    threadSeen: (sessionId, reader) => {
+      if (ownsHostReadMarks(reader) && markThreadSeen(store, sessionId)) {
         runtime.onConversationLinked?.()
       }
     }

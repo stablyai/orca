@@ -1,6 +1,6 @@
 import React, { useEffect, useId } from 'react'
 import { openBotSettings } from './bot-settings-open'
-import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
+import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -31,6 +31,8 @@ import { setBotPurpose } from './bot-purpose-cache'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { BotShareMark, useBotShareLine } from './sharing/BotShareMark'
 import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { BotTeamShareDialogHost } from './team-share/BotTeamShareDialogHost'
+import { useBotPanelSharing } from './team-share/use-bot-panel-sharing'
 
 type BotRowFold = {
   folded: boolean
@@ -60,7 +62,7 @@ export function BotRow({
 }: BotRowProps): React.JSX.Element {
   const t = useTranslate()
   const details = useBotRowDetails(bot, home)
-  const { workspaceId, status, hostLabel, offline, description, line, limit, now } = details
+  const { workspaceId, status, hostLabel, down, offline, description, line, limit, now } = details
   const isUnread = home.isUnread && !offline
   const upNextNew = useBotUpNextUnseen(bot)
   const age = offline ? null : botRowLineAge(line, now)
@@ -85,111 +87,123 @@ export function BotRow({
     work.catch((error: unknown) => toast.error(botErrorMessage(error)))
   }
   const handleDelete = useDeleteBot(bot)
+  const { sharing, setSharing, sharingOffered } = useBotPanelSharing()
   return (
-    <BotSidebarRow
-      avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
-      name={bot.name}
-      nameMark={shareLine ? <BotShareMark line={shareLine} /> : null}
-      workspaceId={workspaceId}
-      hostId={bot.hostId}
-      status={offline ? null : status}
-      stopTip={!offline && limit ? usageLimitStopTip(t, limit.stop) : null}
-      isUnread={isUnread}
-      isActive={isActive}
-      expanded={fold ? !fold.folded : undefined}
-      dimmed={bot.paused || offline}
-      actionsDisabled={offline || shared}
-      dragHandle={dragHandle}
-      onOpen={open}
-      onRename={async (name) => {
-        try {
-          await updateBot(bot, { name })
-        } catch (error) {
-          throw new Error(botErrorMessage(error))
+    <>
+      <BotSidebarRow
+        avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
+        name={bot.name}
+        nameMark={shareLine ? <BotShareMark line={shareLine} /> : null}
+        workspaceId={workspaceId}
+        hostId={bot.hostId}
+        status={offline ? null : status}
+        stopTip={!offline && limit ? usageLimitStopTip(t, limit.stop) : null}
+        isUnread={isUnread}
+        isActive={isActive}
+        expanded={fold ? !fold.folded : undefined}
+        dimmed={bot.paused || offline}
+        actionsDisabled={offline || shared}
+        dragHandle={dragHandle}
+        onOpen={open}
+        onRename={async (name) => {
+          try {
+            await updateBot(bot, { name })
+          } catch (error) {
+            throw new Error(botErrorMessage(error))
+          }
+        }}
+        age={age}
+        line={
+          // Time by the name, Up next count under it; both end where the fold strip starts.
+          line || limit || description || fold || upNextNew > 0 || hostPill || offline ? (
+            <BotRowLineView
+              line={line}
+              limit={offline ? null : limit}
+              fallback={description}
+              unread={isUnread}
+              now={now}
+              down={down}
+              leading={hostPill}
+              trailing={
+                upNextNew > 0 && !offline ? (
+                  <BotUpNextCount
+                    count={upNextNew}
+                    onReveal={() => {
+                      if (openBotFromSidebar(bot, onOpen)) {
+                        revealBotUpNext(bot.id)
+                      }
+                    }}
+                  />
+                ) : null
+              }
+            />
+          ) : null
         }
-      }}
-      age={age}
-      line={
-        // Time by the name, Up next count under it; both end where the fold strip starts.
-        line || limit || description || fold || upNextNew > 0 || hostPill || offline ? (
-          <BotRowLineView
-            line={line}
-            limit={offline ? null : limit}
-            fallback={description}
-            unread={isUnread}
-            now={now}
-            disconnected={offline}
-            leading={hostPill}
-            trailing={
-              upNextNew > 0 && !offline ? (
-                <BotUpNextCount
-                  count={upNextNew}
-                  onReveal={() => {
-                    if (openBotFromSidebar(bot, onOpen)) {
-                      revealBotUpNext(bot.id)
-                    }
-                  }}
-                />
-              ) : null
-            }
+        trailing={
+          fold ? (
+            <BotRowFoldToggle
+              botName={bot.name}
+              fold={fold}
+              working={!offline && status === 'working'}
+            />
+          ) : null
+        }
+        hoverDetails={(keyboardFocus) => (
+          <BotHoverDetails
+            bot={bot}
+            details={details}
+            showHostOnFocus={keyboardFocus}
+            onOpenHome={() => openBotHomePanelFromSidebar(bot, onOpen)}
           />
-        ) : null
-      }
-      trailing={
-        fold ? (
-          <BotRowFoldToggle
-            botName={bot.name}
-            fold={fold}
-            working={!offline && status === 'working'}
-          />
-        ) : null
-      }
-      hoverDetails={(keyboardFocus) => (
-        <BotHoverDetails
-          bot={bot}
-          details={details}
-          showHostOnFocus={keyboardFocus}
-          onOpenHome={() => openBotHomePanelFromSidebar(bot, onOpen)}
-        />
-      )}
-      menuItems={
-        shared ? null : (
-          <>
-            <ContextMenuItem onSelect={() => openBotSettings(bot.id)}>
-              <Settings className="size-3.5" />
-              {t('bots.row.settings', 'Bot settings…')}
-            </ContextMenuItem>
-            <ContextMenuItem
-              disabled={offline}
-              onSelect={() => run(updateBot(bot, { paused: !bot.paused }))}
-            >
-              {bot.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-              {bot.paused ? t('bots.row.resume', 'Resume bot') : t('bots.row.pause', 'Pause bot')}
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(home.folderPath)}>
-              <Copy className="size-3.5" />
-              {t('bots.row.copyPath', 'Copy Path')}
-            </ContextMenuItem>
-          </>
-        )
-      }
-      menuFooter={
-        shared ? null : (
-          <>
-            <ContextMenuSeparator />
-            <ContextMenuItem
-              variant="destructive"
-              disabled={offline}
-              onSelect={() => void handleDelete()}
-            >
-              <Trash2 className="size-3.5" />
-              {t('bots.row.delete', 'Delete bot')}
-            </ContextMenuItem>
-          </>
-        )
-      }
-    />
+        )}
+        menuItems={
+          shared ? null : (
+            <>
+              <ContextMenuItem onSelect={() => openBotSettings(bot.id)}>
+                <Settings className="size-3.5" />
+                {t('bots.row.settings', 'Bot settings…')}
+              </ContextMenuItem>
+              {sharingOffered ? (
+                <ContextMenuItem disabled={offline} onSelect={() => setSharing('people')}>
+                  <UserPlus className="size-3.5" />
+                  {t('bots.row.share', 'Share…')}
+                </ContextMenuItem>
+              ) : null}
+              <ContextMenuItem
+                disabled={offline}
+                onSelect={() => run(updateBot(bot, { paused: !bot.paused }))}
+              >
+                {bot.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+                {bot.paused ? t('bots.row.resume', 'Resume bot') : t('bots.row.pause', 'Pause bot')}
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(home.folderPath)}>
+                <Copy className="size-3.5" />
+                {t('bots.row.copyPath', 'Copy Path')}
+              </ContextMenuItem>
+            </>
+          )
+        }
+        menuFooter={
+          shared ? null : (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                variant="destructive"
+                disabled={offline}
+                onSelect={() => void handleDelete()}
+              >
+                <Trash2 className="size-3.5" />
+                {t('bots.row.delete', 'Delete bot')}
+              </ContextMenuItem>
+            </>
+          )
+        }
+      />
+      {sharing === 'people' ? (
+        <BotTeamShareDialogHost bot={bot} onClose={() => setSharing(null)} />
+      ) : null}
+    </>
   )
 }
 

@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-setup/hooks/workspace-hook-settings-schema'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
@@ -129,7 +130,7 @@ export const ProjectHostSetupDeleteIpcArgs = z.object({
   hostId: IpcExecutionHostId.optional()
 })
 
-const FolderWorkspaceLinkedTaskArgs = WorkspaceLinkedItemSchema.nullable()
+const FolderWorkspaceLinkedTaskArgs = lazyZodSchema(() => WorkspaceLinkedItemSchema.nullable())
 
 function assertFolderWorkspaceLinkedSourceContextMatch(
   value: {

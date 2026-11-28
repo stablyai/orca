@@ -83,7 +83,8 @@ export function repairMobileSessionTabGroupsAfterRetirement(
   return repaired.length > 0 ? repaired : undefined
 }
 
-function topLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {
+/** A tab group lists a terminal by its parent tab, every other tab by its own id. */
+export function topLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {
   return tab.type === 'terminal' ? tab.parentTabId : tab.id
 }
 

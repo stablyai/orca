@@ -1,4 +1,4 @@
-// Where a bot automation run's prompt goes: a new conversation in the bot's home, its Chat, or a chat it names.
+// Where an agent's automation run's prompt goes: a new conversation in the agent's home, a Home Chat, or a chat it names.
 import { randomUUID } from 'node:crypto'
 import type { Bot } from '../../shared/bot-types'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
@@ -21,6 +21,7 @@ import { botChatGone } from '../runtime/integrations/automations/runtime-automat
 import { isBotGroupMemberSession } from '../../shared/bots/bot-group'
 import { sendBotGroupAutomationRun } from './bot-group-automation-run'
 import { runtimeBotGroups } from './bot-group-runtime'
+import { automationHome } from './bot-conversation-acts-for'
 
 export type BotAutomationSessionDependencies = {
   chats: Pick<ReturnType<typeof botChatSessions>, 'sendToChat' | 'sendToSession'>
@@ -38,6 +39,7 @@ export type BotAutomationSessionDependencies = {
     }
   ) => Promise<string>
   nameSession: (sessionId: string, name: string) => Promise<void>
+  homeOf: BotAutomationSessions['homeOf']
   /** A run in a group room the bot is a member of, by its member session there. */
   sendToGroupRoom: (
     bot: Bot,
@@ -85,7 +87,7 @@ export function botAutomationSessions(
       bot,
       { text, title, sessionId: named, run, actsFor, beforeFirstMessage, beforeDelivery }
     ) => {
-      const clientMessageId = randomUUID()
+      const clientMessageId = run?.messageId ?? randomUUID()
       const sessionId = await deps.startSession(
         bot,
         { text, clientMessageId, ...(run ? { run } : {}) },
@@ -110,7 +112,7 @@ export function botAutomationSessions(
       const chat = await deps.chatTakingMail(bot, chatId)
       if (!chat && homeIfGone) {
         return chatThatTookIt(
-          await deps.chats.sendToChat(bot.id, text, undefined, withoutConversation(run))
+          await deps.chats.sendToChat(bot.id, homeIfGone, text, undefined, withoutConversation(run))
         )
       }
       if (!chat) {
@@ -120,8 +122,9 @@ export function botAutomationSessions(
     },
     sendToSession: async (bot, sessionId, text, run) =>
       chatThatTookIt(await deps.chats.sendToSession(bot.id, sessionId, text, run)),
-    sendToChat: async (bot, text, run) =>
-      chatThatTookIt(await deps.chats.sendToChat(bot.id, text, undefined, run))
+    sendToChat: async (bot, home, text, run) =>
+      chatThatTookIt(await deps.chats.sendToChat(bot.id, home, text, undefined, run)),
+    homeOf: deps.homeOf
   }
 }
 
@@ -142,7 +145,8 @@ export function runtimeBotAutomationSessions(runtime: OrcaRuntimeService): BotAu
     // The start installed the host.
     nameSession: async (sessionId, name) => {
       await getStructuredAgentSessionHost()?.setUserConversationName(sessionId, name, 'rename')
-    }
+    },
+    homeOf: (bot, target) => automationHome(runtime, bot, target)
   })
   return {
     ...sessions,

@@ -45,7 +45,7 @@ export function explainMissingEngineTab(
     if (
       error instanceof BrowserError &&
       error.code === 'browser_no_tab' &&
-      host.getRuntimeBrowserPageRegistry().listPages().length === 0 &&
+      host.getRuntimeBrowserPageRegistry().pagesOf('host').length === 0 &&
       !canPlacePairedPage(host)
     ) {
       throw new BrowserError(error.code, `${error.message} ${noVisibleBrowserMessage()}`)

@@ -1,9 +1,6 @@
 import React from 'react'
-import { Ellipsis } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useTranslate } from '@/i18n/use-translate'
 
 export type SearchFiltersProps = {
@@ -15,55 +12,35 @@ export type SearchFiltersProps = {
   excludeInputRef?: React.RefObject<HTMLInputElement | null>
 }
 
+export function countActiveSearchFilters({
+  includePattern,
+  excludePattern
+}: Pick<SearchFiltersProps, 'includePattern' | 'excludePattern'>): number {
+  return Number(Boolean(includePattern.trim())) + Number(Boolean(excludePattern.trim()))
+}
+
+/** Include/exclude inputs for text matches; the field owns the toggle that opens them. */
 export function SearchFilters({
+  open,
   includePattern,
   excludePattern,
   onIncludeChange,
   onExcludeChange,
   includeInputRef,
   excludeInputRef
-}: SearchFiltersProps): React.JSX.Element {
+}: SearchFiltersProps & { open: boolean }): React.JSX.Element {
   const t = useTranslate()
-  const activeCount =
-    Number(Boolean(includePattern.trim())) + Number(Boolean(excludePattern.trim()))
+  const activeCount = countActiveSearchFilters({ includePattern, excludePattern })
 
   return (
-    <Collapsible
-      defaultOpen={activeCount > 0}
-      className="relative min-h-6"
-      data-ignore-file-explorer-keys="true"
-    >
-      <div className="absolute right-0 top-0 z-10 flex h-6 items-center gap-1">
-        {activeCount > 0 && (
-          <span className="text-2xs tabular-nums text-muted-foreground">
-            {t('fileSearch.filters.active', '{{count}} active', { count: activeCount })}
-          </span>
-        )}
-        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {t('fileSearch.filters.active', '{{count}} active', { count: activeCount })}
-        </span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <CollapsibleTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={t('fileSearch.filters.toggle', 'Toggle search details')}
-              >
-                <Ellipsis />
-              </Button>
-            </CollapsibleTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {t('fileSearch.filters.toggle', 'Toggle search details')}
-          </TooltipContent>
-        </Tooltip>
-      </div>
+    <Collapsible open={open} data-ignore-file-explorer-keys="true">
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {t('fileSearch.filters.active', '{{count}} active', { count: activeCount })}
+      </span>
       <CollapsibleContent animation="height">
-        <div className="space-y-2 pb-2 pt-1">
+        <div className="space-y-2 pt-2">
           <label className="flex flex-col gap-1">
-            <span className="pr-20 text-2xs text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">
               {t('auto.components.right.sidebar.SearchFilters.a69ee1bd0e', 'files to include')}
             </span>
             <Input

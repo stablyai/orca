@@ -65,6 +65,7 @@ export const BOT_CREATE_METHOD = defineMethod({
     // from a link, it says whose; made from a template, it says which.
     const first = runtimeBotChats(runtime).sendToChat(
       bot.id,
+      'owner',
       handOff ? botMadeForWorkspacesKickoff(handOff) : botFirstKickoff(bot),
       'bot-created'
     )

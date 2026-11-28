@@ -1,6 +1,7 @@
 import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../../attachments/body-image-urls'
 import type { Nodes } from 'mdast'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import type { PRComment } from '../../../../shared/github/comments/comment-types'
@@ -8,74 +9,86 @@ import { mapGraphQLReactionGroups } from '../../comments/comment-reactions'
 import { tailDiffHunk } from '../../../../shared/github/comments/pr-comment-diff-hunk'
 import { viewerAuthorship } from '../../../source-control/comment-viewer-authorship'
 
-const commentSchema = z.object({
-  id: z.string(),
-  databaseId: z.number().nullable(),
-  author: z
-    .object({ __typename: z.string().optional(), login: z.string(), avatarUrl: z.string() })
-    .nullable(),
-  body: z.string().nullish(),
-  bodyHTML: z.unknown().optional(),
-  createdAt: z.string(),
-  submittedAt: z.string().nullish(),
-  url: z.string(),
-  viewerDidAuthor: z.boolean().nullish().catch(undefined),
-  reactionGroups: z
-    .array(
-      z.object({
-        content: z.string().nullish(),
-        viewerHasReacted: z.boolean().nullish(),
-        reactors: z.object({ totalCount: z.number().nullish() }).nullish()
-      })
-    )
-    .nullish()
-})
-const pageInfo = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }).optional()
-const commentConnection = z.object({ nodes: z.array(commentSchema.nullable()), pageInfo })
-const threadSchema = z.object({
-  id: z.string(),
-  isResolved: z.boolean(),
-  line: z.number().nullable(),
-  startLine: z.number().nullable(),
-  originalLine: z.number().nullable(),
-  originalStartLine: z.number().nullable(),
-  diffSide: z.string().nullish().catch(undefined),
-  rootHunk: z
-    .object({ nodes: z.array(z.object({ diffHunk: z.string().nullish() }).nullable()) })
-    .nullish()
-    .catch(undefined),
-  comments: z.object({
-    nodes: z.array(commentSchema.extend({ path: z.string() }).nullable()),
-    pageInfo
+const commentSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    databaseId: z.number().nullable(),
+    author: z
+      .object({ __typename: z.string().optional(), login: z.string(), avatarUrl: z.string() })
+      .nullable(),
+    body: z.string().nullish(),
+    bodyHTML: z.unknown().optional(),
+    createdAt: z.string(),
+    submittedAt: z.string().nullish(),
+    url: z.string(),
+    viewerDidAuthor: z.boolean().nullish().catch(undefined),
+    reactionGroups: z
+      .array(
+        z.object({
+          content: z.string().nullish(),
+          viewerHasReacted: z.boolean().nullish(),
+          reactors: z.object({ totalCount: z.number().nullish() }).nullish()
+        })
+      )
+      .nullish()
   })
-})
-const threadConnection = z.object({ nodes: z.array(threadSchema.nullable()), pageInfo })
+)
+const pageInfo = lazyZodSchema(() =>
+  z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }).optional()
+)
+const commentConnection = lazyZodSchema(() =>
+  z.object({ nodes: z.array(commentSchema.nullable()), pageInfo })
+)
+const threadSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    isResolved: z.boolean(),
+    line: z.number().nullable(),
+    startLine: z.number().nullable(),
+    originalLine: z.number().nullable(),
+    originalStartLine: z.number().nullable(),
+    diffSide: z.string().nullish().catch(undefined),
+    rootHunk: z
+      .object({ nodes: z.array(z.object({ diffHunk: z.string().nullish() }).nullable()) })
+      .nullish()
+      .catch(undefined),
+    comments: z.object({
+      nodes: z.array(commentSchema.extend({ path: z.string() }).nullable()),
+      pageInfo
+    })
+  })
+)
+const threadConnection = lazyZodSchema(() =>
+  z.object({ nodes: z.array(threadSchema.nullable()), pageInfo })
+)
 export type PRConversationSources = {
   comments?: z.infer<typeof commentConnection>
   reviews?: z.infer<typeof commentConnection>
   reviewThreads?: z.infer<typeof threadConnection>
 }
 export type PRReviewThread = z.infer<typeof threadSchema>
-const envelopeSchema = z.object({
-  data: z
-    .object({
-      repository: z
-        .object({
-          pullRequest: z
-            .object({
-              comments: z.unknown().optional(),
-              reviews: z.unknown().optional(),
-              reviewThreads: z.unknown().optional()
-            })
-            .nullish()
-        })
-        .nullish()
-    })
-    .nullish(),
-  errors: z
-    .array(z.object({ path: z.array(z.union([z.string(), z.number()])).optional() }))
-    .optional()
-})
+const envelopeSchema = lazyZodSchema(() =>
+  z.object({
+    data: z
+      .object({
+        repository: z
+          .object({
+            pullRequest: z
+              .object({
+                comments: z.unknown().optional(),
+                reviews: z.unknown().optional(),
+                reviewThreads: z.unknown().optional()
+              })
+              .nullish()
+          })
+          .nullish()
+      })
+      .nullish(),
+    errors: z
+      .array(z.object({ path: z.array(z.union([z.string(), z.number()])).optional() }))
+      .optional()
+  })
+)
 
 function hasDatabaseId<T extends { databaseId: number | null }>(
   comment: T | null
@@ -215,17 +228,19 @@ function rootDiffHunk(
   return diffHunk ? { diffHunk } : {}
 }
 
-const restCommentSchema = z.object({
-  id: z.number(),
-  user: z
-    .object({ login: z.string(), avatar_url: z.string(), type: z.string().optional() })
-    .nullable(),
-  body: z.string().nullish(),
-  body_html: z.unknown().optional(),
-  created_at: z.string().optional(),
-  submitted_at: z.string().nullish(),
-  html_url: z.string()
-})
+const restCommentSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.number(),
+    user: z
+      .object({ login: z.string(), avatar_url: z.string(), type: z.string().optional() })
+      .nullable(),
+    body: z.string().nullish(),
+    body_html: z.unknown().optional(),
+    created_at: z.string().optional(),
+    submitted_at: z.string().nullish(),
+    html_url: z.string()
+  })
+)
 
 export function parseRestPRCommentPage(
   stdout: string,

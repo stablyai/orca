@@ -12,7 +12,7 @@ describe('share dialog calls', () => {
 
   it('go to the host share list, never the copy-link share', async () => {
     const bot = { id: 'bot-1', hostId: 'local' as const }
-    await addBotTeamShare(bot, 'alice@example.com')
+    await addBotTeamShare(bot, ['alice@example.com'])
     await removeBotTeamShare(bot, 'share-1')
     await resendBotTeamShare(bot, 'share-2')
     expect(callBotRpc.mock.calls).toEqual([

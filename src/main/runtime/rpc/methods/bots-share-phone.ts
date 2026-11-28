@@ -6,7 +6,10 @@ import {
   BOT_SHARE_REVOKE_PHONE_METHOD,
   BotShareProvisionPhoneParams,
   BotShareRevokePhoneParams,
+  SHARED_BOTS_PHONE_ACCEPT_METHOD,
+  SHARED_BOTS_PHONE_DECLINE_METHOD,
   SHARED_BOTS_PHONE_LIST_METHOD,
+  SharedBotsPhoneAnswerParams,
   SHARED_BOTS_PHONE_PROVISION_METHOD,
   SHARED_BOTS_PHONE_ERRORS,
   SharedBotsPhoneProvisionParams
@@ -86,6 +89,18 @@ export const BOT_SHARE_PHONE_METHODS = [
       return (await grants()).phoneShares()
     }
   }),
+  ...([true, false] as const).map((accept) =>
+    defineMethod({
+      name: accept ? SHARED_BOTS_PHONE_ACCEPT_METHOD : SHARED_BOTS_PHONE_DECLINE_METHOD,
+      permission: 'pairing-admin',
+      share: 'not-shared',
+      params: SharedBotsPhoneAnswerParams,
+      handler: async ({ shareId }, context) => {
+        ownPhone(context)
+        return { answered: await (await grants()).answer(shareId, accept) }
+      }
+    })
+  ),
   defineMethod({
     name: SHARED_BOTS_PHONE_PROVISION_METHOD,
     permission: 'pairing-admin',

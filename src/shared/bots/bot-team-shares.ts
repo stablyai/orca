@@ -1,6 +1,7 @@
 // The Orca accounts and invited emails a bot is shared with (Bot.shares). The host owns the list and
 // publishes it in its hello; Orca Cloud mirrors it, resolves invites and relays teammates' accepts.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** One bot's hello lists at most this many, as the connector contract's maxBotShares caps them. */
 export const BOT_MAX_SHARES = 50
@@ -12,41 +13,75 @@ export function normalizeShareEmail(email: string): string {
 }
 
 // URL-safe, as the contract's ShareIdSchema: the id goes in cloud paths.
-export const BotShareIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
-export const BotShareEmailSchema = z
-  .email()
-  .max(MAX_SHARE_EMAIL_LENGTH)
-  .refine((email) => email === normalizeShareEmail(email))
+export const BotShareIdSchema = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9_-]{1,128}$/))
+export const BotShareEmailSchema = lazyZodSchema(() =>
+  z
+    .email()
+    .max(MAX_SHARE_EMAIL_LENGTH)
+    .refine((email) => email === normalizeShareEmail(email))
+)
 
 // shareId is minted on Add and kept when the invite resolves, so the cloud's row and a teammate's
 // accept name the same share throughout.
-export const BotShareSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('account'),
-    shareId: BotShareIdSchema,
-    accountId: z.string().min(1).max(128),
-    name: z.string().min(1).optional(),
-    email: BotShareEmailSchema,
-    addedAt: z.number()
-  }),
-  z.object({
-    kind: z.literal('invite'),
-    shareId: BotShareIdSchema,
-    email: BotShareEmailSchema,
-    addedAt: z.number(),
-    /** When its invite email last went out; absent while none has (its hourly limit, signed out). */
-    emailedAt: z.number().optional()
-  })
-])
+export const BotShareSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('account'),
+      shareId: BotShareIdSchema,
+      accountId: z.string().min(1).max(128),
+      name: z.string().min(1).optional(),
+      email: BotShareEmailSchema,
+      addedAt: z.number(),
+      /** When the teammate accepted it (a device of theirs asked to reach the bot); absent until then. */
+      acceptedAt: z.number().optional(),
+      /** When the teammate declined it: it stays listed for the owner, as declined, never offered again. */
+      declinedAt: z.number().optional(),
+      /** The teammate's Home Chat with the agent; absent until they first open it. Older hosts drop it. */
+      homeSessionId: z.string().min(1).optional()
+    }),
+    z.object({
+      kind: z.literal('invite'),
+      shareId: BotShareIdSchema,
+      email: BotShareEmailSchema,
+      addedAt: z.number(),
+      /** When its invite email last went out; absent while none has (its hourly limit, signed out). */
+      emailedAt: z.number().optional()
+    })
+  ])
+)
 export type BotShare = z.infer<typeof BotShareSchema>
+
+/** A bot's fields for its people beyond the owner. Older hosts drop both. */
+export const BotSharePeopleFields = {
+  /** Each teammate's own `itemsSeen`, by Orca account. */
+  itemsSeenBy: lazyZodSchema(() =>
+    z.record(z.string(), z.number().int().nonnegative()).optional().catch(undefined)
+  ),
+  /** On a teammate's copy only: who is looking, the owner's name (null signed out) and the usable
+   *  teammates, as its host names them for the Items filter. Absent on the owner's own. */
+  shareViewer: lazyZodSchema(() =>
+    z
+      .object({
+        accountId: z.string(),
+        ownerName: z.string().nullable(),
+        teammates: z.array(z.object({ accountId: z.string(), name: z.string() }))
+      })
+      .optional()
+      .catch(undefined)
+  )
+}
 export type BotAccountShare = Extract<BotShare, { kind: 'account' }>
 
 /** Read entry by entry, so one a newer Orca wrote (or a bad one) is dropped, never the whole list. */
-export const BotSharesSchema = z
-  .array(z.unknown())
-  .transform((entries) =>
-    entries.flatMap((entry) => BotShareSchema.safeParse(entry).data ?? []).slice(0, BOT_MAX_SHARES)
-  )
+export const BotSharesSchema = lazyZodSchema(() =>
+  z
+    .array(z.unknown())
+    .transform((entries) =>
+      entries
+        .flatMap((entry) => BotShareSchema.safeParse(entry).data ?? [])
+        .slice(0, BOT_MAX_SHARES)
+    )
+)
 
 export const BOT_SHARES_FULL = `An agent can be shared with up to ${BOT_MAX_SHARES} people.`
 
@@ -83,18 +118,21 @@ export function withBotSharesEmailed(
 /**
  * An invite signed in as an Orca account, applied to the list as the host has it now: null when
  * the share is gone or no longer that email's (removed while the cloud resolved it). An account
- * already on the list keeps its own share, and the invite goes. The same list back: nothing to write.
+ * already on the list keeps its own share, and the invite goes. A repeat for the account share, by
+ * its account, gives it the name it carries. The same list back: nothing to write.
  */
 export function withBotShareResolved(
   shares: readonly BotShare[],
   resolved: { shareId: string; email: string; accountId: string; name?: string }
 ): readonly BotShare[] | null {
   const share = shares.find((entry) => entry.shareId === resolved.shareId)
+  // A repeat names a share resolved before the cloud sent names. Matched by account, not email:
+  // the teammate's sign-in email may have changed since they accepted.
+  if (share?.kind === 'account') {
+    return share.accountId === resolved.accountId ? withBotShareNamed(shares, resolved) : null
+  }
   if (!share || share.email !== normalizeShareEmail(resolved.email)) {
     return null
-  }
-  if (share.kind === 'account') {
-    return share.accountId === resolved.accountId ? shares : null
   }
   if (shares.some((entry) => entry.kind === 'account' && entry.accountId === resolved.accountId)) {
     return shares.filter((entry) => entry.shareId !== share.shareId)
@@ -110,12 +148,92 @@ export function withBotShareResolved(
   return shares.map((entry) => (entry === share ? account : entry))
 }
 
-/** The share an accept names, while it is still that account's. */
+/** The list with that account's share named `name`; the same list when it has no name to give or
+ *  already has it, so a repeat never writes and a missing name never clears one. */
+function withBotShareNamed(
+  shares: readonly BotShare[],
+  named: { shareId: string; accountId: string; name?: string }
+): readonly BotShare[] {
+  const share = shares.find((entry) => entry.shareId === named.shareId)
+  if (
+    !named.name ||
+    share?.kind !== 'account' ||
+    share.accountId !== named.accountId ||
+    share.name === named.name
+  ) {
+    return shares
+  }
+  return shares.map((entry) => (entry === share ? { ...share, name: named.name } : entry))
+}
+
+/** A share's teammate answer, as the owner's list and the teammate's computer each keep it. */
+export type BotShareAnswered = { declinedAt?: number }
+
+/** Whether a share grants anything. A declined one never does: no access or offer on the owner's host,
+ *  no keys or pairing on the teammate's computer. */
+export function botShareUsable(share: BotShareAnswered): boolean {
+  return share.declinedAt === undefined
+}
+
+/** The share an accept names, while it is still that account's and usable. */
 export function botAccountShare(
   shares: readonly BotShare[] | undefined,
   shareId: string,
   accountId: string
 ): BotAccountShare | null {
   const share = shares?.find((entry) => entry.shareId === shareId)
-  return share?.kind === 'account' && share.accountId === accountId ? share : null
+  return share?.kind === 'account' && share.accountId === accountId && botShareUsable(share)
+    ? share
+    : null
+}
+
+export type BotShareAnswer = { shareId: string; accountId: string; answer: 'accepted' | 'declined' }
+
+/** The list with that account's share marked accepted or declined at `at`; the same list once it is
+ *  answered, or the share isn't that account's (removed, or shared again under a new id). */
+export function withBotShareAnswer(
+  shares: readonly BotShare[],
+  answer: BotShareAnswer,
+  at: number
+): readonly BotShare[] {
+  const share = botAccountShare(shares, answer.shareId, answer.accountId)
+  const field = answer.answer === 'accepted' ? 'acceptedAt' : 'declinedAt'
+  // The first answer stands.
+  if (!share || share.acceptedAt !== undefined) {
+    return shares
+  }
+  return shares.map((entry) => (entry === share ? { ...share, [field]: at } : entry))
+}
+
+/** The list with each account share whose teammate already reaches the bot marked accepted: shares
+ *  accepted before the owner's list kept it. */
+export function withBotSharesReached(
+  shares: readonly BotShare[],
+  reachedAccounts: ReadonlySet<string>,
+  at: number
+): readonly BotShare[] {
+  const unmarked = (share: BotShare) =>
+    share.kind === 'account' &&
+    share.acceptedAt === undefined &&
+    share.declinedAt === undefined &&
+    reachedAccounts.has(share.accountId)
+  return shares.some(unmarked)
+    ? shares.map((share) => (unmarked(share) ? { ...share, acceptedAt: at } : share))
+    : shares
+}
+
+/** A declined share offered again: the same person under a new share id, so the teammate is asked
+ *  afresh; the declined id is never offered again. */
+export function withBotShareRenewed(
+  shares: readonly BotShare[],
+  shareId: string,
+  mint: () => { shareId: string; addedAt: number }
+): readonly BotShare[] {
+  return shares.map((share) => {
+    if (share.shareId !== shareId || share.kind !== 'account' || share.declinedAt === undefined) {
+      return share
+    }
+    const { acceptedAt: _accepted, declinedAt: _declined, ...rest } = share
+    return { ...rest, ...mint() }
+  })
 }

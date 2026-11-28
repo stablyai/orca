@@ -16,7 +16,10 @@ import {
   resolveMarkdownDocLink
 } from './markdown-doc-links'
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
-import { requestSharedMarkdownDocumentList } from './markdown-document-list-request'
+import {
+  getMarkdownDocumentRelativePaths,
+  requestSharedMarkdownDocumentList
+} from './markdown-document-list-request'
 import { findRestoredEditorWorkspaceRuntimeOwner } from '../../file-ownership/restored-editor-workspace-runtime-owner'
 import {
   getLatestMarkdownMembershipChangeAt,
@@ -80,11 +83,17 @@ export function useMarkdownDocuments(
   )
   const requestRef = useRef(0)
   // Only the latest listing, once settled, proves membership: an in-flight one may predate a delete.
-  const settledListingRef = useRef<{ requestId: number; relativePaths: Set<string> } | null>(null)
+  const settledListingRef = useRef<{
+    requestId: number
+    documents: readonly MarkdownDocument[]
+  } | null>(null)
 
   const isListed = useCallback((relativePath: string): boolean => {
     const listing = settledListingRef.current
-    return listing?.requestId === requestRef.current && listing.relativePaths.has(relativePath)
+    return (
+      listing?.requestId === requestRef.current &&
+      getMarkdownDocumentRelativePaths(listing.documents).has(relativePath)
+    )
   }, [])
 
   const refreshMarkdownDocuments = useCallback(
@@ -137,10 +146,7 @@ export function useMarkdownDocuments(
         if (requestRef.current !== requestId) {
           return
         }
-        settledListingRef.current = {
-          requestId,
-          relativePaths: new Set(documents.map((document) => document.relativePath))
-        }
+        settledListingRef.current = { requestId, documents }
         setSnapshot({ key: scopeKey, documents })
       } catch (err) {
         console.error('Failed to list markdown documents:', err)
@@ -159,6 +165,7 @@ export function useMarkdownDocuments(
           )
         }
         if (requestRef.current === requestId) {
+          settledListingRef.current = null
           setSnapshot({ key: scopeKey, documents: [] })
         }
       }
@@ -248,6 +255,7 @@ export function useMarkdownDocuments(
     void refreshMarkdownDocuments(false, latestChange, false)
     return () => {
       requestRef.current += 1
+      settledListingRef.current = null
     }
   }, [
     activeFile.id,

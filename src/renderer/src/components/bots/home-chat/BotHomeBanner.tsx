@@ -13,12 +13,32 @@ function openBotActivityPanel(): void {
   setRightSidebarOpen(true)
 }
 
+/** `note`, muted after the name: whose agent it is (a teammate's) or whose Home (the owner on a
+ *  teammate's). A shared agent has no Activity panel here, so its pill opens nothing. */
 export function BotHomeBanner({
-  bot
+  bot,
+  note,
+  opensPage = true
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar'> & BotOnHost
+  note?: string
+  opensPage?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const content = (
+    <>
+      <BotAvatar bot={bot} className="rounded-full text-3xs" />
+      <span data-bot-home-banner-name="">{bot.name}</span>
+      {note ? (
+        <span data-bot-home-banner-note="" className="shrink-0 font-normal text-muted-foreground">
+          {note}
+        </span>
+      ) : null}
+    </>
+  )
+  if (!opensPage) {
+    return <div data-bot-home-banner="">{content}</div>
+  }
   return (
     <button
       type="button"
@@ -29,8 +49,7 @@ export function BotHomeBanner({
         openBotActivityPanel()
       }}
     >
-      <BotAvatar bot={bot} className="rounded-full text-3xs" />
-      <span data-bot-home-banner-name="">{bot.name}</span>
+      {content}
     </button>
   )
 }

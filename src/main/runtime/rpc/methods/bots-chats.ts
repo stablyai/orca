@@ -3,6 +3,7 @@ import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
 // last ask and send it `--chat <id>`.
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotChatRow } from '../../../../shared/bots/bot-chat-row'
+import { botHomeRoots, type BotHomeOf } from '../../../../shared/bots/bot-home-of'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { BotRosterEntry } from '../../../../shared/bot-roster'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
@@ -15,17 +16,17 @@ import { createCanonicalOrcaSessionResolver } from '../../orchestration/addressi
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import {
   clearedInto,
-  lineageLiveSession,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from '../../orchestration/addressing/session-lineage/structured-session-lineage'
 import {
   createStructuredSessionReachContext,
+  structuredSessionMailReach,
   type StructuredSessionReachContext
 } from '../../orchestration/mailbox/routing/structured-session-mail-address'
 import { refuseUndeliverableSessionRecipientWith } from './orchestration/messaging/session-recipient'
 import { namedOrCallerBot } from './bots-caller-bot'
-import { botShareChatFilter, botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
+import { botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
 import { defineMethod } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -41,14 +42,11 @@ const BOT_CHATS_METHOD = defineMethod({
   handler: async (params, context) => {
     const { runtime } = context
     const { bot, caller } = namedOrCallerBot(params, context)
-    const share = botShareScopeOf(context)
-    if (share) {
-      const owns = botShareChatFilter(runtime, share)
-      const chats = await readBotChats(runtime, bot, null, params.all ?? false)
-      return { bot: bot.name, chats: chats.filter((chat) => owns(chat.id)) }
-    }
-    // With the bot named, the claim only marks which row is the asking chat, so a paired client's counts.
-    const asking = caller ?? (params.botId ? params.callerSessionId : undefined)
+    // With the agent named, the claim only marks which row is the asking chat, so a paired client's
+    // counts; a teammate's client asks from none (they reach every chat, rule 1).
+    const asking = botShareScopeOf(context)
+      ? undefined
+      : (caller ?? (params.botId ? params.callerSessionId : undefined))
     return {
       bot: bot.name,
       chats: await readBotChats(runtime, bot, asking ?? null, params.all ?? false)
@@ -71,8 +69,8 @@ const BOT_CHATS_SEEN_METHOD = defineMethod({
   permission: 'workspace',
   share: 'not-shared',
   params: BotChatsSeen,
-  handler: (params, { runtime }) => {
-    params.sessionIds.forEach((sessionId) => runtime.markBotThreadSeen(sessionId))
+  handler: (params, { runtime, callerScope }) => {
+    params.sessionIds.forEach((sessionId) => runtime.markBotThreadSeen(sessionId, callerScope))
     return { ok: true as const }
   }
 })
@@ -85,7 +83,7 @@ export async function readBotChats(
     OrcaRuntimeService,
     'ensureStructuredAgentSessionHost' | 'getOrchestrationDb' | 'lookAround'
   >,
-  bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId'>,
+  bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId' | 'shares'>,
   callerSessionId: string | null,
   all = false
 ): Promise<BotChatRow[]> {
@@ -108,16 +106,39 @@ export async function botChatTakingMail(
     OrcaRuntimeService,
     'ensureStructuredAgentSessionHost' | 'getOrchestrationDb' | 'lookAround'
   >,
-  bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId'>,
+  bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId' | 'shares'>,
   id: string
 ): Promise<{ title: string | null; sessionId: string } | null> {
-  const row = (await readBotChats(runtime, bot, null)).find((chat) => chat.id === id)
-  if (!row) {
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  return botChatTakingMailNow(runtime, bot, id)
+}
+
+/** Recheck the named chat after an awaited attachment claim, before committing its mail. */
+export function botChatTakingMailNow(
+  runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb' | 'lookAround'>,
+  bot: Pick<Bot, 'folderWorkspaceId'>,
+  id: string
+): { title: string | null; sessionId: string } | null {
+  const store = readAgentSessionRecordStore()
+  const record = store?.getRecord(id)
+  if (!store || !record || !isOrcaSessionId(id)) {
     return null
   }
-  const store = readAgentSessionRecordStore()
-  const live = store ? lineageLiveSession(store, row.id) : null
-  return { title: row.title, sessionId: live?.sessionId ?? row.id }
+  const reach = structuredSessionMailReach(store, record, runtime.getOrchestrationDb())
+  if (reach.kind !== 'reachable') {
+    return null
+  }
+  const live = reach.session
+  const root = createCanonicalOrcaSessionResolver(store)
+  if (
+    !isOrcaSessionId(live.sessionId) ||
+    root(live.sessionId) !== id ||
+    !botOfHomeWorkspace([bot], live.location.workspaceId) ||
+    isBotBackgroundRun(runtime.lookAround, live)
+  ) {
+    return null
+  }
+  return { title: live.conversationName ?? null, sessionId: live.sessionId }
 }
 
 /** `bot list`'s count of a bot's chats, naming the asking one when it is among them. */
@@ -147,27 +168,30 @@ export function botChatRecordEmpty(record: AgentSessionConversationView): boolea
 export function botChatRecordRow(
   record: AgentSessionConversationView,
   rootOf: (id: string) => string,
-  homeRoot: string | null
+  /** Each Home's /clear root, by whose Home it is. */
+  homeRoots: ReadonlyMap<string, BotHomeOf>
 ): Omit<BotChatRow, 'self' | 'closed'> | null {
   if (!isOrcaSessionId(record.sessionId) || clearedInto(record) !== null) {
     return null
   }
   const id = rootOf(record.sessionId)
   const turn = record.lastTurn
+  const homeOf = homeRoots.get(id)
   return {
     id,
     title: record.conversationName ?? null,
     lastActivityAt: turn?.at ?? record.updatedAt,
     lastAsked: turn?.prompt ?? null,
     lastSaid: turn?.reply ?? null,
-    home: id === homeRoot
+    home: homeOf !== undefined,
+    ...(homeOf ? { homeOf } : {})
   }
 }
 
 export function listBotChats(
   store: AgentSessionRecordReader | null,
   db: OrchestrationDb,
-  bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId'>,
+  bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId' | 'shares'>,
   callerSessionId: string | null,
   /** Look around and Tidy-up run as conversations in the bot's home, but are never chats. */
   backgroundRuns: BotBackgroundRuns
@@ -189,23 +213,23 @@ export function listBotChats(
 export function listBotChatsWith(
   context: StructuredSessionReachContext,
   store: AgentSessionRecordReader,
-  bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId'>,
+  bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId' | 'shares'>,
   callerSessionId: string | null,
   backgroundRuns: BotBackgroundRuns
 ): BotChatRow[] {
   // A /clear keeps the conversation's address at its root, so each lineage is listed once, by that.
   const root = createCanonicalOrcaSessionResolver(store)
   const rootOf = (id: string | null) => (id && isOrcaSessionId(id) ? root(id) : null)
-  const home = rootOf(bot.chatSessionId)
   const self = rootOf(callerSessionId)
   const rootOfChat = (id: string) => rootOf(id) ?? id
+  const homes = botHomeRoots(bot, rootOfChat)
   return store
     .listRecords()
     .flatMap((record): BotChatRow[] => {
       const row =
         botOfHomeWorkspace([bot], record.location.workspaceId) &&
         !isBotBackgroundRun(backgroundRuns, record)
-          ? botChatRecordRow(record, rootOfChat, home)
+          ? botChatRecordRow(record, rootOfChat, homes)
           : null
       if (!row || !isOrcaSessionId(record.sessionId)) {
         return []

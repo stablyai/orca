@@ -7,6 +7,7 @@ import {
 import { getRuntimeSessionMirrorEnvironmentIds } from '../../../lib/workspace/ownership/runtime-session-mirror-owners'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorktreeRuntimeOwnerState } from '../../../lib/workspace/ownership/worktree-runtime-owner-state'
+import { listedRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 
 type RuntimeMirrorStatus = {
   status: RuntimeStatus | null
@@ -36,6 +37,8 @@ export type RuntimeSessionMirrorTargetState = Omit<
 > & {
   runtimeEnvironments?: readonly RuntimeMirrorEnvironment[]
   runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeMirrorStatus>
+  /** Shared agents' hosts, which no paired-server row lists; absent, the share list is read. */
+  sharedHostEnvironmentIds?: ReadonlySet<string>
 }
 
 export function getReachableRuntimeSessionMirrorTargets(
@@ -55,15 +58,20 @@ export function getReachableRuntimeSessionMirrorTargets(
     if (!runtimeId) {
       continue
     }
-    const environment = environmentById.get(environmentId)
-    if (!environment) {
+    const shared = state.sharedHostEnvironmentIds
+    const pairingRevision = listedRuntimeEnvironmentRevision(
+      environmentById.get(environmentId),
+      environmentId,
+      shared && ((id) => shared.has(id))
+    )
+    if (pairingRevision === undefined) {
       continue
     }
     targets.push({
       environmentId,
       runtimeId,
       connectionGeneration: entry?.connectionGeneration ?? 0,
-      pairingRevision: environment.pairingRevision ?? environment.createdAt,
+      pairingRevision,
       hostContactEpoch: entry?.hostContactEpoch ?? 0
     })
   }

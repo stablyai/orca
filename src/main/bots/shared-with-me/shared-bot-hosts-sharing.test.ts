@@ -3,11 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SharedBotHostsState } from '../../../shared/bots/shared-bot-hosts'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { ConnectorAccountTransport } from '../../connector-cloud/connector-transport'
 import { SharedBotHosts } from './shared-bot-hosts'
 import { sharedBotsCloud } from './shared-bots-cloud'
-import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -44,10 +42,13 @@ function sharingHosts(replies: Reply[], account: () => string | null = () => 'ad
   const hosts = new SharedBotHosts({
     userDataPath: dir,
     account,
-    cloud: () => sharedBotsCloud(transport),
-    platform: NODE_RELAY_CLIENT_PLATFORM,
+    cloud: () =>
+      sharedBotsCloud({
+        call: (...args) => transport.call(...args),
+        readShares: (path, schema, options) =>
+          transport.call(path, undefined, schema, { ...options, method: 'GET' })
+      }),
     publish: (state) => published.push(state),
-    homes: memorySharedBotHomes(dir).homes,
     now: () => 0
   })
   return { hosts, published, fetches: () => fetches }
@@ -134,9 +135,7 @@ describe('whether this account’s Orca Cloud takes shares', () => {
       userDataPath: dir,
       account: () => 'ada',
       cloud: () => null,
-      platform: NODE_RELAY_CLIENT_PLATFORM,
       publish: (state) => published.push(state),
-      homes: memorySharedBotHomes(dir).homes,
       now: () => 0
     })
     await hosts.refresh()
@@ -172,7 +171,6 @@ describe('an account switch while a shares read is out', () => {
       async () => null
     ]
     const accepted: string[] = []
-    const { homes, folders } = memorySharedBotHomes(dir)
     const hosts = new SharedBotHosts({
       userDataPath: dir,
       account: () => account,
@@ -187,18 +185,16 @@ describe('an account switch while a shares read is out', () => {
           accepted.push(shareId)
           return { ok: true, value: { status: 'queued' } }
         },
+        decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
-      platform: NODE_RELAY_CLIENT_PLATFORM,
       publish: () => {},
-      homes,
       now: () => 0
     })
     try {
       await hosts.refresh()
       const kept = hosts.views()
       expect(kept.map((view) => view.shareId)).toEqual(['share-1'])
-      const keptFolders = folders.map((folder) => folder.id)
       const keptAccepts = accepted.length
 
       const outstanding = hosts.refresh()
@@ -208,8 +204,9 @@ describe('an account switch while a shares read is out', () => {
       answerLate()
       await outstanding
 
-      expect(hosts.views()).toEqual(kept)
-      expect(folders.map((folder) => folder.id)).toEqual(keptFolders)
+      // That read was share-1's one wait for its offer, so only its connecting state ends.
+      const settled = ({ accepting: _accepting, ...view }: (typeof kept)[number]) => view
+      expect(hosts.views().map(settled)).toEqual(kept.map(settled))
       expect(accepted).toHaveLength(keptAccepts)
     } finally {
       hosts.stop()

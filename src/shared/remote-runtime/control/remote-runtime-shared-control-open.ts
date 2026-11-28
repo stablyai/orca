@@ -22,6 +22,10 @@ import {
   type RemoteRuntimeSocketLivenessOptions
 } from '../remote-runtime-socket-liveness'
 import type { RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
+import type {
+  AuthenticatedRuntimeChannelEvents,
+  AuthenticatedRuntimeChannelOpener
+} from './remote-runtime-authenticated-channel'
 
 export function openSharedControlSocket(
   connection: PairedRuntimeConnection,
@@ -146,17 +150,17 @@ export function openSharedControlSocket(
   }
 }
 
-/** Preparation and socket installation share the generation that admitted the open. */
-export async function openPreparedSharedControlSocket(
-  connection: PairedRuntimeConnection,
+/** Preparation and channel installation share the generation that admitted the open. */
+export async function openPreparedSharedControlChannel(
   options: RemoteRuntimeSharedControlConnectionOptions,
   args: {
     current: () => boolean
     prepared: () => void
     hasDemand: () => boolean
     refuse: (error: RemoteRuntimeClientError) => void
-    callbacks: Parameters<typeof openSharedControlSocket>[1]
-    accept: (opened: ReturnType<typeof openSharedControlSocket>) => void
+    opener: AuthenticatedRuntimeChannelOpener
+    events: AuthenticatedRuntimeChannelEvents
+    accept: (opened: ReturnType<AuthenticatedRuntimeChannelOpener>) => void
   }
 ): Promise<void> {
   const refusal = await prepareOpenRefusal(false, options)
@@ -172,16 +176,16 @@ export async function openPreparedSharedControlSocket(
     args.refuse(error)
     return
   }
-  const { onSocketClosed } = args.callbacks
+  const { onClosed } = args.events
   args.accept(
-    openSharedControlSocket(connection, {
-      ...args.callbacks,
-      onSocketClosed: (error, cause, close) => {
+    args.opener({
+      ...args.events,
+      onClosed: (error, cause, close) => {
         // Before the close is handled, so the retry it schedules already sees the hold.
         if (close?.code === ORCAD_IDLE_STOP_CLOSE_CODE) {
           options.onIdleStop?.()
         }
-        onSocketClosed(error, cause, close)
+        onClosed(error, cause, close)
       }
     })
   )

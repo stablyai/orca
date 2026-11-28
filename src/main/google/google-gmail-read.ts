@@ -8,6 +8,7 @@ import type {
   GmailReadView,
   GmailSearchView
 } from '../../shared/google/google-read-types'
+import { sliceAtCodeUnitLimit } from '../../shared/text/surrogate-safe-text-slice'
 import {
   formatMegabytes,
   TOOL_DOWNLOAD_MAX_BYTES,
@@ -157,7 +158,7 @@ export async function readGmail(
       continue
     }
     // The first message on a page always shows some text, so --offset always moves on.
-    const text = body.slice(from, from + Math.max(room, MIN_FIRST_TEXT_CHARS))
+    const text = sliceAtCodeUnitLimit(body.slice(from), Math.max(room, MIN_FIRST_TEXT_CHARS))
     shown += text.length + framing
     if (from + text.length < body.length) {
       nextOffset = before + from + text.length

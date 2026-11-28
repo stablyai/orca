@@ -30,13 +30,10 @@ import {
   Wait
 } from '../../../../../shared/rpc-contract/browser/browser-params'
 import * as browserObservationParams from '../../../../../shared/rpc-contract/browser/browser-observation-params'
-import {
-  BrowserOpenUrlParams,
-  BrowserTabCreateParams
-} from '../../../../../shared/rpc-contract/browser/browser-tab-create-params'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { BROWSER_PAGE_LOAD_METHODS } from './browser-page-load-rpc-methods'
 import { BROWSER_PAGE_FIND_METHODS } from './browser-page-find-rpc-methods'
+import { BROWSER_TAB_CREATE_METHODS } from './browser-tab-create-rpc-methods'
 import { BROWSER_PAGE_MENU_METHODS } from './browser-page-menu-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
 import { CertificateProceed } from '../../../../../shared/rpc-contract/browser/browser-core-params'
@@ -130,22 +127,7 @@ export const BROWSER_CORE_METHODS = [
     params: TabSwitch,
     handler: async (params, { runtime }) => runtime.browserTabSwitch(params)
   }),
-  defineMethod({
-    name: 'browser.tabCreate',
-    ...notShared('workspace'),
-    params: BrowserTabCreateParams,
-    handler: async (params, { runtime, pairedDeviceId, clientKind, signal }) =>
-      pairedDeviceId
-        ? runtime.browserTabCreate(params, { pairedDeviceId, clientKind, signal })
-        : runtime.browserTabCreate(params, { clientKind, signal })
-  }),
-  defineMethod({
-    name: 'browser.openUrl',
-    ...notShared('workspace'),
-    params: BrowserOpenUrlParams,
-    handler: async (params, { runtime, signal }) =>
-      runtime.browserOpenUrlOnClient(params, { signal })
-  }),
+  ...BROWSER_TAB_CREATE_METHODS,
   defineMethod({
     name: 'browser.tabClose',
     ...notShared('workspace'),

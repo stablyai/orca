@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 // What a hello says about this machine, always within the cloud's request cap.
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
@@ -17,7 +18,10 @@ import {
   CONNECTOR_WAKE_FEATURE,
   ConnectorHelloWakeOfferSchema
 } from '../../../cloud/packages/connector-contract/src/wake-messages'
-import { CONNECTOR_CLOUD_BOT_SHARES_FEATURE } from '../../shared/connector-cloud-features'
+import {
+  CONNECTOR_CLOUD_BOT_SHARES_FEATURE,
+  CONNECTOR_SHARE_NAMES_FEATURE
+} from '../../shared/connector-cloud-features'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorMachine, ConnectorTransport } from './connector-machine'
 import { jsonBytes } from './connector-snapshot'
@@ -47,16 +51,19 @@ const FEATURES = [
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
   CONNECTOR_WAKE_FEATURE,
   CONNECTOR_RESUME_FEATURE,
-  CONNECTOR_CLOUD_BOT_SHARES_FEATURE
+  CONNECTOR_CLOUD_BOT_SHARES_FEATURE,
+  CONNECTOR_SHARE_NAMES_FEATURE
 ]
 const PROMPT_KINDS = ['approval', 'question']
 // Listed by hand: a source joins only once this build's seam handles its conversations.
 const SOURCES = ['slack', 'linear', 'github']
 
 // The answer as this machine reads it: the shared contract's wake offer beside the rest.
-export const ConnectorHelloAnswer = ConnectorHelloResponse.extend({
-  wake: ConnectorHelloWakeOfferSchema
-})
+export const ConnectorHelloAnswer = lazyZodSchema(() =>
+  ConnectorHelloResponse.extend({
+    wake: ConnectorHelloWakeOfferSchema
+  })
+)
 
 export type ConnectorHelloSaid = {
   /** Null: left out, so the cloud keeps the bots it has until its answer says whether it takes pages. */

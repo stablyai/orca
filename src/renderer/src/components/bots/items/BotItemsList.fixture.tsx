@@ -172,3 +172,55 @@ export const waiting = defineFixture({
     </div>
   )
 })
+
+const alice = { accountId: 'a', name: 'Alice Park' }
+const bo = { accountId: 'b', name: 'Bo Chen' }
+const everyoneItems = [
+  makeTestBotItem(62, {
+    title: 'Check the crash reports for 1.4.231',
+    status: 'needs_you',
+    question: { eventId: 'e62', text: 'File it upstream?' },
+    people: [alice],
+    lastActivityAt: now - 40 * min
+  }),
+  makeTestBotItem(61, {
+    title: 'Approve the 1.4.232 release notes',
+    status: 'needs_you',
+    question: { eventId: 'e61', text: 'Ship these notes?' },
+    lastActivityAt: now - hour
+  }),
+  makeTestBotItem(63, {
+    title: 'Fix the updater crash on Windows 10',
+    lastActivityAt: now - 12 * min
+  }),
+  makeTestBotItem(57, {
+    title: 'Draft the Windows installer FAQ',
+    people: [alice],
+    lastActivityAt: now - hour
+  }),
+  makeTestBotItem(59, {
+    title: 'Draft the onboarding checklist',
+    people: [bo],
+    lastActivityAt: now - 4 * hour
+  })
+]
+
+// Everyone's items on a shared agent: a teammate's row names them before its age; the owner's are unmarked.
+export const everyone = defineFixture({
+  width: 340,
+  render: () => (
+    <div className="@container bg-sidebar p-1">
+      <BotItemsList
+        bot={bot}
+        groups={groupBotItems(everyoneItems, 5, now, 'e100')}
+        seenEventId="e100"
+        closedTotal={0}
+        onMoreClosed={null}
+        staleDays={5}
+        now={now}
+        onOpen={() => {}}
+        personMark={(item) => item.people?.map((person) => person.name).join(', ') ?? null}
+      />
+    </div>
+  )
+})

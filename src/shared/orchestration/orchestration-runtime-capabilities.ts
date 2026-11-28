@@ -75,8 +75,17 @@ export const ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
  *  (`send --on-client`); replies come back by `peerMailReturn`. */
 export const ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY =
   'orchestration.client-agent-asks.v1' as const
+/** A teammate's Orca may send, pull and return peer mail over the share of an agent shared with them,
+ *  for that agent; an older host refuses every peer-mail call from a teammate. */
+export const ORCHESTRATION_TEAMMATE_PEER_MAIL_RUNTIME_CAPABILITY =
+  'orchestration.teammate-peer-mail.v1' as const
+/** `orchestration.taskUpdate` accepts worker-only passive `--note` updates on `dispatch_contexts`. */
+export const ORCHESTRATION_TASK_UPDATE_NOTE_RUNTIME_CAPABILITY =
+  'orchestration.task-update-note.v1' as const
 
 export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
+  ORCHESTRATION_TEAMMATE_PEER_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_TASK_UPDATE_NOTE_RUNTIME_CAPABILITY,
   ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,

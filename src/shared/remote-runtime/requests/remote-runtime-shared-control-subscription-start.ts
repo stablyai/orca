@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import { admitSharedControlSubscription } from '../control/remote-runtime-shared-control-admission'
 import { createSharedControlSubscription } from './remote-runtime-shared-control-subscriptions'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import type {
   RemoteRuntimeSharedSubscription,
   SharedControlLogicalSubscription,
@@ -19,6 +20,19 @@ export async function startSharedControlSubscription<TResult>(args: {
   ensureReady: () => Promise<void>
   sendSubscription: (subscription: SharedControlLogicalSubscription<unknown>) => void
   closeSubscription: (requestId: string) => void
+  binaryChannel?: {
+    assign: (subscription: SharedControlLogicalSubscription<unknown>) => void
+    sendBinary: (
+      subscription: SharedControlLogicalSubscription<unknown>,
+      bytes: Uint8Array<ArrayBufferLike>
+    ) => boolean
+    sendRequest: (
+      subscription: SharedControlLogicalSubscription<unknown>,
+      method: string,
+      params: unknown,
+      timeoutMs: number
+    ) => Promise<RuntimeRpcResponse<unknown>>
+  }
 }): Promise<RemoteRuntimeSharedSubscription> {
   throwIfSignalAborted(args.signal)
   const retainedParamsBytes = admitSharedControlSubscription({
@@ -35,7 +49,9 @@ export async function startSharedControlSubscription<TResult>(args: {
     retainedParamsBytes,
     callbacks: args.callbacks
   })
-  args.subscriptions.set(requestId, subscription as SharedControlLogicalSubscription<unknown>)
+  const logical = subscription as SharedControlLogicalSubscription<unknown>
+  args.binaryChannel?.assign(logical)
+  args.subscriptions.set(requestId, logical)
   try {
     await args.ensureReady()
     throwIfSignalAborted(args.signal)
@@ -46,10 +62,17 @@ export async function startSharedControlSubscription<TResult>(args: {
   if (args.subscriptions.get(requestId) !== subscription) {
     throw remoteRuntimeUnavailableError('Remote runtime subscription closed before it started.')
   }
-  args.sendSubscription(subscription as SharedControlLogicalSubscription<unknown>)
+  args.sendSubscription(logical)
+  const channel = args.binaryChannel
   return {
     requestId,
     close: () => args.closeSubscription(requestId),
-    sendBinary: () => false
+    sendBinary: (bytes) => channel?.sendBinary(logical, bytes) ?? false,
+    ...(channel
+      ? {
+          sendRequest: (method: string, params: unknown, timeoutMs: number) =>
+            channel.sendRequest(logical, method, params, timeoutMs)
+        }
+      : {})
   }
 }

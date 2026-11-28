@@ -156,7 +156,7 @@ export const KO_VALUE_OVERRIDES = {
     '저장되지 않은 Git AI Author 변경사항이 있습니다. 떠나면 폐기됩니다.',
   'Discard unsaved Git AI Author changes?':
     '저장되지 않은 Git AI Author 변경사항을 삭제하시겠습니까?',
-  'Branch naming, base refs, and Git AI Author.': '브랜치 이름 지정, 기본 참조 및 Git AI Author.',
+  'Branch naming, base refs, and Git AI Author.': '브랜치 이름 지정, 기준 참조 및 Git AI Author.',
   'Used by repositories that inherit global hosted-review defaults.':
     '전역 호스팅 PR 기본값을 상속하는 저장소에서 사용됩니다.',
   'Defaults used when the hosted-review composer opens.':

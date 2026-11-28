@@ -17,7 +17,10 @@ import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
 import { MobileQueuedCardText } from './MobileQueuedCardText'
 import type { MobileQueuedHeadLight } from './mobile-queued-head-light'
 import { MobileAgentMessageSenders } from '../../transcript/agent-messages/MobileAgentMessageSenders'
-import { MobileQueuedTypedByLine } from '../../transcript/messages/MobileNativeChatUserMessageMarks'
+import {
+  MobileQueuedTypedByLine,
+  usePhoneOtherPersonTypist
+} from '../../transcript/messages/MobileNativeChatUserMessageMarks'
 import {
   QUEUED_ROW_NARROW_WIDTH,
   queuedMessageStyles as styles
@@ -102,6 +105,7 @@ function QueuedMessageCardContents({
   const t = useMobileTranslation()
   const narrow = useWindowDimensions().width < QUEUED_ROW_NARROW_WIDTH
   const returned = card.state === 'returned'
+  const typist = usePhoneOtherPersonTypist(card.typist)
   // A card that needs attention offers its retry, Send, which is what its caption names.
   const busy = busyControl !== undefined
   const steers = agentWorking && !card.needsAttention && queuedMessageCardSteers(card)
@@ -146,8 +150,8 @@ function QueuedMessageCardContents({
               <View style={styles.metaSenders}>
                 <MobileAgentMessageSenders queued bare from={card.from} />
               </View>
-            ) : card.typedByOther ? (
-              <MobileQueuedTypedByLine typist={card.typedByOther} textStyle={styles.metaText} />
+            ) : typist ? (
+              <MobileQueuedTypedByLine typist={typist} textStyle={styles.metaText} />
             ) : (
               <Text style={styles.metaText} numberOfLines={1}>
                 {t('session.queuedMessageCardRow.you', 'You')}

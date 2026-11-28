@@ -2,6 +2,7 @@
 // `folder:<id>`. Never a worktree, so a choice holds for every worktree of a repo.
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -12,7 +13,7 @@ export type McpHostWorkspace = { key: string; name: string; kind: 'repo' | 'fold
 
 export function useMcpHostWorkspaces(target: RuntimeClientTarget): McpHostWorkspace[] {
   const hostId = getRuntimeTargetHostId(target)
-  const repos = useAppStore((state) => state.repos)
+  const repos = useUserManagedRepos()
   const folders = useAppStore(selectFolderWorkspaces)
   return useMemo(
     () => [

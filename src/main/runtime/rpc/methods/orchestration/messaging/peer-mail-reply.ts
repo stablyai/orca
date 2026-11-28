@@ -71,6 +71,7 @@ export async function replyOverPeerMail(args: {
         subject,
         body: params.body,
         threadId,
+        replyTo: original.id,
         sender,
         // Refuses a second answer to a bot request, before the original is marked read.
         ...botAnswerOf(db, original)
@@ -122,6 +123,7 @@ export async function replyOverPeerMail(args: {
         subject,
         body: params.body,
         threadId,
+        replyTo: original.id,
         sender: peerMailSender(runtime, replier)
       } satisfies z.infer<typeof ClientReplyPayload>
     })
@@ -148,6 +150,7 @@ export async function replyOverPeerMail(args: {
     subject,
     body: params.body,
     threadId,
+    replyTo: original.id,
     sender: peerMailSender(runtime, replier)
   })
   db.markAsRead([original.id], { kind: 'reply' })

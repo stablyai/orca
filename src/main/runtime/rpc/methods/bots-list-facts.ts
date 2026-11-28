@@ -4,17 +4,27 @@
 import { listBotWaits } from '../../../../shared/bots/bot-list-waits'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
+/** Needs you counts of the owner's own items, or with `teammate` theirs on their shared bot alone. */
+export async function listedNeedsYouFacts(
+  runtime: OrcaRuntimeService,
+  teammate: { accountId: string; botId: string } | null = null
+) {
+  const needsYou = await runtime.botItems.needsYouCounts(Date.now(), teammate?.accountId ?? null)
+  // A failed count says nothing, so a window keeps the counts it has.
+  return needsYou
+    ? {
+        needsYou: teammate
+          ? { [teammate.botId]: needsYou.counts[teammate.botId] ?? 0 }
+          : needsYou.counts,
+        needsYouAt: needsYou.at,
+        ...(needsYou.staleInMs !== undefined ? { needsYouStaleInMs: needsYou.staleInMs } : {})
+      }
+    : {}
+}
+
 export async function listedBotsFacts(runtime: OrcaRuntimeService) {
-  const needsYou = await runtime.botItems.needsYouCounts(Date.now())
   return {
-    // A failed count says nothing, so a window keeps the counts it has.
-    ...(needsYou
-      ? {
-          needsYou: needsYou.counts,
-          needsYouAt: needsYou.at,
-          ...(needsYou.staleInMs !== undefined ? { needsYouStaleInMs: needsYou.staleInMs } : {})
-        }
-      : {}),
+    ...(await listedNeedsYouFacts(runtime)),
     waits: listBotWaits(runtime.listAutomationsForScope().automations, (ids) =>
       runtime.listAutomationRunsByAutomation(ids)
     )

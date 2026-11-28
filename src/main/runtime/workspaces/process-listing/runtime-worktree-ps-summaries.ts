@@ -219,9 +219,26 @@ export function buildRuntimeWorktreePsSummaries(args: {
 /** The bot a workspace is under: the nearest bot home among the folders the sidebar's own parent
  * rules nest it beneath, however it got there. */
 function botOwnerLookup(store: RuntimeStore | null, worktrees: readonly Worktree[]) {
-  const lineage = store?.getAllWorkspaceLineage?.() ?? {}
   const botByHome = new Map(
     (store?.getBots?.() ?? []).map((bot) => [folderWorkspaceKey(bot.folderWorkspaceId), bot.name])
+  )
+  const homeOf = botHomeLookup(store, worktrees)
+  return (key: WorkspaceKey, worktree: Worktree): { bot?: string; botHome?: true } => {
+    const home = homeOf(key, worktree)
+    const bot = home ? botByHome.get(home) : undefined
+    return bot ? (home === key ? { bot, botHome: true } : { bot }) : {}
+  }
+}
+
+/** The bot home a workspace is under, as its own key: itself for a home, else the nearest home up its
+ * lineage (worktree parents and folder records), as the sidebar nests it. */
+export function botHomeLookup(
+  store: RuntimeStore | null,
+  worktrees: readonly Worktree[]
+): (key: WorkspaceKey, worktree: Worktree) => WorkspaceKey | undefined {
+  const lineage = store?.getAllWorkspaceLineage?.() ?? {}
+  const homes = new Set(
+    (store?.getBots?.() ?? []).map((bot) => folderWorkspaceKey(bot.folderWorkspaceId))
   )
   const rows = new Map(
     [...worktrees, ...(store?.getFolderWorkspaces?.() ?? []).map(folderWorkspaceToWorktree)].map(
@@ -231,16 +248,14 @@ function botOwnerLookup(store: RuntimeStore | null, worktrees: readonly Worktree
   const parentOf = resolveWorkspaceLineageParents({}, rows, undefined, (row) =>
     pickFolderLineageRecord(lineage[workspaceKeyOfRow(row)], row)
   )
-  const isHome = (row: Worktree) => botByHome.has(workspaceKeyOfRow(row))
+  const isHome = (row: Worktree) => homes.has(workspaceKeyOfRow(row))
   const parent = (row: Worktree) => parentOf.get(getWorktreeHostIdentity(row))
-  return (key: WorkspaceKey, worktree: Worktree): { bot?: string; botHome?: true } => {
-    const home = botByHome.get(key)
-    if (home) {
-      return { bot: home, botHome: true }
+  return (key, worktree) => {
+    if (homes.has(key)) {
+      return key
     }
     const homeRow = nearestBotHome(worktree, parent, isHome)
-    const bot = homeRow ? botByHome.get(workspaceKeyOfRow(homeRow)) : undefined
-    return bot ? { bot } : {}
+    return homeRow ? workspaceKeyOfRow(homeRow) : undefined
   }
 }
 

@@ -9,11 +9,15 @@ import {
 import { toRuntimeExecutionHostId } from '../execution-host/execution-host'
 import { clipActivityTitle } from './bot-activity-recorded-workers'
 import {
-  CHAT_TREE_CAPS,
-  type BotChatTreeChat,
-  type BotChatTreeRead,
-  type BotChatTreeWorker
-} from './bot-chat-tree'
+  botChatHomePlaceholders,
+  idleHomeRow,
+  ownerHomeRowId,
+  NO_HOME_CHAT_ID,
+  type BotChatHostChat,
+  type BotChatHostFacts,
+  type BotChatHostTree
+} from './bot-chat-tree-homes'
+import { CHAT_TREE_CAPS, type BotChatTreeChat, type BotChatTreeWorker } from './bot-chat-tree'
 import { botWorkspaceChats } from './bot-workspace-chats'
 
 /** A chat's own facts, before its workers are placed. */
@@ -22,11 +26,14 @@ export type BotChatFacts = Omit<
   'running' | 'runningTotal' | 'finished' | 'finishedTotal' | 'failedTotal'
 >
 
-/** The id a bot without a Home Chat yet lists its Home row by; opening it starts one. */
-export const NO_HOME_CHAT_ID = ''
-
-/** The Home row's title, the name the bot's Home tab goes by. */
-export const HOME_CHAT_TITLE = 'Home Chat'
+export {
+  HOME_CHAT_TITLE,
+  NO_HOME_CHAT_ID,
+  placeBotChatDispatches,
+  type BotChatHostChat,
+  type BotChatHostFacts,
+  type BotChatHostTree
+} from './bot-chat-tree-homes'
 
 /** One of the bot's Dispatches, with the root chat its creator chain leads to (null: none). */
 export type BotChatTreeDispatch = {
@@ -42,6 +49,10 @@ export type BotChatTreeDispatch = {
   worktreeId: string | null
   /** Its Task's title, for search; absent when the host read none. */
   title?: string
+  /** The paired server that runs it as its own; this host keeps no worker record for it. */
+  serverEnvironmentId?: string
+  /** The agent that server named for it. */
+  agent?: string
 }
 
 /** A row that is not a Dispatch of the bot's: a handed-over agent or a terminal-only automation run. */
@@ -57,29 +68,6 @@ export type BotChatTreePlaced = {
   dispatch: BotChatTreeDispatch
   chatId: string
   note?: BotChatTreeWorker['note']
-}
-
-function homeIdOf(chats: readonly BotChatFacts[]): string {
-  return chats.find((chat) => chat.origin === 'home' && !chat.closed)?.chatId ?? NO_HOME_CHAT_ID
-}
-
-/** Where each Dispatch shows: its chat; Home when it has none, or while its closed chat's worker runs. */
-export function placeBotChatDispatches(
-  chats: readonly BotChatFacts[],
-  dispatches: readonly BotChatTreeDispatch[]
-): BotChatTreePlaced[] {
-  const home = homeIdOf(chats)
-  const byId = new Map(chats.map((chat) => [chat.chatId, chat]))
-  return dispatches.map((dispatch) => {
-    const chat = dispatch.chatId ? byId.get(dispatch.chatId) : undefined
-    if (!chat) {
-      return { dispatch, chatId: home }
-    }
-    if (chat.closed && !dispatch.settled) {
-      return { dispatch, chatId: home, note: 'from-closed-chat' }
-    }
-    return { dispatch, chatId: chat.chatId }
-  })
 }
 
 /** A finished row before its record is read: a Dispatch, or an extra that needs none. */
@@ -187,7 +175,7 @@ export function botChatTreeDispatchIds(
   page?: BotChatTreePage
 ): string[] {
   const ids: string[] = []
-  for (const [chatId, chat] of refsByChat(placed, extras, homeIdOf(chats))) {
+  for (const [chatId, chat] of refsByChat(placed, extras, ownerHomeRowId(chats))) {
     // Every running record, even for one chat's page: one that reads ended moves to its own chat's history.
     ids.push(...chat.running.map((entry) => entry.dispatch.id))
     if (page && page.chatId !== chatId) {
@@ -233,9 +221,20 @@ export function botChatTreeDispatchWorker(
       startedAt: dispatch.at,
       ...(dispatch.settled ? { settledAt: dispatch.at } : {}),
       ...(dispatch.settled && dispatch.undated ? { settledUndated: true as const } : {}),
-      ...(dispatch.worktreeId ? { placedWorktreeId: dispatch.worktreeId } : {}),
+      ...(dispatch.worktreeId && !dispatch.serverEnvironmentId
+        ? { placedWorktreeId: dispatch.worktreeId }
+        : {}),
       ...(note ? { note } : {}),
-      dispatchId: dispatch.id
+      dispatchId: dispatch.id,
+      // A paired server's own worker: its record there names its host and workspace.
+      ...(dispatch.serverEnvironmentId
+        ? {
+            hostId: toRuntimeExecutionHostId(dispatch.serverEnvironmentId),
+            host: 'remote' as const,
+            ...(dispatch.worktreeId ? { worktreeId: dispatch.worktreeId } : {})
+          }
+        : {}),
+      ...(dispatch.agent ? { agent: dispatch.agent } : {})
     }
   }
   const state = workerState(worker)
@@ -273,7 +272,7 @@ function failedCount(finished: readonly FinishedRef[]): number {
 
 /** The tree with every chat's running workers and the last finished ones (or one chat's next page). */
 export function buildBotChatTree(input: {
-  chats: readonly BotChatFacts[]
+  chats: readonly BotChatHostFacts[]
   placed: readonly BotChatTreePlaced[]
   /** The worker records read for `botChatTreeDispatchIds`. */
   workers: ReadonlyMap<string, OrchestrationSessionWorker>
@@ -281,27 +280,22 @@ export function buildBotChatTree(input: {
   /** Workspaces under the bot that no Dispatch places, such as ones moved in by hand. */
   homeWorkspaceIds?: readonly string[]
   page?: BotChatTreePage
-}): BotChatTreeRead {
-  const home = homeIdOf(input.chats)
+}): BotChatHostTree {
+  const home = ownerHomeRowId(input.chats)
   const extras = input.extras ?? []
   const byChat = refsByChat(input.placed, extras, home, input.workers)
-  const facts = input.chats.some((chat) => chat.chatId === home)
-    ? input.chats
-    : [
-        {
-          chatId: NO_HOME_CHAT_ID,
-          title: HOME_CHAT_TITLE,
-          origin: 'home' as const,
-          live: 'idle' as const,
-          lastActiveAt: 0,
-          unread: false,
-          closed: false
-        },
-        ...input.chats
-      ]
+  const listed = new Set(input.chats.map((chat) => chat.chatId))
+  const facts = [
+    ...(listed.has(home) ? [] : [{ ...idleHomeRow(NO_HOME_CHAT_ID), whoseHome: 'owner' as const }]),
+    ...input.chats,
+    ...botChatHomePlaceholders(
+      input.placed.map((entry) => entry.chatId),
+      listed
+    )
+  ]
   const chats = facts
     .filter((chat) => !input.page || chat.chatId === input.page.chatId)
-    .map((chat): BotChatTreeChat => {
+    .map((chat): BotChatHostChat => {
       const refs = byChat.get(chat.chatId) ?? { running: [], runningExtras: [], finished: [] }
       const running = [
         ...refs.running.map((entry) =>

@@ -21,6 +21,7 @@ import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirro
 import type { LaunchEvidence } from '../launch/launch-evidence'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import type { TeammateTabListKey } from '../../../bots/team-share/teammate-rules'
 import type { HostTerminalUsage } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 type RuntimeTerminalTailState = {
@@ -68,6 +69,19 @@ export type RuntimeLeafRecord = Readonly<RuntimeSyncedLeaf> &
 
 export type AdoptedRootProcess = { incarnationId: string | null; pid: number }
 
+/** Whose tab list a terminal is in: the host's, or the teammate's own list that opened it. */
+export type PtyList = 'host' | TeammateTabListKey
+
+/** The one test of whose a PTY is, for every reader that lists or acts on a workspace's terminals
+ *  for someone. `every` is only for work on the workspace itself (removal, moves, its census). A
+ *  record not yet made (a pane's id alone) is the host's: a held PTY never binds a host pane. */
+export function ptyInList(
+  pty: Pick<RuntimePtyWorktreeRecord, 'holder'> | undefined,
+  list: PtyList | 'every'
+): boolean {
+  return list === 'every' || (pty?.holder ?? 'host') === list
+}
+
 export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   readonly ptyId: string
   readonly incarnationId: PtyIncarnationId | null
@@ -75,6 +89,9 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   /** Set only when no binding named the workspace; worktree-scoped stops never act on a cwd guess (#36716). */
   readonly worktreeInferredFromCwd?: true
   readonly connectionId: string | null
+  /** The teammate whose own list in a shared agent's Home holds this terminal; no host list or window
+   *  places it (teammate-rules.ts, rule 4). Stamped once, when the record is made (`recordPtyWorktree`). */
+  readonly holder?: TeammateTabListKey
   runtimeSessionOwned: boolean
   readonly isWsl: boolean | null
   readonly wslDistro: string | null
@@ -94,6 +111,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   spawnHostTerminalUsage?: HostTerminalUsage
   /** The ORCA_PANE_KEY the execution host reports this PTY's env exported; absent when unreported. */
   spawnPaneKey?: string | null
+  /** The line count its released transcript reached, where a slept agent's cursors continue from. */
+  releasedLinesTotal?: number
+  /** The stopped process whose handle (and line cursors) this one took over, counted once. */
+  linesContinuedFrom?: string
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null

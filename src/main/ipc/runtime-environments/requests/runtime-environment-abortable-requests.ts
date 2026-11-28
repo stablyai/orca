@@ -1,3 +1,4 @@
+import { remoteRuntimeOneLinkFor } from '../../../../shared/remote-runtime/control/remote-runtime-one-link'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
@@ -82,6 +83,11 @@ export function sendRemoteRuntimeConnectionRequestAbortable(
   timeoutMs: number,
   signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<unknown>> {
+  // A host on one link takes this call there too, instead of on the cached request socket.
+  const oneLink = remoteRuntimeOneLinkFor(connection)
+  if (oneLink) {
+    return oneLink.request(method, params, timeoutMs, undefined, signal)
+  }
   return signal
     ? sendRemoteRuntimeConnectionRequest(
         environmentId,

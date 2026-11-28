@@ -115,7 +115,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
 
   useBrowserClientHostedPopupNotices(browserTab.id)
   useBrowserClientHostedPermissionNotices(browserTab.id)
-  useClientHostedBrowserIntroTour(isActive && !attachmentError && placement !== null)
+  useClientHostedBrowserIntroTour(runtimeEnvironmentId, isActive && !attachmentError && !!placement)
   useBrowserPageFindShortcuts({ ...shortcutOwner, setFindOpen })
   useBrowserPageWebviewShortcuts({
     ...shortcutOwner,

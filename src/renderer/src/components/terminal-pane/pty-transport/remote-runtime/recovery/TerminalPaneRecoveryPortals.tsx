@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { Fragment, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import type { PtyTransport } from '../../pty-transport-types'
 import { useWslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
@@ -10,18 +10,19 @@ import { CalmRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconne
 import { useRetryingOutageEnvironmentId } from '../../recovery/server-outage/remote-server-outage'
 import { useWorkspaceRuntimeEnvironmentId } from '../../../../../lib/workspace/ownership/workspace-runtime-environment'
 import {
-  usePublishRemoteServerNoticeShowing,
-  useRemoteServerNoticeClaim
+  useRemoteServerNoticeClaim,
+  useReportRemoteServerPaneRetries
 } from '../../recovery/server-outage/remote-server-notice-claims'
-import { RemoteServerOutageNotice } from '../../recovery/server-outage/RemoteServerOutageNotice'
+import { usePublishRemoteServerDownTab } from '../../recovery/server-outage/remote-server-outage-signals'
+import { RemoteServerPaneVeil } from '../../recovery/server-outage/RemoteServerPaneVeil'
 import { WslHostStoppedCard } from '../../recovery/wsl/WslHostStoppedCard'
 import { useRetryPanesWhenWslHostReturns } from '../../recovery/wsl/use-wsl-host-return-retry'
-import { useCalmStatusReveal } from '@/runtime/hosts/connections/use-calm-status-reveal'
 import { useAppStore } from '@/store/index'
 import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
+import { classifyRemoteServerPaneRetries } from '../../recovery/server-outage/remote-server-pane-retries'
 
 /** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
 export function createPaneRecoveryReconnect(
@@ -123,48 +124,55 @@ export function TerminalPaneRecoveryPortals({
     pairingRefusedEnvironmentId === null
   const serverDown = retryingOutageEnvironmentId !== null
   const notice = useRemoteServerNoticeClaim(ownerEnvironmentId, serverDown, canSpeak)
-  const [noticeEnvironmentId, setNoticeEnvironmentId] = useState<string | null>(null)
-  if (notice.speaks && ownerEnvironmentId !== noticeEnvironmentId) {
-    setNoticeEnvironmentId(ownerEnvironmentId)
-  }
-  const revealed = useCalmStatusReveal(notice.speaks, false, notice.since)
-  // Hold only on the eligible outage leader; hidden/sign-in/WSL surfaces and handoffs must not overlap another notice or card.
-  const [handedOff, setHandedOff] = useState(false)
-  if (notice.speaks && handedOff) {
-    setHandedOff(false)
-  } else if (!notice.speaks && serverDown && revealed.visible && !handedOff) {
-    setHandedOff(true)
-  }
-  const noticeReveal =
-    canSpeak && !handedOff && (notice.speaks || !serverDown)
-      ? revealed
-      : { visible: false, downSince: null }
-  usePublishRemoteServerNoticeShowing(noticeEnvironmentId, noticeReveal.visible)
+  // Why these panes only: sign-in, WSL, pairing and Activity panes explain themselves, and bridged panes are on another server.
+  const surfaceHeldByServer =
+    !isolated &&
+    !wslHostUnavailable &&
+    stoppedWslDistro === null &&
+    pairingRefusedEnvironmentId === null
+  const paneEnvironmentIds = managedPanes.map((pane) => {
+    const transport = paneTransportsRef.current.get(pane.id)
+    // Why only when unknown: a bridged pane reports null on purpose and must not borrow the owner's server.
+    return transport?.getRuntimeEnvironmentId
+      ? transport.getRuntimeEnvironmentId()
+      : ownerEnvironmentId
+  })
+  const serverPanes = managedPanes.filter(
+    (pane, index) =>
+      surfaceHeldByServer &&
+      paneEnvironmentIds[index] === ownerEnvironmentId &&
+      ptyRecoveryStatesByPaneId[pane.id]?.reason !== 'ssh-sign-in'
+  )
+  useReportRemoteServerPaneRetries(
+    serverDown ? ownerEnvironmentId : null,
+    serverDown
+      ? classifyRemoteServerPaneRetries(
+          serverPanes.map((pane) => ptyRecoveryStatesByPaneId[pane.id])
+        )
+      : null
+  )
+  // Why gated on the card: a veil must never appear without the card that explains it.
+  const veilServerPanes = serverDown && notice.showing && !showSshReconnectOverlay
+  usePublishRemoteServerDownTab(
+    controller.tabId,
+    serverDown && !showSshReconnectOverlay && serverPanes.length > 0
+  )
   if (showSshReconnectOverlay) {
     return null
   }
   return (
     <>
-      {noticeEnvironmentId ? (
-        <RemoteServerOutageNotice
-          key={noticeEnvironmentId}
-          environmentId={noticeEnvironmentId}
-          reveal={noticeReveal}
-        />
-      ) : null}
-      {managedPanes.map((pane) => {
+      {managedPanes.map((pane, index) => {
         const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
         const awaitingSignIn = recoveryState?.reason === 'ssh-sign-in'
-        const transport = paneTransportsRef.current.get(pane.id)
-        // Why only when unknown: a bridged pane reports null on purpose and must not borrow the owner's server.
-        const paneEnvironmentId = transport?.getRuntimeEnvironmentId
-          ? transport.getRuntimeEnvironmentId()
-          : ownerEnvironmentId
-        const onReconnect = createPaneRecoveryReconnect(
-          () => paneTransportsRef.current.get(pane.id),
-          pairingRefusedEnvironmentId,
-          awaitingSignIn
-        )
+        const paneEnvironmentId = paneEnvironmentIds[index]
+        const onReconnect = (): void => {
+          createPaneRecoveryReconnect(
+            () => paneTransportsRef.current.get(pane.id),
+            pairingRefusedEnvironmentId,
+            awaitingSignIn
+          )()
+        }
         // Why with or without a recovery: a stopped distro's pane is dead either way, and only Start revives it.
         if (
           stoppedWslDistro !== null &&
@@ -186,8 +194,19 @@ export function TerminalPaneRecoveryPortals({
             `wsl-host-stopped-${pane.id}`
           )
         }
+        const veil =
+          veilServerPanes && ownerEnvironmentId !== null && serverPanes.includes(pane)
+            ? createPortal(
+                <RemoteServerPaneVeil
+                  environmentId={ownerEnvironmentId}
+                  terminal={pane.terminal}
+                />,
+                pane.container,
+                `remote-server-pane-veil-${pane.id}`
+              )
+            : null
         // Why mounted with no recovery: the banner's minimum time and hold outlive the recovery itself.
-        return createPortal(
+        const banner = createPortal(
           <CalmRemoteRuntimeReconnectBanner
             // Why per pane, not per epoch: a Reconnect click opens a new epoch and must not hide the banner again.
             key={`remote-runtime-reconnect-${pane.id}`}
@@ -210,6 +229,13 @@ export function TerminalPaneRecoveryPortals({
           />,
           pane.container,
           `remote-runtime-reconnect-${pane.id}`
+        )
+        // Why one keyed fragment: the banner keeps its reveal clock while the veil comes and goes.
+        return (
+          <Fragment key={`pane-recovery-${pane.id}`}>
+            {veil}
+            {banner}
+          </Fragment>
         )
       })}
     </>

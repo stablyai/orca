@@ -194,7 +194,7 @@ export function useMobileStructuredAgentSession(
     onSendError,
     queueSendsNext,
     sendSelection: options.sendSelection,
-    takesSkills: hostSupport?.sendSkills === true
+    hostSupport
   })
   const commandRefusalCauses = useMemo(
     () => ({

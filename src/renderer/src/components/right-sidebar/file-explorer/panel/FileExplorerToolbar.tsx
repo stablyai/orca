@@ -21,6 +21,9 @@ type FileExplorerToolbarProps = {
   runtimeEnvironmentId?: string | null
   ownerUnresolved?: boolean
   workspaceId?: string | null
+  /** An agent's folder shared with this account: it lives on its host, so nothing opens or copies a
+   *  path on this computer for it. */
+  hostOnly?: boolean
   refresh: {
     isRefreshing: boolean
     showRefreshSpinner: boolean
@@ -49,6 +52,7 @@ function formatOpenInAppLabel(appName: string): string {
 export function FileExplorerToolbar({
   repoName,
   worktreePath,
+  hostOnly = false,
   connectionId,
   runtimeEnvironmentId,
   ownerUnresolved,
@@ -178,15 +182,19 @@ export function FileExplorerToolbar({
               )}
             </DropdownMenuCheckboxItem>
           ) : null}
-          <DropdownMenuSeparator />
-          <WorktreeOpenInMenuItems
-            worktreePath={worktreePath}
-            connectionId={connectionId}
-            runtimeEnvironmentId={runtimeEnvironmentId}
-            ownerUnresolved={ownerUnresolved}
-            workspace={workspaceId ? { workspaceId } : null}
-            formatLabel={formatOpenInAppLabel}
-          />
+          {hostOnly ? null : (
+            <>
+              <DropdownMenuSeparator />
+              <WorktreeOpenInMenuItems
+                worktreePath={worktreePath}
+                connectionId={connectionId}
+                runtimeEnvironmentId={runtimeEnvironmentId}
+                ownerUnresolved={ownerUnresolved}
+                workspace={workspaceId ? { workspaceId } : null}
+                formatLabel={formatOpenInAppLabel}
+              />
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

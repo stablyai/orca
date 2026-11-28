@@ -2,7 +2,7 @@
 // marks laid over them, read fresh on every read.
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentListVerdict } from '../../shared/agent-status/presentation/agent-list-status'
-import type { BotChatFacts } from '../../shared/bots/bot-chat-tree-model'
+import type { BotChatHostFacts } from '../../shared/bots/bot-chat-tree-model'
 import type { BotChatBaseChat, BotChatInputs } from './bot-chat-tree-base'
 import { chatLive, chatReadUnread, terminalRunChats } from './bot-chat-tree-rows'
 
@@ -19,14 +19,15 @@ export function overlayBotChats(
     tabbed: ReadonlySet<string>
     unseen: ReadonlySet<string>
   }
-): BotChatFacts[] {
+): BotChatHostFacts[] {
   const shown = chats.filter((chat) => !chat.empty || live.tabbed.has(chat.chatId))
   return [
-    ...shown.map((chat): BotChatFacts => {
+    ...shown.map((chat): BotChatHostFacts => {
       const status = live.rowByPaneKey.get(chat.paneKey)
       return {
         chatId: chat.chatId,
-        title: chat.home ? chat.title : live.tabTitles.get(chat.chatId) || chat.title,
+        ...(chat.whoseHome ? { whoseHome: chat.whoseHome } : {}),
+        title: chat.whoseHome ? chat.title : live.tabTitles.get(chat.chatId) || chat.title,
         origin: chat.origin,
         ...(chat.originLabel ? { originLabel: chat.originLabel } : {}),
         live: chatLive(status),

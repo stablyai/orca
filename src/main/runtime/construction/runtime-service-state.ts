@@ -1,3 +1,4 @@
+import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 import { backgroundWaitReportDeps } from '../orchestration/workers/turn-stops/worker-background-wait-rows'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
@@ -49,6 +50,11 @@ import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
+  protected abstract isSleptAgentLeaf(leaf: RuntimeLeafRecord): boolean
+  protected abstract unmountedSleptAgents(
+    worktreeId?: string,
+    handles?: readonly string[]
+  ): Iterable<RuntimeLeafRecord>
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
@@ -138,6 +144,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTopologyRevision: (worktreeId) => this.getTerminalTopologyRevision(worktreeId),
     buildHostScope: (targetWorktreeId, terminals, worktrees, queriedHostIds) =>
       this.buildTerminalListHostScope(targetWorktreeId, terminals, worktrees, queriedHostIds),
+    isSleptAgentLeaf: (leaf) => this.isSleptAgentLeaf(leaf),
+    unmountedSleptAgents: (worktreeId, handles) => this.unmountedSleptAgents(worktreeId, handles),
     ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { listsEveryPane: (id) => mainListsEveryPane(this, id) } : {})
   })
 
@@ -223,6 +231,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   })
 
   protected readonly orchestrationMailboxPointerDelivery = new OrchestrationMailboxPointerDelivery({
+    wakeSleepingRecipient: this.requestSleptMailboxWake.bind(this),
     mailboxOwner: this.orchestrationMailboxOwner,
     deliveryTarget: this.orchestrationMailboxDeliveryTarget,
     getDb: () => this._orchestrationDb,
@@ -230,7 +239,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isAgentSettledForDelivery: (ptyId) => this.checkDeliverySettledAndArmRecheck(ptyId),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
-    getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
+    getCliCommand: (terminalHandle) =>
+      this.getTerminalOrchestrationCliTarget(terminalHandle).cliCommand,
     resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>

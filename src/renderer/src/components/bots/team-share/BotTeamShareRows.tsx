@@ -1,5 +1,7 @@
-// The Share dialog's rows: one per person with access, and the Add field's suggestions.
-import { Ellipsis, Mail, Search, Trash2, X } from 'lucide-react'
+// An agent's people list (the Share dialog's and Settings › Sharing's): a row per person with access,
+// and the Add field's suggestions.
+import { createContext, useContext } from 'react'
+import { Ellipsis, Mail, Search, Trash2, UserPlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -22,8 +24,11 @@ import {
   type TeamShareSuggestion
 } from './bot-team-share-people'
 
-const LINK_ICONS = { slack: SlackIcon, github: GitHubIcon, linear: LinearIcon } as const
+export const LINK_ICONS = { slack: SlackIcon, github: GitHubIcon, linear: LinearIcon } as const
 const LINK_NAMES = { slack: 'Slack', github: 'GitHub', linear: 'Linear' } as const
+
+/** Where the person rows sit: in the Share dialog, or in a settings inset group. */
+export const TeamShareRowsInset = createContext(false)
 
 function LinkIcons({ links }: { links: readonly TeamShareLinkSource[] }): React.JSX.Element {
   return (
@@ -55,6 +60,7 @@ function PersonAvatar({
   badge?: 'slack' | 'github'
 }): React.JSX.Element {
   const BadgeIcon = badge ? LINK_ICONS[badge] : null
+  const inset = useContext(TeamShareRowsInset)
   return (
     <span className={cn('relative shrink-0', small ? 'size-7' : 'size-8')}>
       <BotOwnerAvatar iconClassName={small ? 'size-3.5' : 'size-4'} />
@@ -62,8 +68,12 @@ function PersonAvatar({
         <span
           className={cn(
             'absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full p-[3px]',
-            // Cut out of the surface it sits on: suggestions are on the popover, rows on the dialog.
-            small ? 'bg-popover' : 'bg-dialog-surface'
+            // Cut out of the surface it sits on: the popover, the dialog, or a settings inset group.
+            small
+              ? 'bg-popover'
+              : inset
+                ? 'bg-[color-mix(in_srgb,var(--foreground)_3.5%,var(--background))]'
+                : 'bg-dialog-surface'
           )}
         >
           <BadgeIcon className="size-full text-muted-foreground" />
@@ -73,15 +83,26 @@ function PersonAvatar({
   )
 }
 
+/** Whether the row is greyed out: someone asked who hasn't accepted, or who declined. */
+function isWaiting(person: TeamSharePerson): boolean {
+  return (
+    person.kind === 'invite' ||
+    (person.kind === 'account' && person.answer !== undefined && person.answer !== 'accepted')
+  )
+}
+
 function useSubline(person: TeamSharePerson): string {
   const t = useTranslate()
   switch (person.kind) {
     case 'account':
-      return person.email
+      // Someone with access shows their email; anyone else, only where they stand.
+      return person.answer === 'declined'
+        ? t('bots.teamShare.declined', 'Declined')
+        : person.answer === 'pending'
+          ? t('bots.teamShare.invited', 'Invited')
+          : person.email
     case 'invite':
-      return person.emailSent
-        ? t('bots.teamShare.invited', 'Invited')
-        : t('bots.teamShare.emailNotSent', 'Email not sent yet')
+      return t('bots.teamShare.invited', 'Invited')
     case 'slack':
       return person.handle
         ? t('bots.teamShare.slackLine', '{{handle}} on Slack · {{workspace}}', {
@@ -103,20 +124,35 @@ function RowShell({
   name,
   links,
   subline,
-  trailing
+  trailing,
+  muted = false
 }: {
   avatar: React.ReactNode
   name: string
   links?: readonly TeamShareLinkSource[]
   subline: string
   trailing: React.ReactNode
+  /** Greyed out: asked, not in yet. */
+  muted?: boolean
 }): React.JSX.Element {
   return (
-    <li className="flex min-h-12 items-center gap-3 px-6 py-1.5">
-      {avatar}
+    <li
+      className={cn(
+        'flex min-h-12 items-center gap-3 py-1.5',
+        useContext(TeamShareRowsInset) ? 'pr-2.5 pl-3' : 'px-6'
+      )}
+    >
+      <span className={cn('flex shrink-0', muted && 'opacity-50')}>{avatar}</span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[13px] leading-5 font-medium">{name}</span>
+          <span
+            className={cn(
+              'truncate text-[13px] leading-5 font-medium',
+              muted && 'text-muted-foreground'
+            )}
+          >
+            {name}
+          </span>
           {links ? <LinkIcons links={links} /> : null}
         </div>
         <div className="truncate text-xs leading-4 text-muted-foreground">{subline}</div>
@@ -146,19 +182,47 @@ export function TeamShareOwnerRow({ owner }: { owner: TeamShareOwner }): React.J
 export function TeamSharePersonRow({
   person,
   onRemove,
-  onResend
+  onResend,
+  onShareAgain
 }: {
   person: TeamSharePerson
   onRemove: (person: TeamSharePerson) => void
   /** Only an invite's row offers Resend. */
   onResend?: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
+  /** Only a declined account's row offers Share again. */
+  onShareAgain?: (person: Extract<TeamSharePerson, { kind: 'account' }>) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const name = teamSharePersonName(person)
   const subline = useSubline(person)
   const removeLabel = t('bots.teamShare.remove', 'Remove')
+  const answer = person.kind === 'account' ? (person.answer ?? 'accepted') : null
   const trailing =
-    person.kind === 'invite' && onResend ? (
+    answer === 'pending' || answer === 'declined' ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t('bots.teamShare.personActions', 'Actions for {{name}}', { name })}
+          >
+            <Ellipsis className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {answer === 'declined' && person.kind === 'account' && onShareAgain ? (
+            <DropdownMenuItem onSelect={() => onShareAgain(person)}>
+              <UserPlus />
+              {t('bots.teamShare.shareAgain', 'Share again')}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem variant="destructive" onSelect={() => onRemove(person)}>
+            <Trash2 />
+            {removeLabel}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : person.kind === 'invite' && onResend ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -206,7 +270,43 @@ export function TeamSharePersonRow({
       links={person.kind === 'account' ? person.links : undefined}
       subline={subline}
       trailing={trailing}
+      muted={isWaiting(person)}
     />
+  )
+}
+
+/** The owner, then everyone with access, then the caller's rows (Slack- and GitHub-only people). */
+export function TeamSharePeopleList({
+  owner,
+  people,
+  onRemove,
+  onResend,
+  onShareAgain,
+  className,
+  children
+}: {
+  owner: TeamShareOwner | null
+  people: readonly TeamSharePerson[]
+  onRemove: (person: TeamSharePerson) => void
+  onResend: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
+  onShareAgain: (person: Extract<TeamSharePerson, { kind: 'account' }>) => void
+  className?: string
+  children?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <ul className={className}>
+      {owner ? <TeamShareOwnerRow owner={owner} /> : null}
+      {people.map((person) => (
+        <TeamSharePersonRow
+          key={person.key}
+          person={person}
+          onRemove={onRemove}
+          onResend={onResend}
+          onShareAgain={onShareAgain}
+        />
+      ))}
+      {children}
+    </ul>
   )
 }
 

@@ -98,6 +98,7 @@ export function MobileBotGroupItems({
   const read = useMobileBotGroupItems({
     visible,
     client,
+    hostKey: hostBotsKey(hostId),
     groupId,
     bots,
     reads,

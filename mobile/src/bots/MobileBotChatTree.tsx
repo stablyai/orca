@@ -36,21 +36,26 @@ import {
   type BotChatSearchAsk
 } from '../../../src/shared/bots/use-bot-chat-search'
 import { MobileBotTextButton } from './MobileBotTextButton'
-import { MobileBotWorkerRow } from './MobileBotWorkerRow'
 import { ChatLeading, useMobileBotChatLabel } from './MobileBotChatLeading'
 import { MobileBotChatSearchNotes } from './MobileBotChatSearchNotes'
 import { MobileBotChatMenu } from './MobileBotChatDelete'
+import { MobileBotWorkerRow, type TreeBot } from './MobileBotWorkerRow'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
+/** What a chat's row says in place of its line and time: a message of theirs held for its host. */
+export type BotChatTreeNote = (
+  chat: BotChatTreeChat
+) => { line: string; aside: React.ReactNode } | null
+
 export type BotChatTreeActions = {
   openChat: (chat: BotChatTreeChat) => void
+  /** False for a chat that can't open now: its row shows disabled, as a worker's that can't. */
+  opens?: (chat: BotChatTreeChat) => boolean
   openWorker: (worker: BotChatTreeWorker) => void
   /** Asks, then deletes the chat; absent where the host can't. */
   deleteChat?: (chat: BotChatTreeChat) => void
 }
-
-type TreeBot = { id: string; name: string }
 
 function useChatLine(bot: TreeBot, chat: BotChatTreeChat, folded: boolean): string {
   const t = useMobileTranslation()
@@ -70,8 +75,13 @@ function useChatLine(bot: TreeBot, chat: BotChatTreeChat, folded: boolean): stri
     chat.preview ??
     (chat.origin === 'home'
       ? t('bots.chats.sayHi', 'Say hi to {{name}}', { name: bot.name })
-      : null)
-  return [place, chat.closed ? t('bots.chats.closedShort', 'closed') : null, preview]
+      : t('bots.chats.noMessages', 'No messages yet'))
+  return [
+    place,
+    chat.homeOf ? null : chat.person?.name,
+    chat.closed ? t('bots.chats.closedShort', 'closed') : null,
+    preview
+  ]
     .filter(Boolean)
     .join(' · ')
 }
@@ -90,7 +100,8 @@ function ChatGroup({
   chat,
   matches,
   loadMore,
-  actions
+  actions,
+  note
 }: {
   bot: TreeBot
   hostKey: string
@@ -98,6 +109,7 @@ function ChatGroup({
   matches: ReadonlySet<string> | null
   loadMore: (chatId: string) => void
   actions: BotChatTreeActions
+  note: ReturnType<BotChatTreeNote>
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -136,6 +148,7 @@ function ChatGroup({
       onOpen={each.worktreeId ? () => actions.openWorker(each) : undefined}
     />
   )
+  const opens = actions.opens?.(chat) ?? true
   const openRow = () => openChat(chat, actions)
   return (
     <>
@@ -143,12 +156,15 @@ function ChatGroup({
         {(onLongPress) => (
           <ListRow
             title={title}
-            subtitle={line || undefined}
+            subtitle={note?.line ?? (line || undefined)}
             leading={<ChatLeading chat={chat} />}
             strong={chat.unread}
-            value={chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now) : undefined}
+            value={
+              !note && chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now) : undefined
+            }
             accessory={
               <>
+                {note?.aside}
                 {chat.unseen ? (
                   <Text style={styles.newTag}>{t('bots.chats.newTag', 'New')}</Text>
                 ) : null}
@@ -173,7 +189,8 @@ function ChatGroup({
                 ) : null}
               </>
             }
-            onPress={unopenable ? undefined : openRow}
+            onPress={unopenable || !opens ? undefined : openRow}
+            disabled={!opens}
             onLongPress={onLongPress}
             accessibilityLabel={
               chat.unread ? `${label}, ${t('bots.chats.unread', 'Unread')}` : label
@@ -243,7 +260,9 @@ export function MobileBotChatTree({
   chats: treeChats,
   loadMore,
   search,
-  actions
+  actions,
+  heading,
+  note
 }: {
   bot: TreeBot
   /** The phone's key for the bot's host; folds are kept under it. */
@@ -254,6 +273,9 @@ export function MobileBotChatTree({
   /** Asks the bot's host to search every chat and worker. */
   search: BotChatSearchAsk
   actions: BotChatTreeActions
+  /** In place of Chats and its count, with no search: a list of only someone's own chats. */
+  heading?: string
+  note?: BotChatTreeNote
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -275,15 +297,16 @@ export function MobileBotChatTree({
       matches={matches}
       loadMore={loadMore}
       actions={actions}
+      note={note?.(chat) ?? null}
     />
   )
   return (
     <View>
       <SectionHeader
-        title={t('bots.chats.title', 'Chats')}
-        trailing={<Text style={styles.count}>{chats.length}</Text>}
+        title={heading ?? t('bots.chats.title', 'Chats')}
+        trailing={heading ? undefined : <Text style={styles.count}>{chats.length}</Text>}
       />
-      {view.onlyHome ? null : (
+      {view.onlyHome || heading ? null : (
         <MobileSearchField
           value={query}
           onChangeText={setQuery}

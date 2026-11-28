@@ -1,5 +1,4 @@
-import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
-import type WebSocket from 'ws'
+import type { AuthenticatedRuntimeChannel } from './remote-runtime-authenticated-channel'
 import type {
   SharedControlConnectionState,
   SharedControlReadyWaiter
@@ -11,8 +10,7 @@ import {
 
 export function ensureSharedControlReady(args: {
   state: SharedControlConnectionState
-  ws: WebSocket | null
-  handshake: PairedE2EEClientHandshake | null
+  channel: AuthenticatedRuntimeChannel | null
   readyWaiters: SharedControlReadyWaiter[]
   timeoutMs: number
   signal?: AbortSignal

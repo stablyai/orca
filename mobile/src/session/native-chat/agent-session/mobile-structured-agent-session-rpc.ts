@@ -1,4 +1,5 @@
 import type { AgentSessionMutationResult } from '../../../../../src/shared/agent-session/agent-session-wire'
+import { SHARED_BOT_HOST_ERRORS } from '../../../../../src/shared/bots/shared-bot-hosts'
 import { RpcRefusedError } from '../../../transport/rpc/rpc-refused-error'
 import type {
   AgentSessionWireRefusalCode,
@@ -33,7 +34,13 @@ export type StructuredAgentSessionMutationCallResult<TValue> =
       message: string
       failure: AgentSessionWriteFailure
     }
-  | { status: 'failed'; message: string; failure: AgentSessionWriteFailure }
+  | {
+      status: 'failed'
+      message: string
+      failure: AgentSessionWriteFailure
+      /** The code a shared agent's away host was answered with here (`SHARED_BOT_HOST_ERRORS`). */
+      sharedHostCode?: string
+    }
   | { status: 'unknown' }
 
 export type StructuredAgentSessionMutationResult<TValue> =
@@ -115,7 +122,8 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
   method: string
   fingerprintMethod: string
   sessionId: string
-  expectedRuntimeFence: number
+  /** Null only for a host that takes no fence (`sendsWithoutFence`). */
+  expectedRuntimeFence: number | null
   fields: Record<string, unknown>
   clientOperationId?: string
   timeoutMs?: number
@@ -172,6 +180,10 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       failure
     }
   } catch (error) {
+    const shared = sharedHostSendAnswer(error)
+    if (shared) {
+      return shared
+    }
     const answered =
       error instanceof RpcRefusedError ? agentSessionThrownFailure(error, error.code) : null
     if (answered && answered.kind !== 'unconfirmed') {
@@ -199,4 +211,22 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       failure: { kind: 'failed' }
     }
   }
+}
+
+/** A send to a shared agent's host that is away: held for it, or why it couldn't be. */
+function sharedHostSendAnswer(error: unknown): {
+  status: 'failed'
+  message: string
+  failure: AgentSessionWriteFailure
+  sharedHostCode: string
+} | null {
+  const codes: readonly string[] = Object.values(SHARED_BOT_HOST_ERRORS)
+  return error instanceof RpcRefusedError && codes.includes(error.code)
+    ? {
+        status: 'failed',
+        message: error.message,
+        failure: { kind: 'failed' },
+        sharedHostCode: error.code
+      }
+    : null
 }

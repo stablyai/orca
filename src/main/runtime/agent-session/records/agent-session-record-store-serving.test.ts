@@ -44,14 +44,14 @@ afterEach(async () => {
 it('reaches old-history retirement at serving on empty profiles through both hosts, unless shutting down', async () => {
   vi.stubEnv('ORCA_APP_VERSION', '1.0.1')
   const location = startupOpen.localAgentSessionRecordStoreLocation
-  vi.spyOn(startupOpen, 'localAgentSessionRecordStoreLocation').mockImplementation((ids) => ({
-    ...location(ids),
+  vi.spyOn(startupOpen, 'localAgentSessionRecordStoreLocation').mockImplementation((ids, bots) => ({
+    ...location(ids, bots),
     writerPath: journalSqlWorkerPath(),
     readerPath: journalSqlReaderPath()
   }))
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   const runtime = {
-    legacyStructuredSessionTabIds: [],
+    recordStoreLocation: () => startupOpen.localAgentSessionRecordStoreLocation([], () => []),
     openAgentSessionRecordStore: OrcaRuntimeWithGetWorktreePs.prototype.openAgentSessionRecordStore,
     startPullRequestWatches: () => {}
   }

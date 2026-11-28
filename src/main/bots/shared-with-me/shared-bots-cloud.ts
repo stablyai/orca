@@ -2,6 +2,7 @@
 // accept for one, and a message held for a host that is away.
 import {
   ConnectorShareAcceptSchema,
+  ConnectorShareDeclineSchema,
   ConnectorShareHoldSchema,
   ConnectorSharesMineSchema,
   sharePath,
@@ -11,14 +12,35 @@ import {
 import { CONNECTOR_PATHS } from '../../../shared/connectors/connector-cloud-paths'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 
-export function sharedBotsCloud(cloud: Pick<ConnectorCloud, 'call'>) {
+/** One accepted share's device, whose offer from the host the next share-list read waits for. */
+export type SharedBotOfferWait = { shareId: string; devicePublicKey: string }
+
+// Past the cloud's 15 s hold, so its answer, not this side's timeout, ends the wait.
+const OFFER_WAIT_TIMEOUT_MS = 25_000
+
+function minePath(wait: SharedBotOfferWait | undefined): string {
+  const path = `${CONNECTOR_PATHS.shares}/mine`
+  if (!wait) {
+    return path
+  }
+  const query = new URLSearchParams({ waitShare: wait.shareId, device: wait.devicePublicKey })
+  return `${path}?${query.toString()}`
+}
+
+export function sharedBotsCloud(cloud: Pick<ConnectorCloud, 'call' | 'readShares'>) {
   return {
-    mine: () =>
-      cloud.call(`${CONNECTOR_PATHS.shares}/mine`, undefined, ConnectorSharesMineSchema, {
-        method: 'GET'
-      }),
+    /** With `wait`, the cloud holds the answer until the host's offer to that device is on the share
+     *  (up to its cap); an older cloud ignores it and answers at once. */
+    mine: (wait?: SharedBotOfferWait) =>
+      cloud.readShares(
+        minePath(wait),
+        ConnectorSharesMineSchema,
+        wait ? { timeoutMs: OFFER_WAIT_TIMEOUT_MS } : {}
+      ),
     accept: (shareId: string, request: ConnectorShareAcceptRequest) =>
       cloud.call(sharePath(shareId, 'accept'), request, ConnectorShareAcceptSchema),
+    decline: (shareId: string) =>
+      cloud.call(sharePath(shareId, 'decline'), { v: 1 }, ConnectorShareDeclineSchema),
     hold: (shareId: string, request: ConnectorShareHoldRequest) =>
       cloud.call(sharePath(shareId, 'messages'), request, ConnectorShareHoldSchema)
   }
@@ -51,15 +73,25 @@ export class CloudSharesSupport {
 
   /** Reads the shares route as the signed-in account; null when there is no cloud, or the answer
    *  came back after another account (or none) signed in, so it is no one's to apply. */
-  async read(cloud: SharedBotsCloud | null, forgot: () => void) {
+  async read(cloud: SharedBotsCloud | null, forgot: () => void, wait?: SharedBotOfferWait) {
     this.forgetIfSwitched(forgot)
     const account = this.readAs
-    const answer = cloud ? await cloud.mine() : null
+    const answer = cloud ? await cloud.mine(wait) : null
     if (this.account() !== account || this.readAs !== account) {
       return null
     }
     this.value = sharesSupported(answer, this.value)
     return answer
+  }
+
+  /** The account's shares an answer gives: its list; none once refused as signed out with no account
+   *  signed in; null (keep what is kept) for anything else, a fenced or quitting connector's same
+   *  refusal while the account stays, or any error or no answer. */
+  sharesIn(answer: Awaited<ReturnType<SharedBotsCloud['mine']>> | null) {
+    if (answer?.ok) {
+      return answer.value.shares
+    }
+    return answer?.error === 'signed_out' && this.account() === null ? [] : null
   }
 }
 

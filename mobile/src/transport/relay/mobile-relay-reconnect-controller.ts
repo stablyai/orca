@@ -3,7 +3,7 @@ import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import { PairedE2EEAuthenticationError } from '../../../../src/shared/remote-runtime/relay/client/paired-e2ee-v2-physical-channel'
 import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
-import { relayDirectorRetryAfterMs } from './mobile-relay-resume-director'
+import { relayDirectorRetryAfterMs } from '../../../../src/shared/remote-runtime/relay/client/relay-director-resolve'
 import {
   isExplicitCredentialRejection,
   RelayCredentialEligibility

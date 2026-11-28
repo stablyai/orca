@@ -1,6 +1,6 @@
-import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
@@ -34,16 +34,18 @@ import {
 } from '../connectivity/runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentTransportGenerationRetired } from '../connections/runtime-environment-transport-generation'
 
-const Port = z.number().int().min(1).max(65_535)
-const EnvironmentId = z.string().trim().min(1).max(256)
-const Label = z.string().max(256).optional()
-const ForwardSpec = z.object({
-  environmentId: EnvironmentId,
-  localPort: Port,
-  remoteHost: z.string().max(256),
-  remotePort: Port,
-  label: Label
-})
+const Port = lazyZodSchema(() => z.number().int().min(1).max(65_535))
+const EnvironmentId = lazyZodSchema(() => z.string().trim().min(1).max(256))
+const Label = lazyZodSchema(() => z.string().max(256).optional())
+const ForwardSpec = lazyZodSchema(() =>
+  z.object({
+    environmentId: EnvironmentId,
+    localPort: Port,
+    remoteHost: z.string().max(256),
+    remotePort: Port,
+    label: Label
+  })
+)
 
 // A person's disconnect stops the server's forwards; a transport swap only redials them.
 onRuntimeEnvironmentTransportGenerationRetired((environmentId) => {
@@ -82,30 +84,22 @@ export function registerRuntimeEnvironmentPortForwardHandlers(options: {
       set: (environmentId, record) => options.store.setPairedPortForwards(environmentId, record)
     }
   })
-  handleRuntimeEnvironmentChannel('runtimeEnvironments:listPortForwards', () =>
-    listPairedPortForwards()
-  )
-  handleRuntimeEnvironmentChannel('runtimeEnvironments:addPortForward', (_event, input: unknown) =>
+  ipcMain.handle('runtimeEnvironments:listPortForwards', () => listPairedPortForwards())
+  ipcMain.handle('runtimeEnvironments:addPortForward', (_event, input: unknown) =>
     addPairedPortForward(ForwardSpec.parse(input))
   )
-  handleRuntimeEnvironmentChannel(
-    'runtimeEnvironments:updatePortForward',
-    (_event, input: unknown) =>
-      updatePairedPortForward(ForwardSpec.extend({ id: z.string().min(1).max(64) }).parse(input))
+  ipcMain.handle('runtimeEnvironments:updatePortForward', (_event, input: unknown) =>
+    updatePairedPortForward(ForwardSpec.extend({ id: z.string().min(1).max(64) }).parse(input))
   )
-  handleRuntimeEnvironmentChannel(
-    'runtimeEnvironments:removePortForward',
-    (_event, input: unknown) =>
-      removePairedPortForward(z.object({ id: z.string().min(1).max(64) }).parse(input).id)
+  ipcMain.handle('runtimeEnvironments:removePortForward', (_event, input: unknown) =>
+    removePairedPortForward(z.object({ id: z.string().min(1).max(64) }).parse(input).id)
   )
-  handleRuntimeEnvironmentChannel(
-    'runtimeEnvironments:ensurePortForward',
-    (_event, input: unknown) =>
-      ensurePairedPortForward(
-        z.object({ environmentId: EnvironmentId, remotePort: Port, label: Label }).parse(input)
-      )
+  ipcMain.handle('runtimeEnvironments:ensurePortForward', (_event, input: unknown) =>
+    ensurePairedPortForward(
+      z.object({ environmentId: EnvironmentId, remotePort: Port, label: Label }).parse(input)
+    )
   )
-  handleRuntimeEnvironmentChannel('runtimeEnvironments:takeRestoredPortForwardMoves', () =>
+  ipcMain.handle('runtimeEnvironments:takeRestoredPortForwardMoves', () =>
     takeRestoredPairedPortForwardMoves()
   )
 }

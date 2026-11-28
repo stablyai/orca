@@ -27,6 +27,15 @@ import {
   withCheckedBotChat
 } from './runtime-automation-target'
 
+/** Whose automation it is was stamped from the chat that made it; an edit never changes it. */
+function withSavedHome(
+  target: AutomationBotTarget,
+  saved: AutomationBotTarget
+): AutomationBotTarget {
+  const { home: _sent, ...rest } = target
+  return saved.home ? { ...rest, home: saved.home } : rest
+}
+
 type BotAutomationLookups = Pick<
   RuntimeAutomationController,
   'webhooks' | 'triggerPeople' | 'cloudTriggers' | 'placeRefs' | 'botChat'
@@ -70,7 +79,12 @@ export async function patchBotAutomationUpdate(
       ? botAutomationAgent(patch.bot, bot)
       : botAutomationSetup(current.bot, bot).agent
   assertNoBotOwnedSettings(updates, agent)
-  patch.bot &&= await withCheckedBotChat(patch.bot, bot, lookups.botChat, current.bot)
+  patch.bot &&= await withCheckedBotChat(
+    withSavedHome(patch.bot, current.bot),
+    bot,
+    lookups.botChat,
+    current.bot
+  )
   if (bot) {
     assertBotHearsEventTriggers(lookups.webhooks.hearing(bot), updates.on)
     patch.agentId = agent

@@ -1,21 +1,21 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { z } from 'zod'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from './shared-bot-hosts'
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { UNREADABLE_ANSWER } from '../../connector-cloud/connector-cloud-request'
 import { SharedBotHeldSends } from './shared-bot-held-sends'
 import { SharedBotHeldUploads } from './shared-bot-held-uploads'
 import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { SHARED_BOT_HOSTS_FILENAME, SharedBotHostStore } from './shared-bot-host-store'
+import { removeOldSharedBotHomes } from './shared-bot-home-cleanup'
 import {
   isSharedBotNewChatId,
   SHARED_BOT_HOST_ERRORS,
-  SHARED_HOSTS_HOLD_WHILE_AWAY,
-  type SharedBotHostView
+  SHARED_HOSTS_HOLD_WHILE_AWAY
 } from '../../../shared/bots/shared-bot-hosts'
 import {
   openBotTeamShareHeldMessage,
@@ -27,7 +27,6 @@ import type { SharedBotHostEntry } from './shared-bot-host-store'
 import { ACCEPT_RETRY_MS, nextPairingStep, sendsHeld, type MineShare } from './shared-bot-pairing'
 import { withoutRefusedCredential } from '../../../shared/remote-runtime/relay/client/shared-host-relay-link'
 import type { SharedBotsCloud } from './shared-bots-cloud'
-import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 import type {
   ConnectorShareAcceptRequest,
   ConnectorShareHoldRequest
@@ -35,6 +34,21 @@ import type {
 
 // Held sends are off while SHARED_HOSTS_HOLD_WHILE_AWAY is: their tests run again when it is on.
 const heldIt = it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)
+
+/** The share's own answer while held sends are on; nothing it sends on reaches a host here. */
+async function callHere(
+  service: SharedBotHosts,
+  environmentId: string,
+  method: string,
+  params: unknown
+) {
+  const noHost = () => Promise.reject(new Error('no host here'))
+  const answer = await service.answerHere(environmentId, method, params, noHost)
+  if (!answer) {
+    throw new Error(`${method} was sent on to the host`)
+  }
+  return answer
+}
 
 const HOST = nacl.box.keyPair()
 const HOST_KEY = Buffer.from(HOST.publicKey).toString('base64')
@@ -53,7 +67,8 @@ function share(overrides: Partial<MineShare> = {}): MineShare {
     botName: 'Ivy',
     ownerName: 'Jinwoo Hong',
     hostOnline: true,
-    state: 'needs-accept',
+    // Accepted by this account (as a share from before Accept existed): it pairs without asking.
+    state: 'ready',
     held: [],
     ...overrides
   }
@@ -94,12 +109,14 @@ const offer = (inviteExpiresAt: number): NonNullable<SharedBotHostEntry['offer']
 function hosts(
   mine: () => MineShare[] | Promise<MineShare[]>,
   now: () => number,
-  hold: SharedBotsCloud['hold'] = async () => ({ ok: true, value: { status: 'held' } })
+  hold: SharedBotsCloud['hold'] = async () => ({ ok: true, value: { status: 'held' } }),
+  phoneSharesChanged?: () => void
 ) {
   const holds: [string, ConnectorShareHoldRequest][] = []
   const dir = mkdtempSync(join(tmpdir(), 'shared-bot-hosts-'))
   dirs.push(dir)
   const accepts: [string, ConnectorShareAcceptRequest][] = []
+  const declines: string[] = []
   let mineReads = 0
   // As the cloud does, a read lists every message it has taken, waiting unless `mine` says more.
   const taken: [string, string][] = []
@@ -125,6 +142,10 @@ function hosts(
       accepts.push([shareId, request])
       return { ok: true, value: { status: 'queued' } }
     },
+    decline: async (shareId) => {
+      declines.push(shareId)
+      return { ok: true, value: { status: 'declined' } }
+    },
     hold: async (shareId, request) => {
       holds.push([shareId, request])
       const answer = await hold(shareId, request)
@@ -135,17 +156,18 @@ function hosts(
     }
   }
   const published: string[][] = []
-  const memory = memorySharedBotHomes(dir)
   const service = new SharedBotHosts({
     userDataPath: dir,
     account: () => 'ada',
     cloud: () => cloud,
-    platform: NODE_RELAY_CLIENT_PLATFORM,
-    publish: (state) => published.push(state.hosts.map((view) => view.shareId)),
-    homes: memory.homes,
+    // As the desktop's publish does (ipc/shared-bot-hosts.ts).
+    publish: (state) => {
+      published.push(state.hosts.map((view) => view.shareId))
+      service.phones.noteListed(phoneSharesChanged)
+    },
     now
   })
-  return { service, accepts, holds, published, mineReads: () => mineReads, dir, memory }
+  return { service, accepts, declines, holds, published, mineReads: () => mineReads, dir }
 }
 
 describe('shared agent pairing', () => {
@@ -161,6 +183,37 @@ describe('shared agent pairing', () => {
     await service.refresh()
     service.stop()
     expect(published.at(-1)).toEqual(['share-2'])
+  })
+
+  it('tells its phone through botsChanged of a share it reached, with no bots of its own', async () => {
+    const runtime = new OrcaRuntimeService()
+    expect(runtime.bots.list()).toEqual([])
+    const events: unknown[] = []
+    runtime.onClientEvent((event) => void (event.type === 'botsChanged' && events.push(event)))
+    const primitives = NODE_PAIRED_E2EE_PRIMITIVES
+    const hostKey = primitives.publicKeyToBase64(primitives.generateKeyPair().publicKey)
+    let current = share({ state: 'ready', hostKey })
+    const { service } = hosts(
+      () => [current],
+      () => 1_000,
+      undefined,
+      () => runtime.notifySharedBotsChanged()
+    )
+    await service.refresh()
+    // Listed but not reached: the phone can't get a key to it yet, so its list is unchanged.
+    expect(service.phones.phoneShares().shares).toEqual([])
+    const { deviceKey, sealKey } = service.store.get('share-1')!
+    // Expired invite, so nothing dials the relay.
+    const sealedOffer = sealBotTeamShareOffer(primitives, {
+      sealKey: sealKey.publicKeyB64,
+      offer: { ...offer(0), hostPublicKeyB64: hostKey }
+    })
+    current = { ...current, offers: [{ devicePublicKey: deviceKey.publicKeyB64, sealedOffer }] }
+    await service.refresh()
+    service.stop()
+    expect(service.phones.phoneShares().shares.map((listed) => listed.shareId)).toEqual(['share-1'])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(events).toEqual([{ type: 'botsChanged', kinds: ['bot'] }])
   })
 
   it('accepts again with the same device keys once the invite expired and the host is back', async () => {
@@ -268,7 +321,8 @@ describe('the key a held message is sealed to', () => {
     // The cloud knows the seal key, so it can name its own key and seal an offer under it too.
     current = { ...current, hostOnline: false, hostKey: cloudKey, offers: offered(cloudKey) }
     await service.refresh()
-    const sent = await service.call(
+    const sent = await callHere(
+      service,
       service.views()[0]!.environmentId,
       'agentSession.send',
       sendParams('chat-0001', 'm1')
@@ -313,7 +367,8 @@ describe('the held queue’s order', () => {
       const reading = service.refresh()
       await new Promise((resolve) => setTimeout(resolve, 0))
       now = 2_000
-      const sent = await service.call(
+      const sent = await callHere(
+        service,
         service.views()[0]!.environmentId,
         'agentSession.send',
         sendParams('chat-0001', 'm1')
@@ -342,6 +397,7 @@ describe('the held queue’s order', () => {
         cloud: () => ({
           mine: async () => UNREADABLE_ANSWER,
           accept: async () => UNREADABLE_ANSWER,
+          decline: async () => ({ ok: true, value: { status: 'declined' } }),
           hold: async () => UNREADABLE_ANSWER
         }),
         now: () => 0,
@@ -386,6 +442,7 @@ describe('a held message and a cloud read that cross', () => {
         cloud: () => ({
           mine: async () => UNREADABLE_ANSWER,
           accept: async () => UNREADABLE_ANSWER,
+          decline: async () => ({ ok: true, value: { status: 'declined' } }),
           hold: () =>
             new Promise((resolve) => {
               accept = () => resolve({ ok: true, value: { status: 'held' } })
@@ -434,11 +491,10 @@ describe('a held message and a cloud read that cross', () => {
       cloud: () => ({
         mine: async () => ({ ok: true, value: { v: 1, shares: [share({ hostKey: HOST_KEY })] } }),
         accept: async () => ({ ok: true, value: { status: 'queued' } }),
+        decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
-      platform: NODE_RELAY_CLIENT_PLATFORM,
       publish: () => {},
-      homes: memorySharedBotHomes(dir).homes,
       now: () => 0
     })
     await service.refresh()
@@ -452,97 +508,78 @@ describe('a held message and a cloud read that cross', () => {
   })
 })
 
-describe('a shared agent’s home on this computer', () => {
-  function homeHosts(dir: string, memory: ReturnType<typeof memorySharedBotHomes>) {
-    let shares: MineShare[] = [share(), share({ shareId: 'share-2', botId: 'bot-2' })]
-    const views: SharedBotHostView[][] = []
-    const service = new SharedBotHosts({
-      userDataPath: dir,
-      account: () => 'ada',
-      cloud: () => ({
-        mine: async () => ({ ok: true, value: { v: 1, shares } }),
-        accept: async () => ({ ok: true, value: { status: 'queued' } }),
-        hold: async () => ({ ok: true, value: { status: 'held' } })
-      }),
-      platform: NODE_RELAY_CLIENT_PLATFORM,
-      publish: (next) => views.push(next.hosts),
-      homes: memory.homes,
-      now: () => 0
-    })
-    return {
-      service,
-      setShares: (next: MineShare[]) => (shares = next),
-      homeOf: (shareId: string) =>
-        views.at(-1)?.find((view) => view.shareId === shareId)?.homeWorkspaceId
-    }
-  }
-
-  it('is one Bots-group folder workspace per share, kept across a restart', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-'))
+describe('the homes an older build kept for shared agents', () => {
+  it('go at startup with their folder, once, leaving every other workspace', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-cleanup-'))
     dirs.push(dir)
-    const memory = memorySharedBotHomes(dir)
-    const first = homeHosts(dir, memory)
-    await first.service.refresh()
-    first.service.stop()
-    await first.service.flushed()
-    const home = first.homeOf('share-1')
-    expect(memory.groups).toEqual([
-      expect.objectContaining({ name: 'Bots', parentPath: join(dir, 'bots') })
-    ])
-    expect(memory.folders).toEqual([
-      {
-        id: home,
-        name: 'Ivy',
-        folderPath: join(dir, 'shared-agents', 'share-1'),
-        projectGroupId: memory.groups[0]?.id
-      },
-      expect.objectContaining({ folderPath: join(dir, 'shared-agents', 'share-2') })
-    ])
-    expect(existsSync(join(dir, 'shared-agents', 'share-1'))).toBe(true)
-    const restarted = homeHosts(dir, memory)
-    await restarted.service.refresh()
-    restarted.service.stop()
-    expect(restarted.homeOf('share-1')).toBe(home)
-    expect(memory.folders).toHaveLength(2)
-  })
-
-  it('loads a store written before homes, and makes each share its home', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-old-'))
-    dirs.push(dir)
-    writeFileSync(join(dir, SHARED_BOT_HOSTS_FILENAME), JSON.stringify({ v: 1, shares: [entry()] }))
-    const memory = memorySharedBotHomes(dir)
-    const { service, homeOf } = homeHosts(dir, memory)
-    await service.ready()
-    expect(service.views()).toEqual([
-      expect.objectContaining({ shareId: 'share-1', homeWorkspaceId: null })
-    ])
-    await service.refresh()
-    service.stop()
-    expect(service.views().find((view) => view.environmentId === 'env-1')?.homeWorkspaceId).toBe(
-      homeOf('share-1')
+    writeFileSync(
+      join(dir, SHARED_BOT_HOSTS_FILENAME),
+      JSON.stringify({
+        v: 1,
+        shares: [
+          entry({ homeWorkspaceId: 'old-home' }),
+          entry({ shareId: 'share-2', environmentId: 'env-2', homeWorkspaceId: 'already-gone' })
+        ]
+      })
     )
-    expect(homeOf('share-1')).toEqual(expect.any(String))
-  })
-
-  it('goes with its share: the record, the workspace and only its own folder', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-gone-'))
-    dirs.push(dir)
-    const memory = memorySharedBotHomes(dir)
-    const { service, setShares, homeOf } = homeHosts(dir, memory)
-    await service.refresh()
-    const kept = homeOf('share-2')
+    mkdirSync(join(dir, 'shared-agents', 'share-1'), { recursive: true })
     writeFileSync(join(dir, 'shared-agents', 'share-1', 'notes.md'), 'x')
-    setShares([share({ shareId: 'share-2', botId: 'bot-2' })])
-    await service.refresh()
-    service.stop()
-    expect(service.views().map((view) => view.shareId)).toEqual(['share-2'])
-    expect(memory.folders.map((home) => home.id)).toEqual([kept])
-    expect(existsSync(join(dir, 'shared-agents', 'share-1'))).toBe(false)
-    expect(existsSync(join(dir, 'shared-agents', 'share-2'))).toBe(true)
-    await service.flushed()
     const store = new SharedBotHostStore(dir)
     await store.load()
-    expect(store.list().map((kept) => kept.shareId)).toEqual(['share-2'])
+    const workspaces = ['old-home', 'a-project']
+    const deleted: string[] = []
+    const cleanup = () =>
+      removeOldSharedBotHomes({
+        userDataPath: dir,
+        store,
+        folderWorkspaceIds: () => workspaces.filter((id) => !deleted.includes(id)),
+        deleteFolderWorkspace: async (id) => void deleted.push(id)
+      })
+    await cleanup()
+    await cleanup()
+    expect(deleted).toEqual(['old-home'])
+    expect(existsSync(join(dir, 'shared-agents'))).toBe(false)
+    expect(store.list().map((kept) => kept.homeWorkspaceId)).toEqual([undefined, undefined])
+  })
+
+  it('keeps a home whose delete failed, to try again at the next start', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-retry-'))
+    dirs.push(dir)
+    const store = new SharedBotHostStore(dir)
+    await store.load()
+    store.put(entry({ homeWorkspaceId: 'old-home' }))
+    await removeOldSharedBotHomes({
+      userDataPath: dir,
+      store,
+      folderWorkspaceIds: () => ['old-home'],
+      deleteFolderWorkspace: () => Promise.reject(new Error('busy'))
+    })
+    expect(store.get('share-1')?.homeWorkspaceId).toBe('old-home')
+  })
+
+  it('never writes back a share that ended or changed while its old home was deleted', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-home-race-'))
+    dirs.push(dir)
+    const store = new SharedBotHostStore(dir)
+    await store.load()
+    store.put(entry({ homeWorkspaceId: 'home-1' }))
+    store.put(entry({ shareId: 'share-2', environmentId: 'env-2', homeWorkspaceId: 'home-2' }))
+    await removeOldSharedBotHomes({
+      userDataPath: dir,
+      store,
+      folderWorkspaceIds: () => ['home-1', 'home-2'],
+      // The cloud's list lands meanwhile: share-1 ended, share-2's name changed.
+      deleteFolderWorkspace: async (id) => {
+        if (id === 'home-1') {
+          store.remove(new Set(['share-1']))
+        } else {
+          store.put({ ...store.get('share-2')!, botName: 'Renamed' })
+        }
+      }
+    })
+    expect(store.get('share-1')).toBeUndefined()
+    expect(store.get('share-2')).toMatchObject({ botName: 'Renamed' })
+    expect(store.get('share-2')?.homeWorkspaceId).toBeUndefined()
   })
 })
 
@@ -569,13 +606,16 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
       )
       await service.refresh()
       const environmentId = service.views()[0]!.environmentId
-      const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+      const started = await callHere(service, environmentId, 'bots.session.start', {
+        botId: 'bot-1'
+      })
       const sessionId = StartedChat.parse(started.ok ? started.result : null).sessionId
       expect(isSharedBotNewChatId(sessionId)).toBe(true)
       // The host doesn't know the placeholder: nothing of it is read there.
-      const read = await service.call(environmentId, 'agentSession.history', { sessionId })
+      const read = await callHere(service, environmentId, 'agentSession.history', { sessionId })
       expect(read.ok ? null : read.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
-      const sent = await service.call(
+      const sent = await callHere(
+        service,
         environmentId,
         'agentSession.send',
         send(sessionId, 'm1', 'Hi')
@@ -610,29 +650,15 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
     await service.refresh()
     const view = service.views()[0]!
     expect(view).toMatchObject({ holds: false, held: [] })
-    const started = await service.call(view.environmentId, 'bots.session.start', { botId: 'bot-1' })
-    const sent = await service.call(
-      view.environmentId,
-      'agentSession.send',
-      send('chat-1', 'm1', 'Hi')
-    )
+    const sentOn = (method: string, params: unknown) =>
+      service.answerHere(view.environmentId, method, params, () =>
+        Promise.reject(new Error('no host here'))
+      )
+    // Not answered here: the paired path sends both, and hears the host is away as a paired server's.
+    expect(await sentOn('bots.session.start', { botId: 'bot-1' })).toBeNull()
+    expect(await sentOn('agentSession.send', send('chat-1', 'm1', 'Hi'))).toBeNull()
     service.stop()
-    expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
-    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
     expect(holds).toEqual([])
-  })
-
-  it('starts no placeholder for a host that holds nothing', async () => {
-    const { service } = hosts(
-      () => [share({ hostOnline: false })],
-      () => 0
-    )
-    await service.refresh()
-    const started = await service.call(service.views()[0]!.environmentId, 'bots.session.start', {
-      botId: 'bot-1'
-    })
-    service.stop()
-    expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
   })
 
   heldIt(
@@ -644,9 +670,11 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
       )
       await service.refresh()
       const environmentId = service.views()[0]!.environmentId
-      const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+      const started = await callHere(service, environmentId, 'bots.session.start', {
+        botId: 'bot-1'
+      })
       const placeholder = StartedChat.parse(started.ok ? started.result : null).sessionId
-      const swap = await service.call(environmentId, 'bots.session.start', {
+      const swap = await callHere(service, environmentId, 'bots.session.start', {
         botId: 'bot-1',
         newChatId: placeholder
       })
@@ -663,7 +691,12 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
     )
     await service.refresh()
     const environmentId = service.views()[0]!.environmentId
-    await service.call(environmentId, 'agentSession.send', send('chat-0001', 'm1', 'Check #40189'))
+    await callHere(
+      service,
+      environmentId,
+      'agentSession.send',
+      send('chat-0001', 'm1', 'Check #40189')
+    )
     expect(await service.sendAgain(environmentId, 'm1')).toBe(false)
     held = [{ clientMessageId: 'm1', state: 'not_sent' }]
     await service.refresh()

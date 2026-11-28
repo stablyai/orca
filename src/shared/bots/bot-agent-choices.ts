@@ -47,6 +47,23 @@ function botAgentEnabledOnHost(agent: BotAgent, rows: readonly NewTabAgentMenuRo
   return rows.some((row) => row.agent === agent && !(row.kind === 'chat' && row.setup))
 }
 
+/** Every agent enabled on a settled host that can run there or says why not, in catalog order: what
+ *  its + menu offers for a new chat, before any bot's own agent is put first. */
+export function hostNewChatAgents(
+  model: Extract<BotAgentMenuModel, { state: 'settled' }>
+): BotNewChatAgent[] {
+  return BOT_AGENTS.filter((agent) => botAgentEnabledOnHost(agent, model.rows))
+    .map((agent) => botAgentOnHost(agent, model))
+    .filter((entry) => entry.unavailable !== 'not-installed')
+}
+
+function ownAgentFirst(agent: BotAgent, entries: readonly BotNewChatAgent[]): BotNewChatAgent[] {
+  return [
+    ...entries.filter((entry) => entry.agent === agent),
+    ...entries.filter((entry) => entry.agent !== agent)
+  ]
+}
+
 /** The bot's own agent first, then every other agent enabled here; each unavailable one says why,
  *  as agent rows do. With none enabled, the bot's own agent as it stands here, so the list is never
  *  empty. Only the bot's own while the menu is still learning the host. */
@@ -57,11 +74,32 @@ export function botNewChatAgents(
   if (model.state === 'loading') {
     return [{ agent: bot.agent }]
   }
-  const enabled = [bot.agent, ...BOT_AGENTS.filter((agent) => agent !== bot.agent)]
-    .filter((agent) => botAgentEnabledOnHost(agent, model.rows))
-    .map((agent) => botAgentOnHost(agent, model))
-    .filter((entry) => entry.unavailable !== 'not-installed')
+  const enabled = ownAgentFirst(bot.agent, hostNewChatAgents(model))
   return enabled.length > 0 ? enabled : [botAgentOnHost(bot.agent, model)]
+}
+
+/** What a bot's home offers to start from its + menu, beside New Home Chat (every person's own). A
+ *  shared agent's chats run on its owner's computer, so it offers the agents its owner's menu does
+ *  (`ownerAgents`, its own alone until that answers); a terminal or browser would open on this
+ *  computer in an empty folder, so neither is offered. */
+export type BotHomeOffers = {
+  agents: BotNewChatAgent[]
+  workspaceTabs: boolean
+}
+
+export function botHomeOffers(
+  bot: Pick<Bot, 'agent'>,
+  model: BotAgentMenuModel,
+  shared: { ownerAgents: readonly BotNewChatAgent[] | null } | null
+): BotHomeOffers {
+  if (!shared) {
+    return { agents: botNewChatAgents(bot, model), workspaceTabs: true }
+  }
+  const owner = ownAgentFirst(bot.agent, shared.ownerAgents ?? [])
+  return {
+    agents: owner.length > 0 ? owner : [{ agent: bot.agent }],
+    workspaceTabs: false
+  }
 }
 
 /** The agents a bot can be set to here: the installed ones, and `current` always; empty while the

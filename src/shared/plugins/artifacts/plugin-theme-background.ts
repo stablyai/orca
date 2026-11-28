@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { z } from 'zod'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
@@ -95,8 +96,8 @@ export const pluginThemeBackgroundRegistrationSchema = z.object({
 })
 
 /** Registration field: an unreadable background drops the image, never the theme. */
-export const tolerantPluginThemeBackgroundRegistration = pluginThemeBackgroundRegistrationSchema
-  .optional()
-  .catch(undefined)
+export const tolerantPluginThemeBackgroundRegistration = lazyZodSchema(() =>
+  pluginThemeBackgroundRegistrationSchema.optional().catch(undefined)
+)
 
 export type PluginThemeBackground = z.infer<typeof pluginThemeBackgroundRegistrationSchema>

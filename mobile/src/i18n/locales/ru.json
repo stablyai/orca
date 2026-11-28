@@ -439,7 +439,6 @@
     },
     "nativeChatProse": {
       "attachedImage": "Прикреплённое изображение",
-      "image": "изображение",
       "openImageHint": "Открывает изображение в полном размере"
     },
     "nativeChatToolLine": {
@@ -4877,9 +4876,6 @@
       "agentCouldNotStart": "Не удалось запустить {{label}}. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentFailedToStart": "Запуск {{label}} завершился ошибкой. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentReportedError": "{{label}} сообщил об ошибке.",
-      "antigravityInvalidEvents": "Antigravity вернул некорректные события JSON.",
-      "antigravityInvalidResult": "Antigravity вернул некорректный результат.",
-      "antigravityNoFinalResult": "Antigravity не вернул итоговый результат.",
       "chatNameAgentUnsupported": "Выберите поддерживаемого агента для названий чатов в разделе «Настройки -> Чат -> Названия чатов». Поддерживаемые агенты: {{agents}} или «Своя команда».",
       "chatNameCustomCommandEmpty": "Своя команда не задана. Добавьте её в разделе «Настройки -> Чат -> Названия чатов».",
       "cliFailed": "Команда CLI {{label}} завершилась с ошибкой и кодом {{exitCode}}.",
@@ -5746,7 +5742,9 @@
       "statusUnreadable": "Не удалось прочитать статус этого сервера. Вернитесь назад и откройте его снова.",
       "tryAgain": "Повторить попытку",
       "isolationUnavailableAndroid": "Для Orca нужен Android System WebView или Chrome версии 101 или новее. Обновите его в Play Маркете или выберите более новый в «Параметры разработчика > Реализация WebView».",
-      "webViewInUse": "На этом устройстве установлен {{name}} {{version}}."
+      "webViewInUse": "На этом устройстве установлен {{name}} {{version}}.",
+      "downloadingLatestApp": "Скачивание последней версии",
+      "downloadProgressFromHost": "с {{host}} · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "Обновите Orca",
@@ -5754,6 +5752,9 @@
       "updateMessageNoHost": "Для этого экрана нужна более новая версия Orca.",
       "serverTitle": "Не удаётся подключиться к этому серверу",
       "serverMessage": "Телефон не может подключиться к серверу этого рабочего пространства через {{host}}."
+    },
+    "downloadProgress": {
+      "megabytes": "{{received}} из {{total}} МБ"
     }
   },
   "workspace": {
@@ -7715,7 +7716,8 @@
       "runningCount": "Выполняются: {{count}}",
       "needsYouCount": "Требуют внимания: {{count}}",
       "open": "Открыть",
-      "delete": "Удалить чат"
+      "delete": "Удалить чат",
+      "noMessages": "Сообщений пока нет"
     },
     "panel": {
       "backTo": "Назад к {{name}}",
@@ -7931,6 +7933,20 @@
     },
     "share": {
       "signInOtherSite": "Компьютер прислал ссылку для входа на другой сайт, поэтому она не открыта.",
+      "invite": {
+        "invitedYou": "{{owner}} пригласил вас",
+        "view": "Открыть приглашение",
+        "sharedWithYou": "{{owner}} поделился им с вами",
+        "runsOn": "Агент {{owner}}. Он работает на компьютере {{owner}}.",
+        "chatFrom": "Вы общаетесь с ним из своего Orca и с телефона.",
+        "ownChats": "Вы видите только свои чаты.",
+        "ownerSees": "{{owner}} может видеть ваши чаты с ним.",
+        "actsAs": "Он может действовать на компьютере {{owner}} через аккаунты {{owner}}.",
+        "pauses": "Он приостанавливается, пока компьютер {{owner}} выключен.",
+        "messagesWait": "Сообщения ждут его возвращения.",
+        "leave": "Вы можете выйти в любой момент.",
+        "uses": "Использует"
+      },
       "receive": {
         "ask": "Запрашивать разрешение",
         "full": "Полный доступ",
@@ -7956,7 +7972,6 @@
       "linkStatusUnavailable": "Не удалось проверить общую ссылку",
       "updatedJustNow": "Обновлено только что",
       "upToDate": "Актуально",
-      "copy": "Копировать",
       "copyLink": "Копировать ссылку",
       "view": "Просмотреть",
       "none": "Нет",
@@ -8073,9 +8088,9 @@
       "unreadableNotShared": "Не удаётся прочитать · не передаётся",
       "overLimitNotShared": "Превышен лимит навыков · не передаётся",
       "original": {
-        "sharedBy": "Автор ссылки: {{who}}",
         "viewOriginal": "Открыть оригинал",
-        "originalGone": "Больше недоступен"
+        "originalGone": "Больше недоступен",
+        "copiedFrom": "Источник копии: {{who}}"
       },
       "sameLinkShort": "Уже сделанные копии не изменятся."
     },

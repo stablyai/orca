@@ -29,6 +29,9 @@ export abstract class OrcaRuntimeWithDetectedCheckoutsAndLiveContent extends Orc
       (leaf) =>
         leaf.connected && leaf.ptyId !== null && worktreeIdsEqual(leaf.worktreeId, worktreeId)
     )
-    return { liveTerminalCount: this.getLivePtyIdsForWorktree(worktreeId).size, hasAttachedPty }
+    return {
+      liveTerminalCount: this.getLivePtyIdsForWorktree(worktreeId, 'every').size,
+      hasAttachedPty
+    }
   }
 }

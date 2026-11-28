@@ -136,9 +136,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
   }
 
   /** A bot thread in this chat is no longer new: the owner opened the chat, or a run owns it. */
-  markBotThreadSeen(sessionId: string): void {
-    this.externalConversations.threadSeen(sessionId)
-  }
+  readonly markBotThreadSeen = this.externalConversations.threadSeen
 
   /** The bot whose home a worktree is, or whose home it sits under (its agents work for that bot). */
   private botOfWorkspace(worktreeId: string): string | null {

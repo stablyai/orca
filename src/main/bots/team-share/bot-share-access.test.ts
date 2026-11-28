@@ -18,7 +18,7 @@ describe('teammate access from the share list', () => {
   it('lists a teammate the shared bot alone, never whom else it is shared with', () => {
     const shared = makeTestBot({ id: 'bot-1', shares: [alice, bob] })
     const other = makeTestBot({ id: 'bot-2', shares: [bob] })
-    const listed = botShareListedBots([shared, other], { botId: 'bot-1' })
+    const listed = botShareListedBots([shared, other], { botId: 'bot-1', accountId: 'acct-alice' })
     expect(listed.map((bot) => bot.id)).toEqual(['bot-1'])
     expect(JSON.stringify(listed)).not.toMatch(/example\.com|share-alice|share-bob/)
   })
@@ -33,7 +33,7 @@ describe('teammate access from the share list', () => {
       chatSessionId: 'home-chat-secret',
       shares: [alice]
     })
-    const [listed] = botShareListedBots([shared], { botId: 'bot-1' })
+    const [listed] = botShareListedBots([shared], { botId: 'bot-1', accountId: 'acct-alice' })
     expect(listed).toMatchObject({
       id: 'bot-1',
       name: shared.name,
@@ -55,12 +55,51 @@ describe('teammate access from the share list', () => {
         saved = { ...saved, ...edit(saved) }
         return saved
       },
-      devices: { revokeBotShareDevices, mintBotShareOffer: vi.fn() }
+      devices: { revokeBotShareDevices, mintBotShareOffer: vi.fn() },
+      automations: { list: () => [], pause: async () => {} }
     }
     await removeBotShare(deps, 'bot-1', 'share-bob')
     expect(revokeBotShareDevices).not.toHaveBeenCalled()
     await removeBotShare(deps, 'bot-1', 'share-alice')
     expect(revokeBotShareDevices).toHaveBeenCalledExactlyOnceWith('bot-1', 'acct-alice')
     expect(saved.shares).toEqual([])
+  })
+
+  it('pauses only the removed teammate’s automations on that bot, and keeps them', async () => {
+    const bo: BotShare = { ...alice, shareId: 'share-bo', accountId: 'acct-bo', name: 'Bo' }
+    let saved: Bot = makeTestBot({ id: 'bot-1', shares: [alice, bo] })
+    const automation = (id: string, botId: string, home?: string, enabled = true) => ({
+      id,
+      enabled,
+      bot: {
+        botId,
+        runsIn: 'new' as const,
+        resultsTo: 'chat' as const,
+        ...(home ? { home } : {})
+      }
+    })
+    const automations = [
+      automation('alice-1', 'bot-1', 'acct-alice'),
+      automation('alice-paused', 'bot-1', 'acct-alice', false),
+      automation('alice-other-bot', 'bot-2', 'acct-alice'),
+      automation('bo-1', 'bot-1', 'acct-bo'),
+      automation('owner-1', 'bot-1'),
+      { id: 'old-project', enabled: true }
+    ]
+    const pause = vi.fn(async (_ids: readonly string[]) => {})
+    await removeBotShare(
+      {
+        update: async (_botId, edit) => {
+          saved = { ...saved, ...edit(saved) }
+          return saved
+        },
+        devices: null,
+        automations: { list: () => automations, pause }
+      },
+      'bot-1',
+      'share-alice'
+    )
+    expect(pause).toHaveBeenCalledExactlyOnceWith(['alice-1'])
+    expect(saved.shares).toEqual([bo])
   })
 })

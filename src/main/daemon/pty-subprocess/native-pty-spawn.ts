@@ -12,6 +12,7 @@ import type { WindowsShellSpawnAttempt } from '../../providers/shell-launch/wind
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 import { wrapPtySpawnInTerminalScope } from '../process-scopes/terminal-scopes-runtime'
 import { spawnConptyWithInputReader, type ConptyStartupEvents } from './conpty-startup-input-reader'
+import { spawnWithSystemConptyFallback } from '../../windows/bundled-conpty-fallback'
 
 async function loadNodePty(): Promise<typeof pty> {
   return import('node-pty')
@@ -80,16 +81,19 @@ export async function spawnNativeDaemonPty(args: {
     const attempt = Promise.withResolvers<PtyCreationDisposition>()
     args.creationWork?.join(attempt.promise)
     let proc: pty.IPty
-    try {
-      proc = nodePty.spawn(wrapped.file, wrapped.args, {
+    const spawnPty = (useConptyDll: boolean): pty.IPty =>
+      nodePty.spawn(wrapped.file, wrapped.args, {
         name: args.env.TERM ?? 'xterm-256color',
         cols: args.cols,
         rows: args.rows,
         cwd,
         env: wrapped.env,
         // Bundled ConPTY provides the wrap-marker behavior xterm expects.
-        ...(process.platform === 'win32' ? { useConptyDll: true } : {})
+        ...(process.platform === 'win32' ? { useConptyDll } : {})
       })
+    try {
+      // Retries on the system ConPTY when the bundled one cannot start (#47506).
+      proc = spawnWithSystemConptyFallback(spawnPty, shellPath)
     } catch (error) {
       attempt.resolve({ kind: 'failed', completion: Promise.resolve() })
       throw error

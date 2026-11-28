@@ -27,6 +27,7 @@ import {
   shouldDropWslMoveProjectUpdate,
   wslMoveProjectRefForWorkspace
 } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { OWNER_RPC_CALLER_SCOPE } from '../../../runtime/rpc/callers/rpc-caller-scope'
 
 export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime } = context
@@ -113,14 +114,18 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
         typeof args.ifParentWorkspace === 'string'
           ? { ifParentWorkspace: args.ifParentWorkspace }
           : {}
-      await runtime.updateManagedWorktreeMeta(args.worktreeId, {
-        lineage:
-          args.noParent === true
-            ? { noParent: true, ...condition }
-            : args.parentWorktreeId
-              ? { parentWorktree: `id:${args.parentWorktreeId}`, ...condition }
-              : undefined
-      })
+      await runtime.updateManagedWorktreeMeta(
+        args.worktreeId,
+        {
+          lineage:
+            args.noParent === true
+              ? { noParent: true, ...condition }
+              : args.parentWorktreeId
+                ? { parentWorktree: `id:${args.parentWorktreeId}`, ...condition }
+                : undefined
+        },
+        OWNER_RPC_CALLER_SCOPE
+      )
       // A folder workspace has no repo; the runtime already announced its folder change.
       if (!isWorkspaceKey(args.worktreeId)) {
         notifyWorktreesChanged(mainWindow, parseWorktreeId(args.worktreeId).repoId)

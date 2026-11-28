@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { FileOpen, WorktreeSelector } from './files-target-params'
 
 export const RUNTIME_FILE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
@@ -31,11 +32,13 @@ export const FileFormatText = FileMutationOpen.extend({
 
 // Why a separate method: a host too old to honor the precondition answers method_not_found
 // instead of silently dropping the field and writing over newer disk content.
-export const FileWriteDiskPreconditionParam = z.object({
-  expectedSignature: z.string().min(1).max(64),
-  allowMissing: z.boolean().optional(),
-  requireLosslessUtf8: z.boolean().optional()
-})
+export const FileWriteDiskPreconditionParam = lazyZodSchema(() =>
+  z.object({
+    expectedSignature: z.string().min(1).max(64),
+    allowMissing: z.boolean().optional(),
+    requireLosslessUtf8: z.boolean().optional()
+  })
+)
 
 export const FileWriteIfUnchanged = FileWrite.extend({
   diskPrecondition: FileWriteDiskPreconditionParam

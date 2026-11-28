@@ -9,6 +9,7 @@ import { AI_VAULT_METHODS } from './history/ai-vault'
 import { AUTOMATION_METHODS } from './automations/automations'
 import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
+import { WORKTREE_AUTO_NAME_METHODS } from './workspaces/worktree-auto-name-methods'
 import { WORKSPACE_CLEANUP_RUNNER_METHODS } from './workspaces/workspace-cleanup-runner-methods'
 import { WORKTREE_ARCHIVE_METHODS } from './workspaces/worktree-archive-methods'
 import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
@@ -42,6 +43,7 @@ import { USAGE_CREDENTIAL_METHODS } from './accounts/usage-credentials'
 import { PREFLIGHT_METHODS } from './preflight/preflight'
 import { COMPUTER_METHODS } from './computer/computer'
 import { SESSION_TAB_METHODS } from './session-tabs/session-tabs'
+import { SESSION_TAB_OPEN_FILE_METHOD } from './session-tabs/session-tab-open-file-method'
 import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 import { FILE_METHODS } from './files/files'
 import { GIT_METHODS } from './source-control/git/git'
@@ -110,6 +112,7 @@ import { GOOGLE_SETUP_SAVED_KEY_METHODS } from './bots-google-setup-saved-key'
 import { BOT_REQUEST_OUTCOME_METHOD } from './bots-request-outcome'
 import { WORKTREE_RELEASE_BOT_HOME_METHOD } from './bots-home-release'
 import { BOT_CREATE_OFFER_METHOD } from './bots-create-offer'
+import { BOT_OFFER_ANSWER_METHOD } from './bots-offer-answer'
 import { BOT_TEMPLATE_METHODS } from './bots-templates'
 import { BOT_IMPORT_METHODS } from './bots-import'
 import { BOT_SHARE_METHODS } from './bots-share'
@@ -148,6 +151,7 @@ const CORE_RPC_METHODS = [
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
+  ...WORKTREE_AUTO_NAME_METHODS,
   ...WORKSPACE_CLEANUP_RUNNER_METHODS,
   ...WORKTREE_ARCHIVE_METHODS,
   ...AGENT_ACTIVITY_METHODS,
@@ -186,6 +190,7 @@ const BOT_RPC_METHODS = [
   BOT_REQUEST_OUTCOME_METHOD,
   WORKTREE_RELEASE_BOT_HOME_METHOD,
   BOT_CREATE_OFFER_METHOD,
+  BOT_OFFER_ANSWER_METHOD,
   ...BOT_TEMPLATE_METHODS,
   ...BOT_IMPORT_METHODS,
   ...BOT_SHARE_METHODS,
@@ -234,6 +239,7 @@ const SERVICE_RPC_METHODS = [
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,
   ...SESSION_TAB_METHODS,
+  SESSION_TAB_OPEN_FILE_METHOD,
   ...WORKSPACE_LAYOUT_METHODS,
   // Switch point: a window-owned build registers no layout command.
   ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [...LAYOUT_APPLY_METHODS, ...LAYOUT_VIEW_REPORT_METHODS] : []),

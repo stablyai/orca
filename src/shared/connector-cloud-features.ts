@@ -77,6 +77,11 @@ export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
  *  Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_BOT_SHARES_FEATURE = 'bots.shares'
 
+/** Listed by this Orca, which names an existing teammate share from a repeat share_resolved's `name`;
+ *  the cloud backfills names only to a machine that lists it. Its own constant, as the cloud's
+ *  contract keeps it. */
+export const CONNECTOR_SHARE_NAMES_FEATURE = 'shareNames'
+
 /** Listed by this Orca, which keeps a reply outbox, and by a cloud that takes its `reply` events
  *  (design item 125). Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'

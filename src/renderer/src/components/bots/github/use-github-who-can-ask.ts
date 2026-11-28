@@ -4,7 +4,7 @@ import { useBotHostLabel } from '../use-bot-host-label'
 import { useBotGitHubRead } from '@/lib/bot-github-state'
 import { botGitHubCalls } from '@/lib/bot-connector-host-calls'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { botMembersFrom, gitHubMembersOf } from '../../../../../shared/bot-types'
+import { gitHubMembersOf } from '../../../../../shared/bot-types'
 import { gitHubLinkedAccounts } from '../../../../../shared/connector-bot-github-contract'
 import { CONNECTOR_CLIENT_LIMITS } from '../../../../../shared/connectors/connector-cloud-contract'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
@@ -37,10 +37,7 @@ export function useGitHubWhoCanAsk(
   )
   return useMemo(
     (): BotWhoCanAskService => ({
-      listed: (members) =>
-        installationId === undefined
-          ? botMembersFrom(members, 'github')
-          : gitHubMembersOf(members, installationId),
+      listed: (members) => gitHubMembersOf(members, installationId),
       stamp:
         installationId === undefined
           ? { source: 'github' }

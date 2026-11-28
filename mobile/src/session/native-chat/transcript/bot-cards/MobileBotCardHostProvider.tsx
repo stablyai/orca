@@ -6,7 +6,7 @@ import {
 } from '../../../../../../src/shared/execution-host/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { botHomeWorktreeId, hostBotsKey } from '../../../../bots/host-bots-read'
-import { publishBotLink } from '../../../../bots/pending-bot-link'
+import { useOpenBotHome } from '../../../../bots/use-open-bot-home'
 import { openMobileStructuredSession } from '../../agent-session/open-mobile-structured-session'
 import { useOpenMobileSession } from '../../../use-open-mobile-session'
 import { useOpenMobileAutomations } from '../../../../automations/use-open-mobile-automations'
@@ -42,6 +42,7 @@ export function MobileBotCardHostProvider({
   const [editing, setEditing] = useState<MobileBotCardOfferEdit | null>(null)
   const openMobileSession = useOpenMobileSession()
   const openMobileAutomations = useOpenMobileAutomations()
+  const openBotHome = useOpenBotHome()
   const chatOpener = useMemo(
     () =>
       botCardChatOpener({
@@ -64,15 +65,22 @@ export function MobileBotCardHostProvider({
             paneKey: structuredAgentSessionPaneKey(opened.tabId, chatId),
             name: bot.name
           }),
-        home: (bot) => publishBotLink({ kind: 'bot', botId: bot.id })
+        // Every bot a card names runs on this chat's computer, so its Home opens here, not through link lookup.
+        home: (bot, current) =>
+          openBotHome(
+            { pairedHostId, executionHost: executionHost ?? LOCAL_EXECUTION_HOST_ID },
+            bot,
+            { current }
+          )
       }),
-    [client, pairedHostId, executionHost, openMobileSession]
+    [client, pairedHostId, executionHost, openMobileSession, openBotHome]
   )
   // Leaving this chat drops an open still waiting on the host.
   useFocusEffect(useCallback(() => chatOpener.cancel, [chatOpener]))
   const host: MobileBotCardHost = useMemo(
     () => ({
       openBotChat: chatOpener.open,
+      openBotHome: chatOpener.home,
       client,
       hostKey: hostBotsKey(pairedHostId, executionHost),
       pairedHostId,

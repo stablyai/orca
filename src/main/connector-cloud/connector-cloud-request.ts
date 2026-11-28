@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { z } from 'zod'
 import { ConnectorErrorResponse } from '../../shared/connectors/connector-cloud-contract'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
@@ -6,15 +7,17 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
 
 // A refusal may carry words for the owner, e.g. why `host_key_limit` refused this machine; control
 // and bidi characters become spaces so they can't reshape where it is shown.
-const ConnectorRefusal = ConnectorErrorResponse.extend({
-  reason: z.string().max(64).optional().catch(undefined),
-  message: z
-    .string()
-    .max(500)
-    .transform((text) => text.replace(/[\p{Cc}\p{Cf}\u2028\u2029\s]+/gu, ' ').trim() || undefined)
-    .optional()
-    .catch(undefined)
-})
+const ConnectorRefusal = lazyZodSchema(() =>
+  ConnectorErrorResponse.extend({
+    reason: z.string().max(64).optional().catch(undefined),
+    message: z
+      .string()
+      .max(500)
+      .transform((text) => text.replace(/[\p{Cc}\p{Cf}\u2028\u2029\s]+/gu, ' ').trim() || undefined)
+      .optional()
+      .catch(undefined)
+  })
+)
 
 export type ConnectorFailure = {
   ok: false
@@ -83,6 +86,8 @@ export type ConnectorRequest = {
   /** Omitted for a GET or DELETE. */
   body?: unknown
   token?: string
+  /** Sent beside the content type and token. */
+  headers?: Record<string, string>
   timeoutMs?: number
   signal?: AbortSignal
 }
@@ -134,7 +139,8 @@ export async function requestConnector<TSchema extends z.ZodType>(
       method: request.method ?? 'POST',
       headers: {
         ...(request.body === undefined ? {} : { 'content-type': 'application/json' }),
-        ...(request.token ? { authorization: `Bearer ${request.token}` } : {})
+        ...(request.token ? { authorization: `Bearer ${request.token}` } : {}),
+        ...request.headers
       },
       // A redirect would replay the token to whatever origin it named.
       redirect: 'error',
@@ -154,13 +160,10 @@ export async function requestConnector<TSchema extends z.ZodType>(
       error.success ? error.data.reason : undefined
     )
   }
-  // Only the contract's success counts: 204 with no body for a no-content reader, 200 with its JSON.
-  if (response.status !== 200 && response.status !== 204) {
-    await cancelUnreadResponseBody(response)
-    return failure(null)
-  }
+  // Only the contract's success counts: 204 with no body for a no-content reader, else its JSON (a
+  // 202 Accepted carries one too).
   const payload = response.status === 204 ? undefined : await readJson(response)
-  if (response.status === 200 && payload === undefined) {
+  if (response.status !== 204 && payload === undefined) {
     return failure(null)
   }
   const parsed = schema.safeParse(payload)

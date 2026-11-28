@@ -19,7 +19,7 @@ export abstract class BrowserHostPageInitializationControls {
   protected readonly records = new Map<string, InitializationRecord>()
   constructor(
     protected readonly requireState: (state: BrowserHostLeaseState) => void,
-    protected readonly changed: (workspaceId: string) => void
+    protected readonly changed: (page: { browserPageId: string; workspaceId: string }) => void
   ) {}
   protected removeRecord(record: InitializationRecord, affected?: Set<string>): void {
     if (this.records.get(record.browserPageId) !== record) {
@@ -200,7 +200,7 @@ export abstract class BrowserHostPageInitializationControls {
       this.cancelOperation(record.operation)
       this.resume(record.operation.admission.state)
     }
-    this.changed(record.workspaceId)
+    this.changed(record)
     return true
   }
 
@@ -239,17 +239,17 @@ export abstract class BrowserHostPageInitializationControls {
   }
 
   fence(state: BrowserHostLeaseState): void {
-    const changed = new Set<string>()
+    const changed: InitializationRecord[] = []
     for (const record of this.records.values()) {
       if (record.operation?.admission.state === state) {
         if (this.presentation(record)) {
-          changed.add(record.workspaceId)
+          changed.push(record)
         }
         this.cancelOperation(record.operation)
       }
     }
-    for (const workspace of changed) {
-      this.changed(workspace)
+    for (const record of changed) {
+      this.changed(record)
     }
   }
 

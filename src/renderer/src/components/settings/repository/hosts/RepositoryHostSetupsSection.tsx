@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { isProjectsHiddenHost } from '../../../../../../shared/project/catalog/hidden-projects'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import {
   getExecutionHostLabel,
   parseExecutionHostId,
@@ -76,7 +78,7 @@ export function RepositoryHostSetupsSection({
   const setupProjectClone = useAppStore((state) => state.setupProjectClone)
   const createProjectHostSetup = useAppStore((state) => state.createProjectHostSetup)
   const deleteProjectHostSetup = useAppStore((state) => state.deleteProjectHostSetup)
-  const repos = useAppStore((state) => state.repos)
+  const repos = useUserManagedRepos()
   const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
   const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
   const settings = useAppStore((state) => state.settings)
@@ -111,20 +113,21 @@ export function RepositoryHostSetupsSection({
   const projectHostSetupProjection = useAppStore((state) =>
     getProjectHostSetupProjectionFromState(state)
   )
-  const repoProjectHostSetup = projectHostSetupProjection.setups.find(
-    (setup) => setup.repoId === repo.id
+  // A shared agent's host's setups are its owner's, never listed among this user's.
+  const managedSetups = useMemo(
+    () => projectHostSetupProjection.setups.filter((setup) => !isProjectsHiddenHost(setup.hostId)),
+    [projectHostSetupProjection]
   )
+  const repoProjectHostSetup = managedSetups.find((setup) => setup.repoId === repo.id)
   const selectedProjectHostSetup =
-    projectHostSetupProjection.setups.find(
+    managedSetups.find(
       (setup) =>
         setup.id === selectedProjectSetupId &&
         setup.repoId === repo.id &&
         setup.projectId === repoProjectHostSetup?.projectId
     ) ?? repoProjectHostSetup
   const allProjectHostSetups = selectedProjectHostSetup
-    ? projectHostSetupProjection.setups.filter(
-        (setup) => setup.projectId === selectedProjectHostSetup.projectId
-      )
+    ? managedSetups.filter((setup) => setup.projectId === selectedProjectHostSetup.projectId)
     : []
   // Exclude sibling checkout setups, but retain project-level not-set-up placeholders for each entry.
   const projectHostSetups = setupsByOwnedExecutionHost(

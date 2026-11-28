@@ -5,7 +5,6 @@ import {
   CONNECTOR_WAKE_MAX_HOLD_MS,
   type ConnectorWakeOffer
 } from '../../../cloud/packages/connector-contract/src/wake-messages'
-import type { ConnectorPollClientOptions } from './connector-machine'
 import type { ConnectorWakeTokenResult } from './connector-transport'
 import {
   openConnectorWakeSocket,
@@ -25,15 +24,28 @@ const WAKE_POLL_HOLD_MS = Math.min(2_000, CONNECTOR_WAKE_MAX_HOLD_MS)
 
 export type ConnectorWakePoll = { holdMs: number }
 
+/** Where to dial; a channel that is never polled (the invite wake) has no safety poll. */
+export type ConnectorWakeChannelOffer = Pick<ConnectorWakeOffer, 'wakeUrl'> &
+  Partial<Pick<ConnectorWakeOffer, 'safetyPollMs'>>
+
+/** What a socket did, for an owner that reacts to it rather than polling through `nextPoll`. */
+export type ConnectorWakeEvents = {
+  opened?(): void
+  wake?(): void
+  ended?(end: ConnectorWakeSocketEnd): void
+  sharesChanged?(): void
+}
+
 export type ConnectorWakeChannelDeps = {
   /** The wake token, renewed first when `renew` (a 401) or when it has under a minute left. */
   token: (renew: boolean) => Promise<ConnectorWakeTokenResult>
   random: () => number
   socketFactory?: ConnectorWakeSocketFactory
+  events?: ConnectorWakeEvents
 }
 
 export class ConnectorWakeChannel {
-  private offered: ConnectorWakeOffer | null = null
+  private offered: ConnectorWakeChannelOffer | null = null
   // Refused until the next hello (country refused, replaced, frame too big, no wake token).
   private refused = false
   private stopped = false
@@ -54,7 +66,7 @@ export class ConnectorWakeChannel {
   constructor(private readonly deps: ConnectorWakeChannelDeps) {}
 
   /** Each hello answer: its offer, or null when it offers none. */
-  offer(offer: ConnectorWakeOffer | null): void {
+  offer(offer: ConnectorWakeChannelOffer | null): void {
     if (this.stopped) {
       return
     }
@@ -81,6 +93,11 @@ export class ConnectorWakeChannel {
   polled(): void {
     this.owed = null
     this.safetyDueAt = this.safetyDue()
+  }
+
+  /** Whether a socket is open now. */
+  get connected(): boolean {
+    return this.open
   }
 
   /** Whether the client polls without holding now: an open socket, or one still in its grace. */
@@ -185,7 +202,7 @@ export class ConnectorWakeChannel {
   }
 
   private connect(
-    offer: ConnectorWakeOffer,
+    offer: ConnectorWakeChannelOffer,
     token: string,
     gapMs: number | null,
     renewed: boolean
@@ -200,7 +217,9 @@ export class ConnectorWakeChannel {
           wake: () => {
             this.owed = 'wake'
             this.notify()
+            this.deps.events?.wake?.()
           },
+          sharesChanged: () => this.deps.events?.sharesChanged?.(),
           ended: (end) => {
             if (this.socket === socket) {
               this.ended(end, renewed)
@@ -227,6 +246,7 @@ export class ConnectorWakeChannel {
     // Wakes sent while it was down or connecting are lost: one poll catches up.
     this.owed ??= 'other'
     this.notify()
+    this.deps.events?.opened?.()
   }
 
   private ended(end: ConnectorWakeSocketEnd, renewed: boolean): void {
@@ -237,6 +257,7 @@ export class ConnectorWakeChannel {
       this.closedAt = now
       this.downSince = now
     }
+    this.deps.events?.ended?.(end)
     if (end.action === 'until-hello') {
       this.refused = true
       this.notify()
@@ -285,73 +306,5 @@ export class ConnectorWakeChannel {
 
   private notify(): void {
     this.changed?.()
-  }
-}
-
-/** A poll client's wake channel, made by the first hello answer offering one it can use. */
-export class ConnectorWakePolls {
-  private channel: ConnectorWakeChannel | null = null
-  // The hello the last poll went out under: a new one's first poll goes at once.
-  private polledRev: number | null = null
-
-  constructor(
-    private readonly options: Pick<ConnectorPollClientOptions, 'transport' | 'wakeSocketFactory'>,
-    private readonly random: () => number,
-    /** The client's stop, which ends the channel for good. */
-    private readonly stopped: AbortSignal
-  ) {
-    stopped.addEventListener('abort', () => this.channel?.stop(), { once: true })
-  }
-
-  /** Each hello answer's offer; none drops the socket, and polls are held again. */
-  offer(offer: ConnectorWakeOffer | null): void {
-    const { transport } = this.options
-    if (!offer || !transport.wakeToken || this.stopped.aborted) {
-      this.channel?.offer(null)
-      return
-    }
-    this.channel ??= new ConnectorWakeChannel({
-      token: (renew) => transport.wakeToken?.(renew) ?? Promise.resolve('none'),
-      random: this.random,
-      socketFactory: this.options.wakeSocketFactory
-    })
-    this.channel.offer(offer)
-  }
-
-  requestPoll(): void {
-    this.channel?.requestPoll()
-  }
-
-  /** The client dropped its hello: a poll waiting under it ends, so the next cycle says hello. */
-  helloDropped(): void {
-    this.channel?.recheck()
-  }
-
-  /**
-   * The next poll's holdMs once it is due: undefined to hold as before (no open socket); null with
-   * no hello, or when stopped or another hello replaced `helloRev` meanwhile (it polls next cycle).
-   */
-  async hold(
-    helloRev: number | null,
-    currentRev: () => number | null,
-    signal: AbortSignal
-  ): Promise<number | undefined | null> {
-    const { channel } = this
-    if (helloRev === null) {
-      return null
-    }
-    let holdMs: number | undefined
-    if (channel?.active) {
-      const stale = (): boolean => currentRev() !== helloRev
-      const turn =
-        this.polledRev === helloRev ? await channel.nextPoll(signal, stale) : { holdMs: 0 }
-      if (signal.aborted || currentRev() !== helloRev) {
-        return null
-      }
-      holdMs = turn?.holdMs
-    }
-    this.polledRev = helloRev
-    channel?.polled()
-    return holdMs
   }
 }

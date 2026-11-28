@@ -1,7 +1,14 @@
 // Slack- and GitHub-only people in the Share dialog: each workspace's or org's own Who can ask (its
-// service and hook), so a pick is confirmed and saved, and a removal made, exactly as Who can ask does.
-import { useEffect, useEffectEvent } from 'react'
-import { botMemberSource, type Bot, type BotMember } from '../../../../../shared/bot-types'
+// service and hook), so a share is confirmed and saved, and a removal made, exactly as Who can ask does.
+import { useContext, useEffect, useEffectEvent } from 'react'
+import { cn } from '@/lib/class-names'
+import {
+  botMemberSource,
+  gitHubMembersOf,
+  slackMembersOf,
+  type Bot,
+  type BotMember
+} from '../../../../../shared/bot-types'
 import type { BotConnectorEntry } from '../../../../../shared/bots/bot-connector-entries'
 import { useBotConnectorEntries } from '../bot-connector-entries'
 import { BotWhoCanAskSaveFailed, type BotWhoCanAskService } from '../BotWhoCanAskList'
@@ -10,13 +17,14 @@ import { useGitHubCard } from '../github/BotGitHubCard'
 import { useSlackWhoCanAsk } from '../slack/use-slack-who-can-ask'
 import { useBotWhoCanAsk } from '../use-bot-who-can-ask'
 import type { TeamSharePerson, TeamShareSuggestion } from './bot-team-share-people'
-import { TeamSharePersonRow } from './BotTeamShareRows'
+import type { TeamShareConnectorAdds } from './share-staged-people'
+import { TeamSharePersonRow, TeamShareRowsInset } from './BotTeamShareRows'
 
 type PeopleEntry = Extract<BotConnectorEntry, { kind: 'slack' | 'github' }>
 
 /**
  * One connector's part in the Add field: not searchable (not set up yet, or full), waiting for a query,
- * searching, or what it found for `query` and how to add one.
+ * searching, or what it found for `query` and the member each suggestion saves as.
  */
 export type TeamShareConnectorFound =
   | { status: 'off' }
@@ -26,7 +34,7 @@ export type TeamShareConnectorFound =
       status: 'ready'
       query: string
       suggestions: TeamShareSuggestion[]
-      pick: (key: string) => void
+      member: (key: string) => BotMember | undefined
     }
 
 export type TeamShareFoundByConnector = Readonly<Record<string, TeamShareConnectorFound>>
@@ -37,6 +45,13 @@ export function useTeamShareConnectors(bot: Bot): PeopleEntry[] {
   return useBotConnectorEntries(bot).filter(
     (entry): entry is PeopleEntry => entry.kind === 'slack' || entry.kind === 'github'
   )
+}
+
+/** The people one connector's rows list: what its Who can ask service lists. */
+export function teamShareConnectorMembers(bot: Bot, entry: PeopleEntry): BotMember[] {
+  return entry.kind === 'slack'
+    ? slackMembersOf(bot, entry.teamId)
+    : gitHubMembersOf(bot.members, entry.installation?.installationId)
 }
 
 function withoutKey(found: TeamShareFoundByConnector, key: string): TeamShareFoundByConnector {
@@ -56,7 +71,6 @@ function ConnectorSearch({
   service,
   query,
   listed,
-  onPick,
   report
 }: {
   entryKey: string
@@ -65,7 +79,6 @@ function ConnectorSearch({
   service: BotWhoCanAskService
   query: string
   listed: readonly BotMember[]
-  onPick: (member: BotMember) => void
   report: Report
 }): null {
   const { search } = useMemberSearch(service, query)
@@ -95,11 +108,9 @@ function ConnectorSearch({
               name: person.name,
               detail: place
             })),
-            pick: (key) => {
+            member: (key) => {
               const person = found.find((entry) => keyOf(entry.id) === key)
-              if (person) {
-                onPick(asMember(person, service))
-              }
+              return person ? asMember(person, service) : undefined
             }
           }
     report((all) => ({ ...all, [entryKey]: value }))
@@ -117,15 +128,25 @@ function ConnectorPeople({
   entry,
   service,
   query,
-  report
+  report,
+  adds
 }: {
   bot: Bot
   entry: PeopleEntry
   service: BotWhoCanAskService
   query: string
   report: Report
+  adds: TeamShareConnectorAdds
 }): React.JSX.Element {
   const { listed, add, remove, save, capped } = useBotWhoCanAsk(bot, service)
+  const inset = useContext(TeamShareRowsInset)
+  // The latest add, so Share saves against the people listed now.
+  useEffect(() => {
+    adds.set(entry.key, add)
+    return () => {
+      adds.delete(entry.key)
+    }
+  })
   const place = entry.title.name ?? entry.title.service
   // As the picker's Add button: only a connector that is set up and has room is searched.
   const searchable = service.outsiders !== null && !capped
@@ -146,7 +167,7 @@ function ConnectorPeople({
         />
       ))}
       {save.kind === 'failed' ? (
-        <li className="px-6 py-1.5">
+        <li className={cn('py-1.5', inset ? 'pr-2.5 pl-3' : 'px-6')}>
           <BotWhoCanAskSaveFailed message={save.message} retry={save.retry} />
         </li>
       ) : null}
@@ -158,7 +179,6 @@ function ConnectorPeople({
           service={service}
           query={query}
           listed={listed}
-          onPick={(member) => void add([member])}
           report={report}
         />
       ) : null}
@@ -171,6 +191,7 @@ function SlackPeople(props: {
   entry: PeopleEntry & { kind: 'slack' }
   query: string
   report: Report
+  adds: TeamShareConnectorAdds
 }): React.JSX.Element {
   return <ConnectorPeople {...props} service={useSlackWhoCanAsk(props.bot, props.entry.teamId)} />
 }
@@ -180,6 +201,7 @@ function GitHubPeople(props: {
   entry: PeopleEntry & { kind: 'github' }
   query: string
   report: Report
+  adds: TeamShareConnectorAdds
 }): React.JSX.Element {
   return (
     <ConnectorPeople
@@ -195,6 +217,7 @@ export function TeamShareConnectorPeople(props: {
   entry: PeopleEntry
   query: string
   report: Report
+  adds: TeamShareConnectorAdds
 }): React.JSX.Element {
   const { entry } = props
   return entry.kind === 'slack' ? (

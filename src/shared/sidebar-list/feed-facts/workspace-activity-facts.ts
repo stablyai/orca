@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import * as z from 'zod'
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
 import {
@@ -23,10 +24,12 @@ export const WorkspaceActivityFactsSnapshotSchema = z.object({
 })
 
 /** Server-owned activity; its clients add browser/chat tabs. */
-export const HostReportedActivitySchema = WorkspaceActivityFactsSchema.pick({
-  terminal: true,
-  agent: true
-})
+export const HostReportedActivitySchema = lazyZodSchema(() =>
+  WorkspaceActivityFactsSchema.pick({
+    terminal: true,
+    agent: true
+  })
+)
 
 export type LiveAgentWorktreeStatus = z.infer<typeof LiveAgentWorktreeStatusSchema>
 export type WorkspaceActivityFacts = z.infer<typeof WorkspaceActivityFactsSchema>

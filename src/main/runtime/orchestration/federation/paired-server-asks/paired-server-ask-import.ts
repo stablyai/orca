@@ -71,6 +71,7 @@ export function declinePairedServerAsk(
     subject: ask.subject.startsWith('Re: ') ? ask.subject : `Re: ${ask.subject}`,
     body: `Declined on ${machine}.`,
     threadId: ask.messageId,
+    replyTo: ask.messageId,
     notice: { requestId: ask.messageId }
   })
   notifyPeerMailQueued(db.db)
@@ -229,6 +230,7 @@ export async function importPairedServerItem(
           senderLabel: data.senderLabel,
           subject: data.subject,
           threadId: data.threadId ?? undefined,
+          replyTo: data.replyTo,
           to: data.to,
           body: data.body,
           peerFingerprint: asks.pairing,

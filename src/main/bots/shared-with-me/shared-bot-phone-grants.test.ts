@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { SharedBotHostStore, type SharedBotHostEntry } from './shared-bot-host-store'
 import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
 import type { SharedBotLink } from './shared-bot-pairing'
@@ -53,17 +53,21 @@ function grants() {
     store,
     listed: () => store.list(),
     reach: async () => link,
-    request: async (_entry, method, params): Promise<RpcResponse> => {
+    request: async (_entry, method, params): Promise<RuntimeRpcResponse<unknown>> => {
       asked.push([method, params])
       return method === 'botShare.provisionPhone'
         ? {
             id: method,
             ok: true,
-            result: { deviceId: `phone-key-${++devices}`, sealedOffer: 'sealed' }
+            result: { deviceId: `phone-key-${++devices}`, sealedOffer: 'sealed' },
+            _meta: { runtimeId: 'host' }
           }
-        : { id: method, ok: true, result: { revoked: true } }
+        : { id: method, ok: true, result: { revoked: true }, _meta: { runtimeId: 'host' } }
     },
-    origin: () => 'https://cloud.example'
+    account: () => 'acct-teammate',
+    origin: () => 'https://cloud.example',
+    requests: () => [],
+    answer: async () => false
   })
   return { store, phones, asked, setLink: (next: SharedBotLink) => (link = next) }
 }
@@ -71,6 +75,14 @@ function grants() {
 const ask = { shareId: 'share-1', devicePublicKey: 'k', sealKey: 's', credentialHash: 'h' }
 
 describe('a phone’s key to a shared agent', () => {
+  it('lists each share with the account it is shared with, whose the phone’s messages are', () => {
+    expect(
+      grants()
+        .phones.phoneShares()
+        .shares.map((share) => share.accountId)
+    ).toEqual(['acct-teammate'])
+  })
+
   it('carries the pinned host key and where to hold messages', async () => {
     const { phones, asked, store } = grants()
     expect(await phones.provisionPhone('phone-a', ask)).toEqual({
@@ -80,6 +92,7 @@ describe('a phone’s key to a shared agent', () => {
       botName: 'Ivy',
       ownerName: 'Jinwoo Hong',
       environmentId: 'env-1',
+      accountId: 'acct-teammate',
       connectorOrigin: 'https://cloud.example',
       hostKey: HOST_KEY,
       sealedOffer: 'sealed'

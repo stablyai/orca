@@ -471,7 +471,9 @@
       "clientHostedTooltip": "Browsing through {{value0}}",
       "streamedTooltip": "Browsing on {{value0}}",
       "clientHostedDetail": "The page renders on this device. Network traffic and DNS go through the remote host.",
-      "streamedDetail": "The page runs on the remote host and streams to this device."
+      "streamedDetail": "The page runs on the remote host and streams to this device.",
+      "teammateTooltip": "Browsing localhost through {{value0}}",
+      "teammateDetail": "The page renders on this device. Localhost pages go through the shared host; other sites load from your network."
     },
     "remote": {
       "findUnavailable": "Find in page is not available while this page streams from the remote host.",
@@ -583,11 +585,10 @@
         "pageChanged": "This page closed or changed profile during the import. Try again."
       },
       "notice": {
-        "importedMore_one": "Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.",
-        "importedMore_other": "Imported {{count}} cookies for {{domains}} +{{more}} more. Reload the page to use them.",
-        "imported_one": "Imported {{count}} cookie for {{domains}}. Reload the page to use them.",
-        "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
-        "failed": "Cookie import failed: {{reason}}"
+        "failed": "Cookie import failed: {{reason}}",
+        "importedCount_one": "Imported {{countLabel}} cookie",
+        "importedCount_other": "Imported {{countLabel}} cookies",
+        "reload": "Reload"
       },
       "routedPage": {
         "label": "Browsers on this device",
@@ -843,7 +844,6 @@
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
-        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
         "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
@@ -1364,6 +1364,8 @@
     },
     "mcp": {
       "inspectFailed": "Unable to inspect {{directory}}.",
+      "inspectConfigsFailed": "Unable to inspect MCP configs.",
+      "createConfigFailed": "Failed to create MCP config.",
       "unreadable": "Unreadable",
       "notFound": "Not found",
       "invalidJson": "Invalid JSON",
@@ -2098,7 +2100,18 @@
         "workspaces": "{{name}}: {{workspaces}}",
         "added": "{{name}} added",
         "newSessions": "Applies to new sessions",
-        "restart": "Restart {{count}} sessions",
+        "restart_one": "Restart {{count}} session",
+        "restart_other": "Restart {{count}} sessions",
+        "staleTerminals_one": "{{count}} agent terminal uses an older MCP setup",
+        "staleTerminals_other": "{{count}} agent terminals use an older MCP setup",
+        "staleTerminalsOnHost_one": "{{count}} agent terminal on {{host}} uses an older MCP setup",
+        "staleTerminalsOnHost_other": "{{count}} agent terminals on {{host}} use an older MCP setup",
+        "staleTerminalsRestart_one": "Restart it to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestart_other": "Restart them to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_one": "Restart it yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_other": "Restart them yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartSome_one": "{{restartable}} can be resumed here. Restart the other one yourself.",
+        "staleTerminalsRestartSome_other": "{{restartable}} can be resumed here. Restart the other {{count}} yourself.",
         "addedMany": "{{count}} servers added",
         "repoOn": "{{name}} turned on in {{repo}}",
         "repoOff": "{{name}} turned off in {{repo}}"
@@ -2471,10 +2484,6 @@
         },
         "worktrees": {
           "e50495aae6": "Force Delete Branch",
-          "14bc053a47": "Local {{value0}} was not refreshed",
-          "localBaseRefRefreshFailedForWorktree": "Local {{value0}} was not refreshed for \"{{value1}}\"",
-          "903b51c2ed": "Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}}. {{value2}}",
-          "localBaseRefRefreshFailedDescriptionNamed": "Workspace \"{{value0}}\" was created from {{value1}}, but Orca could not fast-forward local {{value2}}. {{value3}}",
           "localBaseRefRefreshFailedDetailDirtyNamed": "The worktree at {{value0}} (where local {{value1}} is checked out) has uncommitted changes. Commit, stash, or discard those changes, then update local {{value1}} manually.",
           "localBaseRefRefreshFailedDetailDirty": "The worktree where local {{value0}} is checked out has uncommitted changes. Commit, stash, or discard those changes, then update local {{value0}} manually.",
           "localBaseRefRefreshFailedDetailNotFastForward": "Local {{value0}} does not exist or cannot be fast-forwarded cleanly from the remote base. Check for local-only commits before updating it manually.",
@@ -2520,7 +2529,13 @@
           },
           "createdWithoutParentNesting": "Created without nesting under \"{{value0}}\"",
           "createdWithoutParentNestingUnnamed": "Created without nesting under the selected parent",
-          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu."
+          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu.",
+          "localBaseRefNotUpdated": "{{value0}} not updated",
+          "localBaseRefNotUpdatedDirty": "Uncommitted changes in {{value0}}.",
+          "localBaseRefNotUpdatedNotFastForward": "Local-only commits on {{value0}}.",
+          "localBaseRefNotUpdatedError": "Git error.",
+          "localBaseRefHideDetails": "Hide details",
+          "localBaseRefShowDetails": "Details"
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -3998,9 +4013,9 @@
         "setLocationTooltip": "Choose a folder or clone this project onto {{host}}.",
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
-        "addSshHostHint": "Use an existing machine over SSH",
+        "addSshHostHint": "Connect over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
-        "addRemoteOrcaServerHint": "Pair another Orca runtime",
+        "addRemoteOrcaServerHint": "Orca on another computer",
         "hostConnectionFailed": "Connection failed",
         "connect": "Connect",
         "reconnect": "Reconnect",
@@ -5589,6 +5604,11 @@
             "waitingTitle": "Waiting for {{server}}",
             "waitingBody": "Orca reattaches this terminal when the server offers it again or the connection changes. Reconnect to try now.",
             "downFor": "Down for {{duration}}",
+            "cantReachTitle": "Can't reach {{server}}",
+            "detailsButton": "Details",
+            "tailscaleHintTitle": "Check the Tailscale path",
+            "reconnectNowButton": "Reconnect now",
+            "copyPingCommand": "Copy command",
             "tailscaleHint": "Check the Tailscale path:",
             "fallbackServerName": "the server",
             "connectionLostTitle": "Reconnecting to {{server}}",
@@ -6018,7 +6038,6 @@
             "c0e972d726": "Cancel",
             "3bbf140864": "MiniMax Usage",
             "remoteServerLabel": "Remote server",
-            "antigravityUsage": "Antigravity Usage",
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "4fba7dc1e7": "{{value0}} bal",
@@ -6478,16 +6497,9 @@
             "mainWorktree": "main worktree",
             "detached": "detached"
           },
-          "antigravity": {
-            "unknownAccount": "Google account",
-            "accounts": "Saved Antigravity Accounts",
-            "readAgo": "Read {{time}}",
-            "notRead": "Usage unknown: not read yet"
-          },
           "AccountSwitchList": {
             "used": "Used",
             "left": "Left",
-            "reset": "Reset",
             "accounts": "Accounts"
           },
           "InlineUsageBars": {
@@ -7376,8 +7388,8 @@
           "addSshHost": "Add SSH host",
           "addRemoteServer": "Add remote server",
           "addRemoteHost": "Add remote host",
-          "addSshHostDetail": "Use an existing machine over SSH.",
-          "addRemoteServerDetail": "Pair with Orca running on another computer.",
+          "addSshHostDetail": "Connect to a machine over SSH.",
+          "addRemoteServerDetail": "Orca on another computer, no SSH needed.",
           "addRemoteHostDetail": "SSH host or Orca server",
           "addWslHost": "Add WSL distro",
           "addWslHostDetail": "Run an Orca server inside a WSL 2 distro. Experimental.",
@@ -7470,10 +7482,7 @@
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
-          "ca3b225195": "Branch auto-name failed",
-          "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
           "tryAgain": "Try again",
-          "namingBranch": "Naming branch…",
           "errorDetailsAt": "Error details · {{time}}",
           "reasonNothingYet": "No changes to name this branch from yet.",
           "reasonBranchChanged": "The branch changed while Orca was naming it.",
@@ -7487,8 +7496,7 @@
           "reasonNoDistinctName": "The generated name matched the current one.",
           "reasonFirstMessageUnavailable": "Orca couldn't find this workspace's first message.",
           "reasonAlreadyNamed": "This workspace was already renamed.",
-          "reasonUnavailable": "Orca can't name this branch anymore.",
-          "branchNameKept": "Branch name kept"
+          "reasonUnavailable": "Orca can't name this branch anymore."
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Choose parent folder...",
@@ -7921,9 +7929,6 @@
           "0f33af979b": "Partial checkout. Files outside these paths are not on disk.",
           "4f964d5e8c": "sparse",
           "7d517f82e2": "primary",
-          "4eba2ea99e": "Auto-name failed. Click to see details.",
-          "74522ee457": "rename failed",
-          "02e19349f4": "Auto-rename failed: view error",
           "691ccfd622": "Deleting…",
           "deleteFailed": "Delete failed",
           "35ccfe2475": "Project {{value0}}",
@@ -8033,7 +8038,8 @@
           "lineageSubmenu": "Parent & Children",
           "projectGroupSubmenu": "Project Group",
           "muteNotifications": "Mute Notifications",
-          "unmuteNotifications": "Unmute Notifications"
+          "unmuteNotifications": "Unmute Notifications",
+          "copyAutoNameError": "Auto-Name Error"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -8497,7 +8503,7 @@
           "serverSaveFailed": "Failed to add remote server.",
           "serverTitle": "Add remote server",
           "sshTitle": "Add SSH host",
-          "serverDescription": "Pair with Orca running on another computer.",
+          "serverDescription": "Pair with Orca on another computer on the same network.",
           "serverRunsAsYou": "This device will be able to run commands as you on this server.",
           "sshDescription": "Add a persistent machine you can log into over SSH.",
           "serverSshTitle": "Add SSH host to {{server}}",
@@ -8841,6 +8847,26 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "AutoNameFailed": {
+          "naming": "Naming this workspace…",
+          "title": "Couldn’t auto-name",
+          "dismiss": "Dismiss",
+          "modelUnavailableOnAccount": "{{model}} isn’t available on this {{agent}} account",
+          "modelUnavailableForAgent": "{{model}} isn’t available for {{agent}}",
+          "modelUnavailable": "{{model}} isn’t available",
+          "timedOut": "Timed out after {{seconds}}s",
+          "agentMissing": "{{agent}} isn’t installed",
+          "usageLimitAgent": "{{agent}} hit its usage limit",
+          "usageLimit": "The naming agent hit its usage limit",
+          "signedOutAgent": "{{agent}} isn’t signed in",
+          "signedOut": "The naming agent isn’t signed in",
+          "agentFailed": "{{agent}} exited with an error",
+          "noAgent": "No naming agent is set up",
+          "publishCheck": "Couldn’t check whether the branch was pushed",
+          "environment": "Couldn’t start the naming agent",
+          "emptyName": "The agent returned no usable name",
+          "unknown": "The naming agent hit an error"
         }
       },
       "shared": {
@@ -10414,6 +10440,7 @@
           "localLink": "Local-only link",
           "localLinkHelp": "This link only works in a browser or Orca client running on this computer.",
           "noExternalAddress": "No address for another device was found. Connect this computer to a LAN or Tailscale, refresh, or choose Custom address.",
+          "interfaceDisconnected": "{{address}} is disconnected. Reconnect it and refresh, or choose another address to create a link.",
           "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL.",
           "thisComputer": "This computer",
           "whoOpens": "Who will open the link",
@@ -11307,7 +11334,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Show OpenCode Go token and cost usage in the status bar.",
-            "51b0ccd6a2": "google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Show Codex token and cost usage in the status bar.",
@@ -11349,8 +11375,6 @@
               "pr": "pr",
               "duplicate": "duplicate"
             },
-            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -11404,8 +11428,7 @@
             "c29089716e": "Kimi usage",
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
-            "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "aff6e6afdf": "IDE font"
           }
         },
         "auto": {
@@ -14230,6 +14253,8 @@
             "unverifiable": "Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.",
             "migration": "Not done: a move onto this server is unfinished. Resume it first.",
             "deferred": "Not done yet: the server isn’t ready for this. Try again later.",
+            "stopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not start the update. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
+            "rollbackStopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not roll back. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
             "failed": "Orca couldn’t finish this on the server. Try again.",
             "defaultServer": "Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.",
             "wslMoveRunning": "Not done: a project is moving onto this server. Orca updates it once the move finishes."
@@ -15145,7 +15170,7 @@
             "reset": "time until reset, e.g. 3h 15m",
             "resetAt": "reset clock time, e.g. 20:50",
             "optional": "dropped when a placeholder inside is empty",
-            "usagePools": "named usage pools, e.g. Antigravity models"
+            "namedUsagePools": "named usage pools, e.g. Cursor plan pools"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -15226,8 +15251,7 @@
             "741ff8a0d2": "Push & Create {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Select a workspace to browse files",
-            "2f4483d6c4": "No files match this filter"
+            "79b1537dd3": "Select a workspace to browse files"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "New Folder",
@@ -15270,7 +15294,6 @@
             "31b4c3195d": "More Explorer Actions",
             "d95e30fe28": "Refresh Explorer",
             "6026b16950": "Collapse All",
-            "c1f3f3ec70": "Search file contents",
             "openInApp": "Open in {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -15383,17 +15406,6 @@
             "localPortInUse": "Port {{port}} is already in use. Choose a different local port.",
             "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024."
           },
-          "Search": {
-            "1abfb25a66": "Type to search in files",
-            "d56d140747": "Press Enter to search",
-            "98c8435e36": "Select a workspace to search",
-            "dcc294f28d": "(results truncated)",
-            "resultsInFiles": "{{results}} in {{files}}",
-            "resultCount_one": "{{count}} result",
-            "resultCount_other": "{{count}} results",
-            "fileCount_one": "{{count}} file",
-            "fileCount_other": "{{count}} files"
-          },
           "SearchFilters": {
             "01e4671ccf": "e.g. *.min.js, dist/**",
             "0a6412a895": "files to exclude",
@@ -15403,11 +15415,9 @@
           "SearchHeader": {
             "6234a5ef85": "Use Regular Expression",
             "4567e6e0b6": "Match Whole Word",
-            "464ae3974f": "Match Case",
-            "693cbeadd0": "Search"
+            "464ae3974f": "Match Case"
           },
           "SearchQueryRow": {
-            "queryLabel": "Search files",
             "clearLabel": "Clear search"
           },
           "SearchResultItems": {
@@ -15438,7 +15448,6 @@
             "476b77745b": "Change Base Ref",
             "ed34038d0d": "Refresh branch compare",
             "493f963029": "Change base ref",
-            "11b5dd8e41": "Comparing against",
             "a9bf7c171a": "Commit Failed",
             "011f9713fc": "Commit blocked",
             "cc199ccc5f": "More commit and remote actions",
@@ -15582,7 +15591,6 @@
             "c8e4a1f902": "Filter: {{value0}}",
             "b3c8f1a902": "Filter files by name",
             "d4f8c2a901": "Clear and close filter",
-            "e8a1c4b203": "vs",
             "4b4a7de138": "Open review page in browser",
             "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
             "pushRecovery": {
@@ -15603,7 +15611,6 @@
             "97e7124eac": "Could not refresh Source Control. Try again.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Current branch: {{value0}}",
-            "c7d4e2f801": "Change base ref: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
             "entryStageFailed": "Failed to stage “{{value0}}”",
             "entryUnstageFailed": "Failed to unstage “{{value0}}”",
@@ -15651,9 +15658,6 @@
             "keepFile": "Keep file",
             "keepDeletion": "Keep deletion",
             "refreshAll": "Refresh all",
-            "baseUpToDate": "Up to date",
-            "rebaseOperationInProgress": "Wait for the current Git operation to finish",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} conflict",
             "rebaseConflictCount_other": "{{count}} conflicts",
             "rebasePaused": "Rebase paused",
@@ -15683,9 +15687,7 @@
             "scopeUncommitted": "Uncommitted",
             "scopeAllChanges": "All changes",
             "scopeNone": "None",
-            "scopeOpenDiff": "Open diff",
             "scopeShowAll": "Show all changes",
-            "scopeLoadingBranchChanges": "Loading branch changes…",
             "scopeBranchCommits": "Commits on this branch",
             "scopeRecentCommits": "Recent commits",
             "scopeCompareTo": "Compare to {{ref}}",
@@ -15702,7 +15704,8 @@
             "scopeOlderHistory": "Older history in Git Graph",
             "scopeNoUncommitted": "No uncommitted changes.",
             "scopeCommitFiles": "Files",
-            "gitGraphButton": "Graph"
+            "gitGraphButton": "Graph",
+            "compareLoadingAgainst": "Comparing against {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -16564,16 +16567,6 @@
             "description": "\"{{value0}}\" will be deleted. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "confirm": "Delete"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Find files",
-            "4d5a6b2a49": "Clear file filter",
-            "7a9fb1e6aa": "Contents"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "Names",
-            "b3c8f1a902": "Filter files by name",
-            "f8a2c4d1e0": "Explorer search mode"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No file changes in this commit"
@@ -22100,6 +22093,11 @@
       "copyCode": "Copy code",
       "wrapLines": "Wrap lines",
       "disableLineWrap": "Disable line wrap",
+      "htmlPreview": "HTML preview",
+      "htmlView": "HTML view",
+      "htmlViewCode": "Code",
+      "htmlViewPreview": "Preview",
+      "htmlViewPreviewWaiting": "Preview is available when this code block finishes.",
       "context": {
         "unavailable": "Context usage is not known yet. It becomes available after the agent next responds.",
         "summary": "Context: {{used}} / {{window}} tokens ({{percent}}%), estimated from the last response.",
@@ -23050,21 +23048,14 @@
         "notNow": "Not now",
         "retry": "Retry",
         "dismiss": "Dismiss",
-        "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
-        "workspaceRemoved": "This worker's workspace was removed",
-        "restore": "Show in dock again",
         "alreadyStopped": "Already stopped",
         "cantStop": "Can't stop now",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
         "loadingWorker": "Loading worker…",
         "resultUnavailable": "Worker result unavailable",
-        "showDetails": "Show details",
-        "hideDetails": "Hide details",
-        "close": "Close",
         "workersRegion": "Workers",
-        "doneResult": "Done · open result",
         "clearName": "Clear {{name}}",
         "stopUnavailable": "Stop {{name}} · {{title}} unavailable · {{reason}}",
         "stopName": "Stop {{name}} · {{title}}",
@@ -23088,8 +23079,6 @@
         "task": "Task",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
-        "stopped": "Stopped",
-        "finished": "Finished",
         "failedCount": "{{count}} failed",
         "needsYouCount": "{{count}} needs you",
         "newQuestions_one": "{{count}} new worker question waiting on you",
@@ -23568,6 +23557,9 @@
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Update Orca on {{value0}} to open files outside its workspaces"
+      },
+      "paste": {
+        "clipboardUnpastable": "Couldn't paste the copied file. Try dragging it into the terminal."
       }
     },
     "settings": {
@@ -24401,6 +24393,11 @@
           "bodyWithoutShortcut": "Click this button, or {{modifier}}-click any project header.",
           "action": "Got it"
         }
+      },
+      "clientHostedBrowser": {
+        "intro": {
+          "teammateBody": "Remote browser tabs now render on this device. Localhost pages go through the shared host; other sites load from your network."
+        }
       }
     },
     "tabGroup": {
@@ -24978,9 +24975,6 @@
         "planModelWithoutThinking": "Model \"{{model}}\" does not support a thinking effort level.",
         "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}.",
         "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
-        "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
-        "antigravityInvalidResult": "Antigravity returned an invalid result.",
-        "antigravityNoFinalResult": "Antigravity returned no final result.",
         "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
         "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
         "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
@@ -25467,20 +25461,29 @@
       "label": "Explorer root",
       "full": "Repository root",
       "back": "Back to {{path}}",
-      "searchScope": "Search scope: workspace files",
       "retry": "Retry",
       "sparseStatus": "Sparse checkout",
       "scopeDetails": "About sparse checkout scope",
       "scopeExplanation": "The folder picker changes what you see, not which files are checked out. Repository root includes the checked-out root and ancestor files.",
-      "searchExplanation": "Names filters the folder you are viewing. Contents searches across the workspace. Files omitted by sparse checkout are not searched.",
-      "findInFolder": "Find in {{path}}",
       "folderLoadError": "Could not load this folder:",
-      "emptyFolder": "No files in this folder"
+      "emptyFolder": "No files in this folder",
+      "combinedSearchExplanation": "Search finds file names in the folder you are viewing and text across the workspace. Files omitted by sparse checkout are not searched."
     },
     "trashFailed": {
       "titleRecycleBin": "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
       "titleTrash": "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
       "description": "This cannot be undone."
+    },
+    "combinedSearch": {
+      "text": "Text",
+      "filesIn": "Files in {{path}}",
+      "files": "Files",
+      "showAll": "Show all {{count}}",
+      "noResults": "No results",
+      "placeholder": "Search",
+      "placeholderScoped": "Search {{path}}",
+      "textInWorkspace": "Text in workspace",
+      "refine": "Too many matches"
     }
   },
   "sparsePreset": {
@@ -25539,9 +25542,6 @@
       "retry": "Retry",
       "changed": "The native account changed. Select a saved account again before launching agy.",
       "refresh": "Refresh accounts",
-      "usage": "Refresh usage",
-      "usageWithReading": "Refresh usage ({{reading}})",
-      "usageReading": "Session: {{session}} · Weekly: {{weekly}}",
       "saved": "Saved Google account",
       "remove": "Remove",
       "searchDescription": "Save and select native agy Google accounts on the execution host.",
@@ -25562,8 +25562,6 @@
       "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
       "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
-      "lastReading": "{{reading}} · Read {{time}}",
-      "noReading": "Usage unknown: not read yet",
       "fd47b5a5dd": "Antigravity accounts",
       "personalOption": "Your personal Google AI plan",
       "enterpriseOption": "Your organization's license",
@@ -25594,7 +25592,6 @@
       "currentNotSaved": "Current agy login · not saved",
       "noEmailNotSaved": "agy didn't report an email · not saved",
       "saveShort": "Save",
-      "readAt": "Read {{time}}",
       "active": "Active",
       "runtime": "Runtime",
       "chatTitle": "Antigravity Chat",
@@ -25754,7 +25751,7 @@
       "toggle": "Toggle search details",
       "active": "{{count}} active"
     },
-    "noResults": "No results. Try another search or adjust your filters."
+    "unavailable": "Not available here"
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",
@@ -26004,7 +26001,18 @@
       "addEmoji": "Add emoji",
       "addEmojiTooltip": "Add emoji (or type :)",
       "noEmojiFound": "No emoji found",
-      "labels": "Labels: {{labels}}"
+      "labels": "Labels: {{labels}}",
+      "peek": {
+        "closed": "closed",
+        "open": "open",
+        "merged": "merged",
+        "draft": "draft",
+        "failing": "failing",
+        "running": "running",
+        "cancelled": "cancelled",
+        "passing": "passing",
+        "more": "+{{count}} more"
+      }
     },
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",
@@ -27705,7 +27713,9 @@
       "waitingForUntil": "Waiting for {{label}} · until {{time}}",
       "waitingCount": "Waiting on {{count}} events",
       "settings": "Bot settings…",
+      "share": "Share…",
       "disconnected": "Disconnected",
+      "connecting": "Connecting…",
       "runsOn": "Runs on {{host}}"
     },
     "new": {
@@ -27759,6 +27769,7 @@
       "computerHint": "Where the bot runs.",
       "computerAccountHint": "Where the bot runs, signed in to Orca as {{account}}.",
       "useChatDefaults": "Use chat defaults",
+      "chatDefault": "Chat default",
       "usingChatDefault": "Using your chat default. Background runs use your Agents setting.",
       "agent": "Agent",
       "folder": "Folder: {{path}}",
@@ -27830,6 +27841,7 @@
         "body": "Agents installed on Windows can’t run inside WSL. Install one in the distro and sign in, and it shows up here.",
         "copied": "Copied",
         "copy": "Copy",
+        "checkAgain": "Check again",
         "checking": "Checking again…"
       },
       "hostSleeping": "Sleeping · wakes when used",
@@ -28079,6 +28091,7 @@
       "stop": "Stop",
       "stopWorker": "Stop {{value0}}",
       "agent": "Agent",
+      "progress": "Progress",
       "result": "Result",
       "workspace": "Workspace",
       "branch": "Branch",
@@ -29280,7 +29293,8 @@
         "purpose": "Your Composio project key lets your bots use the apps you connect there. It stays on this computer; bots never see it.",
         "getKey": "Get a key",
         "change": "Change",
-        "purposeOnHost": "Your Composio project key lets the bots on {{host}} use the apps you connect there. It stays on {{host}}; bots never see it."
+        "purposeOnHost": "Your Composio project key lets the bots on {{host}} use the apps you connect there. It stays on {{host}}; bots never see it.",
+        "changeKey": "Change key"
       },
       "card": {
         "heading": "Composio",
@@ -29843,7 +29857,7 @@
       "allHidden": "All bots are paused and hidden."
     },
     "share": {
-      "shareCopy": "Share a copy…",
+      "shareCopy": "Send a copy…",
       "none": "None",
       "noPurpose": "No purpose yet",
       "updatedAt": "Updated {{date}}",
@@ -29860,7 +29874,6 @@
       "updating": "Updating…",
       "publishing": "Publishing…",
       "previewChanged": "The preview changed. Review it before publishing.",
-      "manageSharing": "Manage sharing…",
       "secretFoundTitle": "Secret found",
       "secretWhere": "{{flag}} in {{where}}, line {{line}}",
       "view": "View",
@@ -29901,10 +29914,8 @@
       "soul": "Soul",
       "add": "Add",
       "binaryFile": "Not text, so it isn’t shown.",
-      "isShared": "{{name}} is shared",
       "updatedJustNow": "Updated just now",
       "stopSharing": "Stop sharing",
-      "manageLinks": "Manage links",
       "done": "Done",
       "stopTitle": "Stop sharing {{name}}?",
       "stopDescription": "The link stops working.",
@@ -29970,9 +29981,9 @@
       },
       "notIncluded": "Not included",
       "copy": {
-        "sharedBy": "Shared by {{who}}",
         "viewOriginal": "View original",
-        "originalGone": "No longer available"
+        "originalGone": "No longer available",
+        "copiedFrom": "Copied from {{who}}"
       },
       "error": {
         "blocked": "A secret was found in what would be shared. Remove it, then try again.",
@@ -29988,7 +29999,24 @@
       "duplicateSkill": "Same name, in {{folder}} · not shared",
       "sharedBy": "Shared by {{name}}",
       "sharedWith": "Shared with {{names}}",
-      "ownersComputer": "{{name}}’s computer"
+      "ownersComputer": "{{name}}’s computer",
+      "requestFailed": "Couldn’t answer the request. Try again.",
+      "accept": "Accept",
+      "decline": "Decline",
+      "invite": {
+        "invitedYou": "{{owner}} invited you",
+        "view": "View invite",
+        "sharedWithYou": "{{owner}} shared it with you",
+        "runsOn": "{{owner}}’s agent. It runs on {{owner}}’s computer.",
+        "chatFrom": "You chat with it from your Orca and your phone.",
+        "ownChats": "You see only your own chats.",
+        "ownerSees": "{{owner}} can see your chats with it.",
+        "actsAs": "It can act on {{owner}}’s computer, with {{owner}}’s accounts.",
+        "pauses": "It pauses while {{owner}}’s computer is off.",
+        "messagesWait": "Messages wait until it’s back.",
+        "leave": "You can leave anytime.",
+        "uses": "Uses"
+      }
     },
     "apps": {
       "close": "Close",
@@ -30005,7 +30033,12 @@
         "keyStored": "Stored on this computer; bots never see it. Composio holds your app sign-ins.",
         "addKey": "Add key and continue",
         "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
-        "signsIn": "Signs in through your Composio account."
+        "signsIn": "Signs in through your Composio account.",
+        "changeKeyTitle": "Change your Composio key",
+        "replacesKeyEnding": "Replaces the key ending in {{hint}}, for all your bots.",
+        "replacesKey": "Replaces your saved key, for all your bots.",
+        "newKeyNeeds": "The new key needs <permission/>.",
+        "replaceKey": "Replace key and continue"
       },
       "closeKeepsSigningIn": "Sign-in continues in your browser",
       "openPageAgain": "Open page again",
@@ -30146,7 +30179,8 @@
         "more": "More"
       },
       "setUpNamed": "Set up {{name}}",
-      "setUp": "Set up"
+      "setUp": "Set up",
+      "couldNotConnect": "Couldn’t connect {{app}}"
     },
     "panel": {
       "idle": "Idle",
@@ -30366,7 +30400,6 @@
       "cantReachHost": "Can't reach {{host}}",
       "statusUnknown": "Status unknown",
       "onHost": "on {{host}}",
-      "new": "New chat",
       "title": "Chats",
       "search": "Search chats and workers",
       "empty": "Side chats, Slack and Linear threads and automation runs show up here, each with the workers it starts.",
@@ -30392,7 +30425,18 @@
       "open": "Open",
       "actions": "Chat actions",
       "needsYouCount": "{{count}} needs you",
-      "hideOlder": "Hide older"
+      "personHome": "{{name}}’s Home",
+      "hideOlder": "Hide older",
+      "noMessages": "No messages yet",
+      "searchPerson": "Search {{name}}'s chats",
+      "searchOwn": "Search your chats",
+      "noneFromPerson": "No chats from {{name}}.",
+      "noneFromYou": "No chats from you.",
+      "filter": {
+        "label": "Filter by person",
+        "you": "You",
+        "everyone": "Everyone"
+      }
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -30418,6 +30462,8 @@
     "tabs": {
       "homeDetail": "Home: the bot's main chat. Its memory, automations and requests from others land here.",
       "sideDetail": "Side chat: a separate topic with this bot.",
+      "teammateHomeDetail": "Home: your main chat with this agent. Your requests and its replies to you land here.",
+      "personHomeDetail": "{{name}}’s Home: their main chat with this agent.",
       "homeBanner": "Open {{name}}'s page",
       "homeTitle": "Home"
     },
@@ -30556,7 +30602,7 @@
         "showLess": "Show less",
         "submit": "Comment",
         "thisServer": "This server",
-        "replyOrPick": "Reply in your own words, or pick an option",
+        "replyOrPick": "Reply or pick an option",
         "replyingTo": "Replying to:",
         "hideReplyingTo": "Hide",
         "replyingToShow": "Replying to: {{question}}. Show question",
@@ -30569,7 +30615,8 @@
         "filtered": "No items match.",
         "needsYou": "Nothing needs you.",
         "title": "No items yet",
-        "short": "No items yet. When {{bot}} takes something on, it shows up here."
+        "short": "No items yet. When {{bot}} takes something on, it shows up here.",
+        "person": "No items from {{name}}."
       },
       "field": {
         "chat": "Chat",
@@ -30582,7 +30629,8 @@
         "clearAll": "Clear filters",
         "label": "Filter items",
         "needsYou": "Needs you only",
-        "remove": "Remove filter {{name}}"
+        "remove": "Remove filter {{name}}",
+        "owner": "Owner"
       },
       "group": {
         "closed": "Closed",
@@ -30727,6 +30775,7 @@
       "continuesTip": "Continues automatically at {{time}}",
       "hitTip": "{{agent}} hit its usage limit · resets {{time}}",
       "continuesShort": "Continues {{time}}",
+      "rowLine": "Usage limit · {{time}}",
       "hitShort": "Hit limit",
       "stoppedCount": "{{count}} stopped"
     },
@@ -30845,7 +30894,10 @@
       "groupReplierNotMember": "Choose a current room member in Room replies.",
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
-      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs."
     },
     "lookAroundEvery": {
       "every4h": "Every 4 hours, 8 AM to 8 PM",
@@ -30922,7 +30974,6 @@
       }
     },
     "teamShare": {
-      "add": "Add",
       "addLabel": "Add people",
       "addPlaceholder": "Email, Slack @name or GitHub login",
       "done": "Done",
@@ -30940,7 +30991,6 @@
       "remove": "Remove",
       "removePerson": "Remove {{name}}",
       "resendInvite": "Resend invite",
-      "share": "Share…",
       "slackLine": "{{handle}} on Slack · {{workspace}}",
       "slackOnly": "Slack only",
       "slackPlace": "Slack · {{workspace}}",
@@ -30948,7 +30998,32 @@
       "thisComputer": "this computer",
       "title": "Share {{name}}",
       "warning": "Anyone you share with can do anything {{name}} can on {{host}}, including using your accounts, files and chats.",
-      "you": "{{name}} (you)"
+      "you": "{{name}} (you)",
+      "declined": "Declined",
+      "personActions": "Actions for {{name}}",
+      "shareAgain": "Share again",
+      "cancel": "Cancel",
+      "shareStaged": "Share",
+      "discardOne": "{{name}} won’t get access.",
+      "discardMany": "These people won’t get access.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing",
+      "discardTitleOne": "Discard invite?",
+      "discardTitleMany": "Discard {{count}} invites?",
+      "shareWithTeammates": "Share with teammates…"
+    },
+    "sharingPage": {
+      "teammates": "Teammates",
+      "teammatesFoot": "Runs on {{host}} with your accounts. You can see their chats with it, and each teammate sees only their own.",
+      "add": "Add",
+      "copyLink": "Copy link",
+      "createCopyLink": "Create copy link",
+      "anyoneCanCopy": "Anyone with the link can make a copy",
+      "linkActions": "Link actions",
+      "changeIncluded": "Change what’s included…",
+      "stopSharing": "Stop sharing…",
+      "allYourLinks": "All your links",
+      "alreadyUpToDate": "The link is already up to date"
     }
   },
   "plugins": {

@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 // Bringing a bot over from another app: the new bot reads the old one's files itself in its first turn
 // (no per-app parser), guided by the orca-cli `bot-import` reference.
 import * as z from 'zod'
@@ -31,12 +32,14 @@ export const BotImportFromSchema = z.object({
 export type BotImportFrom = z.infer<typeof BotImportFromSchema>
 
 /** What a bot keeps of where it came from: enough to send its first turn again, and to find it on a re-import. */
-export const BotImportedFromSchema = BotImportFromSchema.extend({
-  /** The old bot's name. */
-  name: z.string().trim().min(1).max(200).optional(),
-  /** Whether the old bot's reply was saved in the new bot's home. */
-  reply: z.boolean().optional()
-})
+export const BotImportedFromSchema = lazyZodSchema(() =>
+  BotImportFromSchema.extend({
+    /** The old bot's name. */
+    name: z.string().trim().min(1).max(200).optional(),
+    /** Whether the old bot's reply was saved in the new bot's home. */
+    reply: z.boolean().optional()
+  })
+)
 export type BotImportedFrom = z.infer<typeof BotImportedFromSchema>
 
 /** What the old bot wrote back when asked for its setup; saved in the new bot's home, never sent as a turn. */

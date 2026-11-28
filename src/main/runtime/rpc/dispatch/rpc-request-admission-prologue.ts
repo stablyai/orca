@@ -26,7 +26,14 @@ import {
 } from '../orchestration/callers/orchestration-session-caller'
 import { admitOrchestrationPeerCall } from '../orchestration/callers/orchestration-peer-caller'
 import { waitForRestoredWorkerCallerIdentity } from '../orchestration/callers/worker-caller-identity-restore-wait'
-import { refuseBotShareCall } from './bot-share-call-admission'
+import { admitBotShareCall } from './bot-share-call-admission'
+import { reachesHostWindow } from '../../../bots/team-share/teammate-rules'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { admitTeammateCall } from '../../../bots/team-share/teammate-call-admission'
+import { rpcCallContext } from '../rpc-call-context'
+
+const HOST_WINDOW_REFUSAL =
+  "A teammate's pages and navigation stay on their own computer, never on the host's window."
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -97,13 +104,32 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     if (callerScope.kind !== 'bot-share') {
       return admitted
     }
-    return refuseBotShareCall(runtime, callerScope, method.share, admitted.params).then(
-      (refusal) => {
-        if (!refusal) {
-          return admitted
+    // Every teammate call, either tier: nothing it opens, focuses or drives lands on the host's window.
+    if (
+      reachesHostWindow(method.name, admitted.params, {
+        pairedDeviceId: options?.pairedDeviceId,
+        pageDeviceOf: (page) => getRuntimeBrowserPageRegistry(runtime).getPage(page)?.pairedDeviceId
+      })
+    ) {
+      reportAgentShareFailure({ stage: 'admission_refused', reason: 'host_window' })
+      return reject(errorResponse(request.id, meta, 'forbidden', HOST_WINDOW_REFUSAL))
+    }
+    const answered = callerScope.workspaceTier
+      ? admitTeammateCall(
+          rpcCallContext(runtime, request, options, pinnedCallerScope, caller, admitted.params),
+          callerScope,
+          admitted
+        )
+      : admitBotShareCall(runtime, callerScope, method.share, admitted.params).then((answer) =>
+          'refusal' in answer ? answer : { ...admitted, params: answer.params }
+        )
+    return answered.then(
+      (answer) => {
+        if (!('refusal' in answer)) {
+          return answer
         }
-        reportAgentShareFailure({ stage: 'admission_refused', reason: refusal })
-        return reject(errorResponse(request.id, meta, 'not_found', refusal))
+        reportAgentShareFailure({ stage: 'admission_refused', reason: answer.refusal })
+        return reject(errorResponse(request.id, meta, 'not_found', answer.refusal))
       },
       (error) => reject(mapDispatcherError(request, meta, error))
     )

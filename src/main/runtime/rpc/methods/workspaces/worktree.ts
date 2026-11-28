@@ -103,9 +103,10 @@ export const WORKTREE_METHODS = [
     name: 'worktree.activate',
     ...notShared('workspace'),
     params: WorktreeActivate,
-    handler: async (params, { runtime, clientKind }) =>
+    handler: async (params, { runtime, clientKind, callerScope }) =>
       // Only mobile activation wakes host-renderer slept agents; preserve web/desktop behavior.
       runtime.activateManagedWorktree(params.worktree, {
+        reader: callerScope,
         notifyClients: params.notifyClients !== false,
         clientKind,
         navigation: resolveRuntimeNavigationTarget({

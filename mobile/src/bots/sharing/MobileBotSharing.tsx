@@ -17,7 +17,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useHostBotsListing } from '../host-bot-store'
 import { mobileBotAvatarSource, type MobileBotAvatarSource } from '../host-bot-row-facts'
 import type { ListedBot } from '../host-bots-operations'
-import { MobileBotTextButton } from '../MobileBotTextButton'
+import { MobileShareLinkCopyButton } from './MobileShareLinkCopyButton'
 import type { SettingsFeature } from '../MobileBotSettingsRoot'
 import { botShareDate, botShareErrorMessage, botShareUrlText } from './bot-share-copy'
 import { stopPhoneBotShare } from './bot-share-operations'
@@ -286,7 +286,7 @@ function SharingPage(props: {
                   <Share2 size={18} color={colors.accentBlue} />
                 )
               }
-              title={t('bots.share.shareBot', 'Share bot…')}
+              title={t('bots.share.shareBot', 'Send a copy…')}
               accent
               disabled={!props.online || read.kind === 'loading'}
               onPress={props.onShare}
@@ -316,13 +316,7 @@ function SharingPage(props: {
           subtitle={t('bots.share.updatedAt', 'Updated {{date}}', {
             date: botShareDate(link.updatedAt, true)
           })}
-          accessory={
-            <MobileBotTextButton
-              label={t('bots.share.copy', 'Copy')}
-              accessibilityLabel={t('bots.share.copyLink', 'Copy link')}
-              onPress={copy}
-            />
-          }
+          accessory={<MobileShareLinkCopyButton onPress={copy} />}
         />
         <ListRow
           leading={<RefreshCw size={18} color={colors.textSecondary} />}

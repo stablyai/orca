@@ -9,6 +9,7 @@ import {
 } from '../remote-runtime-connect-bound'
 import { REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES } from '../remote-runtime-memory-limits'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
+import { relayOnlyEndpointRefusal } from '../pairing/runtime-relay-endpoint'
 import { readSealedFrame, type RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
 
 export type RemoteRuntimeWebSocket = {
@@ -92,6 +93,10 @@ function createSocket(
 ):
   | { ok: true; ws: WebSocket; handshake: PairedE2EEClientHandshake }
   | { ok: false; error: RemoteRuntimeClientError } {
+  const relayOnly = relayOnlyEndpointRefusal(connection.endpoint)
+  if (relayOnly) {
+    return { ok: false, error: relayOnly }
+  }
   let handshake: PairedE2EEClientHandshake
   try {
     handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)

@@ -260,6 +260,14 @@ export const googlePage = defineFixture({
   interact: () => openRow('Google')
 })
 
+/** Signed in, with a setup left open from before: no Setting up, as `orca bot connectors` says. */
+export const googlePageSetupLeftOpen = defineFixture({
+  width: 720,
+  setup: () => fresh({ linearLinked: true, composio: false, googleSetupRunning: true }),
+  render: () => <Panel bot={base} />,
+  interact: () => openRow('Google')
+})
+
 const openPageMenu = async (row: string, name: string): Promise<void> => {
   await openRow(row)
   const trigger = [...document.querySelectorAll<HTMLElement>('button')].find(

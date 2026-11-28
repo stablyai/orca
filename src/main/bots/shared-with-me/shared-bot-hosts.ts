@@ -2,46 +2,45 @@
 // the window as hosts of their own. A message to a host that is away is held in Orca Cloud.
 import type { SharedBotHostFailures } from './shared-bot-host-failures'
 import {
-  SHARED_BOT_HOST_ERRORS,
+  SHARED_HOSTS_HOLD_WHILE_AWAY,
   sharedBotHostView,
   type SharedBotHostsState
 } from '../../../shared/bots/shared-bot-hosts'
-import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { relayStreamError } from '../../../shared/remote-runtime/relay/client/relay-rpc-streams'
-import { sharedBotHostLink, type SharedBotHostLink } from './shared-bot-host-link'
+import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
+import {
+  endSharedBotHostConnections,
+  sharedBotHostLink,
+  type SharedBotHostLink
+} from './shared-bot-host-link'
 import {
   newSharedBotHostEntry,
-  sharedBotHostKey,
   SharedBotHostStore,
   type SharedBotHostEntry
 } from './shared-bot-host-store'
-import {
-  namesSharedBotNewChat,
-  SharedBotHeldSends,
-  sharedBotAnswer,
-  sharedBotFailure as failure,
-  sharedBotOffline
-} from './shared-bot-held-sends'
-import { nextPairingStep, pinnedSharedBotOffer, type MineShare } from './shared-bot-pairing'
+import { applySharedBotMine, sharedBotRequests, usableHere } from './shared-bot-mine-apply'
+import { SharedBotHeldSends } from './shared-bot-held-sends'
+import { sharedBotUnshared } from './shared-bot-host-answers'
+import { callHoldingHost } from './shared-bot-held-call'
+import { nextPairingStep, type MineShare } from './shared-bot-pairing'
+import { SerialRerun } from '../../../shared/concurrency/serial-rerun'
 import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
-import type { SharedBotHomes } from './shared-bot-home'
+import { SharedBotOfferWaits } from './shared-bot-offer-waits'
 import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
+import { SharedBotReadPace, type SharedBotReadPaceDeps } from './shared-bot-read-pace'
+import { hasRelayCredential } from './shared-bot-host-key'
 
-// New shares and invites resolve within this; pairing and held messages are read sooner.
-const IDLE_POLL_MS = 10 * 60 * 1000
-const BUSY_POLL_MS = 30 * 1000
+// How long a call on a dropped link waits for the share list to say whether it was a revoke.
+const SHARES_LIST_WAIT_MS = 5000
 
-export type SharedBotHostsDeps = {
+export type SharedBotHostsDeps = Partial<Pick<SharedBotReadPaceDeps, 'invites' | 'random'>> & {
   userDataPath: string
   cloud: () => SharedBotsCloud | null
   /** The signed-in Orca account the cloud is read as; null signed out. */
   account: () => string | null
-  platform: RelayClientPlatform
   /** Orca Cloud's connector origin, for this computer's phones; null without a cloud. */
   connectorOrigin?: () => string | null
   publish: (state: SharedBotHostsState) => void
-  homes: SharedBotHomes
   failures?: SharedBotHostFailures
   now?: () => number
 }
@@ -52,11 +51,12 @@ export class SharedBotHosts {
   // Null until the cloud first answers: every kept share is listed meanwhile, none dropped.
   private shares: Map<string, MineShare> | null = null
   private readonly held: SharedBotHeldSends
-  private refreshing: Promise<void> | null = null
-  private refreshAgain = false
-  private timer: ReturnType<typeof setTimeout> | null = null
+  private readonly reads = new SerialRerun((applied) => this.readMine(applied), SHARES_LIST_WAIT_MS)
+  private readonly pace: SharedBotReadPace
+  private readonly offerWaits = new SharedBotOfferWaits()
   private readonly now: () => number
   private loaded: Promise<void> | null = null
+  private stopped = false
   private readonly sharing = new CloudSharesSupport(() => this.deps.account())
   /** This computer's phones' keys to the shared agents. */
   readonly phones: SharedBotPhoneGrants
@@ -78,27 +78,55 @@ export class SharedBotHosts {
       listed: () => this.listed(),
       reach: (entry) => this.reach(entry),
       request: (entry, method, params) => this.linkFor(entry).request(method, params),
-      origin: () => deps.connectorOrigin?.() ?? null
+      account: () => deps.account(),
+      origin: () => deps.connectorOrigin?.() ?? null,
+      requests: () => sharedBotRequests(this.store, this.shares),
+      answer: (shareId, accept) => (accept ? this.accept(shareId) : this.decline(shareId))
+    })
+    this.pace = new SharedBotReadPace({
+      ...deps,
+      now: this.now,
+      read: () => void this.refresh(),
+      nextReadMs: (woken) => this.offerWaits.nextReadMs(this.store.list(), this.readState, woken)
     })
   }
 
+  // What sets the read pace for one entry: pairing, away or holding a message reads sooner.
+  private readonly readState = (entry: SharedBotHostEntry) => ({
+    link: this.linkFor(entry).current(),
+    waiting: entry.held.some((held) => this.held.isWaiting(held))
+  })
+
   /** The kept shares are loaded, so `views` lists them. */
   ready(): Promise<void> {
-    this.loaded ??= this.store.load()
-    return this.loaded
+    return (this.loaded ??= this.store.load())
   }
 
-  start(): void {
-    void this.refresh()
+  /** Follows the cloud's list once `before` (work on the kept shares) settles, unless stopped by then. */
+  start(before: Promise<unknown> = Promise.resolve()): void {
+    this.stopped = false
+    void before
+      .catch(() => {})
+      .then(() => {
+        if (!this.stopped) {
+          this.pace.start()
+          void this.refresh()
+        }
+      })
   }
 
+  /** Nothing reads or applies the cloud's list after this, a read already out included: quitting
+   *  must never change the kept shares. */
   stop(): void {
-    if (this.timer) {
-      clearTimeout(this.timer)
-      this.timer = null
-    }
+    this.stopped = true
+    this.pace.stop()
     for (const link of this.links.values()) {
       link.close()
+    }
+    this.links.clear()
+    // As an ended share's: its host's connections go even where no link was made here.
+    for (const entry of this.store.list()) {
+      endSharedBotHostConnections(entry.environmentId)
     }
   }
 
@@ -108,14 +136,15 @@ export class SharedBotHosts {
   }
 
   state(): SharedBotHostsState {
-    return { hosts: this.views(), sharing: this.sharing.value }
+    const requests = sharedBotRequests(this.store, this.shares)
+    return { hosts: this.views(), sharing: this.sharing.value, requests }
   }
 
   views(): SharedBotHostsState['hosts'] {
     return this.listed().map((entry) =>
       sharedBotHostView(entry, {
-        homeWorkspaceId: entry.homeWorkspaceId ?? null,
         link: this.linkFor(entry).current(),
+        accepting: this.offerWaits.connecting(entry.shareId, this.linkFor(entry).current()),
         holds: entry.hostKey !== undefined,
         held: this.held.views(entry)
       })
@@ -123,7 +152,7 @@ export class SharedBotHosts {
   }
 
   /** The kept shares, but for those the cloud's last answer no longer lists. */
-  private listed(): SharedBotHostEntry[] {
+  listed(): SharedBotHostEntry[] {
     return this.store.list().filter((entry) => this.shares?.has(entry.shareId) ?? true)
   }
 
@@ -132,117 +161,87 @@ export class SharedBotHosts {
   refresh(): Promise<void> {
     // A sign-out or switch hides sharing now, not after a read still out for the last account.
     this.sharing.forgetIfSwitched(() => this.publish())
-    if (this.refreshing) {
-      this.refreshAgain = true
-      return this.refreshing
-    }
-    this.refreshing = (async () => {
-      // Cleared in the same turn as the last check, so a read asked for after it starts anew.
-      try {
-        do {
-          this.refreshAgain = false
-          await this.readMine()
-        } while (this.refreshAgain)
-      } finally {
-        this.refreshing = null
-      }
-    })()
-    return this.refreshing
+    return this.reads.start()
   }
 
-  private async readMine(): Promise<void> {
-    await this.ready()
-    if (this.timer) {
-      clearTimeout(this.timer)
-      this.timer = null
+  /** The entry and its link, or null once its share is gone. A link that dropped may be a revoke,
+   *  so the cloud read that started lands first. */
+  private async reachShared(environmentId: string) {
+    const entry = this.entryFor(environmentId)
+    const link = entry && (await this.reach(entry))
+    if (link && link !== 'live') {
+      await this.settled()
     }
-    const cloud = this.deps.cloud()
+    return entry && link && this.entryFor(environmentId) ? { entry, link } : null
+  }
+
+  private async readMine(applied: () => void): Promise<void> {
+    await this.ready()
+    this.pace.began()
     const read = this.held.beginRead()
-    const answer = await this.sharing.read(cloud, () => this.publish())
-    // Signed out: the account's shares, keys and links go with it.
-    const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
-    const gone = shares ? this.applyMine(shares, read) : []
-    await this.deps.homes.settle(gone, this.store)
+    const wait = this.offerWaits.take()
+    const answer = this.stopped
+      ? null
+      : await this.sharing.read(this.deps.cloud(), () => this.publish(), wait)
+    if (this.stopped) {
+      applied()
+      return
+    }
+    // Signed out: the account's shares, keys and links go with it. Any other failure keeps them.
+    const shares = this.sharing.sharesIn(answer)
+    if (shares) {
+      this.applyMine(shares, read)
+    }
+    applied()
     if (shares) {
       await Promise.all(this.store.list().map((entry) => this.advance(entry)))
     }
+    this.offerWaits.settled(wait)
     this.publish()
-    // Pairing, a held message, or a host away: read again soon, so each settles without a click.
-    const busy = this.store
-      .list()
-      .some(
-        (entry) =>
-          !entry.resume ||
-          this.linkFor(entry).current() !== 'live' ||
-          entry.held.some((held) => this.held.isWaiting(held))
-      )
-    this.timer = setTimeout(() => void this.refresh(), busy ? BUSY_POLL_MS : IDLE_POLL_MS)
-    this.timer.unref?.()
+    this.pace.settled(answer?.ok === true)
   }
 
-  async call(
-    environmentId: string,
-    method: string,
-    params: unknown
-  ): Promise<RuntimeRpcResponse<unknown>> {
-    await this.ready()
-    const entry = this.entryFor(environmentId)
-    if (!entry) {
-      return failure(method, SHARED_BOT_HOST_ERRORS.offline, 'This agent is no longer shared.')
-    }
-    const link = await this.reach(entry)
-    if (method === 'agentSession.send') {
-      const handedOff = await this.held.send(entry, link, params)
-      if (handedOff) {
-        return handedOff
-      }
-    }
-    const local = this.held.answerHere(entry, link, method, params)
-    if (local) {
-      return local
-    }
-    // The host doesn't know a placeholder chat yet; nothing of it can be read there.
-    if (link !== 'live' || namesSharedBotNewChat(params)) {
-      return sharedBotOffline(entry, method)
-    }
-    try {
-      const link = this.linkFor(entry)
-      const response =
-        method === 'agentSession.send'
-          ? await this.held.sendWithKept(params, (sent, args) => link.request(sent, args))
-          : await link.request(method, params)
-      this.held.noteAnswer(entry, method, params, response)
-      return sharedBotAnswer(entry, response)
-    } catch {
-      // The link closed or timed out under the request: an answer the window can read.
-      return sharedBotOffline(entry, method)
-    }
-  }
-
-  async subscribe(
+  /**
+   * A call its share answers here, before the paired path sends it: a share the owner ended, or, while
+   * held sends are on, a message held for a host that is away. Null sends it as any paired call.
+   */
+  async answerHere(
     environmentId: string,
     method: string,
     params: unknown,
-    onResponse: (response: RuntimeRpcResponse<unknown>) => void
-  ): Promise<() => void> {
-    await this.ready()
-    const entry = this.entryFor(environmentId)
-    if (!entry || namesSharedBotNewChat(params) || (await this.reach(entry)) !== 'live') {
-      onResponse(
-        entry
-          ? sharedBotOffline(entry, method)
-          : failure(method, SHARED_BOT_HOST_ERRORS.offline, 'This agent is no longer shared.')
-      )
-      return () => {}
+    send: (method: string, params: unknown) => Promise<RpcResponse>
+  ): Promise<RuntimeRpcResponse<unknown> | null> {
+    const ended = await this.endedAnswer(environmentId, method)
+    if (ended || !this.entryFor(environmentId)) {
+      return ended
     }
-    return this.linkFor(entry).subscribe(method, params, (result) => {
-      const error = relayStreamError(result)
-      onResponse(
-        error === null
-          ? { id: method, ok: true, result, _meta: { runtimeId: entry.environmentId } }
-          : failure(method, SHARED_BOT_HOST_ERRORS.offline, error)
-      )
-    })
+    return SHARED_HOSTS_HOLD_WHILE_AWAY
+      ? this.callHolding(environmentId, method, params, send)
+      : null
+  }
+
+  /** A call to a share the owner ended: never an unknown host, and never sent. */
+  async endedAnswer(
+    environmentId: string,
+    method: string
+  ): Promise<RuntimeRpcResponse<unknown> | null> {
+    await this.ready()
+    return !this.entryFor(environmentId) && this.store.wasRemoved(environmentId)
+      ? sharedBotUnshared(method)
+      : null
+  }
+
+  private async callHolding(
+    environmentId: string,
+    method: string,
+    params: unknown,
+    send: (method: string, params: unknown) => Promise<RpcResponse>
+  ): Promise<RuntimeRpcResponse<unknown>> {
+    const reached = await this.reachShared(environmentId)
+    if (!reached) {
+      return sharedBotUnshared(method)
+    }
+    return callHoldingHost(this.held, reached.entry, reached.link, method, params, send)
   }
 
   /** Sends a held message the host refused again; false when it isn't one, or wasn't held. */
@@ -252,33 +251,44 @@ export class SharedBotHosts {
     return entry ? this.held.sendAgain(entry, clientMessageId) : false
   }
 
-  /** Applies the cloud's list; returns the kept shares it no longer lists, now removed. */
-  private applyMine(shares: readonly MineShare[], read: number): SharedBotHostEntry[] {
-    const current = new Map(shares.map((share) => [share.shareId, share]))
-    this.shares = current
-    this.held.applyMine(shares)
-    const gone = this.store.list().filter((entry) => !current.has(entry.shareId))
-    for (const { shareId } of gone) {
+  /** Applies the cloud's list: the kept shares it no longer lists are removed. */
+  private applyMine(shares: readonly MineShare[], read: number): void {
+    this.shares = new Map(shares.map((share) => [share.shareId, share]))
+    // Its host's connections go even where no link was made here (the window's calls open them too).
+    const closeLink = (shareId: string) => {
       this.links.get(shareId)?.close()
       this.links.delete(shareId)
+      const environmentId = this.store.get(shareId)?.environmentId
+      if (environmentId) {
+        endSharedBotHostConnections(environmentId)
+      }
     }
-    this.store.remove(new Set(gone.map((entry) => entry.shareId)))
-    for (const share of shares) {
-      const entry = this.store.get(share.shareId) ?? newSharedBotHostEntry(share)
-      const { hostKey: _hostKey, avatarUrl: _avatar, ...rest } = entry
-      const offer = pinnedSharedBotOffer(entry, share)
-      const hostKey = sharedBotHostKey({ offer, hostKey: share.hostKey })
-      this.store.put({
-        ...rest,
-        botName: share.botName,
-        ownerName: share.ownerName,
-        ...(share.avatarUrl ? { avatarUrl: share.avatarUrl } : {}),
-        ...(hostKey ? { hostKey } : {}),
-        ...(offer ? { offer } : {}),
-        held: this.held.settle(entry.held, read)
-      })
+    applySharedBotMine({ store: this.store, held: this.held, closeLink }, shares, read)
+  }
+
+  /** Accept: keeps the share and runs its accept and pairing; false when it isn't offered now. */
+  async accept(shareId: string): Promise<boolean> {
+    await this.ready()
+    const share = this.shares?.get(shareId)
+    // Declined here, it stays declined: the cloud may list it until it hears, or never (an older cloud).
+    if (!share || !usableHere(this.store, shareId)) {
+      return false
     }
-    return gone
+    this.store.put(this.store.get(shareId) ?? newSharedBotHostEntry(share))
+    await this.refresh()
+    return true
+  }
+
+  /** Decline: kept, so it is never offered again, and told to the cloud for the owner. */
+  async decline(shareId: string): Promise<boolean> {
+    await this.ready()
+    if (!this.shares?.has(shareId) || this.store.get(shareId)) {
+      return false
+    }
+    this.store.decline(shareId, this.now())
+    this.publish()
+    await this.deps.cloud()?.decline(shareId)
+    return true
   }
 
   /** Accepts; dials a fresh invite at once so it is spent before it expires, and an online host so
@@ -297,9 +307,10 @@ export class SharedBotHosts {
       })
       if (answer?.ok) {
         this.store.put({ ...(this.store.get(entry.shareId) ?? entry), acceptedAt: this.now() })
+        this.offerWaits.accepted(entry)
       }
     } else if (step.kind === 'connect' && (step.credential.kind === 'invite' || share.hostOnline)) {
-      const link = await this.linkFor(entry).connect(step.credential)
+      const link = await this.linkFor(entry).connect()
       this.deps.failures?.linked(entry.shareId, link, share.hostOnline)
       await this.phones.endRemoved(entry.shareId)
     }
@@ -310,12 +321,12 @@ export class SharedBotHosts {
     const link = this.linkFor(entry)
     const share = this.shares?.get(entry.shareId)
     const step = share ? nextPairingStep(entry, share, this.now()) : null
-    return step?.kind === 'connect' ? link.connect(step.credential) : link.settled()
+    return step?.kind === 'connect' ? link.connect() : link.settled()
   }
 
-  /** Whether `environmentId` names one of these hosts; read once `ready` has settled. */
-  reaches(environmentId: string): boolean {
-    return this.entryFor(environmentId) !== undefined
+  /** Once a cloud read under way or asked for has its list applied (not its pairings), capped. */
+  async settled(): Promise<void> {
+    await this.reads.nextListed()
   }
 
   private entryFor(environmentId: string): SharedBotHostEntry | undefined {
@@ -326,13 +337,12 @@ export class SharedBotHosts {
     let link = this.links.get(entry.shareId)
     if (!link) {
       link = sharedBotHostLink({
-        platform: this.deps.platform,
-        entry: () => this.store.get(entry.shareId),
-        save: (next) => this.store.put(next),
-        // Unpaired means the host refused this device (a revoke): the cloud's list says so now.
-        onLinkChanged: (next) => {
+        environmentId: entry.environmentId,
+        hasCredential: () => hasRelayCredential(this.store.get(entry.shareId), this.now()),
+        // The host refused this device, or dropped it while live (a revoke closes it): the cloud says.
+        onLinkChanged: (next, previous) => {
           this.publish()
-          if (next === 'unpaired') {
+          if (next === 'unpaired' || (previous === 'live' && next === 'offline')) {
             void this.refresh()
           }
         }

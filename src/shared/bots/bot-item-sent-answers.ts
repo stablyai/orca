@@ -1,5 +1,5 @@
 // What a device's sends on their way answer: shown on their ask's lines until the host's read has them.
-import { botItemAnswersText } from './bot-item-answer-lines'
+import { botItemAnswersText, botItemWordsBesideAnswers } from './bot-item-answer-lines'
 import { botItemCommentFiles } from './bot-item-comment-files'
 import { botItemPendingCommentText, type BotItemPendingComment } from './bot-item-pending-comments'
 
@@ -41,4 +41,17 @@ export function botItemPendingAnswersOnly(entry: BotItemPendingComment): boolean
     botItemCommentFiles(text).files.length === 0 &&
     text === (words === null ? botItemAnswersText(intent.shape, intent.answers) : words)
   )
+}
+
+/** A send of answers to several questions with the owner's own words: those words, which show as its
+ *  comment while its answers show on the ask's lines. */
+export function botItemPendingWordsBesideAnswers(entry: BotItemPendingComment): string | null {
+  const { intent } = entry
+  return intent && intent.shape.decisions.length > 1 && intent.rideAlongText !== undefined
+    ? botItemWordsBesideAnswers(
+        intent.shape,
+        botItemPendingCommentText(entry),
+        intent.answers.map(Boolean)
+      )
+    : null
 }

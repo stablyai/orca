@@ -1,0 +1,202 @@
+// One of a teammate's chats with a shared agent: the regular phone chat. A message sent while the
+// owner's computer is away waits under it, then lands or reads Not sent with Send again. A new chat
+// started then is the placeholder its first message waits under, until the host starts it.
+import { useEffect, useMemo } from 'react'
+import { View } from 'react-native'
+import { useLocalSearchParams } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { isSharedBotNewChatId } from '../../../../src/shared/bots/shared-bot-hosts'
+import { TransientToast, useTransientToast } from '../../components/feedback/TransientToast'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useRouteHandoff } from '../../navigation/route-handoff'
+import { MobileNativeChatOverlay } from '../../session/native-chat/MobileNativeChatOverlay'
+import {
+  MobileNativeChatDeliveryContext,
+  type MobileNativeChatDeliveryNotice
+} from '../../session/native-chat/transcript/notices/mobile-native-chat-delivery'
+import { useMobileSessionKeyboardLift } from '../../terminal/session/input-controls/use-mobile-session-keyboard-lift'
+import { colors } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useHostClient } from '../../transport/connection/host-client-hooks'
+import { botSessionStart } from '../bot-sheet-operations'
+import { mobileBotAvatarSource } from '../host-bot-row-facts'
+import {
+  MobileSharedAgentNavBar,
+  MobileSharedAgentUnavailable,
+  sharedAgentOfflineText
+} from './MobileSharedAgentChrome'
+import { sharedAgentChatHref } from './MobileSharedAgentPage'
+import { sharedAgentChatInputLock, sharedAgentChatTranscriptHeld } from './shared-agent-chat-held'
+import { SHARED_AGENT_CHAT_CONNECTION, useSharedAgentChat } from './use-shared-agent-chat'
+import { useSharedAgentDictation } from './use-shared-agent-dictation'
+import { MobileSharedAgentChatMenu } from './MobileSharedAgentChatMenu'
+import { MobileChatViewerAccountContext } from '../../session/native-chat/transcript/messages/MobileNativeChatUserMessageMarks'
+import { MobileDictationSetupSheet } from '../../dictation/setup/MobileDictationSetupSheet'
+import { useSharedAgentPage } from './use-shared-agent-page'
+import { useSharedAgentSendAgain } from './use-shared-agent-views'
+
+const noop = () => {}
+
+export function MobileSharedAgentChat() {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const insets = useSafeAreaInsets()
+  const router = useRouteHandoff()
+  const params = useLocalSearchParams<{
+    hostId: string
+    environmentId: string
+    sessionId: string
+    title?: string
+  }>()
+  const { hostId, environmentId, sessionId } = params
+  const page = useSharedAgentPage(hostId, environmentId)
+  const agent = page.kind === 'agent' ? page : null
+  const { client: paired, state } = useHostClient(hostId)
+  const { message: toast, showToast } = useTransientToast()
+  const chat = useSharedAgentChat({
+    client: agent?.client ?? null,
+    pairedHostClient: paired,
+    hostId,
+    environmentId,
+    sessionId,
+    // Until the host lists it, as the desktop's placeholder does.
+    agent: agent?.bot?.agent ?? 'claude',
+    title: params.title ?? '',
+    capabilities: agent?.capabilities ?? null,
+    showToast
+  })
+  const keyboardLift = useMobileSessionKeyboardLift(insets.bottom)
+  const dictation = useSharedAgentDictation({
+    pairedClient: paired,
+    hostId,
+    worktreeId: chat.worktreeId,
+    tab: chat.tab,
+    connState: state,
+    controller: chat.controller,
+    showToast,
+    href: sharedAgentChatHref(hostId, environmentId, sessionId, params.title)
+  })
+  const sendAgain = useSharedAgentSendAgain(hostId)
+  const held = agent?.view.held
+  const ownerName = agent?.view.ownerName ?? ''
+  const delivery = useMemo(() => {
+    const shown = sharedAgentChatTranscriptHeld(held ?? [], sessionId)
+    const notices = new Map<string, MobileNativeChatDeliveryNotice>()
+    for (const [id, word] of shown.words) {
+      notices.set(
+        id,
+        word.state === 'waiting'
+          ? {
+              text: t('chat.sharedHeld.waiting', 'Waiting for {{owner}}’s computer', {
+                owner: ownerName
+              }),
+              waiting: true
+            }
+          : {
+              text: t('chat.sharedHeld.notSent', 'Not sent'),
+              waiting: false,
+              onSendAgain: async () => {
+                const sent = await sendAgain(environmentId, word.clientMessageId)
+                if (!sent) {
+                  showToast(t('chat.sharedHeld.notHeld', 'Couldn’t send it again'))
+                }
+                return sent
+              }
+            }
+      )
+    }
+    return { pending: shown.pending, notices }
+  }, [held, sessionId, ownerName, environmentId, sendAgain, showToast, t])
+  // A new chat started while the host was away moves to the chat the host starts for it, once each
+  // time its link comes up.
+  const swap = agent?.live && agent.client && isSharedBotNewChatId(sessionId) ? agent : null
+  const swapping = swap !== null
+  useEffect(() => {
+    if (!swap?.client) {
+      return
+    }
+    let current = true
+    void botSessionStart
+      .request(swap.client, { botId: swap.view.botId, newChatId: sessionId })
+      .then((reply) => botSessionStart.interpret(reply).sessionId)
+      .then((started) => {
+        if (current) {
+          router.replace(sharedAgentChatHref(hostId, environmentId, started, params.title))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      current = false
+    }
+  }, [swapping])
+  const back = () => router.back()
+  if (page.kind !== 'agent') {
+    return <MobileSharedAgentUnavailable page={page} onBack={() => router.dismissTo('/')} />
+  }
+  const { view, bot } = page
+  const name = bot?.name ?? view.botName
+  return (
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <MobileSharedAgentNavBar
+        name={params.title || t('bots.chats.untitled', 'New chat')}
+        avatar={mobileBotAvatarSource(bot ?? { id: view.botId, name, avatar: null })}
+        subtitle={t('bots.shared.chatOf', '{{name}} · Shared by {{owner}}', {
+          name,
+          owner: view.ownerName
+        })}
+        onBack={back}
+        link={page.live ? 'connected' : 'disconnected'}
+        trailing={<MobileSharedAgentChatMenu />}
+      />
+      <View style={styles.chat}>
+        {page.client ? (
+          <MobileNativeChatDeliveryContext.Provider value={delivery}>
+            <MobileChatViewerAccountContext.Provider value={view.accountId ?? null}>
+              <MobileNativeChatOverlay
+                controller={chat.controller}
+                imageSource={{ client: page.client, worktreeId: chat.worktreeId }}
+                worktreePath={null}
+                connState={SHARED_AGENT_CHAT_CONNECTION}
+                onOpenFile={noop}
+                images={chat.images}
+                structuredComposer={chat.structuredComposer}
+                {...dictation.mic}
+                inputLockReason={sharedAgentChatInputLock(page.live, view.holds)}
+                sendErrorMessage={chat.sendError.message}
+                onClearSendError={chat.sendError.clear}
+                sendSurfaceId={chat.scopeKey ?? ''}
+                sessionId={sessionId}
+                getSendCompletionGeneration={chat.getSendCompletionGeneration}
+                keyboardInset={keyboardLift}
+                hostName={null}
+                linkOpenMode={chat.linkOpenMode}
+                onRunInTerminal={noop}
+                hostOutage={
+                  page.live
+                    ? null
+                    : {
+                        ...(view.holds ? { holdsSends: true as const } : {}),
+                        text: sharedAgentOfflineText(t, view)
+                      }
+                }
+              />
+            </MobileChatViewerAccountContext.Provider>
+          </MobileNativeChatDeliveryContext.Provider>
+        ) : null}
+      </View>
+      <MobileDictationSetupSheet
+        visible={dictation.setup.visible}
+        client={paired}
+        onClose={dictation.setup.close}
+        onReady={dictation.setup.close}
+      />
+      <TransientToast message={toast} bottomInset={insets.bottom} />
+    </View>
+  )
+}
+
+const styles = themedStyleSheet(() => ({
+  screen: { flex: 1, backgroundColor: colors.bgBase },
+  chat: { flex: 1 }
+}))

@@ -36,6 +36,8 @@ import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { ownsHostReadMarks } from '../../bots/team-share/teammate-rules'
+import type { RpcCallerScope } from '../rpc/callers/rpc-caller-scope'
 
 /**
  * Feeds main's sleeping retention, and owns the host's sort stamps: clients sort by those, so main
@@ -170,8 +172,12 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     )
   }
 
-  /** A phone holding the workspace's session open has it on screen: its flag is read and stays down. */
-  readAndHoldPhoneSession(worktreeId: string): () => void {
+  /** A phone holding the workspace's session open has it on screen: its flag is read and stays down.
+   *  A teammate's phone neither reads nor holds the owner's flag (rule 6). */
+  readAndHoldPhoneSession(worktreeId: string, reader: RpcCallerScope | undefined): () => void {
+    if (!ownsHostReadMarks(reader)) {
+      return () => {}
+    }
     const hostId = this.workspaceHostId(worktreeId)
     const workspace = {
       worktreeId,

@@ -1,3 +1,4 @@
+import type { TeammateHomeBots } from './agent-session-record-home-names'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { withPRWatchRecovery } from '../lifecycle/pr-watch-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
@@ -19,11 +20,13 @@ export type AgentSessionRecordStoreStartupOpen = {
 }
 
 export function localAgentSessionRecordStoreLocation(
-  legacySessionTabIds: readonly string[]
+  legacySessionTabIds: readonly string[],
+  teammateHomeBots: TeammateHomeBots
 ): AgentSessionRecordStoreLocation {
   return withPRWatchRecovery({
     stateDirectory: getProfileUserDataPath(),
     legacySessionTabIds,
+    teammateHomeBots,
     hostId: LOCAL_EXECUTION_HOST_ID,
     logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
   })
@@ -31,10 +34,10 @@ export function localAgentSessionRecordStoreLocation(
 
 /** Opens saved chats early; old-history cleanup on empty profiles depends on the serving open. */
 export function startLocalAgentSessionRecordStoreOpen(
-  legacySessionTabIds: readonly string[],
+  location: AgentSessionRecordStoreLocation,
   maintenanceAfter: Promise<void>
 ): AgentSessionRecordStoreStartupOpen {
-  const location = localAgentSessionRecordStoreLocation(legacySessionTabIds)
+  const { legacySessionTabIds } = location
   if (!hasPersistedStructuredAgentSessionStore(location.stateDirectory)) {
     return { legacySessionTabIds, persisted: false, opened: null }
   }

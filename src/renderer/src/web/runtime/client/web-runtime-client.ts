@@ -26,6 +26,7 @@ import {
   type WebRuntimeTransportSubscription,
   type WebRuntimeTransportSubscriptionHandle
 } from './web-runtime-subscription-contract'
+import { pairedRuntimeConnectionToken } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 const SHARED_CONNECTION_SUBSCRIPTION_METHODS = new Set(['files.watch'])
 
@@ -234,7 +235,7 @@ export class WebRuntimeClient {
       subscriptions: this.subscriptions,
       sendEncrypted: (message) => this.sendEncrypted(message),
       sendBinary: (bytes) => this.sendEncryptedBinary(bytes),
-      deviceToken: this.connection.credential.deviceToken
+      deviceToken: pairedRuntimeConnectionToken(this.connection)
     })
   }
 

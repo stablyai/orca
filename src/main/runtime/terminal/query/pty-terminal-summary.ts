@@ -74,6 +74,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     // A live process awaiting its pane binding is not evidence of an orphan.
     if (
       orphaned &&
+      !pty.holder &&
       (this.pendingPtyRegistrationIncarnations.has(pty.ptyId) ||
         this.terminalMutationLock.hasActiveSpawns(worktreeIdentityKey(pty.worktreeId)))
     ) {
@@ -84,6 +85,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
       orphaned,
+      ...(pty.holder ? { heldByTeammate: true as const } : {}),
       ...(orphaned && pane && pane.tabId === recorded.tabId && recorded.paneKey
         ? { recordedPaneKey: recorded.paneKey }
         : {}),
@@ -135,7 +137,11 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     }
 
     const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
-    if (!leaf || leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration) {
+    if (
+      !leaf ||
+      ((leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration) &&
+        !this.isSleptLeafBinding(handle, leaf))
+    ) {
       throw new Error('terminal_handle_stale')
     }
     return { record, leaf }
@@ -296,6 +302,11 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     const panePty = this.getPtyRecordForPaneKey(paneKey, context)
     if (panePty?.connected) {
       return this.issuePtyHandle(panePty, context)
+    }
+    // A slept pane keeps its own name: the stopped process's synthetic handle cannot wake it.
+    const slept = leaf && !leaf.ptyId ? this.sleptLeafHandle(leaf) : null
+    if (slept) {
+      return slept
     }
     if (leaf?.ptyId) {
       return this.issueHandle(leaf, context)

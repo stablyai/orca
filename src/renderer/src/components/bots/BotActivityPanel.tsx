@@ -6,6 +6,7 @@ import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../shared/bot-types'
+import type { BotItem } from '../../../../shared/bots/bot-items'
 import { ChatWorkersActivity } from './ChatWorkersActivity'
 import { BotUpNextSection } from './BotUpNextSection'
 import { NO_ACTIVITY, useBotActivityAuthorityRead } from './use-bot-activity'
@@ -33,7 +34,19 @@ import {
   botItemsByDispatch,
   type BotItemFilter
 } from '../../../../shared/bots/bot-item-groups'
-import { BotItemsFilterButton, BotItemsFilterChips } from './items/BotItemsFilter'
+import {
+  BotItemsFilterButton,
+  BotItemsFilterChips,
+  type BotItemsPeople
+} from './items/BotItemsFilter'
+import {
+  botItemPersonMark,
+  botItemsPersonPick,
+  botItemsWhoseOfPick,
+  botPickedOther,
+  type BotChatPersonPick
+} from '../../../../shared/bots/bot-chat-people'
+import { useBotItemsPeople } from './BotPersonPickItems'
 import { BotItemsSection } from './items/BotItemsSection'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
@@ -43,7 +56,11 @@ import { useBotItems } from './items/use-bot-items'
 import { useBotItemsSeenAtOpen } from './items/use-bot-items-seen-mark'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotItemBackFocus } from './items/use-bot-item-back-focus'
-import { useBotItemsShownList } from './items/use-bot-items-shown-list'
+import {
+  botItemsShownReadState,
+  useBotItemsShownGroups,
+  useBotItemsShownRead
+} from './items/use-bot-items-shown-list'
 import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
 
 /** Focus after the panel shows Activity again: the gear that opened settings. */
@@ -66,10 +83,16 @@ export default function BotActivityPanel(): React.JSX.Element | null {
   return <BotActivityForBot key={bot.id} bot={bot} />
 }
 
-/** A shared agent's activity, items and settings are its owner's: none of them is shared, so the
- *  panel offers nothing for it rather than reads that fail and buttons that can't work. */
-function BotActivityForBot({ bot }: { bot: Bot }): React.JSX.Element | null {
-  return useSharedBotHostOf(bot.hostId) ? null : <BotActivityOrSettings bot={bot} />
+/** A shared agent shows a teammate their own Activity, read-only: its settings stay its owner's. */
+function BotActivityForBot({ bot }: { bot: Bot }): React.JSX.Element {
+  const readOnly = useSharedBotHostOf(bot.hostId) !== null
+  return readOnly ? (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <BotActivityTab bot={bot} readOnly />
+    </div>
+  ) : (
+    <BotActivityOrSettings bot={bot} />
+  )
 }
 
 function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
@@ -101,7 +124,13 @@ function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
   )
 }
 
-function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
+function BotActivityTab({
+  bot,
+  readOnly = false
+}: {
+  bot: Bot
+  readOnly?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const activityRead = useBotActivityAuthorityRead(bot)
   // Its server is down: the panel shows the last read with its actions off until it's back.
@@ -120,7 +149,6 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   const now = useBotNow(bot)
   const items = useBotItems(bot)
   const read = items.read
-  const seenAtOpen = useBotItemsSeenAtOpen(bot, read, items.landed)
   const [filter, setFilterState] = useState<BotItemFilter>(BOT_ITEM_NO_FILTER)
   // The row Back returns focus to; another filter shows other rows.
   const [returnTo, setReturnTo] = useState<string | null>(null)
@@ -128,11 +156,38 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     setReturnTo(null)
     setFilterState(next)
   }
+  // Whose items, per screen: a shared bot opens on the viewer's own, the owner's or a teammate's.
+  const entries = useBotItemsPeople(bot)
+  const [picked, setPicked] = useState<BotChatPersonPick | null>(null)
+  const pick = botItemsPersonPick(entries, picked)
+  const personPick: BotItemsPeople | null = entries
+    ? {
+        entries,
+        pick,
+        onPick: (next) => {
+          setReturnTo(null)
+          setPicked(next)
+        }
+      }
+    : null
   const picture = useBotPictureSetting(bot, (updates) => updateBotReporting(bot, updates))
   // "Today at…" and "next" roll over with the clock; a minute is fine-grained enough.
   const clock = useNow(60_000)
-  // Read above the list/item switch: an open item walks this list, and Back finds its row in it.
-  const list = useBotItemsShownList(bot, read, filter, clock, seenAtOpen ?? '')
+  // Read above the list/item switch: an open item walks this list, and Back finds its row in it. One
+  // source for the list: its own read (the person's or chats' when scoped) gives its rows, seen mark,
+  // failures and filter controls.
+  const shown = useBotItemsShownRead(bot, read, filter, botItemsWhoseOfPick(pick, bot))
+  const shownRead = botItemsShownReadState(shown, items)
+  const seenAtOpen = useBotItemsSeenAtOpen(bot, shown.read, shownRead.landed)
+  const list = useBotItemsShownGroups(bot, shown, filter, clock, seenAtOpen ?? '')
+  const ownerFallback = t('bots.items.filter.owner', 'Owner')
+  const personMark = useMemo(
+    () =>
+      entries && pick.kind === 'everyone'
+        ? (item: BotItem) => botItemPersonMark(item, bot.shareViewer, ownerFallback)
+        : null,
+    [entries, pick.kind, bot.shareViewer, ownerFallback]
+  )
   const walk = useBotItemWalk(list, botRefKey(bot))
   const openItem = (uid: string): void => {
     setReturnTo(null)
@@ -189,7 +244,10 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
       <BotItemPane
         bot={bot}
         uid={uid}
-        listed={read?.items.find((item) => item.uid === uid)}
+        listed={
+          list.items.find((item) => item.uid === uid) ??
+          read?.items.find((item) => item.uid === uid)
+        }
         walk={walk}
         offline={offline}
         onBack={back}
@@ -213,15 +271,26 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
         quiet={quiet}
         picture={picture}
         offline={offline}
+        readOnly={readOnly}
         filter={
-          read && read.items.length > 0 ? (
-            <BotItemsFilterButton items={read.items} filter={filter} onFilter={setFilter} />
+          list.read && (list.read.items.length > 0 || personPick) ? (
+            <BotItemsFilterButton
+              items={list.items}
+              filter={filter}
+              onFilter={setFilter}
+              people={personPick}
+            />
           ) : null
         }
       />
+      {/* Items act for a teammate as for the owner; only the agent's settings stay the owner's. */}
       <fieldset disabled={offline} className="contents">
-        {read ? <BotItemsFilterChips filter={filter} onFilter={setFilter} /> : null}
-        {read && items.refreshFailed ? <BotItemsReadFailed stale onRetry={items.retry} /> : null}
+        {list.read ? (
+          <BotItemsFilterChips filter={filter} onFilter={setFilter} people={personPick} />
+        ) : null}
+        {list.read && shownRead.refreshFailed ? (
+          <BotItemsReadFailed stale onRetry={shownRead.retry} />
+        ) : null}
         {/* Asks lead Needs you in every item-read state: loading, failed or empty. */}
         <BotItemsSection
           bot={bot}
@@ -232,11 +301,13 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           now={clock}
           focusUid={returnTo}
           onOpen={(item) => openItem(item.uid)}
-          botRead={items}
+          botRead={shownRead}
           asks={asks}
           offline={offline}
           focusFallback={scroll}
           scroller={scroll}
+          personMark={personMark}
+          teammate={botPickedOther(pick, entries)?.label ?? null}
         />
         <BotUpcomingSection
           bot={bot}

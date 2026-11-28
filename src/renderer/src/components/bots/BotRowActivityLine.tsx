@@ -6,12 +6,13 @@ import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/wo
 import { useNow } from '@/lib/window-activity/use-now'
 import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import type { BotHostDown } from '@/lib/bot-host-views'
 import { useBotWaits, useListedBotItemsNeedingOwner } from '@/lib/bot-catalog'
 import { usePublishedBotNeedsYou } from './bot-needs-you-published'
 import { useStructuredAgentSessionsStarting } from '@/components/native-chat/session/status/structured-agent-session-status-hooks'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
-import { stripInlineMarkdownForToc } from '@/components/editor/markdown/navigation/markdown-table-of-contents'
+import { stripInlineMarkdownForToc } from '@/components/editor/markdown/navigation/markdown-toc-text'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
@@ -32,6 +33,7 @@ import {
   type BotRowLimit
 } from '../../../../shared/bots/bot-usage-limit-stop'
 import { useBotUsageLimitStops } from './use-bot-usage-limit-stops'
+import { formatUsageLimitResetShort } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 const NO_LINKS: NonNullable<FolderWorkspace['externalConversations']> = []
 const NO_ENTRIES: AgentStatusEntry[] = []
@@ -161,7 +163,7 @@ export function BotRowLineView({
   fallback = null,
   unread,
   now,
-  disconnected = false,
+  down = null,
   leading = null,
   trailing = null
 }: {
@@ -172,25 +174,31 @@ export function BotRowLineView({
   fallback?: string | null
   unread: boolean
   now: number
-  /** Its server is down, so the line says so in place of its last activity. */
-  disconnected?: boolean
+  /** Its server can't be reached (away, or still connecting), so the line says so in place of its
+   *  last activity. */
+  down?: BotHostDown
   /** Before the text: a paired server's host pill, as a remote workspace's second line has. */
   leading?: React.ReactNode
   trailing?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
       {leading}
-      {/* No title: the row's hover card shows the whole line. */}
-      <span className={cn('min-w-0 flex-1 truncate', unread && 'text-foreground')}>
-        <BotRowLineText
-          line={line}
-          limit={limit}
-          fallback={fallback}
-          now={now}
-          disconnected={disconnected}
-        />
-      </span>
+      {limit && !down ? (
+        // Amber like the badge; the badge's tooltip says whose limit and if it continues.
+        <span className="min-w-0 flex-1 truncate text-status-warning-text tabular-nums">
+          {t('bots.usageLimit.rowLine', 'Usage limit · {{time}}', {
+            time: formatUsageLimitResetShort(limit.stop.at, now, intlLocale)
+          })}
+        </span>
+      ) : (
+        // No title: the row's hover card shows the whole line.
+        <span className={cn('min-w-0 flex-1 truncate', unread && 'text-foreground')}>
+          <BotRowLineText line={line} limit={limit} fallback={fallback} now={now} down={down} />
+        </span>
+      )}
       {trailing}
     </div>
   )
@@ -202,18 +210,18 @@ export function BotRowLineText({
   limit = null,
   fallback = null,
   now,
-  disconnected = false
+  down = null
 }: {
   line: BotRowLine | null
   limit?: BotRowLimit | null
   /** Shown when there is no line: the bot's purpose. */
   fallback?: string | null
   now: number
-  disconnected?: boolean
+  down?: BotHostDown
 }): React.JSX.Element {
   const t = useTranslate()
-  if (disconnected) {
-    return <>{t('bots.row.disconnected', 'Disconnected')}</>
+  if (down) {
+    return <>{botHostDownText(t, down)}</>
   }
   if (limit) {
     return (
@@ -308,4 +316,11 @@ function ReplyingAtLabel({ place }: { place: BotRowPlace }): React.JSX.Element {
 // so a module translate() here kept the previous language after a switch.
 function lineText(t: Translate, line: BotRowLine, now: number): string {
   return botRowLineText(line, t, (by) => formatWaitTime(by, now))
+}
+
+/** What a bot's line says while its server can't be reached. */
+export function botHostDownText(t: Translate, down: Exclude<BotHostDown, null>): string {
+  return down === 'connecting'
+    ? t('bots.row.connecting', 'Connecting…')
+    : t('bots.row.disconnected', 'Disconnected')
 }

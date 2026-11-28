@@ -10,7 +10,8 @@ import {
 import { BotItemsList, BotItemsShow } from '../../../../shared/rpc-contract/bots-items-params'
 import { BotItemError } from '../../../bots/bot-item-error'
 import { defineMethod } from '../core'
-import { itemsReader, itemsWriter } from './bots-items-caller'
+import { itemsAccess, itemsReader, itemsWriter } from './bots-items-caller'
+import { botItemListScope } from '../../../bots/bot-item-access'
 import { BOT_ITEMS_OWNER_METHODS } from './bots-items-owner-methods'
 import { BOT_ITEMS_WRITE_METHODS } from './bots-items-write-methods'
 import { pageSize, parseCursor, parseItemLink, resolveItem } from './bots-items-write-support'
@@ -45,6 +46,7 @@ const LIST = defineMethod({
     const page = await runtime.botItems.store().list({
       botId: bot.id,
       statuses,
+      ...botItemListScope(itemsAccess(context), params.everyone === true),
       ...(chatId !== undefined ? { chatIds: [chatId] } : {}),
       ...(link ? { link } : {}),
       limit: limit + 1,

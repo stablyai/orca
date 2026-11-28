@@ -1,3 +1,4 @@
+import { fileExplorerOwnerReadOnly } from '../tree/file-explorer-types'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
@@ -32,7 +33,11 @@ export function useFileExplorerMoveDrop({
 }: UseFileExplorerMoveDropParams): (sourcePath: string, destDir: string) => void {
   return useCallback(
     (sourcePath: string, destDir: string) => {
-      if (!worktreePath || !activeWorktreeId) {
+      if (
+        !worktreePath ||
+        !activeWorktreeId ||
+        fileExplorerOwnerReadOnly(getOperationOwnerForPath(sourcePath))
+      ) {
         return
       }
       const fileName = basename(sourcePath),

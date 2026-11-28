@@ -41,6 +41,9 @@ export type AutomationRunMessage = {
   event?: AutomationRunMessageEvent
   /** UTF-16 length of the saved prompt at the head of the sent text. */
   instructionsLength: number
+  /** A teammate's automation: whom its run acts for (their account id); absent is the owner. Older
+   *  hosts drop it and read the run as the owner's. */
+  home?: string
 }
 
 const finite = z.number().finite()
@@ -107,7 +110,8 @@ export const AutomationRunMessageSchema = z.object({
   wait: WaitEndingSchema.optional(),
   toConversation: z.literal(true).optional(),
   event: EventSchema.optional(),
-  instructionsLength: z.number().int().nonnegative()
+  instructionsLength: z.number().int().nonnegative(),
+  home: z.string().min(1).max(128).optional()
 })
 
 /** The run a message records, read from a host of any version; anything malformed is no run. */

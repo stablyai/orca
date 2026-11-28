@@ -15,7 +15,6 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { collectTabGroupLayoutGroupIds } from '../../../../shared/workspace-layout/tab-groups/tab-group-moves'
-import { botHomeHostId } from '../../../../shared/bots/bot-home-host'
 
 type TabPlacementState = Pick<
   AppState,
@@ -34,7 +33,7 @@ export function botHomeTabMove(
 ): BotHomeTabMove | null {
   const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const home =
-    botHomeHostId(bot) === LOCAL_EXECUTION_HOST_ID
+    bot.hostId === LOCAL_EXECUTION_HOST_ID
       ? selectLocalBotHomeTabs(tabs, bot)?.home
       : tabs.find((tab) => isBotHomeTab(tab, bot))
   const groups = state.groupsByWorktree[worktreeId] ?? []
@@ -70,14 +69,14 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
     }
     // Its host publishes Home's place and pin; moving it here too would fight that host's snapshots.
     if (
-      botHomeHostId(bot) !== LOCAL_EXECUTION_HOST_ID &&
+      bot.hostId !== LOCAL_EXECUTION_HOST_ID &&
       botHomeRuleApplies(bot, runtimeStatusSubscriptionsFor(store).readStatuses())
     ) {
       continue
     }
     // A focused duplicate hands focus to Home only after Home's final move, which keeps the destination's selection.
     let focusHomeId: string | null = null
-    if (botHomeHostId(bot) === LOCAL_EXECUTION_HOST_ID) {
+    if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
       const state = store.getState()
       if (!state.workspaceSessionReady) {
         continue

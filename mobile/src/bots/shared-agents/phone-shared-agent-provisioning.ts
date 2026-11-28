@@ -29,19 +29,21 @@ export function awaitingKeyView(share: SharedBotPhoneShare): SharedBotHostView {
     botId: share.botId,
     botName: share.botName,
     ownerName: share.ownerName,
-    homeWorkspaceId: null,
     link: 'unpaired',
     holds: false,
     held: []
   }
 }
 
+// A computer away doesn't hold its follow (and every later one) until it is back.
+const LIST_READ_OPTIONS = { timeoutMs: 15_000, budgetSpansConnect: true }
+
 /** The computer's list, or null when it gave none (offline, or too old to list shared agents). */
-export async function readComputerShares(
-  computer: Computer
-): Promise<readonly SharedBotPhoneShare[] | null> {
-  const answer = await computer.client.sendRequest(SHARED_BOTS_PHONE_LIST_METHOD).catch(() => null)
-  return answer?.ok ? (SharedBotsPhoneList.safeParse(answer.result).data?.shares ?? null) : null
+export async function readComputerShares(computer: Computer): Promise<SharedBotsPhoneList | null> {
+  const answer = await computer.client
+    .sendRequest(SHARED_BOTS_PHONE_LIST_METHOD, undefined, LIST_READ_OPTIONS)
+    .catch(() => null)
+  return answer?.ok ? (SharedBotsPhoneList.safeParse(answer.result).data ?? null) : null
 }
 
 /** Keeps exactly the shares the computer lists under it; asks for a key to each new one. */
@@ -64,7 +66,7 @@ export async function syncComputerShares(
   for (const share of shares) {
     const kept = store.get(share.shareId)
     if (kept && kept.pairedHostId === computer.pairedHostId && !needsKey(kept)) {
-      store.put({ ...kept, botName: share.botName, ownerName: share.ownerName })
+      store.put({ ...kept, ...listedFields(share) })
       continue
     }
     const provisioned = await provisionPhoneKey(computer, share, kept)
@@ -113,6 +115,7 @@ async function provisionPhoneKey(
     botId: grant.botId,
     botName: grant.botName,
     ownerName: grant.ownerName,
+    ...(share.accountId ? { accountId: share.accountId } : {}),
     environmentId: grant.environmentId,
     connectorOrigin: grant.connectorOrigin,
     hostKey: grant.hostKey,
@@ -121,6 +124,17 @@ async function provisionPhoneKey(
     deviceKey,
     credential,
     offer
+  }
+}
+
+/** What the computer's list says of a kept share: its names, and whose it is once a list names it. */
+function listedFields(
+  share: SharedBotPhoneShare
+): Pick<PhoneSharedAgent, 'botName' | 'ownerName' | 'accountId'> {
+  return {
+    botName: share.botName,
+    ownerName: share.ownerName,
+    ...(share.accountId ? { accountId: share.accountId } : {})
   }
 }
 

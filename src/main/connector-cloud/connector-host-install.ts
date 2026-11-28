@@ -3,6 +3,9 @@ import { BotAvatarSync } from './bot-avatar-sync'
 import { withBotsCloudClient } from './bots-cloud-client'
 import { createConnectorCloud } from './connector-cloud-install'
 import { ConnectorGitHubInstallations } from './connector-github-installations'
+import { ConnectorBotGoogle } from './connector-bot-google'
+import { getGoogleConnect } from '../google/google-connect'
+import { onGoogleAccountWritten } from '../google/google-credential-store'
 import type { ConnectorRuntimeKind } from './connector-machine'
 import { connectorAccount, connectorAccountCloudCall } from './connector-token-mint'
 import { botAccessHost } from '../bots/bot-access-host'
@@ -14,7 +17,8 @@ import { refreshDueLinearLogins } from '../linear/accounts/linear-login-refresh'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence/loading-store/store'
-import { splitBotsByOlderBuildSupport, withGitHubMembersTagged } from '../../shared/bot-types'
+import { withGitHubMembersTagged } from '../../shared/bot-types'
+import { splitBotsByOlderBuildSupport } from '../../shared/bots/bot-older-build-support'
 import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../shared/orca-profiles/orca-cloud-team-policy'
 import { onTeamFeatureBlockChanged } from '../orca-profiles/cloud-auth/active-team-capabilities'
 
@@ -61,6 +65,10 @@ export function installConnectorHost({
     fetchState: () =>
       withBotsCloudClient(runtime.getConnectorCloud(), (client) => client.githubState())
   })
+  const google = new ConnectorBotGoogle({
+    bots: () => store.getBots(),
+    accounts: () => getGoogleConnect()?.accounts() ?? null
+  })
   const warnDropped = (error: unknown) =>
     console.warn('[webhooks] could not drop a deleted hook from its automation', error)
   const botFolder = (botId: string): string | null => {
@@ -106,7 +114,8 @@ export function installConnectorHost({
       kind,
       isFenced,
       gitHubInstallations,
-      webhooks
+      webhooks,
+      google
     })
   )
   const stops: (() => void)[] = []
@@ -118,6 +127,8 @@ export function installConnectorHost({
     stops.push(
       () => webhooks.stop(),
       () => composio.stop(),
+      // A sign-in or sign-out writes an account; Google on, its accounts or a share is a bot write.
+      onGoogleAccountWritten(() => void google.refresh()),
       onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.bots, () => {
         connector.helloInputsChanged()
         runtime.notifyBotsChanged({ kinds: ['settings', 'bot'] })

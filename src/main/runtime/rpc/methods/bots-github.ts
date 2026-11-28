@@ -1,3 +1,6 @@
+import { SHARE_SCOPED } from '../../../../shared/bots/bot-share-rpc-methods'
+import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
+import { viewedAnswer } from '../../../bots/team-share/bot-share-connector-views'
 // `bots.github.*`: the host account's GitHub link and installs, as this host's own Orca account.
 import {
   BotGitHubDefaultBot,
@@ -11,18 +14,21 @@ export const BOT_GITHUB_METHODS = [
   defineMethod({
     name: 'bots.github.state',
     permission: 'accounts-admin',
-    share: 'not-shared',
+    share: SHARE_SCOPED,
     params: null,
     // What the owner sees is what the next hello says, so a finished install reaches GitHub at once.
     handler: async (_params, context) =>
-      withHostCloudClient(context, (client) => {
-        const { runtime } = context
-        const read = () => client.githubState()
-        const installations = runtime.connectorGitHubInstallations
-        return installations
-          ? installations.track(runtime.getConnectorCloud()?.signedInAccount() ?? null, read)
-          : read()
-      })
+      viewedAnswer(
+        await withHostCloudClient(context, (client) => {
+          const { runtime } = context
+          const read = () => client.githubState()
+          const installations = runtime.connectorGitHubInstallations
+          return installations
+            ? installations.track(runtime.getConnectorCloud()?.signedInAccount() ?? null, read)
+            : read()
+        }),
+        botShareScopedView(context)?.['bots.github.state']
+      )
   }),
   defineMethod({
     name: 'bots.github.users',

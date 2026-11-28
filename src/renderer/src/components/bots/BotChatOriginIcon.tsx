@@ -1,10 +1,11 @@
 // A bot chat's row glyphs, the same in the Activity panel and the sidebar; never the bot's picture.
-import { CalendarClock, Gauge, House, MessageSquare } from 'lucide-react'
+import { CalendarClock, House, MessageSquare } from 'lucide-react'
+import { GaugeMaxIcon } from '@/components/icons/GaugeMaxIcon'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { BotChatOrigin, BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import type { BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
 import { GitHubIcon } from '../icons/GitHubIcon'
 import { LinearIcon } from '../icons/LinearIcon'
 import { usageLimitStopTip } from './BotUsageLimitMark'
@@ -20,8 +21,13 @@ const ORIGIN_ICONS = {
   side: MessageSquare
 } as const
 
-function useChatKindLabel(origin: BotChatOrigin): string {
+type ChatKind = Pick<BotChatTreeChat, 'origin' | 'homeOf'>
+
+function useChatKindLabel({ origin, homeOf }: ChatKind): string {
   const t = useTranslate()
+  if (homeOf) {
+    return t('bots.chats.personHome', '{{name}}’s Home', { name: homeOf })
+  }
   switch (origin) {
     case 'home':
       return t('bots.chats.home', 'Home Chat')
@@ -50,10 +56,10 @@ function useBotChatStateLabel(live: BotChatTreeChat['live']): string | null {
 
 /** A chat row's spoken name: title · kind · state, the kind skipped when the title already says it. */
 export function useBotChatLabel(
-  chat: Pick<BotChatTreeChat, 'origin' | 'live'>,
+  chat: Pick<BotChatTreeChat, 'origin' | 'live' | 'homeOf'>,
   title: string
 ): string {
-  const kind = useChatKindLabel(chat.origin)
+  const kind = useChatKindLabel(chat)
   const state = useBotChatStateLabel(chat.live)
   return [title, kind === title ? null : kind, state].filter(Boolean).join(' · ')
 }
@@ -73,7 +79,7 @@ export function BotChatStatusSlot({
   stop = null,
   onClick
 }: {
-  chat: Pick<BotChatTreeChat, 'origin' | 'live'>
+  chat: Pick<BotChatTreeChat, 'origin' | 'live' | 'homeOf'>
   className?: string
   iconClassName?: string
   /** Stopped on its usage limit while quiet: the corner shows the stopped mark. */
@@ -81,11 +87,12 @@ export function BotChatStatusSlot({
   onClick?: (event: React.MouseEvent) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const kind = useChatKindLabel(chat.origin)
+  const kind = useChatKindLabel(chat)
   const liveState = useBotChatStateLabel(chat.live)
   const stopped = liveState === null && stop !== null
   const state = stopped ? usageLimitStopTip(t, stop) : liveState
-  const Icon = ORIGIN_ICONS[chat.origin]
+  // Another person's Home Chat draws a house, as the viewer's own does.
+  const Icon = ORIGIN_ICONS[chat.homeOf ? 'home' : chat.origin]
   return (
     <StateIndicatorTooltip label={state ? `${kind} · ${state}` : kind}>
       {/* The row's label carries kind and state. */}
@@ -101,7 +108,7 @@ export function BotChatStatusSlot({
           {state ? (
             <span className="absolute -right-[3px] -bottom-[3px] flex size-[7px]">
               {stopped ? (
-                <Gauge className="size-[8px] stroke-[3] text-status-warning" />
+                <GaugeMaxIcon className="size-[8px] text-status-warning" strokeWidth={3} />
               ) : chat.live === 'replying' ? (
                 <AgentWorkingSpinner className="size-[7px]" />
               ) : (

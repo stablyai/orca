@@ -1,4 +1,5 @@
-import { splitBotsByOlderBuildSupport, type Bot } from '../../../../shared/bot-types'
+import type { Bot } from '../../../../shared/bot-types'
+import { splitBotsByOlderBuildSupport } from '../../../../shared/bots/bot-older-build-support'
 import {
   isImmutableBotSnapshot,
   markImmutableBotSnapshot,

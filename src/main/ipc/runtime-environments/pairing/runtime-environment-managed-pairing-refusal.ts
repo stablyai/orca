@@ -4,6 +4,7 @@ import {
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeEnvironmentConnectionPairingKey } from '../connections/runtime-environment-capability-evidence'
 import { errorMessage } from '../../../../shared/errors/error-message'
+import { isRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { managedOrcadRefusalNeedingUserCode } from '../../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import {
@@ -36,6 +37,17 @@ export async function handleManagedSharedControlRefusal(
   failureStands: typeof managedOrcadPairingFailureStands = managedOrcadPairingFailureStands
 ): Promise<'retry' | 'stop' | null> {
   const expected = await resolveEnvironment(userDataPath, environmentId).catch(() => null)
+  if (expected && isRuntimeRelayEndpoint(getPreferredPairedRuntimeConnection(expected).endpoint)) {
+    // As paseo and superset do: the host refusing this device is not retried; a connect tries again.
+    await reportAuthenticationRejected(
+      userDataPath,
+      environmentId,
+      expected,
+      'This server no longer accepts this computer. Pair it again.',
+      'unauthorized'
+    )
+    return 'stop'
+  }
   try {
     const outcome = await recoverRefusedManagedPairing(userDataPath, environmentId, recover)
     return outcome === null ? null : outcome === 'repaired' ? 'stop' : 'retry'
@@ -44,29 +56,7 @@ export async function handleManagedSharedControlRefusal(
     const code = managedOrcadRefusalNeedingUserCode(error)
     if (code && error instanceof Error && (await failureStands(userDataPath, environmentId))) {
       // Authentication refusal blocks retries until an explicit user connect.
-      try {
-        await withRuntimeEnvironmentStatusOwner(
-          userDataPath,
-          environmentId,
-          (environment, owner) => {
-            if (
-              expected &&
-              (environment.pairingRevision ?? environment.createdAt) ===
-                (expected.pairingRevision ?? expected.createdAt) &&
-              runtimeEnvironmentConnectionPairingKey(
-                getPreferredPairedRuntimeConnection(environment)
-              ) ===
-                runtimeEnvironmentConnectionPairingKey(
-                  getPreferredPairedRuntimeConnection(expected)
-                )
-            ) {
-              owner.authenticationRejected(error.message, code)
-            }
-          }
-        )
-      } catch {
-        // Removed while it re-paired: nothing is left to report on.
-      }
+      await reportAuthenticationRejected(userDataPath, environmentId, expected, error.message, code)
       return 'stop'
     }
     // Lost contact or a foreign answer is not a verdict on the pairing.
@@ -75,5 +65,29 @@ export async function handleManagedSharedControlRefusal(
       errorMessage(error)
     )
     return 'retry'
+  }
+}
+
+async function reportAuthenticationRejected(
+  userDataPath: string,
+  environmentId: string,
+  expected: Awaited<ReturnType<typeof resolveEnvironment>> | null,
+  message: string,
+  code: string
+): Promise<void> {
+  try {
+    await withRuntimeEnvironmentStatusOwner(userDataPath, environmentId, (environment, owner) => {
+      if (
+        expected &&
+        (environment.pairingRevision ?? environment.createdAt) ===
+          (expected.pairingRevision ?? expected.createdAt) &&
+        runtimeEnvironmentConnectionPairingKey(getPreferredPairedRuntimeConnection(environment)) ===
+          runtimeEnvironmentConnectionPairingKey(getPreferredPairedRuntimeConnection(expected))
+      ) {
+        owner.authenticationRejected(message, code)
+      }
+    })
+  } catch {
+    // Removed while it re-paired: nothing is left to report on.
   }
 }

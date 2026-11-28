@@ -7,26 +7,26 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../shared/bot-types'
 import { chatUnavailableLabel } from '../agent/launch-menu/agent-menu-row-presentation'
-import type { NewTabAgentMenuModel } from '../agent/launch-menu/new-tab-agent-menu-model'
 import { BotAgentAvatar } from './BotAgentAvatar'
 import { botAgentLabel } from './bot-presentation'
 import { useBotNewChatLaunch } from './use-bot-new-chat-launch'
-import { botNewChatAgents } from '../../../../shared/bots/bot-agent-choices'
+import type { BotHomeOffers } from '../../../../shared/bots/bot-agent-choices'
 
 /** The + menu's bot items in a bot's home: a new Home Chat, then a side chat with the bot on each
- *  agent it can be. The menu's search field keeps focus on open, as in every other workspace; while
- *  it holds a query the same chats are search results instead (`buildBotNewChatSearchOptions`). */
+ *  agent it can be, as far as `offers` has them. The menu's search field keeps focus on open, as in
+ *  every other workspace; while it holds a query the same chats are search results instead
+ *  (`buildBotNewChatSearchOptions`). */
 export function BotNewChatMenuItems({
   bot,
-  model
+  offers
 }: {
   bot: Bot
-  model: NewTabAgentMenuModel
+  offers: BotHomeOffers
 }): React.JSX.Element {
   const t = useTranslate()
   const { startSideChat, newHomeChat } = useBotNewChatLaunch(bot)
 
-  const entries = botNewChatAgents(bot, model)
+  const entries = offers.agents
   return (
     <>
       <DropdownMenuItem variant="create" onSelect={() => void newHomeChat()}>

@@ -35,6 +35,7 @@ import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bo
 import { hostBotWorkerCounts, lazyHostBotLineage } from '../../bots/host-bot-worker-lines'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { resolveWorktreeHostId } from '../../worktree/row-presentation/worktree-host-context-labels'
+import type { HomeSharedAgentRow } from './use-home-shared-agent-rows'
 
 export type HomeRowBase = {
   /** Unique across computers, and the same whichever computer relays a server's bot. */
@@ -70,6 +71,7 @@ export type HomeBotRow =
       /** `preview` lists what waits on the owner. */
       asking: boolean
     })
+  | HomeSharedAgentRow
   | (HomeRowBase & {
       kind: 'group'
       group: BotGroup

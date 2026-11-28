@@ -1,3 +1,5 @@
+import type { BotHomeOf } from './bot-home-of'
+
 /** How a chat is printed and named in `--chat`; `--chat` takes it with or without the prefix. */
 export const BOT_CHAT_ID_PREFIX = 'chat:'
 
@@ -8,8 +10,10 @@ export type BotChatRow = {
   lastActivityAt: number
   lastAsked: string | null
   lastSaid: string | null
-  /** The bot's Home Chat, which `--to bot:<name>` without --chat reaches. */
+  /** A Home Chat: its owner's, which `--to bot:<name>` without --chat reaches, or a teammate's. */
   home: boolean
+  /** Whose Home Chat it is; absent for any other chat, and from older hosts. */
+  homeOf?: BotHomeOf
   /** The chat asking for the list. */
   self: boolean
   /** Takes no mail now: the delivery check refuses it (closed, run elsewhere, or not checkable). */

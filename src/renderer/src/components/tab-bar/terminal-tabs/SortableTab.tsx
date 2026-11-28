@@ -29,6 +29,7 @@ import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { useTabHasDownServer } from '../../terminal-pane/pty-transport/recovery/server-outage/remote-server-outage-signals'
 import {
   isTerminalTabActivityLive,
   terminalTabHasUnreadActivity
@@ -185,6 +186,14 @@ export default function SortableTab({
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const tabTitle = tab.customTitle ?? tab.title
+  const hasDownServer = useTabHasDownServer(tab.id)
+  const identityLabel = identityDetail ? `${tabTitle}, ${identityDetail}` : undefined
+  const outageStatus = hasDownServer
+    ? t('auto.components.sidebar.WorktreeCard.runtimeHostDisconnected', 'Server disconnected')
+    : null
+  const accessibleLabel = outageStatus
+    ? `${identityLabel ?? fork?.markedTitle ?? displayTitle}, ${outageStatus}`
+    : identityLabel
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
     <div
@@ -198,7 +207,7 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       data-bot-home={isBotHome ? '' : undefined}
       // The drag handle's describedby owns the description, so the names join the tab's name.
-      aria-label={identityDetail ? `${tabTitle}, ${identityDetail}` : undefined}
+      aria-label={accessibleLabel}
       {...attributes}
       {...dragListeners}
       className={`${fork ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
@@ -273,11 +282,20 @@ export default function SortableTab({
           spellCheck={false}
         />
       ) : (
-        <span
-          className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${isBotHome ? BOT_HOME_TAB_LABEL_CLASSES : ''}`}
-        >
-          {titleNode}
-        </span>
+        <>
+          {hasDownServer ? (
+            <span
+              aria-hidden
+              data-tab-server-down=""
+              className="mr-1 size-1.5 shrink-0 rounded-full bg-status-warning"
+            />
+          ) : null}
+          <span
+            className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${isBotHome ? BOT_HOME_TAB_LABEL_CLASSES : ''}`}
+          >
+            {titleNode}
+          </span>
+        </>
       )}
       {tab.color && !isEditing && (
         <span

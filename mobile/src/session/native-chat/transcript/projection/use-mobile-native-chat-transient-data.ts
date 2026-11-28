@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useContext, useMemo, useState } from 'react'
+import { MobileNativeChatDeliveryContext } from '../notices/mobile-native-chat-delivery'
 import {
   buildMobileNativeChatTransientData,
   type MobileNativeChatPendingItem
@@ -103,7 +104,15 @@ export function projectMobileNativeChatTransientData(
   }
 }
 
-export function useMobileNativeChatTransientData(input: Input, scope: string): NativeChatMessage[] {
+export function useMobileNativeChatTransientData(shown: Input, scope: string): NativeChatMessage[] {
+  // Held messages draw after the chat's own pending ones, until the host's row for each is read.
+  const delivery = useContext(MobileNativeChatDeliveryContext)?.pending
+  const pending = useMemo(() => {
+    const recorded = new Set(shown.folded.map((row) => row.id))
+    const held = delivery?.filter((item) => !recorded.has(item.id)) ?? []
+    return held.length === 0 ? shown.pending : [...shown.pending, ...held]
+  }, [shown.pending, shown.folded, delivery])
+  const input = pending === shown.pending ? shown : { ...shown, pending }
   const [state, setState] = useState(() => ({
     scope,
     projection: projectMobileNativeChatTransientData(input)

@@ -3,13 +3,15 @@ import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentListVerdict } from '../../shared/agent-status/presentation/agent-list-status'
 import { handedAgentRows } from '../../shared/bots/bot-activity-handed-agents'
-import type { BotChatTreeRead, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
+import type { BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
 import {
-  botChatTreeDispatchIds,
   buildBotChatTree,
   placeBotChatDispatches,
+  type BotChatHostTree,
   type BotChatTreeExtra
 } from '../../shared/bots/bot-chat-tree-model'
+import type { BotHomeOf } from '../../shared/bots/bot-home-of'
+import { botHomeOfChat } from './bot-conversation-acts-for'
 import type { OrchestrationSessionWorker } from '../../shared/orchestration-session-workers'
 import {
   readAgentSessionRecordStore,
@@ -20,6 +22,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import type { BotBackgroundRuns } from './bot-background-run-records'
 import { buildBotChatBase, orderedBaseChats, readBotChatInputs } from './bot-chat-tree-base'
+import { workerRecordDispatchIds } from './bot-chat-dispatches'
 import { createBotChatTreeIndex, type BotChatTreeIndex } from './bot-chat-tree-index'
 import { overlayBotChats } from './bot-chat-tree-overlay'
 import type { BotChatTreeWorkerCache } from './bot-chat-tree-worker-cache'
@@ -48,6 +51,8 @@ export type BotChatTreeHost = BotActivityHost & {
   workerCache?: BotChatTreeWorkerCache
   /** Whether a paired server's agent waits on a person to message the bot: its Home row needs you. */
   pairedServerCards?: (botId: string) => boolean
+  /** Whose Home a chat's work falls back to once it closes; the owner's without it. */
+  homeOfChat?: (bot: Bot, chatId: string) => BotHomeOf
 }
 
 function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatTreeWorker {
@@ -102,8 +107,8 @@ async function readBotChatBase(host: BotChatTreeHost, bot: Bot) {
   return { store, inputs, build }
 }
 
-/** The bot's newest empty side chat on its agent whose tab is open, so New chat opens it again;
- *  `reusable` narrows it to the chats the asker may have. */
+/** The bot's newest empty side chat on its agent that is still open (its tab, or none for a
+ *  teammate's), so New chat opens it again; `reusable` narrows it to the chats the asker may have. */
 export async function openEmptyBotChat(
   host: BotChatTreeHost,
   bot: Bot,
@@ -114,7 +119,7 @@ export async function openEmptyBotChat(
   const chat = orderedBaseChats(build.chats.values()).find(
     (entry) =>
       entry.empty &&
-      tabbed.has(entry.chatId) &&
+      (tabbed.has(entry.chatId) || store?.isSessionInBackground?.(entry.chatId) === true) &&
       store?.getRecord(entry.chatId)?.provider === bot.agent &&
       reusable(entry.chatId)
   )
@@ -124,13 +129,13 @@ export async function openEmptyBotChat(
 export async function readBotChatTree(
   host: BotChatTreeHost,
   params: BotChatTreeParams
-): Promise<BotChatTreeRead> {
+): Promise<BotChatHostTree> {
   return (await readBotChatTreeParts(host, params)).tree
 }
 
 /** The tree with what it was built from: every Dispatch placed under its chat, and each session's chat. */
 export type BotChatTreeParts = {
-  tree: BotChatTreeRead
+  tree: BotChatHostTree
   placed: ReturnType<typeof placeBotChatDispatches>
   rootOf: (sessionId: string) => string
 }
@@ -171,7 +176,12 @@ export async function readBotChatTreeParts(
       )
     )
   })
-  const placed = placeBotChatDispatches(chats, build.placement.dispatches())
+  const homeOfChat = host.homeOfChat
+  const placed = placeBotChatDispatches(
+    chats,
+    build.placement.dispatches(),
+    homeOfChat && ((chatId) => homeOfChat(bot, chatId))
+  )
   const page =
     params.chatId !== undefined
       ? {
@@ -182,7 +192,7 @@ export async function readBotChatTreeParts(
   // Handed-over agents, under Home.
   const extras: BotChatTreeExtra[] = []
   // Unreadable worker records must not hide the chats.
-  const dispatchIds = botChatTreeDispatchIds(chats, placed, extras, page)
+  const dispatchIds = workerRecordDispatchIds(chats, placed, extras, page)
   const workers: OrchestrationSessionWorker[] = await (
     host.workerCache
       ? host.workerCache.read(
@@ -241,13 +251,13 @@ export async function readBotChatTreeParts(
   return { tree, placed, rootOf }
 }
 
-const sharedTreeBuilds = createSharedBotBuilds<BotChatTreeRead>()
+const sharedTreeBuilds = createSharedBotBuilds<BotChatHostTree>()
 
 /** A full read is shared by every caller asking at once; a page read is one caller's own. */
 export function readSharedBotChatTree(
   runtime: OrcaRuntimeService,
   params: BotChatTreeParams
-): Promise<BotChatTreeRead> {
+): Promise<BotChatHostTree> {
   const host = runtimeBotChatTreeHost(runtime)
   return params.chatId === undefined
     ? sharedTreeBuilds(runtime, params.botId, () => readBotChatTree(host, params))
@@ -268,7 +278,8 @@ export function runtimeBotChatTreeHost(runtime: OrcaRuntimeService): BotChatTree
     agentListVerdicts: () => runtime.readAgentListPublication()?.verdicts,
     ...(runtime.botChatTreeIndex ? { index: runtime.botChatTreeIndex } : {}),
     workerCache: runtime.botChatTreeWorkers,
-    pairedServerCards: (botId) => hasPairedServerCards(runtime.getOrchestrationDb(), botId)
+    pairedServerCards: (botId) => hasPairedServerCards(runtime.getOrchestrationDb(), botId),
+    homeOfChat: (bot, chatId) => botHomeOfChat(runtime, bot, chatId)
   }
 }
 

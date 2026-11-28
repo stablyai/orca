@@ -23,9 +23,9 @@ import {
 } from '../../terminal/surface/mobile-session-layout-projection'
 
 export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh {
-  protected abstract createMobileSessionTabsDelivery(): ReturnType<
-    MobileSessionPublication['createMobileSessionTabsDelivery']
-  >
+  protected abstract createMobileSessionTabsDelivery(
+    ...args: Parameters<MobileSessionPublication['createMobileSessionTabsDelivery']>
+  ): ReturnType<MobileSessionPublication['createMobileSessionTabsDelivery']>
 
   protected abstract emitMobileSessionTabsSnapshotToClient(
     ...args: Parameters<MobileSessionPublication['emitMobileSessionTabsSnapshotToClient']>
@@ -56,14 +56,19 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     /** The caller asked for nothing itself (a host action on its behalf), so it must be told to follow. */
     callerFollows = false
   ): RuntimeMobileSessionTabsResult {
-    const deliver = this.createMobileSessionTabsDelivery()
+    // The caller's own list (the host's without a caller): only its clients follow this activation.
+    const list = this.sessionTabListOf(clientNavigationId, snapshot.worktree)
+    const deliver = this.createMobileSessionTabsDelivery(list)
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
     if (navigationTargetsClients(navigation)) {
       // Follow is live intent; reconnecting devices must not inherit stale navigation.
       const ids = new Set(
         [...this.mobileSessionTabListeners]
           .map((subscription) => subscription.clientNavigationId)
-          .filter((id): id is string => Boolean(id))
+          .filter(
+            (id): id is string =>
+              Boolean(id) && this.sessionTabListOf(id, snapshot.worktree) === list
+          )
       )
       if (clientNavigationId) {
         ids.add(clientNavigationId)
@@ -113,9 +118,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     surface: { tabId: string; leafId: string } | { sessionId: string },
     clientNavigationId: string
   ): Promise<boolean> {
-    const snapshot = await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
-      includeAgentSenders: false
-    })
+    const snapshot = await this.sessionTabListOfClient(worktreeId, clientNavigationId)
     const tab = snapshot.tabs.find((candidate) =>
       'sessionId' in surface
         ? candidate.type === 'agent-session' && candidate.sessionId === surface.sessionId
@@ -130,14 +133,17 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     return true
   }
 
+  /** Of the host's list: a teammate's own list reopens its tabs where they open. */
+  reopenClosedMobileSessionTab(worktreeId: string, tabId: string): void {
+    this.clientSessionTabSelections.reopenForAllClients(worktreeId, tabId)
+  }
+
   async reopenMobileSessionTabForClient(
     worktreeId: string,
     sessionId: string,
     clientNavigationId: string
   ): Promise<boolean> {
-    const snapshot = await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
-      includeAgentSenders: false
-    })
+    const snapshot = await this.sessionTabListOfClient(worktreeId, clientNavigationId)
     const tab = snapshot.tabs.find(
       (candidate) => candidate.type === 'agent-session' && candidate.sessionId === sessionId
     )

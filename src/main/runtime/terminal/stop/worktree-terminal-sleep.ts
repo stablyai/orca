@@ -4,7 +4,6 @@ import {
   type ResolvedWorktree
 } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
-
 import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
 import { sleptNothing } from './worktree-terminal-sleep-result'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
@@ -25,9 +24,13 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       sleepDeadline
     )
     const { key, fence } = scope
-    // Fenced: a same-id twin's PTYs are another host's; a cwd guess may be a same-path sibling's (#36716).
+    // The host's list (a teammate's own terminals are theirs), fenced: a same-id twin's PTYs are
+    // another host's; a cwd guess may be a same-path sibling's (#36716).
     const liveHere = (fresh: ReadonlySet<string>) =>
-      withoutCwdGuesses(this.ptysById, this.getLivePtyIdsForWorktree(worktree.id, fresh, fence))
+      withoutCwdGuesses(
+        this.ptysById,
+        this.getLivePtyIdsForWorktree(worktree.id, 'host', fresh, fence)
+      )
     const existingSleepState = this.terminalSleepStateByHostWorktree.get(key)
     if (existingSleepState?.phase === 'sleeping') {
       try {
@@ -64,6 +67,8 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
     const priorPartialState = existingSleepState?.phase === 'partial' ? existingSleepState : null
     const committedPtyIds = new Set(priorPartialState?.ptyIds ?? [])
     const terminalHandlesByPtyId = { ...priorPartialState?.terminalHandlesByPtyId }
+    const handlesOf = (ptyIds: Iterable<string>) =>
+      this.getRecordedTerminalSleepHandles(ptyIds, terminalHandlesByPtyId)
     const pendingPtyIds = new Set<string>()
     let generation = 0
     let fullyCommitted = false
@@ -91,19 +96,13 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         pendingPtyIds.add(ptyId)
         terminalHandlesByPtyId[ptyId] = this.getTerminalHandlesForPtyId(ptyId)
       }
-      const liveTerminalHandles = this.getRecordedTerminalSleepHandles(
-        livePtyIds,
-        terminalHandlesByPtyId
-      )
+      const liveTerminalHandles = handlesOf(livePtyIds)
       this.terminalSleepStateByHostWorktree.set(key, {
         worktreeId: worktree.id,
         generation,
         phase: 'stopping',
         ptyIds: [...committedPtyIds].sort(),
-        terminalHandles: this.getRecordedTerminalSleepHandles(
-          committedPtyIds,
-          terminalHandlesByPtyId
-        ),
+        terminalHandles: handlesOf(committedPtyIds),
         terminalHandlesByPtyId
       })
       this.emitClientEvent({
@@ -121,17 +120,11 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           generation,
           phase: 'committed',
           ptyIds: [...committedPtyIds].sort(),
-          terminalHandles: this.getRecordedTerminalSleepHandles(
-            committedPtyIds,
-            terminalHandlesByPtyId
-          )
+          terminalHandles: handlesOf(committedPtyIds)
         })
       }
       if (livePtyIds.size === 0) {
-        const terminalHandles = this.getRecordedTerminalSleepHandles(
-          committedPtyIds,
-          terminalHandlesByPtyId
-        )
+        const terminalHandles = handlesOf(committedPtyIds)
         this.terminalSleepStateByHostWorktree.set(key, {
           worktreeId: worktree.id,
           generation,
@@ -150,8 +143,9 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         throw new Error('terminal_worktree_sleep_unavailable')
       }
       const stopAndWait = ptyController.stopAndWait.bind(ptyController)
-
       const orderedLivePtyIds = [...livePtyIds].sort()
+      // Before the stop: an exit wait settling on it must not take the pane for an Agent-slept one.
+      this.noteWorkspaceSleepStops(orderedLivePtyIds)
       for (const ptyId of orderedLivePtyIds) {
         settleReversibleStops.set(
           ptyId,
@@ -179,7 +173,6 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       const failedStopIndex = stopResults.findIndex((result) =>
         result.status === 'rejected' ? true : !result.value.stopped
       )
-
       const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(
         resolvedWorktrees,
         worktree.id,
@@ -247,10 +240,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           remainingLivePtyIds: [...remainingLivePtyIds].sort()
         }
       }
-      const terminalHandles = this.getRecordedTerminalSleepHandles(
-        committedPtyIds,
-        terminalHandlesByPtyId
-      )
+      const terminalHandles = handlesOf(committedPtyIds)
       this.terminalSleepStateByHostWorktree.set(key, {
         worktreeId: worktree.id,
         generation,
@@ -279,17 +269,11 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
             generation,
             phase: 'cancelled',
             ptyIds: cancelledPtyIds,
-            terminalHandles: this.getRecordedTerminalSleepHandles(
-              cancelledPtyIds,
-              terminalHandlesByPtyId
-            )
+            terminalHandles: handlesOf(cancelledPtyIds)
           })
         }
         if (committedPtyIds.size > 0) {
-          const terminalHandles = this.getRecordedTerminalSleepHandles(
-            committedPtyIds,
-            terminalHandlesByPtyId
-          )
+          const terminalHandles = handlesOf(committedPtyIds)
           this.terminalSleepStateByHostWorktree.set(key, {
             worktreeId: worktree.id,
             generation,

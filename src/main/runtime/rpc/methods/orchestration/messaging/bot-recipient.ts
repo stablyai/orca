@@ -7,6 +7,7 @@ import type { Bot } from '../../../../../../shared/bot-types'
 import { automationPlace } from './bot-automation-place'
 import { botOfAddress, parseBotAddress } from '../../../../../../shared/bot-roster'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
+import { botShareAskerOf } from '../../../../../../shared/bots/bot-home-of'
 import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
 import { readBotConversationActsFor } from '../../../../../bots/bot-conversation-acts-for'
 import {
@@ -15,6 +16,7 @@ import {
   type BotRequestConversation
 } from '../../../../../bots/bot-request-asker'
 import { readNewestBotActingTurn } from '../../../../../bots/bot-acting-turn-read'
+import { withCarriedAskers } from '../../../../../bots/bot-request-askers-of'
 import type {
   AutomationTriggeredBy,
   BotRequestAsker
@@ -185,19 +187,53 @@ export function workspaceOf(externalId: string): string | null {
   return externalId.split(':')[0] || null
 }
 
+export type ActingMail = {
+  sender: OrchestrationCallerIdentity
+  /** Whom a paired computer's sending turn acts for, beside this sender's own. */
+  carriedAskers?: readonly BotRequestAsker[]
+  /** Sent by a teammate's Orca over the share of the bot it reaches: it is their ask, never the
+   *  owner's, and lands in their Home. */
+  teammate?: { accountId: string }
+}
+
 /** Who the sender acts for; null for a bot's own worker mailing its own chat, which is ordinary mail. */
 export async function readActingSender(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   callerSessionId: string | undefined,
+  { sender, carriedAskers, teammate }: ActingMail,
+  /** Null for a bot on another computer: its mail is never a bot's own chat here. */
+  receiving: ReceivingBot | null
+): Promise<ActingSender | null> {
+  if (teammate && receiving) {
+    // Their computer's owner is the teammate, so the owner it carries is them, never this one.
+    const asker = botShareAskerOf(receiving.bot, teammate.accountId)
+    const carried = carriedAskers?.map((entry) => (entry.kind === 'owner' ? asker : entry))
+    const turn = { ...OWNER_TURN, askers: [asker], askedBy: [asker] }
+    return {
+      sessionId: null,
+      bot: null,
+      turn: withCarriedAskers(turn, carried),
+      conversation: null
+    }
+  }
+  const read = await readOwnActingSender(runtime, db, callerSessionId, sender, receiving)
+  return read && { ...read, turn: withCarriedAskers(read.turn, carriedAskers) }
+}
+
+async function readOwnActingSender(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  callerSessionId: string | undefined,
   sender: OrchestrationCallerIdentity,
-  receiving: ReceivingBot
+  receiving: ReceivingBot | null
 ): Promise<ActingSender | null> {
   const creator = creatorSession(db, sender)
   if (creator.dispatchId) {
     const creatorBot = creator.sessionId ? botOfSession(runtime.bots, creator.sessionId) : null
     // Its own chat (or the Run it coordinates) is ordinary mail; the bot's other chats are other agents.
     if (
+      receiving &&
       creatorBot?.id === receiving.bot.id &&
       receiving.via === 'address' &&
       receiving.chat &&
@@ -206,7 +242,7 @@ export async function readActingSender(
       return null
     }
     if (creatorBot && creator.sessionId) {
-      if (isBotGroupMemberSession(creator.sessionId)) {
+      if (receiving && isBotGroupMemberSession(creator.sessionId)) {
         return refuse(BOT_REQUEST_GROUP_WORKER_REFUSAL)
       }
       const read = await readBotTurn(runtime, db, creator.sessionId)
@@ -271,11 +307,18 @@ export async function readBotTurn(
   const workspaceId = conversation ? workspaceOf(conversation.externalId) : null
   const host = await requireStructuredHost(runtime)
   const root = isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
+  const bot = botOfSession(runtime.bots, sessionId)
+  const personName = (accountId: string) => (bot && botShareAskerOf(bot, accountId).name) ?? null
   let recorded = readBotConversationActsFor(runtime, root)
   if (!recorded) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
     // says, and is kept as the record.
-    const first = await readFirstMessageActsFor(db, host.journalReads(root), workspaceId)
+    const first = await readFirstMessageActsFor(
+      db,
+      host.journalReads(root),
+      workspaceId,
+      personName
+    )
     if (first) {
       db.recordBotConversationActsFor(root, { actsFor: first })
       recorded = { actsFor: first }
@@ -288,7 +331,9 @@ export async function readBotTurn(
     conversationActsFor: actsFor,
     automationPlace: (run?: AutomationRunMessage) =>
       automationPlace(runtime, sessionId, run, conversation),
-    conversationWorkspaceId: workspaceId
+    conversationWorkspaceId: workspaceId,
+    personName,
+    bot
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])

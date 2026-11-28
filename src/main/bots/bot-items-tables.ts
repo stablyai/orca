@@ -7,6 +7,7 @@ import {
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BotItemError } from './bot-item-error'
+import { BOT_ITEM_OWNER_VIEWER, botItemAuthorViewer } from './bot-item-author'
 import { assertBotItemLinkRoom, linkWords, type BotItemLinkInput } from './bot-items-input'
 import { hasKeptWaitingAsks, waitingAskOf } from './bot-item-waiting-ask-keep'
 import { eventRecordOf, itemRecordOf, linkRecordOf } from './bot-items-rows'
@@ -121,7 +122,8 @@ export class BotItemsTables {
            updated_at = ?, others_last_event_id = CASE WHEN ? THEN ? ELSE others_last_event_id END
          WHERE uid = ?`
       )
-      .run(id, now, now, Number(actor.kind !== 'owner'), id, uid)
+      // The owner's unseen mark, kept on the row: any event the owner didn't make.
+      .run(id, now, now, Number(botItemAuthorViewer(actor) !== BOT_ITEM_OWNER_VIEWER), id, uid)
     return id
   }
 

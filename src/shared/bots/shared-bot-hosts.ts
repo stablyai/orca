@@ -1,6 +1,7 @@
 // The agents other people shared with this Orca account, as main publishes them to the window: each is
 // a host the app reaches over Orca Relay by its own environment id.
 import type { SharedHostLink } from '../remote-runtime/relay/client/shared-host-relay-link'
+import type { AgentCard } from './agent-card-contract'
 
 export type SharedBotHostLink = SharedHostLink
 
@@ -9,7 +10,8 @@ export type SharedBotHostLink = SharedHostLink
 export const SHARED_HOSTS_HOLD_WHILE_AWAY: boolean = false
 
 /** A held message as Orca Cloud last reported it: waiting for the host, in its journal, or refused. */
-export type SharedBotHeldState = 'waiting' | 'delivered' | 'not_sent'
+export const SHARED_BOT_HELD_STATES = ['waiting', 'delivered', 'not_sent'] as const
+export type SharedBotHeldState = (typeof SHARED_BOT_HELD_STATES)[number]
 
 export type SharedBotHeldView = {
   clientMessageId: string
@@ -29,9 +31,13 @@ export type SharedBotHostView = {
   botName: string
   /** Who shared it: their name, else their email, else their computer's name. */
   ownerName: string
-  /** This computer's folder workspace the agent's chats open in; null until main has made it. */
-  homeWorkspaceId: string | null
+  /** The account it is shared with (the viewer's own), as a phone keeps it; absent until a list from
+   *  a computer that names it. */
+  accountId?: string
   link: SharedBotHostLink
+  /** Accepted here and not live yet, while its one share-list read that waits for the host's offer,
+   *  and that offer's dial, are out: it reads as connecting rather than away. Absent from an older main. */
+  accepting?: boolean
   /** Whether a message can be held for the host while it is away (it published its key). */
   holds: boolean
   /** This device's held messages the cloud still reports, oldest first. */
@@ -41,10 +47,13 @@ export type SharedBotHostView = {
 /** A share as a device lists it, with how that device reaches it; nothing holds while held sends
  *  are off. */
 export function sharedBotHostView(
-  share: Pick<SharedBotHostView, 'environmentId' | 'shareId' | 'botId' | 'botName' | 'ownerName'>,
-  reach: Pick<SharedBotHostView, 'homeWorkspaceId' | 'link' | 'holds' | 'held'>
+  share: Pick<
+    SharedBotHostView,
+    'environmentId' | 'shareId' | 'botId' | 'botName' | 'ownerName' | 'accountId'
+  >,
+  reach: Pick<SharedBotHostView, 'link' | 'accepting' | 'holds' | 'held'>
 ): SharedBotHostView {
-  const { environmentId, shareId, botId, botName, ownerName } = share
+  const { environmentId, shareId, botId, botName, ownerName, accountId } = share
   const holds = SHARED_HOSTS_HOLD_WHILE_AWAY && reach.holds
   return {
     environmentId,
@@ -52,6 +61,7 @@ export function sharedBotHostView(
     botId,
     botName,
     ownerName,
+    ...(accountId ? { accountId } : {}),
     ...reach,
     holds,
     held: holds ? reach.held : []
@@ -63,6 +73,21 @@ export function sharedBotHostView(
 export type SharedBotHostsState = {
   hosts: SharedBotHostView[]
   sharing: boolean | null
+  /** Shares that wait for this account's Accept or Decline: nothing of them is paired yet. Absent:
+   *  none. */
+  requests?: SharedBotRequestView[]
+}
+
+/** A share offered to this account, before it accepts: who shared what. */
+export type SharedBotRequestView = {
+  shareId: string
+  botId: string
+  botName: string
+  ownerName: string
+  /** The agent's one-line purpose, when its owner gave one. */
+  botPurpose?: string
+  /** Its mascot and services from its owner's hello; absent from an older host or cloud. */
+  agentCard?: AgentCard
 }
 
 // A new chat started while the host is away: its id until the host starts it from the first held message.
@@ -85,5 +110,10 @@ export const SHARED_BOT_HOST_ERRORS = {
   // Past the cloud's limit for one held message.
   tooLarge: 'shared_host_send_too_large',
   // The owner stopped sharing it: nothing is sent or held.
-  unshared: 'shared_host_unshared'
+  unshared: 'shared_host_unshared',
+  // The phone failed to take the call to the host at all: nothing was sent.
+  failed: 'shared_host_call_failed'
 } as const
+
+/** What a call to a host whose share ended answers, on the desktop and the phone. */
+export const SHARED_BOT_UNSHARED_MESSAGE = 'This agent is no longer shared.'

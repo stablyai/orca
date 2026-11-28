@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import { useAppStore } from '@/store'
 import {
   DropdownMenuSub,
@@ -54,7 +55,7 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   useUiLanguageRevision()
   const workspaceFilterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setWorkspaceFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
-  const allRepos = useAppStore((s) => s.repos)
+  const allRepos = useUserManagedRepos()
   const repos = useMemo(
     () => (includeHidden ? allRepos : withoutHiddenRepos(allRepos)),
     [allRepos, includeHidden]

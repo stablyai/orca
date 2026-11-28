@@ -6,10 +6,27 @@ import { isBotGroupMemberSession } from '../../../../../shared/bots/bot-group'
 import { runtimeChatHost } from '../../../../external-conversations/external-conversation-chat'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { readBotChats } from '../bots-chats'
+import { botHomeOfChat } from '../../../../bots/bot-conversation-acts-for'
+
+/** An automation made from a teammate's chat of its agent is theirs, whatever it runs in: stamped with
+ *  their account, so its runs use their Home and act for them. The owner's are left as they are. */
+export function withCallerHome(
+  runtime: OrcaRuntimeService,
+  caller: string | undefined,
+  target: AutomationBotTarget
+): AutomationBotTarget {
+  const bot = caller ? botOfSession(runtime.bots, caller) : null
+  if (!caller || bot?.id !== target.botId) {
+    return target
+  }
+  const home = botHomeOfChat(runtime, bot, caller)
+  return home === 'owner' ? target : { ...target, home: home.accountId }
+}
 
 /**
- * With no --runs-in, a wait or recurring automation made from one of its bot's chats other than its
- * Home Chat runs in that chat, whoever asked. Gone by the time it runs, it runs in the Home Chat.
+ * With no --runs-in, a wait or recurring automation made from one of its agent's chats other than a
+ * Home Chat runs in that chat, whoever asked. Gone by the time it runs, it runs in the Home Chat of
+ * the person it is for.
  * A wait a thread's turn made answers in that thread, as that turn's workers report there. One
  * made from a group room the bot is a member of runs in that room, and is refused once it left.
  */

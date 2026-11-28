@@ -2,10 +2,13 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as esbuild from 'esbuild'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
+import {
+  loadMobileWebManifestContract,
+  MOBILE_WEB_MANIFEST_CONTRACT
+} from './mobile-web-manifest-contract.mjs'
 import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
@@ -17,13 +20,6 @@ import {
 } from './mobile-web-bundle-manifest.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
-const manifestContract = join(
-  projectDir,
-  'src',
-  'shared',
-  'mobile-web-bundle',
-  'manifest-contract.ts'
-)
 
 // Derive asset ceiling as chunks+images+document so chunk overflow reports splitting cause before generic count; flat ceiling drifts as routes grow.
 export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunkCount = 0) {
@@ -32,8 +28,9 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 
 // UI-language catalogs have their own allowance, like the font: one chunk per non-English locale,
 // fetched only for the active language, never before the first route. Code keeps its own fence.
+// 4 MiB covers the 10 translated locale chunks (~3.19 MiB as of 2026-11-26).
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
-export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 4 * 1024 * 1024
 // A budget, not a frame limit: the host sends a catalog as plain JSON in one reply (gzipped when the phone
 // reads compressed frames) under the 4 MiB REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES. This keeps the first-paint
 // read short and the page's gzipped stored copy under DEVICE_STORE_MAX_VALUE_LENGTH.
@@ -47,8 +44,9 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 // names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
 // update (shellDownloadedAssets), so this budget also bounds that download.
 // Eager: main's own fence. 11 MiB since reverting #48282 put the diagram engine back in it, at 11,479,156
-// bytes (2026-11-24).
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 11 * 1024 * 1024
+// bytes (2026-11-24); +16 KiB when main reached 11,534,272 and item reply targets added ~1.8 KB (2026-11-26);
+// +128 KiB for the teammate shared-agent screens (~70 KB) on top of that, unmeasured on this merge.
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 11 * 1024 * 1024 + 144 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 
@@ -125,13 +123,13 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
 // Measure sorted route prefixes with routes.slice(0,n), excluding locale catalogs: distinct importer sets determine chunks, not route count.
 // Re-measure table with measure-mobile-web-app-chunk-sweep.mjs when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
-  ['./_layout.tsx', 6],
-  ['./h/[hostId]/[...page].tsx', 8],
-  ['./h/[hostId]/accounts.tsx', 9],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 11],
-  ['./h/[hostId]/automations.tsx', 14],
-  ['./h/[hostId]/edit.tsx', 15],
-  ['./h/[hostId]/files/[worktreeId].tsx', 18],
+  ['./_layout.tsx', 4],
+  ['./h/[hostId]/[...page].tsx', 6],
+  ['./h/[hostId]/accounts.tsx', 7],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
+  ['./h/[hostId]/automations.tsx', 12],
+  ['./h/[hostId]/edit.tsx', 13],
+  ['./h/[hostId]/files/[worktreeId].tsx', 16],
   ['./h/[hostId]/files/preview/[worktreeId].tsx', 22],
   ['./h/[hostId]/group/[groupId].tsx', 30],
   ['./h/[hostId]/history/[worktreeId].tsx', 31],
@@ -141,9 +139,11 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/pr/[worktreeId].tsx', 52],
   ['./h/[hostId]/review/[worktreeId].tsx', 61],
   ['./h/[hostId]/session/[worktreeId].tsx', 82],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 84],
-  ['./h/[hostId]/tasks.tsx', 86],
-  ['./h/_layout.tsx', 89]
+  ['./h/[hostId]/shared/[environmentId]/[sessionId].tsx', 92],
+  ['./h/[hostId]/shared/[environmentId]/index.tsx', 90],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 92],
+  ['./h/[hostId]/tasks.tsx', 95],
+  ['./h/_layout.tsx', 98]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -186,20 +186,11 @@ function fail(message) {
 
 // Load phone’s manifest asset ceiling from contract through esbuild, which resolves extensionless TS imports; never copy native shell count.
 export async function readMobileWebBundleMaxAssets() {
-  const { outputFiles } = await esbuild.build({
-    entryPoints: [manifestContract],
-    bundle: true,
-    write: false,
-    format: 'esm',
-    platform: 'node',
-    logLevel: 'silent'
-  })
-  const source = Buffer.from(outputFiles[0].contents).toString('base64')
-  const { MOBILE_WEB_BUNDLE_MAX_ASSETS: ceiling } = await import(
-    `data:text/javascript;base64,${source}`
-  )
+  const { MOBILE_WEB_BUNDLE_MAX_ASSETS: ceiling } = await loadMobileWebManifestContract()
   if (typeof ceiling !== 'number') {
-    fail(`${manifestContract} exports no MOBILE_WEB_BUNDLE_MAX_ASSETS to bound the build with`)
+    fail(
+      `${MOBILE_WEB_MANIFEST_CONTRACT} exports no MOBILE_WEB_BUNDLE_MAX_ASSETS to bound the build with`
+    )
   }
   return ceiling
 }

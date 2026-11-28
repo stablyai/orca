@@ -1,3 +1,4 @@
+import type { TeammateHomeBots } from '../records/agent-session-record-home-names'
 import { prWatchStorage } from '../../../github/pr-watch/pr-watch-storage'
 // Owns the host's CI-line watches apart from the chat host: they start once startup settles, so a
 // PR is watched whether or not any chat was opened.
@@ -18,6 +19,7 @@ import { isHostShuttingDown } from '../../../startup/quit/host-shutdown-state'
 export type PRWatchRuntimeDeps = {
   stateDirectory: string
   legacySessionTabIds: readonly string[]
+  teammateHomeBots: TeammateHomeBots
   hostId: string
   logger: StructuredAgentSessionLogger
   resolveWorkspace: (workspaceId: string) => Promise<PRWatchWorkspace | 'not-git' | null>
@@ -66,6 +68,7 @@ export function startPRWatchRuntime(
       withPRWatchRecovery({
         stateDirectory: deps.stateDirectory,
         legacySessionTabIds: [...deps.legacySessionTabIds],
+        teammateHomeBots: deps.teammateHomeBots,
         hostId: deps.hostId,
         logger: deps.logger
       })

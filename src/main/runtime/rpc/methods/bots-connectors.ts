@@ -1,5 +1,6 @@
 // `orca bot connectors`: what a bot can use where, read live on this computer and from Orca Cloud.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   botConnectorServices,
   type BotConnectorsView
@@ -14,17 +15,23 @@ import { CONNECTOR_ACT_METHOD } from './connector-act'
 
 type Workspaces = Pick<BotConnectorsView, 'workspaces' | 'workspacesNote'>
 
-const RefView = z.object({ ref: z.string(), label: z.string() })
-const Workspace = RefView.extend({ source: z.string(), places: z.array(RefView).optional() })
+const RefView = lazyZodSchema(() => z.object({ ref: z.string(), label: z.string() }))
+const Workspace = lazyZodSchema(() =>
+  RefView.extend({ source: z.string(), places: z.array(RefView).optional() })
+)
 // One workspace this build can't read drops only that one.
-const PlacesResult = z.object({
-  workspaces: z
-    .array(z.unknown())
-    .transform((entries) => entries.flatMap((entry) => Workspace.safeParse(entry).data ?? []))
-})
-const CapabilitiesResult = z.object({
-  sources: z.array(z.object({ source: z.string(), approveUrl: z.string().optional() }))
-})
+const PlacesResult = lazyZodSchema(() =>
+  z.object({
+    workspaces: z
+      .array(z.unknown())
+      .transform((entries) => entries.flatMap((entry) => Workspace.safeParse(entry).data ?? []))
+  })
+)
+const CapabilitiesResult = lazyZodSchema(() =>
+  z.object({
+    sources: z.array(z.object({ source: z.string(), approveUrl: z.string().optional() }))
+  })
+)
 
 export const BOT_CONNECTORS_METHOD = defineMethod({
   name: 'bots.connectors',

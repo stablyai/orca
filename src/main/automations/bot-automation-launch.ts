@@ -4,11 +4,12 @@ import type {
 } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import { automationRunMemoryLabel } from '../bots/bot-turn-source'
+import { automationRunOperationId } from './launch/automation-run-operation'
 import { LINEAR_ISSUE_KEY_PATTERN } from '../../shared/connector-bot-linear-contract'
 import type { LinkableChat } from '../external-conversations/external-conversation-chat-delivery'
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
 import type { Bot } from '../../shared/bot-types'
-import { OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
+import { automationActsFor, type BotHomeOf } from '../../shared/bots/bot-home-of'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import type { AutomationBotLauncher } from './launch/automation-launch'
 import type { BotRunCompletion, BotRunResult } from '../bots/bot-run-results'
@@ -41,22 +42,24 @@ export type BotAutomationSessions = {
       actsFor: BotConversationActsFor
     }
   ): Promise<BotRunSend>
-  /** One of the bot's chats by its id from `orca bot chats`; when it is gone, the bot's Chat with
-   *  `homeIfGone`, else refused. */
+  /** One of the agent's chats by its id from `orca bot chats`; when it is gone, the `homeIfGone` Home
+   *  Chat, else refused. */
   sendToBotChat(
     bot: Bot,
     chatId: string,
     text: string,
     run?: BotRunFields,
-    homeIfGone?: boolean
+    homeIfGone?: BotHomeOf
   ): Promise<BotRunSend>
   /** A chat of the bot's by its session, behind its running turn. */
   sendToSession(bot: Bot, sessionId: string, text: string, run?: BotRunFields): Promise<BotRunSend>
   /** Stops the agent of a finished run's own conversation now, unless someone watches it or it owes
    *  work; replying later resumes it. Never rejects. */
   release(sessionId: string): Promise<void>
-  /** The bot's Chat, created on first use. */
-  sendToChat(bot: Bot, text: string, run?: BotRunFields): Promise<BotRunSend>
+  /** That person's Home Chat, created on first use. */
+  sendToChat(bot: Bot, home: BotHomeOf, text: string, run?: BotRunFields): Promise<BotRunSend>
+  /** Whose Home an automation's "chat" runs use. */
+  homeOf(bot: Bot, target: Automation['bot']): BotHomeOf
 }
 
 /** How a bot run ends: watch its turn from before the prompt is sent, then deliver its result. */
@@ -67,7 +70,7 @@ export type BotRunResults = {
    *  the run was meant for (else the bot's Chat) shows the card. */
   couldNotStart(
     bot: Bot,
-    automation: Pick<Automation, 'name'>,
+    automation: Pick<Automation, 'name' | 'bot'>,
     notStarted?: { destination: BotRunChat; card: AgentJournalAutomationRunNotStartedItem }
   ): void
 }
@@ -180,10 +183,14 @@ export function createBotAutomationDispatcher(
     const fields: BotRunFields = {
       memorySource: automationRunMemoryLabel(automation.name, run.event),
       ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),
-      ...(automationRun ? { automationRun } : {})
+      ...(automationRun ? { automationRun } : {}),
+      messageId: automationRunOperationId(run, 'run-message')
     }
     const { runsIn } = target
     const chosenChat = automation.bot?.chat?.sessionId
+    // A teammate's automation acts for them in every mode; the event stays content.
+    const actsFor = automationActsFor(target.bot, automation.bot)
+    const home = sessions.homeOf(target.bot, automation.bot)
     const saved = automation.bot?.resultsTo ?? 'chat'
     const route: ThreadRoute =
       saved === 'thread' ? await threadRoute(threads, run, runsIn) : { kind: 'take' }
@@ -205,17 +212,16 @@ export function createBotAutomationDispatcher(
                 destination.chatId,
                 text,
                 fields,
-                automation.bot?.chat?.homeIfGone
+                automation.bot?.chat?.homeIfGone ? home : undefined
               )
             : runsIn === 'chat'
-              ? await sessions.sendToChat(target.bot, text, fields)
+              ? await sessions.sendToChat(target.bot, home, text, fields)
               : await sessions.startConversation(target.bot, {
                   text,
                   title: run.title,
                   run: fields,
                   actsFor: {
-                    // Its owner: the event is content, whoever made the automation.
-                    actsFor: [...OWNER_ACTS_FOR],
+                    actsFor,
                     ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {})
                   }
                 })
@@ -229,7 +235,7 @@ export function createBotAutomationDispatcher(
           card: {
             kind: 'automation-run-not-started',
             run: automationRun,
-            actsFor: [...OWNER_ACTS_FOR],
+            actsFor,
             error: notStartedError(error),
             ...(error instanceof BotSessionRefusedError ? { refusal: error.data.refusal } : {}),
             text,

@@ -16,12 +16,18 @@ import {
   normalizeUrl
 } from './browser-page-records'
 import { normalizeBrowserHistoryUrl } from '../../../../../../shared/workspace-session/workspace-session-browser-history'
-import { replaceTabBuckets } from '../../../record-transitions/keyed-record-transitions'
+import {
+  linkRecordWrite,
+  replaceTabBuckets
+} from '../../../record-transitions/keyed-record-transitions'
 import {
   browserCertificateFailureEqual,
   browserPageEqual
 } from '@/runtime/web-session-tabs-sync/snapshots/state-equality-tabs'
 
+// Navigation and page-state writes replace one workspace's browser bucket. Naming it in the record's
+// change journal lets journal readers (the bot sidebar attention reader) skip a scan of every
+// browser workspace; the spread keeps surviving keys in order, as linkRecordWrite requires.
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -93,6 +99,9 @@ export function createBrowserPageStateActions(
                 (tab) => (tab.id === workspace.id ? mirroredWorkspace : tab)
               )
             }
+            linkRecordWrite(nextState.browserTabsByWorktree, s.browserTabsByWorktree, [
+              workspace.worktreeId
+            ])
           }
           if (unifiedLabelNeedsRepair) {
             nextState.unifiedTabsByWorktree = replaceTabBuckets(s.unifiedTabsByWorktree, [
@@ -132,6 +141,9 @@ export function createBrowserPageStateActions(
               (tab) => (tab.id === workspace.id ? nextWorkspace : tab)
             )
           }
+          linkRecordWrite(nextState.browserTabsByWorktree, s.browserTabsByWorktree, [
+            workspace.worktreeId
+          ])
         }
         if (
           workspace.activePageId === pageId &&
@@ -217,7 +229,7 @@ export function createBrowserPageStateActions(
             : entry
         )
         const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
-        return {
+        const nextState = {
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,
             [workspace.id]: nextPages
@@ -229,6 +241,10 @@ export function createBrowserPageStateActions(
             )
           }
         }
+        linkRecordWrite(nextState.browserTabsByWorktree, s.browserTabsByWorktree, [
+          workspace.worktreeId
+        ])
+        return nextState
       })
       if (!options?.preserveLoadError) {
         get().setBrowserPageCertificateFailure(pageId, null)

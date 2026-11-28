@@ -1,12 +1,27 @@
-// Who made an item event, as Activity names them: You, Orca, the bot, the maker, or another agent.
+// Who made an item event, as Activity names them: You, the owner or a teammate by name, Orca, the bot,
+// the maker, or another agent.
+import type { Bot } from '../bot-types'
 import type { BotItem, BotItemEvent } from './bot-items'
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string
 
-export function botItemActorName(event: BotItemEvent, item: BotItem, t: Translate): string {
+/** `viewer`: the bot as this computer has it; a teammate's copy says who is looking (`shareViewer`). */
+export function botItemActorName(
+  event: BotItemEvent,
+  item: BotItem,
+  t: Translate,
+  viewer?: Pick<Bot, 'shareViewer'>
+): string {
+  const you = t('bots.items.activity.you', 'You')
   switch (event.actor.kind) {
-    case 'owner':
-      return t('bots.items.activity.you', 'You')
+    case 'owner': {
+      const { person } = event.actor
+      const looking = viewer?.shareViewer
+      if (person) {
+        return person.accountId === looking?.accountId ? you : person.name
+      }
+      return looking ? (looking.ownerName ?? t('bots.items.filter.owner', 'Owner')) : you
+    }
     case 'orca':
       return 'Orca'
     case 'bot':

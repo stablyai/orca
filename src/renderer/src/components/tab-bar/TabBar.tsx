@@ -15,6 +15,11 @@ import { findBotByWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspa
 import { homeBotLookupFor } from '../bots/bot-home-tab-order'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { useSharedBotOwnerAgents } from '../bots/sharing/use-shared-bot-owner-agents'
+import {
+  sharedBotHostOf,
+  useSharedBotHosts
+} from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { useTabStripScrollMemory } from './strip/tab-strip-scroll-memory'
 import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
@@ -46,6 +51,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
   const botGroup = useBotGroupForWorkspace(worktreeId)
+  useSharedBotHosts()
   const baseCreateMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -90,6 +96,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   const bots = useBots(botsEnabled && parseWorkspaceKey(worktreeId)?.type === 'folder')
   // One catalog subscription: the page's bot (as useBotForWorkspace finds it) and each chat's Home lookup.
   const bot = findBotByWorkspace(bots, worktreeId)
+  const sharedBot = bot !== null && sharedBotHostOf(bot.hostId) !== null
+  const ownerAgents = useSharedBotOwnerAgents(bot, sharedBot, baseCreateMenu.newTabMenuOpen)
   // Each chat asks for the bot on its own host, as its row does, so a mixed-host group never borrows another's Home.
   // Null on a strip no bot calls home (any Git worktree, bots off), which then skips the walk over its tabs.
   const homeBotFor = useMemo(() => homeBotLookupFor(bots, worktreeId), [bots, worktreeId])
@@ -206,6 +214,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       itemActions,
       surfaceRef,
       bot,
+      sharedBot: sharedBot ? { ownerAgents } : null,
       botGroup
     },
     t

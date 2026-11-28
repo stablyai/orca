@@ -1,3 +1,4 @@
+import type { TeammateHomeBots } from '../records/agent-session-record-home-names'
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import type { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
@@ -22,7 +23,10 @@ import type { LinkedSkills } from '../../../native-chat/native-chat-skill-roots'
 export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
+  owedItemAttachmentUploads?: (stateDirectory: string, root: string) => Promise<ReadonlySet<string>>
   legacySessionTabIds?: readonly string[]
+  /** The bots whose share rows title teammates' Homes in the record store. */
+  teammateHomeBots: TeammateHomeBots
   /** Execution host this runtime *is*. A record pinned elsewhere is not ours to
    *  probe and not ours to spawn for. */
   hostId: string

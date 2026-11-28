@@ -1,5 +1,6 @@
-// A bot's sessions are native chats in its home folder; its Chat is the one ongoing one, shared by the owner in Orca and by its direct messages.
-import { OWNER_ACTS_FOR, type AutomationTriggeredBy } from '../../shared/bots/bot-acts-for'
+// An agent's sessions are native chats in its home folder; each person it works with has one ongoing
+// Home Chat: the owner's, shared with its direct messages, and one per teammate it is shared with.
+import { opensHostTab, type AutomationTriggeredBy } from '../../shared/bots/bot-acts-for'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import { randomUUID } from 'node:crypto'
 import {
@@ -13,7 +14,9 @@ import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-sess
 import type { StructuredAgentSessionCreateOptions } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-create-options'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import { nameNewHome, type BotHomeHost } from './bot-home-chat-name'
+import { botHomeRootOf, type BotHomeHost } from './bot-home-chat-name'
+import { botHome, botHomeActsFor, botHomeKey, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import { botHomeLifecycle } from './bot-home-lifecycle'
 export { BOT_CREATED_KICKOFF } from '../../shared/bot-created-kickoff'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -33,7 +36,7 @@ import {
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import type { BotController } from './bot-controller'
 import { closeReplacedBotChat, dropReplacedChatMail } from './bot-chat-replacement'
-import { carryQueuedMessages, type QueuedCarryHost } from './bot-chat-queued-carry'
+import type { QueuedCarryHost } from './bot-chat-queued-carry'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { botStartOptions } from './bot-start-options'
@@ -44,12 +47,13 @@ import { supportedStructuredSeedOptions } from '../runtime/agent-session/install
 export type BotChatHost = StructuredAgentTurnHost & BotHomeHost & QueuedCarryHost
 
 export type BotChatDependencies = {
-  bots: Pick<BotController, 'list' | 'setChatSession'>
+  bots: Pick<BotController, 'list' | 'setHome'>
   /** Installs the native-chat host on first use. */
   host: () => Promise<BotChatHost>
-  /** Creates `sessionId` at rest, with its tab, in the bot's home; its first message starts it. */
-  createChat: (bot: Bot, sessionId: string) => Promise<void>
-  /** Shows the Chat's tab again if it was closed. */
+  /** Creates `sessionId` at rest, with its tab, in the agent's home, acting for the Home's person; its
+   *  first message starts it. */
+  createChat: (bot: Bot, sessionId: string, of: BotHomeOf) => Promise<void>
+  /** Shows the owner's Home tab again if it was closed. */
   showTab: (bot: Bot, sessionId: string) => Promise<void>
   /** Stops the Chat and removes its tab; its history stays. A close that cannot be proven keeps the tab. */
   closeChat: (
@@ -66,6 +70,8 @@ export type BotRunFields = {
   triggeredBy?: AutomationTriggeredBy
   automationRun?: AutomationRunMessage
   images?: readonly { path: string }[]
+  /** The prompt's message id; an automation run's is derived from the run so a restart finds its turn. */
+  messageId?: string
 }
 
 /** A message to a bot's session, as native chat sends it. */
@@ -93,8 +99,11 @@ export type BotChatSender =
 
 type Delivered = { sessionId: string; outcome: StructuredSessionTurnOutcome; fingerprint: string }
 
-// One Chat change per bot at a time, so two first messages cannot each create a Chat.
+// One change per Home at a time, so two first messages cannot each create one; two people's Homes
+// never wait on each other. Sends into a named chat hold that chat's key, which a reset of it also takes.
 const queues = new Map<string, Promise<void>>()
+const homeLockKey = (botId: string, of: BotHomeOf) => `${botId}:${botHomeKey(of)}`
+const sessionLockKey = (botId: string, root: string) => `${botId}:session:${root}`
 
 export function botChatSessions(deps: BotChatDependencies) {
   const requireBot = (botId: string): Bot => {
@@ -105,52 +114,47 @@ export function botChatSessions(deps: BotChatDependencies) {
     return bot
   }
 
-  /** Retired first, so a failure leaves the bot pointing at its old Chat for the retry. */
-  const replace = async (host: BotChatHost, bot: Bot): Promise<string> => {
-    if (bot.chatSessionId && host.deps.store.getConversation(bot.chatSessionId)) {
-      const closed = await deps.closeChat(bot.chatSessionId)
-      if (!closed.stopped) {
-        throw new Error(`bot_chat_close_failed: ${closed.reason ?? 'unknown'}`)
-      }
+  const { replace, open } = botHomeLifecycle(deps)
+
+  type Locked<T> = (host: BotChatHost, bot: Bot) => Promise<T> | T
+  const underLock = <T>(key: string, botId: string, work: Locked<T>): Promise<T> =>
+    runKeyedSerializedOperation(queues, key, async () => work(await deps.host(), requireBot(botId)))
+
+  /** The owner's Home is shown again if its tab was closed. A teammate's is returned as it is: it
+   *  takes mail with its tab closed, so nothing reopens a tab the owner closed. */
+  const shown = async (bot: Bot, of: BotHomeOf, sessionId: string): Promise<string> => {
+    if (of === 'owner') {
+      await deps.showTab(bot, sessionId)
     }
-    const sessionId = randomUUID()
-    await deps.createChat(bot, sessionId)
-    // Saved before anything else can fail, so the bot never loses a Chat it made.
-    await deps.bots.setChatSession(bot.id, sessionId)
-    await carryQueuedMessages(host, bot.chatSessionId, sessionId)
-    await deps.dropUnreadMail(bot, bot.chatSessionId)
-    await nameNewHome(host, { ...bot, chatSessionId: sessionId }, bot.chatSessionId)
     return sessionId
   }
 
-  /** The current Chat, or a new one when it is gone or runs another agent than the bot's. */
-  const open = (host: BotChatHost, bot: Bot): Promise<string> | string => {
-    const record = bot.chatSessionId ? host.deps.store.getConversation(bot.chatSessionId) : null
-    return record?.provider === bot.agent ? record.sessionId : replace(host, bot)
-  }
-
-  const underLock = <T>(botId: string, work: (host: BotChatHost, bot: Bot) => Promise<T> | T) =>
-    runKeyedSerializedOperation(queues, botId, async () =>
-      work(await deps.host(), requireBot(botId))
+  /** That person's Home session id, created on first use. */
+  const ensure = (botId: string, of: BotHomeOf): Promise<string> =>
+    underLock(homeLockKey(botId, of), botId, async (host, bot) =>
+      shown(bot, of, await open(host, bot, of))
     )
 
-  const shown = async (bot: Bot, sessionId: string): Promise<string> => {
-    await deps.showTab(bot, sessionId)
-    return sessionId
-  }
+  /** Runs `work` on the Home as `ensure` gives it, holding its lock through it, so a reset cannot
+   *  retire the Home between choosing it and mailing it. */
+  const withChat = <T>(
+    botId: string,
+    of: BotHomeOf,
+    work: (sessionId: string) => Promise<T> | T
+  ): Promise<T> =>
+    underLock(homeLockKey(botId, of), botId, async (host, bot) =>
+      work(await shown(bot, of, await open(host, bot, of)))
+    )
 
-  /** The bot's Chat session id, created on first use, with its tab shown. */
-  const ensure = (botId: string): Promise<string> =>
-    underLock(botId, async (host, bot) => shown(bot, await open(host, bot)))
-
-  /** Runs `work` on the Chat as `ensure` gives it (a closed tab would refuse mail), holding the bot's
-   *  lock through it, so a reset cannot retire the Chat between choosing it and mailing it. */
-  const withChat = <T>(botId: string, work: (sessionId: string) => Promise<T> | T): Promise<T> =>
-    underLock(botId, async (host, bot) => work(await shown(bot, await open(host, bot))))
-
-  /** Starts a new Chat; the old conversation stops and leaves the tab bar but stays in history. */
-  const reset = (botId: string): Promise<string> =>
-    underLock(botId, async (host, bot) => shown(bot, await replace(host, bot)))
+  /** Starts a new Home for that person; the old conversation stops and leaves the tab bar but stays
+   *  in history. Holds the retired Home's session key too, so a send into it can't race the close. */
+  const reset = (botId: string, of: BotHomeOf): Promise<string> =>
+    underLock(homeLockKey(botId, of), botId, async (host, bot) => {
+      const retiring = botHome(bot, of)
+      const key = sessionLockKey(botId, retiring ? botHomeRootOf(host)(retiring) : '')
+      const sessionId = await runKeyedSerializedOperation(queues, key, () => replace(host, bot, of))
+      return shown(bot, of, sessionId)
+    })
 
   const deliver = async (
     host: BotChatHost,
@@ -179,7 +183,7 @@ export function botChatSessions(deps: BotChatDependencies) {
       turn: {
         body,
         ...(from ? {} : { personsMessage: true }),
-        operationId: mintAgentSessionOperationId(Date.now()),
+        operationId: run?.messageId ?? mintAgentSessionOperationId(Date.now()),
         expectedRuntimeFence: host.deps.store.requireWritableRecord(sessionId).lease.runtimeFence,
         delivery: 'queue'
       }
@@ -187,14 +191,15 @@ export function botChatSessions(deps: BotChatDependencies) {
     return { sessionId, outcome, fingerprint: agentSessionSendBodyFingerprint(sessionId, body) }
   }
 
-  /** Holds the bot's lock through admission only: the agent's start and the dispatch settle after it,
-   *  so opening the Chat, or the next send, never waits on a starting agent. */
+  /** Holds `key` through admission only: the agent's start and the dispatch settle after it, so
+   *  opening the Home, or the next send, never waits on a starting agent. */
   const deliverUnderLock = (
+    key: string,
     botId: string,
     work: (host: BotChatHost, bot: Bot, admitting: StructuredAgentTurnHost) => Promise<Delivered>
   ): Promise<Delivered> => {
     let delivered: Promise<Delivered> | undefined
-    return underLock(botId, async (host, bot) => {
+    return underLock(key, botId, async (host, bot) => {
       let admitted = (): void => {}
       const admission = new Promise<void>((resolve) => (admitted = resolve))
       const admitting: StructuredAgentTurnHost = {
@@ -206,7 +211,7 @@ export function botChatSessions(deps: BotChatDependencies) {
     }).then(() => delivered!)
   }
 
-  /** Held through admission, so a reset cannot retire the Chat between choosing and sending. Queues
+  /** Held through admission, so a reset cannot retire the Home between choosing and sending. Queues
    *  behind a running turn. `from` is absent for a person; `bot-created` is Orca's own first turn;
    *  `card-answer` is an owner's click on a card, which the chat draws as nothing; `took-over` is
    *  Orca's turn handing the bot a workspace.
@@ -214,25 +219,28 @@ export function botChatSessions(deps: BotChatDependencies) {
    *  until it is edited. */
   const send = (
     botId: string,
+    of: BotHomeOf,
     text: string,
     from?: BotChatSender,
     run?: BotRunFields
   ): Promise<Delivered> =>
-    deliverUnderLock(botId, async (host, bot, admitting) =>
-      deliver(host, admitting, botId, await open(host, bot), text, from, run)
+    deliverUnderLock(homeLockKey(botId, of), botId, async (host, bot, admitting) =>
+      deliver(host, admitting, botId, await open(host, bot, of), text, from, run)
     )
 
   /** As `sendToChat`, into another of the bot's chats the caller already checked takes mail. */
-  const sendToSession = (
+  const sendToSession = async (
     botId: string,
     sessionId: string,
     text: string,
     run?: BotRunFields,
     from?: BotChatSender
-  ): Promise<Delivered> =>
-    deliverUnderLock(botId, async (host, _bot, admitting) =>
+  ): Promise<Delivered> => {
+    const root = botHomeRootOf(await deps.host())(sessionId)
+    return deliverUnderLock(sessionLockKey(botId, root), botId, async (host, _bot, admitting) =>
       deliver(host, admitting, botId, sessionId, text, from, run)
     )
+  }
 
   return { ensure, reset, withChat, sendToChat: send, sendToSession }
 }
@@ -257,7 +265,7 @@ export async function requireStructuredHost(
 /** A new native chat in the bot's home, through native chat's own create, on the bot's agent (and its
  *  model, options and permission override, if any); the launch adds the preamble. With `message`, that message starts it,
  *  under the caller's id so its turn can be found. A `background` one (a thread's or a run's) gets no
- *  tab; it waits in the bot's Activity. */
+ *  tab; it waits in the bot's Activity. Nor does one a teammate started (`opensHostTab`). */
 export async function startBotSession(
   runtime: OrcaRuntimeService,
   bot: Bot,
@@ -275,11 +283,8 @@ export async function startBotSession(
   }
   const permissionMode = bot.permissionMode && newChatPermissionMode(bot.agent, bot.permissionMode)
   // A model the agent no longer lists still goes through: the agent's own failure names it, as for any chat.
-  const saved = botStartOptions(
-    () => runtime.requireStore().getSettings(),
-    bot,
-    input.background === true
-  )
+  const settings = () => runtime.requireStore().getSettings()
+  const saved = botStartOptions(settings, bot, input.background === true)
   const launch = supportedStructuredSeedOptions(bot.agent, saved)
   const dropped = Object.keys(saved).filter((key) => !(key in launch))
   if (dropped.length) {
@@ -292,9 +297,10 @@ export async function startBotSession(
     ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {})
   }
   const host = () => requireStructuredHost(runtime)
-  const create = input.background
-    ? createBackgroundStructuredAgentSession
-    : createStructuredAgentSessionForWorktree
+  const create =
+    input.background || !opensHostTab(input.actsFor?.actsFor)
+      ? createBackgroundStructuredAgentSession
+      : createStructuredAgentSessionForWorktree
   const created = await create({
     runtime,
     ensureHost: host,
@@ -352,8 +358,11 @@ export function runtimeBotChats(runtime: OrcaRuntimeService) {
   return botChatSessions({
     bots: runtime.bots,
     host: () => requireStructuredHost(runtime),
-    createChat: async (bot, sessionId) => {
-      await startBotSession(runtime, bot, { sessionId, actsFor: { actsFor: [...OWNER_ACTS_FOR] } })
+    createChat: async (bot, sessionId, of) => {
+      await startBotSession(runtime, bot, {
+        sessionId,
+        actsFor: { actsFor: botHomeActsFor(bot, of) }
+      })
     },
     showTab: (bot, sessionId) => showBotSessionTab(runtime, bot, sessionId),
     closeChat: (sessionId) => closeReplacedBotChat(runtime, sessionId),

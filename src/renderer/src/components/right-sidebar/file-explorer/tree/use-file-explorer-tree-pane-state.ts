@@ -1,4 +1,4 @@
-import type { Dispatch, RefObject, SetStateAction } from 'react'
+import type { RefObject } from 'react'
 import { useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -23,7 +23,6 @@ import { useFileExplorerRowScrolling } from '../selection/use-file-explorer-row-
 import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import { useFileExplorerWatch } from '../watching/useFileExplorerWatch'
-import { useClearNameFilterForReveal } from '../navigation/use-clear-name-filter-for-reveal'
 import type { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
@@ -43,10 +42,9 @@ type UseFileExplorerTreePaneStateParams = {
   expanded: Set<string>
   activeFileId: string | null
   openFiles: OpenFile[]
-  hasNameFilter: boolean
+  /** Search results cover the tree. */
   hasNameFilterQuery: boolean
-  setNameFilterQuery: Dispatch<SetStateAction<string>>
-  handleToggleNameFilterDir: (worktreeId: string, dirPath: string) => void
+  clearNameFilter: () => void
   tree: ReturnType<typeof useFileExplorerTree>
   selection: ReturnType<typeof useFileExplorerSelection>
   selectedNode: TreeNode | null
@@ -83,10 +81,8 @@ export function useFileExplorerTreePaneState({
   expanded,
   activeFileId,
   openFiles,
-  hasNameFilter,
   hasNameFilterQuery,
-  setNameFilterQuery,
-  handleToggleNameFilterDir,
+  clearNameFilter,
   tree,
   selection,
   selectedNode,
@@ -118,13 +114,6 @@ export function useFileExplorerTreePaneState({
     moveSelection,
     selectedPaths
   } = selection
-
-  useClearNameFilterForReveal({
-    activeWorktreeId,
-    visibleFilesWorktreePath,
-    hasNameFilter,
-    setNameFilterQuery
-  })
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const canOpenWorkspaceFileBrowserForPath =
@@ -193,7 +182,7 @@ export function useFileExplorerTreePaneState({
     refreshTree,
     resetAndLoad,
     resetSelection,
-    setNameFilterQuery
+    clearNameFilter
   })
 
   const inlineInputState = useFileExplorerInlineInput({
@@ -266,7 +255,7 @@ export function useFileExplorerTreePaneState({
     runtimeEnvironmentId: ownerRuntimeEnvironmentId,
     openFile,
     makePreviewFilePermanent,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
+    toggleDir,
     loadDir,
     statPath,
     markPathAsDirectory,
@@ -291,7 +280,7 @@ export function useFileExplorerTreePaneState({
     requestDeleteAll: deletion.requestDeleteAll,
     refreshDir,
     handleClick: handlers.handleClick,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
+    toggleDir,
     scrollToIndex: rowScrolling.scrollToIndex,
     pathOwner
   })

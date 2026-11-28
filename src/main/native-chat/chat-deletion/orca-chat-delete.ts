@@ -12,6 +12,8 @@ import { dropUnreadBotRequests } from '../../runtime/rpc/methods/orchestration/m
 import { structuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import { closeStructuredAgentSessionChild } from '../../runtime/agent-session/lifecycle/structured-agent-session-close'
 import { botOfSession } from '../../bots/bot-session-tabs'
+import type { Bot } from '../../../shared/bot-types'
+import { withoutBotHome } from '../../../shared/bots/bot-home-of'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { DeletedChatConversation } from './deleted-chats'
 import { getStructuredAgentSessionHost } from '../agent-session-wire/host/structured-agent-session-registry'
@@ -97,15 +99,20 @@ function commitChatDeletion(
   })
 }
 
-/** Stops each loaded session of the chat, running or not, and closes its tab on every client. */
+/** Stops each loaded session of the chat, running or not, and closes its tab in every person's list
+ *  on every client: a deleted chat can't stay open anywhere. */
 async function stopChat(
   runtime: OrcaRuntimeService,
   host: ChatHost,
   records: readonly AgentSessionRecord[]
 ): Promise<boolean> {
   for (const { sessionId } of records) {
-    if (host.hasSession(sessionId) || host.isSessionTabVisible(sessionId)) {
-      const closed = await closeStructuredAgentSessionChild(sessionId, { runtime })
+    if (
+      host.hasSession(sessionId) ||
+      host.isSessionTabVisible(sessionId) ||
+      runtime.chatTabPeople(sessionId).length > 1
+    ) {
+      const closed = await closeStructuredAgentSessionChild(sessionId, { runtime, chatGone: true })
       if (!closed.stopped) {
         console.warn('[chat-delete] could not stop the chat', closed.reason)
         return false
@@ -113,6 +120,22 @@ async function stopChat(
     }
   }
   return true
+}
+
+/** A teammate's Home deletes like any chat; its pointer goes too, by the whole /clear chain read
+ *  before the delete, so their next open starts a new one. */
+async function forgetDeletedHome(
+  runtime: OrcaRuntimeService,
+  bot: Bot,
+  records: readonly AgentSessionRecord[]
+): Promise<void> {
+  const deleted = new Set(records.map((record) => record.sessionId))
+  if (withoutBotHome(bot, deleted).shares === bot.shares) {
+    return
+  }
+  await runtime.bots
+    .update(bot.id, (saved) => withoutBotHome(saved, deleted))
+    .catch((error: unknown) => console.warn('[chat-delete] could not forget a deleted Home', error))
 }
 
 /** Deletes the chat `sessionId` belongs to, stopping it first when it runs. */
@@ -166,6 +189,7 @@ export async function deleteOrcaChat(
       // Mail it never read goes unanswered, and its senders hear so.
       await dropUnreadBotRequests(runtime, bot.id, 'chat-deleted', record.sessionId)
     }
+    await forgetDeletedHome(runtime, bot, chat.records)
   }
   return { outcome: 'deleted' }
 }

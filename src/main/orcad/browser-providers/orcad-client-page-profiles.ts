@@ -15,7 +15,7 @@ export async function resolveTargetClientPage(
   const page = params.page
     ? pages.getPage(params.page)
     : workspaceId !== undefined
-      ? pages.listPages(workspaceId).find((candidate) => candidate.active)
+      ? pages.pagesOf('host', workspaceId).find((candidate) => candidate.active)
       : undefined
   if (page && workspaceId !== undefined && page.workspaceId !== workspaceId) {
     throw new BrowserError(

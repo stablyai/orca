@@ -219,7 +219,7 @@ afterEach(() => {
 })
 
 describe('a commit picked from retained shallow history', () => {
-  it('follows the deepened page and keeps the old root compare out of rows and Open', async () => {
+  it('follows the deepened page and keeps the old root compare out of rows and the commit diff', async () => {
     // Every owner read gets its own deferred reply, so none is left without one.
     const reads: PromiseWithResolvers<GitCommitCompareResult>[] = []
     mocks.getRuntimeGitCommitCompare.mockImplementation(() => {
@@ -269,17 +269,18 @@ describe('a commit picked from retained shallow history', () => {
         status: 'ready',
         entries: DEEP_ROWS
       })
+      const selected = latest!.changeScope
+      if (selected.kind !== 'commit') {
+        throw new Error('expected a picked commit')
+      }
+      // The whole-commit diff opens against the deepened parent, not the held root.
       await act(async () => {
-        fireEvent.click(screen.getByTestId('source-control-change-scope-open-diff'))
+        await latest!.actions.openHistoryCommitDiff(selected.commit)
       })
       await waitFor(() => expect(mocks.openCommitAllDiffs).toHaveBeenCalledTimes(1))
       expect(mocks.openCommitAllDiffs.mock.lastCall?.[2]).toMatchObject({ parentOid: 'p0' })
       expect(mocks.openCommitAllDiffs.mock.lastCall?.[3]).toEqual(DEEP_ROWS)
       // A row opens with the selected commit, as the commit file list does.
-      const selected = latest!.changeScope
-      if (selected.kind !== 'commit') {
-        throw new Error('expected a picked commit')
-      }
       latest!.actions.openCommitFile(selected.commit, DEEP_ROWS[0])
       expect(mocks.openCommitDiff.mock.lastCall?.[2]).toEqual(DEEP_ROWS[0])
       expect(mocks.openCommitDiff.mock.lastCall?.[3]).toMatchObject({ parentOid: 'p0' })

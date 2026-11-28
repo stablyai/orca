@@ -4,7 +4,11 @@
 import type { RpcResponse } from '../../rpc/rpc-response-shape'
 import { RelayOuterError } from './relay-e2ee-link'
 import type { RelayClientPlatform } from './relay-client-platform'
-import { confirmRelayResume, installRelayResumeCredential } from './relay-resume-credential'
+import {
+  confirmRelayResume,
+  installRelayResumeCredential,
+  type RelayRequestPort
+} from './relay-resume-credential'
 import type { RelayRpcClient } from './relay-rpc-client'
 import { connectSharedHost, type SharedHostRelayCredential } from './shared-host-relay-connection'
 import { mintRelayCredential } from '../relay-credential-hash'
@@ -40,7 +44,7 @@ export type SharedHostRelayLinkDeps<Entry extends SharedHostLinkEntry> = {
   clientCapabilities: readonly string[]
   entry: () => Entry | undefined
   save: (entry: Entry) => void
-  onLinkChanged: (link: SharedHostLink) => void
+  onLinkChanged: (link: SharedHostLink, previous: SharedHostLink) => void
   /** Signs with the device key the host's offer names; the private key stays with the caller. */
   sign: (entry: Entry, message: Uint8Array) => Promise<Uint8Array>
   randomBytes: (length: number) => Uint8Array
@@ -60,6 +64,51 @@ export function withoutRefusedCredential<Entry extends SharedHostLinkEntry>(
     return { ...entry, resume: undefined }
   }
   return { ...entry, refusedInvite: credential.inviteToken }
+}
+
+/** The relay refused the dialed credential itself: it is spent, expired or revoked. */
+export function relayRefusedCredential(error: Error): boolean {
+  return (
+    error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
+  )
+}
+
+/** After an invite: install a resume credential for later dials. After a resume: renew it. */
+export async function keepRelayResumeCredential<Entry extends SharedHostLinkEntry>(
+  client: RelayRequestPort,
+  mode: 'install' | 'renew',
+  deps: Pick<SharedHostRelayLinkDeps<Entry>, 'entry' | 'save' | 'randomBytes' | 'newId'>,
+  reqIdPrefix: string
+): Promise<void> {
+  const entry = deps.entry()
+  if (!entry) {
+    return
+  }
+  if (mode === 'renew') {
+    if (entry.resume) {
+      await confirmRelayResume(client, `confirm-${deps.newId()}`, entry.resume.relay.relayHostId)
+    }
+    return
+  }
+  const pending = entry.pendingResume ?? {
+    ...mintRelayCredential(deps.randomBytes),
+    reqId: `${reqIdPrefix}-${deps.newId()}`
+  }
+  deps.save({ ...entry, pendingResume: pending })
+  const { installed, relay } = await installRelayResumeCredential(client, pending)
+  const current = deps.entry() ?? entry
+  deps.save({
+    ...current,
+    // Installing spent the invite: a refused resume must not fall back to dialing it.
+    refusedInvite: current.offer?.relay.inviteToken ?? current.refusedInvite,
+    pendingResume: undefined,
+    resume: {
+      token: pending.token,
+      hash: pending.hash,
+      version: installed.currentVersion,
+      relay: { cellUrl: relay.cellUrl, relayHostId: relay.relayHostId }
+    }
+  })
 }
 
 type Settled = Exclude<SharedHostLink, 'connecting'>
@@ -128,8 +177,9 @@ export class SharedHostRelayLink<Entry extends SharedHostLinkEntry> {
       this.offlineAt = Date.now()
     }
     if (link !== this.link) {
+      const previous = this.link
       this.link = link
-      this.deps.onLinkChanged(link)
+      this.deps.onLinkChanged(link, previous)
     }
   }
 
@@ -156,7 +206,12 @@ export class SharedHostRelayLink<Entry extends SharedHostLinkEntry> {
         },
         {
           onAuthenticated: () => {
-            void this.afterAuthenticated(client, credential).then(
+            void keepRelayResumeCredential(
+              client,
+              credential.kind === 'invite' ? 'install' : 'renew',
+              this.deps,
+              'share'
+            ).then(
               () => {
                 // Closed while the resume credential settled: this link is no longer the live one.
                 if (this.client !== client) {
@@ -188,49 +243,9 @@ export class SharedHostRelayLink<Entry extends SharedHostLinkEntry> {
     })
   }
 
-  /** Invite: install a resume credential for later dials. Resume: renew it with the host. */
-  private async afterAuthenticated(
-    client: RelayRpcClient,
-    credential: SharedHostRelayCredential
-  ): Promise<void> {
-    const entry = this.deps.entry()
-    if (!entry) {
-      return
-    }
-    if (credential.kind === 'resume') {
-      if (entry.resume) {
-        await confirmRelayResume(
-          client,
-          `confirm-${this.deps.newId()}`,
-          entry.resume.relay.relayHostId
-        )
-      }
-      return
-    }
-    const pending = entry.pendingResume ?? {
-      ...mintRelayCredential(this.deps.randomBytes),
-      reqId: `share-${this.deps.newId()}`
-    }
-    this.deps.save({ ...entry, pendingResume: pending })
-    const { installed, relay } = await installRelayResumeCredential(client, pending)
-    this.deps.save({
-      ...(this.deps.entry() ?? entry),
-      pendingResume: undefined,
-      resume: {
-        token: pending.token,
-        hash: pending.hash,
-        version: installed.currentVersion,
-        relay: { cellUrl: relay.cellUrl, relayHostId: relay.relayHostId }
-      }
-    })
-  }
-
   /** The host is away (offline), or refused this credential (unpaired until it answers an accept). */
   private afterClosed(credential: SharedHostRelayCredential, error: Error): Settled {
-    if (
-      error instanceof RelayOuterError &&
-      error.code === MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
-    ) {
+    if (relayRefusedCredential(error)) {
       const entry = this.deps.entry()
       if (entry) {
         this.deps.save(withoutRefusedCredential(entry, credential))

@@ -65,7 +65,7 @@ function OpenHomeNewBotSheet(props: {
         props.onClose()
         const place = byId.get(computer.id)
         if (place) {
-          openBotHome(place, bot, homeDraft)
+          openBotHome(place, bot, { homeDraft })
         }
       }}
       onCreated={(bot, computer) => {

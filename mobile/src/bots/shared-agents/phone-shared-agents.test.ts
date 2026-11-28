@@ -1,7 +1,6 @@
 // A page's call naming a shared agent's host goes over the phone's own path, not the computer: while
 // the host is away a send is sealed to the pinned host key and held with the phone's share credential,
 // later sends in that chat queue behind it, and once Orca Cloud says it landed they go live again.
-import nacl from 'tweetnacl'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
@@ -20,12 +19,9 @@ vi.mock('../../host-credentials/pairing-keychain', () => ({
 }))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 
-import { SharedBotsPhoneProvisionParams } from '../../../../src/shared/bots/bot-share-phone'
+import { openBotTeamShareHeldMessage } from '../../../../src/shared/bots/bot-team-share-seal'
 import {
-  openBotTeamShareHeldMessage,
-  sealBotTeamShareOffer
-} from '../../../../src/shared/bots/bot-team-share-seal'
-import {
+  isSharedBotNewChatId,
   SHARED_BOT_HOST_ERRORS,
   SHARED_HOSTS_HOLD_WHILE_AWAY
 } from '../../../../src/shared/bots/shared-bot-hosts'
@@ -34,100 +30,21 @@ import {
 const heldIt = it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)
 import { structuredAgentSessionMessageSendMutation } from '../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { hashRelayCredential } from '../../../../src/shared/remote-runtime/relay/relay-credential-hash'
-import type { RpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
 import { MOBILE_PAIRED_E2EE_PRIMITIVES as PRIMITIVES } from '../../transport/encryption/mobile-paired-e2ee-primitives'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { HELD_WAIT_MS } from './phone-shared-agent-held'
+import { HELD_WAIT_MS, PhoneSharedAgentHeld } from './phone-shared-agent-held'
+import { PhoneSharedAgentStore } from './phone-shared-agent-store'
+import { sendMobileStructuredAgentSessionMessage } from '../../session/native-chat/agent-session/mobile-structured-agent-session-send'
+import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { PhoneSharedAgents } from './phone-shared-agents'
 import { namesPhoneSharedAgent, routeSharedAgentCalls } from './shared-agent-call-routing'
+import { CHAT, cloud, computer, HOST, HOST_KEY, SHARED } from './phone-shared-agents.test-support'
 import {
   createBridgeVerdictHold,
   type DesktopBound
 } from '../../mobile-web-shell/host-bridge/bridge-host-verdict-hold'
 
 const ConnectorShareHoldRequestBody = z.object({ sealed: z.string() })
-const HOST = nacl.box.keyPair()
-const HOST_KEY = PRIMITIVES.encodeBase64(HOST.publicKey)
-const CHAT = '00000000-0000-4000-8000-000000000001'
-const share = {
-  shareId: 'share-1',
-  botId: 'bot-1',
-  botName: 'Ivy',
-  ownerName: 'Jinwoo Hong',
-  environmentId: 'env-1'
-}
-const SHARED = { envelope: { executionHost: 'runtime:env-1' } }
-
-/** The teammate's computer as the phone's paired host: its shares, a key per ask, and the page calls
- *  it should not get. */
-function computer() {
-  const asks: SharedBotsPhoneProvisionParams[] = []
-  const desktopCalls: string[] = []
-  const sendRequest = async (method: string, params?: unknown): Promise<RpcResponse> => {
-    if (method === 'sharedBots.phone.list') {
-      return { id: method, ok: true, result: { shares: [share] } }
-    }
-    if (method !== 'sharedBots.phone.provision') {
-      desktopCalls.push(method)
-      return { id: method, ok: true, result: {} }
-    }
-    const ask = SharedBotsPhoneProvisionParams.parse(params)
-    asks.push(ask)
-    const offer = {
-      v: 1 as const,
-      relay: {
-        v: 1 as const,
-        directorUrl: 'https://director.example',
-        cellUrl: 'https://cell.example',
-        assignmentEpoch: 1,
-        relayHostId: 'AbCdEf0123_-xyZ9',
-        inviteToken: 'i'.repeat(43),
-        e2eeFraming: 2 as const,
-        // Lapsed: the phone never dials it here, so the host is away for this test.
-        inviteExpiresAt: 10
-      },
-      hostPublicKeyB64: HOST_KEY,
-      deviceId: 'phone-key-1',
-      botId: 'bot-1'
-    }
-    const result = {
-      v: 1,
-      ...share,
-      connectorOrigin: 'https://cloud.example',
-      hostKey: HOST_KEY,
-      sealedOffer: sealBotTeamShareOffer(PRIMITIVES, { sealKey: ask.sealKey, offer })
-    }
-    return { id: method, ok: true, result }
-  }
-  return { asks, desktopCalls, client: { sendRequest } }
-}
-
-type CloudCall = { url: string; method: string; authorization: string; body: unknown }
-
-/** Orca Cloud's share endpoints; the first `failedReads` reads of held states fail. */
-function cloud(failedReads = 0) {
-  const calls: CloudCall[] = []
-  let states: { clientMessageId: string; state: string }[] = []
-  let reads = 0
-  vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
-    const headers = new Headers(init.headers)
-    const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined
-    calls.push({
-      url,
-      method: init.method ?? 'GET',
-      authorization: headers.get('authorization') ?? '',
-      body
-    })
-    if (init.method === 'POST') {
-      return Response.json({ status: 'held' })
-    }
-    return ++reads <= failedReads
-      ? Response.json({ error: 'unavailable' }, { status: 503 })
-      : Response.json({ v: 1, held: states })
-  })
-  return { calls, setStates: (next: typeof states) => (states = next) }
-}
-
 const send = (clientOperationId: string) =>
   structuredAgentSessionMessageSendMutation({
     sessionId: CHAT,
@@ -259,6 +176,161 @@ describe('a page’s call to a shared agent', () => {
   )
 })
 
+describe('following a computer’s shares', () => {
+  it('lists a share made after the phone connected, and two follows never ask for keys at once', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    let shared = false
+    let asking = 0
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const client = {
+      sendRequest: async (method: string, params?: unknown) => {
+        if (method === 'sharedBots.phone.list' && !shared) {
+          return { id: method, ok: true as const, result: { shares: [] } }
+        }
+        if (method === 'sharedBots.phone.provision') {
+          asking++
+          await gate
+        }
+        return await desktop.client.sendRequest(method, params)
+      }
+    }
+    await agents.syncComputer('computer-1', client)
+    expect(agents.views('computer-1')).toEqual([])
+
+    shared = true
+    const first = agents.syncComputer('computer-1', client)
+    const second = agents.syncComputer('computer-1', client)
+    await vi.waitFor(() => expect(asking).toBe(1))
+    // Every turn the second follow could take to ask, had it not waited.
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve()
+    }
+    expect(asking).toBe(1)
+    release()
+    await Promise.all([first, second])
+    expect(agents.views('computer-1').map((view) => view.shareId)).toEqual(['share-1'])
+  })
+})
+
+describe('a call to a shared agent whose owner stopped sharing it', () => {
+  it('answers no longer shared, never offline, once the computer’s list read under way drops it', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    let release: (() => void) | null = null
+    let unshared = false
+    const client = {
+      sendRequest: async (method: string, params?: unknown) => {
+        if (method === 'sharedBots.phone.list' && unshared) {
+          await new Promise<void>((resolve) => (release = resolve))
+          return { id: method, ok: true as const, result: { shares: [] } }
+        }
+        return await desktop.client.sendRequest(method, params)
+      }
+    }
+    await agents.syncComputer('computer-1', client)
+    const entry = agents.find('computer-1', 'env-1')!
+    unshared = true
+    const follow = agents.syncComputer('computer-1', client)
+    await vi.waitFor(() => expect(release).not.toBeNull())
+    const answer = agents.call(entry, 'bots.list', {})
+    release!()
+    await follow
+    const response = await answer
+    expect(response.ok ? null : response.error).toEqual({
+      code: SHARED_BOT_HOST_ERRORS.unshared,
+      message: 'This agent is no longer shared.'
+    })
+  })
+
+  it('waits at most its cap for a computer that never answers, then reads as offline', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    let away = false
+    const client = {
+      sendRequest: async (method: string, params?: unknown) =>
+        method === 'sharedBots.phone.list' && away
+          ? await new Promise<never>(() => {})
+          : await desktop.client.sendRequest(method, params)
+    }
+    await agents.syncComputer('computer-1', client)
+    const entry = agents.find('computer-1', 'env-1')!
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      away = true
+      void agents.syncComputer('computer-1', client)
+      const answer = agents.call(entry, 'bots.list', {})
+      await vi.advanceTimersByTimeAsync(5_000)
+      const response = await answer
+      expect(response.ok ? null : response.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('a send from the phone to a shared agent', () => {
+  it('answers without Buffer: offline while holding is off (never parsed to hold), held when on', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    cloud()
+    await agents.syncComputer('computer-1', computer().client)
+    const entry = agents.find('computer-1', 'env-1')!
+    vi.stubGlobal('Buffer', undefined)
+    const response = await agents.call(entry, 'agentSession.send', send('op-1'))
+    expect(response.ok ? null : response.error.code).toBe(
+      SHARED_HOSTS_HOLD_WHILE_AWAY ? SHARED_BOT_HOST_ERRORS.held : SHARED_BOT_HOST_ERRORS.offline
+    )
+  })
+
+  it('answers as not sent, never rejecting, when the phone fails to take a call', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    cloud()
+    await agents.syncComputer('computer-1', computer().client)
+    const entry = agents.find('computer-1', 'env-1')!
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stands in for any throw on the phone's path.
+    vi.spyOn(agents as unknown as { reach: () => Promise<never> }, 'reach').mockRejectedValue(
+      new ReferenceError('boom')
+    )
+    const response = await agents.call(entry, 'agentSession.send', send('op-2'))
+    expect(response.ok ? null : response.error.code).toBe(SHARED_BOT_HOST_ERRORS.failed)
+  })
+})
+
+describe('a share offered to the computer’s account', () => {
+  it('lists from the computer, and Accept goes through it and follows its shares again', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    const request = { shareId: 'share-2', botId: 'bot-2', botName: 'Ivy', ownerName: 'Jinwoo Hong' }
+    const answers: unknown[] = []
+    let lists = 0
+    const client = {
+      sendRequest: async (method: string, params?: unknown) => {
+        if (method === 'sharedBots.phone.list') {
+          lists += 1
+          return { id: method, ok: true as const, result: { shares: [], requests: [request] } }
+        }
+        if (method === 'sharedBots.phone.accept') {
+          answers.push(params)
+          return { id: method, ok: true as const, result: { answered: true } }
+        }
+        return await desktop.client.sendRequest(method, params)
+      }
+    }
+    await agents.syncComputer('computer-1', client)
+    expect(agents.requests('computer-1')).toEqual([request])
+    expect(await agents.answerRequest('computer-1', 'share-2', true)).toBe(true)
+    expect(answers).toEqual([{ shareId: 'share-2' }])
+    expect(lists).toBe(2)
+    // No key is asked for a share the computer hasn't paired.
+    expect(desktop.asks).toEqual([])
+  })
+})
+
 describe('a page frame before the phone’s shared agents are loaded', () => {
   it('waits for the computer’s verdict, and only a shared agent’s leaves once they load', async () => {
     const first = new PhoneSharedAgents(() => 1_000)
@@ -292,4 +364,78 @@ describe('a page frame before the phone’s shared agents are loaded', () => {
     hold.releaseBypassing((message) => sent.push(message.id))
     expect(sent).toEqual(['shared'])
   })
+})
+
+describe('a new chat while the shared agent’s host is away', () => {
+  it('with held sends off, starts no placeholder while the host is away and answers offline', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
+    const page = routeSharedAgentCalls(desktop.client as unknown as RpcClient, 'computer-1', agents)
+    await agents.syncComputer('computer-1', desktop.client)
+    const started = await page.sendRequest('bots.session.start', { botId: 'bot-1' }, SHARED)
+    expect(agents.views('computer-1')[0]?.holds).toBe(SHARED_HOSTS_HOLD_WHILE_AWAY)
+    expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+  })
+
+  heldIt(
+    'starts as a placeholder whose sends read as sent and wait, then moves to the chat its host starts',
+    async () => {
+      const agents = new PhoneSharedAgents(() => 1_000)
+      const desktop = computer()
+      cloud()
+      const page = routeSharedAgentCalls(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
+        desktop.client as unknown as RpcClient,
+        'computer-1',
+        agents
+      )
+      await agents.syncComputer('computer-1', desktop.client)
+      const shown: string[][] = []
+      const stop = agents.watch('computer-1', (views) =>
+        shown.push(views.flatMap((view) => view.held.map((held) => held.state)))
+      )
+
+      const started = await page.sendRequest('bots.session.start', { botId: 'bot-1' }, SHARED)
+      const placeholder = started.ok
+        ? z.object({ sessionId: z.string() }).parse(started.result).sessionId
+        : ''
+      expect(isSharedBotNewChatId(placeholder)).toBe(true)
+      const errors: string[] = []
+      const outcome = await sendMobileStructuredAgentSessionMessage({
+        client: scopeRpcClientToExecutionHost(page, 'runtime:env-1'),
+        sessionId: placeholder,
+        // A shared agent's host takes no fence, as the chat sends while it is away.
+        expectedRuntimeFence: null,
+        text: 'Also check it on Android.',
+        attachments: [],
+        clientMessageId: 'm1',
+        onError: (message) => errors.push(message)
+      })
+      expect({ outcome, errors }).toEqual({ outcome: 'accepted', errors: [] })
+      expect(desktop.desktopCalls).toEqual([])
+      const [view] = agents.views('computer-1')
+      expect(view?.held).toMatchObject([{ sessionId: placeholder, state: 'waiting' }])
+      // Drawn once with nothing held and once with it waiting; a change that alters nothing draws nothing.
+      await agents.refreshHeld([])
+      expect(shown).toEqual([[], ['waiting']])
+      stop()
+
+      // The host, back, starts the chat for the placeholder: its held message lands there.
+      await vi.waitFor(() => expect([...appStorage.values()].join('')).toContain('m1'))
+      const store = new PhoneSharedAgentStore()
+      await store.load()
+      const held = new PhoneSharedAgentHeld({ store, now: () => 1_000, changed: () => {} })
+      held.noteAnswer(
+        store.get('share-1')!,
+        'bots.session.start',
+        { botId: 'bot-1', newChatId: placeholder },
+        { id: 'x', ok: true, result: { sessionId: 'chat-9' } }
+      )
+      expect(held.views(store.get('share-1')!).map((message) => message.sessionId)).toEqual([
+        'chat-9'
+      ])
+    }
+  )
 })

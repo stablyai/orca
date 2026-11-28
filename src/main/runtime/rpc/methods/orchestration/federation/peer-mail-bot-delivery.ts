@@ -3,20 +3,26 @@ import type { PeerMailDeliverParams } from '../../../../../../shared/rpc-contrac
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { routeBotMail } from '../messaging/bot-chat-address'
-import { botAddressReach } from '../messaging/bot-recipient'
+import { botAddressReach, receivingBot } from '../messaging/bot-recipient'
+import type { BotShareCallerScope } from '../../../callers/rpc-caller-scope'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { pairedLabelComputer } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
+import { readPeerMailAskers } from './peer-mail-askers'
 import { agentMessageSenderName } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 
 // Deliveries being admitted on this Orca, by message id.
 const admitting = new Set<string>()
 
-/** Peer mail that reaches a bot is admitted as this Orca's own bot mail is, for the owner: a paired
- *  computer has full access here. `{ to }` is mail for an agent that is no bot, stored as peer mail. */
+/** Peer mail that reaches a bot is admitted as this Orca's own bot mail is, for the owner and whoever
+ *  else the sending turn acts for: a paired computer has full access here. A teammate's Orca, over
+ *  the share of one bot, reaches only that bot, and its mail is that teammate's ask, in their Home.
+ *  `{ to }` is mail for an agent that is no bot, stored as peer mail. */
 export async function deliverPeerMailToBot(
   runtime: OrcaRuntimeService,
   params: z.infer<typeof PeerMailDeliverParams>,
   peerFingerprint: string,
   senderSnapshot: string | undefined,
+  teammate: Pick<BotShareCallerScope, 'botId' | 'accountId'> | null,
   /** Mail a server this Orca dials queued for it: its conversation names that server, and
    *  `alsoOnAdmitted` commits with the request's admission. */
   pulled?: { environmentId: string; serverName: string; alsoOnAdmitted: () => void }
@@ -34,6 +40,9 @@ export async function deliverPeerMailToBot(
   const reply = params.type === undefined && !named
   const reach = (): boolean =>
     botAddressReach(runtime, db, params.to, sender, { fromPairedComputer: true }).kind !== 'none'
+  if (teammate) {
+    await requireSharedBot(runtime, db, params.to, sender, teammate.botId)
+  }
   if (reply || (!named && !reach())) {
     return { to: params.to }
   }
@@ -84,6 +93,8 @@ export async function deliverPeerMailToBot(
         routing: { run: undefined },
         messageId: params.messageId,
         senderSnapshot,
+        carriedAskers: readPeerMailAskers(params.askers ?? []),
+        ...(teammate ? { teammate: { accountId: teammate.accountId } } : {}),
         // Who it is from, either side of the pairing: a server this computer pulls from by this
         // computer's catalog name for it, a client by its Orca's name for itself. It grants nothing here.
         pairedSender: {
@@ -105,5 +116,27 @@ export async function deliverPeerMailToBot(
     return 'delivered'
   } finally {
     admitting.delete(params.messageId)
+  }
+}
+
+/** A teammate's mail reaches the bot shared with them, one of its chats, or the Run one coordinates. */
+async function requireSharedBot(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  to: string,
+  sender: Parameters<typeof botAddressReach>[3],
+  botId: string
+): Promise<void> {
+  const reached = await receivingBot(
+    runtime,
+    botAddressReach(runtime, db, to, sender, { fromPairedComputer: true }),
+    to
+  ).catch(() => null)
+  if (reached?.bot.id !== botId) {
+    throw new OrchestrationError(
+      'bot_not_shared',
+      `Only the agent shared with you on ${runtime.readMachineName()} takes mail from your agents, and ${to} is not it. Nothing was delivered.`,
+      { effectsApplied: false }
+    )
   }
 }

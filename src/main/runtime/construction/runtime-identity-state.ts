@@ -1,5 +1,5 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
-import * as savedChatOpen from '../agent-session/records/local-agent-session-record-store-startup-open'
+import type * as savedChatOpen from '../agent-session/records/local-agent-session-record-store-startup-open'
 import type { SessionTitlePublisher } from '../session-tabs/publication/session-title-publisher'
 import { randomUUID } from 'node:crypto'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
@@ -28,7 +28,10 @@ import {
   RuntimeGraphReloadLifecycle
 } from '../session-graph/runtime-graph-reload-lifecycle'
 import { ClientHostedPageReconciliationWindow } from '../browser/client-pages/client-hosted-page-reconciliation-window'
-import { ClientSessionTabSelectionStore } from '../client/navigation/client-session-tab-selection'
+import {
+  ClientSessionTabSelectionStore,
+  type SessionTabListName
+} from '../client/navigation/client-session-tab-selection'
 import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-terminal-mutation-lock'
 import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
@@ -84,6 +87,8 @@ export type MobileSessionTabSubscription = {
   clientKind?: 'mobile' | 'runtime'
   observation?: 'caller'
   acceptsWorktree?: (worktree: string) => boolean
+  /** The list a watcher named (`viewedTabListOf`); absent, the device's own (`tabOwnerOf`). */
+  list?: SessionTabListName
 }
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHooks {
@@ -152,16 +157,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
 
   protected structuredAgentSessionStartupOpen?: savedChatOpen.AgentSessionRecordStoreStartupOpen
-
-  /** Starts the saved-chat open early; the next startup restoration consumes this attempt. */
-  beginStructuredAgentSessionStartupOpen(
-    maintenanceAfter: Promise<void>,
-    open?: savedChatOpen.AgentSessionRecordStoreStartupOpen
-  ): void {
-    const legacyTabIds = this.legacyStructuredSessionTabIds
-    this.structuredAgentSessionStartupOpen =
-      open ?? savedChatOpen.startLocalAgentSessionRecordStoreOpen(legacyTabIds, maintenanceAfter)
-  }
 
   protected mobileSessionTabsChangeSequence = 0
 
@@ -271,7 +266,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
   protected readonly mobileSessionTabsAgentStatusHeartbeat =
     createMobileSessionTabsAgentStatusHeartbeat(
       (ptyId) => this.mobileSessionTabsByWorktree.worktreeIdsForPty(ptyId),
-      (worktreeId) => this.touchMobileSessionTabsForWorktree(worktreeId)
+      // Agent status is shown in the host's list alone (`scheduleSessionTabListAgentStatusHeartbeat`).
+      (worktreeId) => this.touchSessionTabList({ workspaceId: worktreeId, holder: undefined })
     )
 
   // Concurrent focus requests share one host reveal; the latest pane wins.

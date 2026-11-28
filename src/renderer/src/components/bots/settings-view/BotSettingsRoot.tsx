@@ -1,5 +1,5 @@
 // The settings view's root: the bot's card, then Agent, Schedule, Soul and memory, Access and Notifications, then Delete.
-import { useContext, useState } from 'react'
+import { useContext } from 'react'
 import {
   Activity,
   BookOpen,
@@ -29,7 +29,7 @@ import {
   chatAsksNoApprovals,
   savedChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { botMembersFrom, type Bot } from '../../../../../shared/bot-types'
+import { botMembersFrom, tidyUpSupported, type Bot } from '../../../../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../../../../shared/bots/bot-look-around'
 import { botTidyUp } from '../../../../../shared/bots/bot-tidy-up'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
@@ -52,7 +52,6 @@ import {
 } from '../bot-settings-row-states'
 import { useBotTools } from '../bot-tool-checks'
 import { useDeleteBot } from '../use-delete-bot'
-import { BotShareFlow } from '../sharing/BotShareFlow'
 import { BotSharedFromLine } from './BotSharedFromLine'
 import { BotSharingGroup } from './BotSharingPage'
 import { useBotComputerName } from './BotComputerPage'
@@ -112,20 +111,22 @@ function ScheduleGroup({
   const tidyUpTitle = t('settings.bots.tidyUp.title', 'Memory upkeep')
   return (
     <SettingsInsetGroup title={t('bots.settingsView.schedule', 'Schedule')}>
-      <SettingsInsetRow
-        icon={<Eye />}
-        title={lookAroundTitle}
-        value={lookAroundValue(lookAround)}
-        page="look-around"
-        onOpen={() => open('look-around')}
-        end={
-          <BotSettingsSwitch
-            checked={lookAround.on}
-            aria-label={lookAroundTitle}
-            onCheckedChange={() => void update({ lookAround: { on: !lookAround.on } })}
-          />
-        }
-      />
+      {lookAroundSupported(bot.agent) ? (
+        <SettingsInsetRow
+          icon={<Eye />}
+          title={lookAroundTitle}
+          value={lookAroundValue(lookAround)}
+          page="look-around"
+          onOpen={() => open('look-around')}
+          end={
+            <BotSettingsSwitch
+              checked={lookAround.on}
+              aria-label={lookAroundTitle}
+              onCheckedChange={() => void update({ lookAround: { on: !lookAround.on } })}
+            />
+          }
+        />
+      ) : null}
       <SettingsInsetRow
         icon={<Moon />}
         title={tidyUpTitle}
@@ -297,11 +298,9 @@ export function BotSettingsRoot({
   const deleteBot = useDeleteBot(bot)
   const controlsOff = useContext(SettingsControlsOffContext)
   const shareLabel = t('bots.settingsView.shareAction', 'Share')
-  const [sharing, setSharing] = useState(false)
   const picture = useBotPictureSetting(bot, update)
   return (
     <>
-      {sharing ? <BotShareFlow bot={bot} onClose={() => setSharing(false)} /> : null}
       <div className="rounded-[10px] bg-foreground/[0.035] p-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <fieldset disabled={controlsOff} className="contents">
@@ -333,7 +332,7 @@ export function BotSettingsRoot({
                     className="size-7"
                     aria-label={shareLabel}
                     disabled={controlsOff}
-                    onClick={() => setSharing(true)}
+                    onClick={() => open('sharing')}
                   >
                     <Share2 className="size-3.5" />
                   </Button>
@@ -378,9 +377,7 @@ export function BotSettingsRoot({
           }
         />
       </SettingsInsetGroup>
-      {lookAroundSupported(bot.agent) ? (
-        <ScheduleGroup bot={bot} update={update} open={open} />
-      ) : null}
+      {tidyUpSupported(bot.agent) ? <ScheduleGroup bot={bot} update={update} open={open} /> : null}
       <BotItemsSettingsGroup bot={bot} update={update} />
       {home ? <SoulAndMemoryGroup home={home} open={open} /> : null}
       <AccessGroup bot={bot} open={open} />

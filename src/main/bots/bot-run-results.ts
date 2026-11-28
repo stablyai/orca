@@ -40,6 +40,8 @@ import { structuredAgentSessionRefusalLine } from '../../shared/agent-session/re
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { ANSWERED_TOGETHER_NOTICE } from '../../shared/automations/history/automation-run-answered-together'
 import * as resultNote from './bot-run-result-note'
+import type { BotHomeOf } from '../../shared/bots/bot-home-of'
+import { automationHome } from './bot-conversation-acts-for'
 import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-session-wire/structured-agent-session-orca-note'
 import { resultPlaceValue } from '../automations/bot-automation-place-refs'
 import { watchBotTurnEnds, type BotRunUnavailable, type BotTurnEnd } from './bot-run-turn-watch'
@@ -55,7 +57,7 @@ export type BotRunCompletion = Awaited<NonNullable<AutomationLaunch['completion'
 
 export type BotRunDeliveryDependencies = BotOwnerNoticeDeps &
   resultNote.BotRunNoteDependencies & {
-    sendToChat(bot: Bot, text: string, from: AgentMessageSource): Promise<unknown>
+    sendToChat(bot: Bot, home: BotHomeOf, text: string, from: AgentMessageSource): Promise<unknown>
     /** Null when Orca Cloud is not connected. */
     postAsBot(
       bot: Bot,
@@ -212,6 +214,7 @@ export async function deliverBotRunResult(
     try {
       await deps.sendToChat(
         bot,
+        deps.homeOf(bot, automation.bot),
         COPY.chatResult(automation.name, message),
         runSender(result.sessionId, automation.name)
       )
@@ -287,6 +290,7 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
         void showBotRunNotStarted(
           runtimeBotRunNotStarted(runtime, chats),
           bot,
+          automationHome(runtime, bot, automation.bot),
           notStarted.destination,
           notStarted.card
         )
@@ -295,9 +299,10 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
     deliver: (result) =>
       deliverBotRunResult(
         {
-          sendToChat: async (bot, text, from) =>
-            chatThatTookIt(await chats.sendToChat(bot.id, text, from)),
+          sendToChat: async (bot, home, text, from) =>
+            chatThatTookIt(await chats.sendToChat(bot.id, home, text, from)),
           noteToChat: resultNote.runtimeNoteToChat(runtime, chats),
+          homeOf: (bot, target) => automationHome(runtime, bot, target),
           postAsBot: (bot, body) => runtime.getConnectorCloud()?.postAsBot(bot.id, body) ?? null,
           cloudSignedOut: () => orcaCloudNeedsSignIn(runtime.getConnectorCloud()?.status()),
           signInServer: () => orcaSignInServer(runtime),
@@ -312,7 +317,8 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
             runtime
               .getConnectorCloud()
               ?.reply({ replyId, conversation, turnId: Date.now(), text, turnFor }) ?? null,
-          turnForOf: (sessionId) => botTurnFor(runtime, sessionId, undefined),
+          // The host delivers the run's own result: no request to verify.
+          turnForOf: (sessionId) => botTurnFor(runtime, sessionId, 'host'),
           ...runtimeBotOwnerNotice(runtime)
         },
         result

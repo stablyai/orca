@@ -10,7 +10,8 @@ import {
 import { NativeChatUserMessageRow } from './messages/rows/NativeChatUserMessageRow'
 import { NativeChatQueuedMessageCard } from './queue/NativeChatQueuedMessageCard'
 
-const SAM = { name: 'Sam Lee', computer: "Sam's MacBook Pro" }
+// The fixture window has no Orca sign-in, so the host's comparison (`own: false`) decides.
+const SAM = { name: 'Sam Lee', accountId: 'sam', own: false, computer: "Sam's MacBook Pro" }
 const MIRRORED = 'm-mirrored'
 
 const link: ExternalConversationLink = {
@@ -42,19 +43,21 @@ const message = (
 
 const ROWS: NativeChatMessage[] = [
   message('m-1', 'I can take the Windows signing check. Start it on the build from this morning.', {
-    typedByOther: SAM
+    typist: SAM
   }),
   message('m-2', 'Thanks. Draft the changelog while that runs.'),
-  message('m-3', 'Leave out the internal relay fixes.', { typedByOther: SAM }),
-  message('m-4', 'Signing passed on my side too.', { typedByOther: { ...SAM, phone: 'iPhone' } }),
+  message('m-3', 'Leave out the internal relay fixes.', { typist: SAM }),
+  message('m-4', 'Signing passed on my side too.', { typist: { ...SAM, phone: 'iPhone' } }),
   message('m-5', 'Can you also attach the arm64 build?', {
-    typedByOther: {
+    typist: {
       name: 'Alexandra Konstantinopoulou-Hernández',
+      accountId: 'alexandra',
+      own: false,
       computer: "Alexandra's MacBook Pro (work, 16-inch)"
     }
   }),
   message(MIRRORED, 'Yes, Thursday. Posting the changelog here once it is reviewed.', {
-    typedByOther: SAM
+    typist: SAM
   })
 ]
 
@@ -116,7 +119,7 @@ export const transcript = defineFixture({
       <ul className="rounded-lg border border-border bg-card text-card-foreground">
         <NativeChatQueuedMessageCard
           card={card('q-1', 'Also bump the minimum macOS version in the notes', {
-            typedByOther: SAM
+            typist: SAM
           })}
           chatWorktreeId={null}
           showsSteerShortcut={false}

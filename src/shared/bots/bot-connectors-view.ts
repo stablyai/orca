@@ -4,11 +4,10 @@ import { botLinearWorkspaces, botSlackApps, type Bot } from '../bot-types'
 import { CONNECTOR_OFFER_NAMES, type ConnectorOfferSource } from './bot-connector-offer'
 import type { GoogleAccountView, GoogleServiceReadiness } from '../google/google-connect-types'
 import { GOOGLE_SERVICE_INFO } from '../google/google-scopes'
-import { googleBotConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
+import { botGoogleConnectState, type GoogleHostConnect } from '../google/google-bot-connect-state'
 import {
   botGoogleAccess,
   botGoogleDefault,
-  botMayUseGoogleAccount,
   googleEmailKey,
   type GoogleDefaultRead
 } from '../google/google-bot-accounts'
@@ -81,18 +80,15 @@ function googleService(
 ): BotConnectorService {
   // Only the accounts the bot may use, and the default its calls without --account go to: the
   // host's rule, so an unreadable default marks none.
-  const access = botGoogleAccess(bot)
-  const accounts = hostAccounts.filter((account) => botMayUseGoogleAccount(access, account.email))
-  const read = botGoogleDefault(access, computerDefault)
+  const { allowed, host, accounts } = botGoogleConnectState(bot, {
+    client: app,
+    accounts: hostAccounts
+  })
+  const read = botGoogleDefault(botGoogleAccess(bot), computerDefault)
   const defaultAccount = 'email' in read ? read.email : null
   const isDefault = (account: GoogleAccountView): boolean =>
     defaultAccount !== null && googleEmailKey(account.email) === defaultAccount
   const connected = accounts.filter((account) => account.status === 'connected')
-  const { allowed, host } = googleBotConnectState({
-    allowed: bot.google === true,
-    client: app,
-    accounts
-  })
   const gap = !allowed
     ? `Run ${OFFER_GOOGLE} to ask your owner.`
     : host === 'connected'

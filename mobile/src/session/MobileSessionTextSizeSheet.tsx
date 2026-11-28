@@ -71,7 +71,7 @@ export function MobileSessionTextSizeSheet({
   )
 }
 
-function ChatTextSheet({ onDone, onMore }: { onDone: () => void; onMore: () => void }) {
+export function ChatTextSheet({ onDone, onMore }: { onDone: () => void; onMore: () => void }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const settings = useNativeChatTextSettings()

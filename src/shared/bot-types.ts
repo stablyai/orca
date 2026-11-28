@@ -12,7 +12,7 @@ import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
-import { BotSharesSchema } from './bots/bot-team-shares'
+import { BotSharePeopleFields, BotSharesSchema } from './bots/bot-team-shares'
 import {
   BOT_AGENT_SUCCESSORS,
   BOT_RETIRED_AGENTS,
@@ -54,33 +54,13 @@ export const BotAgentReadSchema = z
   .enum([...BOT_AGENTS, ...BOT_RETIRED_AGENTS])
   .transform((agent): BotAgent => (isBotRetiredAgent(agent) ? BOT_AGENT_SUCCESSORS[agent] : agent))
 
-/** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
-const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
-  'claude',
-  'codex',
-  'grok',
-  'opencode',
-  'omp',
-  'pi',
-  'antigravity'
-])
-
-/** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
-export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
-  readable: Bot[]
-  newer: Bot[]
-} {
-  const readable: Bot[] = []
-  const newer: Bot[] = []
-  for (const bot of bots) {
-    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
-    side.push(bot)
-  }
-  return { readable, newer }
-}
-
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
+}
+
+/** Memory upkeep runs tool-free, so every bot agent runs it; Look around is `lookAroundSupported`. */
+export function tidyUpSupported(agent: string): boolean {
+  return isBotAgent(agent)
 }
 
 export const BOT_NAME_MAX_LENGTH = 64
@@ -240,6 +220,7 @@ export const BotSchema = z.object({
   itemsStale: BotItemsStaleSchema.optional().catch(undefined),
   /** The newest item event its owner has seen in its Items tab; absent is none. Older hosts drop it. */
   itemsSeen: z.number().int().nonnegative().optional().catch(undefined),
+  ...BotSharePeopleFields,
   /** Set at create: the Chat runs first-run setup until SOUL.md is written. Older bots never have it. */
   firstRun: z.literal(true).optional(),
   /** New bots its owner created from this bot's bot-create cards, by card, so each card stays Created
@@ -329,8 +310,12 @@ export function withSlackMembersTagged<T extends Pick<Bot, 'members' | 'slack' |
 /** The Slack people allowed to ask the bot in one of its Slack workspaces. */
 export function slackMembersOf(
   bot: Pick<Bot, 'slack' | 'slackApps'> & { members: readonly BotMember[] },
-  teamId: string
+  /** None: every Slack member, as when its app was removed. */
+  teamId?: string
 ): BotMember[] {
+  if (teamId === undefined) {
+    return botMembersFrom(bot.members, 'slack')
+  }
   const first = botSlackApps(bot)[0]?.teamId
   return botMembersFrom(bot.members, 'slack').filter((member) =>
     member.workspaceId === undefined ? teamId === first : member.workspaceId === teamId
@@ -390,8 +375,12 @@ export function withGitHubMembersTagged<T extends Pick<Bot, 'members' | 'github'
 /** The GitHub people allowed to ask the bot in one installation; one saved with none (not yet tagged), in every one. */
 export function gitHubMembersOf(
   members: readonly BotMember[],
-  installationId: string
+  /** None: every GitHub member, GitHub as a whole. */
+  installationId?: string
 ): BotMember[] {
+  if (installationId === undefined) {
+    return botMembersFrom(members, 'github')
+  }
   return botMembersFrom(members, 'github').filter(
     (member) => member.workspaceId === undefined || member.workspaceId === installationId
   )

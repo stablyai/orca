@@ -2,11 +2,11 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSessionTabCloseReason
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { closeCapturedStructuredSession } from '../../agent-session/lifecycle/structured-session-captured-close'
 import type { RuntimeMobileSessionAgentTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { closeRenderedStructuredSessionTab } from './structured-session-renderer-close'
 import {
   captureInstalledStructuredSessionSurface,
-  closeCapturedStructuredSession,
   type StructuredSessionSurfaceRuntime
 } from '../../agent-session/lifecycle/structured-agent-session-close'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'

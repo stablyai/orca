@@ -11,6 +11,8 @@ import {
 import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import { makePaneKey, type PaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
+import { nudgeRemoteServerOutageCard } from '../../pty-transport/recovery/server-outage/remote-server-outage-signals'
+import { getTerminalPaneVeilEnvironmentId } from './terminal-drop-target'
 import { captureNativeTerminalFileDrop } from './terminal-native-file-drop-destination'
 
 export type TerminalPaneFileDropOwnerArgs = {
@@ -35,7 +37,18 @@ function sequenceForPane(pane: ManagedPane, paneKey: PaneKey): OsFileDropSequenc
   return sequence
 }
 
-function paneIsCurrent(manager: PaneManager | null, pane: ManagedPane): boolean {
+function paneCanReceiveDrop(
+  manager: PaneManager | null,
+  pane: ManagedPane,
+  nudge = false
+): boolean {
+  const veiledEnvironmentId = getTerminalPaneVeilEnvironmentId(pane.container)
+  if (veiledEnvironmentId !== null) {
+    if (nudge) {
+      nudgeRemoteServerOutageCard(veiledEnvironmentId)
+    }
+    return false
+  }
   return Boolean(
     manager
       ?.getPanes()
@@ -58,12 +71,12 @@ export function useTerminalPaneFileDropOwner(
   return useOsFileDropOwner(rootRef, {
     consumer: 'agent',
     sequence,
-    canAccept: () =>
+    canAccept: (event) =>
       Boolean(
         rootRef.current?.isConnected &&
         !rootRef.current.closest('[inert]') &&
         !isElementDisplayNone(rootRef.current) &&
-        paneIsCurrent(managerRef.current, pane) &&
+        paneCanReceiveDrop(managerRef.current, pane, event.type === 'drop') &&
         paneTransportsRef.current.get(pane.id)?.isConnected()
       ),
     captureDestination: () => {
@@ -78,7 +91,7 @@ export function useTerminalPaneFileDropOwner(
           managerRef.current !== manager ||
           paneTransportsRef.current !== paneTransports ||
           makePaneKey(tabId, pane.leafId) !== paneKey ||
-          !paneIsCurrent(manager, pane)
+          !paneCanReceiveDrop(manager, pane)
         ) {
           return
         }

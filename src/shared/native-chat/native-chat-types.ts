@@ -36,7 +36,7 @@ import type { WaitEnding } from '../automation-once'
 import type { BotAutomationFacts } from '../bots/bot-automation-rows'
 import type { AgentMessageSource } from '../agent-session/journal/agent-session-message-source'
 import type { ConnectorMessageAsker } from '../connector-message-asker'
-import type { OtherPersonTypist } from '../agent-session/journal/agent-journal-typed-by'
+import type { PersonTypist } from '../agent-session/journal/agent-journal-typed-by'
 import type { BotItemNoteItem, BotItemNoteView } from '../bots/bot-item-note'
 import type { BotContextNote } from '../bots/bot-context-note'
 import type { AutomationResultNote } from '../bots/bot-automation-result-note'
@@ -241,6 +241,8 @@ export type NativeChatBlock =
 export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Client projection: this answer preceded a goal check grouped into its goal row. */
   goalCheckAnswer?: true
+  /** The journal revision a structured row was saved at: a save bumps it, live text keeps it. */
+  journalRevision?: number
   /** Stable dedup/list identity across re-reads and appends. */
   id: string
   role: NativeChatRole
@@ -278,8 +280,9 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   from?: AgentMessageSource
   /** On a user-role message Orca delivered from a connector: who asked and where, for its tag. */
   asker?: ConnectorMessageAsker
-  /** On a person's message typed by someone other than the host's owner, on their paired computer. */
-  typedByOther?: OtherPersonTypist
+  /** On a person's message typed on a paired computer under a named account; drawn only when that is
+   *  not the viewer (`typistOtherThanViewer`). */
+  typist?: PersonTypist
   /** What the chat draws in place of its text, which stays the readable form copy and titles use:
    *  a Slack message's markup as Slack shows it (see `slackMarkupShownText`). Display only. */
   drawnMarkdown?: string

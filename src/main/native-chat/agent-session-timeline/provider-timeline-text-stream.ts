@@ -7,6 +7,7 @@ import type { AgentJournalTurnScope } from '../../../shared/agent-session/journa
 import type { ProviderTimelineTextChannel } from './provider-timeline-event'
 import type { ProviderTimelineRowId } from './provider-timeline-rows'
 import { JOURNAL_TEXT_TAIL_WRITES } from '../agent-session-journal/journal-text-tail-writes'
+import { noteReplyTextGrowth } from '../../../shared/agent-session/view/live-read/agent-session-text-append'
 
 export type ProviderTimelineStream = {
   id: string
@@ -32,22 +33,38 @@ export type ProviderTimelineStream = {
 export function providerTimelineLiveText(
   stream: ProviderTimelineStream,
   epoch: string,
-  snapshot: { text: string } | null
+  readSnapshot: () => { text: string } | null,
+  /** A row no reader takes is not read. */
+  takes?: (itemId: string) => boolean
 ): AgentJournalRenderItem[] {
   const committed = stream.committed
-  return !committed ||
-    committed.epoch !== epoch ||
-    !snapshot ||
-    stream.closing ||
-    stream.stoppedIn !== null
-    ? []
-    : [
-        {
-          ...committed.placement,
-          body: providerTimelineTextBody(stream, snapshot.text)
-        }
-      ]
+  if (!committed || takes?.(committed.placement.itemId) === false) {
+    return []
+  }
+  if (committed.epoch !== epoch || stream.closing || stream.stoppedIn !== null) {
+    return []
+  }
+  const snapshot = readSnapshot()
+  if (!snapshot) {
+    return []
+  }
+  const last = lastLiveRow.get(stream)
+  const same = last?.placement === committed.placement
+  if (same && last.length === snapshot.text.length) {
+    return [last.item]
+  }
+  const item = { ...committed.placement, body: providerTimelineTextBody(stream, snapshot.text) }
+  // Compared once here, so each reader's check that it extends what it holds is a reference compare.
+  noteReplyTextGrowth(item, same ? last.item : undefined)
+  lastLiveRow.set(stream, { placement: committed.placement, length: snapshot.text.length, item })
+  return [item]
 }
+
+/** Each stream's last live row, reused while its text is unchanged. */
+const lastLiveRow = new WeakMap<
+  ProviderTimelineStream,
+  { placement: object; length: number; item: AgentJournalRenderItem }
+>()
 
 export function providerTimelineTextBody(
   stream: ProviderTimelineStream,

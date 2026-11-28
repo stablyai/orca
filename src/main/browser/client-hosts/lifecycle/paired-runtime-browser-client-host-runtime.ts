@@ -1,4 +1,7 @@
 import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
+import type { BrowserRouteViewer } from '../../routing/sessions/browser-route-session-policy'
+import { sharedHostKey } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
+import { recordClientHostViewer } from './paired-runtime-browser-client-host-viewers'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
@@ -68,6 +71,8 @@ type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart &
     orcaProfileId: string
     storageScope: string
     environmentLabel: string
+    /** Decided once when the host starts: a share ending later can't turn a teammate's pages into the owner's. */
+    viewer: BrowserRouteViewer
   }
 
 let activeOrcaProfileId: string | null = null
@@ -94,11 +99,15 @@ const browserClientHosts =
         (browserPageId) => executor?.pageCookieJar(browserPageId) ?? null,
         (params) => executor?.recordPublishedPageUrl(params)
       )
+      const releaseViewer = recordClientHostViewer(input.environmentId, input.viewer)
       return new PairedRuntimeBrowserClientHostComposition({
-        onClosing: routes.release,
+        onClosing: () => {
+          releaseViewer()
+          routes.release()
+        },
         initialInput: input,
         createRoutes: (next, authority) =>
-          createNetworkRoutes(next.connection, authority, next.storageScope, input.environmentId),
+          createNetworkRoutes(next.connection, authority, next.storageScope, input),
         createExecutor: (next, { retainNetworkRoute, onPageUnavailable }) => {
           executor = new BrowserClientPageCommandExecutor({
             orcaProfileId: next.orcaProfileId,
@@ -208,6 +217,8 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     orcaProfileId,
     storageScope: routeIdentity.storageScope,
     environmentLabel: options.environment.name,
+    // A shared agent's host is a teammate's computer; any other paired host is one of the user's own.
+    viewer: sharedHostKey(options.environment.id) ? 'teammate' : 'own-computer',
     ...authorityIdentity
   })
   const previous = clientHostRouteIdentities.get(options.environment.id)
@@ -268,11 +279,12 @@ function createNetworkRoutes(
   connection: PairedRuntimeConnection,
   authority: BrowserClientHostLeaseAuthority,
   authorityStorageKey: string,
-  environmentId: string
+  { environmentId, viewer }: Pick<ProductionBrowserClientHostStart, 'environmentId' | 'viewer'>
 ): BrowserClientNetworkRouteRegistry {
   return new BrowserClientNetworkRouteRegistry({
     authority,
     authorityStorageKey,
+    viewer,
     createRoute: (executionHost) =>
       new PairedRuntimeBrowserNetworkRoute({
         connection,

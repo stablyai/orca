@@ -1,3 +1,4 @@
+import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getPreferredPairedRuntimeConnection,
@@ -18,7 +19,13 @@ type RegistryTransports = Pick<
   | 'ensureRemoteRuntimeSharedControlConnection'
   | 'reconnectRemoteRuntimeSharedControlConnection'
   | 'pauseRemoteRuntimeSharedControlRetry'
->
+> & {
+  noteRemoteRuntimeHostCapabilities: (
+    environmentId: string,
+    pairedConnection: PairedRuntimeConnection,
+    hostCapabilities: readonly string[] | undefined
+  ) => void
+}
 
 export function createRuntimeEnvironmentStatusOwnerRegistry({
   closeRemoteRuntimeRequestConnection,
@@ -26,7 +33,8 @@ export function createRuntimeEnvironmentStatusOwnerRegistry({
   sendRemoteRuntimeSharedControlRequest,
   ensureRemoteRuntimeSharedControlConnection,
   reconnectRemoteRuntimeSharedControlConnection,
-  pauseRemoteRuntimeSharedControlRetry
+  pauseRemoteRuntimeSharedControlRetry,
+  noteRemoteRuntimeHostCapabilities
 }: RegistryTransports) {
   const statusOwners = new Map<string, { key: string; owner: RuntimeHostStatusOwner }>()
   async function getRuntimeEnvironmentStatusOwner(
@@ -66,7 +74,9 @@ export function createRuntimeEnvironmentStatusOwnerRegistry({
           ensureRemoteRuntimeSharedControlConnection(environment.id, pairedConnection)
           reconnectRemoteRuntimeSharedControlConnection(environment.id)
         },
-        pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id)
+        pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id),
+        noteHostCapabilities: (capabilities) =>
+          noteRemoteRuntimeHostCapabilities(environment.id, pairedConnection, capabilities)
       })
       cached = { key, owner }
       statusOwners.set(environment.id, cached)

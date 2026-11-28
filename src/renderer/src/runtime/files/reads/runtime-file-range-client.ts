@@ -1,3 +1,4 @@
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { RuntimeFileReadChunkResult } from '../../../../../shared/file-content/runtime-file-read'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { validateFileRangeRequest } from '../../../../../shared/file-content/file-range-read'
@@ -8,7 +9,6 @@ import {
 } from '../runtime-file-routing'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   remoteFileRequest,

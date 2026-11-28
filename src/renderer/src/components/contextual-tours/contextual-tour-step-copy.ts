@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { getClientHostedBrowserTourViewer } from './client-hosted-browser-tour-viewer'
 import type { ContextualTourStepId } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 
 export type LocalizedContextualTourStepCopy = {
@@ -137,10 +138,17 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.title',
       'This page renders on your desktop'
     ),
-    body: translate(
-      'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.body',
-      'Remote browser tabs now render on this device. Network traffic still goes through the remote host.'
-    ),
+    // A teammate's page sends only loopback through the shared host (browserRouteProxyBypassRules).
+    body:
+      getClientHostedBrowserTourViewer() === 'teammate'
+        ? translate(
+            'components.contextualTours.clientHostedBrowser.intro.teammateBody',
+            'Remote browser tabs now render on this device. Localhost pages go through the shared host; other sites load from your network.'
+          )
+        : translate(
+            'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.body',
+            'Remote browser tabs now render on this device. Network traffic still goes through the remote host.'
+          ),
     primaryActionLabel: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.client.hosted.browser.intro.action',
       'Got it'

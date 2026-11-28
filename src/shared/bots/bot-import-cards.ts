@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 // The import plan and summary cards a bot puts in its chat (`orca bot import plan|done`). Older clients and
 // the phone paint their `text` as a plain line.
 import * as z from 'zod'
@@ -36,7 +37,9 @@ export const BotImportPlanInputSchema = z.object({
 })
 export type BotImportPlanInput = z.infer<typeof BotImportPlanInputSchema>
 
-export const BotImportPlanSchema = BotImportPlanInputSchema.extend({ botId: z.string().min(1) })
+export const BotImportPlanSchema = lazyZodSchema(() =>
+  BotImportPlanInputSchema.extend({ botId: z.string().min(1) })
+)
 export type BotImportPlan = z.infer<typeof BotImportPlanSchema>
 
 export const BOT_IMPORT_DONE_KINDS = [
@@ -70,7 +73,9 @@ export const BotImportDoneInputSchema = z.object({
 })
 export type BotImportDoneInput = z.infer<typeof BotImportDoneInputSchema>
 
-export const BotImportDoneSchema = BotImportDoneInputSchema.extend({ botId: z.string().min(1) })
+export const BotImportDoneSchema = lazyZodSchema(() =>
+  BotImportDoneInputSchema.extend({ botId: z.string().min(1) })
+)
 export type BotImportDone = z.infer<typeof BotImportDoneSchema>
 
 export const BOT_IMPORT_PLAN_PRESENTATION = 'bot-import-plan'

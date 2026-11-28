@@ -33,6 +33,8 @@ export type RelayE2eeLinkOptions = {
   // What authenticates this device to the host inside E2EE: a phone's token or a device key.
   authCredential: PairedE2EEClientCredential
   clientCapabilities?: readonly string[]
+  // A paired runtime's token auth carries its capabilities too; a phone's stays the exact v2 key set.
+  v2TokenCapabilities?: boolean
   desktopPublicKeyB64: string
   onAuthenticated: () => void
   onText: (plaintext: string) => void
@@ -66,7 +68,8 @@ export class RelayE2eeLink {
       hostPublicKeyB64: options.desktopPublicKeyB64,
       framing: 'v2',
       transport: 'relay',
-      relayHostId: options.endpoint.relayHostId
+      relayHostId: options.endpoint.relayHostId,
+      v2TokenCapabilities: options.v2TokenCapabilities
     })
     this.inbound = new WsInboundMessageQueue(
       async (raw) => {

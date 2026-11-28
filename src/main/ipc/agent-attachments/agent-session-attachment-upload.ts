@@ -6,6 +6,7 @@ import { basename } from 'node:path'
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BYTES,
   AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  agentSessionAttachmentUploadDestination,
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget,
   type AgentSessionAttachmentPathUploadResult,
@@ -22,7 +23,6 @@ import {
 import { stageOneSourceForRuntimeUpload } from '../filesystem/imports/filesystem-runtime-upload-staging'
 import { streamExternalFileSlices } from '../runtime-transfers/runtime-upload-file-stream'
 import { formatByteCeiling } from '../runtime-transfers/runtime-import-limits'
-import { runtimeEnvironmentIdOf } from '../runtime-environments/requests/runtime-environment-shared-hosts'
 
 const ATTACHMENT_CALL_TIMEOUT_MS = 30_000
 
@@ -92,7 +92,7 @@ async function uploadAttachment(
 ): Promise<AgentSessionAttachmentUploadCommitResult> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadStart's handler returns this shape.
   const { uploadId } = (await call('agentSessionAttachment.uploadStart', {
-    sessionId,
+    ...agentSessionAttachmentUploadDestination(sessionId),
     name: file.name,
     byteLength: file.byteLength
   })) as AgentSessionAttachmentUploadStartResult
@@ -167,13 +167,13 @@ export async function uploadPasteToAgentSessionAttachments(
   return stored.path
 }
 
-/** The id uploads go to: a shared agent's host is named by its own id; a paired server's selector
- *  resolves to its id, which the manual-disconnect check keys on. */
+/** The id uploads go to: a selector resolves to its server's id, which the manual-disconnect check
+ *  keys on. */
 export async function resolveAttachmentEnvironmentId(
   userDataPath: string,
   selector: string
 ): Promise<string> {
-  return runtimeEnvironmentIdOf(selector, (named) => resolveEnvironment(userDataPath, named))
+  return (await resolveEnvironment(userDataPath, selector)).id
 }
 
 /** Upload files in input order; folders are unsupported. */

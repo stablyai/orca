@@ -9,10 +9,10 @@ import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/v
 import { useAppStore } from '@/store'
 import {
   readBotHostIds,
-  readBotHostState,
   readUpdateNeededBotHosts,
   subscribeToBotChanges
 } from '@/lib/bot-catalog-snapshot'
+import { isBotHostDown } from '@/lib/bot-host-views'
 import { botHostHas } from '@/lib/bot-host-status'
 import { useBotHostOrcaAccounts } from '@/lib/bot-host-orca-account'
 import { BOTS_CONNECTORS_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
@@ -69,7 +69,7 @@ export function useBotSettingsComputers(): BotSettingsComputer[] {
               index >= listed.length ||
               !botHostHas(hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY, runtimeStatusByEnvironmentId)
                 ? 'update-needed'
-                : readBotHostState(hostId) === 'offline'
+                : isBotHostDown(hostId)
                   ? 'offline'
                   : 'live'
           }

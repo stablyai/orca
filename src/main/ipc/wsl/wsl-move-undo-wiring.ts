@@ -22,7 +22,9 @@ import { listEnvironments } from '../../../shared/remote-runtime/host-store/runt
 import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 import {
+  applyWslMoveAutomationStatesHere,
   stopWslMoveHostAutomations,
+  wslMoveAutomationsOnBeforeMove,
   wslMoveMovedAutomationIds,
   type WslMoveHostAutomationStop
 } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-host-automations'
@@ -97,7 +99,9 @@ type UndoStore = Pick<
   | 'getWorkspaceSession'
   | 'patchWorkspaceSession'
   | 'listAutomations'
-  | 'updateAutomation'
+  | 'updateAutomations'
+  | 'advanceAutomationNextRuns'
+  | 'flushPendingOrThrowAsync'
   | 'getUI'
   | 'updateUI'
 >
@@ -187,6 +191,32 @@ export function createWslMoveUndoPorts(
   userDataPath: string,
   mode: WslMoveUndoMode = 'user'
 ): WslMoveUndoPorts {
+  const here = {
+    listHere: () => store.listAutomations(),
+    setHere: (updates: readonly { id: string; enabled: boolean }[]) => {
+      const results = store.updateAutomations(
+        updates.map(({ id, enabled }) => ({ id, updates: { enabled } }))
+      )
+      const applied: { id: string; enabled: boolean }[] = []
+      let error: unknown
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i]
+        if ('error' in result) {
+          error ??= result.error
+        } else {
+          applied.push(updates[i])
+        }
+      }
+      return error === undefined ? { applied } : { applied, error }
+    },
+    // A wait's due time is its own; advanceAutomationNextRuns skips `once` rows in one pass.
+    advanceHere: (ids: readonly string[]) => {
+      if (ids.length > 0) {
+        store.advanceAutomationNextRuns(new Set(ids))
+      }
+    },
+    flushHere: () => store.flushPendingOrThrowAsync()
+  }
   return {
     stopHostCopies: (move) =>
       withHostCopyPort(store, userDataPath, move, mode, (hostIds, port) =>
@@ -215,7 +245,12 @@ export function createWslMoveUndoPorts(
         ) {
           return wasWslHostKeptForPeers(userDataPath, move.destinationEnvironmentId)
             ? { outcome: 'unreachable' }
-            : { outcome: 'stopped', restore: async () => {}, applyHere: () => () => {} }
+            : {
+                outcome: 'stopped',
+                restore: async () => {},
+                applyHere: () =>
+                  applyWslMoveAutomationStatesHere(here, wslMoveAutomationsOnBeforeMove(move))
+              }
         }
         // E11: a Remove that could not prove the server stopped; the host is not to be touched.
         if (await wslHostRemovalPending(userDataPath, move.manifest.source.distro)) {
@@ -233,10 +268,7 @@ export function createWslMoveUndoPorts(
             read: (ids) => readWslHostAutomationStates(userDataPath, environmentId, ids),
             disable: (ids) => disableWslHostAutomations(userDataPath, environmentId, ids),
             restore: (ids) => restoreWslHostAutomations(userDataPath, environmentId, ids),
-            listHere: () => store.listAutomations(),
-            setHere: (id, enabled) => {
-              store.updateAutomation(id, { enabled })
-            }
+            ...here
           }
         )
         // Whatever a refusal left off on the host is retried until it is back on.

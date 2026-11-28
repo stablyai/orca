@@ -1,4 +1,5 @@
 import type { AgentSessionSendResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
+import { SHARED_BOT_HOST_ERRORS } from '../../../../../../src/shared/bots/shared-bot-hosts'
 import { agentSessionRefusalOperationState } from '../../../../../../src/shared/agent-session/failures/agent-session-refusal-retry'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from '../../agent-session/mobile-structured-agent-session-rpc'
@@ -15,6 +16,10 @@ export function mobileStructuredSendDelivery(
 ): MobileStructuredSendDelivery {
   if (result.status === 'unknown') {
     return { outcome: 'unknown', error: null }
+  }
+  // Held for its host: drawn in the chat with its word until the host records it.
+  if (result.status === 'failed' && result.sharedHostCode === SHARED_BOT_HOST_ERRORS.held) {
+    return { outcome: 'accepted', error: null }
   }
   if (result.status === 'refused') {
     return agentSessionRefusalOperationState(result.code) === 'unknown'

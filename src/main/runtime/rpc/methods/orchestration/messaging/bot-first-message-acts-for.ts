@@ -1,6 +1,6 @@
 // Whom a bot conversation with no acts-for record acts for, read from its first message.
 import type { BotRequestAsker } from '../../../../../../shared/bots/bot-acts-for'
-import { firstMessageActsFor } from '../../../../../bots/bot-request-asker'
+import { firstMessageActsFor } from '../../../../../bots/first-message-acts-for'
 import type { JournalSqlReads } from '../../../../../native-chat/agent-session-journal/journal-sql-reads'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { botRequestRecord } from './bot-request-record'
@@ -10,11 +10,13 @@ import { botRequestRecord } from './bot-request-record'
 export async function readFirstMessageActsFor(
   db: OrchestrationDb,
   reads: Promise<Pick<JournalSqlReads, 'promptItem'>>,
-  workspaceId: string | null
+  workspaceId: string | null,
+  personName?: (accountId: string) => string | null
 ): Promise<BotRequestAsker[] | null> {
   const firstPrompt = await (await reads).promptItem('first')
   return firstMessageActsFor(firstPrompt ? [firstPrompt] : [], {
     botRequestAskers: (messageId) => botRequestRecord(db, messageId)?.askers ?? null,
-    conversationWorkspaceId: workspaceId
+    conversationWorkspaceId: workspaceId,
+    ...(personName ? { personName } : {})
   })
 }

@@ -1,4 +1,5 @@
 // @orca-isolated-worker -- Suite hooks own the temporary SQL worker bundle.
+import type { TeammateHomeBots } from './agent-session-record-home-names'
 import { afterAll } from 'vitest'
 /** Centralize store fixtures in the worker-owned journal DB; closeTestAgentSessionRecordStores owns their cleanup. */
 
@@ -29,7 +30,8 @@ export async function ensureTestStructuredAgentSessionHost(
     stateDirectory: deps.stateDirectory,
     hostId: deps.hostId,
     logger: deps.logger,
-    legacySessionTabIds: deps.legacySessionTabIds ?? []
+    legacySessionTabIds: deps.legacySessionTabIds ?? [],
+    teammateHomeBots: deps.teammateHomeBots
   })
   return ensureStructuredAgentSessionHost(deps)
 }
@@ -77,13 +79,17 @@ export async function closeTestAgentSessionRecordStores(): Promise<void> {
   await Promise.all(opened.map(async (database) => (await database).close()))
 }
 
+export type TestAgentSessionRecordStoreOptions = {
+  hostId?: string
+  legacySessionTabIds?: readonly string[]
+  mode?: 'observe'
+  /** The bots the store titles teammates' Homes by; none by default. */
+  teammateHomeBots?: TeammateHomeBots
+}
+
 export async function openTestAgentSessionRecordStore(
   stateDirectory: string,
-  options: {
-    hostId?: string
-    legacySessionTabIds?: readonly string[]
-    mode?: 'observe'
-  } = {}
+  options: TestAgentSessionRecordStoreOptions = {}
 ): Promise<AgentSessionRecordStore> {
   const journalDatabase = await openTestAgentSessionDatabase(stateDirectory)
   return AgentSessionRecordStore.open({
@@ -93,7 +99,8 @@ export async function openTestAgentSessionRecordStore(
       : journalDatabase.installRecords()),
     hostId: options.hostId ?? TEST_HOST_ID,
     legacySessionTabIds: options.legacySessionTabIds ?? [],
-    deletedChats: await readDeletedChats(journalDatabase)
+    deletedChats: await readDeletedChats(journalDatabase),
+    teammateHomeBots: options.teammateHomeBots ?? (() => [])
   })
 }
 

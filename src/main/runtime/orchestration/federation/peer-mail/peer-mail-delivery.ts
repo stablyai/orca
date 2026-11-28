@@ -3,7 +3,8 @@ import {
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
+  ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_TEAMMATE_PEER_MAIL_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type {
   PeerMailMessageType,
@@ -12,7 +13,9 @@ import type {
 } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
+import type { BotRequestAsker } from '../../../../../shared/bots/bot-acts-for'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { PeerMailConversationRow } from '../../db/federation/peer-mail-store'
@@ -33,15 +36,21 @@ export type PeerMailRuntime = Pick<
 >
 
 const NOTHING_SENT = { effectsApplied: false } as const
-const RuntimeStatusCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
+const RuntimeStatusCapabilities = lazyZodSchema(() =>
+  z.object({ capabilities: z.array(z.string()).optional() })
+)
 const DELIVER_TIMEOUT_MS = 15_000
 // An older server returns none; one this Orca cannot read is dropped, since the mail is already stored.
-const PeerMailDeliverResult = z.object({ warnings: z.array(z.unknown()).max(8).optional() })
-const PeerMailDeliveryHeld = z.object({
-  code: z.literal('recipient_delivery_held'),
-  recipient: z.string(),
-  message: z.string().max(2000)
-})
+const PeerMailDeliverResult = lazyZodSchema(() =>
+  z.object({ warnings: z.array(z.unknown()).max(8).optional() })
+)
+const PeerMailDeliveryHeld = lazyZodSchema(() =>
+  z.object({
+    code: z.literal('recipient_delivery_held'),
+    recipient: z.string(),
+    message: z.string().max(2000)
+  })
+)
 
 /** "term_9f3c on Jinwoo's Mac": who sent it, and the Orca server it came from. */
 export function peerMailSenderLabel(runtime: PeerMailRuntime, sender: string): string {
@@ -74,6 +83,18 @@ export function peerMailMessageId(
   return `msg_${digest.slice(0, 12)}`
 }
 
+/** A shared agent's host takes peer mail from this computer only when it says so; an older one
+ *  refuses every peer-mail call from a teammate. */
+export function takesPeerMailFromHere(
+  server: Pick<OrchestrationWorkerServer, 'sharedHost'>,
+  capabilities: readonly string[] | undefined
+): boolean {
+  return (
+    !server.sharedHost ||
+    capabilities?.includes(ORCHESTRATION_TEAMMATE_PEER_MAIL_RUNTIME_CAPABILITY) === true
+  )
+}
+
 /** Refuses before any effect when the server's Orca cannot receive mail or queue its replies. */
 export async function requirePeerMailServer(
   runtime: PeerMailRuntime,
@@ -92,6 +113,13 @@ export async function requirePeerMailServer(
       { expectedEnvironmentPairingRevision: server.pairingRevision }
     )
   )
+  if (status.success && !takesPeerMailFromHere(server, status.data.capabilities)) {
+    throw new OrchestrationError(
+      'server_mail_unsupported',
+      `${server.name} is shared with you from a computer running an older Orca, which can't take mail from your agents. Ask its owner to update Orca, then send again. Nothing was sent.`,
+      { ...NOTHING_SENT, server: server.name }
+    )
+  }
   if (
     !status.success ||
     !status.data.capabilities?.includes(ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY)
@@ -153,10 +181,12 @@ export async function deliverPeerMail(
     type?: z.infer<typeof PeerMailMessageType>
     priority?: 'normal' | 'high' | 'urgent'
     threadId?: string
+    replyTo?: string
     chat?: string
     item?: string
     attachments?: readonly string[]
     sender: PeerMailSender
+    askers?: readonly BotRequestAsker[]
   }
 ): Promise<z.infer<typeof PeerMailDeliveryHeld>[]> {
   const result = await runtime.callOrchestrationWorkerServer(
@@ -172,10 +202,12 @@ export async function deliverPeerMail(
       ...(message.type ? { type: message.type } : {}),
       ...(message.priority ? { priority: message.priority } : {}),
       ...(message.threadId ? { threadId: message.threadId } : {}),
+      ...(message.replyTo ? { replyTo: message.replyTo } : {}),
       ...(message.chat ? { chat: message.chat } : {}),
       ...(message.item ? { item: message.item } : {}),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
-      sender: message.sender
+      sender: message.sender,
+      ...(message.askers ? { askers: message.askers } : {})
     },
     DELIVER_TIMEOUT_MS,
     undefined,
@@ -185,12 +217,13 @@ export async function deliverPeerMail(
   return warnings.flatMap((warning) => PeerMailDeliveryHeld.safeParse(warning).data ?? [])
 }
 
-/** Queues one reply on a conversation a paired Orca opened here, for it to pull. */
+/** Queues one reply on a conversation a paired Orca opened here, for it to pull. It names the
+ *  message it answers, which is how the opener settles that one ask and no other. */
 export function queuePeerMailReply(
   db: OrchestrationDb,
   conversationId: string,
   messageId: string,
-  reply: z.infer<typeof PeerMailRelayPayload>
+  reply: z.infer<typeof PeerMailRelayPayload> & { replyTo: string }
 ): void {
   db.enqueueFederationRelay({
     dispatchId: conversationId,

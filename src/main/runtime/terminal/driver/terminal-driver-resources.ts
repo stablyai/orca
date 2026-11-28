@@ -206,6 +206,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
       notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
         this.notifyMobileSessionTabsChanged(worktreeId),
+      notifyBrowserPageList: (page) => this.notifyBrowserPageList(page),
       readBrowserPageAnnotations: (browserPageId) =>
         readSavedBrowserPageAnnotations(this.store, browserPageId),
       readBrowserTabBar: (worktreeId) =>

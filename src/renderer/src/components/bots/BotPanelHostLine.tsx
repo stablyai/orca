@@ -1,8 +1,10 @@
 // A bot or group header's second line: on a paired server it starts with that server, then the status.
 import { Server } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import { useBotHostDown } from '@/lib/bot-host-views'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useBotHostLabel } from './use-bot-host-label'
+import { botHostDownText } from './BotRowActivityLine'
 
 const LINE = 'text-xs leading-4 text-muted-foreground'
 
@@ -23,6 +25,7 @@ export function BotPanelHostLine({
 }): React.JSX.Element {
   const t = useTranslate()
   const host = useBotHostLabel(hostId)
+  const down = useBotHostDown(hostId)
   if (!host) {
     return (
       <div className={`truncate ${LINE}`} title={title}>
@@ -31,7 +34,12 @@ export function BotPanelHostLine({
     )
   }
   const runsOn = t('bots.panel.runsOn', 'Runs on {{host}}', { host })
-  const status = offline ? t('bots.panel.disconnected', 'Disconnected') : children(true)
+  const status =
+    down === 'connecting'
+      ? botHostDownText(t, down)
+      : offline
+        ? t('bots.panel.disconnected', 'Disconnected')
+        : children(true)
   return (
     <div className={`@container/host-line flex min-w-0 items-center gap-1 ${LINE}`}>
       {/* The host gives way before the status; on a line too short for both, only its icon stays. */}

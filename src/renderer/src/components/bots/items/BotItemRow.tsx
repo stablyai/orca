@@ -47,6 +47,8 @@ type BotItemRowProps = {
   face?: Bot | null
   /** Its chat's name, when the list shows chats beyond the one it is about. */
   place?: string | null
+  /** The teammates it is for, named before the age, when the list shows everyone's. */
+  person?: string | null
   /** In the Tab order: a long group keeps one row there and moves between rows with arrows. */
   tabbable?: boolean
   /** Announced as a list item itself; false when its window's slot is the item. */
@@ -82,6 +84,7 @@ const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
   status: (a, b) => a.status === b.status,
   chat: (a, b) => structuralValuesEqual(a.chat, b.chat),
   madeBy: (a, b) => structuralValuesEqual(a.madeBy, b.madeBy),
+  people: (a, b) => structuralValuesEqual(a.people, b.people),
   // A question is one item event, which never changes once written; a host on another release reads it
   // with other fields (ask, or gist and decisions).
   question: (a, b) =>
@@ -146,6 +149,7 @@ function BotItemRowView({
   onAction,
   face = null,
   place = null,
+  person = null,
   tabbable = true,
   listItem = true
 }: BotItemRowProps): React.JSX.Element {
@@ -232,6 +236,11 @@ function BotItemRowView({
                 >
                   {unseen ? (
                     <span aria-hidden className="size-1.5 rounded-full bg-foreground" />
+                  ) : null}
+                  {person ? (
+                    <span className="max-w-28 truncate text-xs text-muted-foreground">
+                      {person}
+                    </span>
                   ) : null}
                   {snoozed && item.snoozedUntil !== null ? (
                     <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">

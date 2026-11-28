@@ -1,13 +1,9 @@
-// A bot page's Chats tab: search and New chat on top, then every chat as one folded row, its workers behind a chevron.
+// A bot page's Chats tab: search (with a person filter on a shared bot) on top, then every chat as one folded row, its workers behind a chevron.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { toast } from 'sonner'
-import { Plus, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
-import { startBotSession } from '@/lib/bot-catalog'
-import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { useAppStore } from '@/store'
@@ -32,7 +28,6 @@ import {
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
 import { BotChatPaging } from './BotChatRowControls'
-import { botErrorMessage } from './bot-presentation'
 import { useBotOwnChatTree } from './use-bot-chat-tree'
 import { useBotForWorkspace } from './bot-workspace'
 import { BotPanelHeader } from './BotPanelHeader'
@@ -40,9 +35,12 @@ import { useBotNeedsYouCount, useBotNow } from './use-bot-now'
 import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotChatsSkeleton } from './BotChatsSkeleton'
+import { BotChatsPersonFilter } from './BotChatsPersonFilter'
+import { botChatPeople, type BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
+const EVERYONE: BotChatPersonPick = { kind: 'everyone' }
 const NOTE = 'px-2 pt-1 text-2xs text-muted-foreground'
 const HEADING = 'px-2 pt-2.5 pb-1 text-xs font-medium text-muted-foreground'
 
@@ -80,7 +78,14 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const tree = useBotOwnChatTree(bot)
   // Its server is down: the last read shows with its actions off until it's back.
   const offline = useBotHostOffline(bot.hostId)
-  const sharedHost = useSharedBotHostOf(bot.hostId)
+  const people = useMemo(() => botChatPeople(bot), [bot])
+  const [pickState, setPick] = useState<BotChatPersonPick>(EVERYONE)
+  // A teammate no longer shared with drops the pick back to everyone.
+  const pick =
+    pickState.kind === 'person' &&
+    !people.some((person) => person.accountId === pickState.person.accountId)
+      ? EVERYONE
+      : pickState
   const chats = useMemo(() => orderChatsTab(tree.chats), [tree.chats])
   // Its home's chats and runs, and each listed worker's own workspace.
   const stopWorkspaces = useMemo(
@@ -125,11 +130,15 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
     [hostId, botId]
   )
   const search = useBotChatSearch(ask, chats, query)
-  const { found, older, onlyHome, noMatch, searchFailed, moreMatches } = botChatListView(chats, {
-    steps,
-    query,
-    search
-  })
+  const { found, older, onlyHome, noMatch, searchFailed, moreMatches, noneFromPick } =
+    botChatListView(chats, { steps, query, search, pick })
+  const searchLabel =
+    pick.kind === 'person'
+      ? t('bots.chats.searchPerson', "Search {{name}}'s chats", { name: pick.person.name })
+      : pick.kind === 'owner'
+        ? t('bots.chats.searchOwn', 'Search your chats')
+        : t('bots.chats.search', 'Search chats and workers')
+
   const searching = query.trim() !== ''
   // A search lists the chats it found by their own words, then the workers it found by title.
   const chatHits = found.filter((hit) => hit.matches === null)
@@ -140,16 +149,6 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
           .map((worker) => ({ chat, worker }))
       : []
   )
-  const newChat = (): void => {
-    void startBotSession(bot, { agent: bot.agent })
-      .then((sessionId) =>
-        activateAiVaultStructuredSession({
-          structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
-        })
-      )
-      .catch((error: unknown) => toast.error(botErrorMessage(error)))
-  }
-  const newChatLabel = t('bots.chats.new', 'New chat')
   return (
     <BotUsageLimitStopsContext.Provider value={stopIndex}>
       <div
@@ -158,31 +157,31 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
       >
         {/* Outside the fieldset, so its settings open offline too and say what's unavailable. */}
         {offline ? <OfflineHeader bot={bot} /> : null}
-        <div className="flex items-center gap-1.5 px-0.5 pb-2">
-          <div className="relative min-w-0 flex-1">
+        <div className="relative px-0.5 pb-2">
+          <div className="relative min-w-0">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('bots.chats.search', 'Search chats and workers')}
-              aria-label={t('bots.chats.search', 'Search chats and workers')}
+              placeholder={searchLabel}
+              aria-label={searchLabel}
               density="compact"
               inset="leadingIcon"
+              adornment={people.length > 0 ? 'trailing' : 'none'}
               disabled={offline}
             />
+            {people.length > 0 ? (
+              <BotChatsPersonFilter
+                bot={bot}
+                people={people}
+                pick={pick}
+                onPick={(next) => {
+                  setPick(next)
+                  setSteps(0)
+                }}
+              />
+            ) : null}
           </div>
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-7"
-            aria-label={newChatLabel}
-            // A shared agent's new chat can wait for its computer: its first message is held.
-            disabled={offline && !sharedHost?.holds}
-            onClick={newChat}
-          >
-            <Plus />
-            <span className="@max-[240px]:hidden">{newChatLabel}</span>
-          </Button>
         </div>
         <fieldset disabled={offline} className="contents">
           {chats.length === 0 && tree.state !== 'ready' ? (
@@ -195,11 +194,21 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
           {searching && chatHits.length > 0 ? (
             <div className={HEADING}>{t('bots.chats.title', 'Chats')}</div>
           ) : null}
+          {noneFromPick && tree.state === 'ready' ? (
+            <p className={NOTE}>
+              {pick.kind === 'person'
+                ? t('bots.chats.noneFromPerson', 'No chats from {{name}}.', {
+                    name: pick.person.name
+                  })
+                : t('bots.chats.noneFromYou', 'No chats from you.')}
+            </p>
+          ) : null}
           {chatHits.map(({ chat }) => (
             <BotChatTreeGroup
               key={chat.chatId}
               bot={bot}
               chat={chat}
+              hidePerson={pick.kind !== 'everyone'}
               unfolded={searching ? null : unfolded.has(chat.chatId)}
               onFold={(open) => fold(chat.chatId, open)}
               loadMore={tree.loadMore}

@@ -2,6 +2,7 @@
 // finds the text in a fresh read and refuses an edit whose text isn't there exactly once (unless
 // --all). With --suggest, edits land as suggestions the doc's owner accepts or rejects in Docs.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { DocsReadView, DocsWriteView } from '../../shared/google/google-files-types'
 import { pageOfText } from '../../shared/tool-output-limits'
 import { GoogleToolError, parseGoogleJson, type GoogleApi } from './google-api-client'
@@ -112,17 +113,19 @@ export async function createDoc(
   }
 }
 
-const BatchSchema = z.object({
-  replies: z
-    .array(
-      z.object({
-        replaceAllText: z.object({ occurrencesChanged: z.number().optional() }).optional()
-      })
-    )
-    .default([]),
-  // A comment request answers 200 even when Google didn't keep the comment; this says which.
-  commentUpdateState: z.string().optional()
-})
+const BatchSchema = lazyZodSchema(() =>
+  z.object({
+    replies: z
+      .array(
+        z.object({
+          replaceAllText: z.object({ occurrencesChanged: z.number().optional() }).optional()
+        })
+      )
+      .default([]),
+    // A comment request answers 200 even when Google didn't keep the comment; this says which.
+    commentUpdateState: z.string().optional()
+  })
+)
 
 async function batchUpdate(api: GoogleApi, id: string, requests: unknown[], suggest = false) {
   return api.send(

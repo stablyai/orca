@@ -37,20 +37,30 @@ import {
   RepoUpdate
 } from '../../../../../shared/rpc-contract/projects/repo-params'
 import { RepoAddRemote } from '../../../../../shared/rpc-contract/ssh/ssh-params'
+import { teammateWorkspaceLists } from '../../../../bots/team-share/teammate-workspace-view'
 
 export const REPO_METHODS = [
   defineMethod({
     name: 'repo.list',
     ...notShared('workspace'),
     params: RepoList,
-    handler: (params, context) => {
+    handler: async (params, context) => {
       context.runtime.enrichMissingRepoGitRemoteIdentities?.()
+      // Kept before the snapshot id is taken, so a workspace teammate's id is of their own reply.
+      const listed = (await teammateWorkspaceLists(context))?.set.repoIds
       const reply = {
         repos: context.runtime
           .listVisibleRepos()
+          .filter((repo) => !listed || listed.has(repo.id))
           .map((repo) => projectRepoVisibilityForClient(repo, context)),
         // Image icons' ids for sidebarInputs.repoIcons: a phone draws no https image itself.
-        repoIconIds: context.runtime.repoIconDataUrls.idsByRepo()
+        repoIconIds: listed
+          ? Object.fromEntries(
+              Object.entries(context.runtime.repoIconDataUrls.idsByRepo()).filter(([repoId]) =>
+                listed.has(repoId)
+              )
+            )
+          : context.runtime.repoIconDataUrls.idsByRepo()
       }
       return resolveReplySnapshot(reply, params.afterSnapshotId)
     }

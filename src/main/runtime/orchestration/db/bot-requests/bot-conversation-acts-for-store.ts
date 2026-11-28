@@ -40,17 +40,9 @@ export function recordBotConversationActsFor(
     )
 }
 
-export function getBotConversationActsFor(
-  this: OrchestrationDb,
-  sessionId: string
-): BotConversationActsFor | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema above pins both columns as TEXT.
-  const row = this.db
-    .prepare('SELECT acts_for, triggered_by FROM bot_conversation_acts_for WHERE session_id = ?')
-    .get(sessionId) as { acts_for: string; triggered_by: string | null } | undefined
-  if (!row) {
-    return undefined
-  }
+type ActsForRow = { session_id: string; acts_for: string; triggered_by: string | null }
+
+function parseActsForRow(row: ActsForRow): BotConversationActsFor {
   try {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only recordBotConversationActsFor writes these columns.
     const actsFor = JSON.parse(row.acts_for) as BotRequestAsker[]
@@ -67,11 +59,39 @@ export function getBotConversationActsFor(
   }
 }
 
+export function getBotConversationActsFor(
+  this: OrchestrationDb,
+  sessionId: string
+): BotConversationActsFor | undefined {
+  return listBotConversationActsFor.call(this, [sessionId]).get(sessionId)
+}
+
+/** Many conversations' records in one read, by session id; one without a record is absent. */
+export function listBotConversationActsFor(
+  this: OrchestrationDb,
+  sessionIds: readonly string[]
+): Map<string, BotConversationActsFor> {
+  if (sessionIds.length === 0) {
+    return new Map()
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema above pins every column as TEXT.
+  const rows = this.db
+    .prepare(`SELECT session_id, acts_for, triggered_by FROM bot_conversation_acts_for
+       WHERE session_id IN (SELECT value FROM json_each(?))`)
+    .all(JSON.stringify(sessionIds)) as ActsForRow[]
+  return new Map(rows.map((row) => [row.session_id, parseActsForRow(row)]))
+}
+
 export type BotConversationActsForMethods = {
   recordBotConversationActsFor: typeof recordBotConversationActsFor
   getBotConversationActsFor: typeof getBotConversationActsFor
+  listBotConversationActsFor: typeof listBotConversationActsFor
 }
 
 export function attachBotConversationActsForStore(ctor: { prototype: object }): void {
-  Object.assign(ctor.prototype, { recordBotConversationActsFor, getBotConversationActsFor })
+  Object.assign(ctor.prototype, {
+    recordBotConversationActsFor,
+    getBotConversationActsFor,
+    listBotConversationActsFor
+  })
 }

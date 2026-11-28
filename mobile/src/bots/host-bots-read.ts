@@ -134,9 +134,27 @@ const botHomeChatOpen = bindDeferredRpcOperation(
     method: 'bots.chat.open',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('bot-home-chat', z.unknown())
+    read: rpcResultVariant('bot-home-chat', z.object({ sessionId: z.string().min(1) }))
   })
 )
+
+/** This account's Home Chat with the agent, started by the host on first open (a shared agent's host
+ *  opens the teammate's own); throws when it failed other than by the host's refusal. */
+export async function openBotHomeChat(
+  client: RpcClient,
+  botId: string,
+  options?: SendRequestOptions
+): Promise<{ sessionId: string } | { refusal: string }> {
+  try {
+    return botHomeChatOpen.interpret(await botHomeChatOpen.request(client, { botId }, options))
+  } catch (error) {
+    const refusal = readAgentSessionErrorRefusal(error)
+    if (refusal) {
+      return { refusal: mobileBotRefusalText(refusal) }
+    }
+    throw error
+  }
+}
 
 // The desktop's open: a bot that never ran has no Home Chat until the host starts one. Bots switched off refuse; the workspace still opens.
 /** Resolves with why the host refused to start the Home Chat, null when it opened or failed otherwise. */
@@ -146,12 +164,11 @@ export async function ensureBotHomeChat(
   options?: SendRequestOptions
 ): Promise<string | null> {
   try {
-    botHomeChatOpen.interpret(await botHomeChatOpen.request(client, { botId }, options))
-    return null
-  } catch (error) {
+    const opened = await openBotHomeChat(client, botId, options)
+    return 'refusal' in opened ? opened.refusal : null
+  } catch {
     // Opening the workspace without the chat beats not opening it.
-    const refusal = readAgentSessionErrorRefusal(error)
-    return refusal ? mobileBotRefusalText(refusal) : null
+    return null
   }
 }
 

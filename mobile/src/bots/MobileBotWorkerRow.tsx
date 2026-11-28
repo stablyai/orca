@@ -10,7 +10,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
 import { formatNativeChatDuration } from '../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 
-type TreeBot = { id: string; name: string }
+export type TreeBot = { id: string; name: string }
 
 function WorkerIcon({ state }: { state: BotChatTreeWorker['state'] }) {
   switch (state) {

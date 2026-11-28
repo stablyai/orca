@@ -2,10 +2,8 @@ import type React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Gauge, Lightbulb } from 'lucide-react-native'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
-import {
-  splitBotSearchText,
-  type BotSearchRange
-} from '../../../src/shared/bots/bot-sidebar-search'
+import type { BotSearchRange } from '../../../src/shared/bots/bot-sidebar-search'
+import { BoldMatches } from './MobileBotPreviewMatches'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
 import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import {
@@ -292,7 +290,8 @@ export function MobileBotRowView({
   disabled = false,
   onPress,
   onLongPress,
-  titleTrailing = null
+  titleTrailing = null,
+  titleMark = null
 }: {
   avatar: React.ReactNode
   title: string
@@ -314,6 +313,8 @@ export function MobileBotRowView({
   onPress: () => void
   onLongPress?: () => void
   titleTrailing?: React.ReactNode
+  /** Right after the title, e.g. a shared agent's people mark. */
+  titleMark?: React.ReactNode
 }) {
   const t = useMobileTranslation()
   return (
@@ -337,9 +338,18 @@ export function MobileBotRowView({
       <View style={styles.avatar}>{avatar}</View>
       <View style={styles.main}>
         <View style={styles.titleRow}>
-          <Text numberOfLines={1} style={[styles.title, unread && styles.unread]}>
+          <Text
+            numberOfLines={1}
+            style={[styles.title, titleMark ? styles.titleMarked : null, unread && styles.unread]}
+          >
             {title}
           </Text>
+          {titleMark ? (
+            <>
+              {titleMark}
+              <View style={styles.fill} />
+            </>
+          ) : null}
           {titleTrailing}
         </View>
         <View style={styles.activity}>
@@ -358,26 +368,6 @@ export function MobileBotRowView({
 }
 
 /** A search's matched words drawn bold within the line, keyed by where each starts. */
-function BoldMatches({ text, ranges }: { text: string; ranges: readonly BotSearchRange[] }) {
-  const parts = splitBotSearchText(text, ranges)
-  const starts = parts.map((_, at) =>
-    parts.slice(0, at).reduce((length, part) => length + part.text.length, 0)
-  )
-  return (
-    <>
-      {parts.map((part, at) =>
-        part.marked ? (
-          <Text key={starts[at]} style={styles.previewMatch}>
-            {part.text}
-          </Text>
-        ) : (
-          part.text
-        )
-      )}
-    </>
-  )
-}
-
 const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
@@ -408,6 +398,8 @@ const styles = themedStyleSheet(() => ({
   main: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   title: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
+  titleMarked: { flexGrow: 0, flexShrink: 1, flexBasis: 'auto' },
+  fill: { flex: 1 },
   unread: { fontWeight: '700' },
   fold: {
     minWidth: 44,
@@ -424,7 +416,6 @@ const styles = themedStyleSheet(() => ({
   preview: { flex: 1, fontSize: 13, color: colors.textMuted },
   previewUnread: { color: colors.textSecondary },
   previewAsking: { color: colors.agentQuestion },
-  previewMatch: { fontWeight: '600', color: colors.textPrimary },
   age: { fontSize: 11, color: colors.textMuted },
   active: { backgroundColor: colors.bgPanel },
   dimmed: { opacity: 0.6 },

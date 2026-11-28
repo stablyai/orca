@@ -1,7 +1,7 @@
 import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
 import type { RelayRecoveryLog } from './mobile-relay-recovery-log'
 import { isExplicitCredentialRejection } from '../../transport/relay/relay-credential-eligibility'
-import { RelayDirectorHttpError } from '../../transport/relay/mobile-relay-resume-director'
+import { RelayDirectorHttpError } from '../../../../src/shared/remote-runtime/relay/client/relay-director-resolve'
 
 export function logRelayConnected(log: RelayRecoveryLog): void {
   log('runtime channel migrated to relay', undefined, {

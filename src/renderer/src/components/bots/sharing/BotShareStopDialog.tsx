@@ -19,11 +19,14 @@ import { settleBotShare, stopBotShare } from './bot-share-rpc'
 export function BotShareStopDialog({
   name,
   shareId,
+  botId,
   onStopped,
   onCancel
 }: {
   name: string
   shareId: string
+  /** The bot's own link: this computer forgets its last published picks too. */
+  botId?: string
   onStopped: () => void
   onCancel: () => void
 }): React.JSX.Element {
@@ -33,7 +36,7 @@ export function BotShareStopDialog({
   const stop = async (): Promise<void> => {
     setStopping(true)
     setError(null)
-    const result = await settleBotShare(stopBotShare(shareId))
+    const result = await settleBotShare(stopBotShare(shareId, botId))
     setStopping(false)
     if (!result.ok) {
       setError(result.error)

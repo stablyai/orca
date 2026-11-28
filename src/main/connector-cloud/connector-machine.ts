@@ -53,6 +53,10 @@ export type ConnectorMachine = {
   ) => Promise<boolean>
   /** A teammate's device asked to reach a bot shared with them; false once the share isn't theirs. */
   shareAccept?: (delivery: Extract<ConnectorDelivery, { kind: 'share_accept' }>) => Promise<boolean>
+  /** A teammate declined a bot shared with them; false once the share isn't theirs. */
+  shareDeclined?: (
+    delivery: Extract<ConnectorDelivery, { kind: 'share_declined' }>
+  ) => Promise<boolean>
   /** Teammates' messages held while this machine was away. `hostKey`, read per hello, is the key they
    *  are sealed to; null (no pairing identity) holds nothing. `deliver` settles once it is written. */
   shareSend?: {
@@ -84,6 +88,8 @@ export type ConnectorPollClientOptions = {
   random?: () => number
   /** Opens wake sockets; tests pass a fake. */
   wakeSocketFactory?: ConnectorWakeSocketFactory
+  /** The wake socket said the account's shares changed. */
+  onSharesChanged?: () => void
   /** The cloud stopped this client, for good. */
   onHalt?: (reason: string) => void
 }

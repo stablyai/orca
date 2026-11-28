@@ -1,4 +1,5 @@
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
+import { channelRefusalEndsRetry } from './remote-runtime-authenticated-channel'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import type { SharedControlSocketGeneration } from './remote-runtime-shared-control-socket-generation'
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'
@@ -38,7 +39,9 @@ export function closeSharedControlAfterError(args: {
   }
   args.markError(error.message)
   if (!recovery) {
-    args.retry()
+    if (!channelRefusalEndsRetry(args.refused)) {
+      args.retry()
+    }
     args.publishDiagnostics()
     return
   }

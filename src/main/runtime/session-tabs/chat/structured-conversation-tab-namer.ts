@@ -3,7 +3,7 @@ import { structuredChatDisplayName } from '../../../../shared/agent-session/view
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
 
-type SavedTabs = () => readonly Tab[] | undefined
+export type SavedTabs = () => readonly Tab[] | undefined
 
 /** Names a workspace's chat tabs: the desktop tab's rename, else the chat's saved name; null leaves the agent's default label. */
 export function structuredConversationTabNamer(

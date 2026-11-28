@@ -1,5 +1,6 @@
 /** Stop terminals by handle, then managed-decommission orcad/daemon. Claim stopped only with zero-session census, exact serving-orcad identity and retired daemon evidence. */
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { errorMessage } from '../../../shared/errors/error-message'
 import type { OrcadDecommissionResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-decommission'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
@@ -133,7 +134,7 @@ const TerminalHandlesSchema = z.object({
   terminals: Pick<RuntimeTerminalListResult['terminals'][number], 'handle' | 'worktreeId'>[]
 }>
 
-const RuntimeIdSchema = z.object({ runtimeId: z.string().min(1) })
+const RuntimeIdSchema = lazyZodSchema(() => z.object({ runtimeId: z.string().min(1) }))
 
 /** Closing terminals, counting what is left and naming the serving orcad, all through its RPC. */
 export function wslHostRuntimeStopSteps(

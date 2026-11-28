@@ -1,310 +1,245 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
-import { mkdtemp, rm } from 'node:fs/promises'
+// A shared agent's host is reached as a paired server: its id resolves from the share (never the
+// store), the paired path signs in with the share's device key, over Relay on its one link, and the
+// share keeps the Relay credential the host installs. A real host behind a stand-in Relay cell.
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import nacl from 'tweetnacl'
+import { afterEach, expect, it, vi } from 'vitest'
+import type * as NodeRelayPlatform from '../../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import {
-  SHARED_HOSTS_HOLD_WHILE_AWAY,
-  type SharedBotHostView
-} from '../../../../shared/bots/shared-bot-hosts'
+  setSharedHosts,
+  sharedHostEnvironment
+} from '../../../../shared/remote-runtime/pairing/shared-host-keys'
+import { parseRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
+import { SharedBotHosts } from '../../../bots/shared-with-me/shared-bot-hosts'
+import { keptSharedHostRegistry } from '../../../bots/shared-with-me/shared-bot-host-key'
 import {
-  newSharedBotHostEntry,
-  SharedBotHostStore
-} from '../../../bots/shared-with-me/shared-bot-host-store'
-
-type Handler = (event: unknown, args: unknown) => Promise<RuntimeRpcResponse<unknown>>
-const ipc = vi.hoisted(() => ({ handlers: new Map<string, Handler>() }))
-vi.mock('electron', () => ({
-  ipcMain: {
-    handle: (channel: string, handler: Handler) => ipc.handlers.set(channel, handler),
-    removeHandler: (channel: string) => ipc.handlers.delete(channel)
-  }
-}))
-// Every paired-server path starts by resolving its selector in the registry.
-const registry = vi.hoisted(() => ({ resolve: vi.fn() }))
-vi.mock('../../../../shared/remote-runtime/host-store/runtime-environment-store', async (load) => ({
-  ...(await load<object>()),
-  resolveEnvironment: registry.resolve
-}))
-
+  RELAY_TEST_INVITE,
+  startHostOverRelay
+} from '../../../runtime/rpc/testing/relay-runtime-host.test-fixtures'
 import {
-  routeSharedHostsThrough,
-  sharedHostsChanged,
-  sharedHostStatusSnapshots
-} from './runtime-environment-shared-hosts'
-import {
-  isBotShareMethod,
-  isBotShareStreamMethod
-} from '../../../runtime/rpc/methods/rpc-method-share'
-import { SharedBotPhoneGrants } from '../../../bots/shared-with-me/shared-bot-phone-grants'
+  closeRemoteRuntimeRequestConnection,
+  getRemoteRuntimeSharedControlDiagnostics,
+  getRuntimeEnvironmentStatusSnapshot
+} from '../connections/runtime-environment-request-connections'
+import { controlLinkOptions } from '../connections/runtime-environment-relay-link'
+import { setSharedHostsOwner } from './runtime-environment-shared-hosts'
+import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { runtimeHostStatusBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { SHARED_BOT_HOST_ERRORS } from '../../../../shared/bots/shared-bot-hosts'
+import type { MineShare } from '../../../bots/shared-with-me/shared-bot-pairing'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
-import { registerRuntimeEnvironmentPassiveHandlers } from '../connectivity/runtime-environment-connectivity-handlers'
-import { subscribeRuntimeEnvironmentForDocument } from '../subscriptions/runtime-environment-document-subscription'
-import type { RetainedRemoteRuntimeSubscription } from '../subscriptions/runtime-environment-subscription-setup'
+import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
+import type { Bot } from '../../../../shared/bot-types'
 
-// Held sends are off while SHARED_HOSTS_HOLD_WHILE_AWAY is: their tests run again when it is on.
-const heldIt = it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)
-
-const SHARED = 'shared-env'
-const PAIRED = 'paired-env'
-const answer = (method: string): RuntimeRpcResponse<unknown> => ({
-  id: method,
-  ok: true,
-  result: { method, runtimeId: SHARED },
-  _meta: { runtimeId: SHARED }
-})
-const stop = vi.fn()
-const view: SharedBotHostView = {
-  environmentId: SHARED,
-  shareId: 'share-1',
-  botId: 'bot-1',
-  botName: 'Helper',
-  ownerName: 'Owner',
-  homeWorkspaceId: null,
-  link: 'live',
-  holds: true,
-  held: []
-}
-let views: SharedBotHostView[] = []
-let storeDir = ''
-let store = new SharedBotHostStore('/nowhere')
-const sharedEntry = () => ({ ...newSharedBotHostEntry(view), environmentId: SHARED })
-const hosts = {
-  ready: vi.fn(async () => {}),
-  views: () => views,
-  get store() {
-    return store
-  },
-  reaches: (environmentId: string) => environmentId === SHARED,
-  call: vi.fn(async (_environmentId: string, method: string) => answer(method)),
-  subscribe: vi.fn(
-    async (
-      _environmentId: string,
-      method: string,
-      _params: unknown,
-      onResponse: (response: RuntimeRpcResponse<unknown>) => void
-    ) => {
-      onResponse(answer(method))
-      return stop
+// The network edge: main's Relay dials reach the stand-in cell, as the fixture's own client does.
+const cell = vi.hoisted((): { url: string; dialed: string[] } => ({ url: '', dialed: [] }))
+vi.mock(
+  '../../../../shared/remote-runtime/relay/client/node/node-relay-client-platform',
+  async (actual) => {
+    const real = (await actual<typeof NodeRelayPlatform>()).NODE_RELAY_CLIENT_PLATFORM
+    return {
+      NODE_RELAY_CLIENT_PLATFORM: {
+        ...real,
+        createSocket: (url: string, events: Parameters<typeof real.createSocket>[1]) => {
+          cell.dialed.push(new URL(url).host)
+          return real.createSocket(url.replace(/^wss:\/\/[^/]+/, cell.url), events)
+        }
+      }
     }
-  ),
-  phones: new SharedBotPhoneGrants({
-    store: new SharedBotHostStore('/nowhere'),
-    listed: () => [],
-    reach: async () => 'live',
-    request: async () => ({ id: 'unused', ok: true, result: null }),
-    origin: () => null
-  })
-}
-
-function windowCall(selector: string, method: string): Promise<RuntimeRpcResponse<unknown>> {
-  const handler = ipc.handlers.get('runtimeEnvironments:call')!
-  return handler({}, { selector, method, params: {} })
-}
-
-function windowGetStatus(selector: string): Promise<RuntimeRpcResponse<unknown>> {
-  return ipc.handlers.get('runtimeEnvironments:getStatus')!({}, { selector })
-}
-
-function windowDocument() {
-  const retirement = new AbortController()
-  const send = vi.fn()
-  const document: DocumentDeliveryEndpoint = {
-    hostId: 7,
-    isGone: () => false,
-    isCurrent: () => true,
-    send,
-    watchRetirement: () => ({ signal: retirement.signal, dispose: () => {} })
   }
-  return { document, send, retire: () => retirement.abort() }
-}
+)
 
-const subscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
-function windowSubscribe(document: DocumentDeliveryEndpoint, selector: string, method: string) {
-  return subscribeRuntimeEnvironmentForDocument(
-    {
-      getUserDataPath: () => '/nowhere',
-      remoteRuntimeSubscriptions: subscriptions,
-      pendingSubscriptions: new Map(),
-      recordLayoutFrame: () => {}
-    },
-    document,
-    { selector, method, params: { sessionId: 's' } }
-  )
-}
-
-beforeEach(async () => {
-  storeDir = await mkdtemp(join(tmpdir(), 'orca-shared-host-status-'))
-  store = new SharedBotHostStore(storeDir)
-  store.put(sharedEntry())
-  registry.resolve.mockReset().mockRejectedValue(new Error('paired-server registry'))
-  hosts.call.mockClear()
-  hosts.subscribe.mockClear()
-  stop.mockClear()
-  views = [{ ...view }]
-  subscriptions.clear()
-  routeSharedHostsThrough({
-    hosts,
-    methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
-  })
-  registerRuntimeEnvironmentPassiveHandlers(() => '/nowhere')
-})
-
+const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
-  routeSharedHostsThrough(null)
-  await store.flushed()
-  await rm(storeDir, { recursive: true, force: true })
+  setSharedHosts(null)
+  vi.unstubAllEnvs()
+  for (const cleanup of cleanups.splice(0).toReversed()) {
+    await cleanup()
+  }
 })
 
-describe('a shared agent’s host, reached through runtimeEnvironments', () => {
-  it('takes the window’s calls and main’s own (uploads) over its share link', async () => {
-    expect(await windowCall(SHARED, 'bots.list')).toEqual(answer('bots.list'))
-    expect(
-      await callRuntimeEnvironment('/nowhere', SHARED, 'agentSessionAttachment.uploadStart', {})
-    ).toEqual(answer('agentSessionAttachment.uploadStart'))
-    expect(hosts.call).toHaveBeenCalledTimes(2)
-    expect(registry.resolve).not.toHaveBeenCalled()
-  })
+const ENVIRONMENT_ID = 'env-shared-1'
 
-  it('never sends a method the share refuses, and answers it as the host would', async () => {
-    for (const method of ['bots.activity', 'bots.upNext.unseen', 'pairedServerAsks.list']) {
-      expect(await windowCall(SHARED, method)).toMatchObject({
-        ok: false,
-        error: { code: 'method_not_found' }
-      })
+const CHANNEL_EVENTS = {
+  onTransportOpen: () => {},
+  onAuthenticating: () => {},
+  onAuthenticated: () => {},
+  onAnswer: () => {},
+  onText: () => {},
+  onBinary: () => {},
+  onClosed: () => {}
+}
+const failure = (code: string) => ({
+  id: 'status.get',
+  ok: false as const,
+  error: { code, message: code }
+})
+
+it(
+  'answers a call by the share’s id, signed in with its device key, and keeps the host’s Relay credential with the share',
+  async () => {
+    let shareDeviceId = ''
+    // The host shares its agent with this teammate's account.
+    const runtime = new OrcaRuntimeService()
+    const bot = {
+      id: 'bot-1',
+      shares: [{ kind: 'account', accountId: 'acct-teammate', shareId: 'share-1', addedAt: 1 }]
     }
-    const { document, send } = windowDocument()
-    await windowSubscribe(document, SHARED, 'bots.items.subscribe')
-    expect(send).toHaveBeenCalledWith(
-      'runtimeEnvironments:subscriptionEvent',
-      expect.objectContaining({ response: expect.objectContaining({ ok: false }) })
-    )
-    expect(hosts.call).not.toHaveBeenCalled()
-    expect(hosts.subscribe).not.toHaveBeenCalled()
-    expect(registry.resolve).not.toHaveBeenCalled()
-  })
-
-  it('streams over its link until the window unsubscribes or goes away', async () => {
-    const { document, send, retire } = windowDocument()
-    const { subscriptionId } = await windowSubscribe(document, SHARED, 'agentSession.subscribe')
-    expect(hosts.subscribe).toHaveBeenCalledWith(
-      SHARED,
-      'agentSession.subscribe',
-      { sessionId: 's' },
-      expect.any(Function)
-    )
-    expect(send).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
-      subscriptionId,
-      type: 'response',
-      response: answer('agentSession.subscribe')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the share checks read only a bot's id and shares.
+    vi.spyOn(runtime.bots, 'list').mockImplementation(() => [bot] as unknown as Bot[])
+    const host = await startHostOverRelay(cleanups, {
+      relayDeviceId: () => shareDeviceId,
+      runtime
     })
-    subscriptions.get(subscriptionId)!.close()
-    expect(stop).toHaveBeenCalledTimes(1)
-    expect(subscriptions.size).toBe(0)
-
-    await windowSubscribe(document, SHARED, 'agentSession.subscribeStatus')
-    retire()
-    expect(stop).toHaveBeenCalledTimes(2)
-    expect(subscriptions.size).toBe(0)
-    expect(registry.resolve).not.toHaveBeenCalled()
-  })
-
-  it('answers an abortable call (sent as a stream) once, as a call', async () => {
-    const { document, send } = windowDocument()
-    await windowSubscribe(document, SHARED, 'bots.chats')
-    expect(hosts.call).toHaveBeenCalledWith(SHARED, 'bots.chats', { sessionId: 's' })
-    expect(hosts.subscribe).not.toHaveBeenCalled()
-    expect(send).toHaveBeenCalledWith(
-      'runtimeEnvironments:subscriptionEvent',
-      expect.objectContaining({ response: answer('bots.chats') })
-    )
-  })
-})
-
-describe('a shared agent’s host status, as a paired server’s', () => {
-  it('answers getStatus and lists a verified, ready snapshot the window keeps', async () => {
-    expect(await windowGetStatus(SHARED)).toEqual(answer('status.get'))
-    // The window's capability reads ask status.get as a call; the same owner answers it.
-    expect(await windowCall(SHARED, 'status.get')).toEqual(answer('status.get'))
-    expect(sharedHostStatusSnapshots()).toEqual([
-      expect.objectContaining({
-        environmentId: SHARED,
-        sharedHost: true,
-        transport: 'ready',
-        verification: 'verified',
-        status: { method: 'status.get', runtimeId: SHARED }
-      })
-    ])
-    expect(registry.resolve).not.toHaveBeenCalled()
-  })
-
-  const offline = { id: 'status.get', ok: false, error: { code: 'offline', message: '' } } as const
-
-  // The owner's computer away since this Orca launched: no live answer this run.
-  heldIt(
-    'answers verified and ready while its owner is away and messages are held, with no earlier answer',
-    async () => {
-      views = [{ ...view, link: 'offline' }]
-      hosts.call.mockResolvedValue(offline)
-      expect(await windowGetStatus(SHARED)).toMatchObject({ ok: true })
-      expect(sharedHostStatusSnapshots()[0]).toMatchObject({
-        transport: 'ready',
-        verification: 'verified'
-      })
-      hosts.call.mockImplementation(async (_environmentId: string, method: string) =>
-        answer(method)
+    cell.url = host.cell.url
+    // The cell admits only dials to the cell the director names; main's dials are recorded here.
+    host.cellState.dialedHosts = cell.dialed
+    // This device's key on the host, as accepting a share gives it.
+    const key = nacl.sign.keyPair()
+    const shareDevice = await host.server.getBotShareDevices()!.add({
+      botId: 'bot-1',
+      accountId: 'acct-teammate',
+      scope: 'runtime',
+      devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64')
+    })
+    shareDeviceId = shareDevice.deviceId
+    const userDataPath = mkdtempSync(join(tmpdir(), 'shared-host-paired-'))
+    cleanups.push(() => rmSync(userDataPath, { recursive: true, force: true }))
+    // The account's share list: this share, until the owner stops sharing it.
+    let mine: MineShare[] = [
+      {
+        shareId: 'share-1',
+        botId: 'bot-1',
+        botName: 'Ivy',
+        ownerName: 'Jinwoo Hong',
+        hostOnline: true,
+        state: 'ready',
+        held: []
+      }
+    ]
+    const hosts = new SharedBotHosts({
+      userDataPath,
+      account: () => 'ada',
+      cloud: () => ({
+        mine: async () => ({ ok: true, value: { v: 1, shares: mine } }),
+        accept: async () => ({ ok: true, value: { status: 'queued' } }),
+        decline: async () => ({ ok: true, value: { status: 'declined' } }),
+        hold: async () => ({ ok: true, value: { status: 'held' } })
+      }),
+      publish: () => {}
+    })
+    await hosts.ready()
+    const reach = parseRuntimeRelayEndpoint(host.connection.endpoint)!
+    hosts.store.put({
+      shareId: 'share-1',
+      environmentId: ENVIRONMENT_ID,
+      botId: 'bot-1',
+      botName: 'Ivy',
+      ownerName: 'Jinwoo Hong',
+      deviceKey: {
+        publicKeyB64: Buffer.from(key.publicKey).toString('base64'),
+        secretKeyB64: Buffer.from(key.secretKey).toString('base64')
+      },
+      sealKey: { publicKeyB64: 's', secretKeyB64: 's' },
+      offer: {
+        v: 1,
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.test',
+          cellUrl: reach.cellUrl,
+          assignmentEpoch: 1,
+          relayHostId: reach.relayHostId,
+          e2eeFraming: 2,
+          inviteToken: RELAY_TEST_INVITE,
+          inviteExpiresAt: reach.inviteExpiresAt
+        },
+        hostPublicKeyB64: host.connection.hostPublicKeyB64,
+        deviceId: shareDevice.deviceId,
+        botId: 'bot-1'
+      },
+      held: [],
+      phones: []
+    })
+    setSharedHosts(
+      keptSharedHostRegistry(
+        hosts.store,
+        () => hosts.listed(),
+        () => hosts.ready()
       )
-    }
-  )
-
-  heldIt(
-    'keeps the host’s last answer with its share, so it still reads that way after a restart',
-    async () => {
-      await windowGetStatus(SHARED)
-      await store.flushed()
-      store = new SharedBotHostStore(storeDir)
-      await store.load()
-      routeSharedHostsThrough({
-        hosts,
-        methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
-      })
-      views = [{ ...view, link: 'offline' }]
-      hosts.call.mockResolvedValueOnce(offline)
-      expect(await windowGetStatus(SHARED)).toMatchObject({
-        ok: true,
-        result: { runtimeId: SHARED }
-      })
-    }
-  )
-
-  it('reads disconnected with no held messages, and retires when the share goes', async () => {
-    views = [{ ...view, link: 'offline', holds: false }]
-    hosts.call.mockResolvedValueOnce({
-      id: 'status.get',
-      ok: false,
-      error: { code: 'offline', message: '' }
-    })
-    expect(await windowGetStatus(SHARED)).toMatchObject({ ok: false })
-    expect(sharedHostStatusSnapshots()[0]).toMatchObject({ transport: 'disconnected' })
-    views = []
-    sharedHostsChanged()
-    expect(sharedHostStatusSnapshots()).toEqual([])
-  })
-})
-
-describe('a paired server', () => {
-  it('is still reached through the paired-server registry, never a share link', async () => {
-    await expect(windowCall(PAIRED, 'bots.list')).rejects.toThrow('paired-server registry')
-    await expect(callRuntimeEnvironment('/nowhere', PAIRED, 'bots.list', {})).rejects.toThrow(
-      'paired-server registry'
     )
-    const { document } = windowDocument()
-    await expect(windowSubscribe(document, PAIRED, 'agentSession.subscribe')).rejects.toThrow(
-      'paired-server registry'
+    setSharedHostsOwner(hosts)
+    cleanups.push(() => setSharedHostsOwner(null))
+    cleanups.push(() => closeRemoteRuntimeRequestConnection(ENVIRONMENT_ID))
+
+    // Its first call opens the host's link (nothing else has yet), and the host answers it.
+    await expect(
+      callRuntimeEnvironment(userDataPath, ENVIRONMENT_ID, 'terminal.send', {})
+    ).resolves.toMatchObject({ id: expect.any(String) })
+    const status = await callRuntimeEnvironment(userDataPath, ENVIRONMENT_ID, 'status.get', {})
+    expect(status).toMatchObject({ ok: true })
+    // Its environment names the runtime that answered, as a paired server's does: the window's tab
+    // streams are fenced on it.
+    expect(sharedHostEnvironment(ENVIRONMENT_ID)?.runtimeId).toBe(runtime.getRuntimeId())
+    // It works in the agent's workspaces, so the host admits the list of the agent's home (this
+    // stand-in host has no folder lists, so the call gets past the teammate gate to the lookup).
+    await expect(
+      callRuntimeEnvironment(userDataPath, ENVIRONMENT_ID, 'folderWorkspace.list', {})
+    ).resolves.toMatchObject({ ok: false, error: { code: 'method_not_found' } })
+    // Listed with no paired server's, its status is marked as a shared host's, so the window keeps it.
+    expect(getRuntimeEnvironmentStatusSnapshot(ENVIRONMENT_ID)?.sharedHost).toBe(true)
+    // The share, not the endpoint's first invite, holds the credential the host installed.
+    const kept = hosts.store.get('share-1')!
+    expect(kept.resume?.token).toBeTruthy()
+    expect(kept.refusedInvite).toBe(RELAY_TEST_INVITE)
+    expect(kept).toMatchObject({ botName: 'Ivy', deviceKey: { publicKeyB64: expect.any(String) } })
+    expect(host.cell.credentials).toEqual([RELAY_TEST_INVITE])
+    // The share's link reads the host's paired connection: live, then away once it drops.
+    expect(hosts.views()[0]?.link).toBe('live')
+    host.cellState.hostOffline = true
+    host.cell.cut()
+    await vi.waitFor(() => expect(hosts.views()[0]?.link).toBe('offline'), { timeout: 10_000 })
+    // Its connection redials on its own; the host is still away, so the link stays away meanwhile.
+    const dials = cell.dialed.length
+    const seen: string[] = []
+    await vi.waitFor(
+      () => {
+        seen.push(hosts.views()[0]!.link)
+        expect(cell.dialed.length).toBeGreaterThan(dials)
+      },
+      { timeout: 10_000, interval: 5 }
     )
-    expect(registry.resolve).toHaveBeenCalledTimes(3)
-    expect(hosts.call).not.toHaveBeenCalled()
-    expect(hosts.subscribe).not.toHaveBeenCalled()
-  })
-})
+    expect(new Set(seen)).toEqual(new Set(['offline']))
+    // The host is back: an asked-for dial (a phone's key, the cloud saying it is online) is awaited,
+    // not answered from the away state, and a second ask joins it rather than reopening it.
+    host.cellState.hostOffline = false
+    const link = hosts['linkFor'](hosts.store.get('share-1')!)
+    const [first, second] = await Promise.all([link.connect(), link.connect()])
+    expect([first, second]).toEqual(['live', 'live'])
+    expect(link.current()).toBe('live')
+
+    // The owner stops sharing it: nothing of it stays open or redials, and a call answers as ended.
+    const paired = getPreferredPairedRuntimeConnection(sharedHostEnvironment(ENVIRONMENT_ID)!)
+    mine = []
+    await hosts.refresh()
+    expect(getRuntimeEnvironmentStatusSnapshot(ENVIRONMENT_ID)).toBeNull()
+    expect(getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)).toBeNull()
+    expect(
+      await callRuntimeEnvironment(userDataPath, ENVIRONMENT_ID, 'status.get', {})
+    ).toMatchObject({ ok: false, error: { code: SHARED_BOT_HOST_ERRORS.unshared } })
+    // A connection opened with its old key finds no Relay credential to dial, and stops there.
+    const opened = controlLinkOptions(ENVIRONMENT_ID, paired).openChannel!([])(CHANNEL_EVENTS)
+    expect(opened).toMatchObject({ ok: false, error: { code: 'relay_credential_unavailable' } })
+    expect(runtimeHostStatusBlockedReason(failure('relay_credential_unavailable'))).toBe(
+      'access-revoked'
+    )
+    // Nothing of it was written to the paired-server store.
+    await expect(
+      callRuntimeEnvironment(userDataPath, 'env-never-shared', 'status.get', {})
+    ).rejects.toThrow('Unknown environment')
+    hosts.stop()
+  },
+  // A real host and cell: a few dials over loopback.
+  30_000
+)

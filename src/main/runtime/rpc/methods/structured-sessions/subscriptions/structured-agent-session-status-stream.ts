@@ -9,6 +9,7 @@ import { defineStreamingMethod, type RpcContext } from '../../../core'
 import { requireStructuredHost as requireHost } from '../creation/structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
 import { clientReadsStructuredSessionAgent } from '../structured-agent-session-policy'
+import { openTeammateChatFilter } from '../../../../../bots/team-share/teammate-workspace-view'
 import { botShareScopedView } from '../../../../../bots/team-share/bot-share-scoped-view'
 
 /** Ties a stream to both ends that can close it — the runtime's subscription registry and the
@@ -63,9 +64,14 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
       if (stream.isClosed()) {
         return
       }
-      // A teammate's stream carries only their own chats on the shared bot.
-      const listed = botShareScopedView(ctx)?.['agentSession.subscribeStatus'] ?? (() => true)
-      dispose = host.subscribeStatus({
+      // A workspace teammate's stream carries the agent's workspaces' chats; any other teammate's,
+      // only their own chats on the shared bot.
+      const teammate = await openTeammateChatFilter(ctx)
+      const listed =
+        teammate?.listed ??
+        botShareScopedView(ctx)?.['agentSession.subscribeStatus'] ??
+        (() => true)
+      const stopStatus = host.subscribeStatus({
         id: subscriptionId,
         emit: (event) => {
           if (event.type === 'snapshot') {
@@ -109,6 +115,10 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
           }
         }
       })
+      dispose = () => {
+        stopStatus()
+        teammate?.dispose()
+      }
       if (stream.isClosed()) {
         dispose()
       }

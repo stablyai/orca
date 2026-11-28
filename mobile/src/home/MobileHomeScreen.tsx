@@ -152,17 +152,22 @@ export function MobileHomeScreen() {
   const openSettings = useCallback(() => router.push('/settings'), [router])
   const openBot = useCallback(
     (row: HomeBotRow) =>
-      row.offline
-        ? Alert.alert(
-            t('bots.list.cantReach', 'Can’t reach {{host}}. Its bots show when it’s back.', {
-              host: row.hostLabel
-            })
+      // A shared agent opens while its owner's computer is away: its page says so.
+      row.kind === 'shared'
+        ? router.push(
+            `/h/${encodeURIComponent(row.pairedHostId)}/shared/${encodeURIComponent(row.environmentId)}`
           )
-        : row.kind === 'bot'
-          ? openBotHome(row, row.bot)
-          : router.push(
-              `/h/${encodeURIComponent(row.pairedHostId)}/group/${encodeURIComponent(row.group.id)}`
-            ),
+        : row.offline
+          ? Alert.alert(
+              t('bots.list.cantReach', 'Can’t reach {{host}}. Its bots show when it’s back.', {
+                host: row.hostLabel
+              })
+            )
+          : row.kind === 'bot'
+            ? openBotHome(row, row.bot)
+            : router.push(
+                `/h/${encodeURIComponent(row.pairedHostId)}/group/${encodeURIComponent(row.group.id)}`
+              ),
     [openBotHome, router, t]
   )
   const { bots, allClients } = data

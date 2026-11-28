@@ -2,78 +2,42 @@
 // Every comment and status change mails the item's chat, one mail per action and chat; a snooze mails none.
 import {
   BOT_ITEM_LIMITS,
-  BOT_ITEM_OPEN_STATUSES,
   BOT_ITEM_STATUSES,
   botItemEventId,
   parseBotItemEventId
 } from '../../../../shared/bots/bot-items'
 import {
-  BotItemsOwnerComment,
   BotItemsOwnerList,
   BotItemsOwnerOpened,
   BotItemsOwnerShow,
   BotItemsOwnerSnooze,
   BotItemsOwnerStatus
 } from '../../../../shared/rpc-contract/bots-items-params'
-import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../../../shared/agent-session/agent-session-attachments'
 import { BotItemError } from '../../../bots/bot-item-error'
-import { admitBotItemCommentAttachments } from '../../../bots/bot-item-comment-attachments'
+import { defineMethod } from '../core'
+import { BOT_ITEM_OWNER_COMMENT_METHOD } from './bots-items-owner-comment'
+import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
 import {
-  getAgentSessionAttachmentClaimer,
-  getAgentSessionAttachmentStore
-} from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
-import { botChatTakingMail } from './bots-chats'
-import type { BotItemOwnerActor } from '../../../bots/bot-items-input'
-import type { BotItemRecord } from '../../../bots/bot-items-schema'
-import type { BotItemsRemote } from '../../../bots/bot-items-ops'
-import { defineMethod, type RpcContext } from '../core'
-import { ownerOnly } from './bots-caller-gates'
+  assertItemsOfBot,
+  itemsSeenOf,
+  itemsViewerOf,
+  markItemsSeen,
+  ownerActor
+} from './bots-items-owner-person'
+import { botItemListScope, botItemsOfPeople } from '../../../bots/bot-item-access'
 import { parseCursor, resolveItem } from './bots-items-write-support'
+import { itemsAccess } from './bots-items-caller'
+import { allOpenItems, ownerViews } from './bots-items-owner-reads'
 import {
   botItemCountsForClient,
   botItemEventsForClient,
   botItemsForClient
 } from './bots-items-waiting-compat'
 
-const REFUSAL = 'Only your owner changes items this way, in Orca.'
-
-function ownerActor(context: RpcContext): BotItemOwnerActor {
-  ownerOnly(context, REFUSAL)
-  context.runtime.bots.assertEnabled()
-  return context.pairedDeviceId
-    ? { kind: 'owner', device: context.pairedDeviceId }
-    : { kind: 'owner' }
-}
-
-/** Every open item of the bot (or its chats), however many, read a page at a time. */
-async function allOpenItems(
-  store: BotItemsRemote,
-  botId: string,
-  chat: { chatIds?: readonly string[] }
-): Promise<BotItemRecord[]> {
-  const open: BotItemRecord[] = []
-  let cursor: { at: number; number: number } | undefined
-  for (;;) {
-    const page = await store.list({
-      botId,
-      ...chat,
-      statuses: BOT_ITEM_OPEN_STATUSES,
-      limit: BOT_ITEM_LIMITS.listPageMax + 1,
-      ...(cursor ? { cursor } : {})
-    })
-    open.push(...page.items.slice(0, BOT_ITEM_LIMITS.listPageMax))
-    const last = page.items[BOT_ITEM_LIMITS.listPageMax - 1]
-    if (page.items.length <= BOT_ITEM_LIMITS.listPageMax || !last) {
-      return open
-    }
-    cursor = { at: last.lastActivityAt, number: last.number }
-  }
-}
-
 const LIST = defineMethod({
   name: 'bots.items.owner.list',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerList,
   handler: async (params, context) => {
     ownerActor(context)
@@ -81,11 +45,20 @@ const LIST = defineMethod({
     const store = botItems.store()
     // An older client names one chat; a group's panel names its rooms' member sessions.
     const chatIds = params.chatIds ?? (params.chatId !== undefined ? [params.chatId] : undefined)
-    const chat = chatIds ? { chatIds } : {}
+    // A picked person's items, else the caller's default (a teammate's own) or everyone's when asked:
+    // the same scope the items commands list.
+    const scope =
+      params.person === undefined
+        ? botItemListScope(itemsAccess(context), params.everyone === true)
+        : botItemListScope(botItemsOfPeople(params.person === null ? null : [params.person]))
+    const chat = { ...(chatIds ? { chatIds } : {}), ...scope }
     // Read after the rows, so a mark another device moved meanwhile is the one sent.
     const seenEventId = (): string =>
       botItemEventId(
-        context.runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
+        itemsSeenOf(
+          context,
+          context.runtime.bots.list().find((bot) => bot.id === params.botId)
+        )
       )
     if (params.uids) {
       // What a notice named: those items (an absent one is deleted or out of scope), with the counts.
@@ -97,7 +70,10 @@ const LIST = defineMethod({
         limit: params.uids.length
       })
       return {
-        items: botItemsForClient(await botItems.views(named.items, params.summary), context),
+        items: botItemsForClient(
+          await ownerViews(context, params.botId, named.items, params.summary),
+          context
+        ),
         counts: botItemCountsForClient(named.counts, context),
         seenEventId: seenEventId()
       }
@@ -121,7 +97,7 @@ const LIST = defineMethod({
     const stillOpen = open.filter((item) => !closedUids.has(item.uid))
     return {
       items: botItemsForClient(
-        await botItems.views([...stillOpen, ...closedRows], params.summary),
+        await ownerViews(context, params.botId, [...stillOpen, ...closedRows], params.summary),
         context
       ),
       counts: botItemCountsForClient(closed.counts, context),
@@ -136,19 +112,23 @@ const LIST = defineMethod({
 const SHOW = defineMethod({
   name: 'bots.items.owner.show',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerShow,
   handler: async (params, context) => {
     ownerActor(context)
     const { botItems } = context.runtime
     const record = await resolveItem(botItems.store(), params.item)
+    assertItemsOfBot(params.botId, [record])
     const after = params.after !== undefined ? parseBotItemEventId(params.after) : 0
     const before = params.before !== undefined ? parseBotItemEventId(params.before) : 0
     if (after === null || before === null) {
       throw new BotItemError('invalid_argument', 'after and before take an event id such as e41.')
     }
     const limit = BOT_ITEM_LIMITS.eventsPage
-    const [item] = botItemsForClient(await botItems.views([record], false, true), context)
+    const [item] = botItemsForClient(
+      await botItems.views([record], false, true, itemsViewerOf(context)),
+      context
+    )
     if (params.newest) {
       // The newest page; `earlierCursor` pages back from its oldest event.
       const events = await botItems.eventsBefore(record.uid, before, limit + 1)
@@ -171,65 +151,17 @@ const SHOW = defineMethod({
   }
 })
 
-const COMMENT = defineMethod({
-  name: 'bots.items.owner.comment',
-  permission: 'workspace',
-  share: 'not-shared',
-  params: BotItemsOwnerComment,
-  handler: async (params, context) => {
-    const actor = ownerActor(context)
-    const { botItems } = context.runtime
-    const store = botItems.store()
-    const item = await resolveItem(store, params.item)
-    const bot = context.runtime.bots.list().find((entry) => entry.id === item.ownerBotId)
-    if (params.images?.length || params.text.includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)) {
-      // The attachment store and its claims come up with the structured chat host.
-      await context.runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-    }
-    // Admitted and claimed for the item's chat before the event: a failed write leaves only a claim
-    // that chat already prunes, and a retry re-claims the same uploads.
-    const { images } = await admitBotItemCommentAttachments(
-      {
-        store: getAgentSessionAttachmentStore(),
-        // This host's own window: a dropped on-disk image is copied in; a paired client sends store paths.
-        local: context.caller?.kind === 'desktop',
-        claim: getAgentSessionAttachmentClaimer(),
-        chat: async () => (bot ? botChatTakingMail(context.runtime, bot, item.chatId) : null)
-      },
-      params.text,
-      params.images ?? []
-    )
-    const outcome = await store.ownerComment(
-      item.uid,
-      params.text,
-      actor,
-      images,
-      undefined,
-      params.requestId,
-      params.questionId === undefined ? undefined : (parseBotItemEventId(params.questionId) ?? -1),
-      params.plain === true,
-      params.skills,
-      params.skipped
-    )
-    botItems.changed([item])
-    // The comment is stored and its mail owed: the reply never waits on the chat taking it.
-    void botItems
-      .sendOwedMail()
-      .catch((error: unknown) => console.warn('[bots] items: mailing a comment failed', error))
-    return { eventId: outcome.eventId === null ? null : botItemEventId(outcome.eventId) }
-  }
-})
-
 const STATUS = defineMethod({
   name: 'bots.items.owner.status',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerStatus,
   handler: async (params, context) => {
     const actor = ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
     const items = await Promise.all(params.items.map((ref) => resolveItem(store, ref)))
+    assertItemsOfBot(params.botId, items)
     const uids = items.map((item) => item.uid)
     const result = await store.ownerStatus(
       {
@@ -256,13 +188,14 @@ const STATUS = defineMethod({
 const SNOOZE = defineMethod({
   name: 'bots.items.owner.snooze',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerSnooze,
   handler: async (params, context) => {
     const actor = ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
     const items = await Promise.all(params.items.map((entry) => resolveItem(store, entry.item)))
+    assertItemsOfBot(params.botId, items)
     const result = await store.ownerSnooze(
       {
         items: items.map((item, index) => ({
@@ -286,24 +219,21 @@ const SNOOZE = defineMethod({
 const OPENED = defineMethod({
   name: 'bots.items.owner.opened',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerOpened,
   handler: async (params, context) => {
     ownerActor(context)
     const { runtime } = context
     const latest = await runtime.botItems.store().latestEventId(params.botId)
-    const saved = runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
-    // One cursor per bot in its settings, so the desktop and a paired phone agree.
-    const seen =
-      latest > saved
-        ? ((
-            await runtime.bots.update(params.botId, (bot) => ({
-              itemsSeen: Math.max(bot.itemsSeen ?? 0, latest)
-            }))
-          ).itemsSeen ?? latest)
-        : saved
-    return { seenEventId: botItemEventId(seen) }
+    return { seenEventId: await markItemsSeen(context, params.botId, latest) }
   }
 })
 
-export const BOT_ITEMS_OWNER_METHODS = [LIST, SHOW, COMMENT, STATUS, SNOOZE, OPENED]
+export const BOT_ITEMS_OWNER_METHODS = [
+  LIST,
+  SHOW,
+  BOT_ITEM_OWNER_COMMENT_METHOD,
+  STATUS,
+  SNOOZE,
+  OPENED
+]

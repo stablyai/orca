@@ -23,6 +23,7 @@ import {
   type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
+import type { Bot } from '../../../../src/shared/bot-types'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
 import {
   BOT_ITEM_STATUSES,
@@ -31,6 +32,7 @@ import {
 } from '../../../../src/shared/bots/bot-items'
 import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
 import { botItemRepliedAsks } from '../../../../src/shared/bots/bot-item-replying'
+import { botItemPendingWordsBesideAnswers } from '../../../../src/shared/bots/bot-item-sent-answers'
 import {
   isBotItemSentComment,
   type BotItemSentAnswers
@@ -42,8 +44,8 @@ import {
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { colors } from '../../theme/mobile-theme'
+import { styles } from './mobile-bot-item-activity-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
@@ -103,9 +105,10 @@ function FieldChange({ by, field, change }: { by: string; field: string; change:
   )
 }
 
-function EventLine({ event, item }: { event: BotItemEvent; item: BotItem }) {
+type EventLineProps = { event: BotItemEvent; item: BotItem; viewer: Pick<Bot, 'shareViewer'> }
+function EventLine({ event, item, viewer }: EventLineProps) {
   const t = useMobileTranslation()
-  const by = botItemActorName(event, item, t)
+  const by = botItemActorName(event, item, t, viewer)
   const { data } = event
   switch (event.kind) {
     case 'commented':
@@ -253,6 +256,7 @@ function EntryIcon({ entry }: { entry: LineEntry }) {
 }
 
 export function MobileBotItemActivity({
+  viewer,
   item,
   events,
   attachments,
@@ -262,6 +266,8 @@ export function MobileBotItemActivity({
   asking,
   onQuote
 }: {
+  /** The bot as this phone has it: a teammate's copy names who is looking. */
+  viewer: Pick<Bot, 'shareViewer'>
   item: BotItem
   events: readonly BotItemEvent[]
   /** Comments sent from the box that the item's read doesn't show yet: last, as sent. */
@@ -310,6 +316,7 @@ export function MobileBotItemActivity({
         entry.key === waitKey ? null : entry.kind === 'comment' ? (
           entry.onAsk ? null : (
             <MobileBotItemCommentCard
+              viewer={viewer}
               key={entry.key}
               item={item}
               // A reply already sent for this question answers it, before the host's read says so.
@@ -349,7 +356,7 @@ export function MobileBotItemActivity({
               {entry.kind === 'worker' ? (
                 <WorkerLine entry={entry} />
               ) : (
-                <EventLine event={entry.event} item={item} />
+                <EventLine event={entry.event} item={item} viewer={viewer} />
               )}
             </View>
             <Text style={styles.meta} accessibilityLabel={time.full(entry.at)}>
@@ -358,13 +365,17 @@ export function MobileBotItemActivity({
           </View>
         )
       )}
-      {pending.shown.map(({ event, failed, mayHaveArrived, intent }) =>
-        // Answers posted as one comment show on their lines already: that comment, not one with its words.
-        isBotItemSentComment({ failed, intent }, sent) ? null : (
+      {pending.shown.map((sending) => {
+        const { event, failed, mayHaveArrived, intent } = sending
+        // Answers posted as one comment show on their lines already: only the owner's words beside them.
+        const onLines = isBotItemSentComment({ failed, intent }, sent)
+        const beside = onLines ? botItemPendingWordsBesideAnswers(sending) : null
+        return onLines && beside === null ? null : (
           <MobileBotItemCommentCard
             key={event.id}
+            viewer={viewer}
             item={item}
-            entry={{ event, waiting: false }}
+            entry={beside === null ? { event, waiting: false } : { event, waiting: false, beside }}
             attachments={attachments}
             failed={
               failed
@@ -377,7 +388,7 @@ export function MobileBotItemActivity({
             onQuote={failed ? undefined : onQuote}
           />
         )
-      )}
+      })}
       {entries.length > 0 || pending.shown.length > 0 ? null : (
         <Text style={[styles.line, styles.none]}>
           {t('bots.items.activity.noComments', 'No comments yet.')}
@@ -386,35 +397,3 @@ export function MobileBotItemActivity({
     </View>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  event: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    paddingVertical: 6,
-    paddingHorizontal: spacing.xs
-  },
-  eventIcon: { width: 16, height: 18, alignItems: 'center', justifyContent: 'center' },
-  eventBody: { flex: 1, minWidth: 0 },
-  line: { fontSize: 13, lineHeight: 18, color: colors.textMuted },
-  none: { paddingHorizontal: spacing.xs, paddingTop: spacing.xs },
-  actor: { fontWeight: '500', color: colors.textSecondary },
-  inline: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  chevronClosed: { transform: [{ rotate: '-90deg' }] },
-  diff: {
-    marginTop: 2,
-    paddingLeft: spacing.sm,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.borderSubtle,
-    gap: 2
-  },
-  removed: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textMuted,
-    textDecorationLine: 'line-through'
-  },
-  added: { fontSize: 13, lineHeight: 18, color: colors.textPrimary },
-  meta: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] }
-}))

@@ -1,6 +1,6 @@
-// `bots.agentChoices`: the agents this host's New bot offers, and the one it picks first, for a client
-// that can't read this host's agent menu itself (a phone). Same rows, filter and pick as the desktop's
-// New bot, from this host's own facts.
+// `bots.agentChoices`: the agents this host's New bot offers and the one it picks first, and those its
+// + menu offers for a new chat, for a client that can't read this host's agent menu itself (a phone, a
+// teammate's Orca). Same rows, filters and pick as the desktop's, from this host's own facts.
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import {
   buildNewTabAgentMenuRows,
@@ -9,9 +9,14 @@ import {
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   botAgentChoices,
+  hostNewChatAgents,
   newBotAgent,
-  readyBotDefaultAgent
+  readyBotDefaultAgent,
+  type BotNewChatAgent
 } from '../../../../shared/bots/bot-agent-choices'
+import type { BotAgent } from '../../../../shared/bot-types'
+import { SHARE_SCOPED } from '../../../../shared/bots/bot-share-rpc-methods'
+import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
 import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -50,7 +55,15 @@ function availabilitySnapshot(
   })
 }
 
-export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
+export type HostBotAgentChoices = {
+  agents: BotAgent[]
+  defaultAgent: BotAgent | undefined
+  newChatAgents: BotNewChatAgent[]
+}
+
+export async function hostBotAgentChoices(
+  runtime: OrcaRuntimeService
+): Promise<HostBotAgentChoices> {
   const settings = runtime.requireStore().getSettings()
   const [detected, roster] = await Promise.all([
     detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION, hostDetectionOptions(runtime)).catch(
@@ -93,14 +106,29 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
   const agents = botAgentChoices(model)
   return {
     agents,
-    defaultAgent: newBotAgent(agents, readyBotDefaultAgent(model, settings.defaultTuiAgent))
+    defaultAgent: newBotAgent(agents, readyBotDefaultAgent(model, settings.defaultTuiAgent)),
+    newChatAgents: hostNewChatAgents(model)
   }
+}
+
+/** Whether this host's + menu offers a new chat on `agent` that can start: the one list a teammate's
+ *  pick is held to. */
+export async function hostOffersNewChatAgent(
+  runtime: OrcaRuntimeService,
+  agent: BotAgent
+): Promise<boolean> {
+  const { newChatAgents } = await hostBotAgentChoices(runtime)
+  return newChatAgents.some((entry) => entry.agent === agent && !entry.unavailable)
 }
 
 export const BOT_AGENT_CHOICES_METHOD = defineMethod({
   name: 'bots.agentChoices',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_SCOPED,
   params: null,
-  handler: async (_params, { runtime }) => hostBotAgentChoices(runtime)
+  handler: async (_params, context) => {
+    const choices = await hostBotAgentChoices(context.runtime)
+    const share = botShareScopedView(context)?.['bots.agentChoices']
+    return share ? share(choices) : choices
+  }
 })

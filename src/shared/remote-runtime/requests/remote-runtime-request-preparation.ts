@@ -10,6 +10,7 @@ import type {
   RuntimeRequestPreparation,
   RuntimeRequestGuard
 } from '../rpc/runtime-rpc-envelope'
+import { pairedRuntimeConnectionToken } from '../pairing/paired-runtime-connection'
 
 type SerializeRequest = (
   params: unknown,
@@ -82,7 +83,7 @@ export function prepareRuntimeSocketRequest(
   const serializedStatusRequest = statusRequestId
     ? serializeRemoteRuntimePayload({
         id: statusRequestId,
-        deviceToken: connection.credential.deviceToken,
+        deviceToken: pairedRuntimeConnectionToken(connection),
         method: 'status.get'
       })
     : null
@@ -92,7 +93,7 @@ export function prepareRuntimeSocketRequest(
         (selected, selectedEnvelope) =>
           serializeRemoteRuntimeRpcRequest({
             requestId,
-            deviceToken: connection.credential.deviceToken,
+            deviceToken: pairedRuntimeConnectionToken(connection),
             method,
             params: selected,
             envelope: selectedEnvelope

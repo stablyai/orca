@@ -13,6 +13,7 @@ import {
   type RemoteRuntimeSocketLivenessOptions
 } from './remote-runtime-socket-liveness'
 import { RemoteRuntimeSubscriptionOutbound } from './requests/remote-runtime-subscription-outbound'
+import { pairedRuntimeConnectionToken } from './pairing/paired-runtime-connection'
 
 export type RemoteRuntimePassthroughSocket = {
   /** Queues one plaintext RPC frame; false when the socket can no longer carry it. */
@@ -128,7 +129,7 @@ export function openRemoteRuntimePassthroughSocket(
         state = 'awaiting_authenticated'
         void sendRemoteRuntimeTokenAuth({
           handshake,
-          deviceToken: connection.credential.deviceToken,
+          deviceToken: pairedRuntimeConnectionToken(connection),
           clientCapabilities,
           stillAwaiting: () => state === 'awaiting_authenticated',
           send: (authFrame) => ws.send(authFrame),

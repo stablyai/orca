@@ -3,14 +3,11 @@
 // off; a message to a host that is away is held in Orca Cloud with the phone's share credential.
 import nacl from 'tweetnacl'
 import {
-  SHARED_BOT_HOST_ERRORS,
+  SHARED_BOT_UNSHARED_MESSAGE,
   sharedBotHostView,
   type SharedBotHostView
 } from '../../../../src/shared/bots/shared-bot-hosts'
-import type {
-  RpcFailure,
-  RpcResponse
-} from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
+import type { RpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
 import type { SharedHostRelayCredential } from '../../../../src/shared/remote-runtime/relay/client/shared-host-relay-connection'
 import {
   SharedHostRelayLink,
@@ -21,28 +18,31 @@ import { MOBILE_RELAY_CLIENT_PLATFORM } from '../../transport/encryption/mobile-
 import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../transport/connection/mobile-runtime-client-capabilities'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
+import {
+  sharedAgentCallFailed,
+  sharedAgentOffline,
+  sharedAgentUnshared
+} from './phone-shared-agent-failures'
+import { sharedBotHoldsSends } from '../../../../src/shared/bots/shared-bot-held-routing'
+import { PhoneSharedAgentFollows } from './phone-shared-agent-follows'
 import { PhoneSharedAgentHeld } from './phone-shared-agent-held'
-import { sharedBotHeldRefusal } from '../../../../src/shared/bots/shared-bot-held-routing'
+import { PhoneSharedAgentHeldPoll } from './phone-shared-agent-held-poll'
+import { PhoneSharedAgentKeptReads } from './phone-shared-agent-kept-reads'
 import {
   awaitingKeyView,
   readComputerShares,
   syncComputerShares
 } from './phone-shared-agent-provisioning'
 import { PhoneSharedAgentStore, type PhoneSharedAgent } from './phone-shared-agent-store'
-import type { SharedBotPhoneShare } from '../../../../src/shared/bots/bot-share-phone'
+import type {
+  SharedBotPhoneRequest,
+  SharedBotPhoneShare
+} from '../../../../src/shared/bots/bot-share-phone'
+import { answerComputerRequest } from './phone-shared-agent-requests'
+import { watchPhoneSharedAgents } from './phone-shared-agent-watch'
 
 type Link = SharedHostRelayLink<PhoneSharedAgent>
-
-// While a message waits, Orca Cloud is asked how it stands this often (the desktop's busy read),
-// backing off to at most HELD_POLL_MAX_MS while it doesn't answer.
-const HELD_POLL_MS = 30_000
-const HELD_POLL_MAX_MS = 5 * 60_000
-
-const failure = (method: string, code: string, message: string): RpcFailure => ({
-  id: method,
-  ok: false,
-  error: { code, message }
-})
+type Computer = { pairedHostId: string; client: UnvalidatedRpcRequestPort }
 
 /** How the phone reaches the host with what it keeps: its resume credential, else an unexpired invite
  *  the relay hasn't refused; null when only a fresh key (through the computer) would. */
@@ -64,10 +64,19 @@ export class PhoneSharedAgents {
   private readonly links = new Map<string, Link>()
   private readonly listeners = new Set<() => void>()
   private readonly held: PhoneSharedAgentHeld
-  private heldTimer: ReturnType<typeof setTimeout> | null = null
-  private heldReadFailures = 0
+  private readonly heldPoll = new PhoneSharedAgentHeldPoll({
+    store: this.store,
+    held: () => this.held
+  })
   // Listed by a computer but with no key here yet (its host wasn't reached): shown, not callable.
   private readonly awaitingKey = new Map<string, readonly SharedBotPhoneShare[]>()
+  private readonly requestsOf = new Map<string, readonly SharedBotPhoneRequest[]>()
+  private readonly follows = new PhoneSharedAgentFollows<UnvalidatedRpcRequestPort>(
+    (pairedHostId, client, applied) => this.followComputer({ pairedHostId, client }, applied)
+  )
+  // Each computer's client its shares were last followed with, to follow them again.
+  private readonly computers = new Map<string, UnvalidatedRpcRequestPort>()
+  private readonly kept = new PhoneSharedAgentKeptReads()
 
   constructor(private readonly now: () => number = Date.now) {
     this.held = new PhoneSharedAgentHeld({
@@ -75,7 +84,7 @@ export class PhoneSharedAgents {
       now,
       changed: () => {
         this.changed()
-        this.pollHeld()
+        this.heldPoll.poll()
       }
     })
   }
@@ -89,37 +98,9 @@ export class PhoneSharedAgents {
     return this.store.hasLoaded()
   }
 
-  /**
-   * Reads Orca Cloud's states for the agents with a message waiting, and again every HELD_POLL_MS
-   * while one still waits: a delivered message lets that chat's later sends go live again.
-   */
-  async refreshHeld(entries = this.store.list()): Promise<void> {
-    const answered = await Promise.all(
-      entries
-        .filter((entry) => entry.held.some((held) => this.held.isWaiting(held)))
-        .map((entry) => this.held.refresh(entry))
-    )
-    this.heldReadFailures = answered.includes(false) ? this.heldReadFailures + 1 : 0
-    this.pollHeld()
-  }
-
-  private pollHeld(): void {
-    const waiting = this.store
-      .list()
-      .some((entry) => entry.held.some((held) => this.held.isWaiting(held)))
-    if (!waiting) {
-      clearTimeout(this.heldTimer ?? undefined)
-      this.heldTimer = null
-      return
-    }
-    if (this.heldTimer) {
-      return
-    }
-    const delay = Math.min(HELD_POLL_MS * 2 ** this.heldReadFailures, HELD_POLL_MAX_MS)
-    this.heldTimer = setTimeout(() => {
-      this.heldTimer = null
-      void this.refreshHeld()
-    }, delay)
+  /** Reads Orca Cloud's states for the agents with a message waiting, and again while one waits. */
+  refreshHeld(entries?: readonly PhoneSharedAgent[]): Promise<void> {
+    return this.heldPoll.refresh(entries)
   }
 
   onChanged(listener: () => void): () => void {
@@ -129,19 +110,37 @@ export class PhoneSharedAgents {
 
   /** Follows the computer's list: new shares get a key, gone ones are forgotten, the rest dial. */
   async syncComputer(pairedHostId: string, client: UnvalidatedRpcRequestPort): Promise<void> {
+    this.computers.set(pairedHostId, client)
+    await this.follows.run(pairedHostId, client)
+  }
+
+  /** Whether the computer still lists `entry` once its follow under way, if any, lands: a link that
+   *  dropped may be a revoke, which ends the follow it started without the share. */
+  private async stillShared(entry: PhoneSharedAgent): Promise<boolean> {
+    await this.follows.nextListed(entry.pairedHostId)
+    return this.store.get(entry.shareId) !== undefined
+  }
+
+  private async followComputer(computer: Computer, applied: () => void): Promise<void> {
     await this.ready()
-    const computer = { pairedHostId, client }
-    const shares = await readComputerShares(computer)
+    const { pairedHostId } = computer
+    const list = await readComputerShares(computer)
+    const shares = list?.shares ?? null
+    if (list) {
+      this.requestsOf.set(pairedHostId, list.requests ?? [])
+    }
     if (shares) {
+      const listed = new Set(shares.map((share) => share.shareId))
       for (const entry of this.store.list()) {
-        if (
-          entry.pairedHostId === pairedHostId &&
-          !shares.some((s) => s.shareId === entry.shareId)
-        ) {
-          this.links.get(entry.shareId)?.close()
-          this.links.delete(entry.shareId)
+        if (entry.pairedHostId === pairedHostId && !listed.has(entry.shareId)) {
+          this.forget(entry.shareId)
+          this.kept.forget(entry.shareId)
         }
       }
+    }
+    // What a revoke check waits for: the list, not the keys and dials that follow.
+    applied()
+    if (shares) {
       await syncComputerShares(
         this.store,
         computer,
@@ -165,19 +164,24 @@ export class PhoneSharedAgents {
     this.changed()
   }
 
+  /** The shares offered to the computer's account that wait for Accept or Decline. */
+  requests(pairedHostId: string): readonly SharedBotPhoneRequest[] {
+    return this.requestsOf.get(pairedHostId) ?? []
+  }
+
+  /** Accept or Decline, through the computer; its shares are followed again once it took it. */
+  async answerRequest(pairedHostId: string, shareId: string, accept: boolean): Promise<boolean> {
+    const client = this.computers.get(pairedHostId)
+    const followAgain = () => (client ? this.syncComputer(pairedHostId, client) : Promise.resolve())
+    return !!client && (await answerComputerRequest(client, shareId, accept, followAgain))
+  }
+
   /** What the computer's pages show of its shared agents, as the desktop window does. */
   views(pairedHostId: string): SharedBotHostView[] {
     return this.store
       .list()
       .filter((entry) => entry.pairedHostId === pairedHostId)
-      .map((entry) =>
-        sharedBotHostView(entry, {
-          homeWorkspaceId: null,
-          link: this.linkFor(entry).current(),
-          holds: true,
-          held: this.held.views(entry)
-        })
-      )
+      .map((entry) => this.view(entry))
       .concat((this.awaitingKey.get(pairedHostId) ?? []).map(awaitingKeyView))
   }
 
@@ -188,21 +192,44 @@ export class PhoneSharedAgents {
       .find((entry) => entry.pairedHostId === pairedHostId && entry.environmentId === environmentId)
   }
 
+  /** Never rejects: a page's call that fails here answers as not sent, so the page says so. */
   async call(entry: PhoneSharedAgent, method: string, params: unknown): Promise<RpcResponse> {
+    return await this.callHost(entry, method, params).catch((error: unknown) => {
+      console.warn('[shared-agents] a call failed on the phone', method, error)
+      return sharedAgentCallFailed(method)
+    })
+  }
+
+  private async callHost(
+    entry: PhoneSharedAgent,
+    method: string,
+    params: unknown
+  ): Promise<RpcResponse> {
     const link = await this.reach(entry)
-    if (method === 'agentSession.send') {
-      const held = await this.sendHeld(entry, link, params)
-      if (held) {
-        return held
-      }
+    if (link !== 'live' && !(await this.stillShared(entry))) {
+      return sharedAgentUnshared(method)
     }
+    // Answered on the phone: a new chat's placeholder, or a send held (or refused) for the host.
+    const here =
+      this.held.startHere(this.view(entry).holds, link, method, params) ??
+      (method === 'agentSession.send'
+        ? await this.held.answerSend(entry, link, params, () => this.forget(entry.shareId))
+        : null)
+    if (here) {
+      return here
+    }
+    const away = () =>
+      this.kept.answer(entry.shareId, method, params) ?? sharedAgentOffline(entry, method)
     if (link !== 'live') {
-      return this.offline(entry, method)
+      return away()
     }
     try {
-      return await this.linkFor(entry).request(method, params)
+      const response = await this.linkFor(entry).request(method, params)
+      this.held.noteAnswer(entry, method, params, response)
+      this.kept.noteAnswer(entry.shareId, method, params, response)
+      return response
     } catch {
-      return this.offline(entry, method)
+      return away()
     }
   }
 
@@ -214,15 +241,25 @@ export class PhoneSharedAgents {
   ): () => void {
     let stop: (() => void) | null = null
     let released = false
-    void this.reach(entry).then((link) => {
+    void this.reach(entry).then(async (link) => {
+      const shared = link === 'live' || (await this.stillShared(entry))
       if (released) {
         return
       }
-      if (link !== 'live') {
-        onData({ type: 'error', message: this.offline(entry, method).error.message })
+      if (!shared) {
+        onData({ type: 'error', message: SHARED_BOT_UNSHARED_MESSAGE })
         return
       }
-      stop = this.linkFor(entry).subscribe(method, params, onData)
+      if (link !== 'live') {
+        // While away, a chat shows what its host last streamed of it, if this launch saw it.
+        stop = this.kept.replay(entry.shareId, method, params, onData)
+        if (!stop) {
+          onData({ type: 'error', message: sharedAgentOffline(entry, method).error.message })
+        }
+        return
+      }
+      const kept = this.kept.recording(entry.shareId, method, params, onData)
+      stop = this.linkFor(entry).subscribe(method, params, kept)
     })
     return () => {
       released = true
@@ -230,36 +267,23 @@ export class PhoneSharedAgents {
     }
   }
 
+  /** The computer's shared agents as `views` reads them, now and on each change that alters them. */
+  watch(pairedHostId: string, onViews: (views: SharedBotHostView[]) => void): () => void {
+    return watchPhoneSharedAgents(this, () => this.views(pairedHostId), onViews)
+  }
+
   async sendAgain(entry: PhoneSharedAgent, clientMessageId: string): Promise<boolean> {
     return await this.held.sendAgain(entry, clientMessageId)
   }
 
   /** A send that belongs on the held queue: held, or why not; null when it goes to the host live. */
-  private async sendHeld(
-    entry: PhoneSharedAgent,
-    link: SharedHostLink,
-    params: unknown
-  ): Promise<RpcResponse | null> {
-    const send = this.held.heldSend(params)
-    if (!send || !this.held.sendsHeld(entry, link, send.chat)) {
-      return send || link === 'live' ? null : this.offline(entry, 'agentSession.send')
-    }
-    const result = await this.held.hold(entry, send)
-    if (result === 'unshared') {
-      this.forget(entry.shareId)
-    }
-    const refusal = sharedBotHeldRefusal(result, entry.ownerName)
-    return refusal
-      ? failure('agentSession.send', ...refusal)
-      : this.offline(entry, 'agentSession.send')
-  }
-
-  private offline(entry: PhoneSharedAgent, method: string): RpcFailure {
-    return failure(
-      method,
-      SHARED_BOT_HOST_ERRORS.offline,
-      `${entry.ownerName}’s computer is offline`
-    )
+  /** The agent as its pages show it: whether it holds (the off switch applied there) and what. */
+  private view(entry: PhoneSharedAgent): SharedBotHostView {
+    return sharedBotHostView(entry, {
+      link: this.linkFor(entry).current(),
+      holds: sharedBotHoldsSends(entry.hostKey),
+      held: this.held.views(entry)
+    })
   }
 
   /** The link once any dial the phone can make with what it keeps has settled. */
@@ -277,8 +301,13 @@ export class PhoneSharedAgents {
         clientCapabilities: MOBILE_RUNTIME_CLIENT_CAPABILITIES,
         entry: () => this.store.get(entry.shareId),
         save: (next) => this.store.put(next),
-        onLinkChanged: (next) => {
+        onLinkChanged: (next, previous) => {
           const current = this.store.get(entry.shareId)
+          const computer = this.computers.get(entry.pairedHostId)
+          // The host dropped the live link (a revoke closes it): the computer's list says whether.
+          if (previous === 'live' && next === 'offline' && computer) {
+            void this.syncComputer(entry.pairedHostId, computer)
+          }
           // The host refused this phone's key (revoked) and nothing kept can dial it: dropped until
           // the computer lists it again and the host gives a new key.
           if (

@@ -30,6 +30,13 @@ import {
   isBotSideChatTab,
   isHostedBotChatTab
 } from '../../../../../shared/bots/bot-home-tab'
+import {
+  botHomeOfSession,
+  botSharePersonName,
+  isOwnBotHome
+} from '../../../../../shared/bots/bot-home-of'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
 import { BotAvatar } from '../../bots/BotAvatar'
 import { BotGroupTabIcon, useBotGroupTabMembers } from '../../bots/BotGroupTabIcon'
@@ -97,9 +104,18 @@ function TabBarItemRow({
   )
   const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
   const homeRule = useBotHomeRuleApplies(bot)
-  // Why: Orca names a bot's main chat "Home" in its record; that name reads in the UI language.
-  const conversationName =
-    isBotChat && chatNaming.name === 'Home' ? t('bots.tabs.homeTitle', 'Home') : chatNaming.name
+  const ownHome = item.type === 'agent-session' && isOwnBotHome(bot, item.data.entityId)
+  const teammateOf =
+    item.type === 'agent-session' && bot && !ownHome
+      ? botHomeOfSession(bot, item.data.entityId)
+      : null
+  const teammateName =
+    bot && teammateOf && teammateOf !== 'owner'
+      ? botSharePersonName(bot, teammateOf.accountId)
+      : null
+  const sharedHost = useSharedBotHostOf(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID)
+  // Only the viewer's own Home is retitled here; a teammate's comes titled from the host's records.
+  const conversationName = ownHome ? t('bots.tabs.homeTitle', 'Home') : chatNaming.name
   const ruledHome = useAppStore(
     (state) =>
       state.workspaceSessionReady &&
@@ -223,13 +239,26 @@ function TabBarItemRow({
         }
         identityDetail={
           isBotChat
-            ? t(
-                'bots.tabs.homeDetail',
-                "Home: the bot's main chat. Its memory, automations and requests from others land here."
-              )
-            : bot
-              ? t('bots.tabs.sideDetail', 'Side chat: a separate topic with this bot.')
-              : undefined
+            ? sharedHost !== null || bot?.shareViewer
+              ? t(
+                  'bots.tabs.teammateHomeDetail',
+                  'Home: your main chat with this agent. Your requests and its replies to you land here.'
+                )
+              : t(
+                  'bots.tabs.homeDetail',
+                  "Home: the bot's main chat. Its memory, automations and requests from others land here."
+                )
+            : teammateName !== null
+              ? t(
+                  'bots.tabs.personHomeDetail',
+                  '{{name}}’s Home: their main chat with this agent.',
+                  {
+                    name: teammateName
+                  }
+                )
+              : bot
+                ? t('bots.tabs.sideDetail', 'Side chat: a separate topic with this bot.')
+                : undefined
         }
       />
     )

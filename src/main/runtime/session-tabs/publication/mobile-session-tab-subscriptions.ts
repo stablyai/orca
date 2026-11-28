@@ -6,12 +6,13 @@ import type {
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeWorkspaceFileTargets } from '../../workspaces/workspace-file-session-targets'
+import type { SessionTabListName } from '../../client/navigation/client-session-tab-selection'
 export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorkspaceFileTargets {
   onMobileSessionTabsChanged(
     listener: MobileSessionTabSubscription['listener'],
     clientNavigationId?: string,
     clientKind?: 'mobile' | 'runtime',
-    options?: Pick<MobileSessionTabSubscription, 'observation' | 'acceptsWorktree'>
+    options?: Pick<MobileSessionTabSubscription, 'observation' | 'acceptsWorktree' | 'list'>
   ): () => void {
     // Drain coalesced notifications before subscribing: the initial snapshot already includes them.
     this.mobileSessionTabsNotifyCoalescer.flushAll()
@@ -20,7 +21,8 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
       clientNavigationId,
       clientKind,
       observation: options?.observation,
-      acceptsWorktree: options?.acceptsWorktree
+      acceptsWorktree: options?.acceptsWorktree,
+      list: options?.list
     }
     this.mobileSessionTabListeners.add(subscription)
     return () => {
@@ -80,10 +82,13 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     this.clientHostedPageReconciliation.forgetObservation(clientNavigationId, observer)
   }
 
+  /** Listeners of one workspace's tab list: a device's own list (`tabOwnerOf`), or the list a watcher
+   *  named. A frame of the host's list never reaches a teammate's device whose own list is there. */
   protected selectMobileSessionTabsListeners(
     worktree?: string,
     clientNavigationId?: string,
-    candidates: Iterable<MobileSessionTabSubscription> = this.mobileSessionTabListeners
+    candidates: Iterable<MobileSessionTabSubscription> = this.mobileSessionTabListeners,
+    list: SessionTabListName = 'host'
   ): MobileSessionTabSubscription[] {
     const selected: MobileSessionTabSubscription[] = []
     for (const subscription of candidates) {
@@ -91,7 +96,10 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
         this.mobileSessionTabListeners.has(subscription) &&
         (clientNavigationId === undefined ||
           subscription.clientNavigationId === clientNavigationId) &&
-        (worktree === undefined || subscription.acceptsWorktree?.(worktree) !== false)
+        (worktree === undefined ||
+          (subscription.acceptsWorktree?.(worktree) !== false &&
+            (subscription.list ??
+              this.sessionTabListOf(subscription.clientNavigationId, worktree)) === list))
       ) {
         selected.push(subscription)
       }

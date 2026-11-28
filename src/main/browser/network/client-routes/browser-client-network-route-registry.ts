@@ -1,6 +1,7 @@
 import type { BrowserHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserClientPageNetworkRoute } from './browser-client-page-network-route'
+import type { BrowserRouteViewer } from '../../routing/sessions/browser-route-session-policy'
 import {
   assertBrowserClientNetworkRouteAddress,
   sameBrowserClientNetworkRouteAddress
@@ -26,6 +27,8 @@ type BrowserClientNetworkRouteRegistryOptions = {
   authority: BrowserHostLeaseAuthority
   /** Durable machine identity; process runtime IDs must not name storage. */
   authorityStorageKey: string
+  /** Whose computer the authority is: decides what its pages send through it. */
+  viewer: BrowserRouteViewer
   reconnectGraceMs?: number
   reconnectRetryDelayMs?: number
   createRoute(
@@ -103,6 +106,7 @@ export class BrowserClientNetworkRouteRegistry {
         legacyExecutionHostIdentity:
           legacyBrowserNetworkExecutionHostStorageIdentity(executionHost),
         proxyEndpoint: { host: '127.0.0.1', port: address.port },
+        viewer: this.options.viewer,
         release: async () => {
           if (released) {
             return

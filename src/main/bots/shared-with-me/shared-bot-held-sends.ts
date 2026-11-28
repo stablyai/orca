@@ -7,7 +7,6 @@ import { z } from 'zod'
 import {
   isSharedBotNewChatId,
   newSharedBotChatId,
-  SHARED_BOT_HOST_ERRORS,
   SHARED_HOSTS_HOLD_WHILE_AWAY,
   type SharedBotHeldState,
   type SharedBotHeldView
@@ -19,6 +18,7 @@ import {
   sharedBotHeldChat,
   sharedBotHeldRefusal
 } from '../../../shared/bots/shared-bot-held-routing'
+import { sharedBotFailure, sharedBotOffline } from './shared-bot-host-answers'
 import { handOffSharedBotMessage, type HandOffResult } from './shared-bot-hand-off'
 import {
   sharedBotHostKey,
@@ -38,18 +38,13 @@ import {
   type SharedBotHeldAttachment
 } from './shared-bot-held-uploads'
 import type { SharedBotsCloud } from './shared-bots-cloud'
-
-export const sharedBotFailure = (
-  id: string,
-  code: string,
-  message: string
-): RuntimeRpcResponse<unknown> => ({ id, ok: false, error: { code, message } })
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 // A new chat started live under the id its held messages name, and the session the host gave it.
-const NewChatParams = z.looseObject({ newChatId: z.string() })
-const StartedSession = z.looseObject({ sessionId: z.string() })
-const SessionParams = z.looseObject({ sessionId: z.string() })
-const EnvelopeParams = z.looseObject({ envelope: SessionParams })
+const NewChatParams = lazyZodSchema(() => z.looseObject({ newChatId: z.string() }))
+const StartedSession = lazyZodSchema(() => z.looseObject({ sessionId: z.string() }))
+const SessionParams = lazyZodSchema(() => z.looseObject({ sessionId: z.string() }))
+const EnvelopeParams = lazyZodSchema(() => z.looseObject({ envelope: SessionParams }))
 
 /** The chat a call names, as `sessionId` or in its mutation envelope. */
 const sessionIdOf = (params: unknown): string | undefined =>
@@ -328,26 +323,4 @@ export class SharedBotHeldSends {
   private state(held: SharedBotHeldMessage): SharedBotHeldState {
     return this.states.get(held.clientMessageId) ?? 'waiting'
   }
-}
-
-/** The host's own answer, named for the host the window asked. */
-export function sharedBotAnswer(
-  entry: Pick<SharedBotHostEntry, 'environmentId'>,
-  response: RpcResponse
-): RuntimeRpcResponse<unknown> {
-  return response.ok
-    ? { ...response, _meta: { runtimeId: response._meta?.runtimeId ?? entry.environmentId } }
-    : response
-}
-
-/** A call the host wasn't reached for, and nothing was held for. */
-export function sharedBotOffline(
-  entry: SharedBotHostEntry,
-  method = 'agentSession.send'
-): RuntimeRpcResponse<unknown> {
-  return sharedBotFailure(
-    method,
-    SHARED_BOT_HOST_ERRORS.offline,
-    `${entry.ownerName}’s computer is offline`
-  )
 }

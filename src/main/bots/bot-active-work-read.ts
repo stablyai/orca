@@ -5,6 +5,7 @@ import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { type BotActiveWorkSection, botActiveWorkSection } from './bot-active-work'
 import type { BotItemRecord } from './bot-items-schema'
+import { type BotItemAccess, botItemListScope } from './bot-item-access'
 
 const FRESH_MS = 15_000
 /** Items in progress or waiting read, newest first; the block shows at most 12 rows anyway. */
@@ -31,11 +32,12 @@ type Cached = { at: number; section: Promise<BotActiveWorkSection> }
 export function createBotActiveWorkReader() {
   const cache = new Map<string, Cached>()
   return async <R extends Listed>(
-    botId: string,
+    /** The bot and the scope its reads cover: one cache entry each. */
+    key: string,
     reads: BotActiveWorkReads<R>,
     now = Date.now()
   ): Promise<BotActiveWorkSection> => {
-    const hit = cache.get(botId)
+    const hit = cache.get(key)
     if (hit && now - hit.at < FRESH_MS) {
       return hit.section
     }
@@ -66,28 +68,37 @@ export function createBotActiveWorkReader() {
         now
       })
     })()
-    cache.set(botId, { at: now, section })
+    cache.set(key, { at: now, section })
     // A failed read is tried again on the next turn, never kept.
-    section.catch(() => cache.get(botId)?.section === section && cache.delete(botId))
+    section.catch(() => cache.get(key)?.section === section && cache.delete(key))
     return section
   }
 }
 
 const readers = new WeakMap<OrcaRuntimeService, ReturnType<typeof createBotActiveWorkReader>>()
 
+/** What a turn's live work holds: whose items, and whether the bot's workers too. */
+export type BotActiveWorkScope = { items: BotItemAccess; workers: boolean }
+
+function scopeKey({ items, workers }: BotActiveWorkScope): string {
+  return JSON.stringify([items.kind === 'everyone' ? '*' : items.accounts, workers])
+}
+
 /** The runtime's reads for a turn of one of `botId`'s chats. */
 export function readBotActiveWork(
   runtime: OrcaRuntimeService,
-  botId: string
+  botId: string,
+  scope: BotActiveWorkScope
 ): Promise<BotActiveWorkSection> {
   const reader = readers.get(runtime) ?? createBotActiveWorkReader()
   readers.set(runtime, reader)
-  return reader(botId, {
+  const people = botItemListScope(scope.items)
+  return reader(`${botId}\n${scopeKey(scope)}`, {
     items: (status, limit, cursor) =>
       runtime.botItems
         .store()
-        .list({ botId, statuses: [status], limit, ...(cursor ? { cursor } : {}) }),
+        .list({ botId, statuses: [status], ...people, limit, ...(cursor ? { cursor } : {}) }),
     views: (items) => runtime.botItems.views(items),
-    workers: () => runtime.botWork.list(botId)
+    workers: async () => (scope.workers ? runtime.botWork.list(botId) : [])
   })
 }

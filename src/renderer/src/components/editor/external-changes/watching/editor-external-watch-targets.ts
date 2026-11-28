@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { getExplorerTreeView } from '@/store/slices/right-sidebar/right-sidebar-route'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
@@ -50,7 +51,10 @@ export type EditorExternalWatchTargetState = Pick<
   Partial<
     Pick<
       AppState,
-      'activeWorkspaceExecutionHostId' | 'rightSidebarEffectiveTab' | 'lastVisitedAtByWorktreeId'
+      | 'activeWorkspaceExecutionHostId'
+      | 'rightSidebarEffectiveTab'
+      | 'lastVisitedAtByWorktreeId'
+      | 'fileSearchStateByWorktree'
     >
   >
 
@@ -168,7 +172,7 @@ export function selectEditorExternalWatchTargets(
     cachedRightSidebarOpen === state.rightSidebarOpen &&
     cachedRightSidebarTab === state.rightSidebarTab &&
     cachedRightSidebarEffectiveTab === state.rightSidebarEffectiveTab &&
-    cachedRightSidebarExplorerView === state.rightSidebarExplorerView &&
+    cachedRightSidebarExplorerView === getExplorerTreeView(state) &&
     cachedGitStatusHugeByWorktree === state.gitStatusHugeByWorktree &&
     cachedSshConnectionStates === state.sshConnectionStates &&
     cachedFolderWorkspaces === selectFolderWorkspaces(state) &&
@@ -225,7 +229,7 @@ export function selectEditorExternalWatchTargets(
   const activeWorktreeNeedsSidebarWatch =
     activeWorktreeId !== null &&
     state.rightSidebarOpen &&
-    ((shownRightSidebarTab === 'explorer' && state.rightSidebarExplorerView === 'files') ||
+    ((shownRightSidebarTab === 'explorer' && getExplorerTreeView(state) === 'files') ||
       (shownRightSidebarTab === 'source-control' && sourceControlCanConsumeWatch))
   if (activeWorktreeNeedsSidebarWatch) {
     // Why: this app-level watcher owns Explorer/Source-Control subscriptions so downstream consumers don't fight over watch/unwatch IPC.
@@ -263,7 +267,7 @@ export function selectEditorExternalWatchTargets(
   cachedRightSidebarOpen = state.rightSidebarOpen
   cachedRightSidebarTab = state.rightSidebarTab
   cachedRightSidebarEffectiveTab = state.rightSidebarEffectiveTab
-  cachedRightSidebarExplorerView = state.rightSidebarExplorerView
+  cachedRightSidebarExplorerView = getExplorerTreeView(state)
   cachedGitStatusHugeByWorktree = state.gitStatusHugeByWorktree
   cachedSshConnectionStates = state.sshConnectionStates
   cachedFolderWorkspaces = selectFolderWorkspaces(state)

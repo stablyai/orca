@@ -9,9 +9,10 @@ import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-
 import type { PtyControllerInventory } from '../lifecycle/runtime-pty-controller-contract'
 import { buildRuntimeTerminalOrphanSession } from './runtime-terminal-orphan-session-adoption'
 import { validateRuntimeTerminalOrphanTopology } from './runtime-terminal-orphan-topology-validation'
-import type {
-  RuntimeLeafRecord,
-  RuntimePtyWorktreeRecord
+import {
+  ptyInList,
+  type RuntimeLeafRecord,
+  type RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { PtyPaneOf } from '../surface/pty-pane-query'
@@ -76,6 +77,10 @@ export function planRuntimeTerminalOrphanAdoption(
     seenPtyIds.add(claim.ptyId)
     seenPaneKeys.add(paneKey)
     const pty = ports.getPty(claim.terminal)
+    if (pty && !ptyInList(pty, 'host')) {
+      // A teammate's own terminal is in their list alone, never the host's saved layout.
+      throw new Error('terminal_orphan_owner_mismatch')
+    }
     const controllerIdentity = inventory.terminalIdentityByPtyId.get(claim.ptyId)
     if (
       !pty ||

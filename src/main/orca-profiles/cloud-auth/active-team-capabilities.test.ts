@@ -6,6 +6,7 @@ import {
 } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import {
   initializeActiveTeamProfile,
+  isActiveCloudFlagOn,
   isTeamFeatureBlocked,
   observeActiveTeamProfile,
   observeActiveTeamSession
@@ -113,4 +114,26 @@ it('discovers new policies on a connected account and cancels discovery at sign-
     stop()
     vi.useRealTimers()
   }
+})
+
+it('reads an account flag as off when the session has no flags', () => {
+  const cloud = {
+    userId: 'user_f',
+    cloudProfileId: 'cloud_f',
+    email: 'f@example.test',
+    linkedAt: 1
+  }
+  const profile = { ...createDefaultLocalOrcaProfile(1), cloud }
+  initializeActiveTeamProfile(
+    '/orca-flags',
+    profile
+  )({
+    accessToken: 'access',
+    refreshToken: 'refresh',
+    expiresAt: 2,
+    identity: cloud,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a stored session missing its flags, which the type rules out
+    capabilities: { refreshedAt: 1 } as never
+  })
+  expect(isActiveCloudFlagOn('relay.oneLink')).toBe(false)
 })

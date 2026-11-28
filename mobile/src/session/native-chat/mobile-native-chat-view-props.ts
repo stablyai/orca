@@ -22,7 +22,8 @@ import type { MobileNativeChatInputLockStatus } from './composer/field/MobileNat
 import type { MobileNativeChatPendingItem } from './transcript/projection/mobile-native-chat-render-data'
 import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
 
-export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
+// unreachable: the host is out and nothing can wait for it, so the composer gives way to why.
+export type MobileNativeChatInputLockReason = 'disconnected' | 'unreachable' | 'waiting'
 
 export type MobileNativeChatViewProps = MobileNativeChatSendProps &
   Omit<ComponentProps<typeof MobileNativeChatPromptCard>, 'answering' | 'requiresTerminal'> & {
@@ -61,6 +62,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     onLoadEarlier?: () => void
     // Fence send completion by route identity after tab/view switches.
     sendSurfaceId: string
+    /** The structured session this chat shows, where its cards' answers go; null before it has one. */
+    sessionId?: string | null
     getSendCompletionGeneration: () => number
     getComposerEditGeneration: () => number
     pending: MobileNativeChatPendingItem[]

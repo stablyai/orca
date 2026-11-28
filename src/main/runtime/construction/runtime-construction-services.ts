@@ -1,3 +1,4 @@
+import type { TabListRef } from '../../bots/team-share/teammate-rules'
 import { RuntimeAgentStatusReadContract } from './runtime-agent-status-read-contract'
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
@@ -38,7 +39,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/executio
 import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
-import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
+import type { OrchestrationCliTarget } from '../orchestration/workers/launch/orchestration-cli-command'
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/routing/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-submit'
 import type { OrchestrationPointerPty } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-delivery-contract'
@@ -84,6 +85,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): Calls.SyncOrchestrationFederatedDispatchResult
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
   abstract forgetStructuredSessionMail(sessionId: string): void
+  abstract sleptAgentHandleForPane(paneKey: string | null | undefined): string | null
   abstract getLocalProvider(): IPtyProvider | null
   abstract removeWorktreeMetadataAndHistory(
     ...args: Calls.RemoveWorktreeMetadataAndHistoryArgs
@@ -97,12 +99,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
 
   protected abstract handleGraphReloadTimeout(windowId: number): void
   protected abstract flushScheduledMobileSessionTabsChanged(worktreeId: string): void
-  abstract touchMobileSessionTabsForWorktree(
-    worktreeId: string,
-    options?: {
-      immediate?: boolean
-    }
-  ): void
+  abstract touchSessionTabList(list: TabListRef, options?: { immediate?: boolean }): void
   protected abstract readonly ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   protected abstract repointPendingMessagesForHandle(handle: string): void
   protected abstract getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform
@@ -262,9 +259,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   protected abstract isLeafPtyProvenAbsent(ptyId: string): Promise<boolean>
   protected abstract checkDeliverySettledAndArmRecheck(ptyId: string): boolean
   protected abstract isPtyAwaitingUserInput(ptyId: string): boolean
-  abstract getTerminalOrchestrationCliCommand(
-    handle: string
-  ): ReturnType<typeof resolveTerminalOrchestrationCliCommand>
+  abstract getTerminalOrchestrationCliTarget(handle: string): OrchestrationCliTarget
   protected abstract resolveOrchestrationPointerSubmitTarget(
     ptyId: string
   ): OrchestrationMailboxPointerSubmitTarget | null

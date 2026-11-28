@@ -13,13 +13,11 @@ import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
 import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
-import {
-  publishBotSidebarViewChanges,
-  publishWorkspaceViewChanges
-} from './client/settings/runtime-workspace-view-change-events'
+import { publishWorkspaceViewChanges } from './client/settings/runtime-workspace-view-change-events'
+import { publishBotViewChanges } from '../bots/bot-view-change-publication'
 import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
 import { sidebarFactsRuntime } from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithAgentQuestions } from './construction/orca-runtime-agent-questions'
+import { OrcaRuntimeWithRelayHostNotices } from './construction/orca-runtime-relay-host-notices'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
@@ -75,7 +73,7 @@ import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view
 import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
+class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
   protected override assertStructuredQueuedMessageAllowed(sessionId: string, messageId: string) {
     botGroups.assertBotGroupQueuedMessageAllowed(this, sessionId, messageId)
   }
@@ -201,14 +199,14 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     return this.references.find(params)
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentQuestions>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithRelayHostNotices>) {
     super(...args)
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     registerWorktreeCatalogRoutes(this.store)
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
-    publishBotSidebarViewChanges(this.store, () => this.notifyBotsChanged({ kinds: ['bot'] }))
+    publishBotViewChanges(this.store, this)
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
     announceAgentCliUpdatesFinished((event) => this.emitClientEvent(event))
@@ -216,11 +214,6 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
     this.automation.botChat = botGroups.withGroupRoomChats(this, this.automation.botChat)
     syncPRAutoRefreshCadence(this.store)
-  }
-
-  /** What mobileRelay.hosts.list answers changed. */
-  notifyRelayHostsChanged(): void {
-    this.emitClientEvent({ type: 'relayHostsChanged' })
   }
 
   private structuredAgentAvailability?: ReturnType<typeof installAvailability>

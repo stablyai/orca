@@ -1,7 +1,8 @@
 // The desktop's marks on a person's message: for one Orca delivered from Slack, GitHub, Linear or
 // Discord, the "Sam Lee · Slack" tag and the folded lines from people without access; for one another
 // person typed on their paired computer, "Sam Lee · Sam's MacBook Pro"; "Sent as goal".
-import { useState } from 'react'
+import { MobileNativeChatMessageDelivery } from '../notices/MobileNativeChatDeliveryNotice'
+import { createContext, useContext, useState } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { ChevronRight, Goal } from 'lucide-react-native'
 import type { ConnectorMessageAsker } from '../../../../../../src/shared/connector-message-asker'
@@ -23,10 +24,22 @@ import { useMobileSlackMirrorContext } from '../../slack-mirror/use-mobile-slack
 import { slackMirrorPostedAsker } from '../../../../../../src/shared/connectors/slack-mirror-state'
 import {
   otherPersonTypistWords,
-  type OtherPersonTypist
+  typistOtherThanViewer,
+  type PersonTypist
 } from '../../../../../../src/shared/agent-session/journal/agent-journal-typed-by'
 
 const ICON_SIZE = 12
+
+/** Whose this chat's view is: a shared agent's chat names the account it is shared with. Null for the
+ *  phone's own computers (it has no Orca sign-in of its own), where the host's comparison decides. */
+export const MobileChatViewerAccountContext = createContext<string | null>(null)
+
+/** The typist when someone other than the viewer, by the one rule the desktop uses. */
+export function usePhoneOtherPersonTypist(
+  typist: PersonTypist | undefined
+): PersonTypist | undefined {
+  return typistOtherThanViewer(typist, useContext(MobileChatViewerAccountContext))
+}
 
 // The phone has no avatar cache, so a person shows by initials, as the desktop does when it can't load one.
 function Initials({ name }: { name: string }): React.JSX.Element {
@@ -89,7 +102,7 @@ export function MobileNativeChatConnectorAskerTag({
 }
 
 /** "Sam Lee · Sam's MacBook Pro"; the phone has no tooltip, so it speaks the full line. */
-function MobileNativeChatTypedByTag({ typist }: { typist: OtherPersonTypist }): React.JSX.Element {
+function MobileNativeChatTypedByTag({ typist }: { typist: PersonTypist }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { name, computer, label } = otherPersonTypistWords(typist, t)
@@ -115,7 +128,7 @@ function MobileTypedMessageTags({
 }): React.JSX.Element | null {
   const mirror = useMobileSlackMirrorContext()
   const posted = mirror?.link.mirrorPosts?.[message.id]?.state === 'posted'
-  const typist = message.typedByOther
+  const typist = usePhoneOtherPersonTypist(message.typist)
   if (!posted && !typist) {
     return null
   }
@@ -139,7 +152,7 @@ export function MobileQueuedTypedByLine({
   typist,
   textStyle
 }: {
-  typist: OtherPersonTypist
+  typist: PersonTypist
   textStyle: StyleProp<TextStyle>
 }): React.JSX.Element {
   const t = useMobileTranslation()
@@ -193,6 +206,7 @@ export function MobileNativeChatUserMessageNotes({
   return (
     <>
       <MobileSlackMirrorPostLine messageId={message.id} />
+      <MobileNativeChatMessageDelivery messageId={message.id} />
       {message.sentAs === 'goal' ? <MobileNativeChatSentAsGoal /> : null}
       {message.automationResultsCarried ? (
         <MobileNativeChatAutomationResultsCarried count={message.automationResultsCarried} />

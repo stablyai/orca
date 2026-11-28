@@ -243,7 +243,7 @@ export class E2EEChannel {
     const authentication = authenticateMobileE2EE({
       plaintext,
       v2Session: this.v2Session,
-      v2TokenCapabilities: this.transportContext.transport === 'direct',
+      transport: this.transportContext.transport,
       resolveDevice: this.resolvers.resolveAuthenticatedDevice,
       resolveDeviceKey: this.resolvers.resolveAuthenticatedDeviceKey
     })

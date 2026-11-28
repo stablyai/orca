@@ -11,6 +11,7 @@ import {
 } from './use-mobile-native-chat-offline-sends'
 
 import { loadMobileNativeChatDrafts } from '../drafts/mobile-native-chat-draft-persistence'
+import { sharedAgentChatInputLock } from '../../../../bots/shared-agents/shared-agent-chat-held'
 
 vi.mock('@react-native-async-storage/async-storage', async () => {
   const { createInMemoryAsyncStorage } =
@@ -61,6 +62,17 @@ describe('useMobileNativeChatOfflineQueue', () => {
     releasePending = null
     pendingSend = null
     await loadMobileNativeChatDrafts('host', 'worktree')
+  })
+
+  it('queues nothing for a shared agent whose host is away and holds nothing, and shows no composer', async () => {
+    const send = vi.fn<Send>().mockResolvedValue(false)
+    await mount(sharedAgentChatInputLock(false, false), send)
+    expect(queue?.composerHidden).toBe(true)
+    expect(queue?.composerLock.offline).toBe(false)
+    await act(async () => {
+      await queue?.send('hello')
+    })
+    expect(readMobileNativeChatOfflineSends(SCOPE)).toEqual([])
   })
 
   it('pauses a queued message whose send fails and holds later sends behind it until Resume', async () => {

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { PLUGIN_SHOT_MAX_ACTS } from './plugin-shot-acts'
 
 /**
@@ -11,8 +12,8 @@ import { PLUGIN_SHOT_MAX_ACTS } from './plugin-shot-acts'
 const MAX_COORDINATE = 10_000
 const KEY_MODIFIERS = ['shift', 'control', 'alt', 'meta'] as const
 
-const coordinate = z.number().finite().min(0).max(MAX_COORDINATE)
-const point = z.tuple([coordinate, coordinate])
+const coordinate = lazyZodSchema(() => z.number().finite().min(0).max(MAX_COORDINATE))
+const point = lazyZodSchema(() => z.tuple([coordinate, coordinate]))
 
 const EDITOR_ACT_SCHEMAS = {
   click: z.strictObject({ click: point }),
@@ -23,17 +24,14 @@ const EDITOR_ACT_SCHEMAS = {
   })
 }
 
-export const pluginEditorShotActSchema = z.union([
-  EDITOR_ACT_SCHEMAS.click,
-  EDITOR_ACT_SCHEMAS.drag,
-  EDITOR_ACT_SCHEMAS.key
-])
+export const pluginEditorShotActSchema = lazyZodSchema(() =>
+  z.union([EDITOR_ACT_SCHEMAS.click, EDITOR_ACT_SCHEMAS.drag, EDITOR_ACT_SCHEMAS.key])
+)
 export type PluginEditorShotAct = z.infer<typeof pluginEditorShotActSchema>
 
-export const pluginEditorShotActsSchema = z
-  .array(pluginEditorShotActSchema)
-  .min(1)
-  .max(PLUGIN_SHOT_MAX_ACTS)
+export const pluginEditorShotActsSchema = lazyZodSchema(() =>
+  z.array(pluginEditorShotActSchema).min(1).max(PLUGIN_SHOT_MAX_ACTS)
+)
 
 const VERBS = ['click', 'drag', 'key'] as const
 

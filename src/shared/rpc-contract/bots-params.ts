@@ -39,6 +39,7 @@ import {
 import { type BotCancelledWait, withBotCancelledWait } from '../bots/bot-cancelled-waits'
 import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
 import { ACCESS_REQUEST_TOKEN_PATTERN } from '../connector-bot-access-contract'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** Why a bots.* call refused. */
 export const BOT_ERROR_CODES = [
@@ -52,7 +53,7 @@ export const BOT_ERROR_CODES = [
 ] as const
 
 const HandedWorkspaces = z.array(HandedWorkspaceSchema).min(1).max(HANDED_WORKSPACES_MAX)
-const BotAgent = z.enum(BOT_AGENTS).optional()
+const BotAgent = lazyZodSchema(() => z.enum(BOT_AGENTS).optional())
 
 export const BotCreate = z.object({
   name: NewBotNameSchema,
@@ -275,7 +276,7 @@ export const BotRoster = z.object({
 /** A new conversation with the bot; `agent` runs it on another of the agents a bot can be.
  *  `newChatId`: a shared teammate's id for this new chat, so their start and their message held while
  *  the host was away open the same one; the owner's starts ignore it. */
-const NewChatId = z.string().min(1).max(128).optional()
+const NewChatId = lazyZodSchema(() => z.string().min(1).max(128).optional())
 export const BotSessionStart = BotChat.extend({ agent: BotAgent, newChatId: NewChatId })
 
 /** The owner handed the bot a workspace, already moved under its home: Orca tells the bot in its Home

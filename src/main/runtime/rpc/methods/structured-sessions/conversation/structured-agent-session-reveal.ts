@@ -1,4 +1,5 @@
 import { assertBotLinkOpenAuthority } from '../../../../../bots/bot-link-open-authority'
+import { callerTabPerson } from '../../../../../bots/team-share/teammate-rules'
 import { holdAgentSessionPublicationFence } from '../../../../agent-session/agent-session-publication-fence'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { StructuredWorkspaceUnavailable } from '../../../../session-tabs/chat/structured-workspace-authority'
@@ -53,6 +54,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         })
       }
       let publication: StructuredSessionSurface | null = null
+      let personList = false
       let revealed: StructuredAgentSessionReveal
       try {
         const host = requireStructuredHost(ctx)
@@ -125,6 +127,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           }
         }
         await ctx.runtime.publishStructuredAgentSessionTab({
+          person: callerTabPerson(ctx.callerScope),
           workspaceAuthority: {
             writerFence: publicationFence?.fence,
             check,
@@ -141,12 +144,15 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           agent: revealed.agent,
           capture: (surface) => {
             publication = surface
+            personList = surface.personList === true
           },
           activate: params.navigation !== 'caller',
           ...(params.navigation ? { navigation: params.navigation } : {})
         })
         check()
+        // A teammate's own list holds the tab; the host's tab, open or not, is someone else's.
         if (
+          !personList &&
           !structuredSessionSurfaceIsCurrent(
             requireStructuredHost(ctx),
             revealed.sessionId,
@@ -167,9 +173,9 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           throw new Error('Could not publish the chat to its caller.')
         }
         check()
-        // A bot thread is no longer new once opened anywhere.
+        // A thread is no longer new once its owner opens it anywhere.
         for (const id of new Set([params.sessionId, revealed.sessionId])) {
-          ctx.runtime.markBotThreadSeen(id)
+          ctx.runtime.markBotThreadSeen(id, ctx.callerScope)
         }
         // Return named fields only; private journal-open reasons stay on the host.
         const { sessionId, workspaceId, agent, readable } = revealed

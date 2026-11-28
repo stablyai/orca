@@ -16,8 +16,14 @@ import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/rel
 import { isMissingFileError, quarantineCorruptRegistry } from './device-registry-corruption'
 import { validRelayBinding } from './device-registry-row-validation'
 import { BOT_SHARE_DEVICES_FILENAME } from './mobile-pairing-files'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 
-export type BotShareGrant = { botId: string; accountId: string; name: string }
+// The teammate's name is their share row's (botSharePersonName), never read from here. Each row is
+// still written with it as `name`, which older builds require to read the row at all.
+export type BotShareGrant = { botId: string; accountId: string }
+
+/** The `name` a row is written with for older builds: the teammate as their share row names them now. */
+export type BotShareLegacyName = (grant: BotShareGrant) => string
 
 /** Whether the share a row stands on is still on the bot's list; a row without one signs in as nothing. */
 export type BotShareGranted = (grant: Pick<BotShareGrant, 'botId' | 'accountId'>) => boolean
@@ -42,30 +48,36 @@ export type BotShareDeviceLookup =
   // The file can't be read (or wasn't whole), which proves nothing absent.
   | { kind: 'unavailable' }
 
-const NonEmpty = z.string().min(1)
-const BotShareDeviceRow = z.looseObject({
-  deviceId: NonEmpty,
-  botId: NonEmpty,
-  accountId: NonEmpty,
-  name: z.string(),
-  scope: z.enum(['runtime', 'mobile']),
-  devicePublicKeyB64: z.string().refine(isDevicePublicKeyB64),
-  pairedAt: z.number().finite(),
-  relayBinding: z.unknown().optional(),
-  parentDeviceId: NonEmpty.optional(),
-  shareId: NonEmpty.optional()
-})
-const BotShareDevicesFile = z.object({ v: z.literal(1), devices: z.array(z.unknown()) })
+const NonEmpty = lazyZodSchema(() => z.string().min(1))
+const BotShareDeviceRow = lazyZodSchema(() =>
+  z.looseObject({
+    deviceId: NonEmpty,
+    botId: NonEmpty,
+    accountId: NonEmpty,
+    // Written for older builds; never read.
+    name: z.unknown().optional(),
+    scope: z.enum(['runtime', 'mobile']),
+    devicePublicKeyB64: z.string().refine(isDevicePublicKeyB64),
+    pairedAt: z.number().finite(),
+    relayBinding: z.unknown().optional(),
+    parentDeviceId: NonEmpty.optional(),
+    shareId: NonEmpty.optional()
+  })
+)
+const BotShareDevicesFile = lazyZodSchema(() =>
+  z.object({ v: z.literal(1), devices: z.array(z.unknown()) })
+)
 
-/** A row is used only whole; one that fails its schema is refused, never read as anything else. */
-function parseRow(value: unknown): BotShareDevice | null {
+/** A row is used only whole; one that fails its schema is refused, never read as anything else.
+ *  `writtenName` is the `name` it was written with, kept only to know when to write it again. */
+function parseRow(value: unknown): { device: BotShareDevice; writtenName: unknown } | null {
   const row = BotShareDeviceRow.safeParse(value)
   if (!row.success) {
     return null
   }
-  const { relayBinding, ...rest } = row.data
+  const { relayBinding, name: writtenName, ...rest } = row.data
   const binding = validRelayBinding(relayBinding, rest.deviceId)
-  return binding ? { ...rest, relayBinding: binding } : rest
+  return { device: binding ? { ...rest, relayBinding: binding } : rest, writtenName }
 }
 
 export class BotShareDeviceStore {
@@ -78,10 +90,13 @@ export class BotShareDeviceStore {
   /** Rows this build couldn't read, written back as they were: they may be another build's devices. */
   private unparsedRows: unknown[] = []
   private writing: Promise<void> = Promise.resolve()
+  /** Each row's `name` as last written, so a rename rewrites the file only when one changed. */
+  private writtenNames = new Map<string, unknown>()
 
   constructor(
     userDataPath: string,
-    private readonly granted: BotShareGranted
+    private readonly granted: BotShareGranted,
+    private readonly legacyNameOf: BotShareLegacyName
   ) {
     this.path = join(userDataPath, BOT_SHARE_DEVICES_FILENAME)
     this.load()
@@ -177,6 +192,15 @@ export class BotShareDeviceStore {
     return bound
   }
 
+  /** Rewrites the rows whose teammate's name changed since they were written (for older builds). */
+  async syncLegacyNames(): Promise<void> {
+    await this.save((devices) =>
+      devices.some((device) => this.writtenNames.get(device.deviceId) !== this.legacyNameOf(device))
+        ? [...devices]
+        : null
+    )
+  }
+
   /** Its parent row is still here and its share still on the bot's list: a removed teammate's
    *  leftover row (a revoke that failed or raced an accept) refuses every frame and reconnect. */
   private signsIn(device: BotShareDevice): boolean {
@@ -195,9 +219,10 @@ export class BotShareDeviceStore {
       }
       this.devices = []
       for (const row of file.data.devices) {
-        const device = parseRow(row)
-        if (device) {
-          this.devices.push(device)
+        const parsed = parseRow(row)
+        if (parsed) {
+          this.devices.push(parsed.device)
+          this.writtenNames.set(parsed.device.deviceId, parsed.writtenName)
         } else {
           this.unparsedRows.push(row)
         }
@@ -244,11 +269,13 @@ export class BotShareDeviceStore {
       if (!next) {
         return
       }
-      const devices = [...next, ...this.unparsedRows]
+      const named = next.map((device) => ({ ...device, name: this.legacyNameOf(device) }))
+      const devices = [...named, ...this.unparsedRows]
       await writeSecureFileAsync(this.path, JSON.stringify({ v: 1, devices }, null, 2), {
         durable: true
       })
       this.devices = next
+      this.writtenNames = new Map(named.map((device) => [device.deviceId, device.name]))
     })
     this.writing = write.catch(() => {})
     return write

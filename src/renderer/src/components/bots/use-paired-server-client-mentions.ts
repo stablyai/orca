@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { z } from 'zod'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { ownBotHost } from '@/lib/bot-hosts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { botMentionServer } from './bot-mention-server'
+import { serverAsksAgentsHere } from './paired-server-asks-on'
 
 const OwnStatus = z.object({
   hostDescriptor: z.looseObject({ installationId: z.string() }).nullish()
@@ -34,13 +33,7 @@ export function usePairedServerClientInstallation(hostId: ExecutionHostId | null
       return
     }
     let live = true
-    void Promise.all([
-      runtimeEnvironmentSupportsCapability(
-        environmentId,
-        ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY
-      ),
-      readOwnInstallation()
-    ])
+    void Promise.all([serverAsksAgentsHere(environmentId), readOwnInstallation()])
       .then(([supported, installationId]) => {
         if (live) {
           setRead({ environmentId, installationId: supported ? installationId : null })

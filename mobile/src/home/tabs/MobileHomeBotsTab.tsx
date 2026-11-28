@@ -10,6 +10,10 @@ import type { HomeBotRow, HomeBots, HomeBotsUnavailable } from '../bots/home-bot
 import { translate } from '../../i18n/mobile-i18n'
 import { homeBotRowsByComputer, MobileHomeBotRows } from '../bots/MobileHomeBotRow'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
+import {
+  MobileSharedAgentRequestRows,
+  useSharedAgentRequests
+} from '../bots/MobileSharedAgentRequestRows'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
@@ -39,7 +43,11 @@ export function MobileHomeBotsTab(props: {
       }
     />
   )
-  const notice = useMemo(() => homeBotsNotice(data.bots), [data.bots])
+  const requests = useSharedAgentRequests(
+    useMemo(() => data.hostCatalog.map((host) => host.id), [data.hostCatalog])
+  )
+  const listed = requests.length > 0
+  const notice = useMemo(() => homeBotsNotice(data.bots, listed), [data.bots, listed])
   const computers = useMemo(() => homeBotRowsByComputer(data.bots.rows), [data.bots.rows])
   if (!data.hostCatalogLoaded) {
     return header
@@ -69,6 +77,7 @@ export function MobileHomeBotsTab(props: {
             isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
         >
+          <MobileSharedAgentRequestRows requests={requests} />
           {computers.length > 1 ? (
             computers.map((computer, index) => (
               <View key={computer.placeKey}>
@@ -106,15 +115,18 @@ type HomeBotsNotice =
 /** What the tab says beside its rows: a wait for a first answer, one empty state when every computer
  *  is too old or switched off, else a quiet line per computer it can't list. */
 export function homeBotsNotice(
-  bots: Pick<HomeBots, 'rows' | 'unavailable' | 'listable' | 'awaiting'>
+  bots: Pick<HomeBots, 'rows' | 'unavailable' | 'listable' | 'awaiting'>,
+  /** Shares offered to this account list above the rows, so the list isn't empty. */
+  requests = false
 ): HomeBotsNotice {
-  if (bots.rows.length === 0 && bots.awaiting) {
+  if (bots.rows.length === 0 && bots.awaiting && !requests) {
     return { kind: 'waiting' }
   }
   const reasons = bots.unavailable
   const only = reasons[0]?.reason
   if (
     bots.rows.length === 0 &&
+    !requests &&
     !bots.listable &&
     (only === 'update' || only === 'off') &&
     reasons.every((entry) => entry.reason === only)
@@ -122,7 +134,7 @@ export function homeBotsNotice(
     return emptyNotice(only, reasons)
   }
   const lines = [
-    ...(bots.rows.length === 0
+    ...(bots.rows.length === 0 && !requests
       ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
       : []),
     ...reasons.map((entry) => ({ key: `${entry.reason}:${entry.key}`, text: endLine(entry) }))

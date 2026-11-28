@@ -10,6 +10,8 @@ import type { RuntimeNativeChatDraftResolutions } from '../agent-session/launch/
 import type { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
 import type { NotificationAttentionAcknowledgement } from '../../../shared/notifications/notification-settings-types'
+import { ownsHostReadMarks } from '../../bots/team-share/teammate-rules'
+import type { RpcCallerScope } from '../rpc/callers/rpc-caller-scope'
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
@@ -40,7 +42,11 @@ export type RuntimeServiceCommandSurface = {
   getMobileNotificationEpoch: RuntimeMobileNotificationController['getEpoch']
   dismissMobileNotification: RuntimeMobileNotificationController['dismiss']
   retireNotificationAttention: RuntimeMobileNotificationController['acknowledgeAttention']
-  acknowledgeNotificationAttention(acknowledgement: NotificationAttentionAcknowledgement): void
+  /** A teammate's read leaves the owner's attention (rule 6). */
+  acknowledgeNotificationAttention(
+    acknowledgement: NotificationAttentionAcknowledgement,
+    reader: RpcCallerScope | undefined
+  ): void
   reconcileStructuredPromptAttention: RuntimeMobileNotificationController['reconcileStructuredPromptAttention']
   dispatchPluginNotification: RuntimeMobileNotificationController['dispatchPlugin']
   dispatchOwnerNotice: RuntimeMobileNotificationController['dispatchOwnerNotice']
@@ -155,7 +161,13 @@ export function installRuntimeServiceCommandSurface(
     getMobileNotificationEpoch: notifications.getEpoch.bind(notifications),
     dismissMobileNotification: notifications.dismiss.bind(notifications),
     retireNotificationAttention: notifications.acknowledgeAttention.bind(notifications),
-    acknowledgeNotificationAttention: (acknowledgement: NotificationAttentionAcknowledgement) => {
+    acknowledgeNotificationAttention: (
+      acknowledgement: NotificationAttentionAcknowledgement,
+      reader: RpcCallerScope | undefined
+    ) => {
+      if (!ownsHostReadMarks(reader)) {
+        return
+      }
       notifications.acknowledgeAttention(acknowledgement)
       events.emit({ type: 'notificationAttentionAcknowledged', acknowledgement })
     },

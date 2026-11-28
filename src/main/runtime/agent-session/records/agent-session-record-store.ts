@@ -1,4 +1,4 @@
-import { clearSuccessor } from './agent-session-sender-identity-revision'
+import { recordHomeTitles, type TeammateHomeBots } from './agent-session-record-home-names'
 import type * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
@@ -70,13 +70,13 @@ export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
 
 export class AgentSessionRecordStore extends AgentSessionRecordForgets {
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
-  private clearedFrom: { lineage: object; predecessors: Map<string, string[]> } | undefined
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
     readonly hostId: string,
     journalDatabase: JournalSqlDatabase,
-    deletedChats: readonly DeletedChat[]
+    deletedChats: readonly DeletedChat[],
+    private readonly teammateHomeBots: TeammateHomeBots
   ) {
     super(transactions, journalDatabase, deletedChats)
     const founding = createAgentSessionFoundingStore(transactions)
@@ -104,6 +104,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
     hostId: string
     legacySessionTabIds: readonly string[]
     deletedChats?: readonly DeletedChat[]
+    teammateHomeBots: TeammateHomeBots
   }): AgentSessionRecordStore {
     const transactions = new AgentSessionStoreTransactions(
       args.journalDatabase,
@@ -115,7 +116,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
       transactions,
       args.hostId,
       args.journalDatabase,
-      args.deletedChats ?? []
+      args.deletedChats ?? [],
+      args.teammateHomeBots
     )
   }
 
@@ -131,39 +133,26 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
   backfillChatPermissionModes = (ranWithFullAccess: (provider: string) => boolean): Promise<void> =>
     backfillAgentSessionPermissionModes(this.transactions, ranWithFullAccess)
 
+  // Reads hand out a teammate's Home titled (agent-session-record-home-names.ts); writes never see it.
+  private readonly titles = recordHomeTitles(
+    () => listAgentSessionConversations(this.state),
+    () => this.transactions.lineageRevision(),
+    () => this.teammateHomeBots()
+  )
   getRecord = (sessionId: string): AgentSessionRecord | null =>
-    this.state.records.get(sessionId) ?? null
-
-  getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
-  listConversations = () => listAgentSessionConversations(this.state)
+    this.titles.one(this.state.records.get(sessionId) ?? null)
+  getConversation = (id: string) => this.titles.one(getAgentSessionConversation(this.state, id))
+  listConversations = () => this.titles.all(listAgentSessionConversations(this.state))
   workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
     readAgentSessionWorkspaceAttention(this.journalDatabase, this.inScope(location), location)
   private inScope = (location: AgentSessionExecutionLocation) =>
     this.transactions.keyIndexes.inScope(this.state, location)
   /** The chats answering to `key` under `keys`, in listing order, without walking the history. */
   conversationsKeyedBy = (keys: AgentSessionConversationKeys, key: string) =>
-    this.transactions.keyIndexes.conversations(this.state, keys, key)
+    this.titles.all(this.transactions.keyIndexes.conversations(this.state, keys, key))
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
   connectorReplies = () => new JournalSqlConnectorReplies(this.journalDatabase)
-  /** Sessions a committed /clear continued into this one, derived from every held conversation
-   *  (unreadable leases still count) and rebuilt only when lineage changes. */
-  listClearedFrom = (sessionId: string): string[] => {
-    const lineage = this.transactions.lineageRevision()
-    if (this.clearedFrom?.lineage !== lineage) {
-      const predecessors = new Map<string, string[]>()
-      for (const conversation of this.listConversations()) {
-        const successor = clearSuccessor(conversation)
-        if (successor !== null) {
-          predecessors.set(successor, [
-            ...(predecessors.get(successor) ?? []),
-            conversation.sessionId
-          ])
-        }
-      }
-      this.clearedFrom = { lineage, predecessors }
-    }
-    return [...(this.clearedFrom.predecessors.get(sessionId) ?? [])]
-  }
+  listClearedFrom = (sessionId: string): string[] => this.titles.clearedFrom(sessionId)
   lineageRevision = (): object => this.transactions.lineageRevision()
   providerAliasOwner = (nativeId: string): string | null =>
     this.transactions.keyIndexes.providerAliasOwner(this.state, nativeId)
@@ -172,7 +161,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
   requireWritableRecord = (sessionId: string) =>
     requireWritableAgentSessionRecord(this.state, sessionId)
 
-  listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
+  listRecords = (): AgentSessionRecord[] => this.titles.all([...this.state.records.values()])
 
   /** Records whose lease may be held: what renewal and restart reconciliation visit. */
   listLeaseHolders = (): AgentSessionRecord[] => this.transactions.leaseHolders.list(this.state)
@@ -223,7 +212,15 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
     expected,
     contextId = null
   ) =>
-    this.updateRecord(id, { kind: 'name-if-current', name, expected, contextId, now: Date.now() })
+    this.titles.isHome(id)
+      ? Promise.resolve(null)
+      : this.updateRecord(id, {
+          kind: 'name-if-current',
+          name,
+          expected,
+          contextId,
+          now: Date.now()
+        })
 
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>
     this.updateRecord(sessionId, { kind: 'launch-directory', launchDirectory, now: Date.now() })

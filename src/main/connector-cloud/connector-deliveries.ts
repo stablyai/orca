@@ -69,10 +69,12 @@ export type DispatchMachine = Pick<
   | 'threadMute'
   | 'shareResolved'
   | 'shareAccept'
+  | 'shareDeclined'
   | 'shareSend'
 >
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
 export type SendDelivery = Extract<ConnectorDelivery, { kind: 'send' }>
+
 /** When the cloud took the message and how long it waited, both on the cloud's clock. */
 function sentTiming(
   delivery: RequestDelivery,
@@ -149,6 +151,9 @@ export function dispatchDelivery(
   }
   if (delivery.kind === 'share_accept') {
     return doneOnly(deliveryId, machine.shareAccept, delivery, UNKNOWN_SHARE_REFUSAL)
+  }
+  if (delivery.kind === 'share_declined') {
+    return doneOnly(deliveryId, machine.shareDeclined, delivery, UNKNOWN_SHARE_REFUSAL)
   }
   if (delivery.kind === 'share_send') {
     const take = machine.shareSend

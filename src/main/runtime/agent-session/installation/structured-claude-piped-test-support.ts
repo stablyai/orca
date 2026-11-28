@@ -48,6 +48,7 @@ export async function claudePipedFixture() {
   const host = await ensureStructuredAgentSessionHost({
     stateDirectory: directory,
     hostId: 'local',
+    teammateHomeBots: () => [],
     claimKeyId: 'key-1',
     logger: logs,
     resolveWorkspacePath: async () => directory,

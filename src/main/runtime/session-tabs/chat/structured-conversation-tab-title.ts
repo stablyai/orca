@@ -1,9 +1,13 @@
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import type { RuntimeMobileSessionAgentTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 /** Whether a chat is a fork on this host, so phones draw its fork mark. */
 export type StructuredConversationForked = (sessionId: string) => boolean
+
+export const structuredConversationForked: StructuredConversationForked = (sessionId) =>
+  !!getStructuredAgentSessionHost()?.deps?.store?.getConversation(sessionId)?.forkedFrom
 
 function titledTab(
   tab: RuntimeMobileSessionAgentTab,

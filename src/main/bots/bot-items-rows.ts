@@ -85,9 +85,25 @@ function actorOf(value: unknown): BotItemActor {
   }
   if (fields?.kind === 'owner') {
     const device = str(fields.device)
-    return device ? { kind: 'owner', device } : { kind: 'owner' }
+    const person = record(fields.person)
+    const accountId = str(person?.accountId)
+    const name = str(person?.name)
+    return {
+      kind: 'owner',
+      ...(device ? { device } : {}),
+      ...(accountId && name ? { person: { accountId, name } } : {})
+    }
   }
   return { kind: 'orca', why: str(fields?.why) ?? 'orca' }
+}
+
+function accountsOf(value: unknown): readonly string[] | null {
+  if (!Array.isArray(value)) {
+    return null
+  }
+  const accounts = value.filter((entry): entry is string => typeof entry === 'string' && !!entry)
+  // A row naming no account is no one's, never the owner's.
+  return accounts
 }
 
 export function itemRecordOf(row: SqliteRow): BotItemRecord {
@@ -98,6 +114,7 @@ export function itemRecordOf(row: SqliteRow): BotItemRecord {
     chatId: text(row, 'chat_id'),
     source: sourceOf(json(row, 'source')),
     madeBy: madeByOf(json(row, 'made_by')),
+    actsForAccounts: accountsOf(json(row, 'acts_for_accounts')),
     title: text(row, 'title'),
     description: optionalText(row, 'description'),
     doneMeans: optionalText(row, 'done_means'),

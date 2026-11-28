@@ -18,9 +18,10 @@ import {
   AttachmentUploadIdParams,
   AttachmentUploadStartParams
 } from '../../../shared/rpc-contract/structured-agent-session/agent-session-attachment-params'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 // Append, commit and abort all name their upload.
-const UploadOf = z.looseObject({ uploadId: z.string() })
+const UploadOf = lazyZodSchema(() => z.looseObject({ uploadId: z.string() }))
 
 export const SHARED_BOT_UPLOAD_METHODS: ReadonlySet<string> = new Set([
   'agentSessionAttachment.uploadStart',

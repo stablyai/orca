@@ -6,10 +6,15 @@ import {
 } from '../../../ipc/agent-hooks/agent-status-ipc-boundary'
 import { readAgentOrchestrationProjectionRecords } from '../addressing/orchestration-fleet-agent-status-snapshot'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
-import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
+import { OrcaRuntimeWithPersonSessionTabWrites } from '../../session-tabs/person/person-session-tab-writes'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 
-export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends OrcaRuntimeWithRuntimeId {
+export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends OrcaRuntimeWithPersonSessionTabWrites {
+  abstract retrySleptMailboxWakes(): void
+  protected abstract requestSleptMailboxWake(
+    mailbox: string,
+    reservedTypes?: ReadonlySet<string>
+  ): void
   abstract getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined
   abstract getAgentStatusOrchestrationContextForPaneKey(
     paneKey: string

@@ -20,6 +20,8 @@ const { host, sends, state } = vi.hoisted(() => {
             workspaceId: sessionId === 'other-bot-chat' ? 'folder:home-2' : 'folder:home-1'
           }
         }),
+        // No chat here was /cleared: each is its own root.
+        listConversations: () => [],
         requireWritableRecord: () => ({ lease: { runtimeFence: 1 } })
       }
     },
@@ -70,7 +72,7 @@ const bots = {
     { id: 'b1', agent: 'claude', chatSessionId: 'chat-1', folderWorkspaceId: 'home-1' },
     { id: 'b2', agent: 'claude', chatSessionId: 'other-bot-chat', folderWorkspaceId: 'home-2' }
   ],
-  setChatSession: async () => {}
+  setHome: async () => {}
 }
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime fields.
 const runtime = {

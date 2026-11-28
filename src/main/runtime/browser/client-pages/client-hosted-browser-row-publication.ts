@@ -10,6 +10,8 @@ export type ClientHostedBrowserRowPublicationHost = {
   getClientPage(browserPageId: string): RuntimeBrowserClientPage | undefined
   hasLivePlacement(browserPageId: string): boolean
   resolveDeviceName(pairedDeviceId: string): string | null
+  /** Fail-closed: a page shows on the host only from a computer known now to be the owner's. */
+  isOwnerDevice(pairedDeviceId: string): boolean
   /** Null while no host renderer is attached; hydration replays the snapshot when one arrives. */
   getEmitter(): ((event: ClientHostedBrowserRowsEvent) => void) | null
 }
@@ -78,26 +80,35 @@ export class ClientHostedBrowserRowPublisher {
     }
     // Hydration clears/replaces the renderer's rows; replace this set too, healing stale-window deliveries.
     this.publishedWorktreeIds.clear()
-    for (const worktreeId of pagesByWorktreeId.keys()) {
+    const events = [...pagesByWorktreeId]
+      .map(([worktreeId, pages]) => ({ worktreeId, rows: this.buildRows(pages) }))
+      .filter((event) => event.rows.length > 0)
+    for (const { worktreeId } of events) {
       this.publishedWorktreeIds.add(worktreeId)
     }
-    return [...pagesByWorktreeId].map(([worktreeId, pages]) => ({
-      worktreeId,
-      rows: this.buildRows(pages)
-    }))
+    return events
   }
 
+  /** Where one page is open, for a client that shows it as a placeholder: any person's computer. */
   row(browserPageId: string): ClientHostedBrowserRow | undefined {
     const page = this.host.getClientPage(browserPageId)
-    return page ? this.buildRows([page])[0] : undefined
+    return page ? projectClientHostedBrowserRows([page], this.rowSources())[0] : undefined
+  }
+
+  private rowSources() {
+    return {
+      hasLivePlacement: (browserPageId: string) => this.host.hasLivePlacement(browserPageId),
+      resolveDeviceName: (pairedDeviceId: string) => this.host.resolveDeviceName(pairedDeviceId)
+    }
   }
 
   private buildRows(
     pages: readonly RuntimeBrowserClientPage[]
   ): ClientHostedBrowserRowsEvent['rows'] {
-    return projectClientHostedBrowserRows(pages, {
-      hasLivePlacement: (browserPageId) => this.host.hasLivePlacement(browserPageId),
-      resolveDeviceName: (pairedDeviceId) => this.host.resolveDeviceName(pairedDeviceId)
-    })
+    // A teammate's page, or one from a computer not known (yet, or any more), opens no tab on the host.
+    const hostPages = pages.filter(
+      (page) => page.pairedDeviceId !== undefined && this.host.isOwnerDevice(page.pairedDeviceId)
+    )
+    return projectClientHostedBrowserRows(hostPages, this.rowSources())
   }
 }

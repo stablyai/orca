@@ -14,6 +14,7 @@ import type { SshConnectionState } from '../remote-runtime/ssh/ssh-types'
 import type { RuntimeEnvironmentSource } from '../remote-runtime/host-catalog/runtime-environments'
 import type { GlobalSettings } from '../settings/global-settings-types'
 import type { Repo } from '../repository/repo-types'
+import { isRepoOnProjectsHiddenHost } from '../project/catalog/hidden-projects'
 import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
 import { getSshConnectionHealth, type EphemeralVmHostLifecycle } from './execution-host-health'
 import { applyEphemeralVmHostLifecycles } from './execution-host-vm-lifecycle'
@@ -141,7 +142,11 @@ export function buildExecutionHostRegistry(args: {
       args.runtimeStatusByEnvironmentId
     )
   }
-  for (const environmentId of args.runtimeStatusByEnvironmentId?.keys() ?? []) {
+  for (const [environmentId, entry] of args.runtimeStatusByEnvironmentId ?? []) {
+    // A shared agent's host is reached for its agent alone, never listed as one of this user's hosts.
+    if (entry.snapshot?.sharedHost) {
+      continue
+    }
     addRuntimeHost(
       hosts,
       environmentId,
@@ -167,7 +172,7 @@ export function buildExecutionHostRegistry(args: {
   if (args.hostSource !== 'configured-only') {
     for (const repo of args.repos) {
       const parsedHost = parseExecutionHostId(repo.executionHostId)
-      if (parsedHost?.kind === 'runtime') {
+      if (parsedHost?.kind === 'runtime' && !isRepoOnProjectsHiddenHost(repo)) {
         addRuntimeHost(
           hosts,
           parsedHost.environmentId,

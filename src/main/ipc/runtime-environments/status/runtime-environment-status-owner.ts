@@ -1,3 +1,4 @@
+import { isRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { getRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import '../../../../shared/remote-runtime/protocol/protocol-version'
@@ -34,6 +35,8 @@ import {
   RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
   RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
 } from '../../../../shared/remote-runtime/recipe-vm-wake'
+import { pairedRuntimeConnectionToken } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { sharedHostEnvironment } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
 
 const statusListeners = new Set<(snapshot: RuntimeHostStatusSnapshot) => void>()
 
@@ -69,6 +72,19 @@ async function answerRefusedPairing(
   return runtimeEnvironmentChangedFailure(environment, 'status.get', outcome === 'repaired')
 }
 
+/**
+ * Whether a status probe goes over the host's control connection: a host paired over Relay always
+ * (its link is the only way there, and opening it makes it the host's one link), any other once
+ * that connection is ready and proven.
+ */
+export function statusProbeRidesControl(
+  connection: { endpoint: string },
+  controlReady: boolean,
+  controlProven: boolean
+): boolean {
+  return isRuntimeRelayEndpoint(connection.endpoint) || (controlReady && controlProven)
+}
+
 export function createRuntimeEnvironmentStatusOwner(
   userDataPath: string,
   environment: KnownRuntimeEnvironment,
@@ -77,6 +93,7 @@ export function createRuntimeEnvironmentStatusOwner(
     request: (signal: AbortSignal) => Promise<RuntimeHostStatusResponse>
     establish: () => void
     pause: () => void
+    noteHostCapabilities: (capabilities: readonly string[] | undefined) => void
   }
 ): RuntimeHostStatusOwner {
   const connection = getPreferredPairedRuntimeConnection(environment)
@@ -115,9 +132,12 @@ export function createRuntimeEnvironmentStatusOwner(
     evidence = captureRuntimeEnvironmentCapabilityEvidence(environment.id, connection)
     let response: RuntimeHostStatusResponse
     try {
-      response = await (transport.isReady() &&
-      getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
-        'supported'
+      response = await (statusProbeRidesControl(
+        connection,
+        transport.isReady(),
+        getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
+          'supported'
+      )
         ? transport.request(signal)
         : sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
             connection,
@@ -147,6 +167,7 @@ export function createRuntimeEnvironmentStatusOwner(
   return new RuntimeHostStatusOwner({
     environmentId: environment.id,
     pairingRevision: environment.pairingRevision ?? environment.createdAt,
+    ...(sharedHostEnvironment(environment.id) ? { sharedHost: true } : {}),
     // Each probe's outcome is evidence for whether the server's host is still there (#34089).
     request: async (signal) => {
       try {
@@ -164,6 +185,9 @@ export function createRuntimeEnvironmentStatusOwner(
     verified: (response, active) => {
       const capable =
         response.result.capabilities?.includes(REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) ?? false
+      if (capable && active) {
+        transport.noteHostCapabilities(response.result.capabilities)
+      }
       const accepted = applyRuntimeEnvironmentCapabilityVerdict({
         evidence,
         verdict: capable ? 'capable' : 'absent',
@@ -173,7 +197,7 @@ export function createRuntimeEnvironmentStatusOwner(
         recordRuntimeEnvironmentUsage(userDataPath, environment.id, {
           runtimeId: response._meta.runtimeId,
           pairedDeviceId: response.result.pairedDeviceId,
-          pairingDeviceToken: connection.credential.deviceToken
+          pairingDeviceToken: pairedRuntimeConnectionToken(connection)
         })
         if (capable) {
           transport.establish()

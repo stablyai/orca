@@ -20,6 +20,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host/execution-h
 import type {
   BranchAutoRenameAttemptEvent,
   BranchAutoRenameRetryAvailability,
+  BranchAutoRenameDismissResult,
   BranchAutoRenameRetryResult
 } from '../../../shared/worktree/branch-auto-rename-attempt'
 import type {
@@ -166,7 +167,7 @@ export type WorktreeApi = {
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Last failure output; memory-only, cleared on restart or when the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>
-  /** Desktop-local only; other hosts and the web client report unavailable. */
+  /** This app's own workspaces; paired-server workspaces go through the runtime's worktree.autoName methods. */
   getBranchAutoRenameRetryAvailability: (args: {
     worktreeId: string
     executionHostId?: ExecutionHostId
@@ -175,6 +176,17 @@ export type WorktreeApi = {
     worktreeId: string
     executionHostId?: ExecutionHostId
   }) => Promise<BranchAutoRenameRetryResult>
+  /** Keeps the current name: clears the error and stops automatic attempts, persisted. */
+  dismissBranchAutoRename: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+  }) => Promise<BranchAutoRenameDismissResult>
+  /** Resolves when that running attempt finishes; null when it already had. */
+  waitBranchAutoRenameAttempt: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+    attemptId: number
+  }) => Promise<BranchAutoRenameRetryResult | null>
   onBranchAutoRenameAttempt: (callback: (event: BranchAutoRenameAttemptEvent) => void) => () => void
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
   onGitStatusMetadataChanged: (

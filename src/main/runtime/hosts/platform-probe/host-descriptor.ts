@@ -1,6 +1,6 @@
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { createHmac, randomUUID } from 'node:crypto'
-import { renameSync, rmSync, writeFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import {
   RuntimeHostDescriptorSchema,
@@ -12,7 +12,9 @@ import type { RuntimeSourceStamp } from '../../../../shared/remote-runtime/host-
 
 export const HOST_INSTALLATION_FILENAME = 'host-installation.json'
 const MAX_INSTALLATION_FILE_BYTES = 4 * 1024
-const InstallationFileSchema = RuntimeHostDescriptorSchema.pick({ installationId: true })
+const InstallationFileSchema = lazyZodSchema(() =>
+  RuntimeHostDescriptorSchema.pick({ installationId: true })
+)
 
 type InstallationRead =
   | { kind: 'valid'; installationId: string }
@@ -53,33 +55,47 @@ export async function readExistingHostInstallationId(
 ): Promise<string | undefined> {
   try {
     const current = await readInstallation(join(userDataPath, HOST_INSTALLATION_FILENAME))
-    return current.kind === 'valid' ? current.installationId : undefined
+    return current.kind === 'valid' ? known(userDataPath, current.installationId) : undefined
   } catch {
     return undefined
   }
+}
+
+// An identity never changes once valid, so each one read or created is kept for later callers.
+const knownInstallationIds = new Map<string, string>()
+
+/** The profile's identity if this process already read or created it; never touches the disk, for a
+ *  request whose timing must not shift. */
+export function knownHostInstallationId(userDataPath: string): string | undefined {
+  return knownInstallationIds.get(userDataPath)
+}
+
+function known(userDataPath: string, installationId: string): string {
+  knownInstallationIds.set(userDataPath, installationId)
+  return installationId
 }
 
 export async function loadOrCreateHostInstallationId(userDataPath: string): Promise<string> {
   const filePath = join(userDataPath, HOST_INSTALLATION_FILENAME)
   const current = await readInstallation(filePath)
   if (current.kind === 'valid') {
-    return current.installationId
+    return known(userDataPath, current.installationId)
   }
   // Decide only after any racing creator/repairer publishes.
   return await withFileTransactionLock(filePath, async () => {
     const locked = await readInstallation(filePath)
     if (locked.kind === 'valid') {
-      return locked.installationId
+      return known(userDataPath, locked.installationId)
     }
     const installationId = randomUUID()
     const draftPath = `${filePath}.${installationId}.draft`
     try {
-      writeFileSync(draftPath, JSON.stringify({ installationId }), { flag: 'wx', mode: 0o600 })
-      renameSync(draftPath, filePath)
+      await writeFile(draftPath, JSON.stringify({ installationId }), { flag: 'wx', mode: 0o600 })
+      await rename(draftPath, filePath)
     } finally {
-      rmSync(draftPath, { force: true })
+      await rm(draftPath, { force: true })
     }
-    return installationId
+    return known(userDataPath, installationId)
   })
 }
 

@@ -37,7 +37,6 @@ import { useBotWorkerWorkspaces } from './use-bot-worker-statuses'
 import { useBotUsageLimitStops } from './use-bot-usage-limit-stops'
 import { UsageLimitStopMark } from './BotUsageLimitMark'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { botHomeHostId } from '../../../../shared/bots/bot-home-host'
 
 type BotNowCounts = Pick<BotNow, 'needsYou' | 'working'>
 
@@ -155,6 +154,7 @@ export function BotPanelHeader({
   quiet = NOTHING_RUNS,
   picture,
   offline = false,
+  readOnly = false,
   filter = null
 }: {
   bot: Bot
@@ -164,26 +164,26 @@ export function BotPanelHeader({
   picture: ReturnType<typeof useBotPictureSetting>
   /** Its server is down: only the gear stays on, so its settings say what is unavailable. */
   offline?: boolean
+  /** A shared agent seen by a teammate: its settings and actions stay with its owner. */
+  readOnly?: boolean
   /** The Items filter, before the gear. */
   filter?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const home = useAppStore((state) =>
-    selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, botHomeHostId(bot))
+    selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, bot.hostId)
   )
   const folderPath = home?.folderPath ?? null
   const settingsLabel = t('bots.row.settings', 'Bot settings…')
-  const moreLabel = t('bots.panel.more', 'More')
   const setRightSidebarTab = useAppStore((state) => state.setRightSidebarTab)
   // Settings open in Activity's place, so the gear works from any tab showing this header.
   const openSettings = (): void => {
     setBotSettingsPlace('panel', { botId: bot.id, page: null })
     setRightSidebarTab('bot-activity')
   }
-  const { sharing, setSharing, sharingOffered } = useBotPanelSharing()
   return (
     <div className="flex items-center gap-2.5 px-2 pb-1 pt-1 @max-[284px]:gap-1.5">
-      <fieldset disabled={offline} className="contents">
+      <fieldset disabled={offline || readOnly} className="contents">
         <BotPictureButton
           bot={bot}
           picture={picture}
@@ -228,6 +228,37 @@ export function BotPanelHeader({
         )}
       </div>
       {filter}
+      {readOnly ? null : (
+        <BotPanelHeaderActions
+          bot={bot}
+          offline={offline}
+          folderPath={folderPath}
+          settingsLabel={settingsLabel}
+          openSettings={openSettings}
+        />
+      )}
+    </div>
+  )
+}
+
+function BotPanelHeaderActions({
+  bot,
+  offline,
+  folderPath,
+  settingsLabel,
+  openSettings
+}: {
+  bot: Bot
+  offline: boolean
+  folderPath: string | null
+  settingsLabel: string
+  openSettings: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const moreLabel = t('bots.panel.more', 'More')
+  const { sharing, setSharing, sharingOffered } = useBotPanelSharing()
+  return (
+    <>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -262,7 +293,7 @@ export function BotPanelHeader({
             {sharingOffered ? (
               <DropdownMenuItem onSelect={() => setSharing('people')}>
                 <UserPlus />
-                {t('bots.teamShare.share', 'Share…')}
+                {t('bots.teamShare.shareWithTeammates', 'Share with teammates…')}
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuItem
@@ -277,7 +308,7 @@ export function BotPanelHeader({
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setSharing('copy')}>
               <Share2 />
-              {t('bots.share.shareCopy', 'Share a copy…')}
+              {t('bots.share.shareCopy', 'Send a copy…')}
             </DropdownMenuItem>
             {folderPath ? (
               <>
@@ -295,6 +326,6 @@ export function BotPanelHeader({
         <BotTeamShareDialogHost bot={bot} onClose={() => setSharing(null)} />
       ) : null}
       {sharing === 'copy' ? <BotShareFlow bot={bot} onClose={() => setSharing(null)} /> : null}
-    </div>
+    </>
   )
 }

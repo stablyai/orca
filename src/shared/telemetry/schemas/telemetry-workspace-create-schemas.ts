@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   PREPARED_CHECKOUT_MISS_REASONS,
   PREPARED_CHECKOUT_ORIGINS,
@@ -11,7 +12,7 @@ import {
 
 // Numbers and closed enums exclude repo-identifying paths/branches/refs/errors. Fields are optional for folder workspaces and untimed creates.
 
-const durationMsSchema = z.number().int().nonnegative().optional()
+const durationMsSchema = lazyZodSchema(() => z.number().int().nonnegative().optional())
 
 export const WORKTREE_COUNT_BUCKETS = [
   '1',
@@ -62,7 +63,7 @@ type _PhaseDurationSync = [_PhaseKeys] extends [_PhaseDurationKeys]
 const _phaseDurationSyncCheck: _PhaseDurationSync = true
 void _phaseDurationSyncCheck
 
-const countSchema = z.number().int().nonnegative().optional()
+const countSchema = lazyZodSchema(() => z.number().int().nonnegative().optional())
 
 const workspaceCreateContextProperties = {
   create_entry_point: z.enum(WORKSPACE_CREATE_ENTRY_POINTS).optional(),

@@ -1,3 +1,6 @@
+import { SHARE_SCOPED } from '../../../../shared/bots/bot-share-rpc-methods'
+import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
+import { viewedAnswer } from '../../../bots/team-share/bot-share-connector-views'
 // `bots.linear.*`: the host account's Linear links, as this host's own Orca account.
 import {
   BotLinearDefaultBot,
@@ -12,10 +15,13 @@ export const BOT_LINEAR_METHODS = [
   defineMethod({
     name: 'bots.linear.state',
     permission: 'accounts-admin',
-    share: 'not-shared',
+    share: SHARE_SCOPED,
     params: null,
     handler: async (_params, context) =>
-      withHostCloudClient(context, (client) => client.linearState())
+      viewedAnswer(
+        await withHostCloudClient(context, (client) => client.linearState()),
+        botShareScopedView(context)?.['bots.linear.state']
+      )
   }),
   defineMethod({
     name: 'bots.linear.unlink',

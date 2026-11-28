@@ -30,7 +30,7 @@ export async function provisionBotSharePhone(
   if (parent.kind !== 'found' || parent.device.parentDeviceId !== undefined) {
     throw new Error('share_phone_refused')
   }
-  const { botId, accountId, name } = parent.device
+  const { botId, accountId } = parent.device
   const shareOf = () =>
     deps
       .bots()
@@ -43,7 +43,6 @@ export async function provisionBotSharePhone(
   const { device, added } = await bindBotShareDevice(deps.store, {
     botId,
     accountId,
-    name,
     devicePublicKey: params.devicePublicKey,
     phone: { parentDeviceId, shareId: share.shareId }
   })

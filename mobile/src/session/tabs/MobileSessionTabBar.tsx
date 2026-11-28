@@ -34,6 +34,8 @@ import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
+import type { Bot } from '../../../../src/shared/bot-types'
+import { isOwnBotHome } from '../../../../src/shared/bots/bot-home-of'
 
 const SWIPE_SETTLE_MS = 250
 // A tab arriving from the side starts this far out, as a share of the tab cell's width.
@@ -70,13 +72,13 @@ export function MobileSessionTabBar({
   controller,
   inTopBar,
   actionsCollapsed = false,
-  homeChatId = null
+  homeBot = null
 }: {
   controller: MobileSessionController
   inTopBar: boolean
   actionsCollapsed?: boolean
-  /** The route bot's main chat, whose recorded name "Home" reads in the phone's language. */
-  homeChatId?: string | null
+  /** The route's agent, whose own Home tab is titled Home (`isOwnBotHome`). */
+  homeBot?: Pick<Bot, 'chatSessionId' | 'shares'> | null
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -97,11 +99,9 @@ export function MobileSessionTabBar({
     () =>
       visibleTabs.map((tab) => {
         const built = buildMobileSessionTabSummary(tab, terminals, now)
+        // A teammate's Home comes titled from the host's records; only the viewer's own is "Home".
         const summary =
-          homeChatId !== null &&
-          tab.type === 'agent-session' &&
-          tab.sessionId === homeChatId &&
-          built.title === 'Home'
+          tab.type === 'agent-session' && isOwnBotHome(homeBot, tab.sessionId)
             ? { ...built, title: t('bots.tabs.homeTitle', 'Home') }
             : built
         // The tab on screen is being read (useMarkViewedAgentRead), so it never rings.
@@ -109,7 +109,7 @@ export function MobileSessionTabBar({
           ? { ...summary, unread: false }
           : summary
       }),
-    [visibleTabs, terminals, now, activeSessionTabId, homeChatId, t]
+    [visibleTabs, terminals, now, activeSessionTabId, homeBot, t]
   )
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
   const active: MobileSessionTabSummary | undefined = rows[activeIndex]

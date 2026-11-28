@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { BrowserTarget, OptionalBoolean, OptionalFiniteNumber } from '../rpc-param-primitives'
 
 // A viewer's stream; each `*: 1` opts into events an older host strips.
@@ -40,48 +41,66 @@ export const Screencast = BrowserTarget.extend({
   prints: z.literal(1).optional()
 })
 
-export const ScreencastUnsubscribe = z.object({
-  subscriptionId: z.string().min(1, 'Missing required --subscription-id')
-})
+export const ScreencastUnsubscribe = lazyZodSchema(() =>
+  z.object({
+    subscriptionId: z.string().min(1, 'Missing required --subscription-id')
+  })
+)
 
-export const ScreencastAck = z.object({
-  subscriptionId: z.string().min(1, 'Missing required --subscription-id'),
-  // Cumulative: the newest frame seq the viewer has received.
-  seq: z.number().int().nonnegative()
-})
+export const ScreencastAck = lazyZodSchema(() =>
+  z.object({
+    subscriptionId: z.string().min(1, 'Missing required --subscription-id'),
+    // Cumulative: the newest frame seq the viewer has received.
+    seq: z.number().int().nonnegative()
+  })
+)
 
 // A `driver` event's page, which a phone drives; `all` also takes back the host's other phone-held pages.
-export const ScreencastReclaimForDesktop = z.object({
-  browserPageId: z.string().min(1),
-  all: z.literal(true).optional()
-})
+export const ScreencastReclaimForDesktop = lazyZodSchema(() =>
+  z.object({
+    browserPageId: z.string().min(1),
+    all: z.literal(true).optional()
+  })
+)
 
 // A `pagePrompt` event's requestId; `answer` is checked by the prompt's own kind, and null declines it.
-export const PagePromptAnswer = z.object({
-  requestId: z.string().min(1),
-  answer: z.unknown()
-})
+export const PagePromptAnswer = lazyZodSchema(() =>
+  z.object({
+    requestId: z.string().min(1),
+    answer: z.unknown()
+  })
+)
 
 // A `print` event's PDF, read in slices by the device it was handed to.
-export const ReleasePrintPdf = z.object({
-  printId: z.string().min(1)
-})
+export const ReleasePrintPdf = lazyZodSchema(() =>
+  z.object({
+    printId: z.string().min(1)
+  })
+)
 
-export const ReadPrintPdf = ReleasePrintPdf.extend({
-  offset: z.number().int().nonnegative().optional()
-})
+export const ReadPrintPdf = lazyZodSchema(() =>
+  ReleasePrintPdf.extend({
+    offset: z.number().int().nonnegative().optional()
+  })
+)
 
 // A `downloadFinished` event's copy, streamed once to the device it was offered to, or let go.
-export const ReleaseDownloadCopy = z.object({
-  copyId: z.string().min(1)
-})
+export const ReleaseDownloadCopy = lazyZodSchema(() =>
+  z.object({
+    copyId: z.string().min(1)
+  })
+)
 
-export const DownloadCopyStream = z.object({
-  copyId: z.string().min(1)
-})
+export const DownloadCopyStream = lazyZodSchema(() =>
+  z.object({
+    copyId: z.string().min(1)
+  })
+)
 
 // A `fileChooser` event's requestId and the host paths the viewer staged; null when the person closed their picker.
-export const FileChooserAnswer = z.object({
-  requestId: z.string().min(1),
-  files: z.array(z.string().min(1)).nullable()
-})
+export const FileChooserAnswer = lazyZodSchema(() =>
+  z.object({
+    requestId: z.string().min(1),
+    files: z.array(z.string().min(1)).nullable()
+  })
+)

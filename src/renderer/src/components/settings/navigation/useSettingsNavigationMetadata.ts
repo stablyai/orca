@@ -1,4 +1,5 @@
 import { shallow } from 'zustand/shallow'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useSupportedGroupHookSettings } from '../repository/hooks/use-supported-group-hook-settings'
 import type { ProjectGroupSettingsEntry } from '../repository/hooks/use-supported-group-hook-settings'
@@ -44,6 +45,10 @@ import { buildWorkflowSettingsSections } from './settings-navigation-workflow-se
 import { useWindowsTerminalCapabilityOwnerKey } from '../../../runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useMcpServersAvailable } from './use-mcp-servers-available'
+import {
+  getOptInOnlyExperimentVisibility,
+  type OptInOnlyExperimentVisibility
+} from '../advanced/experimental-search'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -68,6 +73,8 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled = !isWebClient,
     showWorkspaceCardLayout = true,
     isDev = import.meta.env.DEV,
+    showAgentDashboardExperiment = false,
+    showTerminalAttentionExperiment = false,
     isLinearConnected = false,
     mcpServersAvailable = false,
     repos,
@@ -87,6 +94,8 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled?: boolean
     showWorkspaceCardLayout?: boolean
     isDev?: boolean
+    showAgentDashboardExperiment?: boolean
+    showTerminalAttentionExperiment?: boolean
     isLinearConnected?: boolean
     mcpServersAvailable?: boolean
     projectGroups?: readonly ProjectGroupSettingsEntry[]
@@ -126,6 +135,10 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled,
     showWorkspaceCardLayout,
     isDev,
+    optInOnlyExperiments: {
+      agentDashboard: showAgentDashboardExperiment,
+      terminalAttention: showTerminalAttentionExperiment
+    },
     isLinearConnected,
     mcpServersAvailable,
     repos,
@@ -148,19 +161,25 @@ export function buildSettingsNavigationMetadata(
   ]
 }
 
-/** `pickedHost`: Settings' own host picker, which can show MCP servers on a host the default isn't. */
+const NO_SETTINGS_NAV_SECTIONS: SettingsNavSection[] = []
+
+/** `pickedHost`: Settings' own host picker, which can show MCP servers on a host the default isn't.
+ *  `optInOnlyExperimentRows`: the Settings page's per-visit rows; elsewhere the live settings decide. */
 export function useSettingsNavigationMetadata(
-  pickedHost?: RuntimeClientTarget
+  pickedHost?: RuntimeClientTarget,
+  enabled = true,
+  optInOnlyExperimentRows?: OptInOnlyExperimentVisibility
 ): SettingsNavSection[] {
   const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
   const projectGroups = useSupportedGroupHookSettings()
-  const repos = useAppStore((state) => state.repos)
+  const repos = useUserManagedRepos()
   const botsEnabled = useBotsEnabled()
   const bots = useBots(botsEnabled)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
+  const optInOnlyExperiments = optInOnlyExperimentRows ?? getOptInOnlyExperimentVisibility(settings)
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] =
     useAppStoreWithHostStatuses((state, statuses) => {
       const policy = getClientCreationActionPolicy(state, state.activeWorktreeId, statuses)
@@ -210,32 +229,36 @@ export function useSettingsNavigationMetadata(
 
   return useMemo(
     () =>
-      buildSettingsNavigationMetadata(
-        {
-          isMac,
-          isWindows,
-          isLocalWindowsHost,
-          isWindowsTerminalHost,
-          isWebClient,
-          botsEnabled,
-          hostQueuesMessages,
-          typedChatPermissions,
-          managedBrowserCreationEnabled,
-          mobileEmulatorCreationEnabled,
-          showWorkspaceCardLayout,
-          isDev: import.meta.env.DEV,
-          isLinearConnected,
-          mcpServersAvailable,
-          repos,
-          bots,
-          projectGroups,
-          projectGrouping: {
-            projects: projectHostSetupProjection.projects,
-            projectHostSetups: projectHostSetupProjection.setups
-          }
-        },
-        t
-      ),
+      enabled
+        ? buildSettingsNavigationMetadata(
+            {
+              isMac,
+              isWindows,
+              isLocalWindowsHost,
+              isWindowsTerminalHost,
+              isWebClient,
+              botsEnabled,
+              hostQueuesMessages,
+              typedChatPermissions,
+              managedBrowserCreationEnabled,
+              mobileEmulatorCreationEnabled,
+              showWorkspaceCardLayout,
+              isDev: import.meta.env.DEV,
+              showAgentDashboardExperiment: optInOnlyExperiments.agentDashboard,
+              showTerminalAttentionExperiment: optInOnlyExperiments.terminalAttention,
+              isLinearConnected,
+              mcpServersAvailable,
+              repos,
+              bots,
+              projectGroups,
+              projectGrouping: {
+                projects: projectHostSetupProjection.projects,
+                projectHostSetups: projectHostSetupProjection.setups
+              }
+            },
+            t
+          )
+        : NO_SETTINGS_NAV_SECTIONS,
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() inside buildSettingsNavigationMetadata reads the UI language and catalogs implicitly.
     [
       isMac,
@@ -249,6 +272,8 @@ export function useSettingsNavigationMetadata(
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       showWorkspaceCardLayout,
+      optInOnlyExperiments.agentDashboard,
+      optInOnlyExperiments.terminalAttention,
       isLinearConnected,
       mcpServersAvailable,
       repos,
@@ -256,7 +281,8 @@ export function useSettingsNavigationMetadata(
       projectGroups,
       projectHostSetupProjection,
       languageRevision,
-      t
+      t,
+      enabled
     ]
   )
 }

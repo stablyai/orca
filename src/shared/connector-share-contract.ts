@@ -2,25 +2,31 @@
 // Copies, not imports: the CLI compiles src/shared with rootDir src, so it can't reach cloud files.
 import * as z from 'zod'
 import { BotShareEmailSchema, BotShareIdSchema } from './bots/bot-team-shares'
+import { AgentCardSchema } from './bots/agent-card-contract'
 import { CONNECTOR_PATHS } from './connectors/connector-cloud-paths'
+import { lazyZodSchema } from './schema/lazy-zod-schema'
 
-const Id = z.string().min(1).max(128)
-const Name = z.string().min(1).max(200)
+const Id = lazyZodSchema(() => z.string().min(1).max(128))
+const Name = lazyZodSchema(() => z.string().min(1).max(200))
 // Canonical padded base64 of 32 bytes (the contract's CANONICAL_KEY_B64).
-const PublicKey = z.string().regex(/^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/)
+const PublicKey = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/))
 
 /** One person in a bot's hello sharedWith: an Orca account, or an email not yet resolved to one. */
-export const ConnectorBotShareSchema = z.union([
-  z.object({ shareId: BotShareIdSchema, accountId: Id }),
-  z.object({ shareId: BotShareIdSchema, email: BotShareEmailSchema })
-])
+export const ConnectorBotShareSchema = lazyZodSchema(() =>
+  z.union([
+    z.object({ shareId: BotShareIdSchema, accountId: Id }),
+    z.object({ shareId: BotShareIdSchema, email: BotShareEmailSchema })
+  ])
+)
 export type ConnectorBotShare = z.infer<typeof ConnectorBotShareSchema>
 
 // Every share delivery is on the share's own conversation, its ordered queue.
 const ShareDeliveryFields = {
-  deliveryId: z.string().min(1),
-  expiresAt: z.number().int().positive(),
-  conversation: z.object({ source: z.literal('orca'), externalId: BotShareIdSchema }),
+  deliveryId: lazyZodSchema(() => z.string().min(1)),
+  expiresAt: lazyZodSchema(() => z.number().int().positive()),
+  conversation: lazyZodSchema(() =>
+    z.object({ source: z.literal('orca'), externalId: BotShareIdSchema })
+  ),
   shareId: BotShareIdSchema,
   botId: Id
 }
@@ -30,27 +36,38 @@ const isOnItsShare = (delivery: { shareId: string; conversation: { externalId: s
   delivery.conversation.externalId === delivery.shareId
 
 // An invited email signed in to Orca: the host rewrites that invite as this account.
-export const ShareResolvedDelivery = z
-  .object({
-    ...ShareDeliveryFields,
-    kind: z.literal('share_resolved'),
-    email: BotShareEmailSchema,
-    accountId: Id,
-    name: Name.optional()
-  })
-  .refine(isOnItsShare)
+export const ShareResolvedDelivery = lazyZodSchema(() =>
+  z
+    .object({
+      ...ShareDeliveryFields,
+      kind: z.literal('share_resolved'),
+      email: BotShareEmailSchema,
+      accountId: Id,
+      name: Name.optional()
+    })
+    .refine(isOnItsShare)
+)
 
 // A teammate's device asked to reach the bot: Ed25519 devicePublicKey, Curve25519 sealKey.
-export const ShareAcceptDelivery = z
-  .object({
-    ...ShareDeliveryFields,
-    kind: z.literal('share_accept'),
-    accountId: Id,
-    devicePublicKey: PublicKey,
-    sealKey: PublicKey,
-    deviceName: Name.optional()
-  })
-  .refine(isOnItsShare)
+export const ShareAcceptDelivery = lazyZodSchema(() =>
+  z
+    .object({
+      ...ShareDeliveryFields,
+      kind: z.literal('share_accept'),
+      accountId: Id,
+      devicePublicKey: PublicKey,
+      sealKey: PublicKey,
+      deviceName: Name.optional()
+    })
+    .refine(isOnItsShare)
+)
+
+// The teammate declined the share: its owner sees so, and a new share id asks them again.
+export const ShareDeclinedDelivery = lazyZodSchema(() =>
+  z
+    .object({ ...ShareDeliveryFields, kind: z.literal('share_declined'), accountId: Id })
+    .refine(isOnItsShare)
+)
 
 // The contract's maxHeldMessageChars: one held message keeps under the cloud's 1 MiB request cap.
 /** One held message as the cloud's request holds it: sealed, base64 (contract maxHeldMessageChars). */
@@ -58,15 +75,25 @@ export const MAX_HELD_MESSAGE_CHARS = 1024 * 1024 - 4 * 1024
 
 // A teammate's message held while the host was away, sealed to the host's hello hostKey. Only the
 // host can open it; the sender it names is checked against the host's own share device rows.
-export const ShareSendDelivery = z
-  .object({
-    ...ShareDeliveryFields,
-    kind: z.literal('share_send'),
-    accountId: Id,
-    clientMessageId: Id,
-    sealed: z.string().min(1).max(MAX_HELD_MESSAGE_CHARS)
-  })
-  .refine(isOnItsShare)
+export const ShareSendDelivery = lazyZodSchema(() =>
+  z
+    .object({
+      ...ShareDeliveryFields,
+      kind: z.literal('share_send'),
+      accountId: Id,
+      clientMessageId: Id,
+      sealed: z.string().min(1).max(MAX_HELD_MESSAGE_CHARS)
+    })
+    .refine(isOnItsShare)
+)
+
+/** Every share delivery, as the delivery union lists them. */
+export const SHARE_DELIVERIES = [
+  ShareResolvedDelivery,
+  ShareAcceptDelivery,
+  ShareDeclinedDelivery,
+  ShareSendDelivery
+] as const
 
 /** PUT `${bots}/<bot id>/shares/<share id>/offer`: the accept's answer, sealed to its sealKey. */
 export type ConnectorShareOfferRequest = { v: 1; devicePublicKey: string; sealedOffer: string }
@@ -92,28 +119,33 @@ const MAX_SHARE_HELD_STATES = 500
 
 export const SHARE_HELD_STATES = ['waiting', 'delivered', 'not_sent'] as const
 
-export const ConnectorSharesMineSchema = z.object({
-  v: z.literal(1),
-  shares: z.array(
-    z.object({
-      shareId: BotShareIdSchema,
-      botId: Id,
-      botName: Name,
-      ownerName: Name,
-      avatarUrl: z.string().url().max(2048).optional(),
-      hostOnline: z.boolean(),
-      state: z.enum(['ready', 'needs-accept']),
-      // Present only once the host takes held messages; absent, hold nothing.
-      hostKey: PublicKey.optional(),
-      offers: z
-        .array(z.object({ devicePublicKey: PublicKey, sealedOffer: z.string().min(1) }))
-        .optional(),
-      held: z
-        .array(z.object({ clientMessageId: Id, state: z.enum(SHARE_HELD_STATES) }))
-        .max(MAX_SHARE_HELD_STATES)
-    })
-  )
-})
+export const ConnectorSharesMineSchema = lazyZodSchema(() =>
+  z.object({
+    v: z.literal(1),
+    shares: z.array(
+      z.object({
+        shareId: BotShareIdSchema,
+        botId: Id,
+        botName: Name,
+        ownerName: Name,
+        hostOnline: z.boolean(),
+        state: z.enum(['ready', 'needs-accept']),
+        // The agent's purpose line from its owner's hello, when given.
+        botPurpose: z.string().min(1).max(1000).optional(),
+        // Its mascot and services from its owner's hello; absent from an older host or cloud.
+        agentCard: AgentCardSchema,
+        // Present only once the host takes held messages; absent, hold nothing.
+        hostKey: PublicKey.optional(),
+        offers: z
+          .array(z.object({ devicePublicKey: PublicKey, sealedOffer: z.string().min(1) }))
+          .optional(),
+        held: z
+          .array(z.object({ clientMessageId: Id, state: z.enum(SHARE_HELD_STATES) }))
+          .max(MAX_SHARE_HELD_STATES)
+      })
+    )
+  })
+)
 export type ConnectorSharesMine = z.infer<typeof ConnectorSharesMineSchema>
 
 export type ConnectorShareAcceptRequest = {
@@ -122,20 +154,32 @@ export type ConnectorShareAcceptRequest = {
   sealKey: string
   deviceName?: string
 }
-export const ConnectorShareAcceptSchema = z.object({ status: z.literal('queued') })
+export const ConnectorShareAcceptSchema = lazyZodSchema(() =>
+  z.object({ status: z.literal('queued') })
+)
 
 export type ConnectorShareHoldRequest = { v: 1; clientMessageId: string; sealed: string }
-export const ConnectorShareHoldSchema = z.object({ status: z.enum(['held', 'duplicate']) })
+export const ConnectorShareHoldSchema = lazyZodSchema(() =>
+  z.object({ status: z.enum(['held', 'duplicate']) })
+)
 
 // GET `…/<share id>/messages` (a phone, `Bearer <share credential>`): that share's held states.
-export const ConnectorShareHeldSchema = z.object({
-  v: z.literal(1),
-  held: z
-    .array(z.object({ clientMessageId: Id, state: z.enum(SHARE_HELD_STATES) }))
-    .max(MAX_SHARE_HELD_STATES)
-})
+export const ConnectorShareHeldSchema = lazyZodSchema(() =>
+  z.object({
+    v: z.literal(1),
+    held: z
+      .array(z.object({ clientMessageId: Id, state: z.enum(SHARE_HELD_STATES) }))
+      .max(MAX_SHARE_HELD_STATES)
+  })
+)
 export type ConnectorShareHeld = z.infer<typeof ConnectorShareHeldSchema>
 
-export function sharePath(shareId: string, tail: 'accept' | 'messages'): string {
+// POST `…/<share id>/decline` ({ v: 1 }): this account turns the share down. Idempotent; the share then
+// leaves `mine`, and the owner's host gets share_declined.
+export const ConnectorShareDeclineSchema = lazyZodSchema(() =>
+  z.object({ status: z.literal('declined') })
+)
+
+export function sharePath(shareId: string, tail: 'accept' | 'decline' | 'messages'): string {
   return `${CONNECTOR_PATHS.shares}/${encodeURIComponent(shareId)}/${tail}`
 }

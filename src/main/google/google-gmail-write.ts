@@ -1,6 +1,7 @@
 // Gmail writes for `orca gmail draft|send|archive|label|mark-read`. Mail is drafted first and sent
 // as its own step; a reply stays in its thread, and a revised draft keeps what it doesn't change.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type {
   GmailDraftView,
   GmailModifyView,
@@ -26,10 +27,12 @@ export type { GmailDraftArgs }
 
 const UPLOAD = 'https://gmail.googleapis.com/upload/gmail/v1/users/me'
 
-const DraftSchema = z.object({ id: z.string(), message: MessageSchema })
-const SentSchema = z.object({ id: z.string(), threadId: z.string() })
-const LabelSchema = z.object({ id: z.string(), name: z.string(), type: z.string().optional() })
-const LabelsSchema = z.object({ labels: z.array(LabelSchema).default([]) })
+const DraftSchema = lazyZodSchema(() => z.object({ id: z.string(), message: MessageSchema }))
+const SentSchema = lazyZodSchema(() => z.object({ id: z.string(), threadId: z.string() }))
+const LabelSchema = lazyZodSchema(() =>
+  z.object({ id: z.string(), name: z.string(), type: z.string().optional() })
+)
+const LabelsSchema = lazyZodSchema(() => z.object({ labels: z.array(LabelSchema).default([]) }))
 
 /** `gmail:draft:<id>` as draft prints it, or a bare draft id. */
 export function parseDraftRef(ref: string): string {

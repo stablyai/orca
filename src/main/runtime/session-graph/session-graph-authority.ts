@@ -267,15 +267,21 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     if (candidates.length === 0) {
       return
     }
-    const deliver = this.createMobileSessionTabsDelivery()
     const delivered: Promise<void>[] = []
     for (const worktree of held) {
-      const selected = this.selectMobileSessionTabsListeners(worktree, pairedDeviceId, candidates)
+      // The device's own list there: a teammate's own in their agent's Home holds their pages.
+      const list = this.sessionTabListOf(pairedDeviceId, worktree)
+      const selected = this.selectMobileSessionTabsListeners(
+        worktree,
+        pairedDeviceId,
+        candidates,
+        list
+      )
       if (selected.length === 0) {
         continue
       }
       delivered.push(
-        deliver(
+        this.createMobileSessionTabsDelivery(list)(
           await this.getMobileSessionTabsForWorktree(worktree, pairedDeviceId, {
             includeAgentSenders: false
           }),

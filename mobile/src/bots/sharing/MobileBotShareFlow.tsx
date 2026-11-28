@@ -19,6 +19,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 import { MobileBotAvatar } from '../MobileBotAvatar'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import { MobileShareLinkCopyButton } from './MobileShareLinkCopyButton'
 import {
   botShareDate,
   botShareErrorMessage,
@@ -190,7 +191,7 @@ export function MobileBotShareFlow(props: ShareFlowProps) {
     entry.kind === 'part' ? entry.title : shareListTitle(entry.list, t)
   if (page && ctx) {
     const backLabel =
-      nav.length > 1 ? pageTitle(nav.at(-2)!) : t('bots.share.shareBot', 'Share bot…')
+      nav.length > 1 ? pageTitle(nav.at(-2)!) : t('bots.share.shareBot', 'Send a copy…')
     return (
       <>
         <SheetHeader
@@ -277,13 +278,7 @@ export function MobileBotShareFlow(props: ShareFlowProps) {
                     .filter(Boolean)
                     .join(' · ')
             }
-            accessory={
-              <MobileBotTextButton
-                label={t('bots.share.copy', 'Copy')}
-                accessibilityLabel={t('bots.share.copyLink', 'Copy link')}
-                onPress={() => void copy(link.url)}
-              />
-            }
+            accessory={<MobileShareLinkCopyButton onPress={() => void copy(link.url)} />}
           />
         </SettingsSection>
       ) : null}

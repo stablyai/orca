@@ -18,7 +18,9 @@ const READ_OPS: ReadonlySet<BotItemsOp> = new Set<BotItemsOp>([
   'viewRows',
   'closes',
   'latestEventId',
-  'owedMail'
+  'ownerCommentByRequest',
+  'owedMail',
+  'owedCommentAttachmentUploads'
 ])
 
 export type TrackedBotItems = {

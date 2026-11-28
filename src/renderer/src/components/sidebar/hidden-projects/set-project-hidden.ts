@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
+import { userManagedRepos } from '../../../../../shared/project/catalog/hidden-projects'
 
 type HiddenTarget = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
@@ -58,9 +59,14 @@ export async function setProjectHidden(
   hidden: boolean,
   name: string
 ): Promise<boolean> {
+  // A shared agent's host's projects are its owner's: this window never hides or shows them there.
+  const managed = userManagedRepos(targets)
+  if (managed.length === 0) {
+    return true
+  }
   const hiddenAt = hidden ? Date.now() : null
-  const written = await writeHidden(targets, hiddenAt)
-  if (written.length < targets.length) {
+  const written = await writeHidden(managed, hiddenAt)
+  if (written.length < managed.length) {
     toast.error(
       hidden
         ? translate(
@@ -83,5 +89,5 @@ export async function setProjectHidden(
       }
     })
   }
-  return written.length === targets.length
+  return written.length === managed.length
 }

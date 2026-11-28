@@ -7,7 +7,7 @@ export type ClientHostedBrowserRowSources = {
   resolveDeviceName(pairedDeviceId: string): string | null
 }
 
-/** Omit active: scoped listPages and global hydration legitimately normalize it differently. */
+/** Omit active: scoped page lists and global hydration legitimately normalize it differently. */
 export function projectClientHostedBrowserRows(
   pages: readonly RuntimeBrowserClientPage[],
   sources: ClientHostedBrowserRowSources

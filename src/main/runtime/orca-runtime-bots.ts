@@ -7,10 +7,7 @@ import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/
 import type { BotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import type { ConnectorGitHubInstallations } from '../connector-cloud/connector-github-installations'
 import { BotChangeNotices } from '../bots/bot-change-notices'
-import {
-  revokeDeletedBotShareDevices,
-  type BotShareDevices
-} from '../bots/team-share/bot-share-access'
+import { revokeDeletedBotShareDevices } from '../bots/team-share/bot-share-access'
 import { deleteAutomationsOfBot } from '../bots/bot-automations-removal'
 import { syncBotAutomationAgents } from '../bots/bot-automation-agent-sync'
 import { BotController } from '../bots/bot-controller'
@@ -24,18 +21,18 @@ import { journaledItemsNotice } from '../bots/bot-memory-journal-runtime'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
-import type { BotInviteCloudCall } from '../bots/team-share/bot-invite-email'
 import type { BotShareDownloadPolicy } from '../bots/sharing/bot-share-receive'
 import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
 import { runtimeBotWork, type BotWorkRuntime } from '../bots/bot-work-runtime'
 import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
+import { botLinkedSkillsFolder } from '../bots/bot-skill-projects'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
+import { OrcaRuntimeWithBotTeamShare } from './orca-runtime-bot-team-share'
 import { botStructuredSessionWiring, type WiredBot } from '../bots/bot-structured-session-wiring'
 import { botChatJournal } from '../bots/bot-chat-reads'
 import type { RuntimeStore } from './construction/runtime-store-contract'
@@ -52,7 +49,7 @@ import { runtimeBotItems } from '../bots/runtime-bot-items'
 import { botItemOfReport } from '../bots/bot-item-report-fact'
 import { listeningClients } from './orchestration/federation/client-asks/client-ask-listeners'
 
-export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands {
+export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithBotTeamShare {
   /** Set at construction (orcad: as its account installs); a profile switch publishes another
    *  active profile while this store lives on. */
   protected servedOrcaProfileId: string | null = null
@@ -65,24 +62,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** The host's GitHub orgs as its connector says them; null on a host without a connector. */
   connectorGitHubInstallations: Pick<ConnectorGitHubInstallations, 'track'> | null = null
 
-  /** The RPC server's teammate devices of shared bots, set as it is made; null without one. */
-  botShareDevices: BotShareDevices | null = null
-
   private readonly botWriteListeners = new Set<() => void>()
-  private readonly shareHostKeyListeners = new Set<() => void>()
-
-  /** The RPC server loaded its pairing identity: held messages now have a key to be sealed to, which
-   *  the connector's hello publishes (hostKey). */
-  onBotShareHostKeyReady(listener: () => void): () => void {
-    this.shareHostKeyListeners.add(listener)
-    return () => this.shareHostKeyListeners.delete(listener)
-  }
-
-  notifyBotShareHostKeyReady(): void {
-    for (const listener of this.shareHostKeyListeners) {
-      listener()
-    }
-  }
 
   /** Every bot record save or removal on this host, for its own readers (webhooks, avatars, the
    *  connector's hello); clients hear `botsChanged`. */
@@ -129,6 +109,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
+      this.pruneTeammateTabLists()
       await revokeDeletedBotShareDevices(this.botShareDevices, botId)
       void this.bots.slackIcons.forget(botId).catch(() => undefined)
     }
@@ -154,9 +135,6 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     this.botShareClient = { client, download }
     this.botShareService = null
   }
-
-  /** This host's signed-in Orca Cloud calls, set where its connector installs (desktop, serve, orcad). */
-  botCloudAuth: BotInviteCloudCall | null = null
 
   /** Sharing bots by link, made on first use (it needs the app's data folder). */
   botShares(): BotShareService {
@@ -264,6 +242,13 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   private readonly wiredBotLookup = createBotLookupIndex(() => this.wiredBots())
 
+  /** The linked-project skills folder every chat of the bot homed at this workspace loads. */
+  botLinkedSkillsFolderOfHome(workspaceId: string | null | undefined): string | null {
+    const bot = this.wiredBotLookup.byHome(workspaceId)
+    // Unlinking every project hides its skills at once, before the folder's links are removed.
+    return bot?.skillProjects?.length ? botLinkedSkillsFolder(bot.id) : null
+  }
+
   /** The bots on this host's store, read per call. */
   protected wiredBots(): readonly WiredBot[] {
     return this.store?.getBots?.() ?? []
@@ -272,6 +257,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** The structured host's bot side: their sessions' tools and memory, Look around, and the queued-message gate. */
   protected botStructuredSessionHostDeps(store: () => RuntimeStore) {
     return {
+      owedItemAttachmentUploads: (stateDirectory: string, root: string) =>
+        this.botItems.owedCommentAttachmentUploads(stateDirectory, root),
       ...botStructuredSessionWiring({
         store,
         botsAtInstall: this.store?.getBots?.() ?? [],
@@ -330,10 +317,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** Debounced `botsChanged` for clients showing a bot; every source of change calls it. */
   protected readonly botChangeNotices = new BotChangeNotices({
-    emit: (scope) => {
-      this.notifier?.botsChanged?.(scope)
-      this.emitClientEvent({ type: 'botsChanged', ...scope })
-    },
+    emit: (scope) => this.emitBotsChanged(scope),
     hasBots: () => this.bots.list().length > 0,
     needsYouCounts: () => this.botItems.needsYouCounts(Date.now())
   })
@@ -353,6 +337,15 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
    *  Unscoped, every reader re-reads. */
   notifyBotsChanged(scope: BotChangeScope = {}): void {
     this.botChangeNotices.changed(scope)
+  }
+
+  /** The agents shared with this computer's account changed. Sent with no bots of its own too: a
+   *  phone listing those agents reads the notice. */
+  readonly notifySharedBotsChanged = (): void => this.emitBotsChanged({ kinds: ['bot'] })
+
+  private emitBotsChanged(scope: BotChangeScope): void {
+    this.notifier?.botsChanged?.(scope)
+    this.emitClientEvent({ type: 'botsChanged', ...scope })
   }
 
   /** This host's waiting access requests changed; windows and phones re-read them. */

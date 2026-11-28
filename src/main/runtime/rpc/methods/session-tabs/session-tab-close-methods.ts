@@ -1,7 +1,11 @@
 import { withSpan } from '../../../../observability/tracer'
+import type { z } from 'zod'
+import { callerTabPerson } from '../../../../bots/team-share/teammate-rules'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { SessionTabCloseTarget } from '../../../session-lifecycle/close/refuse-unattributed-mobile-session-tab-close'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
-import { defineMethod } from '../../core'
+import { defineMethod, type RpcContext } from '../../core'
 import {
   CloseLifecycleTab,
   CloseTab
@@ -10,6 +14,35 @@ import { assertProjectedSessionTabVisible } from './session-tab-browser-placemen
 import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
 
+/** The list a close names, the one resolver of its person: a watched list's (`params.person`, another
+ *  person's, which moves no device of the closer's), else the caller's own on their device. Read once. */
+async function sessionTabCloseTarget(
+  params: z.infer<typeof CloseTab>,
+  context: RpcContext
+): Promise<SessionTabCloseTarget> {
+  const { runtime } = context
+  if (params.person) {
+    const viewed = await runtime.listViewedSessionTabs(params.worktree, params.person, {
+      includeAgentSenders: false
+    })
+    return {
+      person: viewed.list === 'host' ? 'owner' : viewed.list,
+      watched: true,
+      list: async () => viewed.frame
+    }
+  }
+  let own: Promise<RuntimeMobileSessionTabsResult> | undefined
+  return {
+    person: callerTabPerson(context.callerScope),
+    ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {}),
+    watched: false,
+    list: () =>
+      (own ??= runtime.listMobileSessionTabs(params.worktree, context.pairedDeviceId, {
+        includeAgentSenders: false
+      }))
+  }
+}
+
 export const SESSION_TAB_CLOSE_METHODS = [
   defineMethod({
     name: 'session.tabs.close',
@@ -17,12 +50,9 @@ export const SESSION_TAB_CLOSE_METHODS = [
     share: 'not-shared',
     params: CloseTab,
     handler: async (params, context) => {
+      const closeTarget = await sessionTabCloseTarget(params, context)
       if (context.clientKind) {
-        const raw = await context.runtime.listMobileSessionTabs(
-          params.worktree,
-          context.pairedDeviceId,
-          { includeAgentSenders: false }
-        )
+        const raw = await closeTarget.list()
         const visible = projectSessionTabsForClient(
           raw,
           context.clientKind,
@@ -48,8 +78,8 @@ export const SESSION_TAB_CLOSE_METHODS = [
           // Preserve legacy runtime closes: user clicks and cleanup have identical wire shapes.
           if (!params.reason && requiresIntent) {
             const result = await context.runtime.refuseUnattributedMobileSessionTabClose(
-              params.worktree,
-              params.tabId
+              params.tabId,
+              { ...closeTarget, person: closeTarget.person }
             )
             span.setAttribute('decision', `refused-${result.refusalReason ?? 'missing-intent'}`)
             return result
@@ -58,10 +88,13 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.worktree,
             params.tabId,
             {
+              person: closeTarget.person,
               reason: 'user',
               // Only explicit reasons prove confirmation; legacy reasonless closes do not.
               ...(params.force && params.reason !== undefined ? { force: true } : {}),
-              ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
+              ...(closeTarget.clientNavigationId
+                ? { clientNavigationId: closeTarget.clientNavigationId }
+                : {})
             }
           )
           span.setAttribute(
@@ -126,6 +159,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.worktree,
             params.tabId,
             {
+              person: callerTabPerson(context.callerScope),
               reason: params.reason,
               expectedPublicationEpoch: params.publicationEpoch,
               expectedTerminalHandle: params.terminal,

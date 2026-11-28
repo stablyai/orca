@@ -1,3 +1,7 @@
+import {
+  isTestRelayRuntimeDevice,
+  runtimeRelayPairingTestSwitchOn
+} from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import type { RuntimeDeviceGrant } from '../callers/rpc-method-permission'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { BotShareDeviceStore } from './pairing/bot-share-device-store'
@@ -47,8 +51,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   /** A device that signs in through Relay on its own: a phone, or a teammate's share device. */
   isRelayClientDevice(deviceId: string): boolean {
+    const device = this.deviceRegistry?.getDevice(deviceId)
     return (
-      this.deviceRegistry?.getDevice(deviceId)?.scope === 'mobile' ||
+      device?.scope === 'mobile' ||
+      isTestRelayRuntimeDevice(device) ||
       (this.botShareDevices?.get(deviceId) ?? null) !== null
     )
   }
@@ -82,7 +88,9 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       (phone?.scope === 'mobile' &&
       this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) !== 'local-only'
         ? phone
-        : null)
+        : null) ??
+      // Test-only: a paired desktop takes a Relay binding in a dev build (runtime-relay-endpoint.ts).
+      (phone?.scope === 'runtime' && runtimeRelayPairingTestSwitchOn() ? phone : null)
     if (!current) {
       return false
     }
@@ -168,6 +176,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           this.runtime.onClientEvent(listener, { consumesTerminalSideEffects: false }),
         changed: () => this.runtime.notifyRelayHostsChanged()
       }) ?? null
+    const detachRowChanges =
+      this.mobileRelayHostCatalog?.publishRowChanges((hostId) =>
+        this.runtime.notifyRelayHostRowsChanged(hostId)
+      ) ?? null
     // Phones filter pending VM checkouts when they read; a change makes them read again.
     const detachPendingVmChanges = this.mobileRelayHostCatalog
       ? publishPendingVmCheckoutRepoChanges(pendingVmCheckouts, (repoId) =>
@@ -175,9 +187,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
         )
       : null
     this.detachRelayHostsChanges =
-      detachListChanges || detachPendingVmChanges
+      detachListChanges || detachRowChanges || detachPendingVmChanges
         ? () => {
             detachListChanges?.()
+            detachRowChanges?.()
             detachPendingVmChanges?.()
           }
         : null

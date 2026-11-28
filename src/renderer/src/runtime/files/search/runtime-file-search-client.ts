@@ -1,3 +1,4 @@
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   throwIfSignalAborted,
@@ -24,7 +25,6 @@ import {
 } from './runtime-legacy-quick-open-inventory'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 const QUICK_OPEN_REMOTE_UPDATE_REQUIRED_MESSAGE =
   'Quick Open search requires a newer paired Orca host. Update the remote host and reconnect.'
@@ -63,7 +63,10 @@ export async function searchRuntimeFiles(
   return callRuntimeRpc<SearchResult>(
     target,
     'files.search',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...runtimeOptions },
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      ...runtimeOptions
+    },
     { timeoutMs: 15_000, signal }
   )
 }

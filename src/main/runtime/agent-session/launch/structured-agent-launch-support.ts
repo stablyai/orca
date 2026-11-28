@@ -51,9 +51,6 @@ export type LaunchEnvironmentSettings = Pick<
 
 /** What the check reads from the runtime asking it. */
 type LaunchSettingsRuntime = { requireStore(): { getSettings(): LaunchEnvironmentSettings } }
-type LaunchSupportRuntime = LaunchSettingsRuntime & {
-  resolveRuntimeFileTarget(selector: string): Promise<{ worktree: { path: string } }>
-}
 
 /** Check the installed release with launch env/Command settings in cwd; null means location-only admission. Unrunnable Command settings throw launch refusal. */
 export async function observeStructuredAgentLaunch(
@@ -147,7 +144,7 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 /** What a chat start of `agent` on this host launches from, for a child that serves no chat. */
 export async function structuredAgentHostLaunchSources(
   agent: StructuredAgentId,
-  runtime: Pick<LaunchSupportRuntime, 'requireStore'> & {
+  runtime: LaunchSettingsRuntime & {
     resolveStructuredAgentAccountHome(agent: StructuredAgentId): Promise<AgentSessionAccountHome>
   },
   signal: AbortSignal
@@ -183,19 +180,16 @@ export async function structuredAgentHostLaunchSources(
 /** Report pre-spawn refusals from registered location/release checks without installing the host; log the refusing check. */
 export async function resolveHostStructuredAgentCreateSupport(input: {
   agent: StructuredAgentId
-  worktreeSelector: string
+  /** The folder a new chat would start in, where its CLI is resolved and its version read. */
+  workspacePath: () => Promise<string>
   location: AgentSessionExecutionLocation
-  runtime: LaunchSupportRuntime
+  runtime: LaunchSettingsRuntime
 }): Promise<StructuredAgentSessionCreateSupport> {
   const { agent, location, runtime } = input
   const supportsLocation =
     structuredAgentRuntimeMetadata(agent)?.supportsLocation(location) ?? false
   const launch = supportsLocation
-    ? await structuredAgentLaunchAdmission(
-        agent,
-        async () => (await runtime.resolveRuntimeFileTarget(input.worktreeSelector)).worktree.path,
-        runtime
-      )
+    ? await structuredAgentLaunchAdmission(agent, input.workspacePath, runtime)
     : null
   const support = resolveStructuredAgentSessionCreateSupport({
     location,

@@ -6,6 +6,8 @@ import {
   type PairedRuntimeConnection
 } from '../pairing/paired-runtime-connection'
 import { classifyRemotePairingHostname } from '../pairing/remote-pairing-address'
+import { redactRuntimeRelayEndpoint } from '../pairing/runtime-relay-endpoint'
+import { sharedHostConnection } from '../pairing/shared-host-keys'
 import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environment-reconciliation-record'
 import {
   OrcadWslDeploymentLinkSchema,
@@ -176,7 +178,10 @@ export function redactRuntimeEnvironment(
   return {
     ...environment,
     endpoints: environment.endpoints.map(
-      ({ deviceToken: _deviceToken, publicKeyB64: _key, ...rest }) => rest
+      ({ deviceToken: _deviceToken, publicKeyB64: _key, ...rest }) => ({
+        ...rest,
+        endpoint: redactRuntimeRelayEndpoint(rest.endpoint)
+      })
     )
   }
 }
@@ -291,12 +296,15 @@ export function getPreferredPairedRuntimeConnection(
   environment: PreferredEndpointSource
 ): PairedRuntimeConnection {
   const endpoint = preferredEndpoint(environment)
-  return pairedRuntimeConnectionFromOffer({
-    endpoint: endpoint.endpoint,
-    deviceToken: endpoint.deviceToken,
-    publicKeyB64: endpoint.publicKeyB64,
-    pairedDeviceId: environment.pairedDeviceId
-  })
+  return (
+    sharedHostConnection(endpoint, environment.pairedDeviceId) ??
+    pairedRuntimeConnectionFromOffer({
+      endpoint: endpoint.endpoint,
+      deviceToken: endpoint.deviceToken,
+      publicKeyB64: endpoint.publicKeyB64,
+      pairedDeviceId: environment.pairedDeviceId
+    })
+  )
 }
 
 export function getPreferredPairingOffer(environment: PreferredEndpointSource): PairingOffer {

@@ -1,4 +1,7 @@
 import { app, powerMonitor } from 'electron'
+import { SharedBotHostStore } from '../../bots/shared-with-me/shared-bot-host-store'
+import { keptSharedHostRegistry } from '../../bots/shared-with-me/shared-bot-host-key'
+import { setSharedHosts } from '../../../shared/remote-runtime/pairing/shared-host-keys'
 import { join } from 'node:path'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import { installConnectorHost } from '../../connector-cloud/connector-host-install'
@@ -10,7 +13,6 @@ import { browserManager } from '../../browser/guest-lifecycle/manager/browser-ma
 import { installGoogleSetupHostWatch } from '../../google/google-setup-host-watch'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { mainProcessState as state } from '../main-process-state'
-import { botsRootFolder } from '../../bots/bot-home'
 import type { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
 
 let sharedBotHosts: SharedBotHosts | null = null
@@ -39,6 +41,16 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
     keyStagingDir: join(userDataPath, 'google-setup-keys')
   })
   if (serve) {
+    // Its profile's kept shares, read only, so their mail is never taken for a share that ended.
+    const kept = new SharedBotHostStore(userDataPath)
+    const loaded = kept.load()
+    setSharedHosts(
+      keptSharedHostRegistry(
+        kept,
+        () => kept.list(),
+        () => loaded
+      )
+    )
     return
   }
   powerMonitor.on('resume', host.refreshLinearLogins)
@@ -48,20 +60,22 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
   sharedBotHosts = registerSharedBotHostsHandlers({
     userDataPath,
     cloud: () => runtime.getConnectorCloud(),
-    // Through the runtime's own create and delete, as a bot home is.
+    // Old homes go through the runtime's own delete, as a bot home's do.
     homes: {
-      botsRoot: () => botsRootFolder(),
-      store,
-      createFolderWorkspace: async (input) =>
-        (await runtime.createFolderWorkspace(input)).folderWorkspace,
+      folderWorkspaceIds: () => store.getFolderWorkspaces().map((home) => home.id),
       deleteFolderWorkspace: (id) =>
         runtime.deleteFolderWorkspace(id, { discardUnsavedDrafts: true })
-    }
+    },
+    phoneSharesChanged: () => runtime.notifySharedBotsChanged()
   })
   powerMonitor.on('resume', refreshSharedBotHosts)
   // A share made while this window was in the background shows on return, not at the next idle read.
   let readOnFocusAt = 0
   app.on('browser-window-focus', () => {
+    // The invite wake already said whether anything changed.
+    if (mainProcessConnectorCloud()?.invites.up) {
+      return
+    }
     if (Date.now() - readOnFocusAt >= SHARED_BOT_HOSTS_FOCUS_READ_GAP_MS) {
       readOnFocusAt = Date.now()
       refreshSharedBotHosts()

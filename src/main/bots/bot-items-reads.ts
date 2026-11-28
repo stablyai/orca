@@ -19,12 +19,16 @@ import {
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 import { BotItemsTables } from './bot-items-tables'
+import { BOT_ITEM_EVENT_NOT_BY_VIEWER, BOT_ITEM_OWNER_VIEWER } from './bot-item-author'
 
 export type BotItemListQuery = {
   botId: string
   statuses: readonly BotItemStatus[]
   /** Only these chats' items, counts included. */
   chatIds?: readonly string[]
+  /** Only these people's items (`botItemListScope`): those acting for any of these teammates'
+   *  accounts, or null for the owner's; absent: everyone's. */
+  actsForAccounts?: readonly string[] | null
   /** Only items linking this: `item list --link`. */
   link?: { kind: BotItemLinkKind; ref: string }
   /** Only these items; the counts stay the whole scope's. */
@@ -38,6 +42,23 @@ export type BotItemListQuery = {
 const CLOSE_LOOKBACK_EVENTS = 200
 
 export type BotItemClose = { actor: BotItemActor; actsFor: readonly BotRequestAsker[] | null }
+
+/** The list's people part: the owner's own (null), any of these teammates', or everyone's (absent). */
+function peopleScope(query: Pick<BotItemListQuery, 'actsForAccounts'>): {
+  sql: string
+  args: string[]
+} {
+  const accounts = query.actsForAccounts
+  if (accounts === undefined) {
+    return { sql: '', args: [] }
+  }
+  return accounts === null
+    ? { sql: ' AND items.acts_for_accounts IS NULL', args: [] }
+    : {
+        sql: ' AND EXISTS (SELECT 1 FROM json_each(items.acts_for_accounts) WHERE value IN (SELECT value FROM json_each(?)))',
+        args: [JSON.stringify(accounts)]
+      }
+}
 
 export class BotItemsReads extends BotItemsTables {
   /** Links of a kind to any of these refs, across items. */
@@ -100,10 +121,12 @@ export class BotItemsReads extends BotItemsTables {
     const link = query.link
       ? ' AND uid IN (SELECT item_uid FROM item_links WHERE kind = ? AND ref = ?)'
       : ''
-    const scope = `owner_bot_id = ?${chat}${link}`
+    const person = peopleScope(query)
+    const scope = `owner_bot_id = ?${chat}${person.sql}${link}`
     const scopeArgs = [
       query.botId,
       ...(query.chatIds ? [JSON.stringify(query.chatIds)] : []),
+      ...person.args,
       ...(query.link ? [query.link.kind, query.link.ref] : [])
     ]
     const counts: Partial<Record<BotItemStatus, number>> = {}
@@ -136,13 +159,18 @@ export class BotItemsReads extends BotItemsTables {
     return { items, counts }
   }
 
-  /** Every Needs you item's bot, last activity and snooze, so the bot list counts what needs the owner. */
-  needsYou(): { botId: string; lastActivityAt: number; snoozedUntil: number | null }[] {
+  /** Every Needs you item's bot, last activity and snooze in `people`'s scope (`botItemListScope`, as
+   *  the list reads it), so the bot list counts what needs the owner. */
+  needsYou(
+    people: Pick<BotItemListQuery, 'actsForAccounts'>
+  ): { botId: string; lastActivityAt: number; snoozedUntil: number | null }[] {
+    const person = peopleScope(people)
     return this.db
       .prepare(
-        `SELECT owner_bot_id, last_activity_at, snoozed_until FROM items WHERE status = 'needs_you'`
+        `SELECT owner_bot_id, last_activity_at, snoozed_until FROM items
+           WHERE status = 'needs_you'${person.sql}`
       )
-      .all()
+      .all(...person.args)
       .map((row) => ({
         botId: String(row.owner_bot_id),
         lastActivityAt: Number(row.last_activity_at),
@@ -182,7 +210,9 @@ export class BotItemsReads extends BotItemsTables {
   viewRows(
     uids: readonly string[],
     /** Also each open item's waiting ask, which reads its events: for its own view only. */
-    withWaitingAsks = false
+    withWaitingAsks = false,
+    /** Whose unseen marks `othersLast` holds: the owner's (kept on each row), or a teammate's. */
+    viewer = BOT_ITEM_OWNER_VIEWER
   ): {
     items: BotItemRecord[]
     links: Record<string, BotItemLinkRecord[]>
@@ -198,7 +228,17 @@ export class BotItemsReads extends BotItemsTables {
       .all(ids)
     const items = rows.map(itemRecordOf)
     const othersLast: Record<string, number> = {}
-    for (const row of rows) {
+    const teammates =
+      viewer === BOT_ITEM_OWNER_VIEWER
+        ? null
+        : this.db
+            .prepare(
+              `SELECT item_uid AS uid, MAX(id) AS others_last_event_id FROM item_events
+                 WHERE item_uid IN (SELECT value FROM json_each(?)) AND ${BOT_ITEM_EVENT_NOT_BY_VIEWER}
+                 GROUP BY item_uid`
+            )
+            .all(ids, viewer)
+    for (const row of teammates ?? rows) {
       const id = integer(row, 'others_last_event_id')
       if (id > 0) {
         othersLast[text(row, 'uid')] = id

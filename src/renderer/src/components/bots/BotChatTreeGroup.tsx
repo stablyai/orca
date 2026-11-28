@@ -1,5 +1,5 @@
 // One chat in the Chats tab: one folded row; its chevron shows the workers it started, capped and stepped.
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { useTranslate } from '@/i18n/use-translate'
@@ -68,17 +68,20 @@ export function BotChatLine({
   bot,
   chat,
   folded,
-  liveAtEnd = false
+  liveAtEnd = false,
+  hidePerson = false
 }: {
   bot: Bot
   chat: BotChatTreeChat
   folded: boolean
   liveAtEnd?: boolean
+  /** A person is picked, so every row is theirs and none names them. */
+  hidePerson?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const stop = useBotUsageLimitStopIndex().bySession.get(chat.chatId)
   if (liveAtEnd) {
-    return <BotChatPreview bot={bot} chat={chat} />
+    return <BotChatPreview bot={bot} chat={chat} hidePerson={hidePerson} />
   }
   if (chat.live === 'replying') {
     return <>{t('bots.chats.replying', 'Replying…')}</>
@@ -99,11 +102,19 @@ export function BotChatLine({
   if (counts) {
     return <>{chatFoldSummary(t, counts)}</>
   }
-  return <BotChatPreview bot={bot} chat={chat} />
+  return <BotChatPreview bot={bot} chat={chat} hidePerson={hidePerson} />
 }
 
-/** Where the chat is, when it closed, and the last thing said. */
-function BotChatPreview({ bot, chat }: { bot: Bot; chat: BotChatTreeChat }): React.JSX.Element {
+/** Where the chat is, whose it is, when it closed, and the last thing said; every row has a line. */
+function BotChatPreview({
+  bot,
+  chat,
+  hidePerson
+}: {
+  bot: Bot
+  chat: BotChatTreeChat
+  hidePerson: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const closed = chat.closedAt
     ? t('bots.chats.closedOn', 'closed {{date}}', {
@@ -114,8 +125,30 @@ function BotChatPreview({ bot, chat }: { bot: Bot; chat: BotChatTreeChat }): Rea
     chat.preview ??
     (chat.origin === 'home'
       ? t('bots.chats.sayHi', 'Say hi to {{name}}', { name: bot.name })
-      : null)
-  return <>{[botChatPlace(chat), closed, preview].filter(Boolean).join(' · ')}</>
+      : chat.live === 'idle'
+        ? t('bots.chats.noMessages', 'No messages yet')
+        : null)
+  // A teammate's Home is titled by their name already.
+  const person = hidePerson || chat.homeOf ? null : (chat.person?.name ?? null)
+  const parts: { key: string; node: React.ReactNode }[] = [
+    { key: 'place', node: botChatPlace(chat) },
+    {
+      key: 'person',
+      node: person ? <span className="text-foreground/80">{person}</span> : null
+    },
+    { key: 'closed', node: closed },
+    { key: 'preview', node: preview }
+  ].filter((part) => part.node)
+  return (
+    <>
+      {parts.map((part, index) => (
+        <Fragment key={part.key}>
+          {index > 0 ? ' · ' : null}
+          {part.node}
+        </Fragment>
+      ))}
+    </>
+  )
 }
 
 /** The preview line's end for the chat itself: replying, waiting for the owner, or stopped on its
@@ -202,10 +235,12 @@ export function BotChatTreeGroup({
   chat,
   unfolded,
   onFold,
-  loadMore
+  loadMore,
+  hidePerson = false
 }: {
   bot: Bot
   chat: BotChatTreeChat
+  hidePerson?: boolean
   /** The panel's own fold, apart from the sidebar's; null for a search's chat hit, which lists no workers. */
   unfolded: boolean | null
   onFold: (open: boolean) => void
@@ -336,7 +371,13 @@ export function BotChatTreeGroup({
             </span>
             <span className="flex min-w-0 items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
-                <BotChatLine bot={bot} chat={chat} folded={false} liveAtEnd />
+                <BotChatLine
+                  bot={bot}
+                  chat={chat}
+                  folded={false}
+                  liveAtEnd
+                  hidePerson={hidePerson}
+                />
               </span>
               <ChatRowLive chat={chat} />
               <ChatRowWork chat={chat} />

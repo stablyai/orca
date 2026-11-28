@@ -22,6 +22,8 @@ type StatusOwnerOptions = {
   request: (signal: AbortSignal) => Promise<RuntimeHostStatusResponse>
   verified: (response: Extract<RuntimeHostStatusResponse, { ok: true }>, active: boolean) => boolean
   publish: (snapshot: RuntimeHostStatusSnapshot) => void
+  /** A shared agent's host: listed with no paired server's, so readers keep it by this mark. */
+  sharedHost?: true
 }
 
 /** One verification and one retry slot, shared by all readers of this connection. */
@@ -51,7 +53,8 @@ export class RuntimeHostStatusOwner {
       checkedAt: 0,
       status: null,
       verification: 'checking',
-      transport: 'unknown'
+      transport: 'unknown',
+      ...(options.sharedHost ? { sharedHost: true } : {})
     }
   }
 

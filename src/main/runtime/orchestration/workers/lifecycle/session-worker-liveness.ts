@@ -22,7 +22,40 @@ import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
 
 export type SessionWorkerSubject = {
   agentTerminalHandle: string | null
-  resource?: { processIncarnation?: string | null } | null
+  resource?: { processIncarnation?: string | null; paneKey?: string | null } | null
+}
+
+/** Agent-slept terminal workers read as live and idle; their pane's kept status row is their activity. */
+export function withSleptAgentWorkers(
+  observe: (worker: SessionWorkerSubject) => FleetSessionObservation | undefined,
+  statuses: readonly FleetAgentStatusEvidence[],
+  sleptAgentHandle: (paneKey: string) => string | null
+): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
+  let byPane: Map<string, FleetAgentStatusEvidence> | null = null
+  return (worker) => {
+    const observed = observe(worker)
+    const paneKey = worker.resource?.paneKey
+    // Only the worker's own handle: another conversation slept in its old pane is not this worker.
+    if (
+      observed ||
+      !paneKey ||
+      !worker.agentTerminalHandle ||
+      sleptAgentHandle(paneKey) !== worker.agentTerminalHandle
+    ) {
+      return observed
+    }
+    if (!byPane) {
+      byPane = new Map()
+      for (const status of statuses) {
+        const key = status.activity.paneKey
+        if (key && !byPane.has(key)) {
+          byPane.set(key, status)
+        }
+      }
+    }
+    const activity = byPane.get(paneKey)
+    return activity ? { status: 'live', activity } : { status: 'live' }
+  }
 }
 
 /** The session a structured worker was minted for, known before (and without) verifying it. */

@@ -1,5 +1,6 @@
 // Per-upload directories preserve original filenames without collisions; atomic commit hides partial bytes.
 
+import { AttachmentUploaderChats } from './agent-session-attachment-uploader-chats'
 import { readAttachmentTextChunk } from './agent-session-attachment-text-read'
 import type { AttachmentTextRequest } from '../../../shared/attachment-text/attachment-text-source'
 import { createHash, randomUUID } from 'node:crypto'
@@ -38,6 +39,8 @@ type InFlightUpload = {
   callerKey: string
   uploadDir: string
   name: string
+  /** Null for an item's staged upload, which no chat holds yet. */
+  sessionId: string | null
   expectedLength: number
   receivedLength: number
   writing: boolean
@@ -61,6 +64,9 @@ export class AgentSessionAttachmentStore {
   // Latest content write per folder, and pending writes by file so a re-send queues nothing.
   private readonly contentWrites = new Map<string, Promise<void>>()
   private readonly pendingContent = new Set<string>()
+  // The chat each upload this launch was made for: it reads its file back before any message claims it
+  // (a composer chip's thumbnail), which a shared agent's guard asks the claims for.
+  private readonly uploadedFor = new AttachmentUploaderChats()
 
   constructor(
     readonly rootDir: string,
@@ -80,11 +86,22 @@ export class AgentSessionAttachmentStore {
     if (!this.options.hasSession(args.sessionId)) {
       throw new Error('This chat is not on this host')
     }
+    return this.stageUpload(args)
+  }
+
+  /** Only after the caller has verified the destination on this host. */
+  async stageUpload(args: {
+    callerKey: string
+    sessionId?: string
+    name: string
+    byteLength: number
+  }): Promise<{ uploadId: string }> {
     const name = sanitizeAgentSessionAttachmentName(args.name)
     const uploadId = this.uploads.create((id) => ({
       callerKey: args.callerKey,
       uploadDir: join(this.rootDir, id),
       name,
+      sessionId: args.sessionId ?? null,
       expectedLength: args.byteLength,
       receivedLength: 0,
       writing: false
@@ -147,6 +164,9 @@ export class AgentSessionAttachmentStore {
         join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE),
         finalPath
       )
+      if (upload.sessionId !== null) {
+        this.uploadedFor.remember(args.uploadId, upload.sessionId)
+      }
       return { path: finalPath, name: upload.name, byteLength: upload.receivedLength }
     } catch (error) {
       await removeQuietly(upload.uploadDir)
@@ -237,10 +257,16 @@ export class AgentSessionAttachmentStore {
     return readAttachmentTextChunk(this.rootDir, request, maxContentBytes)
   }
 
-  /** The chats whose messages claim the stored file at `filePath`; none for a path outside the store. */
+  /** The chats whose messages claim the stored file at `filePath`, and the one it was uploaded for this
+   *  launch; none for a path outside the store. */
   async claimingSessions(filePath: string): Promise<readonly string[]> {
     const stored = parseAgentSessionAttachmentStorePath(this.rootDir, filePath)
-    return stored ? ((await this.options.claimingSessions?.(stored.uploadId)) ?? []) : []
+    if (!stored) {
+      return []
+    }
+    const claimed = (await this.options.claimingSessions?.(stored.uploadId)) ?? []
+    const uploader = this.uploadedFor.chatOf(stored.uploadId)
+    return uploader && !claimed.includes(uploader) ? [...claimed, uploader] : claimed
   }
 
   async readPreview(filePath: string, maxContentBytes?: number): Promise<RuntimeFilePreviewResult> {

@@ -20,6 +20,7 @@ import {
   readEndedChatTurnOpener
 } from './external-conversation-turn-opener'
 import { journalTurnAnsweredMessages } from '../../shared/agent-session/journal/journal-turn-answered-messages'
+import { typedOnAnotherDevice } from '../bots/bot-typed-in-orca'
 
 // A chat's ended turn, read from its journal as of the turn's end.
 
@@ -40,6 +41,9 @@ export type EndedChatTurn = {
   turnToolsRan?: boolean
   /** The turn answered a message besides its opener (a steer, a joined bot request): no one asker. */
   turnAnsweredOthers?: boolean
+  /** A paired device Orca can't place as the owner typed a message the turn answered (its opener,
+   *  or a steer the provider took into it): the turn is never the owner's. */
+  typedByAnother?: true
 }
 
 export async function endedTurn(
@@ -92,7 +96,7 @@ export async function endedTurnAttribution(
   sessionId: string,
   turnId: string,
   cursor?: AgentJournalCursor
-): Promise<Pick<EndedChatTurn, 'opener' | 'stamps'>> {
+): Promise<Pick<EndedChatTurn, 'opener' | 'stamps' | 'typedByAnother'>> {
   const read = cursor
     ? await chat
         .journalReads(sessionId)
@@ -107,7 +111,11 @@ export async function endedTurnAttribution(
   ) {
     return {}
   }
-  return { opener: read.opener, stamps: read.stamps }
+  return {
+    opener: read.opener,
+    stamps: read.stamps,
+    ...(read.messages?.some(typedOnAnotherDevice) ? { typedByAnother: true as const } : {})
+  }
 }
 
 /** What the reply outbox reads of the turn: its row's journal key, the deliveries it answered, and
@@ -119,7 +127,13 @@ function outboxTurn(
   turnId: string
 ): Pick<
   EndedChatTurn,
-  'turnItemId' | 'stamps' | 'turnProse' | 'turnBotProse' | 'turnToolsRan' | 'turnAnsweredOthers'
+  | 'turnItemId'
+  | 'stamps'
+  | 'turnProse'
+  | 'turnBotProse'
+  | 'turnToolsRan'
+  | 'turnAnsweredOthers'
+  | 'typedByAnother'
 > {
   const turnItemId = endedChatTurnRow(items, turnId)?.itemId
   if (!turnItemId) {
@@ -133,7 +147,8 @@ function outboxTurn(
     turnProse: prose,
     turnBotProse: botProse,
     turnToolsRan: toolsRan,
-    turnAnsweredOthers: answered.length > 1
+    turnAnsweredOthers: answered.length > 1,
+    ...(answered.some(typedOnAnotherDevice) ? { typedByAnother: true as const } : {})
   }
 }
 

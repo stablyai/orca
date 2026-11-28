@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   BrowserTarget,
   ExpectUrlBrowserTarget,
@@ -57,7 +58,7 @@ export const Eval = ExpectUrlBrowserTarget.extend({
   expression: requiredString('Missing required --expression')
 })
 
-export const TabList = z.object({ worktree: OptionalString })
+export const TabList = lazyZodSchema(() => z.object({ worktree: OptionalString }))
 
 // Require exactly one of index/page. Opt-in focus reveals only within the current worktree;
 // other worktrees silently stage selection so parallel agents cannot steal the screen.
@@ -78,22 +79,26 @@ export const TabSwitch = BrowserTarget.extend({
   { message: 'Missing required --index (non-negative integer) or --page' }
 )
 
-export const TabShow = z.object({
-  page: requiredString('Missing required --page'),
-  worktree: OptionalString
-})
+export const TabShow = lazyZodSchema(() =>
+  z.object({
+    page: requiredString('Missing required --page'),
+    worktree: OptionalString
+  })
+)
 
-export const TabCurrent = z.object({ worktree: OptionalString })
+export const TabCurrent = lazyZodSchema(() => z.object({ worktree: OptionalString }))
 
-export const TabClose = z.object({
-  index: z
-    .unknown()
-    .transform((v) => (typeof v === 'number' ? v : undefined))
-    .pipe(z.union([z.number(), z.undefined()]))
-    .optional(),
-  page: OptionalString,
-  worktree: OptionalString
-})
+export const TabClose = lazyZodSchema(() =>
+  z.object({
+    index: z
+      .unknown()
+      .transform((v) => (typeof v === 'number' ? v : undefined))
+      .pipe(z.union([z.number(), z.undefined()]))
+      .optional(),
+    page: OptionalString,
+    worktree: OptionalString
+  })
+)
 
 export const TabSetProfile = BrowserTarget.extend({
   profileId: requiredString('Missing required --profile')
@@ -103,20 +108,26 @@ export const TabProfileClone = BrowserTarget.extend({
   profileId: requiredString('Missing required --profile')
 })
 
-export const ProfileDelete = z.object({ profileId: requiredString('Missing required --profile') })
+export const ProfileDelete = lazyZodSchema(() =>
+  z.object({ profileId: requiredString('Missing required --profile') })
+)
 
-export const ProfileClearGoogleCookies = ProfileDelete.extend({
-  executorRuntimeId: z.string().min(1)
-})
+export const ProfileClearGoogleCookies = lazyZodSchema(() =>
+  ProfileDelete.extend({
+    executorRuntimeId: z.string().min(1)
+  })
+)
 
 export const ProfileClearCookies = ProfileClearGoogleCookies
 
-export const ProfileImportFromBrowser = z.object({
-  profileId: requiredString('Missing required --profile'),
-  browserFamily: requiredString('Missing required --browser-family'),
-  browserProfile: OptionalString,
-  supportsPartitionSkippedCookies: z.literal(true).optional()
-})
+export const ProfileImportFromBrowser = lazyZodSchema(() =>
+  z.object({
+    profileId: requiredString('Missing required --profile'),
+    browserFamily: requiredString('Missing required --browser-family'),
+    browserProfile: OptionalString,
+    supportsPartitionSkippedCookies: z.literal(true).optional()
+  })
+)
 
 export const Drag = ExpectUrlBrowserTarget.extend({
   from: requiredString('Missing required --from and --to element refs'),
@@ -269,11 +280,13 @@ export const MouseXY = ExpectUrlBrowserTarget.extend({
 const BROWSER_MOUSE_MODIFIERS = ['cmd', 'ctrl', 'alt', 'shift'] as const
 export type BrowserMouseModifier = (typeof BROWSER_MOUSE_MODIFIERS)[number]
 
-export const MouseModifiers = z
-  .unknown()
-  .transform((v) => (Array.isArray(v) ? v : undefined))
-  .pipe(z.union([z.array(z.enum(BROWSER_MOUSE_MODIFIERS)), z.undefined()]))
-  .optional()
+export const MouseModifiers = lazyZodSchema(() =>
+  z
+    .unknown()
+    .transform((v) => (Array.isArray(v) ? v : undefined))
+    .pipe(z.union([z.array(z.enum(BROWSER_MOUSE_MODIFIERS)), z.undefined()]))
+    .optional()
+)
 
 // Older hosts strip `modifiers` from mouseDown/mouseUp, so a modified press arrives plain.
 export const MouseButton = ExpectUrlBrowserTarget.extend({

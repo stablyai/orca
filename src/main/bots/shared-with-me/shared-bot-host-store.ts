@@ -6,85 +6,95 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { BotTeamShareOffer } from '../../../shared/bots/bot-team-share-seal'
-import { BotShareIdSchema } from '../../../shared/bots/bot-team-shares'
+import { BotShareIdSchema, type BotShareAnswered } from '../../../shared/bots/bot-team-shares'
 import { writeSecureFileAsync } from '../../../shared/secure-storage/secure-file-async-write'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import nacl from 'tweetnacl'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 export const SHARED_BOT_HOSTS_FILENAME = 'shared-bot-hosts.json'
 
-const Text = z.string().min(1)
-const KeyPair = z.object({ publicKeyB64: Text, secretKeyB64: Text })
+const Text = lazyZodSchema(() => z.string().min(1))
+const KeyPair = lazyZodSchema(() => z.object({ publicKeyB64: Text, secretKeyB64: Text }))
 
-export const SharedBotHeldMessage = z.object({
-  clientMessageId: Text,
-  chat: z.union([z.object({ sessionId: Text }), z.object({ newChatId: Text })]),
-  // A new chat's session once the host started it: the chat the message lands in.
-  startedAs: Text.optional(),
-  // Kept on this device only, to draw it in its chat and send it again if the host refuses it.
-  // Absent in a store written before held messages kept their words.
-  text: z.string().default(''),
-  // Sealed with it, and kept to send it again.
-  attachments: z.array(z.object({ name: Text, contentBase64: z.string() })).optional(),
-  sentAt: z.number().int().nonnegative()
-})
+export const SharedBotHeldMessage = lazyZodSchema(() =>
+  z.object({
+    clientMessageId: Text,
+    chat: z.union([z.object({ sessionId: Text }), z.object({ newChatId: Text })]),
+    // A new chat's session once the host started it: the chat the message lands in.
+    startedAs: Text.optional(),
+    // Kept on this device only, to draw it in its chat and send it again if the host refuses it.
+    // Absent in a store written before held messages kept their words.
+    text: z.string().default(''),
+    // Sealed with it, and kept to send it again.
+    attachments: z.array(z.object({ name: Text, contentBase64: z.string() })).optional(),
+    sentAt: z.number().int().nonnegative()
+  })
+)
 export type SharedBotHeldMessage = z.infer<typeof SharedBotHeldMessage>
 
-const ResumeCredential = z.object({
-  token: Text,
-  hash: Text,
-  version: z.number().int().positive(),
-  // Where the host's relay is now: it can move cells after the invite.
-  relay: z.object({ cellUrl: Text, relayHostId: Text })
-})
+const ResumeCredential = lazyZodSchema(() =>
+  z.object({
+    token: Text,
+    hash: Text,
+    version: z.number().int().positive(),
+    // Where the host's relay is now: it can move cells after the invite.
+    relay: z.object({ cellUrl: Text, relayHostId: Text })
+  })
+)
 
 /** The host's last status answer, kept so a host away reads as it last said after a restart too. */
-const KeptStatus = z.object({
-  runtimeId: Text,
-  runtimeProtocolVersion: z.number().int().optional(),
-  minCompatibleRuntimeClientVersion: z.number().int().optional(),
-  capabilities: z.array(z.string()).optional(),
-  appVersion: z.string().optional()
-})
+const KeptStatus = lazyZodSchema(() =>
+  z.object({
+    runtimeId: Text,
+    runtimeProtocolVersion: z.number().int().optional(),
+    minCompatibleRuntimeClientVersion: z.number().int().optional(),
+    capabilities: z.array(z.string()).optional(),
+    appVersion: z.string().optional()
+  })
+)
 export type SharedBotKeptStatus = z.infer<typeof KeptStatus>
 
 // A phone of this computer's that the host gave a key of its own: `removed` once the phone was unpaired
 // here, until the host has ended that key.
-const SharedBotPhone = z.object({
-  phoneDeviceId: Text,
-  hostDeviceId: Text,
-  removed: z.literal(true).optional()
-})
+const SharedBotPhone = lazyZodSchema(() =>
+  z.object({
+    phoneDeviceId: Text,
+    hostDeviceId: Text,
+    removed: z.literal(true).optional()
+  })
+)
 export type SharedBotPhone = z.infer<typeof SharedBotPhone>
 
-const SharedBotHostEntry = z.object({
-  shareId: BotShareIdSchema,
-  // The paired-server id the app routes this host's calls by; minted once, kept for the share's life.
-  environmentId: Text,
-  botId: Text,
-  botName: Text,
-  ownerName: Text,
-  avatarUrl: z.string().optional(),
-  // The host's E2EE key held messages are sealed to; absent, nothing is held for it.
-  hostKey: Text.optional(),
-  // Ed25519: signs the relay auth and held messages. Curve25519: the host seals its offer to it.
-  deviceKey: KeyPair,
-  sealKey: KeyPair,
-  // The host's latest answer: its key and this device's id there, and a relay invite while unexpired.
-  offer: BotTeamShareOffer.optional(),
-  // The offer's invite the relay refused (spent or expired early): never dialed again.
-  refusedInvite: Text.optional(),
-  // Minted and persisted before install, so a lost reply retries the same request.
-  pendingResume: z.object({ token: Text, hash: Text, reqId: Text }).optional(),
-  resume: ResumeCredential.optional(),
-  acceptedAt: z.number().int().nonnegative().optional(),
-  // This computer's folder workspace its chats open in; absent until made (and in a store from before).
-  homeWorkspaceId: Text.optional(),
-  status: KeptStatus.optional(),
-  held: z.array(SharedBotHeldMessage),
-  // Absent in a store from before phones reached shared agents.
-  phones: z.array(SharedBotPhone).default([])
-})
+const SharedBotHostEntry = lazyZodSchema(() =>
+  z.object({
+    shareId: BotShareIdSchema,
+    // The paired-server id the app routes this host's calls by; minted once, kept for the share's life.
+    environmentId: Text,
+    botId: Text,
+    botName: Text,
+    ownerName: Text,
+    // The host's E2EE key held messages are sealed to; absent, nothing is held for it.
+    hostKey: Text.optional(),
+    // Ed25519: signs the relay auth and held messages. Curve25519: the host seals its offer to it.
+    deviceKey: KeyPair,
+    sealKey: KeyPair,
+    // The host's latest answer: its key and this device's id there, and a relay invite while unexpired.
+    offer: BotTeamShareOffer.optional(),
+    // The offer's invite the relay refused (spent or expired early): never dialed again.
+    refusedInvite: Text.optional(),
+    // Minted and persisted before install, so a lost reply retries the same request.
+    pendingResume: z.object({ token: Text, hash: Text, reqId: Text }).optional(),
+    resume: ResumeCredential.optional(),
+    acceptedAt: z.number().int().nonnegative().optional(),
+    // The home an older build kept on this computer; removed at startup (shared-bot-home-cleanup.ts).
+    homeWorkspaceId: Text.optional(),
+    status: KeptStatus.optional(),
+    held: z.array(SharedBotHeldMessage),
+    // Absent in a store from before phones reached shared agents.
+    phones: z.array(SharedBotPhone).default([])
+  })
+)
 export type SharedBotHostEntry = z.infer<typeof SharedBotHostEntry>
 
 /** A share seen for the first time: a fresh environment id, and fresh keys this device keeps for it. */
@@ -118,21 +128,43 @@ export function sharedBotHostKey(
   return entry.offer?.hostPublicKeyB64 ?? entry.hostKey
 }
 
-const SharedBotHostsFile = z.object({ v: z.literal(1), shares: z.array(z.unknown()) })
+const SharedBotHostsFile = lazyZodSchema(() =>
+  z.object({
+    v: z.literal(1),
+    shares: z.array(z.unknown()),
+    // Shares this account declined, and when: never offered again. Absent in a file from before.
+    declined: z
+      .array(z.object({ shareId: BotShareIdSchema, declinedAt: z.number().int().nonnegative() }))
+      .max(1000)
+      .catch([])
+      .default([])
+  })
+)
 
 /** Entry by entry, so one this build can't read is dropped, never the whole file. */
-function parseFile(text: string): SharedBotHostEntry[] {
+function parseFile(text: string): {
+  entries: SharedBotHostEntry[]
+  declined: Map<string, number>
+} {
   const file = SharedBotHostsFile.safeParse(JSON.parse(text))
   return file.success
-    ? file.data.shares.flatMap((entry) => SharedBotHostEntry.safeParse(entry).data ?? [])
-    : []
+    ? {
+        entries: file.data.shares.flatMap(
+          (entry) => SharedBotHostEntry.safeParse(entry).data ?? []
+        ),
+        declined: new Map(file.data.declined.map((entry) => [entry.shareId, entry.declinedAt]))
+      }
+    : { entries: [], declined: new Map() }
 }
 
 /** Read once at start; every change is kept in memory at once and written behind, in order. */
 export class SharedBotHostStore {
   private readonly path: string
   private entries: SharedBotHostEntry[] = []
+  private declinedAt = new Map<string, number>()
   private writes: Promise<void> = Promise.resolve()
+  // Hosts whose share ended this launch: their calls still answer, as no longer shared.
+  private readonly removed = new Set<string>()
 
   constructor(userDataPath: string) {
     this.path = join(userDataPath, SHARED_BOT_HOSTS_FILENAME)
@@ -140,7 +172,9 @@ export class SharedBotHostStore {
 
   async load(): Promise<void> {
     try {
-      this.entries = parseFile(await readFile(this.path, 'utf8'))
+      const file = parseFile(await readFile(this.path, 'utf8'))
+      this.entries = file.entries
+      this.declinedAt = file.declined
     } catch {
       this.entries = []
     }
@@ -168,9 +202,31 @@ export class SharedBotHostStore {
   }
 
   remove(shareIds: ReadonlySet<string>): void {
+    for (const entry of this.entries.filter((candidate) => shareIds.has(candidate.shareId))) {
+      this.removed.add(entry.environmentId)
+    }
     if (this.entries.some((entry) => shareIds.has(entry.shareId))) {
       this.write(this.entries.filter((entry) => !shareIds.has(entry.shareId)))
     }
+  }
+
+  /** Keeps that this account declined the share at `at`, so it is never offered again. */
+  decline(shareId: string, at: number): void {
+    if (!this.declinedAt.has(shareId)) {
+      this.declinedAt.set(shareId, at)
+      this.write(this.entries)
+    }
+  }
+
+  /** This account's answer to the share, for `botShareUsable`. */
+  answer(shareId: string): BotShareAnswered {
+    const declinedAt = this.declinedAt.get(shareId)
+    return declinedAt === undefined ? {} : { declinedAt }
+  }
+
+  /** Whether `environmentId` named a share this launch removed. */
+  wasRemoved(environmentId: string): boolean {
+    return this.removed.has(environmentId)
   }
 
   /** Every write so far is on disk. */
@@ -180,7 +236,8 @@ export class SharedBotHostStore {
 
   private write(entries: SharedBotHostEntry[]): void {
     this.entries = entries
-    const contents = JSON.stringify({ v: 1, shares: entries }, null, 2)
+    const declined = [...this.declinedAt].map(([shareId, declinedAt]) => ({ shareId, declinedAt }))
+    const contents = JSON.stringify({ v: 1, shares: entries, declined }, null, 2)
     this.writes = this.writes
       .then(() => writeSecureFileAsync(this.path, contents))
       .then(

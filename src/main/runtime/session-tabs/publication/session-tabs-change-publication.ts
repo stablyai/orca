@@ -1,21 +1,21 @@
 import { createMobileSessionTabsDelivery } from './mobile-session-tabs-delivery'
 import { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab } from '../restoration/mobile-session-publication-preservation'
 import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
-  RuntimeMobileSessionClientTab,
-  RuntimeMobileSessionMarkdownTab
-} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import type {
-  RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
-import { getMobileSessionTabOrderIds } from '../../session-lifecycle/projection/mobile-session-tab-merge'
+import {
+  getRuntimeBrowserPageRegistry,
+  pageListOf,
+  type PageList
+} from '../../browser/client-pages/runtime-browser-page-registry'
 import { readCreatedWorkspaceLaunch } from '../../../agent-launch/agent-launch-created-workspace'
 import type { AgentSenderRevision } from '../../../../shared/orchestration/mailbox/agent-sender-associations'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import type { SessionTabListName } from '../../client/navigation/client-session-tab-selection'
 
 export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {
   protected scheduleMobileSessionTabsChanged(worktreeId: string): void {
@@ -62,16 +62,17 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     }
   }
 
-  protected createMobileSessionTabsDelivery() {
+  /** Delivers frames of one tab list (the host's, or a teammate's own) to that list's listeners only. */
+  protected createMobileSessionTabsDelivery(list: SessionTabListName = 'host') {
     return createMobileSessionTabsDelivery({
       senders: this.agentProjections.senders,
       listeners: (worktree, navigation, candidates) =>
-        this.selectMobileSessionTabsListeners(worktree, navigation, candidates),
+        this.selectMobileSessionTabsListeners(worktree, navigation, candidates, list),
       subscribed: (subscription) => this.mobileSessionTabListeners.has(subscription),
       project: (frame, navigation) => this.projectMobileSessionTabsForClient(frame, navigation),
       deliver: (subscription, frame, sequence, delivery) =>
         this.deliverMobileSessionTabsFrame(subscription, frame, sequence, delivery),
-      source: (worktree) => this.mobileSessionTabsByWorktree.deliverySource(worktree),
+      source: (worktree) => this.sessionTabListDeliverySource(list, worktree),
       epoch: () => this.getAuthoritativeSessionTabsInventoryEpoch(),
       releaseHistory: () => this.releaseAgentSenderHistoryIfUnobserved()
     })
@@ -125,9 +126,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
           return { ...result, agentSenderAssociations: senderScope(snapshot.worktree) }
         })
         return {
-          snapshots: frames.map((frame) =>
-            this.projectMobileSessionTabsForClient(frame, clientNavigationId)
-          ),
+          snapshots: this.projectSessionTabsCensus(frames, clientNavigationId, includeAgentSenders),
           changeSequence: this.mobileSessionTabsChangeSequence
         }
       } finally {
@@ -147,6 +146,14 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
   ): Promise<RuntimeMobileSessionTabsResult> {
     const consume = (): RuntimeMobileSessionTabsResult => {
+      const own = this.ownSessionTabListFrame(
+        worktreeId,
+        clientNavigationId,
+        options?.includeAgentSenders
+      )
+      if (own) {
+        return this.projectMobileSessionTabsForClient(own, clientNavigationId)
+      }
       const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
       if (!snapshot) {
         // A windowless desktop has no publisher coming, so its hydrated absence is the answer.
@@ -230,7 +237,10 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     projected: RuntimeMobileSessionTabsResult,
     clientNavigationId: string,
     follow = false,
-    deliver = this.createMobileSessionTabsDelivery()
+    // The client's own list in this workspace: a teammate's in their Home, else the host's.
+    deliver = this.createMobileSessionTabsDelivery(
+      this.sessionTabListOf(clientNavigationId, projected.worktree)
+    )
   ): void {
     deliver(
       follow ? { ...projected, navigationIntent: 'follow' } : projected,
@@ -261,12 +271,15 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   protected getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo> {
     const liveTabs = this.agentBrowserBridge?.tabList?.(worktreeId).tabs ?? []
     const byPageId = new Map(liveTabs.map((tab) => [tab.browserPageId, tab]))
-    for (const [index, page] of getRuntimeBrowserPageRegistry(this)
-      .listPages(worktreeId)
-      .entries()) {
+    // Looked up by id from each list's own tabs; a page's index is the one its own list gives it.
+    const listed = new Map<PageList, number>()
+    for (const page of getRuntimeBrowserPageRegistry(this).everyPage(worktreeId)) {
+      const list = pageListOf(page)
+      const index = listed.get(list) ?? (list === 'host' ? liveTabs.length : 0)
+      listed.set(list, index + 1)
       byPageId.set(page.browserPageId, {
         browserPageId: page.browserPageId,
-        index: liveTabs.length + index,
+        index,
         url: page.url,
         title: page.title,
         active: page.active,
@@ -278,38 +291,5 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       byPageId.set(tab.browserPageId, tab)
     }
     return byPageId
-  }
-
-  protected collectReturnedSessionTabIds(
-    tabs: readonly RuntimeMobileSessionClientTab[]
-  ): Set<string> {
-    return new Set(tabs.flatMap(getMobileSessionTabOrderIds))
-  }
-
-  protected sanitizeMobileSessionTabGroups(
-    groups: readonly RuntimeMobileSessionTabGroup[] | undefined,
-    returnedTabs: readonly RuntimeMobileSessionClientTab[]
-  ): RuntimeMobileSessionTabGroup[] | undefined {
-    if (!groups || groups.length === 0) {
-      return undefined
-    }
-    const returnedIds = this.collectReturnedSessionTabIds(returnedTabs)
-    const sanitized = groups
-      .map((group): RuntimeMobileSessionTabGroup | null => {
-        const tabOrder = group.tabOrder.filter((tabId) => returnedIds.has(tabId))
-        if (tabOrder.length === 0) {
-          return null
-        }
-        const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
-        return {
-          id: group.id,
-          activeTabId:
-            group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
-          tabOrder,
-          ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
-        }
-      })
-      .filter((group): group is RuntimeMobileSessionTabGroup => group !== null)
-    return sanitized.length > 0 ? sanitized : undefined
   }
 }

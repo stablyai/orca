@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { Users } from 'lucide-react-native'
 import { botHomeWorktreeId } from '../../bots/host-bots-read'
 import { mobileBotRowLimitText } from '../../bots/mobile-bot-row-line'
 import { useMobileBotUsageLimitStop } from '../../bots/use-mobile-bot-usage-limit-stop'
@@ -52,7 +53,9 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
   return (
     <MobileBotRowView
       avatar={
-        row.kind === 'bot' ? (
+        row.kind === 'shared' ? (
+          <MobileBotRowAvatar avatar={row.avatar} dot={row.dot} surface={surface} />
+        ) : row.kind === 'bot' ? (
           <MobileBotRowAvatar
             avatar={mobileBotAvatarSource(row.bot)}
             dot={row.dot}
@@ -69,7 +72,8 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
       title={row.title}
       unread={row.unread}
       preview={
-        props.nameComputer
+        // A shared agent's row names no computer: it runs on its owner's.
+        props.nameComputer && row.kind !== 'shared'
           ? [row.hostLabel, limitText ?? row.preview].filter(Boolean).join(' · ')
           : (limitText ?? row.preview)
       }
@@ -78,6 +82,11 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
       dimmed={row.offline === true || (row.kind === 'bot' && row.bot.paused)}
       divider={props.divider}
       onPress={() => props.onOpen(row)}
+      titleMark={
+        row.kind === 'shared' ? (
+          <Users size={14} color={colors.textSecondary} accessibilityLabel={row.preview} />
+        ) : null
+      }
       titleTrailing={row.needsYou > 0 ? <MobileBotNeedsYouCount count={row.needsYou} /> : null}
     />
   )

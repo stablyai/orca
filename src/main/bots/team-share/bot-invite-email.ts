@@ -3,9 +3,10 @@
 import { randomUUID } from 'node:crypto'
 import * as z from 'zod'
 import { OrcaCloudRequestError } from '../../orca-profiles/cloud-auth/profile-cloud-client'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 const INVITE_TIMEOUT_MS = 15_000
-const InviteAnswer = z.object({ sent: z.boolean() })
+const InviteAnswer = lazyZodSchema(() => z.object({ sent: z.boolean() }))
 
 export type BotInviteEmail = { to: string; agentName: string }
 

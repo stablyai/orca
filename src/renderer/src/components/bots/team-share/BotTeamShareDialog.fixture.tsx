@@ -42,8 +42,7 @@ const PEOPLE = {
   sam: { kind: 'slack', key: 'sam', name: 'Sam Ruiz', handle: '@sam', workspace: 'Stably' },
   octo: { kind: 'github', key: 'octo', login: 'octo-dev', place: 'stablyai', linkedAccounts: 2 },
   tom: { kind: 'github', key: 'tom', login: 'tom-okafor', place: 'stablyai' },
-  dana: { kind: 'invite', key: 'dana', email: 'dana@acme.co', emailSent: true },
-  danaHeld: { kind: 'invite', key: 'dana', email: 'dana@acme.co', emailSent: false },
+  dana: { kind: 'invite', key: 'dana', email: 'dana@acme.co' },
   danaJoined: { kind: 'account', key: 'dana', name: 'Dana Wu', email: 'dana@acme.co', links: [] },
   mei: {
     kind: 'account',
@@ -66,7 +65,23 @@ const PEOPLE = {
     email: 'lena@stably.ai',
     links: ['linear']
   },
-  ana: { kind: 'slack', key: 'ana', name: 'Ana Ruiz', handle: '@ana', workspace: 'Stably' }
+  ana: { kind: 'slack', key: 'ana', name: 'Ana Ruiz', handle: '@ana', workspace: 'Stably' },
+  boWaiting: {
+    kind: 'account',
+    key: 'bo',
+    name: 'Bo Park',
+    email: 'bo@stably.ai',
+    links: [],
+    answer: 'pending'
+  },
+  eli: {
+    kind: 'account',
+    key: 'eli',
+    name: 'Eli Ross',
+    email: 'eli@stably.ai',
+    links: [],
+    answer: 'declined'
+  }
 } satisfies Record<string, TeamSharePerson>
 
 type PersonKey = keyof typeof PEOPLE
@@ -98,15 +113,27 @@ const FOUND: Record<string, readonly TeamShareSuggestion[]> = {
   }))
 }
 
+const STAGED: Record<string, TeamShareSuggestion> = {
+  dana: { kind: 'invite', key: 'dana@acme.co', email: 'dana@acme.co' },
+  alicia: { kind: 'slack', key: 'alicia', name: 'Alicia Gómez', detail: 'Stably' }
+}
+
+const NONE_STAGED: readonly (keyof typeof STAGED)[] = []
+
 function Scene({
   people: initial,
-  query: initialQuery = ''
+  query: initialQuery = '',
+  staged: initialStaged = NONE_STAGED
 }: {
   people: readonly PersonKey[]
   query?: string
+  staged?: readonly (keyof typeof STAGED)[]
 }): React.JSX.Element {
   const [people, setPeople] = useState<TeamSharePerson[]>(initial.map((key) => PEOPLE[key]))
   const [query, setQuery] = useState(initialQuery)
+  const [staged, setStaged] = useState<TeamShareSuggestion[]>(
+    initialStaged.map((key) => STAGED[key])
+  )
   return (
     <div className="min-h-[640px]">
       <BotTeamShareDialog
@@ -114,22 +141,46 @@ function Scene({
         hostName="Jinwoo’s MacBook Pro"
         owner={OWNER}
         people={people}
+        othersListed={people.length > 0}
         query={query}
         onQueryChange={setQuery}
         suggestions={query.trim() === '' ? null : (FOUND[query.trim()] ?? [])}
-        onAdd={() => setQuery('')}
+        staged={staged}
+        onStage={(suggestion) => {
+          setQuery('')
+          setStaged([...staged, suggestion])
+        }}
+        onUnstage={(suggestion) =>
+          setStaged(staged.filter((entry) => entry.key !== suggestion.key))
+        }
+        onShare={() => {
+          setPeople([
+            ...people,
+            ...staged.map((entry): TeamSharePerson =>
+              entry.kind === 'invite'
+                ? { kind: 'invite', key: entry.key, email: entry.email }
+                : { kind: 'slack', key: entry.key, name: entry.name, workspace: 'Stably' }
+            )
+          ])
+          setStaged([])
+        }}
+        onCancelStaged={() => setStaged([])}
         onRemove={(person) => setPeople(people.filter((entry) => entry.key !== person.key))}
         onResend={() => {}}
+        onShareAgain={() => {}}
         onClose={() => {}}
       />
     </div>
   )
 }
 
-function scene(people: readonly PersonKey[], opts: { query?: string; interact?: () => void } = {}) {
+function scene(
+  people: readonly PersonKey[],
+  opts: { query?: string; staged?: readonly (keyof typeof STAGED)[]; interact?: () => void } = {}
+) {
   return defineFixture({
     width: 760,
-    render: () => <Scene people={people} query={opts.query} />,
+    render: () => <Scene people={people} query={opts.query} staged={opts.staged} />,
     interact: opts.interact
   })
 }
@@ -149,11 +200,11 @@ export const inviteEmail = scene(['alice', 'bo'], { query: 'dana@acme.co' })
 /** Nothing matches the name, so nothing can be added. */
 export const noMatch = scene(['alice', 'bo', 'sam'], { query: '@alcie' })
 
-/** An added email shows Invited until their Orca picks it up. */
-export const invited = scene(['alice', 'bo', 'sam', 'dana'])
+/** Picked people wait in the field as chips; nothing is saved until Share. */
+export const staged = scene(['alice', 'bo'], { staged: ['dana', 'alicia'] })
 
-/** Past the hourly email limit the share stands; only the email waits. */
-export const emailNotSent = scene(['alice', 'bo', 'danaHeld'])
+/** After Share: the invite is greyed out as Invited until they accept. */
+export const invited = scene(['alice', 'bo', 'sam', 'dana'])
 
 /** The invite resolved: Dana has access as her Orca account. */
 export const hasAccess = scene(['alice', 'bo', 'danaJoined'])
@@ -163,6 +214,22 @@ export const inviteMenu = scene(['alice', 'bo', 'dana'], {
   interact: () => {
     const trigger = document.querySelector<HTMLButtonElement>(
       'button[aria-label="Invite actions for dana@acme.co"]'
+    )
+    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  }
+})
+
+/** Each answer: accepted, an account and an email invited but not in yet (greyed), and declined. */
+export const answers = scene(['alice', 'boWaiting', 'dana', 'eli'])
+
+/** One of each: has access, invited, declined. */
+export const rows = scene(['alice', 'dana', 'eli'])
+
+/** A declined person's menu: Share again and Remove. */
+export const declinedMenu = scene(['alice', 'boWaiting', 'dana', 'eli'], {
+  interact: () => {
+    const trigger = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Actions for Eli Ross"]'
     )
     trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
   }

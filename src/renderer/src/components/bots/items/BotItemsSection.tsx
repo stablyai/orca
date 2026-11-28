@@ -42,7 +42,9 @@ export function BotItemsSection({
   asks,
   offline,
   focusFallback,
-  scroller
+  scroller,
+  personMark = null,
+  teammate = null
 }: {
   bot: Bot
   list: BotItemsShownList
@@ -62,6 +64,10 @@ export function BotItemsSection({
   focusFallback: React.RefObject<HTMLElement | null>
   /** The panel's scroller, for windowing long groups. */
   scroller?: React.RefObject<HTMLDivElement | null>
+  /** Each row's person before its age (`botItemPersonMark`): the list shows everyone's. */
+  personMark?: ((item: BotItem) => string | null) | null
+  /** The teammate whose items the list shows, by name. */
+  teammate?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const { items, shown, staleDays } = list
@@ -78,6 +84,13 @@ export function BotItemsSection({
       ) : (
         // Needs you shows only for counted asks; runs a sign-in stopped, alone, leave it out.
         <BotItemsLoading afterAsks={asks.needs.length > 0} />
+      )
+    }
+    if (items.length === 0 && teammate) {
+      return (
+        <p className="px-6 py-10 text-center text-xs text-muted-foreground">
+          {t('bots.items.empty.person', 'No items from {{name}}.', { name: teammate })}
+        </p>
       )
     }
     if (items.length === 0 && !filtered) {
@@ -138,6 +151,7 @@ export function BotItemsSection({
         offline={offline}
         focusFallback={focusFallback}
         scroller={scroller}
+        personMark={personMark}
       />
       {itemsNote()}
     </>

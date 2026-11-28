@@ -48,7 +48,9 @@ export const BOT_TAKE_OVER_METHOD = defineMethod({
     let sessionId: string
     if (chat === 'home') {
       try {
-        sessionId = chatThatTookIt(await chats.sendToChat(bot.id, text, tookOver(true))).sessionId
+        sessionId = chatThatTookIt(
+          await chats.sendToChat(bot.id, 'owner', text, tookOver(true))
+        ).sessionId
       } catch (error) {
         throw refused(error)
       }

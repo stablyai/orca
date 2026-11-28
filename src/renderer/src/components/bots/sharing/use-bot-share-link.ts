@@ -56,10 +56,17 @@ export function useBotShareLink(
   known: BotShareLink | null | undefined,
   signedOut: boolean,
   shareId?: string
-): { read: LinkRead; setLink: (link: BotShareLink | null) => void; reread: () => void } {
+): {
+  read: LinkRead
+  setLink: (link: BotShareLink | null) => void
+  reread: () => void
+  /** The owner has live links for other bots too (as of the last read). */
+  otherLinks: boolean
+} {
   const [read, setRead] = useState<LinkRead>(
     signedOut || known === undefined ? { kind: 'loading' } : { kind: 'read', link: known }
   )
+  const [otherLinks, setOtherLinks] = useState(false)
   const [version, setVersion] = useState(signedOut || known === undefined ? 1 : 0)
   const selectedShareId = shareId ?? known?.shareId
   useEffect(() => {
@@ -74,7 +81,9 @@ export function useBotShareLink(
           return
         }
         if (!selectedShareId) {
-          setRead({ kind: 'read', link: botShareLinkOf(botShareStatusOf(shares, botId)) })
+          const link = botShareLinkOf(botShareStatusOf(shares, botId))
+          setOtherLinks(shares.some((share) => share.id !== link?.shareId))
+          setRead({ kind: 'read', link })
           return
         }
         const selected = shares.find((share) => share.id === selectedShareId)
@@ -108,6 +117,7 @@ export function useBotShareLink(
   }, [botId, selectedShareId, version, signedOut])
   return {
     read: signedOut ? { kind: 'signIn' } : read,
+    otherLinks,
     setLink: useCallback((link) => setRead({ kind: 'read', link }), []),
     reread: useCallback(() => {
       setRead({ kind: 'loading' })

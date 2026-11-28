@@ -32,6 +32,8 @@ import { noteRuntimeEnvironmentSharedControlContact } from '../status/runtime-en
 import { declareWslHostClient } from '../../../wsl/host-lifecycle/wsl-host-client-declaration'
 import { onWslHostIdleStopCleared } from '../../../wsl/host-lifecycle/wsl-host-idle-stop'
 import { declarePairedDesktopAccount } from './paired-desktop-account-declaration'
+import * as relayLink from './runtime-environment-relay-link'
+import { noteOneLinkHostCapabilities } from './runtime-environment-one-link'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -61,7 +63,12 @@ export const {
   sendRemoteRuntimeSharedControlRequest,
   ensureRemoteRuntimeSharedControlConnection,
   reconnectRemoteRuntimeSharedControlConnection,
-  pauseRemoteRuntimeSharedControlRetry
+  pauseRemoteRuntimeSharedControlRetry,
+  // After each verified status the host may become one link (runtime-environment-one-link.ts).
+  noteRemoteRuntimeHostCapabilities: (environmentId, pairedConnection, hostCapabilities) =>
+    noteOneLinkHostCapabilities(environmentId, pairedConnection, hostCapabilities, () =>
+      getSharedControlConnection(environmentId, pairedConnection)
+    )
 })
 
 /** Consult owned authenticated transports without acquiring another host channel. */
@@ -205,6 +212,7 @@ export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
 }
 
 export function closeRemoteRuntimeSharedControlConnection(environmentId: string): void {
+  relayLink.releaseRemoteRuntimeOneLink(environmentId)
   const cached = sharedControlConnections.get(environmentId)
   sharedControlConnections.delete(environmentId)
   clearSharedControlAnswerSource(environmentId)
@@ -273,6 +281,8 @@ function getSharedControlConnection(
         ...sharedControlEnvironmentPolicy(environmentId),
         // Ws pongs can come from a relay hop or a runtime whose request path is stuck (#39785).
         appHeartbeat: {},
+        // Ready for one link; a direct host uses it once its status lists binary channels.
+        ...relayLink.controlLinkOptions(environmentId, pairedConnection),
         // R39: every ready socket, including after a reconnect, re-declares this installation, and
         // the Orca account it is signed in to.
         onReady: async () => {
@@ -307,6 +317,7 @@ function getSharedControlConnection(
       })
     cached = { pairingKey, answeredAt: () => answeredAt, connection }
     sharedControlConnections.set(environmentId, cached)
+    relayLink.claimRelayOneLink(environmentId, pairedConnection, connection)
     const entry = cached
     // Ready requires this socket's own server frame, which stamps its answer time.
     setSharedControlAnswerSource(environmentId, entry.connection, () =>
