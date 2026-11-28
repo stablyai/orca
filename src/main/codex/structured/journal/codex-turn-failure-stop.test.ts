@@ -88,8 +88,8 @@ function codexTurn(options: { deferred?: boolean; command?: true } = {}) {
   const stopTurn = options.command ? 'command-turn' : TURN
   return {
     stop: (reason: JournalStopEvent['reason'], turnId = stopTurn) => chat.stop(reason, NOW, turnId),
-    notice: (at: number, processedAt?: number) =>
-      send('error', { turnId: TURN, willRetry: false, error: ERROR }, at, processedAt),
+    notice: (at: number, processedAt?: number, names: object = { turnId: TURN }) =>
+      send('error', { ...names, willRetry: false, error: ERROR }, at, processedAt),
     failed: (at: number, turn: object = { id: TURN }) =>
       send('turn/completed', { turn: { ...turn, status: 'failed', error: ERROR } }, at),
     completed: (at: number) =>
@@ -263,6 +263,13 @@ describe('a real Codex failure keeps exactly one error row', () => {
         expect(turn.errors()).toHaveLength(1)
       }
     }
+  })
+
+  it('once for a compaction whose error notice names no turn', () => {
+    const turn = codexTurn({ command: true })
+    turn.notice(NOW + 1_000, undefined, {})
+    turn.completed(NOW + 2_000)
+    expect(turn.errors()).toHaveLength(1)
   })
 
   it('for a compaction Codex ended without a marker and no Stop', () => {

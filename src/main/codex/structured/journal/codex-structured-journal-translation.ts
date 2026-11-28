@@ -285,7 +285,7 @@ function createCodexTranslation(
         event.threadId
       )
       if (unhandled.accepted && event.method === 'error') {
-        commands.errorShown(event.params)
+        commands.errorShown(event.params, activeTurns.current(event.threadId))
       }
       return publishActivity(event, unhandled)
     },

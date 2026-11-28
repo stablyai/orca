@@ -199,9 +199,10 @@ export class CodexJournalCommandTurn {
     return { failure, mutations }
   }
 
-  // Codex's own terminal error frame was admitted: the command's row only repeats it.
-  errorShown(params: unknown): void {
-    const providerTurnId = readCodexTurnId(params)
+  // Codex's own terminal error frame was admitted: the command's row only repeats it. A frame
+  // that names no turn belongs to the active one, as its row does.
+  errorShown(params: unknown, activeTurnId: string | null = null): void {
+    const providerTurnId = readCodexTurnId(params) ?? activeTurnId
     const carried = providerTurnId ? this.carried.get(providerTurnId) : undefined
     // Retried stream errors do not end the command.
     if (carried && readCodexJournalRecord(params).willRetry !== true) {
