@@ -138,9 +138,7 @@ describe('a paired request that times out', () => {
 
     await expect(send(host)).rejects.toMatchObject({
       code: 'runtime_timeout',
-      data: { requestSent: false },
-      // The typed proof this Orca trusts; `data` can also come from a server's answer.
-      requestUnsent: true
+      data: { requestSent: false }
     })
     expect(host.frames).toEqual([])
     await expect(send(host)).resolves.toMatchObject({ ok: true })
@@ -155,7 +153,6 @@ describe('a paired request that times out', () => {
     const error = await send(host).catch((failure: unknown) => failure)
     expect(error).toMatchObject({ code: 'runtime_timeout' })
     expect(error).not.toHaveProperty('data.requestSent')
-    expect(error).toHaveProperty('requestUnsent', undefined)
     await expect(replay(host, { paramsForStatus: () => params })).resolves.toMatchObject({
       ok: true
     })

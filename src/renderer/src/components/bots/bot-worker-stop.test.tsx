@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { useAppStore } from '@/store/index'
 import { fixtureCos } from '../../component-fixtures/fixture-bot-panel'
-import { clientMadeFailureData } from '../../../../shared/remote-runtime/rpc/runtime-rpc-client-made-failure'
+import { translate } from '@/i18n/i18n'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { Bot } from '../../../../shared/bot-types'
@@ -146,90 +146,52 @@ it("stops from a paired bot's chat tree row on that computer", async () => {
   expect(localCall).not.toHaveBeenCalled()
 })
 
-// This Orca proves the stop never left it (no connection): the notice names the computer and the worker.
-it('names the paired computer when the stop never reached it', async () => {
-  pairedAnswers(
-    refused(
-      'remote_runtime_unavailable',
-      'Could not connect to the remote Orca runtime.',
-      clientMadeFailureData(undefined, true)
-    )
+const unconfirmedTitle = (): string =>
+  translate(
+    'components.native-chat.workers.stopUnconfirmed',
+    'Orca couldn’t confirm the worker stopped.'
   )
+
+// Whatever failed (no connection, no answer in time, a full queue, the paired computer's own error), a
+// failed stop may still have reached the computer: Orca says it couldn't confirm it, in the error's words.
+it.each([
+  ['no connection', 'remote_runtime_unavailable', 'Could not connect to the remote Orca runtime.'],
+  [
+    'no answer in time',
+    'runtime_timeout',
+    'Timed out waiting for the remote Orca runtime to respond.'
+  ],
+  ['a full call queue', 'runtime_rpc_queue_overloaded', 'Remote runtime call queue is full.'],
+  [
+    "the paired computer's own error",
+    'remote_runtime_unavailable',
+    'Could not check whether the user kept Dispatch ctx_remote000001 open on C.'
+  ],
+  ['a worker the paired computer kept open', 'dispatch_kept_open', 'The user kept Prod scan open.']
+])('says the stop is unconfirmed, in its own words, after %s', async (_case, code, message) => {
+  pairedAnswers(refused(code, message))
   clickChipStop(pairedBot)
   const [title, options] = await toastShown()
-  expect(title).toEqual(expect.stringContaining('M4 Air'))
-  expect(title).toEqual(expect.stringContaining('Prod scan'))
-  expect(options).toBeUndefined()
+  expect(stopCalls()).toHaveLength(1)
+  expect(title).toBe(unconfirmedTitle())
+  expect(options).toEqual({ description: expect.stringContaining(message) })
 })
 
-// The version check before the stop can't reach the computer (a cold probe, no marker on its failure):
-// the stop was never sent, so the notice names the computer.
-it('names the paired computer when its version check fails before the stop', async () => {
+// The version check before the stop fails (the real probe): the same notice, in the probe's words.
+it.each([
+  ['remote_runtime_unavailable', 'Could not connect to the remote Orca runtime.'],
+  ['runtime_unavailable', 'Timed out waiting for the remote Orca runtime.']
+])('says the stop is unconfirmed when the version check fails with %s', async (code, message) => {
   pairedCall.mockImplementation(async (args: { method: string }) =>
     args.method === 'status.get'
-      ? refused('remote_runtime_unavailable', 'Could not connect to the remote Orca runtime.')
+      ? refused(code, message)
       : answered({ dispatchId: dispatch, state: 'stopped' })
   )
   clickChipStop(pairedBot)
   const [title, options] = await toastShown()
   expect(stopCalls()).toHaveLength(0)
-  expect(title).toEqual(expect.stringContaining('M4 Air'))
-  expect(title).toEqual(expect.stringContaining('Prod scan'))
-  expect(options).toBeUndefined()
-})
-
-// This Orca's own status check gives up (its waiter timed out, its SSH tunnel failed, or it is backing
-// off) with `runtime_unavailable`: still before the stop, so the notice names the computer.
-it("names the paired computer when this Orca's status check can't reach it", async () => {
-  pairedCall.mockImplementation(async (args: { method: string }) =>
-    args.method === 'status.get'
-      ? refused('runtime_unavailable', 'Timed out waiting for the remote Orca runtime.')
-      : answered({ dispatchId: dispatch, state: 'stopped' })
-  )
-  clickChipStop(pairedBot)
-  const [title, options] = await toastShown()
-  expect(stopCalls()).toHaveLength(0)
-  expect(title).toEqual(expect.stringContaining('M4 Air'))
-  expect(title).toEqual(expect.stringContaining('Prod scan'))
-  expect(options).toBeUndefined()
-})
-
-// Sent, then no reply in time: the worker may be stopped, so this is unconfirmed, not unreachable.
-it('says the stop is unconfirmed when the paired computer times out after the send', async () => {
-  pairedAnswers(
-    refused(
-      'runtime_timeout',
-      'Timed out waiting for the remote Orca runtime to respond.',
-      clientMadeFailureData(undefined, false)
-    )
-  )
-  clickChipStop(pairedBot)
-  const [title, options] = await toastShown()
-  expect(title).not.toEqual(expect.stringContaining('M4 Air'))
-  expect(options).toEqual({ description: expect.stringContaining('M4 Air') })
-})
-
-// A full call queue says nothing about the connection: unconfirmed, in its own words.
-it("keeps a full call queue's own words, unconfirmed", async () => {
-  const message = 'Remote runtime call queue is full; retry after current calls finish.'
-  pairedAnswers(
-    refused('runtime_rpc_queue_overloaded', message, clientMadeFailureData(undefined, false))
-  )
-  clickChipStop(pairedBot)
-  const [title, options] = await toastShown()
-  expect(title).not.toEqual(expect.stringContaining('M4 Air'))
-  expect(options).toEqual({ description: message })
-})
-
-// The paired computer answered, about a third computer it couldn't reach (its data even says "unsent"):
-// its words, not "couldn't reach M4 Air".
-it("keeps the paired computer's own answer when it couldn't reach another computer", async () => {
-  const message = 'Could not check whether the user kept Dispatch ctx_remote000001 open on C.'
-  pairedAnswers(refused('remote_runtime_unavailable', message, { requestSent: false }))
-  clickChipStop(pairedBot)
-  const [title, options] = await toastShown()
-  expect(title).not.toEqual(expect.stringContaining('M4 Air'))
-  expect(options).toEqual({ description: message })
+  expect(title).toBe(unconfirmedTitle())
+  expect(options).toEqual({ description: expect.stringContaining(message) })
 })
 
 // An unanswered stop the paired computer still owes keeps its own account of why.

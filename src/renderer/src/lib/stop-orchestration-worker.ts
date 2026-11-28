@@ -2,15 +2,9 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { translate } from '@/i18n/i18n'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
-import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { pairedServerName } from '@/lib/agent-session/open/paired-server-open'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration/orchestration-runtime-capabilities'
-import { toRemoteRuntimeClientErrorLike } from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
-import {
-  isClientMadeFailure,
-  isUnsentClientMadeFailure
-} from '../../../shared/remote-runtime/rpc/runtime-rpc-client-made-failure'
 import {
   HelperStopOutcome,
   isHelperStopDone
@@ -46,12 +40,13 @@ export async function stopOrchestrationWorker(
   target: RuntimeClientTarget = LOCAL,
   name?: string
 ): Promise<void> {
-  const call = { sent: false }
   let response: unknown
   try {
-    response = await requestWorkerStop(dispatchId, target, call)
+    response = await requestWorkerStop(dispatchId, target)
   } catch (error) {
-    reportFailure(error, target, name, call.sent)
+    // Unknown means unconfirmed: a stop that failed may still have reached the host and stopped the
+    // worker, so Orca never says it didn't. The error's own words say what went wrong.
+    notStopped(error instanceof Error ? error.message : String(error))
     return
   }
   const unconfirmed = unconfirmedStop(response)
@@ -61,54 +56,6 @@ export async function stopOrchestrationWorker(
     notStopped(unconfirmed.reason)
   }
 }
-
-/** Unknown means unconfirmed: only proof the stop never left this computer says Orca couldn't reach the
- *  server, since a stop that left it may have stopped the worker. */
-function reportFailure(
-  error: unknown,
-  target: RuntimeClientTarget,
-  name: string | undefined,
-  sent: boolean
-): void {
-  const message = error instanceof Error ? error.message : String(error)
-  const server = target.kind === 'environment' ? pairedServerName(target.environmentId) : null
-  if (!server) {
-    notStopped(message)
-    return
-  }
-  const { code } = toRemoteRuntimeClientErrorLike(error)
-  const notConnected = code !== undefined && NOT_CONNECTED_CODES.has(code)
-  // Before the send (its version check failed) the stop is proven unsent; after it, only the transport proves it.
-  const unsent =
-    !sent ||
-    (error instanceof RuntimeRpcCallError && isUnsentClientMadeFailure(error.response.error))
-  if (unsent && notConnected) {
-    notReached(server, name)
-    return
-  }
-  // This Orca's own timeout or lost connection after the send; the same codes from the server are its answer.
-  const unanswered =
-    error instanceof RuntimeRpcCallError &&
-    isClientMadeFailure(error.response.error) &&
-    (code === 'runtime_timeout' || code === 'remote_runtime_unavailable')
-  notStopped(
-    unanswered
-      ? translate(
-          'components.native-chat.workers.stopNoAnswer',
-          "{{server}} didn't answer in time. The worker may already be stopped.",
-          { server }
-        )
-      : message
-  )
-}
-
-// `runtime_unavailable`: this Orca's status check timing out, its SSH tunnel failing, or its backoff.
-const NOT_CONNECTED_CODES: ReadonlySet<string> = new Set([
-  'remote_runtime_unavailable',
-  'runtime_unavailable',
-  'runtime_timeout',
-  'runtime_manually_disconnected'
-])
 
 /** What leaves the stop unproven: the worker not settled, or a helper under it whose stop isn't done
  *  (the shared receipt contract's check; a helper the user kept open is done). Null when the stop is done. */
@@ -133,8 +80,7 @@ function unconfirmedStop(response: unknown): { reason: string | null; helper: bo
 
 async function requestWorkerStop(
   dispatchId: string,
-  target: RuntimeClientTarget,
-  call: { sent: boolean }
+  target: RuntimeClientTarget
 ): Promise<unknown> {
   const params = { dispatch: dispatchId }
   // One key per click, as on this computer, so the host keeps a receipt. A second click is a new stop.
@@ -142,33 +88,15 @@ async function requestWorkerStop(
   if (target.kind === 'environment') {
     return await callRuntimeRpc<unknown>(target, 'orchestration.workerStop', params, {
       orchestrationRequestId: requestId,
-      timeoutMs: PAIRED_STOP_TIMEOUT_MS,
-      // Past the version check: from here the stop may reach the server.
-      beforeSend: () => {
-        call.sent = true
-      }
+      timeoutMs: PAIRED_STOP_TIMEOUT_MS
     })
   }
-  call.sent = true
   const response = await window.api.runtime.call({
     method: 'orchestration.workerStop',
     params,
     orchestration: { contractVersion: ORCHESTRATION_CONTRACT_VERSION, requestId }
   })
   return unwrapRuntimeRpcResult(response)
-}
-
-function notReached(server: string, name: string | undefined): void {
-  toast.error(
-    translate(
-      'components.native-chat.workers.stopUnreachable',
-      "Orca couldn't reach {{server}} to stop {{agent}}.",
-      {
-        server,
-        agent: name || translate('auto.lib.activateAiVaultStructuredSession.theAgent', 'the agent')
-      }
-    )
-  )
 }
 
 function helperTitle(name: string | undefined): string {

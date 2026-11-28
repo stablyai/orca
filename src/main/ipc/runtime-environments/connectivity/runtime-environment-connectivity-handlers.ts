@@ -15,7 +15,6 @@ import {
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { connectThroughOwningService } from './runtime-environment-host-service-ops'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { asRemoteAnswer } from '../../../../shared/remote-runtime/rpc/runtime-rpc-client-made-failure'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { readSettingsWithRuntimeEnvironmentPreference } from '../catalog/runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from '../pairing/runtime-environment-pairing-verification'
@@ -200,7 +199,7 @@ function registerPassiveCallHandler(
     ): Promise<RuntimeRpcResponse<unknown>> => {
       const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-        return manuallyDisconnectedResponse(environment, true)
+        return manuallyDisconnectedResponse(environment)
       }
       if (isHostSpawnFencedForWslMoveUndo(environment.id, args.method)) {
         return wslMoveUndoSpawnFencedResponse(environment, args.method)
@@ -262,10 +261,9 @@ function registerPassiveCallHandler(
       }
       observeWslOrcadHostResponse(environment.id, args.method, response)
       recordAnswer?.(environment, args.method, response)
-      // The one way a returned answer reaches the renderer: it can't claim this Orca's provenance.
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
         ? manuallyDisconnectedResponse(environment)
-        : asRemoteAnswer(response)
+        : response
     }
   )
 }

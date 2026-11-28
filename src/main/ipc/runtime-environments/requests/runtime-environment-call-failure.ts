@@ -6,20 +6,16 @@ import type {
   RuntimeRpcResponse
 } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { runtimeEnvironmentManualDisconnectReason } from '../connectivity/runtime-environment-manual-disconnect'
-import { clientMadeFailureData } from '../../../../shared/remote-runtime/rpc/runtime-rpc-client-made-failure'
 
-/** `beforeSend`: refused before the call was made, so nothing was sent; after it, the call's fate is unknown. */
 export function manuallyDisconnectedResponse(
-  environment: Awaited<ReturnType<typeof resolveEnvironment>>,
-  beforeSend = false
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>
 ): RuntimeRpcResponse<never> {
   return {
     id: 'runtime.manualDisconnect',
     ok: false,
     error: {
       code: 'runtime_manually_disconnected',
-      message: runtimeEnvironmentManualDisconnectReason(environment.id),
-      data: clientMadeFailureData(undefined, beforeSend)
+      message: runtimeEnvironmentManualDisconnectReason(environment.id)
     },
     _meta: { runtimeId: environment.runtimeId }
   }
@@ -39,23 +35,7 @@ export function runtimeEnvironmentCallFailure(
   return {
     id: method,
     ok: false,
-    error: {
-      code: error.code,
-      message: error.message,
-      data: clientMadeFailureData(
-        error instanceof RemoteRuntimeClientError ? error.data : undefined,
-        error instanceof RemoteRuntimeClientError && provenUnsent(error)
-      )
-    },
+    error: { code: error.code, message: error.message },
     _meta: { runtimeId: environment.runtimeId }
   }
-}
-
-/** This Orca's own proof that nothing but the handshake left it: the socket's typed keyed-request
- *  flag, or a failure before the host authenticated us. Never `error.data`, which a server can fill. */
-function provenUnsent(error: RemoteRuntimeClientError): boolean {
-  return (
-    error.requestUnsent === true ||
-    (error.pairingStage !== undefined && error.pairingStage !== 'runtime')
-  )
 }
