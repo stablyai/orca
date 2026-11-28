@@ -63,7 +63,8 @@ describe('desktop browser bridge restricted dispatcher', () => {
       error: { code: DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE }
     })
     expect(dispatch).not.toHaveBeenCalled()
-    // A misrouted call that skips the executor allowlist still finds nothing to run.
+    // Load the shared browser group, then a misrouted call that skips the executor allowlist still finds nothing.
+    await execute('browser.tabList')
     const misrouted = await dispatcher.dispatch(
       { id: 'req', authToken: '', method: 'browser.cookie.get', params: {} },
       { caller: { kind: 'local-cli' } }
