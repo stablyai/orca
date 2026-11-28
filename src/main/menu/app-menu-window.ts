@@ -6,6 +6,8 @@ export function createAppWindowMenu(
 ): Electron.MenuItemConstructorOptions {
   return {
     label,
+    // Registers via -[NSApp setWindowsMenu:] so macOS adds the window list and tiling items.
+    ...(isMac ? { role: 'window' as const } : {}),
     submenu: [
       {
         ...labeledAppMenuRole('minimize', 'menu.minimize', 'Minimize'),
