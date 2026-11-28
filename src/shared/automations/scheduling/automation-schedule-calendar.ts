@@ -7,6 +7,7 @@ const OFFSET_BUCKET_MS = 15 * MINUTE_MS
 const OFFSET_CACHE_SIZE = 1024
 
 export type ScheduleWallTime = {
+  year: number
   month: number
   day: number
   weekday: number
@@ -26,6 +27,7 @@ export const LOCAL_SCHEDULE_CALENDAR: ScheduleCalendar = {
   fields: (timestamp) => {
     const date = new Date(timestamp)
     return {
+      year: date.getFullYear(),
       month: date.getMonth() + 1,
       day: date.getDate(),
       weekday: date.getDay(),
@@ -107,6 +109,7 @@ function zonedCalendar(timeZone: string): ScheduleCalendar {
     fields: (timestamp) => {
       const wall = wallOf(timestamp)
       return {
+        year: wall.getUTCFullYear(),
         month: wall.getUTCMonth() + 1,
         day: wall.getUTCDate(),
         weekday: wall.getUTCDay(),

@@ -20,7 +20,7 @@ orca automations create \
   --json
 ```
 
-`--trigger` accepts presets such as `hourly`, `daily`, `weekdays`, and `weekly`, plus cron expressions or RRULE strings built from `FREQ=HOURLY|DAILY|WEEKLY`, `BYDAY` (weekly only), `BYHOUR` (daily and weekly) and `BYMINUTE`. Other RRULE parts, such as `INTERVAL` or `COUNT`, are refused. Use `--timezone <tz>` when the schedule should follow a specific IANA timezone instead of the runtime default.
+`--trigger` accepts presets such as `hourly`, `daily`, `weekdays`, and `weekly`, plus cron expressions or RRULE strings built from `FREQ=HOURLY|DAILY|WEEKLY`, `BYDAY` (weekly only), `BYHOUR` (daily and weekly), `BYMINUTE` and `INTERVAL` (1 to 52, counted from when the schedule was saved, e.g. `FREQ=WEEKLY;INTERVAL=2;BYDAY=WE` for every other Wednesday). Other RRULE parts, such as `COUNT` or `UNTIL`, are refused. Use `--timezone <tz>` when the schedule should follow a specific IANA timezone instead of the runtime default.
 
 ## Choose where runs happen
 

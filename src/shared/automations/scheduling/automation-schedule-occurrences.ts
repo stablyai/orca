@@ -6,7 +6,11 @@ import {
   type ParsedSchedule
 } from './automation-schedule-parsing'
 import { cronDateMatches, cronMatches, floorToMinute } from './automation-cron-occurrence'
-import { automationScheduleCalendar, type ScheduleCalendar } from './automation-schedule-calendar'
+import {
+  automationScheduleCalendar,
+  type ScheduleCalendar,
+  type ScheduleWallTime
+} from './automation-schedule-calendar'
 
 const MINUTE_MS = 60 * 1000
 const DAY_MS = 24 * 60 * MINUTE_MS
@@ -15,12 +19,28 @@ const CRON_SCAN_DAYS = 9 * 366
 const CRON_SCAN_MINUTES = CRON_SCAN_DAYS * 24 * 60
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 
-function dayMatches(rule: ParsedRrule, calendar: ScheduleCalendar, timestamp: number): boolean {
-  if (rule.freq === 'DAILY') {
-    return true
+// Wall-clock index per FREQ; epoch day 0 (1970-01-01) is a Thursday, so +3 starts weeks on Monday.
+function intervalIndex(freq: ParsedRrule['freq'], f: ScheduleWallTime): number {
+  const day = Date.UTC(f.year, f.month - 1, f.day) / DAY_MS
+  return freq === 'HOURLY' ? day * 24 + f.hour : freq === 'WEEKLY' ? Math.floor((day + 3) / 7) : day
+}
+
+function onInterval(rule: ParsedRrule, start: ScheduleWallTime, fields: ScheduleWallTime): boolean {
+  const steps = intervalIndex(rule.freq, fields) - intervalIndex(rule.freq, start)
+  return ((steps % rule.interval) + rule.interval) % rule.interval === 0
+}
+
+function dayMatches(
+  rule: ParsedRrule,
+  calendar: ScheduleCalendar,
+  start: ScheduleWallTime,
+  timestamp: number
+): boolean {
+  const fields = calendar.fields(timestamp)
+  if (!onInterval(rule, start, fields)) {
+    return false
   }
-  const code = DAY_CODES[calendar.fields(timestamp).weekday]
-  return rule.byDay.includes(code)
+  return rule.freq === 'DAILY' || rule.byDay.includes(DAY_CODES[fields.weekday])
 }
 
 /** The nearest time after `anchor` (direction 1) or at or before it (-1) that `timesOn` names. */
@@ -48,9 +68,14 @@ function scanDayCandidates(
   return null
 }
 
-function rruleTimesOn(rule: ParsedRrule, calendar: ScheduleCalendar, day: number): number[] {
+function rruleTimesOn(
+  rule: ParsedRrule,
+  calendar: ScheduleCalendar,
+  start: ScheduleWallTime,
+  day: number
+): number[] {
   const candidate = calendar.atTime(day, rule.byHour, rule.byMinute)
-  return dayMatches(rule, calendar, candidate) ? [candidate] : []
+  return dayMatches(rule, calendar, start, candidate) ? [candidate] : []
 }
 
 // Why: a fixed time resolves as an RRULE time does (RFC 5545): a fall-back repeat fires once, on
@@ -68,14 +93,35 @@ function fixedCronTimesOn(rule: ParsedCron, calendar: ScheduleCalendar, day: num
   return times
 }
 
-function timesOnDay(rule: ParsedSchedule, calendar: ScheduleCalendar): (day: number) => number[] {
+function timesOnDay(
+  rule: ParsedSchedule,
+  calendar: ScheduleCalendar,
+  start: ScheduleWallTime
+): (day: number) => number[] {
   return rule.kind === 'cron'
     ? (day) => fixedCronTimesOn(rule, calendar, day)
-    : (day) => rruleTimesOn(rule, calendar, day)
+    : (day) => rruleTimesOn(rule, calendar, start, day)
 }
 
-function hourlyMatches(rule: ParsedRrule, calendar: ScheduleCalendar, timestamp: number): boolean {
-  return calendar.fields(timestamp).minute === rule.byMinute
+function hourlyMatches(
+  rule: ParsedRrule,
+  calendar: ScheduleCalendar,
+  start: ScheduleWallTime,
+  timestamp: number
+): boolean {
+  const fields = calendar.fields(timestamp)
+  if (fields.minute !== rule.byMinute) {
+    return false
+  }
+  if (rule.interval === 1) {
+    return true
+  }
+  // Why: every N wall hours means one run per wall slot; atTime picks a repeated slot's first pass,
+  // which catches a fall-back of any length.
+  if (calendar.atTime(calendar.startOfDay(timestamp), fields.hour, fields.minute) !== timestamp) {
+    return false
+  }
+  return onInterval(rule, start, fields)
 }
 
 // Why: walk absolute minutes; recomposing local fields can't address the second pass of a fall-back hour.
@@ -166,9 +212,10 @@ export function nextAutomationOccurrenceAfter(
   if (rule.kind === 'cron' && !rule.fixedTime) {
     return nextMatchingMinute(dtstart, after, (candidate) => cronMatches(rule, candidate, calendar))
   }
+  const start = calendar.fields(dtstart)
   if (rule.kind === 'rrule' && rule.freq === 'HOURLY') {
     return nextMatchingMinute(dtstart, after, (candidate) =>
-      hourlyMatches(rule, calendar, candidate)
+      hourlyMatches(rule, calendar, start, candidate)
     )
   }
   const candidate = scanDayCandidates(
@@ -176,7 +223,7 @@ export function nextAutomationOccurrenceAfter(
     Math.max(dtstart - 1, after),
     1,
     CRON_SCAN_DAYS,
-    timesOnDay(rule, calendar)
+    timesOnDay(rule, calendar, start)
   )
   if (candidate === null) {
     throw new Error('Unable to compute next automation run.')
@@ -198,13 +245,24 @@ export function latestAutomationOccurrenceAtOrBefore(
   if (rule.kind === 'cron' && !rule.fixedTime) {
     return latestMatchingMinute(dtstart, now, (candidate) => cronMatches(rule, candidate, calendar))
   }
+  const start = calendar.fields(dtstart)
   if (rule.kind === 'rrule' && rule.freq === 'HOURLY') {
     return latestMatchingMinute(dtstart, now, (candidate) =>
-      hourlyMatches(rule, calendar, candidate)
+      hourlyMatches(rule, calendar, start, candidate)
     )
   }
   // Back to dtstart and no further; the two spare days cover partial ends and short DST days.
   const days = Math.min(CRON_SCAN_DAYS, Math.ceil((now - dtstart) / DAY_MS) + 2)
-  const candidate = scanDayCandidates(calendar, now, -1, days, timesOnDay(rule, calendar))
+  const candidate = scanDayCandidates(calendar, now, -1, days, timesOnDay(rule, calendar, start))
   return candidate !== null && candidate >= dtstart ? candidate : null
+}
+
+/** True when only a scheduler that reads INTERVAL runs this schedule as written. */
+export function needsScheduleRulesCapability(schedule: string): boolean {
+  try {
+    const parsed = parseSchedule(schedule)
+    return parsed.kind === 'rrule' && parsed.interval > 1
+  } catch {
+    return false
+  }
 }

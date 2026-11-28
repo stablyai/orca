@@ -131,6 +131,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', "--item goes with --bot: a bot's own item")
     }
     if (bot) {
+      await assertAutomationFieldsSupported(client, schedule)
       const saved = await createBotAutomation(client, flags, bot, schedule, on, once)
       printSavedAutomation(saved, json, on)
       return
