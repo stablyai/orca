@@ -227,11 +227,7 @@ export function recordPaneIsOwnedByPreservedPane(
     if (isPaneResumingInPlace(record.paneKey)) {
       return true
     }
-    // A dispatcher wake-on-mount promise is the same ownership proof one step earlier: the pane
-    // will mount and cold-restore this record, so the sweep must not fork a duplicate resume tab.
-    // Unlike the in-place hold above, the wake mark's producer and consumer are build-independent,
-    // and it lapses with the record or when the pane consumes it, so a never-mounting pane cannot
-    // strand the resume forever.
+    // A wake mark means this pane will cold-restore the record; it lapses, so it never strands it.
     if (hasSleepingAgentWakeRequest(record)) {
       return true
     }

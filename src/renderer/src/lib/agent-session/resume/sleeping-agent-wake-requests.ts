@@ -28,8 +28,7 @@ type RequestSleepingAgentWakeOnMountOptions = {
   skipClaimKeys?: ReadonlySet<string>
 }
 
-/** Asks the named tabs' sleeping agents to start when their panes mount hidden. Claim keys the host
- * still holds live are skipped: waking such a pane starts a second `--resume` writer (STA-3859). */
+/** Skips claim keys the host still holds live: waking them adds a second writer (STA-3859). */
 export function requestSleepingAgentWakeOnMount(
   worktreeId: string,
   tabIds: readonly string[],
@@ -56,9 +55,7 @@ export function requestSleepingAgentWakeOnMount(
     useAppStore.getState().sleepingAgentSessionsByPaneKey,
     worktreeId
   )) {
-    // Explicit sleep stays asleep until its own tab opens; a sibling record's targeted wake must not
-    // wake it just because the two share a tab (#11598). Host-claimed records reattach, and main
-    // owns workspace-sleep records, so a tab-wide mount must not mark either for an in-place writer.
+    // Never mark explicit sleep (#11598), host-claimed (reattach) or main-owned workspace sleep.
     if (
       record.restoreOnTabOpenOnly === true ||
       isWorkspaceSleepRecord(record) ||

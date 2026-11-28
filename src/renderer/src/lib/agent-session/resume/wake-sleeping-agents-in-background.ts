@@ -204,8 +204,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(
   if (worktreeRecords.length === 0) {
     return
   }
-  // Only passive completed-hibernation records need fresh-connect mounting; active records mount inside
-  // the activation gate, after the host proves their PTYs exited, so each resumes in its own pane.
+  // Active records mount in the activation gate once their PTYs exit; only passive ones mount here.
   const passiveTabIds = new Set<string>()
   let hasUntargetablePassiveRecord = false
   // Phone workspace opens must preserve explicit sleep until each tab opens (#11598). Filter before canonicalization so lazy records cannot steal/delete active hibernation claims.
@@ -239,8 +238,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(
     void gateWorktreeAgentActivation(worktreeId, resumeOptions)
     return
   }
-  // No inventory can be read (paired runtime or an unresolved route), so nothing may authorize a writer
-  // here: the sweep parks or blocks these records, and mounting a pane would start its `--resume` anyway.
+  // No inventory here, so nothing may authorize a writer: mounting would start a --resume anyway.
   resumeSleepingAgentSessionsForWorktree(worktreeId, resumeOptions)
 }
 

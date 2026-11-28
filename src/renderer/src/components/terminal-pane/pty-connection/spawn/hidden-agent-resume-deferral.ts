@@ -10,8 +10,7 @@ import { pendingSpawnByPaneKey } from './pending-pane-spawn'
 import type { ColdRestoreAgentResumeStartup } from '../startup/fresh-spawn-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
-// Mirrors waitsForMainPaneStart's gate: these statuses span main's start of the pane through its
-// asynchronous attach-back, a window with no renderer connect or spawn in flight.
+// Mirrors waitsForMainPaneStart: main's start-to-attach window has no renderer connect in flight.
 const mainPaneStartInFlight = (paneKey: string): boolean => {
   const status = useAppStore.getState().terminalPaneStartsByPaneKey[paneKey]?.status
   return status === 'starting' || status === 'resuming' || status === 'failed'
@@ -23,18 +22,11 @@ const paneResumeAttemptInFlight = (session: ConnectPanePtySession): boolean =>
   session.transport.getPtyId() === null &&
   (session.transportConnectInFlightSince !== null ||
     pendingSpawnByPaneKey.has(session.pendingSpawnKey) ||
-    // Why the request flag and cacheKey: the dispatch window before main publishes a
-    // status has no other in-flight signal, and a legacy record paneKey is not the key
-    // main publishes under — the session's stable pane key is.
+    // The flag covers dispatch before any status; cacheKey is the stable key main publishes under.
     session.mainPaneStartRequestInFlight ||
     mainPaneStartInFlight(session.cacheKey))
 
-/**
- * Holds the record while this pane's own attempt runs. Consuming the wake mark hands ownership from the
- * dispatcher's promise to the attempt, and the sweep must not read the gap before the PTY binds as
- * unowned and fork a duplicate resume tab. Self-releases once the attempt settles, and is tracked on the
- * session so releaseHiddenAgentResumeHold can drop it with the pane.
- */
+/** Holds the record until this pane's attempt settles, so the sweep cannot fork a duplicate tab. */
 const holdPaneResumeAttempt = (session: ConnectPanePtySession, paneKey: string): void => {
   if (session.agentResumeAttemptHold && session.agentResumeAttemptHoldPaneKey === paneKey) {
     return
@@ -46,8 +38,7 @@ const holdPaneResumeAttempt = (session: ConnectPanePtySession, paneKey: string):
     const inFlight = paneResumeAttemptInFlight(session)
     if (!inFlight) {
       releasePaneResumeHold(paneKey, hold)
-      // Why: a self-released hold must stop matching, or a later attempt on this pane would return
-      // at the identity check without registering a fresh registry entry.
+      // A self-released hold must stop matching, or this pane's next attempt never re-registers.
       if (session.agentResumeAttemptHold === hold) {
         session.agentResumeAttemptHold = null
         session.agentResumeAttemptHoldPaneKey = null
@@ -74,9 +65,7 @@ export function deferHiddenAgentResume(
     session.hiddenAgentResumeReleased
   ) {
     if (recordEntry && (session.disposed || session.deps.isVisibleRef.current)) {
-      // Why consume: a disposed or visible pane never takes the hidden-deferral path, so nothing
-      // would ever spend its wake mark — a later sweep would then read the stale mark as ownership
-      // and skip a record whose pane has no live PTY and no resume in flight.
+      // No hidden deferral will spend this mark, and a stale mark would read as ownership forever.
       if (takeSleepingAgentWakeRequest(recordEntry.record)) {
         session.hiddenAgentResumeReleased = true
       }
@@ -89,8 +78,7 @@ export function deferHiddenAgentResume(
   if (takeSleepingAgentWakeRequest(recordEntry.record)) {
     // Why: later fallbacks in this same connect must not hold what the background wake released.
     session.hiddenAgentResumeReleased = true
-    // Why the hold: the released restore starts async through main, and before it binds a PTY the
-    // sweep would see no mark, no live PTY and fork a duplicate.
+    // The restore starts async through main; until a PTY binds, the sweep would fork a duplicate.
     holdPaneResumeAttempt(session, recordEntry.paneKey)
     return false
   }
@@ -144,8 +132,7 @@ export function releaseHiddenAgentResumeHold(session: ConnectPanePtySession): vo
   if (session.hiddenAgentResumeHold && session.hiddenAgentResumeHoldKey) {
     releasePaneResumeHold(session.hiddenAgentResumeHoldKey, session.hiddenAgentResumeHold)
   }
-  // The attempt's own hold is anonymous to the hidden flow; drop it here too or the registry entry
-  // pins the pane's session graph until its pane key is reused.
+  // The hidden flow can't see the attempt's own hold; left in place it pins the session graph.
   if (session.agentResumeAttemptHold && session.agentResumeAttemptHoldPaneKey) {
     releasePaneResumeHold(session.agentResumeAttemptHoldPaneKey, session.agentResumeAttemptHold)
     session.agentResumeAttemptHold = null

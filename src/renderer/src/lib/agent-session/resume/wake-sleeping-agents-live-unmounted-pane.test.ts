@@ -171,9 +171,7 @@ describe('background wake of a pane whose PTY the host still holds', () => {
   it('resumes in place, not in a duplicate tab, once the host inventory shows the PTY exited', async () => {
     useAppStore.setState(unmountedLivePaneState())
 
-    // The record's own tab exists, so recovery mounts that tab and its pane cold-restores the
-    // record; the sweep must not queue a second --resume writer in a new tab (it did before,
-    // accumulating one empty duplicate tab per worktree open).
+    // Recovery mounts the record's own tab; the sweep used to add one empty duplicate per open.
     expect(await wakeAndSettle()).toBe('resumed')
 
     const state = useAppStore.getState()
@@ -284,8 +282,7 @@ describe('background wake of a pane whose PTY the host still holds', () => {
       expect(hasSleepingAgentWakeRequest(record)).toBe(true)
       vi.advanceTimersByTime(5 * 60_000 + 1)
       expect(hasSleepingAgentWakeRequest(record)).toBe(false)
-      // A later activation's re-dispatch must not refresh the lapsed bound, or the sweep's
-      // fallback fork could never run for a pane that never mounts.
+      // A re-dispatch must not refresh the lapsed bound, or the fallback fork could never run.
       markSleepingAgentWakeRequest(record)
       expect(hasSleepingAgentWakeRequest(record)).toBe(false)
       // A replaced record is a new wake cycle and marks again.

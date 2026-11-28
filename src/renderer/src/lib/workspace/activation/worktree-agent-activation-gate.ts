@@ -270,8 +270,7 @@ export async function runWorktreeAgentActivationGate(
   ) {
     return 'blocked'
   }
-  // Mount preserved panes only now: the inventory above proved these sessions' PTYs exited (STA-3859),
-  // so each pane can cold-restore its record in place instead of the sweep forking a duplicate tab (#36623).
+  // Inventory proved these PTYs exited (STA-3859): resume each in its pane, not a new tab (#36623).
   const mountedInPlace = deps.mountInPlaceResumes?.(worktreeId, claims.keys) ?? 0
   const launched = deps.resume(worktreeId, { skipClaimKeys: claims.keys })
   // Empty directs caller to seed, not a claim the host has nothing; caller rechecks its own guards.

@@ -69,8 +69,7 @@ export function startPaneThroughMainThenAttach(
     return Promise.resolve(null)
   }
   return new Promise((resolve) => {
-    // Why a session flag: from this dispatch until main publishes a start status (or today() spawns)
-    // no pending spawn or status exists yet, and ownership holds must not read that window as idle.
+    // Until main publishes a start status nothing else is pending, and holds must not read idle.
     session.mainPaneStartRequestInFlight = true
     const settle = (value: string | null | Promise<string | null>): void => {
       session.mainPaneStartRequestInFlight = false

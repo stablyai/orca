@@ -15,15 +15,7 @@ import {
   takeSleepingAgentWakeRequest
 } from './sleeping-agent-wake-requests'
 
-/**
- * Wakes the preserved panes of records whose own pane must cold-restore them, and mounts those panes when
- * activation will not mount them itself. The wake-on-mount mark is what the resume sweep reads as pane
- * ownership, which is what stops it from forking a duplicate resume tab (#36623).
- *
- * Only call with host-claimed keys from the activation inventory: a mounted pane starts its `--resume`
- * writer, so records the host still holds as live sessions must not mount a second one (STA-3859).
- * Returns how many panes it woke, so an activation gate counts an in-place wake as recovery work.
- */
+/** Resumes records in their own preserved pane (#36623), skipping host-claimed keys (STA-3859). */
 export function requestInPlaceResumeMounts(
   worktreeId: string,
   hostClaimedKeys: ReadonlySet<string>
@@ -50,9 +42,7 @@ export function requestInPlaceResumeMounts(
       continue
     }
     const tabId = getSleepingRecordTabId(record)
-    // Why skip mounted tabs: their pane already ran its connect (or holds the record itself), so a
-    // mark nothing would consume would only strand the record behind the sweep's ownership check.
-    // A pending startup command wins the pane's start over the cold restore, so leave that tab to the sweep too.
+    // Mounted tabs and pending startup commands would never spend a mark; leave them to the sweep.
     if (
       tabId !== null &&
       !hasRegisteredRuntimeTerminalTab(tabId, worktreeId) &&
@@ -65,11 +55,9 @@ export function requestInPlaceResumeMounts(
     return 0
   }
   const targets = [...tabIds]
-  // Why the claim filter on marking too: a host-claimed record can share a mounted tab with an
-  // unclaimed one, and waking its pane would start a second `--resume` writer (STA-3859).
+  // A claimed record can share a tab with an unclaimed one; waking it adds a writer (STA-3859).
   requestSleepingAgentWakeOnMount(worktreeId, targets, { skipClaimKeys: hostClaimedKeys })
-  // An active worktree mounts these panes itself; only one activation will not mount needs the request,
-  // which must stay targeted so a whole-worktree mount cannot spawn every saved tab.
+  // Active worktrees mount these panes themselves; request only the rest, never a whole worktree.
   const unactivatedTabIds = targets.filter(
     (tabId) => !paneWillConnectOnActivation(worktreeId, tabId, state)
   )
