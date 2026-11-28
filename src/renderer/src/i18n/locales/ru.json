@@ -22540,6 +22540,7 @@
         "thinking": "Думает",
         "workingFor": "Работает {{value0}}",
         "workedFor": "Работал {{value0}}",
+        "continuedFor": "Продолжал {{value0}}",
         "interruptedAfter": "Прервано через {{value0}}",
         "failedAfter": "Ошибка через {{value0}}",
         "toggleDetails": "Показать или скрыть подробности ответа"

@@ -21881,6 +21881,7 @@
         "thinking": "Thinking",
         "workingFor": "Working for {{value0}}",
         "workedFor": "Worked for {{value0}}",
+        "continuedFor": "Continued for {{value0}}",
         "interruptedAfter": "Interrupted after {{value0}}",
         "failedAfter": "Failed after {{value0}}",
         "toggleDetails": "Toggle turn details"

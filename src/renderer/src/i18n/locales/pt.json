@@ -22724,6 +22724,7 @@
         "thinking": "Pensando",
         "workingFor": "Trabalhando há {{value0}}",
         "workedFor": "Trabalhou por {{value0}}",
+        "continuedFor": "Continuou por {{value0}}",
         "toggleDetails": "Alternar detalhes do turno",
         "stopping": "Parando…",
         "queueAfterStop": "Colocar uma mensagem na fila para executar após a parada",

@@ -14,11 +14,17 @@ import { useNativeChatElapsedSeconds } from './use-native-chat-elapsed-seconds'
 
 // Literal keys with literal fallbacks: a dynamic key registers no catalog reference.
 function turnStatusLabel(
-  key: ReturnType<typeof describeNativeChatTurnStatus>['key'],
+  key: ReturnType<typeof describeNativeChatTurnStatus>['key'] | 'continuedFor',
   duration: string,
   t: Translate = translate
 ): string {
   switch (key) {
+    case 'continuedFor':
+      return t(
+        'components.native-chat.status.continuedFor',
+        NATIVE_CHAT_TURN_STATUS_COPY.continuedFor,
+        { value0: duration }
+      )
     case 'workedFor':
       return t('components.native-chat.status.workedFor', NATIVE_CHAT_TURN_STATUS_COPY.workedFor, {
         value0: duration
@@ -51,6 +57,7 @@ export function NativeChatWorkingStatus({
   startedAt,
   workedSeconds,
   verdict,
+  continued = false,
   expanded = false,
   onToggleExpanded,
   actions
@@ -60,6 +67,8 @@ export function NativeChatWorkingStatus({
   startedAt: number | null
   workedSeconds?: number | null
   verdict?: AgentTurnOutcome
+  /** Settled: the stretch after the person's message mid-turn, which reads "Continued for". */
+  continued?: boolean
   expanded?: boolean
   onToggleExpanded?: () => void
   /** Controls at the line's end; the rule under the status spans them too. */
@@ -76,7 +85,9 @@ export function NativeChatWorkingStatus({
     elapsedSeconds,
     verdict
   })
-  const label = pendingLabel ?? turnStatusLabel(key, duration, t)
+  const label =
+    pendingLabel ??
+    turnStatusLabel(continued && workedSeconds != null ? 'continuedFor' : key, duration, t)
   const detailsLabel = t(
     'components.native-chat.status.toggleDetails',
     NATIVE_CHAT_TURN_STATUS_COPY.toggleDetails

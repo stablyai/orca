@@ -20993,6 +20993,7 @@
         "thinking": "생각 중",
         "workingFor": "{{value0}} 작업 중",
         "workedFor": "{{value0}} 작업 완료",
+        "continuedFor": "{{value0}} 동안 이어서 작업",
         "interruptedAfter": "{{value0}} 후 중단됨",
         "failedAfter": "{{value0}} 후 실패",
         "toggleDetails": "턴 세부 정보 전환"

@@ -12,6 +12,8 @@ export const NATIVE_CHAT_TURN_STATUS_COPY = {
   sendAfterStop: 'Send a message to run after the stop',
   workingFor: 'Working for {{value0}}',
   workedFor: 'Worked for {{value0}}',
+  /** A settled stretch of a turn after the person's message mid-turn (desktop). */
+  continuedFor: 'Continued for {{value0}}',
   interruptedAfter: 'Interrupted after {{value0}}',
   failedAfter: 'Failed after {{value0}}',
   toggleDetails: 'Toggle turn details',

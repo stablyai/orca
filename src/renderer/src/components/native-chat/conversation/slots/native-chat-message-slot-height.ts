@@ -11,20 +11,22 @@ export function nativeChatMessageSlotHeight(
   message: NativeChatMessage,
   slot: Pick<
     NativeChatMessageSlot,
-    'receipt' | 'status' | 'turnDiff' | 'openedPullRequests' | 'folded'
+    'receipt' | 'status' | 'leadStatus' | 'turnDiff' | 'openedPullRequests' | 'folded'
   >,
   typography: NativeChatTranscriptSlotsInput['typography']
 ): number {
-  return estimateNativeChatRowHeight(
-    nativeChatRowContentMetrics(message, typography),
-    {
-      hasReceipt: slot.receipt !== undefined,
-      hasStatus: slot.status !== undefined,
-      hasTurnDiff: slot.turnDiff !== undefined,
-      turnDiffFileCount: slot.turnDiff?.files.length,
-      hasOpenedPullRequests: (slot.openedPullRequests?.length ?? 0) > 0,
-      folded: slot.folded
-    },
-    typography
-  )
+  const content = nativeChatRowContentMetrics(message, typography)
+  const chrome = {
+    hasReceipt: slot.receipt !== undefined,
+    hasStatus: slot.status !== undefined,
+    hasTurnDiff: slot.turnDiff !== undefined,
+    turnDiffFileCount: slot.turnDiff?.files.length,
+    hasOpenedPullRequests: (slot.openedPullRequests?.length ?? 0) > 0,
+    folded: slot.folded
+  }
+  const height = estimateNativeChatRowHeight(content, chrome, typography)
+  // A second bar, above the row: as much again as the one below adds.
+  return slot.leadStatus === undefined
+    ? height
+    : 2 * height - estimateNativeChatRowHeight(content, { ...chrome, hasStatus: false }, typography)
 }

@@ -20785,6 +20785,7 @@
         "thinking": "思考中",
         "workingFor": "{{value0}} 処理中",
         "workedFor": "{{value0}} で完了",
+        "continuedFor": "さらに {{value0}} 作業",
         "interruptedAfter": "{{value0}} 後に中断",
         "failedAfter": "{{value0}} 後に失敗",
         "toggleDetails": "ターンの詳細を切り替えます"

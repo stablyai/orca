@@ -28,6 +28,9 @@ export type NativeChatTranscriptSlotsInput = {
   /** Turns the reader opened. Everything else with a duration stays folded. */
   expandedTurnKeys: ReadonlySet<string>
   isWorking: boolean
+  /** False where the turn's own header draws its status (a group turn): its rows draw no bars, so
+   *  the person's messages mid-turn don't cut it and it folds whole. */
+  turnBarsOnRows?: boolean
   /** Session-level lifecycle, which outlives a transcript that never said "done". */
   lifecycleWorking: boolean
   /** Only where `/btw` listens: find the newest response that offers Fork. */

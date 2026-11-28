@@ -7,27 +7,20 @@ import { buildNativeChatTranscriptSlots } from '../slots/native-chat-transcript-
 import { NativeChatTranscriptRowStack } from '../../viewport/virtualization/NativeChatTranscriptItems'
 import { NativeChatTurnActivityLine } from '../../messages/reasoning/NativeChatTurnActivityLine'
 
-// Anchored to now so the live clock reads the same in every shot: 6m 14s of work, then the
-// follow-up 16s ago.
+// Anchored to now so the live clock reads about the same in every shot: the follow-up came 6m 14s
+// in, a second one 26s later, and the newest arrived about 20s ago.
 const now = Date.now()
-const start = now - 390_000
+const start = now - 420_000
 const at = (seconds: number): number => start + seconds * 1000
 
 const row = (
   id: string,
   role: NativeChatMessage['role'],
   seconds: number,
-  blocks: NativeChatMessage['blocks'],
-  extra: Partial<NativeChatMessage> = {}
-): NativeChatMessage => ({
-  id,
-  role,
-  source: 'transcript',
-  timestamp: at(seconds),
-  blocks,
-  ...extra
-})
+  blocks: NativeChatMessage['blocks']
+): NativeChatMessage => ({ id, role, source: 'transcript', timestamp: at(seconds), blocks })
 
+const say = (text: string): NativeChatMessage['blocks'][number] => ({ type: 'text', text })
 const call = (id: string, command: string): NativeChatMessage['blocks'][number] => ({
   type: 'tool-call',
   callId: id,
@@ -39,29 +32,34 @@ const result = (id: string): NativeChatMessage['blocks'][number] => ({
   callId: id,
   output: 'ok'
 })
+const command = (id: string, seconds: number, text: string): NativeChatMessage[] => [
+  row(id, 'assistant', seconds, [call(`c-${id}`, text)]),
+  row(`${id}-result`, 'tool', seconds + 1, [result(`c-${id}`)])
+]
 
 const ask = row('ask', 'user', 0, [
-  { type: 'text', text: 'The release scan took 6 hours and is still not done. Find out why.' }
-])
-const followUp = row('follow-up', 'user', 374, [
-  { type: 'text', text: 'Debug deeply and do a deep analysis based on all relevant transcripts.' }
+  say('The release scan took 6 hours and is still not done. Find out why.')
 ])
 const beforeFollowUp = [
-  row('read-1', 'assistant', 5, [call('c1', 'orca orchestration check --json')]),
-  row('read-1-result', 'tool', 6, [result('c1')]),
-  row('read-2', 'assistant', 40, [
-    { type: 'text', text: 'The scan is waiting on two workers that never reported.' },
-    call('c2', 'rg -n "worker_done" scan.log')
+  ...command('check', 5, 'orca orchestration check --json'),
+  row('read', 'assistant', 40, [
+    say('The scan is waiting on two workers that never reported.'),
+    call('c-read', 'rg -n "worker_done" scan.log')
   ]),
-  row('read-2-result', 'tool', 41, [result('c2')])
+  row('read-result', 'tool', 41, [result('c-read')])
 ]
-const afterFollowUp = [
-  row('read-3', 'assistant', 380, [call('c3', 'ls ~/transcripts')]),
-  row('read-3-result', 'tool', 381, [result('c3')])
-]
-const answer = row('answer', 'assistant', 600, [
-  { type: 'text', text: 'Both workers hit a usage limit and exited without reporting.' }
+const followUp = row('follow-up', 'user', 374, [
+  say('Debug deeply and do a deep analysis based on all relevant transcripts.')
 ])
+const afterFollowUp = command('transcripts', 380, 'ls ~/transcripts')
+const again = row('again', 'user', 400, [say('Also check the worker logs.')])
+const afterAgain = command('logs', 405, 'tail -n 200 worker.log')
+const answer = row('answer', 'assistant', 600, [
+  say('Both workers hit a usage limit and exited without reporting.')
+])
+
+const oneFollowUp = [ask, ...beforeFollowUp, followUp, ...afterFollowUp]
+const twoFollowUps = [...oneFollowUp, again, ...afterAgain]
 
 const context: Omit<NativeChatTranscriptRowContext, 'expandedTurnIds' | 'onToggleExpandedTurn'> = {
   turnBot: { name: 'Release bot', src: null, fallback: 'R' },
@@ -122,36 +120,64 @@ function Transcript({
   )
 }
 
-const expandFirstTurnBar = (frame: HTMLElement): void => {
-  frame.querySelector<HTMLButtonElement>('button[data-native-chat-turn-status="settled"]')?.click()
+/** Opens every turn bar that folds work, top to bottom. */
+const expandAll = (frame: HTMLElement): void => {
+  for (const button of frame.querySelectorAll<HTMLButtonElement>(
+    'button[data-native-chat-turn-status="settled"]'
+  )) {
+    button.click()
+  }
 }
 
 /** The person wrote into the running turn: the work before it reads settled, the clock runs below it. */
 export const runningWithFollowUp = defineFixture({
   width: 720,
-  render: () => (
-    <Transcript messages={[ask, ...beforeFollowUp, followUp, ...afterFollowUp]} running />
-  )
+  render: () => <Transcript messages={oneFollowUp} running />
 })
 
 /** The same, with the work before the follow-up opened from its row. */
 export const runningWithFollowUpExpanded = defineFixture({
   width: 720,
-  render: () => (
-    <Transcript messages={[ask, ...beforeFollowUp, followUp, ...afterFollowUp]} running />
-  ),
-  interact: expandFirstTurnBar
+  render: () => <Transcript messages={oneFollowUp} running />,
+  interact: expandAll
 })
 
-/** That turn once it ends: one "Worked for" with the whole turn's time. */
+/** Two messages into the running turn: each finished stretch has its own row. */
+export const runningWithTwoFollowUps = defineFixture({
+  width: 720,
+  render: () => <Transcript messages={twoFollowUps} running />
+})
+
+/** Only the running turn's tail is loaded, and it starts on the person's follow-up. */
+export const runningFromFollowUp = defineFixture({
+  width: 720,
+  render: () => <Transcript messages={[followUp, ...afterFollowUp]} running />
+})
+
+/** That turn once it ends: the whole turn on its own row, the stretch after the follow-up under it. */
 export const settledWithFollowUp = defineFixture({
   width: 720,
-  render: () => (
-    <Transcript
-      messages={[ask, ...beforeFollowUp, followUp, ...afterFollowUp, answer]}
-      running={false}
-    />
-  )
+  render: () => <Transcript messages={[...oneFollowUp, answer]} running={false} />
+})
+
+/** The same with every row opened. */
+export const settledWithFollowUpExpanded = defineFixture({
+  width: 720,
+  render: () => <Transcript messages={[...oneFollowUp, answer]} running={false} />,
+  interact: expandAll
+})
+
+/** A settled turn with two messages written into it. */
+export const settledWithTwoFollowUps = defineFixture({
+  width: 720,
+  render: () => <Transcript messages={[...twoFollowUps, answer]} running={false} />
+})
+
+/** The same with every row opened. */
+export const settledWithTwoFollowUpsExpanded = defineFixture({
+  width: 720,
+  render: () => <Transcript messages={[...twoFollowUps, answer]} running={false} />,
+  interact: expandAll
 })
 
 /** A running turn nobody wrote into. */
