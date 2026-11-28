@@ -78,7 +78,9 @@ export function codexSharedLeaseRelayView(
     ownServer: false,
     releaseOutput: () => {},
     endedWork: () => undefined,
-    openWork: () => undefined
+    openWork: () => undefined,
+    // A kept run whose reopen couldn't read its state goes on as it was, for a later reopen.
+    ...(lease.restored ? { keep: async () => lease.endQuietly() } : {})
   }
 }
 

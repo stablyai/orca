@@ -41,6 +41,12 @@ async function readPages(
   throw new Error(`codex ${method} listed more pages than Orca reads`)
 }
 
+/** Every thread the server has loaded; throws when the listing fails. */
+export async function listCodexLoadedThreads(reads: Reads): Promise<Set<string>> {
+  const ids = await readPages(reads, 'thread/loaded/list', {})
+  return new Set(ids.filter((id): id is string => typeof id === 'string'))
+}
+
 /** One loaded thread's open work: its running turn, and each background terminal's command. */
 async function readThreadWork(reads: Reads, threadId: string): Promise<CodexSharedOpenWork> {
   const thread = readRecord(
@@ -75,9 +81,7 @@ async function readThreadWork(reads: Reads, threadId: string): Promise<CodexShar
  */
 export async function readCodexSharedOpenWork(reads: Reads): Promise<CodexSharedOpenWork | null> {
   try {
-    const loaded = (await readPages(reads, 'thread/loaded/list', {})).filter(
-      (id): id is string => typeof id === 'string'
-    )
+    const loaded = [...(await listCodexLoadedThreads(reads))]
     // The first failure settles it (unknown), so a hung server never waits out every read.
     let failed = false
     const read = await mapSettledWithConcurrency(loaded, CODEX_SHARED_METADATA_READS, (threadId) =>

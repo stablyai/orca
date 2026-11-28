@@ -4,6 +4,7 @@ import { readRecord } from '../codex-item-field-readers'
 import { readCodexTurnStatus } from '../codex-structured-thread-facts'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexSharedServerTurns } from './codex-shared-server-turns'
+import { listCodexLoadedThreads } from './codex-shared-server-open-work'
 
 /** How long an interrupted turn has to report turn/completed before Stop counts it unproven. */
 const TURN_STOP_PROOF_MS = 10_000
@@ -35,6 +36,18 @@ export async function seedRunningCodexTurns(
   return settled.every((read) => read.status === 'fulfilled')
 }
 
+/** Marks the chat's threads the server has loaded as live; on a failed listing, every one of them
+ *  (true either way: the turn reads that follow decide). */
+async function markLoadedThreadsLive(reads: Reads, lease: CodexSharedServerLease): Promise<true> {
+  const loaded = await listCodexLoadedThreads(reads).catch(() => null)
+  for (const threadId of lease.threads) {
+    if (!loaded || loaded.has(threadId)) {
+      lease.liveThreads.add(threadId)
+    }
+  }
+  return true
+}
+
 /** Interrupts every turn on the chat's threads, the helpers it announces meanwhile included;
  *  the chat keeps routing them until each turn is proven over. */
 export async function stopCodexLeaseWriter(
@@ -46,9 +59,12 @@ export async function stopCodexLeaseWriter(
   reads: Reads = physical
 ): Promise<boolean> {
   const options = { timeoutMs: requestTimeoutMs }
+  // A kept run's helpers came back through history, not live frames: those still loaded here may
+  // run (a quiet one sends nothing), so they're stopped like live ones.
   const seeded =
     !lease.restored ||
-    (await seedRunningCodexTurns(reads, lease.liveThreads, turns, requestTimeoutMs))
+    ((await markLoadedThreadsLive(reads, lease)) &&
+      (await seedRunningCodexTurns(reads, lease.liveThreads, turns, requestTimeoutMs)))
   // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
   await turns.waitUntil(
     () => lease.pendingOpens.size === 0 && !turns.anyStartPending([...lease.threads]),
