@@ -10,7 +10,7 @@ import type {
 } from '../creation/worktree-base-directory-poller'
 import { createSingleFlight } from './single-flight-promise'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
-import { onWorktreeActivity } from './worktree-activity-signal'
+import { onRepoActivity } from './worktree-activity-signal'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import { createNativeUpgradePoll } from './worktree-git-common-native-upgrade-poll'
 
@@ -54,8 +54,8 @@ export async function startGitCommonNarrowWatch(
       armExistencePoll()
     },
     onEvents,
-    subscribeRepoActivity: onWorktreeActivity,
-    ownsRepo: (repoId) => getRepos().has(repoId)
+    subscribeRepoActivity: onRepoActivity,
+    getRepoIds: () => getRepos().keys()
   })
 
   const stopExistencePoll = (): void => {
@@ -304,6 +304,7 @@ export async function startGitCommonNarrowWatch(
   await reconciliation.ensureStarted()
 
   return {
+    syncRepos: () => reconciliation.syncRepoIds(),
     unsubscribe: async () => {
       disposed = true
       stopExistencePoll()
