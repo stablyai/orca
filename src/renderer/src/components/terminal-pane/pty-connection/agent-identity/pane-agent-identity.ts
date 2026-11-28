@@ -32,7 +32,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     const entry = state.agentStatusByPaneKey.get(session.cacheKey)
     return entry?.state !== 'done' && Boolean(agentTypeToIconAgent(entry?.agentType))
   }
-  // One launch ladder serves finish confirmation, visible sampling and OSC color-reply suppression.
+  // One launch ladder serves finish confirmation and visible sampling. Color replies prefer this pane's own agent.
   const panePane = (): PaneLaunchAgentPaneSlice => ({
     worktreeId: session.deps.worktreeId,
     tabId: session.deps.tabId,

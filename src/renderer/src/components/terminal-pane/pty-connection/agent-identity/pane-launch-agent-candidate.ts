@@ -16,7 +16,7 @@ export type PaneLaunchAgentPaneSlice = {
   startup?: { command?: string; launchAgent?: string; initialAgentStatus?: { agent?: string } }
 }
 
-/** Share expected-agent precedence across finish confirmation, visible sampling and color-query policy; launch config may precede its identity. */
+/** Share expected-agent precedence across finish confirmation and visible sampling; launch config may precede its identity. */
 export function resolvePaneLaunchAgentCandidate(
   state: PaneLaunchAgentStoreSlice,
   pane: PaneLaunchAgentPaneSlice
@@ -43,10 +43,41 @@ export function resolvePaneLaunchTuiAgent(
   return isTuiAgent(candidate) ? candidate : null
 }
 
-// jcode queries colors before its input loop is ready; skip renderer replies like main ingress to avoid pre-typed composer text (#12112).
+function skipsOscColorQueryReplies(agent: string | null | undefined): boolean {
+  return agent === 'jcode' || agent === 'antigravity'
+}
+
+function recognizedStartupAgent(command: string | undefined): TuiAgent | null {
+  if (!command || command.length > COMMAND_TOKEN_SCAN_MAX_CHARS) {
+    return null
+  }
+  const agent = recognizeAgentLaunchCommand(command)?.agent
+  return isTuiAgent(agent) ? agent : null
+}
+
+// This pane's own launch evidence receives the reply; the tab can name another split (#51192).
+function paneOscColorQueryAgent(
+  state: PaneLaunchAgentStoreSlice,
+  pane: PaneLaunchAgentPaneSlice
+): TuiAgent | null {
+  if (isTuiAgent(pane.startup?.launchAgent)) {
+    return pane.startup.launchAgent
+  }
+  const initialAgent = pane.startup?.initialAgentStatus?.agent
+  if (isTuiAgent(initialAgent)) {
+    return initialAgent
+  }
+  const registered = state.agentLaunchConfigByPaneKey[pane.paneKey]?.identity?.agentType
+  if (isTuiAgent(registered)) {
+    return registered
+  }
+  return recognizedStartupAgent(pane.startup?.command) ?? resolvePaneLaunchTuiAgent(state, pane)
+}
+
+// jcode and agy paint an early OSC 10/11 reply as composer text (#12112, #51192).
 export function paneShouldAnswerOscColorQueries(
   state: PaneLaunchAgentStoreSlice,
   pane: PaneLaunchAgentPaneSlice
 ): boolean {
-  return resolvePaneLaunchTuiAgent(state, pane) !== 'jcode'
+  return !skipsOscColorQueryReplies(paneOscColorQueryAgent(state, pane))
 }

@@ -12,8 +12,8 @@ export function shouldForwardHeadlessTerminalQueryReply(
   if (launchAgent === 'grok') {
     return !XTVERSION_REPLY.test(reply)
   }
-  // jcode renders early OSC color replies as input (#12112); match renderer/startup suppression.
-  if (launchAgent === 'jcode') {
+  // jcode and agy paint an early OSC 10/11 reply as composer text (#12112, #51192).
+  if (launchAgent === 'jcode' || launchAgent === 'antigravity') {
     return !OSC_COLOR_QUERY_REPLY.test(reply)
   }
   return true
