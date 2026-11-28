@@ -102,6 +102,34 @@ describe('a local webhook call', () => {
     })
   })
 
+  it('keeps local calls not yet started in their own ledger across a switch to the cloud', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'local-webhooks-pipeline-'))
+    let account = 'local-webhooks'
+    const ledger = new WebhookHostLedger(
+      dir,
+      () => account,
+      () => new Set()
+    )
+    const call = (callId: string) => ({
+      callId,
+      hookId: 'wh_AAAAAAAAAAAAAAAA',
+      automationId: 'auto-1',
+      triggerId: 'rule-1',
+      occurredAt: 1,
+      epoch: 0
+    })
+    expect(ledger.receive(call('call_AAAAAAAAAAAAAAAAAAAA'), 1)).toBe(true)
+    // Signed in to Orca Cloud with local webhooks off: its ledger is written too.
+    account = 'cloud-account'
+    expect(ledger.receive(call('call_BBBBBBBBBBBBBBBBBBBB'), 2)).toBe(true)
+    account = 'local-webhooks'
+    expect(ledger.call('call_AAAAAAAAAAAAAAAAAAAA')).toMatchObject({ state: 'received' })
+    expect(ledger.call('call_BBBBBBBBBBBBBBBBBBBB')).toBeUndefined()
+    expect(JSON.parse(readFileSync(join(dir, 'webhook-host.json'), 'utf8'))).toMatchObject({
+      account: 'cloud-account'
+    })
+  })
+
   it("keeps a card's answer out of the ledger when local webhooks switched meanwhile", async () => {
     dir = mkdtempSync(join(tmpdir(), 'local-webhooks-pipeline-'))
     const store = new LocalWebhookStore(dir)

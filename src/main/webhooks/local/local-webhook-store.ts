@@ -35,7 +35,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const PREVIOUS_KEY_MS = DAY_MS
 // A sender's delivery id is remembered this long, so its resend is dropped.
 const REPLAY_MS = DAY_MS
-// Queued calls are never pruned (pruneSettledCalls); past this many, no new one is taken.
+// Pending calls (queued, or handed over and not started) are never pruned (pruneSettledCalls); past
+// this many, no new one is taken.
 const QUEUED_PER_HOOK = 50
 
 export class LocalWebhookStore {
@@ -263,7 +264,8 @@ export class LocalWebhookStore {
       if (!current || keyEnded) {
         return null
       }
-      if (call.state === 'queued' && queuedCalls(data, hook.hookId).length >= QUEUED_PER_HOOK) {
+      const pending = data.calls.filter((entry) => entry.hookId === hook.hookId && isPending(entry))
+      if (call.state === 'queued' && pending.length >= QUEUED_PER_HOOK) {
         return 'queue_full'
       }
       data.calls.unshift(entry)

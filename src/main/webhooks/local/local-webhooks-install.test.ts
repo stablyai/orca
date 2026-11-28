@@ -12,7 +12,16 @@ import {
   localWebhookPublicUrlProblem
 } from '../../../shared/webhooks/local-webhook-settings'
 import { installLocalWebhooks, type LocalWebhooks } from './local-webhooks-install'
-import { listenOnLoopback } from './local-webhook.test-fixture'
+import { LocalWebhookStore } from './local-webhook-store'
+import { listenOnLoopback, webhookAutomation } from './local-webhook.test-fixture'
+
+const ENVELOPE = {
+  receivedAt: 1,
+  contentType: null,
+  headers: {},
+  body: { kind: 'text' as const, value: '' },
+  truncated: false
+}
 
 const freePort = async () => {
   const probe = createServer()
@@ -58,6 +67,11 @@ describe('local webhook settings', () => {
     expect(isLocalWebhookBindAddress('300.1.1.1')).toBe(false)
     expect(isLocalWebhookBindAddress('example.net')).toBe(false)
     expect(isLocalWebhookBindAddress('::\t1')).toBe(false)
+    // The URL parser would split these suffixes off; the listener's isIP refuses them.
+    for (const address of ['::1]/', '::1]#x', '::1]?x', '::1]:80/']) {
+      expect(isLocalWebhookBindAddress(address)).toBe(false)
+    }
+    expect(isLocalWebhookBindAddress('::ffff:127.0.0.1')).toBe(true)
   })
 
   it('takes only an IP literal or nothing as the listen address, so routing matches the listener', () => {
@@ -65,6 +79,7 @@ describe('local webhook settings', () => {
     expect(bind.safeParse('localhost').success).toBe(false)
     expect(bind.safeParse('').success).toBe(true)
     expect(bind.safeParse('::1').success).toBe(true)
+    expect(bind.safeParse('::1]:80/').success).toBe(false)
     // A name saved before this check still listens, and routes, on the default.
     expect(
       localWebhookConfig({ localWebhooksEnabled: true, localWebhooksBindAddress: 'localhost' })
@@ -156,6 +171,38 @@ describe('installLocalWebhooks', () => {
     })
     busy = undefined
     await expect.poll(reach).toBe(401)
+  })
+
+  it('leaves a queued call queued when local webhooks go off during a pass', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'local-webhooks-install-'))
+    const store = new LocalWebhookStore(dir)
+    const hook = await store.mint('op-1', 'auto-1', 'bot-1')
+    const local = await store.hook(hook.hookId)
+    if (!local) {
+      throw new Error('no hook')
+    }
+    await store.admit(local, { receivedAt: 1, state: 'queued' }, ENVELOPE)
+    busy = createServer()
+    const port = await listenOnLoopback(busy)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let settings: Partial<GlobalSettings> = { localWebhooksEnabled: true, localWebhooksPort: port }
+    installed = installLocalWebhooks({
+      userDataPath: dir,
+      settings: () => settings,
+      onSettingsChanged: () => () => {},
+      automations: () => [webhookAutomation(hook)],
+      bots: () => [{ id: 'bot-1' }],
+      modeChanged: () => {}
+    })
+    let received = 0
+    installed.attach(() => ++received > 0)
+    // Off once the pass has started, before it reads the queued calls.
+    settings = {}
+    await expect
+      .poll(() => warn.mock.calls.some(([text]) => String(text).includes('could not reach')))
+      .toBe(true)
+    expect(received).toBe(0)
+    expect(await new LocalWebhookStore(dir).queued()).toHaveLength(1)
   })
 
   it('tries the queued calls again after a failed read, and never after stop', async () => {

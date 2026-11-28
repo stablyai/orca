@@ -15,6 +15,11 @@ import {
 export type { LedgerCall, LedgerCallState, LedgerHook, LedgerIntent }
 
 const LEDGER_FILE = 'webhook-host.json'
+
+/** The host ledger's account while local webhooks are on; its calls are this host's alone. */
+export const LOCAL_WEBHOOKS_ACCOUNT = 'local-webhooks'
+// Local webhooks keep their own ledger files, so a cloud account's ledger never overwrites calls only this host holds.
+const LOCAL_LEDGER_DIR = 'local-webhooks'
 // Kept as long as the cloud keeps call rows.
 export const WEBHOOK_LEDGER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -29,18 +34,33 @@ export class WebhookHostLedger {
   private stored: StoredLedger | null = null
   // The last write failed: memory holds what disk lacks, so the next save writes even if unchanged.
   private unsaved = false
-  private readonly newerAgentHooks: NewerAgentHooks<LedgerHook>
+  private readonly filings = new Map<string, NewerAgentHooks<LedgerHook>>()
 
   constructor(
     private readonly userDataPath: string,
     private readonly account: () => string | null,
-    newerAgentBotIds: () => ReadonlySet<string>
-  ) {
-    this.newerAgentHooks = new NewerAgentHooks(userDataPath, newerAgentBotIds, LedgerHook)
+    private readonly newerAgentBotIds: () => ReadonlySet<string>
+  ) {}
+
+  private dir(account: string): string {
+    return account === LOCAL_WEBHOOKS_ACCOUNT
+      ? join(this.userDataPath, LOCAL_LEDGER_DIR)
+      : this.userDataPath
   }
 
-  private get path(): string {
-    return join(this.userDataPath, LEDGER_FILE)
+  private path(account: string): string {
+    return join(this.dir(account), LEDGER_FILE)
+  }
+
+  /** The newer-agent hooks file beside the account's ledger file. */
+  private newerAgentHooks(account: string): NewerAgentHooks<LedgerHook> {
+    const dir = this.dir(account)
+    let filing = this.filings.get(dir)
+    if (!filing) {
+      filing = new NewerAgentHooks(dir, this.newerAgentBotIds, LedgerHook)
+      this.filings.set(dir, filing)
+    }
+    return filing
   }
 
   /** The signed-in account's ledger; another account's is dropped, since its cloud owns those calls. */
@@ -50,9 +70,9 @@ export class WebhookHostLedger {
       return null
     }
     if (this.stored?.account !== account) {
-      const loaded = this.read()
+      const loaded = this.read(account)
       const ledger = loaded?.account === account ? loaded : emptyLedger(account)
-      ledger.hooks = this.newerAgentHooks.load(account, ledger.hooks)
+      ledger.hooks = this.newerAgentHooks(account).load(account, ledger.hooks)
       this.stored = ledger
     }
     return this.stored
@@ -61,14 +81,14 @@ export class WebhookHostLedger {
   /** Bots were written: a hook whose bot changed agents moves into the file older builds read, or out of it. */
   refile(): void {
     const ledger = this.ledger()
-    if (ledger && this.newerAgentHooks.unfiled(ledger.hooks)) {
+    if (ledger && this.newerAgentHooks(ledger.account).unfiled(ledger.hooks)) {
       this.write()
     }
   }
 
-  private read(): StoredLedger | null {
+  private read(account: string): StoredLedger | null {
     try {
-      const parsed = StoredLedger.safeParse(JSON.parse(readFileSync(this.path, 'utf8')))
+      const parsed = StoredLedger.safeParse(JSON.parse(readFileSync(this.path(account), 'utf8')))
       return parsed.success ? parsed.data : null
     } catch (error) {
       if (!isMissingFileError(error)) {
@@ -84,7 +104,8 @@ export class WebhookHostLedger {
       return
     }
     try {
-      this.newerAgentHooks.save(this.path, this.stored, false)
+      const { account } = this.stored
+      this.newerAgentHooks(account).save(this.path(account), this.stored, false)
       this.unsaved = false
     } catch (error) {
       this.unsaved = true
@@ -100,7 +121,7 @@ export class WebhookHostLedger {
     }
     const next = structuredClone(ledger)
     change(next)
-    this.newerAgentHooks.save(this.path, next, true)
+    this.newerAgentHooks(next.account).save(this.path(next.account), next, true)
     this.stored = next
     return true
   }

@@ -88,7 +88,7 @@ const ENVELOPE = {
   body: { kind: 'text' as const, value: '' },
   truncated: false
 }
-/** A call the host was handed: pending, but no longer queued, so the caps may let its envelope go. */
+/** A call the host was handed: pending, but no longer queued. */
 const handedOver = async (local: Parameters<LocalWebhookStore['admit']>[0]) => {
   const call = await store.admit(local, { receivedAt: now, state: 'queued' }, ENVELOPE)
   if (!call || call === 'queue_full') {
@@ -138,8 +138,9 @@ describe('local webhook routes', () => {
       body: { kind: 'text' as const, value: '' },
       truncated: false
     }
+    // Started, so settled: the caps may let their envelopes go.
     for (let index = 0; index < 50; index++) {
-      await handedOver(local)
+      await store.start((await handedOver(local)).callId, `run-${index}`)
     }
     removal.fail = true
     try {
@@ -205,17 +206,17 @@ describe('local webhook routes', () => {
     expect(await reopened.call(taken?.callId ?? '')).toMatchObject({ state: 'queued' })
   })
 
-  it('counts every call a stop-now rotation cancels, also one whose envelope was let go', async () => {
+  it('counts every call a stop-now rotation cancels', async () => {
     const hook = await mint()
     const local = await store.hook(hook.hookId)
     if (!local) {
       throw new Error('no hook')
     }
-    for (let index = 0; index < 51; index++) {
+    for (let index = 0; index < 50; index++) {
       await handedOver(local)
     }
     expect(await value(routes.rotate(hook.hookId, { operationId: 'r-1', stopNow: true }))).toEqual({
-      cancelledCalls: 51
+      cancelledCalls: 50
     })
   })
 
@@ -241,6 +242,33 @@ describe('local webhook routes', () => {
       expect(await store.envelope(callId)).not.toBeNull()
     }
     expect(await store.queued()).toHaveLength(50)
+  })
+
+  it('keeps calls handed over but not started past the caps, and counts them as waiting', async () => {
+    const hook = await mint()
+    const local = await store.hook(hook.hookId)
+    if (!local) {
+      throw new Error('no hook')
+    }
+    const handed: string[] = []
+    for (let index = 0; index < 50; index++) {
+      const call = await store.admit(local, { receivedAt: now, state: 'queued' }, ENVELOPE)
+      if (!call || call === 'queue_full') {
+        throw new Error('not taken')
+      }
+      await store.handOverQueued(call.callId, () => true)
+      handed.push(call.callId)
+    }
+    expect(await store.admit(local, { receivedAt: now, state: 'queued' }, ENVELOPE)).toBe(
+      'queue_full'
+    )
+    for (let index = 0; index < 200; index++) {
+      await store.admit(local, { receivedAt: now, state: 'ignored' }, null)
+    }
+    for (const callId of handed) {
+      expect(await store.call(callId)).toMatchObject({ state: 'delivered' })
+      expect(await store.envelope(callId)).not.toBeNull()
+    }
   })
 
   it('updates the last call only for that call, also one taken in the same millisecond', async () => {

@@ -216,11 +216,12 @@ export async function loadLocalWebhooks(path: string): Promise<StoredLocalWebhoo
 const CALLS_PER_HOOK = 200
 const ENVELOPES_PER_HOOK = 50
 
-/** Past the caps, the hook's oldest settled calls let their envelope go, then go; queued ones stay,
- *  since their senders were told they were taken. Returns the calls whose envelope went. */
+/** Past the caps, the hook's oldest settled calls let their envelope go, then go; pending ones (queued,
+ *  or handed over and not started) stay, since their senders were told they were taken and the
+ *  pending cap bounds them. Returns the calls whose envelope went. */
 export function pruneSettledCalls(data: StoredLocalWebhooks, hookId: string): LocalCall[] {
   const own = data.calls.filter((call) => call.hookId === hookId)
-  const settled = (call: LocalCall) => call.state !== 'queued'
+  const settled = (call: LocalCall) => !isPending(call)
   const stale = own.slice(ENVELOPES_PER_HOOK).filter((call) => call.hasEnvelope && settled(call))
   for (const call of stale) {
     call.hasEnvelope = false

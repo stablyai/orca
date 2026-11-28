@@ -20,8 +20,7 @@ import { LocalWebhookStore } from './local-webhook-store'
 
 type TriggerDelivery = Extract<ConnectorDelivery, { kind: 'trigger' }>
 
-/** The host ledger's account while local webhooks are on; its calls are this host's alone. */
-export const LOCAL_WEBHOOKS_ACCOUNT = 'local-webhooks'
+export { LOCAL_WEBHOOKS_ACCOUNT } from '../webhook-host-ledger'
 
 const SETTING_KEYS = [
   'localWebhooksEnabled',
@@ -73,7 +72,13 @@ export function installLocalWebhooks(deps: {
     store,
     automations: deps.automations,
     bots: deps.bots,
-    receive: (delivery, event) => receive(delivery, event),
+    // Turned off during a pass: the handoff fails, so its call stays queued for when it is on again.
+    receive: (delivery, event) => {
+      if (!config()) {
+        throw new Error('local webhooks are off')
+      }
+      return receive(delivery, event)
+    },
     retryLater: () => {
       if (stopped) {
         return
