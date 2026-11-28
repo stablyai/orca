@@ -1,6 +1,6 @@
 import {
   isCompactContinuationUserTurnText,
-  isKnownHarnessInjectedUserTurnText
+  userTaskTextAfterHarnessEnvelope
 } from '../agent-session/journal/harness-injected-user-turns'
 import { capOpenCodeHookText } from './listener-limits'
 import type { HookListenerState } from './listener-state'
@@ -98,16 +98,17 @@ export function resolvePrompt(
   promptText: string,
   options?: { resetOnNewTurn?: boolean }
 ): string {
-  // Known harness turns retain the user prompt; unknown tags still open real turns.
-  if (isKnownHarnessInjectedUserTurnText(promptText)) {
+  // Harness-only turns retain the user prompt; a task after leading envelopes is real input.
+  const taskText = userTaskTextAfterHarnessEnvelope(promptText)
+  if (promptText && !taskText) {
     return state.lastPromptByPaneKey.get(paneKey) ?? ''
   }
   if (options?.resetOnNewTurn) {
     state.lastPromptByPaneKey.delete(paneKey)
   }
-  if (promptText) {
-    state.lastPromptByPaneKey.set(paneKey, promptText)
-    return promptText
+  if (taskText) {
+    state.lastPromptByPaneKey.set(paneKey, taskText)
+    return taskText
   }
   return state.lastPromptByPaneKey.get(paneKey) ?? ''
 }

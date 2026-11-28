@@ -1,4 +1,5 @@
 import { MARINE_CREATURES } from '../../../worktree/naming/marine-creatures'
+import { stripKnownHarnessEnvelope } from '../../../agent-session/journal/harness-injected-user-turns'
 
 // Bound generated leaves after generation; leave prompts general so user naming instructions own style.
 export const MAX_BRANCH_NAME_WORDS = 4
@@ -97,6 +98,13 @@ export function branchNameContextFromChanges(changes: BranchNameChanges): Branch
   return { firstPrompt: sections.join('\n\n'), fromChanges: true }
 }
 
+/** Naming source text: change summaries stay trim-only; user prompts drop leading harness envelopes. */
+export function branchNameSourceText(context: BranchNameWorkContext): string {
+  return context.fromChanges
+    ? context.firstPrompt.trim()
+    : stripKnownHarnessEnvelope(context.firstPrompt)
+}
+
 /** Share naming prompts across local/SSH. Keep defaults general for user Source Control AI/template guidance; enforce Git safety/length after generation via sanitizeBranchSlug. */
 export function buildBranchNamePrompt(context: BranchNameWorkContext, customPrompt = ''): string {
   const sections: string[] = []
@@ -115,7 +123,7 @@ export function buildBranchNamePrompt(context: BranchNameWorkContext, customProm
   )
   sections.push(
     context.fromChanges ? 'Changes so far:' : 'User request:',
-    context.firstPrompt.trim()
+    branchNameSourceText(context)
   )
   const assistant = context.assistantMessage?.trim()
   if (assistant) {
