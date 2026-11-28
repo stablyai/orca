@@ -79,14 +79,16 @@ export async function applyJournalSqlWriteRequest(
   }
 }
 
-/** A custody page neither reads nor changes fork stages, so it takes no fork snapshot. */
+/** Sweep reads (claim checks, custody pages) never touch fork stages, so take no fork snapshot. */
 export function journalSqlLeavesForksAlone(request: JournalSqlWriteRequest): boolean {
   const { command } = request
   return (
     command.type === 'effects' &&
     command.effects.length > 0 &&
     command.effects.every(
-      (effect) => effect.kind === 'sweep' && effect.operation.kind === 'legacy-custody'
+      (effect) =>
+        effect.kind === 'sweep' &&
+        (effect.operation.kind === 'legacy-custody' || effect.operation.kind === 'unclaimed')
     )
   )
 }
