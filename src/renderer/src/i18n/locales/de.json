@@ -22166,7 +22166,6 @@
         "action": "Ab dieser Antwort abzweigen",
         "pending": "Chat wird abgezweigt…",
         "checking": "Es wird geprüft, ob dieser Chat abgezweigt werden kann…",
-        "tooltip": "Ab dieser Antwort abzweigen. Der neue Chat enthält diese vollständige Antwort bis zum Ende des Durchgangs.",
         "unconfirmed": "{{agent}} konnte das Abzweigen nicht bestätigen",
         "unconfirmedDetail": "Der Chat wurde möglicherweise dennoch geöffnet. Prüfe den Sitzungsverlauf, bevor du erneut abzweigst.",
         "failed": "{{agent}} konnte diesen Chat nicht abzweigen",

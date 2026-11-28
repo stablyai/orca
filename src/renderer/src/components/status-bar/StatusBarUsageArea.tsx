@@ -126,7 +126,8 @@ export function StatusBarUsageArea({
                   )}
                   aria-label={t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
                   aria-describedby={alertDescription ? alertDescriptionId : undefined}
-                  title={remoteOwner?.label}
+                  aria-description={remoteOwner?.label}
+                  title={usageMode === 'compact' ? undefined : remoteOwner?.label}
                 >
                   {alertDescription ? (
                     <span id={alertDescriptionId} className="sr-only">

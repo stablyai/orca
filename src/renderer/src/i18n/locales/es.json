@@ -21740,7 +21740,6 @@
         "action": "Crear una rama desde esta respuesta",
         "pending": "Creando una rama de este chat…",
         "checking": "Comprobando si se puede crear una rama de este chat…",
-        "tooltip": "Crear una rama desde esta respuesta. El nuevo chat incluye esta respuesta completa, hasta el final de su turno.",
         "unconfirmed": "{{agent}} no pudo confirmar la creación de la rama",
         "unconfirmedDetail": "Es posible que se haya abierto. Revisa el historial de sesiones antes de volver a intentarlo.",
         "failed": "{{agent}} no pudo crear una rama de este chat",

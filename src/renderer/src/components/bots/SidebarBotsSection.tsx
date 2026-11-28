@@ -206,7 +206,6 @@ export function SidebarBotsSection({
               working: preview.working
             }
           ),
-          tooltip: collapseLabel,
           onToggle: toggleBots
         }}
         titleAccessory={

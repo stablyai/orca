@@ -42,11 +42,7 @@ export function NativeChatForkAction({
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {disabledReason ??
-          t(
-            'components.native-chat.fork.tooltip',
-            'Fork from this response. The new chat includes this whole response, up to the end of its turn.'
-          )}
+        {disabledReason ?? label}
       </TooltipContent>
     </Tooltip>
   )

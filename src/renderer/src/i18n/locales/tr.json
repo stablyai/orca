@@ -22541,7 +22541,6 @@
         "hostUnsupported": "Bu ana makinede eski bir Orca sürümü çalışıyor. Ana makinedeki Orca’yı güncelleyip tekrar deneyin.",
         "pending": "Bu sohbet çatallanıyor…",
         "checking": "Bu sohbetin çatallanıp çatallanamayacağı kontrol ediliyor…",
-        "tooltip": "Bu yanıttan çatallayın. Yeni sohbet bu yanıtın tamamını turun sonuna kadar içerir.",
         "unconfirmed": "{{agent}} çatallamayı doğrulayamadı",
         "unconfirmedDetail": "Yine de açılmış olabilir. Yeniden çatallamadan önce Oturum Geçmişini kontrol edin.",
         "failed": "{{agent}} bu sohbeti çatallayamadı",

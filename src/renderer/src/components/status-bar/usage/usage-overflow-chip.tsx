@@ -1,4 +1,5 @@
 import React from 'react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useTranslate } from '@/i18n/use-translate'
@@ -21,23 +22,31 @@ export function UsageOverflowChip({
   const names = hidden
     .map((p) => formatUsageChipTitle(p, getStatusBarUsageSections(p, 'compact', t)[0], display, t))
     .join(', ')
-  return (
-    <span
-      title={[
-        t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
-          value0: names
-        }),
-        hostLabel
-      ]
-        .filter(Boolean)
-        .join('\n')}
-      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground"
-    >
+  const label = [
+    t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
+      value0: names
+    }),
+    hostLabel
+  ]
+    .filter(Boolean)
+    .join('\n')
+  const chip = (
+    <span className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground">
       {/* Why: reserve the widest count so the measured width doesn't depend on how many are hidden. */}
       <span aria-hidden="true" className="invisible col-start-1 row-start-1">
         +{providerCount}
       </span>
       <span className="col-start-1 row-start-1">+{Math.max(1, hidden.length)}</span>
     </span>
+  )
+  return hidden.length > 0 ? (
+    <Tooltip>
+      <TooltipTrigger asChild>{chip}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4} className="whitespace-pre-line">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    chip
   )
 }

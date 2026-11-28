@@ -22619,7 +22619,6 @@
         "action": "Fork from this response",
         "pending": "Forking this chat…",
         "checking": "Checking whether this chat can fork…",
-        "tooltip": "Fork from this response. The new chat includes this whole response, up to the end of its turn.",
         "unconfirmed": "{{agent}} couldn't confirm the fork",
         "unconfirmedDetail": "It may have opened anyway. Check Session History before forking again.",
         "failed": "{{agent}} couldn't fork this chat",
