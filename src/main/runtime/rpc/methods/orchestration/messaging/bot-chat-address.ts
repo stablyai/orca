@@ -15,6 +15,8 @@ import type { Bot } from '../../../../../../shared/bot-types'
 import { resolveItem } from '../../bots-items-write-support'
 import { mayReachBot, refuse } from './bot-recipient'
 import { sendToBot } from './bot-request-send'
+import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { assertNoStatusFiles } from './bot-status-note'
 import { itemMailFilesBody, withItemMailFiles } from './bot-item-mail-files'
 
 /** `--chat new`: the receiving bot starts a new chat for a handoff or question. */
@@ -42,6 +44,8 @@ export async function routeBotMail(
   }
 ): Promise<{ to: string; body?: string } | { receipt: unknown }> {
   const chat = await chatForItem(context.runtime, input.to, input.params)
+  const callerSessionId = sessionCallerOf(context.orchestrationCaller)?.sessionId
+  assertNoStatusFiles(context.runtime, input, input.sender, callerSessionId)
   const mail = await withItemMailFiles(context.runtime, input)
   const newChat = chat === BOT_NEW_CHAT
   let to = mail.to

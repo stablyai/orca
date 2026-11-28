@@ -1,13 +1,26 @@
 // A bot's `send --type status` to another bot or its own other chat wakes no one: where its work
 // stands lives on an item, so Orca records it there and the other bot reads it when it needs it.
-import { BOT_ITEM_OPEN_STATUSES, BOT_ITEM_STATUSES } from '../../../../../../shared/bots/bot-items'
+import {
+  BOT_ITEM_OPEN_STATUSES,
+  isOpenBotItemStatus
+} from '../../../../../../shared/bots/bot-items'
+import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
+import type { OrchestrationPartyIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import { botRequestRefusal, botNotFound } from '../../../../../bots/bot-request-policy'
+import { botOfSession } from '../../../../../bots/bot-session-tabs'
 import { BOT_ITEM_MAIL_ID_PREFIX } from '../../../../../../shared/bots/bot-item-note-runs'
 import type { Bot } from '../../../../../../shared/bot-types'
 import type { BotItemRecord } from '../../../../../bots/bot-items-schema'
 import type { BotItemsRemote } from '../../../../../bots/bot-items-ops'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { ActingSender } from './bot-recipient'
+import {
+  creatorSession,
+  refuse,
+  toOtherChat,
+  type ActingSender,
+  type ReceivingBot
+} from './bot-recipient'
 
 export type BotStatusNoteReceipt = {
   recorded: { item: number; bot: string }
@@ -21,28 +34,77 @@ type StatusMail = { subject: string; body?: string; item?: string; images?: read
 
 const CANDIDATES_SHOWN = 6
 
-/** A bot's own status send (not an item comment or paired mail, which carry their id) is recorded
- *  instead of sent; null for any other mail. */
+const STATUS_FILES_REFUSAL =
+  'A status is recorded on an item, which takes no files this way. Nothing was sent. Attach them with `orca bot item comment <n> --text "..." --file <path>`.'
+
+/** Whether a bot's own status send (not an item comment, paired mail or a group room's) is recorded
+ *  instead of sent. */
+function isRecordedStatus(
+  mail: { params: { type?: string }; messageId?: string; to: string },
+  sessionId: string | null | undefined
+): boolean {
+  return (
+    mail.params.type === 'status' &&
+    mail.messageId === undefined &&
+    !mail.to.includes('bot-group-member-') &&
+    !isBotGroupMemberSession(sessionId)
+  )
+}
+
+/** Refused before `--file` attachments are claimed: a recorded status takes none. */
+export function assertNoStatusFiles(
+  runtime: OrcaRuntimeService,
+  mail: { params: { type?: string; files?: readonly string[] }; messageId?: string; to: string },
+  sender: OrchestrationPartyIdentity,
+  callerSessionId: string | undefined
+): void {
+  if (!mail.params.files?.length) {
+    return
+  }
+  const creator = creatorSession(runtime.getOrchestrationDb(), sender).sessionId
+  const sessionId = creator ?? callerSessionId
+  if (!sessionId || !botOfSession(runtime.bots, sessionId) || !isRecordedStatus(mail, sessionId)) {
+    return
+  }
+  throw new OrchestrationError('invalid_argument', STATUS_FILES_REFUSAL)
+}
+
+/** A bot's own status send is recorded instead of sent, after the checks any bot request passes;
+ *  null for any other mail. */
 export async function statusNoteInstead(
   context: { runtime: OrcaRuntimeService; recordMutationReceipt?: (receipt: unknown) => void },
-  mail: { params: StatusMail & { type?: string }; messageId?: string; images?: readonly string[] },
+  mail: {
+    params: StatusMail & { type?: string }
+    messageId?: string
+    to: string
+    images?: readonly string[]
+  },
   acting: ActingSender,
-  target: Bot
+  receiving: ReceivingBot
 ): Promise<{ receipt: BotStatusNoteReceipt; nudge: () => void } | null> {
+  const { runtime } = context
   const { bot, sessionId } = acting
-  if (mail.params.type !== 'status' || mail.messageId !== undefined || !bot || !sessionId) {
+  if (!bot || !sessionId || !isRecordedStatus(mail, sessionId)) {
     return null
   }
-  context.runtime.bots.assertEnabled()
-  const receipt = await recordBotStatusNote(
-    context.runtime,
-    { ...acting, bot, sessionId },
-    target,
-    {
-      ...mail.params,
-      images: mail.images
-    }
-  )
+  const target = runtime.bots.list().find((entry) => entry.id === receiving.bot.id)
+  const refusal = target
+    ? botRequestRefusal({
+        enabled: runtime.bots.enabled(),
+        target,
+        senderBotId: bot.id,
+        toOtherChat: toOtherChat(receiving, sessionId),
+        type: 'status',
+        fromWorker: acting.worker !== undefined
+      })
+    : botNotFound(receiving.bot.name, runtime.bots.list())
+  if (refusal || !target) {
+    return refuse(refusal ?? botNotFound(receiving.bot.name, runtime.bots.list()))
+  }
+  const receipt = await recordBotStatusNote(runtime, { ...acting, bot, sessionId }, target, {
+    ...mail.params,
+    images: mail.images
+  })
   context.recordMutationReceipt?.(receipt)
   return { receipt, nudge: () => {} }
 }
@@ -54,10 +116,7 @@ async function recordBotStatusNote(
   mail: StatusMail
 ): Promise<BotStatusNoteReceipt> {
   if (mail.images?.length) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      'A status is recorded on an item, which takes no files this way. Nothing was sent. Attach them with `orca bot item comment <n> --text "..." --file <path>`.'
-    )
+    throw new OrchestrationError('invalid_argument', STATUS_FILES_REFUSAL)
   }
   const store = runtime.botItems.store()
   const item = await statusItem(runtime, store, acting, mail.item)
@@ -80,6 +139,13 @@ async function statusItem(
   acting: ActingSender & { bot: Bot; sessionId: string },
   named: string | undefined
 ): Promise<BotItemRecord> {
+  const chatOpen = (limit = CANDIDATES_SHOWN) =>
+    store.list({
+      botId: acting.bot.id,
+      chatIds: [runtime.botItems.chatRootOf(acting.sessionId)],
+      statuses: BOT_ITEM_OPEN_STATUSES,
+      limit
+    })
   if (named !== undefined) {
     const trimmed = named.trim()
     const item = /^\d+$/.test(trimmed) ? await store.byNumber(Number(trimmed)) : undefined
@@ -89,49 +155,58 @@ async function statusItem(
         `No item ${trimmed} on this computer, so nothing was recorded. \`orca bot item list\` lists yours.`
       )
     }
+    if (!isOpenBotItemStatus(item.status)) {
+      const open = await chatOpen()
+      const others = open.items.length > 0 ? ` Open items in this chat: ${listed(open)}.` : ''
+      throw new OrchestrationError(
+        'item_closed',
+        `Item ${item.number} is closed, so nothing was recorded.${others}`
+      )
+    }
     return item
   }
-  const own = (item: BotItemRecord | null | undefined): item is BotItemRecord =>
-    item?.ownerBotId === acting.bot.id
   if (acting.worker) {
-    const { items: linked } = await store.list({
+    const linked = await store.list({
       botId: acting.bot.id,
       link: { kind: 'dispatch', ref: acting.worker },
-      statuses: BOT_ITEM_STATUSES,
+      statuses: BOT_ITEM_OPEN_STATUSES,
       limit: CANDIDATES_SHOWN
     })
-    if (linked.length > 0) {
+    if (linked.items.length > 0) {
       return pickOne(linked)
     }
   }
   const woken = itemUidOfRequest(acting.turn.actingOnRequestId)
   const wokenItem = woken ? await store.get(woken) : null
-  if (own(wokenItem)) {
+  if (wokenItem?.ownerBotId === acting.bot.id && isOpenBotItemStatus(wokenItem.status)) {
     return wokenItem
   }
-  const { items } = await store.list({
-    botId: acting.bot.id,
-    chatIds: [runtime.botItems.chatRootOf(acting.sessionId)],
-    statuses: BOT_ITEM_OPEN_STATUSES,
-    limit: CANDIDATES_SHOWN
-  })
-  return pickOne(items)
+  return pickOne(await chatOpen())
 }
 
-function pickOne(items: readonly BotItemRecord[]): BotItemRecord {
+type OpenItems = Awaited<ReturnType<BotItemsRemote['list']>>
+
+/** The open items a read found, and how many there are when the read was cut off. */
+function listed({ items, counts }: OpenItems): string {
+  const total = BOT_ITEM_OPEN_STATUSES.reduce((sum, status) => sum + (counts[status] ?? 0), 0)
+  const names = items.map((item) => `${item.number} (${item.title})`).join(', ')
+  return total > items.length ? `${names} (showing ${items.length} of ${total})` : names
+}
+
+function pickOne(open: OpenItems): BotItemRecord {
+  const { items } = open
   if (items.length === 1) {
     return items[0]!
   }
   if (items.length === 0) {
     throw new OrchestrationError(
       'invalid_argument',
-      'A status is recorded on the item it is about, and this chat has no open item. Nothing was sent. Add or pick an item (`orca bot item add --title "..."`, then `orca bot item comment <n> --text "..."`), or use --type question or --type handoff if the other bot needs to act.'
+      'No open item to record this status on, so nothing was sent. If the other bot needs to act, use --type question or --type handoff; otherwise there is nothing to send.'
     )
   }
-  const listed = items.map((item) => `${item.number} (${item.title})`).join(', ')
   throw new OrchestrationError(
     'invalid_argument',
-    `A status is recorded on the item it is about, and this chat has several open items: ${listed}. Nothing was sent. Comment on the right one: \`orca bot item comment <n> --text "..."\`, or send again with --item <n>.`
+    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. Comment on the right one: \`orca bot item comment <n> --text "..."\`.`
   )
 }
 

@@ -87,7 +87,7 @@ export async function sendToBot(
   if (!acting) {
     return null
   }
-  const note = await statusNoteInstead(context, mail, acting, receiving.bot)
+  const note = await statusNoteInstead(context, mail, acting, receiving)
   if (note) {
     return note
   }

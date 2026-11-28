@@ -1,5 +1,6 @@
 // The bots on this computer as another bot sees them: what each is for, where it is linked, and the
 // address that mails it.
+import { AGENT_STATUS_RULE } from './orchestration/mailbox/agent-status-rule'
 import { botLinearWorkspaces, botSlackApps, type Bot, type BotAgent } from './bot-types'
 import { soulDescription } from './bot-soul'
 
@@ -154,7 +155,7 @@ export function formatBotRosterEntry(entry: BotRosterEntry): string {
 export const BOT_ROSTER_COMMANDS = [
   'Hand work to a bot (it takes over; its answer appears in its own Chat): orca orchestration send --to bot:<name> --type handoff --subject "<the task>" --body "<what bounds it; what a good result is>"',
   'Ask a bot for input (its answer comes back to you as mail and wakes you; you finish the job): orca orchestration send --to bot:<name> --type question --subject "<the question>"',
-  'Tell a bot something without giving it a job (nothing comes back): orca orchestration send --to bot:<name> --type status --subject "<the news>" --body "<what it means for its work>"',
+  `${AGENT_STATUS_RULE} Yours: orca bot item comment <n> --text "<where it stands>"; another bot's: orca bot item show <n>.`,
   'A bot on another computer: put its `--on <server>` before `--to`, as its "On:" line shows.'
 ].join('\n')
 

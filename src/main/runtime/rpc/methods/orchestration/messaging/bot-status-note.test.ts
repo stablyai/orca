@@ -91,7 +91,7 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
   it('refuses, naming the items, when the chat has several open items or none', async () => {
     await expect(
       mail.send(RANGER_THREAD, { to: 'bot:Docs', type: 'status', body: 'b' })
-    ).rejects.toThrow(/no open item.*orca bot item add/)
+    ).rejects.toThrow(/No open item.*--type question or --type handoff/)
     const first = items.get(addItem('One').uid)!.number
     const second = items.get(addItem('Two').uid)!.number
     await expect(
@@ -99,6 +99,24 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
     ).rejects.toThrow(new RegExp(`${second} \\(Two\\), ${first} \\(One\\).*orca bot item comment`))
     expect(messageCount()).toEqual({ n: 0 })
     expect(mail.runtime.notifyMessageArrived).not.toHaveBeenCalled()
+  })
+
+  it('skips closed items and keeps the same-chat refusal', async () => {
+    const closed = addItem('Done already').uid
+    items.close(closed, 'done', undefined, RANGER)
+    const { uid } = addItem('Still open')
+    await mail.send(RANGER_THREAD, { to: 'bot:Docs', type: 'status', body: 'b' })
+    expect(comments(uid)).toHaveLength(1)
+    expect(comments(closed)).toHaveLength(0)
+
+    await expect(
+      mail.send(RANGER_THREAD, {
+        to: `orca_session_id:${RANGER_THREAD}`,
+        type: 'status',
+        body: 'b'
+      })
+    ).rejects.toThrow(/already in that chat/)
+    expect(comments(uid)).toHaveLength(1)
   })
 
   it.each(['question', 'handoff'])('a %s still lands as mail and wakes the bot', async (type) => {
