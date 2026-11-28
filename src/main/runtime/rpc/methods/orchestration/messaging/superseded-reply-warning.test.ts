@@ -4,6 +4,8 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
+import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { supersededReplyWarning } from './superseded-reply-warning'
 
 const PANES: Record<string, string> = {
   term_lead: 'tab_a:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -76,5 +78,30 @@ describe('a reply to mail its sender has since followed up', () => {
 
     expect(await replyWarnings(followUp.id)).toEqual([])
     expect(await replyWarnings(first.id)).toEqual([])
+  })
+
+  it("counts a worker and its coordinator's newer mail on another thread, since it is one task", () => {
+    const dispatch = createRootDispatch(db, db.createTask({ spec: 'Sign in' }).id, 'term_helper')
+    const mailbox = `dispatch:${dispatch.id}`
+    const toWorker = mail(`run:${runId}`, mailbox, 'Sign-in in progress')
+    const newer = mail(`run:${runId}`, mailbox, 'Grok is signed in')
+    expect(supersededReplyWarning(db, toWorker)?.message).toContain(
+      `${newer.id} from run:${runId} on this task`
+    )
+
+    const report = (subject: string) =>
+      db.insertMessage({
+        from: 'term_helper',
+        to: `run:${runId}`,
+        subject,
+        runId,
+        senderDispatchId: dispatch.id
+      })
+    const older = report('Waiting on sign-in')
+    const later = report('Signed in, continuing')
+    db.insertMessage({ from: 'term_helper', to: `run:${runId}`, subject: 'Another task', runId })
+    expect(supersededReplyWarning(db, older)?.message).toContain(
+      `${later.id} from term_helper on this task`
+    )
   })
 })

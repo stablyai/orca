@@ -1,6 +1,6 @@
 import type { ChatMailPlace } from '../../../../../shared/connectors/external-conversation-link'
 import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-mail-sender'
-import { AGENT_MAIL_REPLY_RULE } from '../../../../../shared/orchestration/mailbox/agent-mail-reply-rule'
+import { AGENT_STATUS_RULE } from '../../../../../shared/orchestration/mailbox/agent-status-rule'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
@@ -220,7 +220,7 @@ export function structuredMailMessage(input: {
 
 /** In a chat bound to a conversation, mail says where the bot's answer lands: there for its own
  *  workers' reports and other bots' answers to its asks, else Orca. Peer agent mail whose answer
- *  stays in Orca also carries the agent-mail reply rule; owner item mail and mail answered in a
+ *  stays in Orca also carries the agent status and mail rule; owner item mail and mail answered in a
  *  thread never do, so a person's instruction never reads as "answer only if asked".
  *  Returns the fullest note first, then one without the rule. */
 function withConversationNotes(
@@ -245,7 +245,7 @@ function withConversationNotes(
   if (sender === BOT_ITEM_MAIL_SENDER || bound?.answersThere) {
     return [placed]
   }
-  const rule = `[${AGENT_MAIL_REPLY_RULE}]`
+  const rule = `[Agent mail. ${AGENT_STATUS_RULE}]`
   return [[{ type: 'text', text: `${text}\n\n${place ? `${rule}\n${place}` : rule}` }], placed]
 }
 
