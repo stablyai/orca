@@ -29301,7 +29301,7 @@
       "newThreadTab": "建立討論串",
       "items": {
         "orNames": "{{names}} 或 {{last}}",
-        "emptyBotsNeedsYou": "{{names}} 暫無需要你的項目",
+        "emptyBotsNeedsYou": "{{names}} 暫無需要你的事項",
         "emptyBots": "沒有來自 {{names}} 的事項",
         "emptyTitle": "此群組還沒有事項",
         "filterNamed": "篩選事項，目前篩選條件：{{filter}}",
