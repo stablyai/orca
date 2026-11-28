@@ -47,6 +47,7 @@ function showStatus(status: CursorAccountStatus): void {
 afterEach(() => {
   cleanup()
   cursorUsage = null
+  vi.restoreAllMocks()
 })
 
 // Incident replay: the macOS Keychain didn't answer in time; the login is there.
@@ -80,6 +81,22 @@ it('keeps last known usage without a raw failure reason while it cannot check', 
   showStatus(unchecked)
   expect(await screen.findByText('Last known usage — couldn’t refresh just now.')).toBeTruthy()
   expect(screen.queryByText(/the latest refresh failed/)).toBeNull()
+})
+
+it('says it cannot check, not signed out, when the status call itself fails', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  Object.assign(window, {
+    api: {
+      cursorAccounts: {
+        getStatus: async () => {
+          throw new Error('IPC channel closed')
+        }
+      }
+    }
+  })
+  render(<CursorAccountsSection />)
+  expect(await screen.findByText(CANT_CHECK)).toBeTruthy()
+  expect(screen.queryByText('No Cursor sign-in found on this computer')).toBeNull()
 })
 
 it('says no sign-in was found when the keychain definitively has none', async () => {

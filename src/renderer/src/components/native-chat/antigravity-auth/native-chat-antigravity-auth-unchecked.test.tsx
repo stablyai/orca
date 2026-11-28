@@ -12,7 +12,7 @@ import {
   useNativeChatAntigravityAuth
 } from './native-chat-antigravity-auth'
 
-let detection: AntigravityChatAuthDetection
+let detection: AntigravityChatAuthDetection | null
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client', () => ({
@@ -98,6 +98,16 @@ it('never starts a sign-in when the Google login could not be checked', async ()
     { kind: 'local' },
     expect.objectContaining({ method: 'oauth-personal' })
   )
+  expect(startAntigravityChatSignIn).not.toHaveBeenCalled()
+})
+
+// The host's first detection hasn't arrived (or an older host sends none): nothing is known.
+it('never starts a sign-in while there is no detection at all', async () => {
+  detection = null
+  renderSwitch()
+  // Without a detection Orca can't rule out running chats, so it asks before switching.
+  fireEvent.click(await screen.findByRole('button', { name: 'Switch' }))
+  await waitFor(() => expect(toast.success).toHaveBeenCalled())
   expect(startAntigravityChatSignIn).not.toHaveBeenCalled()
 })
 
