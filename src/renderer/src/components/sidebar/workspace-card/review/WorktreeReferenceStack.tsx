@@ -194,7 +194,8 @@ function ReferencePeekRow({
       <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground [&>svg]:size-3.5">
         <ReferenceGlyph item={item} details={details} />
       </span>
-      <span className="max-w-[45%] shrink-0 truncate font-medium tabular-nums">
+      {/* Why: caps the key at the row minus the title's 25% and the icon and gaps, at any width. */}
+      <span className="max-w-[calc(75%-2.375rem)] shrink-0 truncate font-medium tabular-nums">
         {workspaceAttachmentReferenceLabel(item, PEEK_LABELS)}
       </span>
       <span className="min-w-[25%] flex-1 truncate text-muted-foreground">{detail?.title}</span>
