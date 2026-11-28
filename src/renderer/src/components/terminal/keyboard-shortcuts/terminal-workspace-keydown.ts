@@ -31,6 +31,7 @@ import {
 } from './agent-tab-shortcut-launch'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
 import type { TerminalActivationController } from '../tab-lifecycle/use-terminal-activation-actions'
+import { ownTabsHiddenIn } from '@/components/bots/teammate-tabs/viewed-tab-list'
 
 export function handleTerminalWorkspaceKeyDown(
   event: KeyboardEvent,
@@ -55,6 +56,7 @@ export function handleTerminalWorkspaceKeyDown(
   }
   const context = getKeybindingContext(event.target)
   const floatingWorkspaceFocused = isFloatingWorkspaceKeyTarget(event.target)
+  const ownTabsHidden = !floatingWorkspaceFocused && ownTabsHiddenIn(activeWorktreeId)
   const matchShortcut = (actionId: KeybindingActionId): boolean =>
     keybindingMatchesAction(actionId, event, shortcutPlatform, keybindings, {
       context,
@@ -214,8 +216,10 @@ export function handleTerminalWorkspaceKeyDown(
   }
   if (!event.repeat && matchShortcut('tab.closeAll')) {
     event.preventDefault()
-    notifyTerminalCapture('tab.closeAll')
-    handleCloseAllFiles()
+    if (!ownTabsHidden) {
+      notifyTerminalCapture('tab.closeAll')
+      handleCloseAllFiles()
+    }
     return
   }
   if (

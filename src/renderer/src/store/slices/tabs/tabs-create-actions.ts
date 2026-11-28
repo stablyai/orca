@@ -1,4 +1,5 @@
 import { releaseUnreferencedEditorContent } from '../editor/tabs/editor-tab-retirement'
+import { leaveViewedTabList } from '@/components/bots/teammate-tabs/viewed-tab-list'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
@@ -179,6 +180,9 @@ export function createTabsCreateActions(
           ])
         }
       })
+      if ((init?.activate ?? true) && init?.recordFocus !== false) {
+        leaveViewedTabList(worktreeId)
+      }
       if (replacedEditorId) {
         releaseUnreferencedEditorContent(get, replacedEditorId)
       }
@@ -271,6 +275,9 @@ export function createTabsCreateActions(
             : {})
         }
       })
+      if (created && (init?.activate ?? true)) {
+        leaveViewedTabList(worktreeId)
+      }
       if (created && init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }

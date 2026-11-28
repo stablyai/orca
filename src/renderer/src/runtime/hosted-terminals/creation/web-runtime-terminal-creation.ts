@@ -1,4 +1,5 @@
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
+import { leaveViewedTabList } from '@/components/bots/teammate-tabs/viewed-tab-list'
 import { resolveWebRuntimeSessionEnvironmentId } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-routing'
 import { useAppStore } from '../../../store/index'
 import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
@@ -59,6 +60,10 @@ async function createWebRuntimeTerminal(
     return { status: 'failed', message: stoppedWslHostMessage(args.environmentId) }
   }
   const created = await create()
+  // A paired host's tab mirrors here without a local create: a person's create shows it all the same.
+  if (options.userAct && args.activate !== false && created.outcome.status === 'created') {
+    leaveViewedTabList(args.worktreeId)
+  }
   if (
     created.hostFailed &&
     created.outcome.status === 'failed' &&

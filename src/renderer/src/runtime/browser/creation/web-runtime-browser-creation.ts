@@ -1,4 +1,5 @@
 import { translate } from '../../../i18n/i18n'
+import { leaveViewedTabList } from '@/components/bots/teammate-tabs/viewed-tab-list'
 import { useAppStore } from '../../../store/index'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
@@ -284,6 +285,10 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
   }
   if (materializedPageId) {
     args.onMaterialized?.(materializedPageId)
+    // A paired host's page mirrors here without a local create: one shown on create is shown here.
+    if (context.shouldFocusOnCreate) {
+      leaveViewedTabList(args.worktreeId)
+    }
   }
   return true
 }

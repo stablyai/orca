@@ -1,4 +1,5 @@
 import { resolveTerminalCreatedShell } from './terminal-created-shell'
+import { leaveViewedTabList } from '@/components/bots/teammate-tabs/viewed-tab-list'
 import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/provider-notices/zcode-capability/zcode-missing-tui-notice'
 import { clearWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
@@ -297,6 +298,9 @@ export function createTerminalTabCreationActions(
           tab,
           store: { getState: get, setState: (patch) => set(patch), subscribe }
         })
+      }
+      if (options?.activate !== false && !options?.pendingActivationSpawn) {
+        leaveViewedTabList(worktreeId)
       }
       if (options?.initialPtyId) {
         // Why: a tab born with a live PTY (CLI/runtime create) wakes the workspace like any other bind.

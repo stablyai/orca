@@ -52,6 +52,24 @@ export function viewTabList(
   changed()
 }
 
+/** Whether this window shows another list (or a chat to read) over its own tabs in `homeKey`. */
+export function hasViewedTabList(homeKey: string): boolean {
+  return views.has(homeKey)
+}
+
+/** Whether this window's own tabs in `worktreeId` are covered by another list: closing or moving one
+ *  of them there, unseen, is no act of the person pressing keys. */
+export function ownTabsHiddenIn(worktreeId: string | null): boolean {
+  return worktreeId !== null && views.has(worktreeId)
+}
+
+/** One of this window's own tabs became the one shown, by a person's activation or create (the
+ *  store's `activateTab` and tab creates): its own tabs show again. A background update
+ *  (`recordFocus: false`) leaves a view as it is. */
+export function leaveViewedTabList(homeKey: string): void {
+  viewTabList(homeKey, null)
+}
+
 /** Shows a chat to read whose person this window can't tell, over its own tabs. */
 export function viewChatOfUnknownPerson(homeKey: string, sessionId: string): void {
   views.set(homeKey, { person: null, picked: { sessionId } })

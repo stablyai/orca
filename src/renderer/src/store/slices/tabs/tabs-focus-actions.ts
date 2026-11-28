@@ -6,6 +6,7 @@ import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-
 import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { withPreviewEnded } from './tab-preview-flag'
+import { leaveViewedTabList } from '@/components/bots/teammate-tabs/viewed-tab-list'
 import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview-tab-promotion'
 import {
   replaceRecordEntries,
@@ -94,6 +95,7 @@ export function createTabsFocusActions(
 
     activateTab: (tabId, opts) => {
       const promoted: Tab[] = []
+      let shownIn: string | null = null
       set((state) => {
         const scopedWorktreeId = opts?.worktreeId
         let found: ReturnType<typeof findTabAndWorktree>
@@ -110,11 +112,15 @@ export function createTabsFocusActions(
           return state
         }
         const { tab, worktreeId } = found
+        shownIn = opts?.recordFocus === false ? null : worktreeId
         if (ORCA_LAYOUT_OWNER_IS_MAIN && tab.isPreview && !opts?.preservePreview) {
           promoted.push(tab)
         }
         return tabActivationPatch(state, tab, worktreeId, opts, endsPreviewHere(state, worktreeId))
       })
+      if (shownIn !== null) {
+        leaveViewedTabList(shownIn)
+      }
       // Switch point: main makes the activated preview permanent; its frame clears the flag.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {
         promotePreviewTabsThroughLayoutOwner(get(), set, promoted)

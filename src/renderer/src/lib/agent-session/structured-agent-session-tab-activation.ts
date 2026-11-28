@@ -10,7 +10,6 @@ import {
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { viewTabList } from '@/components/bots/teammate-tabs/viewed-tab-list'
 
 export function findStructuredAgentSessionTab(
   unifiedTabsByWorktree: Readonly<Record<string, readonly Tab[]>>,
@@ -46,8 +45,6 @@ export function activateStructuredAgentSessionTab(args: {
   if (!tab) {
     return false
   }
-  // One of this window's own chats is shown: its own tabs show again, over any viewed list.
-  viewTabList(args.worktreeId, null)
   state.focusGroup(args.worktreeId, tab.groupId)
   state.activateTab(tab.id, { worktreeId: args.worktreeId })
   state.setActiveTabType('agent-session', args.worktreeId)

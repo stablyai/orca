@@ -15,6 +15,8 @@ import { renderHook } from '@testing-library/react'
 import type * as BotHosts from '@/lib/bot-hosts'
 import type * as BotCatalog from '@/lib/bot-catalog'
 import { claimChatMadeHere } from './shared-agent-chat-admission'
+import { openBotHomeTab } from '@/lib/bot-catalog'
+import { makeFolderWorkspace } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { useAppStore } from '@/store'
 import { makeTestBot } from '../../../../../main/bots/bot.test-fixture'
 
@@ -222,6 +224,36 @@ it('shows this window’s own tabs again when one of its own chats, already open
   expect(host.reveal).not.toHaveBeenCalled()
 })
 
+it('shows this window’s own tabs again for its own chat that is the active tab under the view', async () => {
+  host.bots = [shared]
+  const tab = {
+    id: 'own-side-tab',
+    entityId: 'own-side',
+    contentType: 'agent-session' as const,
+    agentSessionAgent: 'claude' as const,
+    worktreeId: HOME,
+    groupId: 'group',
+    executionHostId: 'local' as const,
+    label: 'Chat',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  }
+  useAppStore.setState({
+    activeWorktreeId: HOME,
+    activeView: 'terminal',
+    unifiedTabsByWorktree: { [HOME]: [tab] },
+    groupsByWorktree: {
+      [HOME]: [{ id: 'group', worktreeId: HOME, activeTabId: tab.id, tabOrder: [tab.id] }]
+    },
+    activeGroupIdByWorktree: { [HOME]: 'group' }
+  })
+  viewTabList(HOME, { accountId: MATE.accountId })
+  openBotSession(shared, 'own-side')
+  await vi.waitFor(() => expect(viewed()).toBeNull())
+})
+
 it('places this viewer’s own chat opened by a session an earlier /clear of it left', async () => {
   // Their chat ran S1, then S2, now S3; the host answers for S2 with the chat it is in.
   host.rows.s2 = row('s1', undefined, 's3')
@@ -246,5 +278,16 @@ it('asks of the agent on the chat’s own host, never a same-id twin on another'
   host.bots = [pairedTwin, unshared]
   openBotSession(unshared, 'any-side')
   await vi.waitFor(() => expect(host.reveal).toHaveBeenCalledWith('any-side'))
+  expect(viewed()).toBeNull()
+})
+
+it('keeps the view when its own Home can’t open, and shows its own tabs once it does', async () => {
+  host.bots = [shared]
+  viewTabList(HOME, { accountId: MATE.accountId })
+  // Not in this window's catalog yet: the Home can't open.
+  expect(await openBotHomeTab(shared)).toBe(false)
+  expect(viewed()).toEqual({ person: { accountId: MATE.accountId }, picked: null })
+  useAppStore.setState({ folderWorkspaces: [makeFolderWorkspace({ id: 'home-1' })] })
+  expect(await openBotHomeTab(shared)).toBe(true)
   expect(viewed()).toBeNull()
 })
