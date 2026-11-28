@@ -40,6 +40,7 @@ import type { AppChromeLayout } from '../../app-shell/chrome/use-app-chrome-layo
 import type { FloatingWorkspacePanelState } from '../../components/floating-terminal/workspace/use-floating-workspace-panel'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { textInputOwnsComposition } from '../../../../shared/keybindings/text-input-shortcut-policy'
+import { selectFloatingWorkspaceShortcutsActive } from '@/store/slices/keybindings/floating-workspace-shortcuts-selector'
 import { isAgentTerminalPreviewTarget } from '../../components/dashboard/terminal-preview/agent-terminal-preview-target'
 
 /** Register window listeners once; each key event reads the latest committed shortcut state through a ref. */
@@ -50,6 +51,7 @@ export function useGlobalKeybindings(args: {
   const { layout, floatingWorkspace } = args
   const actions = useAppShortcutActions()
   const keybindings = useAppStore((s) => s.keybindings)
+  const floatingWorkspaceShortcutsActive = useAppStore(selectFloatingWorkspaceShortcutsActive)
   const terminalShortcutPolicy = useAppStore((s) => s.settings?.terminalShortcutPolicy)
   const pluginCommands = usePluginCommands()
 
@@ -57,7 +59,7 @@ export function useGlobalKeybindings(args: {
     activeView: layout.activeView,
     actions,
     creationLayoutActive: layout.creationLayoutActive,
-    floatingTerminalEnabled: floatingWorkspace.enabled,
+    floatingWorkspaceShortcutsActive,
     floatingTerminalOpen: floatingWorkspace.open,
     floatingVisibleTabCount: floatingWorkspace.visibleTabCount,
     keybindings,
@@ -99,7 +101,7 @@ export function useGlobalKeybindings(args: {
         activeWorktreeId,
         actions,
         creationLayoutActive,
-        floatingTerminalEnabled,
+        floatingWorkspaceShortcutsActive,
         floatingTerminalOpen,
         floatingVisibleTabCount,
         keybindings,
@@ -190,7 +192,7 @@ export function useGlobalKeybindings(args: {
       if (
         !floatingTerminalOpen &&
         matchShortcut('floatingWorkspace.maximize') &&
-        floatingTerminalEnabled
+        floatingWorkspaceShortcutsActive
       ) {
         input.preventDefault()
         runBuiltInOrReplacement('floatingWorkspace.maximize', openFloatingWorkspaceMaximized)
@@ -199,7 +201,14 @@ export function useGlobalKeybindings(args: {
 
       const matchOptions = { context, terminalShortcutPolicy }
       const targetYields = (actionId?: KeybindingActionId): boolean =>
-        globalShortcutTargetYields(input, shortcutPlatform, keybindings, matchOptions, actionId)
+        globalShortcutTargetYields(
+          input,
+          shortcutPlatform,
+          keybindings,
+          matchOptions,
+          actionId,
+          floatingWorkspaceShortcutsActive
+        )
       const matchAppShortcut = (actionId: KeybindingActionId): boolean =>
         matchShortcut(actionId) && !targetYields(actionId)
 
@@ -211,7 +220,8 @@ export function useGlobalKeybindings(args: {
           shortcutPlatform,
           keybindings,
           Boolean(activeWorktreeId),
-          matchOptions
+          matchOptions,
+          floatingWorkspaceShortcutsActive
         )
         if (pluginCommand) {
           input.preventDefault()

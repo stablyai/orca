@@ -1,3 +1,9 @@
+import { selectFloatingWorkspaceShortcutsActive } from '@/store/slices/keybindings/floating-workspace-shortcuts-selector'
+import {
+  inactiveFloatingWorkspaceActionIds,
+  isFloatingWorkspaceInSettings
+} from '../../../../../shared/settings/floating-workspace-cohort'
+import { isPluginReplacedActionDisclosed } from '@/lib/plugins/commands/plugin-command-floating-workspace'
 import { useId } from 'react'
 import { AlertTriangle, Check, Loader2, ShieldAlert } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
@@ -84,11 +90,23 @@ export function PluginInstallConsent({
   const capabilities = requested ? shownPluginCapabilities(requested, trust) : null
   const ready = capabilities !== null
   const overrides = useAppStore((state) => state.keybindings)
+  const floatingWorkspaceShortcutsActive = useAppStore(selectFloatingWorkspaceShortcutsActive)
+  const floatingWorkspaceInSettings = useAppStore((state) =>
+    isFloatingWorkspaceInSettings(state.settings)
+  )
   const platform = getShortcutPlatform()
   const conflicts = (shortcuts ?? []).flatMap((shortcut) => {
-    const replaced = shadowedKeybindingTitles(shortcut.key, platform, overrides)
+    const replaced = shadowedKeybindingTitles(
+      shortcut.key,
+      platform,
+      overrides,
+      inactiveFloatingWorkspaceActionIds(floatingWorkspaceShortcutsActive)
+    )
     return replaced.length > 0 ? [{ ...shortcut, replaced }] : []
   })
+  const disclosedReplacements = (replacements ?? []).filter((replacement) =>
+    isPluginReplacedActionDisclosed(replacement.action, floatingWorkspaceInSettings)
+  )
   return (
     <SecuritySurface>
       <section
@@ -153,7 +171,7 @@ export function PluginInstallConsent({
               </span>
             </p>
           ))}
-          {(replacements ?? []).map((replacement) => (
+          {disclosedReplacements.map((replacement) => (
             <p key={replacement.action} className="flex items-start gap-2 text-status-warning-text">
               <AlertTriangle className="mt-1 size-4 shrink-0" />
               <span>

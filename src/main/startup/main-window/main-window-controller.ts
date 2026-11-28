@@ -155,6 +155,8 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
     revealInBackground,
     title: state.devInstanceIdentity?.name ?? app.name,
     getKeybindings: () => keybindings.getOverrides(),
+    getFloatingWorkspaceShortcutsActive: () =>
+      keybindings.committedFloatingWorkspaceShortcutsActive(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (state.mainWindow?.webContents.id === webContentsId) {
         markExpectedRendererReload(webContentsId)

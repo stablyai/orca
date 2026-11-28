@@ -2030,9 +2030,6 @@
             "creation": {
               "f3785eddc2": "新規ブラウザタブ"
             }
-          },
-          "availability": {
-            "web": "フローティングワークスペースはお使いのコンピューター上で動作するため、Orca デスクトップアプリでのみ利用できます。"
           }
         }
       },
@@ -2786,8 +2783,7 @@
         "automationsTitle": "自動化",
         "automationsDescription": "Agent の作業をスケジュールし、自動化をサイドバーに表示するかどうかを選択します。",
         "shareSkillsTitle": "スキルを共有する",
-        "shareSkillsDescription": "非公開リンクを使用してスキルを共有してください。持っている人なら誰でもインストールできます。",
-        "floatingWorkspaceWebDescription": "グローバルターミナルと markdown タブ。"
+        "shareSkillsDescription": "非公開リンクを使用してスキルを共有してください。持っている人なら誰でもインストールできます。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -16507,8 +16503,7 @@
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "フローティングワークスペースを表示",
             "4cb418b991": "フローティングワークスペースを表示、新規アクティビティ",
-            "5785dd9148": "フローティングワークスペースを最小限に抑える",
-            "bfe7809a70": "{{value0}} フローティングワークスペース ({{value1}})"
+            "5785dd9148": "フローティングワークスペースを最小限に抑える"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "最小化",

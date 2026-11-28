@@ -3739,8 +3739,7 @@
         "automationsTitle": "Automações",
         "automationsDescription": "Agende o trabalho dos agentes e escolha se Automações aparece na barra lateral.",
         "shareSkillsTitle": "Compartilhar Skills",
-        "shareSkillsDescription": "Compartilhe suas skills com um link não listado. Qualquer pessoa que o tiver pode instalá-las.",
-        "floatingWorkspaceWebDescription": "Abas globais de terminal e markdown."
+        "shareSkillsDescription": "Compartilhe suas skills com um link não listado. Qualquer pessoa que o tiver pode instalá-las."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "A colagem é muito grande."
@@ -3881,9 +3880,6 @@
             "creation": {
               "f3785eddc2": "Nova Aba do Navegador"
             }
-          },
-          "availability": {
-            "web": "O espaço de trabalho flutuante é executado no seu próprio computador, então só está disponível no app desktop do Orca."
           }
         }
       },
@@ -20721,8 +20717,7 @@
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Mostrar espaço de trabalho flutuante",
             "4cb418b991": "Mostrar espaço de trabalho flutuante, nova atividade",
-            "5785dd9148": "Minimizar espaço de trabalho flutuante",
-            "bfe7809a70": "{{value0}} espaço de trabalho flutuante ({{value1}})"
+            "5785dd9148": "Minimizar espaço de trabalho flutuante"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "Minimizar",

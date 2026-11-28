@@ -2784,9 +2784,6 @@
             "creation": {
               "f3785eddc2": "Neuer Browser-Tab"
             }
-          },
-          "availability": {
-            "web": "Der schwebende Arbeitsbereich läuft auf deinem eigenen Computer und ist daher nur in der Orca-Desktop-App verfügbar."
           }
         }
       },
@@ -3540,8 +3537,7 @@
         "automationsTitle": "Automatisierungen",
         "automationsDescription": "Agentenaufgaben planen und festlegen, ob Automatisierungen in der Seitenleiste angezeigt werden.",
         "shareSkillsTitle": "Skills teilen",
-        "shareSkillsDescription": "Skills über einen nicht gelisteten Link teilen. Alle, die den Link haben, können sie installieren.",
-        "floatingWorkspaceWebDescription": "Globale Terminal- und Markdown-Tabs."
+        "shareSkillsDescription": "Skills über einen nicht gelisteten Link teilen. Alle, die den Link haben, können sie installieren."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Der einzufügende Inhalt ist zu groß."
@@ -17436,8 +17432,7 @@
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Schwebenden Arbeitsbereich anzeigen",
             "4cb418b991": "Schwebenden Arbeitsbereich anzeigen, neue Aktivität",
-            "5785dd9148": "Schwebenden Arbeitsbereich minimieren",
-            "bfe7809a70": "Schwebenden Arbeitsbereich {{value0}} ({{value1}})"
+            "5785dd9148": "Schwebenden Arbeitsbereich minimieren"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "Minimieren",

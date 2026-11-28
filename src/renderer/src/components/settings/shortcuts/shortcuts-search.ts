@@ -1,3 +1,4 @@
+import { isFloatingWorkspaceKeybindingActionId } from '../../../../../shared/settings/floating-workspace-cohort'
 import { KEYBINDING_DEFINITIONS } from '../../../../../shared/keybindings/definitions'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
@@ -53,16 +54,20 @@ const getShortcutDefinitionSearchEntries = createLocalizedCatalog(() =>
 export function getShortcutsPaneSearchEntries(options?: {
   includeManagedBrowser?: boolean
   includeMobileEmulator?: boolean
+  /** Fail-closed: inactive floating actions have no rows, so search must not find them. */
+  includeFloatingWorkspace?: boolean
 }): SettingsSearchEntry[] {
   const includeManagedBrowser = options?.includeManagedBrowser !== false
   const includeMobileEmulator = options?.includeMobileEmulator !== false
+  const includeFloatingWorkspace = options?.includeFloatingWorkspace === true
   return [
     ...getShortcutDefinitionSearchEntries()
       .filter(
         ({ actionId }) =>
           (includeManagedBrowser ||
             (actionId !== 'tab.newBrowser' && actionId !== 'tab.newBrowserSplitRight')) &&
-          (includeMobileEmulator || actionId !== 'tab.newSimulator')
+          (includeMobileEmulator || actionId !== 'tab.newSimulator') &&
+          (includeFloatingWorkspace || !isFloatingWorkspaceKeybindingActionId(actionId))
       )
       .map(({ searchEntry }) => searchEntry),
     getTerminalShortcutPolicySearchEntry()

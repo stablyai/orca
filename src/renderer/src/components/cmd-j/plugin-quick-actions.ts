@@ -1,3 +1,4 @@
+import { isPluginCommandInactiveFloatingWorkspaceAlias } from '@/lib/plugins/commands/plugin-command-floating-workspace'
 import { Blocks, FilePlus } from 'lucide-react'
 import { isWorkspaceScopedPluginContext } from '../../../../shared/plugins/contributions/plugin-command-contribution'
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
@@ -40,30 +41,36 @@ export function buildPluginNewFileQuickActions(
 
 export function buildPluginQuickActions(
   commands: readonly ActivePluginCommand[],
+  floatingWorkspaceShortcutsActive = false,
   t: Translate = translate
 ): CmdJQuickAction[] {
-  return commands.map((command) => ({
-    id: `plugin:${command.pluginKey}/${command.id}`,
-    kind: 'action',
-    title: command.title,
-    description: t(
-      'auto.components.cmd.j.pluginQuickActions.description',
-      '{{value0}} plugin command',
-      { value0: command.pluginName }
-    ),
-    icon: Blocks,
-    verbKeywords: [
-      command.title,
-      command.pluginName,
-      t('auto.components.cmd.j.pluginQuickActions.keyword', 'plugin command')
-    ],
-    isAvailable: (context) =>
-      isWorkspaceScopedPluginContext(command.context) && !context.activeWorktreeId
-        ? { available: false, reason: 'no-active-workspace' }
-        : { available: true },
-    run: async () => {
-      await executePluginCommand(command, 'plugin-palette')
-      return { status: 'ok' }
-    }
-  }))
+  return commands
+    .filter(
+      (command) =>
+        !isPluginCommandInactiveFloatingWorkspaceAlias(command, floatingWorkspaceShortcutsActive)
+    )
+    .map((command) => ({
+      id: `plugin:${command.pluginKey}/${command.id}`,
+      kind: 'action',
+      title: command.title,
+      description: t(
+        'auto.components.cmd.j.pluginQuickActions.description',
+        '{{value0}} plugin command',
+        { value0: command.pluginName }
+      ),
+      icon: Blocks,
+      verbKeywords: [
+        command.title,
+        command.pluginName,
+        t('auto.components.cmd.j.pluginQuickActions.keyword', 'plugin command')
+      ],
+      isAvailable: (context) =>
+        isWorkspaceScopedPluginContext(command.context) && !context.activeWorktreeId
+          ? { available: false, reason: 'no-active-workspace' }
+          : { available: true },
+      run: async () => {
+        await executePluginCommand(command, 'plugin-palette')
+        return { status: 'ok' }
+      }
+    }))
 }

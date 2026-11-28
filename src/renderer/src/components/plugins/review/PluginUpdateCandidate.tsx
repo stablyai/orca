@@ -1,3 +1,4 @@
+import { isPluginReplacedActionDisclosed } from '@/lib/plugins/commands/plugin-command-floating-workspace'
 import { pluginBlockCopy } from '../presentation/plugin-block-copy'
 // @protected-copy
 import { Check, ChevronDown } from 'lucide-react'
@@ -140,7 +141,8 @@ export function updateChanges(
   preview: PluginMarketplaceHostInstallPreview,
   t: Translate,
   /** The installed manifest, when loaded: names the file types a grown editor reaches. */
-  installedManifest?: EditorManifest | null
+  installedManifest?: EditorManifest | null,
+  floatingWorkspaceInSettings = false
 ): {
   capabilities: string[]
   warnings: string[]
@@ -166,7 +168,10 @@ export function updateChanges(
   // Why named: "Commands" alone would hide that one takes over an Orca action.
   const replacements = growth?.contributions.includes('commands')
     ? preview.manifest.contributes.commands.flatMap((command) =>
-        command.replaces ? [replacementLine(command.title, command.replaces, t)] : []
+        command.replaces &&
+        isPluginReplacedActionDisclosed(command.replaces, floatingWorkspaceInSettings)
+          ? [replacementLine(command.title, command.replaces, t)]
+          : []
       )
     : []
   return {

@@ -287,8 +287,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   browserSshWorkspaceRoutingDisabledTargetIds?: string[]
   /** Targets whose forwarding preflight the user overrode via "Try anyway" (e.g. PermitOpen allows their sites); skips the probe, never changes egress. */
   browserSshWorkspaceRoutingProbeSkippedTargetIds?: string[]
-  /** One-shot migration flag for the floating-workspace default-on rollout; after migration an explicit off sticks. */
-  floatingTerminalDefaultedForAllUsers?: boolean
   /** Start dir for new floating-workspace terminal tabs; empty or '~' = home dir. */
   floatingTerminalCwd: string
   /** Picker-approved floating-workspace dirs reauthorized across restarts; renderer text alone must not populate this. */

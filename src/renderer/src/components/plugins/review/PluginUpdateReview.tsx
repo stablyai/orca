@@ -1,3 +1,5 @@
+import { isFloatingWorkspaceInSettings } from '../../../../../shared/settings/floating-workspace-cohort'
+import { useAppStore } from '@/store/index'
 import { Plus } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
@@ -50,7 +52,15 @@ export function PluginUpdateReview({
   const t = useTranslate()
   const installed = entry.installed
   const execution = pluginExecutionProfile(preview.manifest)
-  const { lines, compared } = pluginUpdateAdditions(preview, installedManifest, t)
+  const floatingWorkspaceInSettings = useAppStore((state) =>
+    isFloatingWorkspaceInSettings(state.settings)
+  )
+  const { lines, compared } = pluginUpdateAdditions(
+    preview,
+    installedManifest,
+    t,
+    floatingWorkspaceInSettings
+  )
   const checkboxId = `plugin-update-approve-${entry.pluginKey}`
 
   return (

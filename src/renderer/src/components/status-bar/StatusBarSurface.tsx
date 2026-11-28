@@ -1,3 +1,4 @@
+import { withShortcutHint } from '@/lib/keyboard/with-shortcut-hint'
 import { PanelsTopLeft } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -161,7 +162,7 @@ export function StatusBarSurface({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={6}>
-                  {floatingTerminalActionLabel} ({floatingTerminalShortcut})
+                  {withShortcutHint(floatingTerminalActionLabel, floatingTerminalShortcut)}
                 </TooltipContent>
               </Tooltip>
             </FloatingTerminalIconContextMenu>

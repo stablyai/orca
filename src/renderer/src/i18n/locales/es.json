@@ -2060,9 +2060,6 @@
             "creation": {
               "f3785eddc2": "Nueva pestaña del navegador"
             }
-          },
-          "availability": {
-            "web": "El espacio de trabajo flotante se ejecuta en tu propio equipo, así que solo está disponible en la app de escritorio de Orca."
           }
         }
       },
@@ -2818,8 +2815,7 @@
         "automationsTitle": "Automatizaciones",
         "automationsDescription": "Programa el trabajo del agente y elige si Automatizaciones aparece en la barra lateral.",
         "shareSkillsTitle": "Compartir skills",
-        "shareSkillsDescription": "Comparte tus skills con un enlace no listado. Cualquiera que lo tenga puede instalarlos.",
-        "floatingWorkspaceWebDescription": "Pestañas globales de terminal y markdown."
+        "shareSkillsDescription": "Comparte tus skills con un enlace no listado. Cualquiera que lo tenga puede instalarlos."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -16911,8 +16907,7 @@
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Mostrar espacio de trabajo flotante",
             "4cb418b991": "Mostrar espacio de trabajo flotante, nueva actividad",
-            "5785dd9148": "Minimizar el espacio de trabajo flotante",
-            "bfe7809a70": "{{value0}} espacio de trabajo flotante ({{value1}})"
+            "5785dd9148": "Minimizar el espacio de trabajo flotante"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "Minimizar",

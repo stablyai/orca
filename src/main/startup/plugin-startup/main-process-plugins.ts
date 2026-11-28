@@ -125,6 +125,8 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     getPluginConsents: () => normalizePluginConsents(store.getSettings().pluginConsents),
     getDevPluginPaths: () => normalizePluginIdList(store.getSettings().devPluginPaths),
     getKeybindings: () => core.keybindings?.getOverrides() ?? {},
+    getFloatingWorkspaceShortcutsActive: () =>
+      core.keybindings?.committedFloatingWorkspaceShortcutsActive() === true,
     getPluginKillListEntry: getPluginBlock,
     hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged),
     getDesktopFrameServices: getPluginDesktopFrameServices,

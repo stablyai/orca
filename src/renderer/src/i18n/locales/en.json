@@ -2788,7 +2788,7 @@
             }
           },
           "availability": {
-            "web": "The floating workspace runs on your own computer, so it is only available in the Orca desktop app."
+            "desktopOnly": "Only in the desktop app."
           }
         }
       },
@@ -3548,8 +3548,7 @@
         "automationsTitle": "Automations",
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
-        "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -17455,8 +17454,7 @@
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Show floating workspace",
             "4cb418b991": "Show floating workspace, new activity",
-            "5785dd9148": "Minimize floating workspace",
-            "bfe7809a70": "{{value0}} floating workspace ({{value1}})"
+            "5785dd9148": "Minimize floating workspace"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "Minimize",

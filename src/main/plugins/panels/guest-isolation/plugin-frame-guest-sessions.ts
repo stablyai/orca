@@ -40,6 +40,7 @@ export type PluginFrameGuestSource = {
   /** Kill-listed plugins also lose their frame storage. */
   isKillListed?: (pluginKey: string) => boolean
   getKeybindings?: () => KeybindingOverrides | undefined
+  getFloatingWorkspaceShortcutsActive?: () => boolean
 }
 
 let source: PluginFrameGuestSource | null = null
@@ -65,6 +66,7 @@ type PluginFrameGuestService = {
   options: {
     getPluginKillListEntry?: (pluginKey: string) => unknown
     getKeybindings?: () => KeybindingOverrides | undefined
+    getFloatingWorkspaceShortcutsActive?: () => boolean
   }
 }
 
@@ -77,7 +79,9 @@ export function bindPluginFrameGuests(service: PluginFrameGuestService): void {
     listPluginKeys: () =>
       service.getDiscovered().flatMap((plugin) => (plugin.pluginKey ? [plugin.pluginKey] : [])),
     isKillListed: (pluginKey) => Boolean(service.options.getPluginKillListEntry?.(pluginKey)),
-    getKeybindings: () => service.options.getKeybindings?.()
+    getKeybindings: () => service.options.getKeybindings?.(),
+    getFloatingWorkspaceShortcutsActive: () =>
+      service.options.getFloatingWorkspaceShortcutsActive?.() === true
   })
   // Re-binding (window reload, tests) must not stack listeners on the old service.
   stopServiceBinding?.()
@@ -230,7 +234,13 @@ function attachGuest(guest: WebContents, host: WebContents): boolean {
   if (frameKey === undefined) {
     return false
   }
-  installPluginFrameGuestPolicies(guest, frameKey, host, () => source?.getKeybindings?.())
+  installPluginFrameGuestPolicies(
+    guest,
+    frameKey,
+    host,
+    () => source?.getKeybindings?.(),
+    () => source?.getFloatingWorkspaceShortcutsActive?.() === true
+  )
   const pluginKey = pluginKeyByFrameKey.get(frameKey)
   if (pluginKey) {
     installPluginFrameGuestDiagnostics(guest, frameKey, pluginKey)

@@ -1,3 +1,6 @@
+import { selectFloatingWorkspaceShortcutsActive } from '@/store/slices/keybindings/floating-workspace-shortcuts-selector'
+import { inactiveFloatingWorkspaceActionIds } from '../../../../../shared/settings/floating-workspace-cohort'
+import { isPluginCommandInactiveFloatingWorkspaceAlias } from '@/lib/plugins/commands/plugin-command-floating-workspace'
 import { Fragment } from 'react'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
 import {
@@ -121,9 +124,21 @@ function CommandRow({
   const t = useTranslate()
   const overrides = useAppStore((state) => state.keybindings)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const floatingWorkspaceShortcutsActive = useAppStore(selectFloatingWorkspaceShortcutsActive)
   const platform = getShortcutPlatform()
   const binding = command.keybindings[0]
-  const shadowed = binding ? shadowedKeybindingTitles(binding.key, platform, overrides) : []
+  const shadowed = binding
+    ? shadowedKeybindingTitles(
+        binding.key,
+        platform,
+        overrides,
+        inactiveFloatingWorkspaceActionIds(floatingWorkspaceShortcutsActive)
+      )
+    : []
+  // An alias of an inactive floating action cannot run, so it offers no Run control.
+  const runnable =
+    command.live !== undefined &&
+    !isPluginCommandInactiveFloatingWorkspaceAlias(command.live, floatingWorkspaceShortcutsActive)
   const unavailableReason = command.live
     ? pluginCommandUnavailableReason(command.live, activeWorktreeId, t)
     : null
@@ -163,10 +178,10 @@ function CommandRow({
         )
       }
       trailing={
-        binding || command.live ? (
+        binding || runnable ? (
           <span className="flex items-center gap-2">
             {binding ? <ShortcutKeyCombo keys={formatKeybinding(binding.key, platform)} /> : null}
-            {command.live ? (
+            {runnable && command.live ? (
               <PluginContributionActionCommand
                 command={command.live}
                 unavailableReason={unavailableReason}

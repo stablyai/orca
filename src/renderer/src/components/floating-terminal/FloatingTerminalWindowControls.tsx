@@ -15,7 +15,10 @@ import {
   isTuiAgentEnabled
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { useTranslate } from '@/i18n/use-translate'
-import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import {
+  useFloatingWorkspaceShortcutLabel,
+  withShortcutHint
+} from '@/lib/keyboard/with-shortcut-hint'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -26,10 +29,6 @@ type FloatingTerminalWindowControlsProps = {
 const controlButtonClassName =
   'border-border bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-accent-foreground'
 
-function withShortcutHint(label: string, shortcutLabel: string | null): string {
-  return shortcutLabel ? `${label} (${shortcutLabel})` : label
-}
-
 export function FloatingTerminalWindowControls({
   maximized,
   onToggleMaximized,
@@ -39,8 +38,8 @@ export function FloatingTerminalWindowControls({
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
   const activateTab = useAppStore((s) => s.activateTab)
-  const maximizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.maximize')
-  const minimizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.minimize')
+  const maximizeShortcutLabel = useFloatingWorkspaceShortcutLabel('floatingWorkspace.maximize')
+  const minimizeShortcutLabel = useFloatingWorkspaceShortcutLabel('floatingWorkspace.minimize')
 
   const disabledTuiAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS

@@ -5,6 +5,7 @@ import type {
   KeybindingFileSnapshot,
   KeybindingOverrides
 } from '../../../../../shared/keybindings/types'
+import { isOlderKeybindingSnapshot } from '../../../../../shared/keybindings/keybinding-snapshot-generation'
 
 const EMPTY_KEYBINDINGS: KeybindingOverrides = {}
 
@@ -22,13 +23,14 @@ export type KeybindingsSlice = {
   revealKeybindingsFile: () => Promise<void>
 }
 
+// Every apply point goes through here, so no late reply can replace a newer publish.
 function applySnapshot(
   snapshot: KeybindingFileSnapshot
-): Pick<KeybindingsSlice, 'keybindings' | 'keybindingSnapshot'> {
-  return {
-    keybindings: snapshot.overrides,
-    keybindingSnapshot: snapshot
-  }
+): (state: AppState) => Partial<Pick<KeybindingsSlice, 'keybindings' | 'keybindingSnapshot'>> {
+  return (state) =>
+    isOlderKeybindingSnapshot(state.keybindingSnapshot, snapshot)
+      ? {}
+      : { keybindings: snapshot.overrides, keybindingSnapshot: snapshot }
 }
 
 export const createKeybindingsSlice: StateCreator<AppState, [], [], KeybindingsSlice> = (set) => ({

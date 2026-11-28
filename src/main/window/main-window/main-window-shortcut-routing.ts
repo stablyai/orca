@@ -151,6 +151,8 @@ export function installMainWindowShortcutRouting(args: {
       context: 'app',
       terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
     }
+    // Read after getKeybindings so predicate and map come from the same committed snapshot.
+    const floatingWorkspaceShortcutsActive = opts?.getFloatingWorkspaceShortcutsActive?.() === true
 
     if (textInputOwnsComposition(input)) {
       doubleTapDetector.reset()
@@ -176,7 +178,7 @@ export function installMainWindowShortcutRouting(args: {
           { type: 'keyDown', doubleTapModifier: detected.modifier },
           process.platform,
           keybindings,
-          appShortcutContext
+          { ...appShortcutContext, floatingWorkspaceShortcutsActive }
         )
         if (
           doubleTapAction &&
@@ -215,12 +217,10 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     // Allowlist interception so readline control chords reach the PTY.
-    const action = resolveWindowShortcutAction(
-      input,
-      process.platform,
-      keybindings,
-      terminalShortcutContext
-    )
+    const action = resolveWindowShortcutAction(input, process.platform, keybindings, {
+      ...terminalShortcutContext,
+      floatingWorkspaceShortcutsActive
+    })
     if (!action) {
       return
     }

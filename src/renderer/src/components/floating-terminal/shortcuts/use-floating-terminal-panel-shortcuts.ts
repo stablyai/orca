@@ -1,3 +1,4 @@
+import { selectFloatingWorkspaceShortcutsActive } from '@/store/slices/keybindings/floating-workspace-shortcuts-selector'
 import { useCallback, useEffect, useRef } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { isTerminalPaneCloseChord } from '@/components/terminal-pane/input/keyboard/terminal-shortcut-policy'
@@ -113,7 +114,8 @@ export function useFloatingTerminalPanelShortcuts({
         platform,
         state.keybindings,
         matchOptions,
-        floatingChromeMatchOptions
+        floatingChromeMatchOptions,
+        { floatingWorkspaceShortcutsActive: selectFloatingWorkspaceShortcutsActive(state) }
       )
       if (panelShortcut === null) {
         return null

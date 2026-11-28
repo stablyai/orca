@@ -17,6 +17,10 @@ export type SettingsNavigationBuildOptions = {
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean
   showWorkspaceCardLayout: boolean
+  /** Frozen cohort: only profiles from before the new default keep the Floating Workspace section. */
+  floatingWorkspaceInSettings: boolean
+  /** From the keybinding snapshot, so Shortcuts search matches the listed rows. */
+  floatingWorkspaceShortcutsActive: boolean
   isDev: boolean
   /** Opt-in-only experiments stay searchable only while the user has them on. */
   optInOnlyExperiments: OptInOnlyExperimentVisibility

@@ -148,12 +148,18 @@ export function nativeZoomCommandMatchesKeybindings(
   )
 }
 
+export type WindowShortcutResolveOptions = KeybindingMatchOptions & {
+  /** Absent = inactive: the chord then resolves to whatever else owns it, or passes through. */
+  floatingWorkspaceShortcutsActive?: boolean
+}
+
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform,
   keybindings?: KeybindingOverrides,
-  options: KeybindingMatchOptions = {}
+  resolveOptions: WindowShortcutResolveOptions = {}
 ): WindowShortcutAction | null {
+  const { floatingWorkspaceShortcutsActive, ...options } = resolveOptions
   if (keybindingMatchesAction('worktree.history.back', input, platform, keybindings, options)) {
     return {
       type: 'worktreeHistoryNavigate',
@@ -168,7 +174,10 @@ export function resolveWindowShortcutAction(
     }
   }
 
-  if (keybindingMatchesAction('floatingTerminal.toggle', input, platform, keybindings, options)) {
+  if (
+    floatingWorkspaceShortcutsActive === true &&
+    keybindingMatchesAction('floatingTerminal.toggle', input, platform, keybindings, options)
+  ) {
     return { type: 'toggleFloatingTerminal' }
   }
 

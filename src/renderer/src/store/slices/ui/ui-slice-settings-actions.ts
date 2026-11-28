@@ -1,5 +1,6 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { isSettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
+import { isFloatingWorkspaceInSettings } from '../../../../../shared/settings/floating-workspace-cohort'
 
 export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
@@ -23,6 +24,11 @@ export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Parti
         if (import.meta.env.DEV) {
           throw new TypeError('openSettingsTarget received an invalid navigation target')
         }
+        return
+      }
+      // New profiles never get this section, so a link to it falls back to the default section.
+      if (target.pane === 'floating-workspace' && !isFloatingWorkspaceInSettings(get().settings)) {
+        set({ settingsNavigationTarget: null })
         return
       }
       set({ settingsNavigationTarget: target })

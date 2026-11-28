@@ -81,6 +81,7 @@ export function startBrowserExtensionSidePanelGuest(guest: Electron.WebContents)
     guest,
     resolveRenderer: resolveHost,
     getKeybindings: () => browserManager.getKeybindingOverrides(),
+    getFloatingWorkspaceShortcutsActive: () => browserManager.getFloatingWorkspaceShortcutsActive(),
     resolveWorktreeId: (pageId) => browserManager.getWorktreeIdForTab(pageId) ?? null,
     resolveWorkspaceId: (pageId) => browserManager.getWorkspaceIdForPage(pageId)
   })

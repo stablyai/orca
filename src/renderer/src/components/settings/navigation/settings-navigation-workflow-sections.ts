@@ -29,7 +29,7 @@ import {
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildWorkflowSettingsSections(
-  { isWebClient, botsEnabled }: SettingsNavigationBuildOptions,
+  { isWebClient, botsEnabled, floatingWorkspaceInSettings }: SettingsNavigationBuildOptions,
   terminalPaneSearchEntries: SettingsNavSection['searchEntries'],
   t: Translate = translate
 ): SettingsNavSection[] {
@@ -191,23 +191,23 @@ export function buildWorkflowSettingsSections(
           }
         ]
       : []),
-    {
-      id: 'floating-workspace',
-      title: t('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
-      description: showDesktopOnlySettings
-        ? t(
-            'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
-            'Global terminal, browser, and markdown tabs.'
-          )
-        : t(
-            'auto.hooks.useSettingsNavigationMetadata.floatingWorkspaceWebDescription',
-            'Global terminal and markdown tabs.'
-          ),
-      icon: PanelsTopLeft,
-      searchEntries: getFloatingWorkspaceSearchEntries({
-        includeBrowser: showDesktopOnlySettings
-      }),
-      group: 'workflows'
-    }
+    ...(floatingWorkspaceInSettings
+      ? [
+          {
+            id: 'floating-workspace',
+            title: t('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
+            // Web settings never carry the cohort, so this section only exists on desktop.
+            description: t(
+              'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
+              'Global terminal, browser, and markdown tabs.'
+            ),
+            icon: PanelsTopLeft,
+            searchEntries: getFloatingWorkspaceSearchEntries({
+              includeBrowser: showDesktopOnlySettings
+            }),
+            group: 'workflows' as const
+          }
+        ]
+      : [])
   ]
 }

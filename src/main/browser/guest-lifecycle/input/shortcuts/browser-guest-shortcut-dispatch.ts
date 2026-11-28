@@ -29,6 +29,8 @@ export type GuestShortcutForwardContext = {
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
+  /** Read per key; absent = the floating chords stay with the page. */
+  getFloatingWorkspaceShortcutsActive?: () => boolean
   resolveWorktreeId?: (browserTabId: string) => string | null
   resolveWorkspaceId?: (browserTabId: string) => string | null
   forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => void
@@ -41,7 +43,9 @@ export function forwardGuestShortcutInput(
   ctx: GuestShortcutForwardContext,
   event: Electron.Event,
   input: GuestShortcutInput,
-  action = resolveWindowShortcutAction(input, process.platform, ctx.getKeybindings?.())
+  action = resolveWindowShortcutAction(input, process.platform, ctx.getKeybindings?.(), {
+    floatingWorkspaceShortcutsActive: ctx.getFloatingWorkspaceShortcutsActive?.() === true
+  })
 ): boolean {
   const {
     browserTabId,

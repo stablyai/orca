@@ -8,6 +8,7 @@ import { carriedChatUiLaunchSettings } from '../../../../shared/native-chat/sett
 import { savedChatUiWithTerminalDefaultView } from '../../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
+import { isTelemetryOnlyProfile } from './new-profile-cohort-seeds'
 
 type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeedsSave'>
 
@@ -34,6 +35,14 @@ export class LoadedCohortMigrationOperations {
           ...state.settings,
           [key]: existing === 'pending' || existingProfile ? 'legacy' : 'done'
         }
+      }
+    }
+    if (typeof state.settings?.floatingWorkspaceInSettings !== 'boolean') {
+      this.runtime.loadNeedsSave = true
+      // Not a default: a defaults-spreading writer would hide Floating Workspace from existing profiles.
+      state = {
+        ...state,
+        settings: { ...state.settings, floatingWorkspaceInSettings: existingProfile }
       }
     }
     if (typeof state.settings?.nativeChatMarkNewMessages !== 'boolean') {
@@ -224,18 +233,6 @@ export class LoadedCohortMigrationOperations {
       }
     }
   }
-}
-
-/** Secondary profiles start with only the install's telemetry consent, before their first load. */
-function isTelemetryOnlyProfile(profile: unknown): boolean {
-  const settings = isRecord(profile) ? profile.settings : undefined
-  return (
-    isRecord(profile) &&
-    Object.keys(profile).length === 1 &&
-    isRecord(settings) &&
-    Object.keys(settings).length === 1 &&
-    isRecord(settings.telemetry)
-  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -11,6 +11,7 @@ import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import type { DesktopCore } from '../../core-desktop/desktop-core'
 import type { Store } from '../../persistence/loading-store/store'
+import { areFloatingWorkspaceShortcutsActive } from '../../../shared/settings/floating-workspace-cohort'
 import { createDesktopOrcaAccountService } from '../desktop-orca-account-service'
 import { installOrcaServerSignIn, OrcaServerSignIn } from '../../orca-profiles/orca-server-sign-in'
 import { GoogleConnect, installGoogleConnect } from '../../google/google-connect'
@@ -75,7 +76,13 @@ export async function initializeMainProcessAccountServices(
     legacySearchDefaults:
       (process.platform === 'darwin'
         ? store.getSettings().searchKeybindingSeed
-        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy'
+        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy',
+    getFloatingWorkspaceShortcutsActive: () =>
+      areFloatingWorkspaceShortcutsActive(store.getSettings())
   })
-  browserManager.setSettingsResolver(() => ({ keybindings: core.keybindings?.getOverrides() }))
+  // Map first, then the predicate committed with it, so guests never pair a stale map with it.
+  browserManager.setSettingsResolver(() => ({
+    keybindings: core.keybindings?.getOverrides(),
+    floatingWorkspaceShortcutsActive: core.keybindings?.committedFloatingWorkspaceShortcutsActive()
+  }))
 }

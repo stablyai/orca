@@ -1,3 +1,5 @@
+import { isFloatingWorkspaceInSettings } from '../../../../../shared/settings/floating-workspace-cohort'
+import { useAppStore } from '@/store/index'
 // @protected-copy
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
@@ -92,8 +94,16 @@ function ToastPlugin({
   loading: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const floatingWorkspaceInSettings = useAppStore((state) =>
+    isFloatingWorkspaceInSettings(state.settings)
+  )
   const { lines, compared } = update
-    ? pluginUpdateAdditions(update.preview, update.installedManifest, t)
+    ? pluginUpdateAdditions(
+        update.preview,
+        update.installedManifest,
+        t,
+        floatingWorkspaceInSettings
+      )
     : { lines: [], compared: true }
   return (
     <div data-plugin-update-toast={notice.pluginKey} className="space-y-1.5">

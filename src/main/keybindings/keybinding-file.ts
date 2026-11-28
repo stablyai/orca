@@ -12,6 +12,7 @@ import type {
   KeybindingFileSnapshot,
   KeybindingOverrides
 } from '../../shared/keybindings/types'
+import { inactiveFloatingWorkspaceActionIds } from '../../shared/settings/floating-workspace-cohort'
 import {
   createEmptyDocument,
   FILE_VERSION,
@@ -29,14 +30,22 @@ export function getUserKeybindingsPath(homePath: string): string {
   return join(homePath, '.orca', 'keybindings.json')
 }
 
+export type KeybindingReadOptions = {
+  /** Absent = inactive: the floating actions stay inert until main says otherwise. */
+  floatingWorkspaceShortcutsActive?: boolean
+}
+
 export function readKeybindingFile(
   path: string,
   platform: NodeJS.Platform = process.platform,
   defaultOverrides: KeybindingOverrides = {},
-  fallbackOverrides: KeybindingOverrides = {}
+  fallbackOverrides: KeybindingOverrides = {},
+  options: KeybindingReadOptions = {}
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const diagnostics: KeybindingFileDiagnostic[] = []
+  const floatingWorkspaceShortcutsActive = options.floatingWorkspaceShortcutsActive === true
+  const ignoredActionIds = inactiveFloatingWorkspaceActionIds(floatingWorkspaceShortcutsActive)
   const readResult = readJsonDocument(path)
   if (!readResult.document) {
     return {
@@ -44,7 +53,13 @@ export function readKeybindingFile(
       platform: keybindingPlatform,
       exists: readResult.exists,
       defaultOverrides,
-      overrides: resolveKeybindingOverrides(platform, fallbackOverrides, defaultOverrides),
+      floatingWorkspaceShortcutsActive,
+      overrides: resolveKeybindingOverrides(
+        platform,
+        fallbackOverrides,
+        defaultOverrides,
+        ignoredActionIds
+      ),
       commonOverrides: {},
       platformOverrides: {},
       diagnostics: [
@@ -71,14 +86,16 @@ export function readKeybindingFile(
   }
   const overrides = removeConflictingOverrides(
     keybindingPlatform,
-    resolveKeybindingOverrides(platform, mergedOverrides, defaultOverrides),
-    diagnostics
+    resolveKeybindingOverrides(platform, mergedOverrides, defaultOverrides, ignoredActionIds),
+    diagnostics,
+    ignoredActionIds
   )
 
   return {
     path,
     platform: keybindingPlatform,
     exists: readResult.exists,
+    floatingWorkspaceShortcutsActive,
     overrides,
     defaultOverrides,
     commonOverrides,
@@ -97,7 +114,8 @@ export function ensureKeybindingFile(path: string): void {
 export function migrateLegacyKeybindings(
   path: string,
   platform: NodeJS.Platform,
-  legacyOverrides: KeybindingOverrides | undefined
+  legacyOverrides: KeybindingOverrides | undefined,
+  options: KeybindingReadOptions = {}
 ): void {
   if (!legacyOverrides || Object.keys(legacyOverrides).length === 0) {
     return
@@ -106,7 +124,7 @@ export function migrateLegacyKeybindings(
   if (!document) {
     throw new Error('Could not read keybindings file.')
   }
-  const current = readKeybindingFile(path, platform)
+  const current = readKeybindingFile(path, platform, {}, {}, options)
   if (
     exists &&
     (!isJsonObject(document.migrations) ||
@@ -117,9 +135,17 @@ export function migrateLegacyKeybindings(
   ) {
     return
   }
-  writeActivePlatformSection(path, platform, current.commonOverrides, (activePlatform) => {
-    Object.assign(activePlatform, legacyOverrides)
-  })
+  writeActivePlatformSection(
+    path,
+    platform,
+    current.commonOverrides,
+    (activePlatform) => {
+      Object.assign(activePlatform, legacyOverrides)
+    },
+    {},
+    {},
+    options
+  )
 }
 
 // Migration and Settings writes must use the same document assembly.
@@ -128,7 +154,9 @@ function writeActivePlatformSection(
   platform: NodeJS.Platform,
   fallbackCommonOverrides: KeybindingOverrides,
   mutateActivePlatform: (activePlatform: JsonObject) => void,
-  defaultOverrides: KeybindingOverrides = {}
+  defaultOverrides: KeybindingOverrides = {},
+  fallbackOverrides: KeybindingOverrides = {},
+  options: KeybindingReadOptions = {}
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const readResult = readJsonDocument(path)
@@ -165,7 +193,7 @@ function writeActivePlatformSection(
     [keybindingPlatform]: activePlatform
   }
   writeJsonDocument(path, document)
-  return readKeybindingFile(path, platform, defaultOverrides)
+  return readKeybindingFile(path, platform, defaultOverrides, fallbackOverrides, options)
 }
 
 export function writeKeybindingOverride(
@@ -174,13 +202,17 @@ export function writeKeybindingOverride(
   actionId: string,
   bindings: unknown,
   defaultOverrides: KeybindingOverrides = {},
-  fallbackOverrides: KeybindingOverrides = {}
+  fallbackOverrides: KeybindingOverrides = {},
+  options: KeybindingReadOptions = {}
 ): KeybindingFileSnapshot {
   if (!isKeybindingActionId(actionId)) {
     throw new Error(`Unknown keybinding action "${actionId}".`)
   }
   const keybindingPlatform = getKeybindingPlatform(platform)
-  const currentSnapshot = readKeybindingFile(path, platform)
+  const ignoredActionIds = inactiveFloatingWorkspaceActionIds(
+    options.floatingWorkspaceShortcutsActive === true
+  )
+  const currentSnapshot = readKeybindingFile(path, platform, {}, {}, options)
   const normalizedBindings =
     bindings === null
       ? getKeybindingResetBindings(actionId, platform, currentSnapshot.commonOverrides)
@@ -202,8 +234,8 @@ export function writeKeybindingOverride(
   }
   const blockingConflict = findKeybindingConflicts(
     keybindingPlatform,
-    resolveKeybindingOverrides(platform, candidateOverrides, defaultOverrides),
-    { includeMainProcessInterception: true }
+    resolveKeybindingOverrides(platform, candidateOverrides, defaultOverrides, ignoredActionIds),
+    { includeMainProcessInterception: true, ignoredActionIds }
   ).find((conflict) => conflict.actionIds.includes(actionId))
   if (blockingConflict) {
     throw new Error(
@@ -231,6 +263,8 @@ export function writeKeybindingOverride(
         activePlatform[actionId] = normalizedBindings
       }
     },
-    defaultOverrides
+    defaultOverrides,
+    {},
+    options
   )
 }

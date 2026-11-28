@@ -2744,9 +2744,6 @@
             "creation": {
               "f3785eddc2": "新瀏覽器分頁"
             }
-          },
-          "availability": {
-            "web": "浮動工作區在你自己的電腦上執行，因此只能在 Orca 桌面應用程式中使用。"
           }
         }
       },
@@ -3500,8 +3497,7 @@
         "automationsTitle": "自動化",
         "automationsDescription": "設定代理程式工作的排程，並選擇是否在側邊欄顯示「自動化」。",
         "shareSkillsTitle": "分享技能",
-        "shareSkillsDescription": "透過未公開列出的連結分享技能。任何取得連結的人都能安裝。",
-        "floatingWorkspaceWebDescription": "全域終端機和 Markdown 分頁。"
+        "shareSkillsDescription": "透過未公開列出的連結分享技能。任何取得連結的人都能安裝。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼上內容過大。"
@@ -17241,8 +17237,7 @@
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "顯示浮動工作區",
             "4cb418b991": "顯示浮動工作區，有新活動",
-            "5785dd9148": "最小化浮動工作區",
-            "bfe7809a70": "{{value0}} 浮動工作區 ({{value1}})"
+            "5785dd9148": "最小化浮動工作區"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "最小化",

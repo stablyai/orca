@@ -25,12 +25,14 @@ export function disabledAgentTabActionIds(
 
 export function groupDefinitions(
   disabledTuiAgents: readonly TuiAgent[],
-  additionalDefinitions: readonly KeybindingDefinition[] = []
+  additionalDefinitions: readonly KeybindingDefinition[] = [],
+  inactiveActionIds: readonly KeybindingActionId[] = []
 ): ShortcutGroup[] {
-  // Hide launch bindings for disabled agents because those chords cannot launch them.
-  const hiddenAgentActionIds = new Set<KeybindingActionId>(
-    disabledAgentTabActionIds(disabledTuiAgents)
-  )
+  // Hide bindings that cannot fire: disabled agents' launches and inactive actions.
+  const hiddenAgentActionIds = new Set<KeybindingActionId>([
+    ...disabledAgentTabActionIds(disabledTuiAgents),
+    ...inactiveActionIds
+  ])
   const groups = new Map<string, KeybindingDefinition[]>()
   for (const definition of [...KEYBINDING_DEFINITIONS, ...additionalDefinitions]) {
     if (hiddenAgentActionIds.has(definition.id)) {

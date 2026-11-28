@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store/index'
+import { isFloatingWorkspaceInSettings } from '../../../../shared/settings/floating-workspace-cohort'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { createFloatingTerminalPanelDragActions } from './geometry/floating-terminal-panel-drag-actions'
 import type { FloatingTerminalPanelProps } from './state/floating-terminal-panel-types'
@@ -28,7 +30,9 @@ export function useFloatingTerminalPanelController({
   const localState = useFloatingTerminalPanelLocalState()
   const items = useFloatingWorkspaceChromeModel()
 
-  useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
+  // New profiles never see Floating Workspace in Settings, so an implicit open must not tour it.
+  const tourEligible = useAppStore((state) => isFloatingWorkspaceInSettings(state.settings))
+  useContextualTour('floating-workspace', open && tourEligible, 'floating_workspace_visible', {
     recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
     featureInteractionPersisted: tourInteractionSnapshot?.persisted,
     wasFeaturePreviouslyInteracted: tourInteractionSnapshot?.wasPreviouslyInteracted

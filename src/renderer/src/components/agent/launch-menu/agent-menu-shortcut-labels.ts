@@ -6,6 +6,7 @@ import { platformModifiers } from '../../../../../shared/keybindings/matching-ke
 import { resolveWindowShortcutAction } from '../../../../../shared/keybindings/window-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { selectFloatingWorkspaceShortcutsActive } from '@/store/slices/keybindings/floating-workspace-shortcuts-selector'
 import {
   readAgentTabShortcutActions,
   resolveAgentTabShortcutAction
@@ -18,16 +19,23 @@ export function useAgentMenuShortcutLabels(
   model: NewTabAgentMenuModel | undefined
 ): Map<TuiAgent, string> | undefined {
   const keybindings = useAppStateValue((s) => s.keybindings)
+  const floatingWorkspaceShortcutsActive = useAppStateValue(selectFloatingWorkspaceShortcutsActive)
   const worktreeId = model?.state === 'settled' ? model.pickerContext?.workspace.worktreeId : null
   return worktreeId
-    ? agentMenuShortcutLabels(worktreeId, keybindings, getShortcutPlatform())
+    ? agentMenuShortcutLabels(
+        worktreeId,
+        keybindings,
+        getShortcutPlatform(),
+        floatingWorkspaceShortcutsActive
+      )
     : undefined
 }
 
 export function agentMenuShortcutLabels(
   worktreeId: string,
   keybindings: KeybindingOverrides,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  floatingWorkspaceShortcutsActive = false
 ): Map<TuiAgent, string> {
   const actions = readAgentTabShortcutActions(worktreeId, keybindings).map((action) => ({
     ...action
@@ -54,7 +62,10 @@ export function agentMenuShortcutLabels(
       const input = { key, code: parsed.key, ...platformModifiers(parsed, platform) }
       // Main claims its window shortcuts before the workspace listener sees the key.
       const opensAgent =
-        !resolveWindowShortcutAction(input, platform, keybindings, { context: 'app' }) &&
+        !resolveWindowShortcutAction(input, platform, keybindings, {
+          context: 'app',
+          floatingWorkspaceShortcutsActive
+        }) &&
         resolveAgentTabShortcutAction(actions, (actionId) =>
           keybindingMatchesAction(actionId, input, platform, keybindings, { context: 'app' })
         )?.agent === agent

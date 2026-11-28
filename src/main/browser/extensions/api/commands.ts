@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { KEYBINDING_DEFINITIONS } from '../../../../shared/keybindings/definitions'
 import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
+import { isFloatingWorkspaceKeybindingActionId } from '../../../../shared/settings/floating-workspace-cohort'
 import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {
@@ -27,8 +28,11 @@ import { noteBrowserExtensionUserGesture } from '../permissions/browser-extensio
 
 function isOrcaShortcut(input: Electron.Input): boolean {
   const overrides = browserManager.getKeybindingOverrides()
-  return KEYBINDING_DEFINITIONS.some((definition) =>
-    keybindingMatchesAction(definition.id, input, process.platform, overrides)
+  const floatingActive = browserManager.getFloatingWorkspaceShortcutsActive()
+  return KEYBINDING_DEFINITIONS.some(
+    (definition) =>
+      (floatingActive || !isFloatingWorkspaceKeybindingActionId(definition.id)) &&
+      keybindingMatchesAction(definition.id, input, process.platform, overrides)
   )
 }
 

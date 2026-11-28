@@ -48,6 +48,8 @@ import {
   getOptInOnlyExperimentVisibility,
   type OptInOnlyExperimentVisibility
 } from '../advanced/experimental-search'
+import { isFloatingWorkspaceInSettings } from '../../../../../shared/settings/floating-workspace-cohort'
+import { selectFloatingWorkspaceShortcutsActive } from '../../../store/slices/keybindings/floating-workspace-shortcuts-selector'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -71,6 +73,8 @@ export function buildSettingsNavigationMetadata(
     managedBrowserCreationEnabled = !isWebClient,
     mobileEmulatorCreationEnabled = !isWebClient,
     showWorkspaceCardLayout = true,
+    floatingWorkspaceInSettings = false,
+    floatingWorkspaceShortcutsActive = false,
     isDev = import.meta.env.DEV,
     showAgentDashboardExperiment = false,
     showTerminalAttentionExperiment = false,
@@ -92,6 +96,8 @@ export function buildSettingsNavigationMetadata(
     managedBrowserCreationEnabled?: boolean
     mobileEmulatorCreationEnabled?: boolean
     showWorkspaceCardLayout?: boolean
+    floatingWorkspaceInSettings?: boolean
+    floatingWorkspaceShortcutsActive?: boolean
     isDev?: boolean
     showAgentDashboardExperiment?: boolean
     showTerminalAttentionExperiment?: boolean
@@ -133,6 +139,8 @@ export function buildSettingsNavigationMetadata(
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled,
     showWorkspaceCardLayout,
+    floatingWorkspaceInSettings,
+    floatingWorkspaceShortcutsActive,
     isDev,
     optInOnlyExperiments: {
       agentDashboard: showAgentDashboardExperiment,
@@ -188,6 +196,8 @@ export function useSettingsNavigationMetadata(
       ] as const
     }, shallow)
   const showWorkspaceCardLayout = !useAppStore(selectDrawsNewWorktreeCards)
+  const floatingWorkspaceInSettings = isFloatingWorkspaceInSettings(settings)
+  const floatingWorkspaceShortcutsActive = useAppStore(selectFloatingWorkspaceShortcutsActive)
   const typedChatPermissions = useChatSettingsOwnPermissions()
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
   const isMac = isMacUserAgent()
@@ -242,6 +252,8 @@ export function useSettingsNavigationMetadata(
               managedBrowserCreationEnabled,
               mobileEmulatorCreationEnabled,
               showWorkspaceCardLayout,
+              floatingWorkspaceInSettings,
+              floatingWorkspaceShortcutsActive,
               isDev: import.meta.env.DEV,
               showAgentDashboardExperiment: optInOnlyExperiments.agentDashboard,
               showTerminalAttentionExperiment: optInOnlyExperiments.terminalAttention,
@@ -271,6 +283,8 @@ export function useSettingsNavigationMetadata(
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       showWorkspaceCardLayout,
+      floatingWorkspaceInSettings,
+      floatingWorkspaceShortcutsActive,
       optInOnlyExperiments.agentDashboard,
       optInOnlyExperiments.terminalAttention,
       isLinearConnected,

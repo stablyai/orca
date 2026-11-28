@@ -52,6 +52,8 @@ export type CreateMainWindowOptions = {
   revealInBackground?: boolean
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
+  /** Published with the `getKeybindings` map; absent = floating chords stay with the page. */
+  getFloatingWorkspaceShortcutsActive?: () => boolean
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   /** Spare live PTYs from orphan sweeping until recovery restore (#5787); distinguish manual retries from automatic-recovery breadcrumbs. */
   onBeforeRecoveryReload?: (webContentsId: number, trigger: RecoveryReloadTrigger) => void

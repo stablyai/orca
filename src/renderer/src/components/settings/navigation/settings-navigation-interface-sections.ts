@@ -25,7 +25,8 @@ export function buildInterfaceSettingsSections(
     typedChatPermissions,
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled,
-    showWorkspaceCardLayout
+    showWorkspaceCardLayout,
+    floatingWorkspaceShortcutsActive
   }: SettingsNavigationBuildOptions,
   t: Translate = translate
 ): SettingsNavSection[] {
@@ -103,7 +104,8 @@ export function buildInterfaceSettingsSections(
       icon: Keyboard,
       searchEntries: getShortcutsPaneSearchEntries({
         includeManagedBrowser: managedBrowserCreationEnabled,
-        includeMobileEmulator: mobileEmulatorCreationEnabled
+        includeMobileEmulator: mobileEmulatorCreationEnabled,
+        includeFloatingWorkspace: floatingWorkspaceShortcutsActive
       }),
       group: 'interface'
     },
