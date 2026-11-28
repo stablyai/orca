@@ -21,15 +21,18 @@ export function createStructuredAgentSessionPublicationWiring(input: {
 }): StructuredAgentSessionConversations {
   return new StructuredAgentSessionConversations({
     observe: (id, journal, rows) => {
-      if (rows) {
-        input.client().subscribers.providerReceipts.observe(id, journal, rows)
+      if (
+        rows?.publication?.promptDispatches?.some(
+          (dispatch) => dispatch.previousHandoverSequence !== undefined
+        )
+      ) {
+        input.client().subscribers.providerReceipts.observe(journal, rows)
       }
       input.client().requestFailures.observe(id, journal, rows)
       input.observeRows()?.(id, journal, rows)
       observeNativeChatPromptSubmissions(journal, rows)
     },
     forget: (id) => {
-      input.client().subscribers.providerReceipts.forget(id)
       input.client().requestFailures.forget(id)
       // A closed chat's undecided run is asked again at its next open.
       forgetProviderRelayRunVerdict(id)

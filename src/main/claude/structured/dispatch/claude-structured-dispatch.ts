@@ -210,6 +210,7 @@ export async function dispatchClaudeTurn(
     await (authorize
       ? session.connection.send(message, authorize)
       : session.connection.send(message))
+    input.beginProviderReceipt?.written?.()
   } catch (error) {
     const replay = pending.replay
     if (!replay) {
@@ -247,6 +248,10 @@ export async function dispatchClaudeTurn(
       return { state: 'rejected', ...claudeWriteFailureRejection(error) }
     }
     const waiter = replay.waiter
+    const unwritten = claudeUserMessageWasProvablyUnwritten(error)
+    if (!unwritten || waiter.settledUuid || waiter.providerReceiptConfirmed) {
+      input.beginProviderReceipt?.written?.()
+    }
     if (waiter.settledUuid) {
       const uuid = await replay.promise
       if (uuid) {
@@ -256,7 +261,7 @@ export async function dispatchClaudeTurn(
         }
       }
     }
-    if (claudeUserMessageWasProvablyUnwritten(error)) {
+    if (unwritten) {
       forgetWaiter(session, waiter)
       forgetRetiredWaiter(session, waiter)
       waiter.resolve(null)

@@ -1,28 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { AgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   sameAgentSessionFailureFact,
   agentSessionVisibleFailureFacts
 } from '../../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
-
-import { dispatchWasWithdrawn } from '../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-
-export function useHasStructuredAgentSessionRejections(
-  submissions: readonly AgentJournalSubmission[]
-): boolean {
-  return useMemo(
-    () =>
-      submissions.some(
-        (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
-      ),
-    [submissions]
-  )
-}
 
 const NO_FACTS: readonly AgentSessionFailureFact[] = []
 

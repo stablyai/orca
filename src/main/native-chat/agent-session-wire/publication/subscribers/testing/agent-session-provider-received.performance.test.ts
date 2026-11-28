@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
 import { claudeProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
@@ -13,6 +14,8 @@ import {
 
 // PR #51346: receipt work stays within the recipients of an exact pending send.
 it.each([
+  [2, 0],
+  [20, 0],
   [2, 1],
   [20, 1],
   [2, 3],
@@ -58,18 +61,18 @@ it.each([
     const desktop = Array.from({ length: windows }, (_, index) => open(`desktop-${index}`, true))
     const remote = open('remote', false)
     const phone = open('phone', false, true)
-    const nonDisplaying = ['tool-steps', 'prompt', 'bot-group', 'unsupported', 'minimized'].map(
-      (id) => open(id, false)
-    )
     let barrier: Promise<void> | undefined
-    const stalled = open('lagging-desktop', true, false, async (_journal, event) => {
-      await barrier
-      return event
-    })
+    const stalled = windows
+      ? open('lagging-desktop', true, false, async (_journal, event) => {
+          await barrier
+          return event
+        })
+      : undefined
     await idle()
-    expect(wrappers).toHaveBeenCalledTimes(windows + 1)
+    expect(wrappers).toHaveBeenCalledTimes(windows + Number(!!stalled))
     const originalCounts = desktop.map(({ events }) => events.length)
-    const jobs = vi.spyOn(SubscriberDeliveryLane.prototype, 'providerReceived')
+    const jobs = vi.spyOn(SubscriberDeliveryLane.prototype, 'scheduleProviderReceipt')
+    const jobCount = () => jobs.mock.results.filter(({ value }) => value === true).length
     const append = (id: string) =>
       journal.appendItem(
         { provider: 'orca', clientMessageId: id },
@@ -88,8 +91,7 @@ it.each([
       })
       for (let index = 0; index < count; index++) {
         const clientMessageId = `covered-${index}`
-        await append(clientMessageId)
-        const cursor = journal.cursor()
+        const cursor = await handover(journal, clientMessageId, windows > 0)
         const receive = subscribers.providerReceipts.bind({
           journal,
           clientMessageId,
@@ -99,6 +101,7 @@ it.each([
           owns: () => true
         })
         subscribers.deliverFrames(SESSION, journal)
+        expect(!!receive).toBe(windows > 0)
         receive?.(() => true)
         await vi.waitFor(() => {
           desktop.forEach(({ events }, reader) => {
@@ -109,9 +112,15 @@ it.each([
       }
       blocked.resolve()
       await idle()
-      expect(JSON.stringify(stalled.events)).not.toContain('providerReceived')
-      stalled.close()
-      expect(jobs).toHaveBeenCalledTimes(count * windows)
+      if (stalled) {
+        expect(
+          stalled.events.flatMap((event) =>
+            event.type === 'batch' ? (event.providerReceived ?? []) : []
+          )
+        ).toHaveLength(count)
+        stalled.close()
+      }
+      expect(jobCount()).toBe(0)
       const remoteBytes = JSON.stringify(remote.events)
       const phoneBytes = JSON.stringify(phone.events)
       expect(remoteBytes).not.toContain('providerReceived')
@@ -119,7 +128,7 @@ it.each([
 
       for (let index = 0; index < count; index++) {
         const clientMessageId = `standalone-${index}`
-        await append(clientMessageId)
+        await handover(journal, clientMessageId, windows > 0)
         const receive = subscribers.providerReceipts.bind({
           journal,
           clientMessageId,
@@ -144,21 +153,20 @@ it.each([
           batch: { cursor: journal.cursor(), items: [], removedItemIds: [], submissions: [] }
         })
       })
-      expect(jobs).toHaveBeenCalledTimes(2 * count * windows)
+      expect(jobCount()).toBe(count * windows)
       expect(JSON.stringify(remote.events.slice(0, JSON.parse(remoteBytes).length))).toBe(
         remoteBytes
       )
       expect(JSON.stringify(phone.events.slice(0, JSON.parse(phoneBytes).length))).toBe(phoneBytes)
       expect(JSON.stringify(remote.events)).not.toContain('providerReceived')
       expect(JSON.stringify(phone.events)).not.toContain('providerReceived')
-      for (const { events } of nonDisplaying) {
-        expect(events).toEqual(remote.events)
+      if (windows) {
+        const successor = open('desktop-0', true)
+        desktop[0]?.close()
+        await idle()
+        expect(successor.events).toHaveLength(1)
+        expect(JSON.stringify(successor.events)).not.toContain('providerReceived')
       }
-      const successor = open('desktop-0', true)
-      desktop[0]?.close()
-      await idle()
-      expect(successor.events).toHaveLength(1)
-      expect(JSON.stringify(successor.events)).not.toContain('providerReceived')
     } finally {
       blocked.resolve()
       jobs.mockRestore()
@@ -215,7 +223,7 @@ it.each([
       }
       for (let index = 0; index < attemptCount; index++) {
         const clientMessageId = `send-${index}`
-        await append(clientMessageId)
+        await handover(journal, clientMessageId, true)
         receive.push(
           receipts.bind({
             journal,
@@ -229,7 +237,7 @@ it.each([
         subscribers.deliverFrames(SESSION, journal)
         await idle()
       }
-      const stop = journal.observeCommits((commit) => receipts.observe(SESSION, journal, commit))
+      const stop = journal.observeCommits((commit) => receipts.observe(journal, commit))
       try {
         const unrelatedTraffic = async (id: string) => {
           owns.mockClear()
@@ -253,3 +261,31 @@ it.each([
     }
   }
 )
+
+async function handover(
+  journal: Parameters<AgentSessionSubscribers['open']>[0]['journal'],
+  clientMessageId: string,
+  captureProviderReceipt: boolean
+) {
+  const body: AgentJournalMessageItem = {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'hello' }]
+  }
+  await journal.appendSubmission({
+    clientMessageId,
+    payloadFingerprint: clientMessageId,
+    handoverRecorded: true,
+    fence: 1,
+    body
+  })
+  const result = await journal.prepareHandover({
+    clientMessageId,
+    fence: 1,
+    turnScope: { kind: 'thread' },
+    body,
+    captureProviderReceipt
+  })
+  expect(!!result.dispatchCursor).toBe(captureProviderReceipt)
+  return journal.cursor()
+}

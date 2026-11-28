@@ -46,7 +46,6 @@ export type StructuredAgentSessionLiveReadInput = {
     | AgentSessionTextAppendCapabilities
   /** Whether this reader shows prompt suggestions and the host takes the param; a rejection means no. */
   promptSuggestions?: Promise<boolean> | boolean
-  providerReceived?: boolean
   clearProviderReceived?: () => void
   liveTextViewer?: Parameters<typeof createStructuredAgentSessionSubscribeAsks>[0]['liveTextViewer']
   readCurrentRequests: (

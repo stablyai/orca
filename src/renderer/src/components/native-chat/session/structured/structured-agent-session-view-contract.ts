@@ -1,4 +1,3 @@
-import type { AgentSessionReceiptProvider } from '../../../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { StructuredAgentSessionLaunchView } from '../../host-access/use-native-chat-provisional-launch'
@@ -9,7 +8,6 @@ export type StructuredAgentSessionViewArgs = {
   target: RuntimeClientTarget
   agent: AgentType
   isVisible: boolean
-  receiptProvider?: AgentSessionReceiptProvider
   transportEnabled?: boolean
   /** The host has published the session but its provider has not answered startup yet. */
   providerStarting?: boolean

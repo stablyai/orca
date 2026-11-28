@@ -1,5 +1,4 @@
-import type { ProviderReceivedStore } from '../../../../../../../shared/agent-session/view/live-read/agent-session-provider-received'
-import type { AgentSessionReceiptProvider } from '../../../../../../../shared/agent-session/journal/agent-session-dispatch-limits'
+import type { ProviderReceivedLabels } from '../../../../../../../shared/agent-session/view/live-read/agent-session-provider-received'
 import type { AppState } from '@/store/types'
 import type { StructuredAgentSessionState } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { AgentSessionHistoryPage } from '../../../../../../../shared/agent-session/agent-session-wire'
@@ -18,7 +17,7 @@ export type StructuredAgentSessionReadSnapshot = {
 }
 
 export type StructuredAgentSessionReadOwner = {
-  receipts?: ProviderReceivedStore
+  receipts?: ProviderReceivedLabels
   trackSend: (id: string) => {
     issue: () => void
     settle: (uncertain: boolean) => void
@@ -52,7 +51,6 @@ export type StructuredAgentSessionReadEffects = {
   subscribeRetryNow: (retry: () => void) => () => void
   /** This reader draws reply and reasoning text, so the host may send it live text while shown. */
   showsReplyText?: boolean
-  receiptProvider?: AgentSessionReceiptProvider
 }
 
 /** Whether any active reader of a chat draws its reply text, and when that changes. */

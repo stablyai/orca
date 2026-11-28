@@ -46,7 +46,7 @@ it('detaches receipt callbacks while retaining late replay identity across 64 re
   const journal = await openJournal()
   const subscribers = new AgentSessionSubscribers({ now: () => 100 })
   const registry = subscribers.providerReceipts
-  journal.observeCommits((commit) => registry.observe(SESSION, journal, commit))
+  journal.observeCommits((commit) => registry.observe(journal, commit))
   const frames = vi.fn()
   const reader = () =>
     subscribers.open({
@@ -86,7 +86,7 @@ it('detaches receipt callbacks while retaining late replay identity across 64 re
       fence: 1,
       body,
       turnScope: scope,
-      captureProviderReceipt: registry.hasReaderAtHead(journal, 1)
+      captureProviderReceipt: registry.hasLiveReader(journal)
     })
     const confirmation = registry.bind({
       journal,

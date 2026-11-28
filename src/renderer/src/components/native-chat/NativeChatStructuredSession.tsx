@@ -1,4 +1,3 @@
-import { isAgentSessionReceiptProvider } from '../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import { useBotLinkPrompt } from '@/lib/agent-session/open/bot-link-item-target'
 import {
   NativeChatCrewContext,
@@ -67,15 +66,13 @@ import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/Nati
 import { NativeChatWorkerAutoCloseBanner } from '@/components/native-chat/worker-lifetime/NativeChatWorkerAutoCloseBanner'
 import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
+import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from '@/components/native-chat/host-access/use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from '@/components/native-chat/host-access/use-native-chat-host-outage-notice'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { BotServerOutageCard } from '@/components/bots/BotServerOutageCard'
 import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/use-native-chat-host-send-gate'
-import {
-  useHasStructuredAgentSessionRejections,
-  useStructuredAgentSessionStartFailureFacts
-} from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
+import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
@@ -100,7 +97,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const { rewindHost, focusComposer } = useNativeChatRewindHost(props, composerRef)
   const controller = useStructuredAgentSession({
     ...props,
-    receiptProvider: isAgentSessionReceiptProvider(props.agent) ? props.agent : undefined,
     // Why: Stop and a queued card's Edit give text back to the conversation's draft, as the composer keeps it.
     composerScopeKey: structuredAgentSessionDraftScopeKey(props.sessionId),
     queueFollowUps,
@@ -135,15 +131,19 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const submits = useSubmitReveal(controller, provisionalLaunch.retry, hostHeld, focusComposer)
   const workerApprovalParty = nativeChatWorkerApprovalParty(props)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
-  const hasRejection = useHasStructuredAgentSessionRejections(controller.submissions)
+  const needsFailureFacts =
+    submits.queuedMessages.cards.some((card) => card.state === 'returned') ||
+    controller.submissions.some(
+      (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
+    )
   const startFailures = useStructuredAgentSessionStartFailureFacts(
     controller.journalItems,
-    props.agent === 'claude' ||
-      hasRejection ||
-      submits.queuedMessages.cards.some((card) => card.state === 'returned')
+    needsFailureFacts || props.agent === 'claude'
   )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
-    ...controller,
+    pending: controller.pending,
+    submissions: controller.submissions,
+    journalItems: controller.journalItems,
     startFailures,
     agentName: agentLabel
   })

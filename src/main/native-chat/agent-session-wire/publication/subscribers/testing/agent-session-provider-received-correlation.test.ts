@@ -31,7 +31,7 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
   })
   const subscribers = new AgentSessionSubscribers({ now: () => 100 })
   journal.observeCommits((commit) => {
-    subscribers.providerReceipts.observe(SESSION, journal, commit)
+    subscribers.providerReceipts.observe(journal, commit)
   })
   const { providerReceipts } = subscribers
   const events: AgentSessionSubscribeEvent[] = []
@@ -68,7 +68,7 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
       clientMessageId,
       fence: 1,
       turnScope: { kind: 'thread' },
-      captureProviderReceipt: providerReceipts.hasReaderAtHead(journal, 1),
+      captureProviderReceipt: providerReceipts.hasLiveReader(journal),
       body
     })
   const deliver = async () => {
@@ -81,7 +81,7 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
     clientMessageId: 'A',
     fence: 1,
     submittedAt: 1,
-    captureProviderReceipt: providerReceipts.hasReaderAtHead(journal, 1),
+    captureProviderReceipt: providerReceipts.hasLiveReader(journal),
     turnScope: { kind: 'thread' }
   })
   expect(a.dispatchCursor?.sequence).toBe(3)
@@ -251,5 +251,5 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
   late?.(() => true)
   await idle()
   expect(replacement).toHaveLength(1)
-  expect(late).toBeUndefined()
+  expect(replacement.some((frame) => frame.type === 'batch' && frame.providerReceived)).toBe(false)
 })

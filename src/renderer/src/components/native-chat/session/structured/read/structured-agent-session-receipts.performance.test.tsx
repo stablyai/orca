@@ -115,7 +115,7 @@ it.each([4096, 40960])('applies one receipt without visiting %i loaded rows', (s
       hasOlder: false,
       hasNewer: false
     })
-    owner.activate({ ...options, receiptProvider: 'claude', showsReplyText: true })
+    owner.activate({ ...options, showsReplyText: true })
     const { emit } = mock.streams.at(-1)!
     const batch = {
       type: 'batch',
@@ -124,10 +124,24 @@ it.each([4096, 40960])('applies one receipt without visiting %i loaded rows', (s
       batch: { cursor, items: [], removedItemIds: [], submissions: [] }
     } satisfies AgentSessionSubscribeEvent
     emit(batch)
-    emit({
+    const handover = {
       ...batch,
       batch: { ...batch.batch, items: [row(size, 'user', itemId)], submissions: [submission] }
-    })
+    }
+    const renders = vi.fn()
+    const labels = acknowledge
+      ? render(
+          <NativeChatProviderReceived value={{ labels: owner.receipts!, agent: 'claude' }}>
+            <Profiler id="match" onRender={renders}>
+              <NativeChatSendingLabel itemId={itemId} />
+            </Profiler>
+            <Profiler id="other" onRender={renders}>
+              <NativeChatSendingLabel itemId="unrelated" />
+            </Profiler>
+          </NativeChatProviderReceived>
+        )
+      : undefined
+    act(() => emit(handover))
     const state = owner.getSnapshot().state
     expect(state.items).toHaveLength(size)
     const notify = vi.fn()
@@ -138,18 +152,7 @@ it.each([4096, 40960])('applies one receipt without visiting %i loaded rows', (s
     const retainedSubmissions = counted(state.submissions, () => submissions++)
     state.items = retainedItems
     state.submissions = retainedSubmissions
-    if (acknowledge) {
-      const renders = vi.fn()
-      const labels = render(
-        <NativeChatProviderReceived value={owner.receipts}>
-          <Profiler id="match" onRender={renders}>
-            <NativeChatSendingLabel itemId={itemId} />
-          </Profiler>
-          <Profiler id="other" onRender={renders}>
-            <NativeChatSendingLabel itemId="unrelated" />
-          </Profiler>
-        </NativeChatProviderReceived>
-      )
+    if (labels) {
       renders.mockClear()
       const stamp = { ...batch, providerReceived: [size] }
       const snapshot = owner.getSnapshot()
@@ -222,42 +225,40 @@ it.each([4096, 40960])('does not copy %i discarded row IDs on trim', (discarded)
 })
 
 // PR #51346: changing document visibility keeps the existing journal subscription and paging.
-it.each([undefined, 'codex'] as const)(
-  'fixes receipt interest at stream open for %s',
-  (receiptProvider) => {
-    const owner = createReadOwner('local:chat:interest', 'chat', { kind: 'local' })
-    const cursor = { epoch: 'epoch', sequence: 0 }
-    owner.publishCreated({
-      sessionId: 'chat',
-      epoch: cursor.epoch,
-      fence: 1,
-      direction: 'tail',
-      window: { oldest: null, newest: null, nextCursor: cursor },
-      items: [],
-      submissions: [],
-      removedItemIds: [],
-      hasOlder: false,
-      hasNewer: false
-    })
-    owner.activate({ ...options, showsReplyText: true, receiptProvider })
-    const { params, emit } = mock.streams[0]!
-    expect(params.capabilities?.providerReceived).toBe(receiptProvider ? 1 : undefined)
-    emit({
-      type: 'batch',
-      sessionId: 'chat',
-      fence: 1,
-      batch: { cursor, items: [], removedItemIds: [], submissions: [] }
-    })
-    const snapshot = owner.getSnapshot()
-    expect(snapshot.current).toBe(true)
-    for (const visible of [false, true]) {
-      mock.visible = visible
-      document.dispatchEvent(new Event('visibilitychange'))
-      Array.from(mock.changed).forEach((changed) => changed())
-      expect(mock.streams).toHaveLength(1)
-      expect(owner.getSnapshot()).toBe(snapshot)
-    }
-    owner.dispose()
-    expect(mock.changed.size).toBe(0)
+it.each([false, true])('keeps one stream with transcript opened first = %s', (transcriptFirst) => {
+  const owner = createReadOwner('local:chat:interest', 'chat', { kind: 'local' })
+  const cursor = { epoch: 'epoch', sequence: 0 }
+  owner.publishCreated({
+    sessionId: 'chat',
+    epoch: cursor.epoch,
+    fence: 1,
+    direction: 'tail',
+    window: { oldest: null, newest: null, nextCursor: cursor },
+    items: [],
+    submissions: [],
+    removedItemIds: [],
+    hasOlder: false,
+    hasNewer: false
+  })
+  owner.activate({ ...options, showsReplyText: transcriptFirst })
+  owner.activate({ ...options, showsReplyText: !transcriptFirst })
+  const { emit } = mock.streams[0]!
+  expect(mock.streams).toHaveLength(1)
+  emit({
+    type: 'batch',
+    sessionId: 'chat',
+    fence: 1,
+    batch: { cursor, items: [], removedItemIds: [], submissions: [] }
+  })
+  const snapshot = owner.getSnapshot()
+  expect(snapshot.current).toBe(true)
+  for (const visible of [false, true]) {
+    mock.visible = visible
+    document.dispatchEvent(new Event('visibilitychange'))
+    Array.from(mock.changed).forEach((changed) => changed())
+    expect(mock.streams).toHaveLength(1)
+    expect(owner.getSnapshot()).toBe(snapshot)
   }
-)
+  owner.dispose()
+  expect(mock.changed.size).toBe(0)
+})

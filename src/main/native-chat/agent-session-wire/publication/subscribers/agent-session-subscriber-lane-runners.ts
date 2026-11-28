@@ -16,6 +16,7 @@ import type { Subscriber } from './agent-session-subscribe-input'
 type LaneOwner = {
   deliveryPort: () => SubscriberDeliveryPort
   now: () => number
+  sendReceipt: (subscriber: Subscriber) => void
   caughtUp: (subscriber: Subscriber, journal: SubscriberCatchUp['journal']) => void
   isActive: (subscriber: Subscriber) => boolean
   fail: (subscriber: Subscriber, error: unknown) => void
@@ -57,6 +58,9 @@ export function subscriberLaneRunners(
         subscribers: [subscriber],
         hostNow
       }),
+    ...(subscriber.readsProviderReceived
+      ? { sendReceipt: () => owner.sendReceipt(subscriber) }
+      : {}),
     mergeCatchUp: mergeSubscriberCatchUp,
     runnable: () => owner.isActive(subscriber),
     failed: (error) => {

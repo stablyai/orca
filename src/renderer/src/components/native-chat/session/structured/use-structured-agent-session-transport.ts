@@ -10,7 +10,6 @@ export function useStructuredAgentSessionTransport(args: {
   isVisible: boolean
   enabled: boolean
   agentName?: string
-  receiptProvider?: Parameters<typeof useStructuredAgentSessionRead>[0]['receiptProvider']
 }) {
   const { agentName, enabled, isVisible, sessionId, target } = args
   const providerVisible = isVisible && enabled
@@ -25,8 +24,7 @@ export function useStructuredAgentSessionTransport(args: {
     sessionId,
     target,
     isVisible: providerVisible,
-    showsReplyText: true,
-    receiptProvider: args.receiptProvider
+    showsReplyText: true
   })
   const stateRef = useRef(read.state)
   const mutation = useStructuredAgentSessionMutate({

@@ -1,5 +1,5 @@
 import {
-  createProviderReceivedStore,
+  createProviderReceivedLabels,
   isProviderReceiptOnly
 } from '../../../../../../../shared/agent-session/view/live-read/agent-session-provider-received'
 import { createStructuredAgentSessionReadHydrate } from './structured-agent-session-read-hydrate'
@@ -45,7 +45,7 @@ export function createReadOwner(
   const retiredHistoryRead = (): boolean => true
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
   const activations = new Map<symbol, StructuredAgentSessionReadEffects>()
-  const receipts = createProviderReceivedStore()
+  const receipts = target?.kind === 'local' ? createProviderReceivedLabels() : undefined
   const listeners = new Set<() => void>()
   const commandListeners = new Set<() => void>()
   const historyReaders = new Set<symbol>()
@@ -113,7 +113,7 @@ export function createReadOwner(
     if (state === snapshot.state && !snapshot.loadingOlder) {
       return
     }
-    receipts.trim(state.items)
+    receipts?.trim(state.items)
     if (state.submissions !== snapshot.state.submissions) {
       activity.observe(state)
     }
@@ -148,11 +148,10 @@ export function createReadOwner(
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
     }
-    const receiptProvider = target.kind === 'local' ? effects.receiptProvider : undefined
     const transport = startStructuredAgentSessionReadTransport({
-      receiptProvider,
-      pendingReceiptSequence: receipts.sequence,
-      clearProviderReceived: receipts.clear,
+      receiptLimit: receipts?.receiptLimit,
+      pendingReceiptSequence: receipts?.pendingReceiptSequence,
+      clearProviderReceived: receipts?.clearProviderReceived,
       showsPromptSuggestions: nativeChatShowsPromptSuggestions(effects.getState().settings),
       replyText: interests.replyText,
       subscribeRetryNow: effects.subscribeRetryNow,
@@ -161,12 +160,12 @@ export function createReadOwner(
         const lostCommands =
           snapshot.state.commands != null && 'commands' in event && event.commands === null
         const before = snapshot.state
-        if (!isProviderReceiptOnly(event) || options?.opensSubscription) {
-          apply({ type: 'event', event, ...options })
+        if (receipts && isProviderReceiptOnly(event) && !options?.opensSubscription) {
+          receipts.apply(event, before, before)
+          return
         }
-        if (receiptProvider) {
-          receipts.apply(event, before, snapshot.state, receiptProvider, options?.opensSubscription)
-        }
+        apply({ type: 'event', event, ...options })
+        receipts?.apply(event, before, snapshot.state, options?.opensSubscription)
         if (
           event.type !== 'end' &&
           (event.commandsChanged || options?.opensSubscription || lostCommands)
@@ -280,7 +279,7 @@ export function createReadOwner(
       stopActiveRun?.()
     },
     getSnapshot: () => snapshot,
-    receipts,
+    receipts: receipts?.labels,
     trimHistory,
     retainHistory: () => {
       const reader = Symbol('history-reader')

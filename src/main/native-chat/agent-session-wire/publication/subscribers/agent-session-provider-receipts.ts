@@ -3,300 +3,310 @@ import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-ses
 import { AGENT_SESSION_DISPATCH_LIMITS } from '../../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import type { JournalWriterCommit } from '../../../agent-session-journal/journal-writer-changes'
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import type { ProviderReceiptConfirmation } from '../../journal-ingress/provider-receipt-publication'
+import {
+  withProviderReceipt,
+  type ProviderReceiptConfirmation
+} from '../../journal-ingress/provider-receipt-publication'
+import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { Subscriber } from './agent-session-subscribe-input'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
+import type { ProviderReceiptDispatch } from './agent-session-provider-receipt-attempt'
 
-import {
-  ProviderReceiptReaders,
-  receiptCursorOf,
-  type Attempt,
-  type ProviderReceiptDispatch,
-  type ReceiptLink,
-  type SessionAttempts
-} from './agent-session-provider-receipt-attempt'
+type Batch = Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
+type Reader = {
+  subscriber: Subscriber
+  journal: SqlAgentSessionJournal
+  opened?: AgentJournalCursor
+  fence?: number
+  emitted?: AgentJournalCursor
+  post: Subscriber['emit']
+  owed: Map<number, Attempt>
+  lowest: number
+}
+type Attempt = ProviderReceiptDispatch & {
+  itemId: string
+  recipients: Set<Reader>
+  pending?: () => boolean
+  retired?: true
+}
 
 export class AgentSessionProviderReceipts {
-  private readonly readers = new ProviderReceiptReaders()
-  private readonly attempts = new Map<string, SessionAttempts>()
-  private readonly bound = new WeakMap<Subscriber, Set<Attempt>>()
-  private readonly owed = new WeakMap<Subscriber, Set<Attempt>>()
-  private readonly waking = new Set<SessionAttempts>()
+  private readonly live = new WeakMap<SqlAgentSessionJournal, Set<Reader>>()
+  private readonly readers = new WeakMap<Subscriber, Reader>()
+  private readonly attempts = new WeakMap<SqlAgentSessionJournal, Map<string, Attempt>>()
+  private readonly waking = new Map<SqlAgentSessionJournal, Set<Attempt>>()
   private wakeQueued = false
 
-  constructor(private readonly schedule: (sub: Subscriber, send: () => void) => void) {}
+  constructor(private readonly schedule: (sub: Subscriber) => void) {}
 
-  track(subscriber: Subscriber): void {
-    const post = subscriber.emit
-    subscriber.emit = (event) => this.emit(subscriber, post, event)
-    subscriber.stopped?.addEventListener('abort', () => this.drop(subscriber), { once: true })
+  track(subscriber: Subscriber, journal: SqlAgentSessionJournal): void {
+    const reader: Reader = {
+      subscriber,
+      journal,
+      post: subscriber.emit,
+      owed: new Map(),
+      lowest: Infinity
+    }
+    this.readers.set(subscriber, reader)
+    subscriber.providerReceiptsRouting = (event) =>
+      event.type === 'batch' && !!reader.opened && !!this.waking.get(reader.journal)?.size
+    subscriber.emit = (event) => {
+      const outgoing = withProviderReceipt(() => this.decorate(reader, event)) ?? event
+      reader.post(outgoing)
+      if (event.type === 'batch') {
+        reader.emitted = event.batch.cursor
+      }
+    }
+    subscriber.stopped?.addEventListener('abort', () => this.drop(reader), { once: true })
   }
 
-  hasReaderAtHead(journal: SqlAgentSessionJournal, fence: number): boolean {
-    return this.readers.atHead(journal, fence)
+  hasLiveReader(journal: SqlAgentSessionJournal): boolean {
+    return !!this.live.get(journal)?.size
   }
 
   caughtUp(subscriber: Subscriber, journal: SqlAgentSessionJournal): void {
-    this.readers.caughtUp(subscriber, journal)
+    const reader = this.readers.get(subscriber)
+    if (!reader || subscriber.stopped?.aborted || subscriber.owedSnapshotFence !== undefined) {
+      return
+    }
+    if (reader.journal !== journal) {
+      this.drop(reader)
+      reader.journal = journal
+    }
+    if (reader.opened) {
+      return
+    }
+    // The adopted journal cursor orders opening against handovers, even if this lane trails it.
+    reader.opened = journal.cursor()
+    reader.fence = subscriber.fence
+    const live = this.live.get(journal) ?? new Set()
+    live.add(reader)
+    this.live.set(journal, live)
   }
 
-  private drop(subscriber: Subscriber): void {
-    const last = this.readers.drop(subscriber)
-    for (const attempt of this.bound.get(subscriber) ?? []) {
-      this.release(attempt, subscriber)
+  private drop(reader: Reader): void {
+    reader.opened = reader.emitted = undefined
+    const live = this.live.get(reader.journal)
+    if (!live?.delete(reader)) {
+      return
     }
-    if (last) {
-      this.forget(subscriber.sessionId)
+    for (const attempt of reader.owed.values()) {
+      this.release(reader, attempt)
     }
-  }
-
-  private release(attempt: Attempt, reader: Subscriber): void {
-    this.bound.get(reader)?.delete(attempt)
-    this.owed.get(reader)?.delete(attempt)
-    attempt.readers.delete(reader)
-    if (!attempt.readers.size) {
-      const session = this.attempts.get(attempt.journal.identity.sessionId)
-      if (session?.bySequence.get(attempt.cursor.sequence) === attempt) {
-        session.bySequence.set(attempt.cursor.sequence, attempt.clientMessageId)
-        session.changed.delete(attempt)
+    if (!live.size) {
+      for (const attempt of this.attempts.get(reader.journal)?.values() ?? []) {
+        this.retire(attempt)
       }
-      attempt.link.attempt = undefined
-      attempt.pending = undefined
     }
   }
 
   bind(dispatch: ProviderReceiptDispatch): ProviderReceiptConfirmation | undefined {
-    const { journal, cursor, fence } = dispatch
-    const { sessionId } = journal.identity
-    if (journal.cursor().epoch !== cursor.epoch || !dispatch.owns()) {
-      return undefined
-    }
-    let session = this.attempts.get(sessionId)
+    const { journal, cursor, clientMessageId, provider } = dispatch
     if (
-      session &&
-      (session.journal !== journal || session.epoch !== cursor.epoch || session.fence !== fence)
-    ) {
-      this.forget(sessionId)
-      session = undefined
-    }
-    if (
-      session?.bySequence.has(cursor.sequence) ||
-      (session && session.bySequence.size >= AGENT_SESSION_DISPATCH_LIMITS[dispatch.provider])
+      !this.hasLiveReader(journal) ||
+      journal.cursor().epoch !== cursor.epoch ||
+      !dispatch.owns()
     ) {
       return undefined
     }
-    const readers = this.readers.boundTo(dispatch)
-    if (!readers.size) {
+    const attempts = this.attempts.get(journal) ?? new Map<string, Attempt>()
+    const previous = attempts.get(clientMessageId)
+    if (
+      previous?.cursor.sequence === cursor.sequence ||
+      (!previous && attempts.size >= AGENT_SESSION_DISPATCH_LIMITS[provider])
+    ) {
       return undefined
     }
-    session ??= {
-      journal,
-      epoch: cursor.epoch,
-      fence,
-      bySequence: new Map(),
-      changed: new Set(),
-      readFence: dispatch.readFence
+    if (previous) {
+      this.retire(previous)
     }
-    const link: ReceiptLink = {}
-    const attempt: Attempt = { ...dispatch, readers, link }
-    link.attempt = attempt
-    session.bySequence.set(cursor.sequence, attempt)
-    this.attempts.set(sessionId, session)
-    if (session.bySequence.size === 1) {
+    const attempt: Attempt = {
+      ...dispatch,
+      itemId: agentJournalSubmissionKey(clientMessageId),
+      recipients: new Set()
+    }
+    attempts.set(clientMessageId, attempt)
+    this.attempts.set(journal, attempts)
+    if (attempts.size === 1) {
       journal.trackProviderReceiptSettlements(true)
     }
-    for (const reader of readers) {
-      const attempts = this.bound.get(reader) ?? new Set<Attempt>()
-      attempts.add(attempt)
-      this.bound.set(reader, attempts)
-    }
-    return this.confirmation(link)
-  }
-
-  private confirmation(link: ReceiptLink): ProviderReceiptConfirmation {
-    const confirm = (isPending: () => boolean): void => {
-      const attempt = link.attempt
-      if (attempt && !attempt.pending) {
-        attempt.pending = isPending
-        this.queueWake(attempt)
-      }
-    }
-    return Object.assign(confirm, {
-      cancel: () => {
-        const attempt = link.attempt
-        if (attempt) {
-          link.attempt = undefined
-          this.queueWake(attempt)
+    return Object.assign(
+      (isPending: () => boolean) => {
+        if (!attempt.retired && !attempt.pending) {
+          attempt.pending = isPending
+          const changed = this.waking.get(journal) ?? new Set<Attempt>()
+          changed.add(attempt)
+          this.waking.set(journal, changed)
+          if (!this.wakeQueued) {
+            this.wakeQueued = true
+            queueMicrotask(this.wake)
+          }
         }
-      }
-    })
-  }
-
-  private queueWake(attempt: Attempt): void {
-    const session = this.attempts.get(attempt.journal.identity.sessionId)
-    if (!session) {
-      return
-    }
-    session.changed.add(attempt)
-    this.waking.add(session)
-    if (!this.wakeQueued) {
-      this.wakeQueued = true
-      queueMicrotask(this.wake)
-    }
+      },
+      { cancel: () => withProviderReceipt(() => this.retire(attempt)) }
+    )
   }
 
   private wake = (): void => {
+    const ready = new Set<Reader>()
     this.wakeQueued = false
-    for (const session of this.waking) {
-      this.fanOut(session)
-    }
-  }
-
-  private fanOut(session: SessionAttempts): void {
-    this.waking.delete(session)
-    const readers = new Set<Subscriber>()
-    for (const attempt of session.changed) {
-      if (!this.isPending(attempt)) {
-        for (const reader of attempt.readers) {
-          this.release(attempt, reader)
-        }
-        continue
-      }
-      for (const reader of attempt.readers) {
-        const owed = this.owed.get(reader) ?? new Set<Attempt>()
-        owed.add(attempt)
-        this.owed.set(reader, owed)
-        readers.add(reader)
-      }
-    }
-    session.changed.clear()
-    for (const reader of readers) {
-      this.schedule(reader, () => {
-        try {
-          const emitted = this.readers.emitted.get(reader)
-          const providerReceived = emitted && this.take(reader, emitted.cursor, emitted.fence)
-          if (emitted && providerReceived) {
-            reader.emit({
-              type: 'batch',
-              sessionId: reader.sessionId,
-              fence: emitted.fence,
-              batch: emptyAgentSessionBatch(emitted.cursor),
-              providerReceived
-            })
+    for (const [journal, changed] of this.waking) {
+      this.waking.delete(journal)
+      for (const attempt of changed) {
+        withProviderReceipt(() => {
+          if (!this.isPending(attempt)) {
+            this.retire(attempt)
+            return
           }
-        } catch {
-          // Losing a receipt must leave transcript delivery running.
-        }
-      })
+          for (const reader of this.live.get(journal) ?? []) {
+            const { opened, fence, emitted } = reader
+            if (
+              opened?.epoch === attempt.cursor.epoch &&
+              opened.sequence < attempt.cursor.sequence &&
+              fence === attempt.fence
+            ) {
+              attempt.recipients.add(reader)
+              reader.owed.set(attempt.cursor.sequence, attempt)
+              reader.lowest = Math.min(reader.lowest, attempt.cursor.sequence)
+              if (emitted && emitted.sequence >= attempt.cursor.sequence) {
+                ready.add(reader)
+              }
+            }
+          }
+        })
+      }
+    }
+    for (const reader of ready) {
+      withProviderReceipt(() => this.schedule(reader.subscriber))
     }
   }
 
   private isPending(attempt: Attempt): boolean {
-    return attempt.link.attempt === attempt && attempt.owns() && attempt.pending?.() === true
+    return !attempt.retired && attempt.owns() && attempt.pending?.() === true
   }
 
-  private remove(session: SessionAttempts, sequence: number): void {
-    const attempt = session.bySequence.get(sequence)
-    session.bySequence.delete(sequence)
-    if (attempt && typeof attempt !== 'string') {
-      session.changed.delete(attempt)
-      for (const reader of attempt.readers) {
-        this.release(attempt, reader)
-      }
+  private release(reader: Reader, attempt: Attempt): void {
+    attempt.recipients.delete(reader)
+    reader.owed.delete(attempt.cursor.sequence)
+    if (reader.lowest === attempt.cursor.sequence) {
+      reader.lowest = Math.min(...reader.owed.keys())
     }
   }
 
-  observe(sessionId: string, journal: SqlAgentSessionJournal, commit: JournalWriterCommit): void {
-    const session = this.attempts.get(sessionId)
-    if (!session) {
+  private retire(attempt: Attempt): void {
+    if (attempt.retired) {
       return
     }
-    if (
-      session.journal !== journal ||
-      session.epoch !== commit.cursor.epoch ||
-      (session.readFence && session.fence !== session.readFence())
-    ) {
-      this.forget(sessionId)
-      return
+    attempt.retired = true
+    this.waking.get(attempt.journal)?.delete(attempt)
+    for (const reader of attempt.recipients) {
+      this.release(reader, attempt)
     }
+    const attempts = this.attempts.get(attempt.journal)!
+    attempts.delete(attempt.clientMessageId)
+    if (!attempts.size) {
+      attempt.journal.trackProviderReceiptSettlements(false)
+    }
+  }
+
+  observe(journal: SqlAgentSessionJournal, commit: JournalWriterCommit): void {
+    const attempts = this.attempts.get(journal)
     for (const change of commit.publication?.promptDispatches ?? []) {
-      const sequence = change.previousHandoverSequence
-      if (sequence === undefined) {
-        continue
-      }
-      const attempt = session.bySequence.get(sequence)
+      const attempt = attempts?.get(change.clientMessageId)
       if (
         attempt &&
-        (typeof attempt === 'string' ? attempt : attempt.clientMessageId) === change.clientMessageId
+        change.previousHandoverSequence !== undefined &&
+        change.previousHandoverSequence >= attempt.cursor.sequence
       ) {
-        this.remove(session, sequence)
+        this.retire(attempt)
       }
-    }
-    if (!session.bySequence.size) {
-      this.forget(sessionId)
     }
   }
 
-  forget(sessionId: string): void {
-    const session = this.attempts.get(sessionId)
-    if (session) {
-      this.waking.delete(session)
-      for (const sequence of session.bySequence.keys()) {
-        this.remove(session, sequence)
-      }
-      this.attempts.delete(sessionId)
-      session.journal.trackProviderReceiptSettlements(false)
+  private decorate(reader: Reader, event: AgentSessionSubscribeEvent): Batch | undefined {
+    if (
+      event.type === 'snapshot' ||
+      event.type === 'reset' ||
+      ('fence' in event &&
+        reader.opened &&
+        event.fence !== undefined &&
+        event.fence !== reader.fence)
+    ) {
+      this.drop(reader)
     }
-  }
-
-  /** Called after projection, at the same post guard as ordinary frames. */
-  private emit(
-    subscriber: Subscriber,
-    post: Subscriber['emit'],
-    event: AgentSessionSubscribeEvent
-  ): void {
     if (event.type === 'snapshot' || event.type === 'reset') {
-      this.drop(subscriber)
+      reader.emitted = event.page.liveCursor ?? event.page.window.nextCursor
     }
-    let providerReceived: number[] | undefined
-    if (event.type === 'batch' && !event.providerReceived && this.readers.isLive(subscriber)) {
-      const session = this.attempts.get(subscriber.sessionId)
-      if (session?.changed.size) {
-        this.fanOut(session)
+    if (event.type === 'batch') {
+      const providerReceived = this.take(reader, event.batch.cursor, event.fence, event.batch)
+      if (providerReceived) {
+        return { ...event, providerReceived }
       }
-      providerReceived = this.take(subscriber, event.batch.cursor, event.fence)
     }
-    post(providerReceived && event.type === 'batch' ? { ...event, providerReceived } : event)
-    const position = receiptCursorOf(event, subscriber.fence)
-    if (position) {
-      this.readers.posted(subscriber, position)
-    }
+    return undefined
+  }
+
+  sendStandalone(subscriber: Subscriber): void {
+    withProviderReceipt(() => {
+      const reader = this.readers.get(subscriber)
+      const cursor = reader?.emitted
+      if (!reader || !cursor || subscriber.stopped?.aborted) {
+        return
+      }
+      const providerReceived = this.take(reader, cursor, subscriber.fence)
+      if (providerReceived) {
+        reader.post({
+          type: 'batch',
+          sessionId: subscriber.sessionId,
+          fence: subscriber.fence,
+          batch: emptyAgentSessionBatch(cursor),
+          providerReceived
+        })
+      }
+    })
   }
 
   private take(
-    subscriber: Subscriber,
+    reader: Reader,
     cursor: AgentJournalCursor,
-    fence: number | undefined
+    fence: number | undefined,
+    batch?: Batch['batch']
   ): number[] | undefined {
-    if (subscriber.stopped?.aborted || fence !== subscriber.fence) {
+    if (
+      cursor.sequence < reader.lowest ||
+      reader.opened?.epoch !== cursor.epoch ||
+      reader.fence !== fence
+    ) {
       return undefined
     }
-    let providerReceived: number[] | undefined
-    for (const attempt of this.owed.get(subscriber) ?? []) {
+    let stamps: number[] | undefined
+    for (const attempt of reader.owed.values()) {
+      const { sequence } = attempt.cursor
+      if (sequence > cursor.sequence) {
+        continue
+      }
+      this.release(reader, attempt)
       if (!this.isPending(attempt)) {
-        this.release(attempt, subscriber)
         continue
       }
       if (
-        attempt.fence === fence &&
-        attempt.cursor.epoch === cursor.epoch &&
-        attempt.cursor.sequence <= cursor.sequence
+        batch &&
+        (reader.emitted?.sequence ?? 0) < sequence &&
+        (!batch.items.some(
+          (item) => item.sequence === sequence && item.itemId === attempt.itemId
+        ) ||
+          !batch.submissions.some(
+            (submission) =>
+              submission.clientMessageId === attempt.clientMessageId &&
+              submission.dispatchState === 'pending' &&
+              submission.handedOverAt !== undefined
+          ))
       ) {
-        this.release(attempt, subscriber)
-        providerReceived ??= []
-        providerReceived.push(attempt.cursor.sequence)
+        continue
       }
+      stamps ??= []
+      stamps.push(sequence)
     }
-    return providerReceived
+    return stamps
   }
 }

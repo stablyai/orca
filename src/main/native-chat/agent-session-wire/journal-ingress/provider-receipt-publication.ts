@@ -11,7 +11,9 @@ export type ProviderReceiptInput = { beginProviderReceipt?: BeginProviderReceipt
 export type ProviderReceiptConfirmation = ((isPending: () => boolean) => void) & {
   cancel: () => void
 }
-export type BeginProviderReceipt = () => ProviderReceiptConfirmation | undefined
+export type BeginProviderReceipt = (() => ProviderReceiptConfirmation | undefined) & {
+  written?: () => void
+}
 
 /** Optional delivery status cannot fail the provider frame or send it accompanies. */
 export function withProviderReceipt<T>(publish: () => T): T | undefined {
@@ -47,7 +49,7 @@ export function localProviderReceipt(
   const { providerReceipts, journal, record } = ctx
   const provider = journal.identity.agent
   if (
-    !providerReceipts?.hasReaderAtHead(journal, ctx.fence) ||
+    !providerReceipts?.hasLiveReader(journal) ||
     !isCurrent ||
     !isAgentSessionReceiptProvider(provider)
   ) {
@@ -65,7 +67,6 @@ export function localProviderReceipt(
         cursor,
         fence,
         provider,
-        readFence: () => record()?.lease.runtimeFence,
         owns: () =>
           !signal?.aborted &&
           ctx.fence === fence &&
@@ -96,18 +97,35 @@ export function providerHandoverReceipt(
       begun = false
       uuidUnused ??= next.firstHandover
     },
-    begin: () => {
-      if (!begun && cursor) {
-        begun = true
-        const receive = receipt(cursor, uuidUnused === true)
-        if (ctx.journal.identity.agent === 'claude') {
-          uuidUnused = false
-          return receive
+    begin: Object.assign(
+      () => {
+        if (!cursor) {
+          return undefined
         }
-        confirmation = receive
-        uuidUnused = false
+        if (ctx.journal.identity.agent === 'claude') {
+          const receive = receipt(cursor, uuidUnused === true)
+          return (
+            receive &&
+            Object.assign(
+              (isPending: () => boolean) => {
+                uuidUnused = false
+                receive(isPending)
+              },
+              { cancel: receive.cancel }
+            )
+          )
+        }
+        if (!begun) {
+          begun = true
+          confirmation = receipt(cursor)
+        }
+        return confirmation
+      },
+      {
+        written: () => {
+          uuidUnused = false
+        }
       }
-      return confirmation
-    }
+    )
   }
 }

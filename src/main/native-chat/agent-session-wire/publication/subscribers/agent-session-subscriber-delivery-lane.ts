@@ -38,6 +38,7 @@ export type SubscriberDeliveryLaneRunners = {
   backgroundTasks: (fence: number) => Promise<unknown>
   liveText: (liveText: SubscriberLiveText) => Promise<unknown>
   /** Undefined when the two cannot be one delivery. */
+  sendReceipt?: () => void
   mergeCatchUp: (
     pending: SubscriberCatchUp,
     next: SubscriberCatchUp
@@ -61,7 +62,6 @@ export type SubscriberDeliveryRetention = {
 export class SubscriberDeliveryLane {
   private readonly pending: LaneEntry[] = []
   private active: LaneEntry | undefined
-  private receiptJob: { since: number; run: () => void } | undefined
   private scheduled = false
   /** Live text the running delivery holds, whether a live-text entry or sent by ordered work. */
   private delivering: readonly AgentJournalRenderItem[] | undefined
@@ -71,7 +71,7 @@ export class SubscriberDeliveryLane {
   constructor(private readonly runners: SubscriberDeliveryLaneRunners) {}
 
   get idle(): boolean {
-    return !this.active && !this.scheduled && !this.receiptJob && this.pending.length === 0
+    return !this.active && !this.scheduled && this.pending.length === 0
   }
 
   /** Catch-ups and refreshes never merge across ordered work: it may reset what they read from. */
@@ -79,9 +79,12 @@ export class SubscriberDeliveryLane {
     this.add({ kind: 'ordered', since: this.runners.now(), run })
   }
 
-  providerReceived(run: () => void): void {
-    this.receiptJob = { since: this.receiptJob?.since ?? this.runners.now(), run }
+  scheduleProviderReceipt(): boolean {
+    if (!this.idle) {
+      return false
+    }
     this.schedule()
+    return true
   }
 
   catchUp(next: SubscriberCatchUp): void {
@@ -163,7 +166,6 @@ export class SubscriberDeliveryLane {
   /** Releases waiting work and withdraws queued reads; the active delivery gets no more frames. */
   clear(): void {
     this.pending.length = 0
-    this.receiptJob = undefined
     this.stop.abort()
   }
 
@@ -186,8 +188,8 @@ export class SubscriberDeliveryLane {
     }
     const oldest = entries.reduce((since, entry) => Math.min(since, entry.since), now)
     return {
-      pending: entries.length + Number(this.receiptJob !== undefined),
-      oldestMs: now - Math.min(oldest, this.receiptJob?.since ?? now),
+      pending: entries.length,
+      oldestMs: now - oldest,
       liveTextBytes
     }
   }
@@ -222,11 +224,9 @@ export class SubscriberDeliveryLane {
     while (!this.active) {
       const entry = this.pending.shift()
       if (!entry) {
-        // Give waiting ordinary work first claim without splitting its coalescing.
-        const receipt = this.receiptJob
-        this.receiptJob = undefined
-        if (receipt && this.runners.runnable()) {
-          receipt.run()
+        // A receipt uses the idle slot only after ordinary delivery has had first claim.
+        if (this.runners.sendReceipt && this.runners.runnable()) {
+          this.runners.sendReceipt()
         }
         return
       }

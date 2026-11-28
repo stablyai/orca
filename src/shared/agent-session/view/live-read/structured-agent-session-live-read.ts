@@ -42,9 +42,9 @@ export function startStructuredAgentSessionLiveRead(args: StructuredAgentSession
     }
   }, args.coalesce)
   const clearProviderReceived = (): void => {
-    if (args.providerReceived) {
+    if (args.clearProviderReceived) {
       coalescer.clearProviderReceived()
-      args.clearProviderReceived?.()
+      args.clearProviderReceived()
     }
   }
   const reconnectScheduler = createReconnectScheduler({

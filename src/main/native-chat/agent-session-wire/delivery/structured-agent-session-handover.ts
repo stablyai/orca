@@ -100,7 +100,7 @@ export async function beginSubmissionHandover(
       fence,
       turnScope: scope,
       body,
-      captureProviderReceipt: receipt && ctx.providerReceipts?.hasReaderAtHead(ctx.journal, fence)
+      captureProviderReceipt: !!receipt
     })
     carried = prepared.carried
     receipt?.committed(prepared)

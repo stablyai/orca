@@ -36,6 +36,7 @@ export class AgentSessionSubscribers {
   private readonly lanes = new SubscriberLanes({
     deliveryPort: () => this.deliveryPort(),
     now: () => this.now(),
+    sendReceipt: (subscriber) => this.providerReceipts.sendStandalone(subscriber),
     caughtUp: (subscriber, journal) => this.providerReceipts.caughtUp(subscriber, journal),
     isActive: (subscriber) => this.isActive(subscriber),
     fail: (subscriber, error) => this.fail(subscriber, error)
@@ -49,8 +50,8 @@ export class AgentSessionSubscribers {
     (subscriber, journal) =>
       this.enqueue(subscriber, () => this.forkMarkers.refresh(subscriber, journal))
   )
-  readonly providerReceipts = new AgentSessionProviderReceipts((sub, send) =>
-    this.lanes.of(sub).providerReceived(send)
+  readonly providerReceipts = new AgentSessionProviderReceipts((sub) =>
+    this.lanes.of(sub).scheduleProviderReceipt()
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
   private readonly viewerShows = new liveText.LiveTextViewerShows({
@@ -84,11 +85,10 @@ export class AgentSessionSubscribers {
     input: AgentSessionSubscribeInput & { journal: AgentSessionJournal; fence: number }
   ): () => void {
     const { journal, ...fields } = input
-    const liveCursor = journal.cursor()
     const subscriber: Subscriber = {
       ...fields,
       readForkMarker: () => this.hooks.readForkMarker?.(fields.sessionId),
-      cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
+      cursor: input.cursor ?? { epoch: journal.cursor().epoch, sequence: 0 },
       boundedFrames: input.boundedFrames === true,
       readsCurrentRequests: input.readsCurrentRequests === true,
       snapshotCatchUp: input.snapshotCatchUp !== false
@@ -100,7 +100,7 @@ export class AgentSessionSubscribers {
       this.lanes.clear(replaced)
     }
     if (subscriber.readsProviderReceived) {
-      this.providerReceipts.track(subscriber)
+      this.providerReceipts.track(subscriber, journal)
     }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
@@ -122,8 +122,7 @@ export class AgentSessionSubscribers {
       await this.sendLiveTail(subscriber, journal, input.fence)
     })
     this.promptSuggestions.opened(subscriber)
-    const { sessionId, id } = subscriber
-    return () => void (!subscriber.stopped?.aborted && this.close(sessionId, id))
+    return () => void (!subscriber.stopped?.aborted && this.close(input.sessionId, input.id))
   }
 
   close(sessionId: string, id: string): void {
@@ -247,11 +246,20 @@ export class AgentSessionSubscribers {
     const { sessionId } = subscriber
     const readers = liveText.subscriberLiveTextReaders(subscriber)
     const taken = this.hooks.readLiveText?.(sessionId, readers)
-    const sends = !!taken?.length && liveText.subscriberAtHead(subscriber, journal)
-    const items = sends && this.lanes.of(subscriber).sendsLiveText(taken) ? taken : []
-    const [subscribers, hostNow] = [[subscriber], this.now()]
-    const tail = { sessionId, journal, fence, items, subscribers, hostNow }
-    const sent = liveText.publishSubscriberLiveText(this.deliveryPort(), tail)
+    const items =
+      taken?.length &&
+      liveText.subscriberAtHead(subscriber, journal) &&
+      this.lanes.of(subscriber).sendsLiveText(taken)
+        ? taken
+        : []
+    const sent = liveText.publishSubscriberLiveText(this.deliveryPort(), {
+      sessionId,
+      journal,
+      fence,
+      items,
+      subscribers: [subscriber],
+      hostNow: this.now()
+    })
     return subscriber.readsProviderReceived
       ? sent.then(() => this.providerReceipts.caughtUp(subscriber, journal))
       : sent

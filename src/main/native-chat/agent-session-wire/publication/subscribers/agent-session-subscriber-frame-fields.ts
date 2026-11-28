@@ -199,6 +199,10 @@ export async function emitSubscriberFrame(
     return
   }
   for (const outgoing of built.frames) {
+    // Give the queued receipt routing a turn before the synchronous post guard.
+    while (subscriber.providerReceiptsRouting?.(outgoing)) {
+      await Promise.resolve()
+    }
     if (options?.isActive && !options.isActive()) {
       return
     }

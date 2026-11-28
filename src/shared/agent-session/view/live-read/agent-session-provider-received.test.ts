@@ -56,7 +56,7 @@ it('applies a coalesced receipt at the same cursor and clears it on resubscribe'
     store.apply(event, before, state, 'claude', opensSubscription)
   }
   apply({ ...batch, batch: { ...batch.batch, items, submissions } })
-  const coalescer = createStructuredAgentSessionEventCoalescer(apply, { receiptProvider: 'claude' })
+  const coalescer = createStructuredAgentSessionEventCoalescer(apply, { receiptLimit: () => 64 })
   coalescer.push(batch)
   coalescer.push({ ...batch, providerReceived: [8] })
   coalescer.push(batch)
@@ -78,7 +78,7 @@ it.each([
   ['codex', 256]
 ] as const)(
   'holds %s receipts within the provider cap and prunes an exact settlement without drawing text',
-  (receiptProvider, limit) => {
+  (_receiptProvider, limit) => {
     vi.useFakeTimers()
     try {
       const cursor = { epoch: 'epoch', sequence: limit + 10 }
@@ -88,14 +88,15 @@ it.each([
         fence: 1,
         batch: { cursor, items: [], removedItemIds: [], submissions: [] }
       }
+      let visible = false
       let show = () => {}
       const draw = vi.fn()
       const emit = vi.fn()
       const coalescer = createStructuredAgentSessionEventCoalescer(emit, {
-        receiptProvider,
+        receiptLimit: () => limit,
         pendingReceiptSequence: (id) => (id === agentJournalSubmissionKey('first') ? 1 : undefined),
         visibility: {
-          hidden: () => true,
+          hidden: () => !visible,
           sendsShownTail: () => true,
           heldDrawn: draw,
           subscribeShown: (shown) => {
@@ -106,8 +107,7 @@ it.each([
       })
       coalescer.push({ ...batch, providerReceived: [1] })
       expect(vi.getTimerCount()).toBe(0)
-      expect(emit).toHaveBeenCalledTimes(1)
-      emit.mockClear()
+      expect(emit).not.toHaveBeenCalled()
       coalescer.push({
         ...batch,
         batch: {
@@ -145,6 +145,7 @@ it.each([
           ]
         }
       })
+      visible = true
       show()
       coalescer.push({ ...batch, providerReceived: [limit + 2] })
       expect(emit).not.toHaveBeenCalled()

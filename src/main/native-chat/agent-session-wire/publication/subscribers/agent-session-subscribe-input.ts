@@ -61,6 +61,7 @@ export type Subscriber = {
   owedSnapshotFence?: number
   showsPromptSuggestions?: boolean
   readsProviderReceived?: boolean
+  providerReceiptsRouting?: (event: AgentSessionSubscribeEvent) => boolean
   /** The current-work view the last frame's fields were read under
    *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
   workView?: string
