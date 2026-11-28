@@ -44,6 +44,7 @@ import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
 import { createStoreNativeSettingsProjection } from '../core-desktop/native-settings-projection'
+import { followSpellcheckLanguages } from '../spellcheck/spellcheck-languages'
 import { followNativeSettingChanges } from './native-setting-subscriptions'
 import { updateGpuAccelerationAboutPanel } from './gpu-recovery/gpu-lifecycle'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
@@ -183,6 +184,8 @@ export async function initializeReadyFoundation(): Promise<void> {
   state.store = store
   const nativeSettings = createStoreNativeSettingsProjection(store)
   state.nativeSettings = nativeSettings
+  // Before any window loads: Chromium reads the session's dictionaries for every spellchecked field.
+  followSpellcheckLanguages(nativeSettings, session.defaultSession)
   hangWatchdog?.setMenuBarIconSetting(nativeSettings.getSettings().showMenuBarIcon !== false)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {

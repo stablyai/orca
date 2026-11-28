@@ -176,6 +176,20 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       )
     ]
   }),
+  generalSetting(GENERAL_SETTING_ANCHORS.spellcheckLanguages, {
+    title: translate('settings.editorSpellcheckLanguages.title', 'Spellcheck languages'),
+    description: translate(
+      'settings.editorSpellcheckLanguages.description',
+      'Dictionaries spellcheck uses in editors and chat. Leave empty to follow the system language.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.editorSpellcheckLanguages.kwSpellcheck', 'spellcheck'),
+      ...translateSearchKeyword('settings.editorSpellcheckLanguages.kwSpelling', 'spelling'),
+      ...translateSearchKeyword('settings.editorSpellcheckLanguages.kwLanguage', 'language'),
+      ...translateSearchKeyword('settings.editorSpellcheckLanguages.kwDictionary', 'dictionary'),
+      ...translateSearchKeyword('settings.editorSpellcheckLanguages.kwLocale', 'locale')
+    ]
+  }),
   generalSetting(GENERAL_SETTING_ANCHORS.reviewNotes, {
     title: translate('auto.components.settings.general.search.728a309ce1', 'Markdown review notes'),
     description: translate(

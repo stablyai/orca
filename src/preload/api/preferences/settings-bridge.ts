@@ -24,6 +24,9 @@ export const settingsApi = {
 
   listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
 
+  listSpellcheckLanguages: (): Promise<string[]> =>
+    ipcRenderer.invoke('settings:listSpellcheckLanguages'),
+
   previewGhosttyImport: (
     source?: TerminalConfigImportSource
   ): Promise<TerminalConfigImportPreview> =>

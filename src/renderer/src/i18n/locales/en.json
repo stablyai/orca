@@ -2276,6 +2276,20 @@
         "open": "Open {{file}}"
       },
       "unreadable": "Saved sign-in or key can’t be opened on this computer"
+    },
+    "editorSpellcheckLanguages": {
+      "macDescription": "macOS uses the system spellchecker and picks the language automatically.",
+      "description": "Dictionaries spellcheck uses in editors and chat. Leave empty to follow the system language.",
+      "title": "Spellcheck languages",
+      "systemLanguage": "System language",
+      "systemDefault": "System default",
+      "search": "Search languages…",
+      "empty": "No spellcheck dictionaries are available.",
+      "kwSpellcheck": "spellcheck",
+      "kwSpelling": "spelling",
+      "kwLanguage": "language",
+      "kwDictionary": "dictionary",
+      "kwLocale": "locale"
     }
   },
   "menu": {

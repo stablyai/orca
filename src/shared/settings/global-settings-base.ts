@@ -35,6 +35,7 @@ import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
 import type { UiLanguageSettings } from '../i18n/ui-language-settings'
 import type { ChatDeleteSettings } from '../agent-session/chat-deletion/orca-chat-delete'
 import type { StatusBarMemorySettings } from '../diagnostics/status-bar-memory-settings'
+import type { SpellcheckLanguageSettings } from './spellcheck-language-settings'
 
 type DesktopWindowSettings = {
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
@@ -82,5 +83,6 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   ManagedAccountNameSettings &
   NewTabMenuSettings &
   UiLanguageSettings &
+  SpellcheckLanguageSettings &
   ChatDeleteSettings &
   StatusBarMemorySettings

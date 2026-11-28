@@ -76,6 +76,8 @@ export function buildDefaultSettings(args: {
     editorFontFamily: '',
     editorWordWrap: true,
     richMarkdownSpellcheckEnabled: true,
+    // Why empty: Chromium keeps using the system dictionaries until the user picks languages.
+    spellcheckLanguages: [],
     markdownDefaultViewMode: 'rich',
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: args.primarySelectionMiddleClickPaste,

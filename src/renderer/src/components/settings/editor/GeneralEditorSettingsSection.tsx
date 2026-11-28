@@ -14,6 +14,7 @@ import { CollapseUnchangedRegionsSetting } from './CollapseUnchangedRegionsSetti
 import { SettingsSegmentedControl, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
+import { SpellcheckLanguagesSetting } from './SpellcheckLanguagesSetting'
 import { MarkdownDefaultViewSetting } from './MarkdownDefaultViewSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
@@ -162,6 +163,7 @@ export function GeneralEditorSettingsSection({
         />
         <EditorTypographySettings settings={settings} updateSettings={updateSettings} />
         <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
+        <SpellcheckLanguagesSetting settings={settings} updateSettings={updateSettings} />
         <SearchableSetting
           id={GENERAL_SETTING_ANCHORS.minimap}
           title={t('auto.components.settings.GeneralEditorSettingsSection.6690b1ffb9', 'Minimap')}
