@@ -1,5 +1,5 @@
-// The checks that start a bot's servers to see what needs signing in: one per bot, agent and scope
-// at a time, shared by whoever asks meanwhile, and stopped when the window that asked lets go.
+// The checks that start a bot's servers to see what needs signing in: one per bot, agent, scope and
+// settings at a time, shared by whoever asks meanwhile, and stopped when the window that asked lets go.
 
 import type { BotToolProblem } from '../../shared/bot-tools'
 
@@ -7,6 +7,13 @@ type Problems = Record<string, BotToolProblem>
 type Check = { botId: string; controller: AbortController; result: Promise<Problems> }
 
 const checks = new Map<string, Check>()
+
+/** Which check a request joins: one under other settings (`basis`) is another check. */
+export const botToolHealthCheckKey = (
+  agent: string,
+  remote: boolean,
+  basis: string | undefined
+): string => `${agent}\0${remote ? 'remote' : 'all'}\0${basis ?? ''}`
 
 /** Runs `run`, or joins the same check already under way. */
 export function sharedBotToolHealthCheck(

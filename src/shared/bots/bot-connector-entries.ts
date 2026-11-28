@@ -130,11 +130,15 @@ export function botToolAppsOf<Tool extends AppTool>(
 }
 
 /** Signing in again or fixing a server that won't start is the owner's to do. */
-function botToolAppNeedsOwner({ tool, problem }: BotToolApp<AppTool>): boolean {
+export function botToolAppNeedsOwner({ tool, problem }: BotToolApp<AppTool>): boolean {
+  // One that won't start needs the owner whatever its sign-in (a name Codex's config has).
+  if (problem?.kind === 'failed') {
+    return true
+  }
   if (tool.signIn) {
     return tool.signIn.state !== 'signed-in'
   }
-  return problem?.kind === 'sign-in' || problem?.kind === 'failed'
+  return problem?.kind === 'sign-in'
 }
 
 /** The list itself, in the order both sides draw it. */

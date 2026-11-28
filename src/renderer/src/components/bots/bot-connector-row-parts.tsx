@@ -30,6 +30,9 @@ export type BotConnectorFix = {
   disabled?: boolean
   /** Also opens the row, when the fix continues in its panel. */
   opensRow?: boolean
+  /** The collapsed list row's line in place of `label`, when the fix alone wouldn't say what's
+   *  wrong ("Won't start" over "Edit"); the fix itself waits on the opened page. */
+  listLabel?: string
 }
 
 /** `warning`: works, but something the owner fixes outside Orca keeps part of it from working. */

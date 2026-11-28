@@ -112,9 +112,8 @@ export function useBotToolsPage(
   const runCheck = useCallback(
     (own: readonly PhoneOwnTool[]) => {
       stopCheck()
-      // Only URL servers Orca doesn't sign in to are checked: Orca's own sign-in has its own state.
-      const checked =
-        scope === 'all' ? own : own.filter((tool) => isBotAppTool(tool) && !tool.signIn)
+      // An app Orca signs in to is checked too: its name can be taken in the agent's config.
+      const checked = scope === 'all' ? own : own.filter(isBotAppTool)
       if (!client || checked.length === 0) {
         setProblems({})
         shareTools(hostKey, botId, { problems: {} })

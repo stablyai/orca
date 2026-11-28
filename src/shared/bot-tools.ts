@@ -163,7 +163,12 @@ export type BotToolContext = {
 }
 
 /** What a row says is wrong; a working tool shows nothing. */
-export type BotToolProblem = { kind: 'sign-in' | 'failed' | 'unconfirmed'; detail?: string }
+export type BotToolProblem = {
+  kind: 'sign-in' | 'failed' | 'unconfirmed'
+  detail?: string
+  /** Why it fails, when renaming the bot's tool fixes it: its agent's own config has the name. */
+  reason?: 'nameTaken'
+}
 
 export type BotOwnTool = {
   name: string
@@ -185,6 +190,9 @@ export type BotTools = {
   inherited: BotInheritedTool[]
   /** Whether its sessions also take the host's MCP server list; absent while the host's switch is off. */
   hostMcpServers?: boolean
+  /** What a check of these tools runs with beyond them (Codex Arguments); a check from before it
+   *  changed is old. Absent from an older host. */
+  checkBasis?: string
 }
 
 export const botToolDetail = (server: BotToolServer): string =>

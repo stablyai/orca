@@ -87,7 +87,8 @@ describe('botToolProblems on Codex', () => {
 
     const taken = (name: string) => ({
       kind: 'failed',
-      detail: expect.stringContaining(`Codex already has a local tool named ${name}`)
+      reason: 'nameTaken',
+      detail: expect.stringContaining(`Codex already has a tool named ${name}`)
     })
     expect(await botToolProblems(cli)).toEqual({ notion: taken('notion'), linear: taken('linear') })
   })

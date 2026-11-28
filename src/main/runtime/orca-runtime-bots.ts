@@ -34,6 +34,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
 import { botStructuredSessionWiring, type WiredBot } from '../bots/bot-structured-session-wiring'
 import { botChatJournal } from '../bots/bot-chat-reads'
+import { watchCodexToolCheckArgs } from '../bots/bot-tools-codex-args'
 import type { RuntimeStore } from './construction/runtime-store-contract'
 import { watchBotSettingsChangeSources } from '../bots/bot-settings-change-sources'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
@@ -330,6 +331,10 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   // Every window's and phone's settings rows re-read on what changes them from outside their settings.
   protected readonly stopSettingsChangeSources = watchBotSettingsChangeSources(() =>
+    this.botChangeNotices.changed({ kinds: ['settings'] })
+  )
+  // A bot's Tools check loads the Codex Arguments its chats do, so one from before a change is old.
+  protected readonly stopCodexToolArgsWatch = watchCodexToolCheckArgs(this.store, () =>
     this.botChangeNotices.changed({ kinds: ['settings'] })
   )
 

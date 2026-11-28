@@ -192,7 +192,7 @@ export const MCP_SERVER_METHODS = [
             const names = only
               ? new Set([...ids].flatMap(([name, id]) => (only.has(id) ? [name] : [])))
               : undefined
-            const home = await toolsHomeFor(context.runtime, agent, {
+            const home = await toolsHomeFor(context.runtime, agent, undefined, {
               botId: MCP_HOST_LIST_RELAY_OWNER,
               folder,
               signInFolder: join(folder, '.orca', 'sign-in'),

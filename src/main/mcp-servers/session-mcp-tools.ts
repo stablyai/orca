@@ -169,11 +169,16 @@ export function withSessionMcpToolsEnv(
   if (!tools.relayed) {
     return Object.keys(tools.env).length > 0 ? { ...env, ...tools.env } : env
   }
-  // Both CLIs send loopback calls into HTTP(S)_PROXY unless NO_PROXY names loopback.
+  return withLoopbackNoProxy({ ...env, ...tools.env })
+}
+
+/** `env` with loopback in both NO_PROXY spellings: both CLIs send loopback calls into
+ *  HTTP(S)_PROXY unless NO_PROXY names loopback. */
+export function withLoopbackNoProxy(env: Record<string, string>): Record<string, string> {
   const existing = [env.NO_PROXY, env.no_proxy]
     .flatMap((value) => (value ?? '').split(','))
     .map((entry) => entry.trim())
     .filter(Boolean)
   const noProxy = [...new Set([...existing, ...LOOPBACK_HOSTS])].join(',')
-  return { ...env, ...tools.env, NO_PROXY: noProxy, no_proxy: noProxy }
+  return { ...env, NO_PROXY: noProxy, no_proxy: noProxy }
 }

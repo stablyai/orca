@@ -69,6 +69,9 @@ function shellEnvironmentSetConfig(
   )
 }
 
+/** What the opens of one start learned about the saved thread they resume. */
+export type CodexResumeEvidence = { archived: boolean }
+
 export async function openCodexThread(
   connection: Pick<CodexAppServerConnection, 'request'>,
   launch: {
@@ -81,6 +84,9 @@ export async function openCodexThread(
     threadConfig?: Record<string, unknown>
     commandEnv?: Record<string, string>
     developerInstructions?: string
+    /** Shared by the opens of one start (a retry without a refused server), so what one learns
+     *  about the saved thread holds for the next. */
+    resumeEvidence?: CodexResumeEvidence
   },
   /** null: no deadline; the start that opens the thread bounds it (`signal`). */
   timeoutMs: number | null | undefined,
@@ -128,14 +134,14 @@ export async function openCodexThread(
         { timeoutMs }
       )
     }
-    // An archived thread was saved, so it is never replaced by a new one.
-    let archived = false
+    // An archived thread was saved, so it is never replaced by a new one, by this open or a later.
+    const evidence = launch.resumeEvidence ?? { archived: false }
     try {
       opened = await resume().catch(async (error: unknown) => {
         if (!isCodexArchivedThreadError(error, resumeThreadId)) {
           throw error
         }
-        archived = true
+        evidence.archived = true
         throwIfSignalAborted(signal)
         await connection
           .request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
@@ -170,7 +176,7 @@ export async function openCodexThread(
       if (!isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }
-      if (!launch.supersedeIfUnsaved || archived) {
+      if (!launch.supersedeIfUnsaved || evidence.archived) {
         throw withProviderDiagnostic(
           Object.assign(
             new AgentSessionAcquisitionRefusal(error.message, 'savedConversationMissing'),

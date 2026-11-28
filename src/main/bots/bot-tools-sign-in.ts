@@ -9,14 +9,13 @@ import { z } from 'zod'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { BotToolServer } from '../../shared/bot-tools'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty/local-pty-executable-spawn'
-import { codexToolProblems, isTakenByCodexStdio } from './bot-tools-codex'
+import { codexThread, codexToolProblems, isTakenByCodexStdio } from './bot-tools-codex'
 import { redactBotToolText } from './bot-tool-redaction'
 import { readBotToolServers } from './bot-tools-file'
 import {
   claudeSignInFolder,
   codexSession,
   codexStdioToolNames,
-  codexThread,
   hasBotToolsCli,
   type BotToolsCli,
   type BotToolsHome
@@ -166,7 +165,15 @@ async function codexLogin(
   const link = Promise.withResolvers<string>()
   const launch = await cliWithLaunchTools(cli, servers)
   const login = codexSession(launch.cli, SIGN_IN_TIMEOUT_MS, async (rpc) => {
-    const threadId = await codexThread(rpc, launch.cli, launch.tools, ownerStdioNames)
+    const { threadId } = await codexThread(rpc, launch.cli, launch.tools, ownerStdioNames, {
+      // Its thread would run the owner's same-named server instead, which this sign-in isn't for:
+      // said at once, before (or instead of) another open, which could fail with a vaguer reason.
+      onRefused: (refused) => {
+        if (refused === name) {
+          throw new BotFailureError('toolNameTakenByCodexStdio', { name })
+        }
+      }
+    })
     const started = await rpc.request('mcpServer/oauth/login', { name, threadId })
     const url = LoginStarted.safeParse(started).data?.authorizationUrl
     if (!url) {

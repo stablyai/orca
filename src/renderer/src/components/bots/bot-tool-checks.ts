@@ -14,6 +14,13 @@ import {
   type BotChangeScope
 } from '../../../../shared/bots/bot-change-scope'
 import { notifyToolReaders, subscribe, toolsRevision } from './bot-tools-revision'
+import {
+  basisDrops,
+  droppedOf,
+  problemsUnder,
+  rememberBasis,
+  StaleCheck
+} from './bot-tool-check-basis'
 
 type Problems = Record<string, BotToolProblem>
 
@@ -33,6 +40,8 @@ type BotToolReads = {
   checks: Partial<Record<CheckScope, Check>>
   /** The host changed while no view showed it: the next view reads the tools again. */
   stale?: boolean
+  /** The host's `checkBasis` the checks ran with; undefined until the tools are read. */
+  basis?: string | null
 }
 // Shared by every row and card of a bot until the next change: a check starts its servers. Keyed by botRefKey.
 const reads = new Map<string, BotToolReads>()
@@ -86,6 +95,9 @@ function rereadToolLists(hostId: ExecutionHostId, scope: BotChangeScope | undefi
     read.tools = tools
     void tools.then(
       (next) => {
+        if (droppedForBasis(key, read, next)) {
+          return
+        }
         for (const reader of listReaders.get(key) ?? []) {
           reader(next)
         }
@@ -94,6 +106,9 @@ function rereadToolLists(hostId: ExecutionHostId, scope: BotChangeScope | undefi
     )
   }
 }
+
+// A Codex Arguments change drops only that bot's reads; its readers alone check again.
+const { invalidate, droppedForBasis } = basisDrops(reads, (read) => stopUnfinishedChecks(read))
 
 function listenForHostChanges(): void {
   if (!listeningForHost && typeof window !== 'undefined') {
@@ -130,6 +145,10 @@ function readsFor(bot: BotRef, agent: string | null): BotToolReads {
     if (cached.stale) {
       cached.stale = false
       cached.tools = callBotRpc<BotTools>(cached.bot, 'bots.tools.list', { botId: bot.id })
+      void cached.tools.then(
+        (next) => droppedForBasis(key, cached, next),
+        () => {}
+      )
     }
     reads.delete(key)
     reads.set(key, cached)
@@ -147,6 +166,7 @@ function readsFor(bot: BotRef, agent: string | null): BotToolReads {
     tools: callBotRpc<BotTools>(ref, 'bots.tools.list', { botId: bot.id }),
     checks: {}
   }
+  rememberBasis(fresh)
   reads.delete(key)
   reads.set(key, fresh)
   pruneClosedReads()
@@ -171,10 +191,13 @@ function holdCheck(read: BotToolReads, scope: CheckScope): [Check, () => void] {
   let check = read.checks[scope]
   if (!check) {
     const started: Check = {
-      problems: callBotRpc<{ problems: Problems }>(read.bot, 'bots.tools.problems', {
-        botId: read.bot.id,
-        scope
-      }).then((answer) => answer.problems),
+      problems: callBotRpc<{ problems: Problems; checkBasis?: string }>(
+        read.bot,
+        'bots.tools.problems',
+        { botId: read.bot.id, scope }
+      )
+        // Ran under settings the tools' read didn't (a change in between): read both again.
+        .then((answer) => problemsUnder(answer, read, () => invalidate(botRefKey(read.bot), read))),
       settled: null,
       users: 0,
       done: false
@@ -227,9 +250,6 @@ const LOADING: BotToolsView = { status: 'loading' }
  */
 export type BotToolsCheck = 'check' | 'apps' | 'finished' | 'none'
 
-/** An app whose state its agent's CLI reports; one Orca signs in to has its own, and isn't checked. */
-const checkedApp = (tool: BotOwnTool): boolean => isBotAppTool(tool) && !tool.signIn
-
 // A tool Orca signs in to isn't checked: its state is Orca's own, so it is never unconfirmed.
 const unconfirmed = (tools: readonly BotOwnTool[], detail?: string): Problems =>
   Object.fromEntries(
@@ -248,6 +268,7 @@ export function useBotTools(
 ): { view: BotToolsView } {
   const current = useSyncExternalStore(subscribe, toolsRevision)
   const finished = useSyncExternalStore(subscribe, () => (check === 'finished' ? checked : 0))
+  const readsDropped = useSyncExternalStore(subscribe, () => (bot ? droppedOf(botRefKey(bot)) : 0))
   const agent = useBots(bot !== null).find((entry) => bot && isSameBot(entry, bot))?.agent ?? null
   const [view, setView] = useState<BotToolsView>(LOADING)
   const botId = bot?.id ?? null
@@ -275,7 +296,8 @@ export function useBotTools(
         const scope: CheckScope | null =
           check === 'check' && own.length > 0
             ? 'all'
-            : check === 'apps' && own.some(checkedApp)
+            : // An app Orca signs in to is checked too: its name can be taken in the agent's config.
+              check === 'apps' && own.some(isBotAppTool)
               ? 'remote'
               : null
         if (!scope) {
@@ -299,16 +321,19 @@ export function useBotTools(
             }))
           }
         }
-        void held.problems.then(showProblems, () =>
-          showProblems(
-            unconfirmed(
-              own,
-              translate(
-                'bots.tools.checkUnfinished',
-                'The native check did not finish. Check again to retry.'
+        void held.problems.then(showProblems, (error: unknown) =>
+          // A stale answer is read again in its place.
+          error instanceof StaleCheck
+            ? undefined
+            : showProblems(
+                unconfirmed(
+                  own,
+                  translate(
+                    'bots.tools.checkUnfinished',
+                    'The native check did not finish. Check again to retry.'
+                  )
+                )
               )
-            )
-          )
         )
       },
       (error: unknown) =>
@@ -323,6 +348,6 @@ export function useBotTools(
       stopListening()
       release?.()
     }
-  }, [botId, hostId, agent, check, current, finished])
+  }, [botId, hostId, agent, check, current, finished, readsDropped])
   return { view: botId ? view : LOADING }
 }

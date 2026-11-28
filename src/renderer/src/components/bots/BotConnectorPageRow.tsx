@@ -133,7 +133,9 @@ export function BotConnectorPageRow({
                     aria-hidden
                   />
                 )}
-                <span className="truncate">{props.fix?.label ?? props.status?.label}</span>
+                <span className="truncate">
+                  {props.fix?.listLabel ?? props.fix?.label ?? props.status?.label}
+                </span>
               </p>
             ) : (
               <p className="truncate text-xs text-muted-foreground">{props.description}</p>

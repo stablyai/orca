@@ -124,6 +124,8 @@ type CodexSkillRootsLaunch = {
   permissionPolicy?: CodexStructuredPermissionPolicy
 }
 
+/** Codex takes roots at thread open and rereads their contents; run setup after initialize and
+ *  before opening. A Codex that takes no roots has the linked skills listed on the bot's next turn. */
 export async function prepareCodexThreadSkills(
   connection: CodexVisualsConnection,
   launch: CodexSkillRootsLaunch,
@@ -150,25 +152,4 @@ export async function prepareCodexThreadSkills(
       : writableRootsConfig(connection, { cwd: launch.cwd, folder: visuals.folder }, report)
   ])
   return { threadConfig, rootsTaken }
-}
-
-/** Codex takes roots at thread open and rereads their contents; run setup after initialize and
- *  before opening. A Codex that takes no roots has the linked skills listed on the bot's next turn. */
-export async function withCodexSkillRootsThreadConfig<
-  T extends CodexSkillRootsLaunch & {
-    threadConfig?: Record<string, unknown>
-    linkedSkillsRefused?: () => void
-  }
->(
-  connection: CodexVisualsConnection,
-  launch: T,
-  log: { logger?: StructuredAgentSessionLogger; sessionId: string }
-): Promise<T & { threadConfig?: Record<string, unknown> }> {
-  const { threadConfig, rootsTaken } = await prepareCodexThreadSkills(connection, launch, log)
-  if (!rootsTaken) {
-    launch.linkedSkillsRefused?.()
-  }
-  return threadConfig
-    ? { ...launch, threadConfig: { ...launch.threadConfig, ...threadConfig } }
-    : launch
 }

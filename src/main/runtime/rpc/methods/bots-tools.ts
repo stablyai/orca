@@ -43,6 +43,7 @@ import {
   finishBotToolSignIn
 } from '../../../bots/bot-tools-sign-in'
 import {
+  botToolHealthCheckKey,
   cancelBotToolHealthChecks,
   sharedBotToolHealthCheck
 } from '../../../bots/bot-tool-health-checks'
@@ -55,14 +56,17 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { appendOrcaChatCard } from '../../orca-chat-card'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { refuseFromLook, targetBot } from './bots-tools-target'
+import { codexChatAppServerArgs, codexCheckAdmission } from '../../../bots/bot-tools-codex-args'
+import type { CodexChatArgs } from '../../../bots/bot-tools-codex-args'
 
 const botToolSignInFolder = (botId: string): string =>
   join(getProfileUserDataPath(), 'bot-tool-sign-in', botId)
 
 /** The bot's tools on this host, with the agent CLI and account its next turn runs for Claude Code and Codex. */
-export async function botToolsHome(runtime: OrcaRuntimeService, bot: Bot): Promise<BotToolsHome> {
+/** Codex: `args` are the Arguments a check was admitted under, so it runs with exactly those. */
+export async function botToolsHome(runtime: OrcaRuntimeService, bot: Bot, args?: CodexChatArgs) {
   const agent = bot.agent
-  return toolsHomeFor(runtime, agent, {
+  return toolsHomeFor(runtime, agent, args, {
     botId: bot.id,
     folder: botHomeFolder(bot),
     signInFolder: botToolSignInFolder(bot.id),
@@ -78,6 +82,8 @@ export async function botToolsHome(runtime: OrcaRuntimeService, bot: Bot): Promi
 export async function toolsHomeFor(
   runtime: OrcaRuntimeService,
   agent: BotAgent,
+  /** Codex: the Arguments a check was admitted under; undefined reads them now. */
+  chatArgs: CodexChatArgs | undefined,
   folder: BotToolsFolder
 ): Promise<BotToolsHome> {
   if (agent !== 'claude' && agent !== 'codex') {
@@ -100,7 +106,10 @@ export async function toolsHomeFor(
       command,
       prefixArgs: [...prefixArgs],
       env: cliEnv,
-      accountHome: agent === 'claude' ? cliEnv.CLAUDE_CONFIG_DIR?.trim() || null : home
+      accountHome: agent === 'claude' ? cliEnv.CLAUDE_CONFIG_DIR?.trim() || null : home,
+      ...(agent === 'codex'
+        ? { chatArgs: chatArgs ?? codexChatAppServerArgs(sources.commandSettings) }
+        : {})
     }
   } finally {
     release.abort()
@@ -169,15 +178,19 @@ export const BOT_TOOLS_METHODS = [
     handler: async (params, context) => {
       const bot = targetBot(params, context)
       const remote = params.scope === 'remote'
+      // Admitted under the Arguments in force now: a request after a change never joins a check
+      // that runs with the old ones, and its answer names the ones it ran with.
+      const admitted = codexCheckAdmission(bot.agent, context.runtime.requireStore().getSettings())
       const problems = await sharedBotToolHealthCheck(
         bot.id,
-        `${bot.agent}\0${remote ? 'remote' : 'all'}`,
+        botToolHealthCheckKey(bot.agent, remote, admitted.checkBasis),
         async (signal) => {
           await scrubBotToolSecrets(context.runtime, bot)
-          return botToolProblems(await botToolsHome(context.runtime, bot), { remote, signal })
+          const home = await botToolsHome(context.runtime, bot, admitted.chatArgs)
+          return botToolProblems(home, { remote, signal })
         }
       )
-      return { problems }
+      return { problems, checkBasis: admitted.checkBasis }
     }
   }),
   defineMethod({

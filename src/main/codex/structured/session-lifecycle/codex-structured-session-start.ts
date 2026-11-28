@@ -24,8 +24,9 @@ import type { CodexJournalTranslator } from '../journal/codex-structured-journal
 import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-identity'
 import { openCodexThread } from '../threads/codex-structured-thread-open'
 import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
-import { withCodexSkillRootsThreadConfig } from '../launch/codex-structured-skill-roots'
 import { codexReadOnlyMcpOff } from '../prompts/codex-structured-read-only'
+import { codexThreadLaunch, openCodexThreadFitted } from '../launch/codex-bot-tools-fit'
+import { sharingCodexConfigReads } from '../launch/codex-shared-config-read'
 import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   restoredCodexSessionOptions,
@@ -97,19 +98,16 @@ export async function openCodexStructuredSession(
     openInput.signal
   )
   current()
-  // A read-only thread opens only with every MCP server its config has turned off.
-  const mcpOff = launch.readOnly
-    ? await waitForPromiseWithSignal(codexReadOnlyMcpOff(connection, launch.cwd), openInput.signal)
-    : null
-  current()
+  // The steps before the open share one read of Codex's config.
+  const configReads = sharingCodexConfigReads(connection)
+  const log = { sessionId, ...(deps.logger ? { logger: deps.logger } : {}) }
   const threadLaunch = await waitForPromiseWithSignal(
-    withCodexSkillRootsThreadConfig(
-      connection,
-      mcpOff ? { ...launch, threadConfig: { ...launch.threadConfig, ...mcpOff } } : launch,
-      {
-        sessionId,
-        ...(deps.logger ? { logger: deps.logger } : {})
-      }
+    codexThreadLaunch(
+      configReads,
+      launch,
+      // A read-only thread opens only with every MCP server its config has turned off.
+      launch.readOnly ? codexReadOnlyMcpOff(configReads, launch.cwd) : null,
+      log
     ),
     openInput.signal
   )
@@ -118,13 +116,25 @@ export async function openCodexStructuredSession(
     ...launch.commandEnv,
     ...(launch.visuals ? { [NATIVE_CHAT_SCRATCH_DIR_ENV]: launch.visuals.folder } : {})
   }
+  // An open again without a refused server still knows the saved thread was archived.
+  const resumeEvidence = { archived: false }
   const opened = await waitForPromiseWithSignal(
-    openCodexThread(
-      connection,
-      { ...threadLaunch, commandEnv },
-      // Long rollout/MCP setup relies on the host ceiling and cancellation unless a timeout is supplied.
-      deps.requestTimeoutMs ?? null,
-      openInput.signal
+    openCodexThreadFitted(
+      threadLaunch.threadConfig,
+      (threadConfig) =>
+        openCodexThread(
+          connection,
+          {
+            ...threadLaunch,
+            ...(threadConfig ? { threadConfig } : {}),
+            commandEnv,
+            resumeEvidence
+          },
+          // Long rollout/MCP setup relies on the host ceiling and cancellation unless a timeout is supplied.
+          deps.requestTimeoutMs ?? null,
+          openInput.signal
+        ),
+      log
     ),
     openInput.signal
   )

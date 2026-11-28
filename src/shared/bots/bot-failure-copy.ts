@@ -55,7 +55,7 @@ export const BOT_FAILURE_COPY = {
   toolNameTakenByAgent:
     'Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.',
   toolNameTakenByCodexStdio:
-    "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
+    "Your Codex already has a tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
   toolNotUpdated: 'The tool was not updated.',
   toolSignInAddressIncomplete: 'Paste the whole address the sign-in page ended on.',
   toolSignInAddressWrong:

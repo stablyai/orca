@@ -3,7 +3,7 @@ import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { BotToolServer } from '../../../../shared/bot-tools'
-import { BotToolLogo } from './apps/BotToolAppRow'
+import { BotToolLogo } from './apps/BotToolLogo'
 
 function serverLine(server: BotToolServer): string {
   return 'url' in server
