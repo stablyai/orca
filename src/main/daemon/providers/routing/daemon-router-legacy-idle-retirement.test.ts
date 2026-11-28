@@ -154,147 +154,160 @@ function holdNextDecision(adapter: DaemonPtyAdapter) {
   return held
 }
 
-describe.skipIf(process.platform === 'win32')('an older daemon generation that retires itself', () => {
-  it('serves reattach across an app restart, retires itself after its last terminal ends, and the current one stays', async () => {
-    const { dir, current, legacy } = await setup()
-    await seedOlderTerminal(legacy, 'old-1')
+describe.skipIf(process.platform === 'win32')(
+  'an older daemon generation that retires itself',
+  () => {
+    it('serves reattach across an app restart, retires itself after its last terminal ends, and the current one stays', async () => {
+      const { dir, current, legacy } = await setup()
+      await seedOlderTerminal(legacy, 'old-1')
 
-    // First launch reattaches, then quits without ending either terminal.
-    const first = launchApp(dir, current, legacy)
-    await first.router.discoverLegacySessions()
-    expect((await first.router.spawn({ ...size, sessionId: 'old-1', cwd: dir })).isReattach).toBe(true)
-    // Quit retires an empty current daemon by design; one terminal keeps it for the next launch.
-    const kept = await first.router.spawn({ ...size, cwd: dir })
-    await first.router.disconnectOnly()
+      // First launch reattaches, then quits without ending either terminal.
+      const first = launchApp(dir, current, legacy)
+      await first.router.discoverLegacySessions()
+      expect((await first.router.spawn({ ...size, sessionId: 'old-1', cwd: dir })).isReattach).toBe(
+        true
+      )
+      // Quit retires an empty current daemon by design; one terminal keeps it for the next launch.
+      const kept = await first.router.spawn({ ...size, cwd: dir })
+      await first.router.disconnectOnly()
 
-    // Second launch: the older generation still owns the terminal, so it keeps serving it.
-    const app = launchApp(dir, current, legacy)
-    await app.router.discoverLegacySessions()
-    expect((await app.router.spawn({ ...size, sessionId: 'old-1', cwd: dir })).isReattach).toBe(true)
-    await vi.waitFor(() => expect(app.legacyAdapter.isHeldForRetirement()).toBe(true))
-    expect(app.router.getLegacyAdapters()).toEqual([app.legacyAdapter])
-    const currentAsked = vi.spyOn(app.currentAdapter, 'askRetireWhenIdle')
+      // Second launch: the older generation still owns the terminal, so it keeps serving it.
+      const app = launchApp(dir, current, legacy)
+      await app.router.discoverLegacySessions()
+      expect((await app.router.spawn({ ...size, sessionId: 'old-1', cwd: dir })).isReattach).toBe(
+        true
+      )
+      await vi.waitFor(() => expect(app.legacyAdapter.isHeldForRetirement()).toBe(true))
+      expect(app.router.getLegacyAdapters()).toEqual([app.legacyAdapter])
+      const currentAsked = vi.spyOn(app.currentAdapter, 'askRetireWhenIdle')
 
-    legacy.endSession('old-1')
-    await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
-    await vi.waitFor(() => expect(app.router.getLegacyAdapters()).toEqual([]), { timeout: 5_000 })
+      legacy.endSession('old-1')
+      await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
+      await vi.waitFor(() => expect(app.router.getLegacyAdapters()).toEqual([]), { timeout: 5_000 })
 
-    // The current generation keeps serving, empty or not.
-    current.endSession(kept.id)
-    const fresh = await app.router.spawn({ ...size, cwd: dir })
-    current.endSession(fresh.id)
-    await vi.waitFor(() => expect(current.server.host.listSessions()).toEqual([]))
-    const next = await app.router.spawn({ ...size, cwd: dir })
-    expect(current.server.host.listSessions().map((s) => s.sessionId)).toEqual([next.id])
-    expect(currentAsked).not.toHaveBeenCalled()
-    expect(current.retired).toBe(false)
-  })
+      // The current generation keeps serving, empty or not.
+      current.endSession(kept.id)
+      const fresh = await app.router.spawn({ ...size, cwd: dir })
+      current.endSession(fresh.id)
+      await vi.waitFor(() => expect(current.server.host.listSessions()).toEqual([]))
+      const next = await app.router.spawn({ ...size, cwd: dir })
+      expect(current.server.host.listSessions().map((s) => s.sessionId)).toEqual([next.id])
+      expect(currentAsked).not.toHaveBeenCalled()
+      expect(current.retired).toBe(false)
+    })
 
-  it('routes a reattach that reaches it after it decided to the current generation', async () => {
-    const { dir, current, legacy } = await setup()
-    await seedOlderTerminal(legacy, 'old-1')
-    const app = launchApp(dir, current, legacy)
-    await app.router.discoverLegacySessions()
-    await vi.waitFor(() => expect(app.legacyAdapter.isHeldForRetirement()).toBe(true))
+    it('routes a reattach that reaches it after it decided to the current generation', async () => {
+      const { dir, current, legacy } = await setup()
+      await seedOlderTerminal(legacy, 'old-1')
+      const app = launchApp(dir, current, legacy)
+      await app.router.discoverLegacySessions()
+      await vi.waitFor(() => expect(app.legacyAdapter.isHeldForRetirement()).toBe(true))
 
-    // Routed to the older generation while it still owns the terminal, then held there.
-    const held = holdNextSpawn(app.legacyAdapter)
-    const reattach = app.router.spawn({ ...size, sessionId: 'old-1', cwd: dir })
-    await held.reached
-    legacy.endSession('old-1')
-    await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
+      // Routed to the older generation while it still owns the terminal, then held there.
+      const held = holdNextSpawn(app.legacyAdapter)
+      const reattach = app.router.spawn({ ...size, sessionId: 'old-1', cwd: dir })
+      await held.reached
+      legacy.endSession('old-1')
+      await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
 
-    held.release()
-    const restored = await reattach
-    expect(restored.id).toBe('old-1')
-    expect(current.server.host.listSessions().map((s) => s.sessionId)).toEqual(['old-1'])
-    expect(app.router.getLegacyAdapters()).toEqual([])
-  })
+      held.release()
+      const restored = await reattach
+      expect(restored.id).toBe('old-1')
+      expect(current.server.host.listSessions().map((s) => s.sessionId)).toEqual(['old-1'])
+      expect(app.router.getLegacyAdapters()).toEqual([])
+    })
 
-  it('is never asked of, and refused by, the current generation', async () => {
-    const { current } = await setup()
-    const client = new DaemonClient({ socketPath: current.socketPath, tokenPath: current.tokenPath })
-    cleanups.push(() => client.disconnect())
-    await client.ensureConnected()
-    for (const currentProtocolVersion of [PROTOCOL_VERSION, LEGACY, undefined]) {
-      await expect(
-        client.request('retireWhenIdle', { currentProtocolVersion })
-      ).rejects.toThrow(/refused/)
-    }
-    // Empty, with this client gone: only an ordinary last-client retirement could stop it now.
-    await client.request('createOrAttach', { sessionId: 'kept', cols: 80, rows: 24 })
-    expect(current.retired).toBe(false)
-  })
-})
+    it('is never asked of, and refused by, the current generation', async () => {
+      const { current } = await setup()
+      const client = new DaemonClient({
+        socketPath: current.socketPath,
+        tokenPath: current.tokenPath
+      })
+      cleanups.push(() => client.disconnect())
+      await client.ensureConnected()
+      for (const currentProtocolVersion of [PROTOCOL_VERSION, LEGACY, undefined]) {
+        await expect(client.request('retireWhenIdle', { currentProtocolVersion })).rejects.toThrow(
+          /refused/
+        )
+      }
+      // Empty, with this client gone: only an ordinary last-client retirement could stop it now.
+      await client.request('createOrAttach', { sessionId: 'kept', cols: 80, rows: 24 })
+      expect(current.retired).toBe(false)
+    })
+  }
+)
 
 // Transitional: generations from before `retireWhenIdle` (v63 and older) are asked by the app.
-describe.skipIf(process.platform === 'win32')('an older generation from before retireWhenIdle', () => {
-  function launchPreRpcApp(dir: string, current: Generation, legacy: Generation) {
-    const app = launchApp(dir, current, legacy)
-    vi.spyOn(app.legacyAdapter, 'askRetireWhenIdle').mockResolvedValue('unsupported')
-    return app
+describe.skipIf(process.platform === 'win32')(
+  'an older generation from before retireWhenIdle',
+  () => {
+    function launchPreRpcApp(dir: string, current: Generation, legacy: Generation) {
+      const app = launchApp(dir, current, legacy)
+      vi.spyOn(app.legacyAdapter, 'askRetireWhenIdle').mockResolvedValue('unsupported')
+      return app
+    }
+
+    it('holds reattaches while it decides, routes them to current after it retires, and never delays a new terminal', async () => {
+      const { dir, current, legacy } = await setup()
+      const app = launchPreRpcApp(dir, current, legacy)
+      const decision = holdNextDecision(app.legacyAdapter)
+      await app.router.discoverLegacySessions()
+      await decision.reached
+
+      let reattachSettled = false
+      const reattach = app.router
+        .spawn({ ...size, sessionId: 'restored', cwd: dir })
+        .finally(() => (reattachSettled = true))
+      const fresh = await app.router.spawn({ ...size, cwd: dir })
+      expect(current.server.host.listSessions().map((s) => s.sessionId)).toContain(fresh.id)
+      expect(reattachSettled).toBe(false)
+
+      decision.release()
+      const restored = await reattach
+      await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
+      expect(restored.id).toBe('restored')
+      expect(current.server.host.listSessions().map((s) => s.sessionId)).toContain('restored')
+      expect(legacy.server.host.listSessions()).toEqual([])
+      await vi.waitFor(() => expect(app.router.getLegacyAdapters()).toEqual([]))
+    })
+
+    it('asks no decision while a reattach to it is in flight, even once it reads empty', async () => {
+      const { dir, current, legacy } = await setup()
+      await seedOlderTerminal(legacy, 'old-1')
+      await seedOlderTerminal(legacy, 'old-2')
+      const app = launchPreRpcApp(dir, current, legacy)
+      await app.router.discoverLegacySessions()
+      // Attached, so its exit reaches the app and starts an emptiness check.
+      await app.router.spawn({ ...size, sessionId: 'old-2', cwd: dir })
+      const decision = vi.spyOn(app.legacyAdapter, 'requestIdleRetirement')
+      const inventory = vi.spyOn(app.legacyAdapter, 'listSessionsAndRelays')
+      const held = holdNextSpawn(app.legacyAdapter)
+
+      const reattach = app.router.spawn({ ...size, sessionId: 'old-1', cwd: dir })
+      await held.reached
+      inventory.mockClear()
+      legacy.endSession('old-1')
+      legacy.endSession('old-2')
+      await vi.waitFor(() => expect(legacy.server.host.listSessions()).toEqual([]))
+      // The exit's check finds the reattach in flight and defers before it reads anything.
+      await vi.waitFor(() => expect(app.legacyAdapter.getActiveSessionIds()).toEqual([]))
+      expect(inventory).not.toHaveBeenCalled()
+      expect(decision).not.toHaveBeenCalled()
+
+      // The reattach lands after its terminal ended and starts it again there: work the old generation keeps.
+      held.release()
+      const result = await reattach
+      await vi.waitFor(() => expect(inventory).toHaveBeenCalled())
+      expect(decision).not.toHaveBeenCalled()
+      expect(legacy.retired).toBe(false)
+      expect(legacy.server.host.listSessions().map((s) => s.sessionId)).toEqual([result.id])
+
+      legacy.endSession(result.id)
+      await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
+      await vi.waitFor(() => expect(app.router.getLegacyAdapters()).toEqual([]))
+    })
   }
-
-  it('holds reattaches while it decides, routes them to current after it retires, and never delays a new terminal', async () => {
-    const { dir, current, legacy } = await setup()
-    const app = launchPreRpcApp(dir, current, legacy)
-    const decision = holdNextDecision(app.legacyAdapter)
-    await app.router.discoverLegacySessions()
-    await decision.reached
-
-    let reattachSettled = false
-    const reattach = app.router
-      .spawn({ ...size, sessionId: 'restored', cwd: dir })
-      .finally(() => (reattachSettled = true))
-    const fresh = await app.router.spawn({ ...size, cwd: dir })
-    expect(current.server.host.listSessions().map((s) => s.sessionId)).toContain(fresh.id)
-    expect(reattachSettled).toBe(false)
-
-    decision.release()
-    const restored = await reattach
-    await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
-    expect(restored.id).toBe('restored')
-    expect(current.server.host.listSessions().map((s) => s.sessionId)).toContain('restored')
-    expect(legacy.server.host.listSessions()).toEqual([])
-    await vi.waitFor(() => expect(app.router.getLegacyAdapters()).toEqual([]))
-  })
-
-  it('asks no decision while a reattach to it is in flight, even once it reads empty', async () => {
-    const { dir, current, legacy } = await setup()
-    await seedOlderTerminal(legacy, 'old-1')
-    await seedOlderTerminal(legacy, 'old-2')
-    const app = launchPreRpcApp(dir, current, legacy)
-    await app.router.discoverLegacySessions()
-    // Attached, so its exit reaches the app and starts an emptiness check.
-    await app.router.spawn({ ...size, sessionId: 'old-2', cwd: dir })
-    const decision = vi.spyOn(app.legacyAdapter, 'requestIdleRetirement')
-    const inventory = vi.spyOn(app.legacyAdapter, 'listSessionsAndRelays')
-    const held = holdNextSpawn(app.legacyAdapter)
-
-    const reattach = app.router.spawn({ ...size, sessionId: 'old-1', cwd: dir })
-    await held.reached
-    inventory.mockClear()
-    legacy.endSession('old-1')
-    legacy.endSession('old-2')
-    await vi.waitFor(() => expect(legacy.server.host.listSessions()).toEqual([]))
-    // The exit's check finds the reattach in flight and defers before it reads anything.
-    await vi.waitFor(() => expect(app.legacyAdapter.getActiveSessionIds()).toEqual([]))
-    expect(inventory).not.toHaveBeenCalled()
-    expect(decision).not.toHaveBeenCalled()
-
-    // The reattach lands after its terminal ended and starts it again there: work the old generation keeps.
-    held.release()
-    const result = await reattach
-    await vi.waitFor(() => expect(inventory).toHaveBeenCalled())
-    expect(decision).not.toHaveBeenCalled()
-    expect(legacy.retired).toBe(false)
-    expect(legacy.server.host.listSessions().map((s) => s.sessionId)).toEqual([result.id])
-
-    legacy.endSession(result.id)
-    await vi.waitFor(() => expect(legacy.retired).toBe(true), { timeout: 5_000 })
-    await vi.waitFor(() => expect(app.router.getLegacyAdapters()).toEqual([]))
-  })
-})
+)
 
 describe('the transitional recheck timer', () => {
   type Stub = Partial<Record<keyof DaemonPtyAdapter, unknown>> & { protocolVersion: number }
@@ -302,7 +315,10 @@ describe('the transitional recheck timer', () => {
   const asAdapter = (stub: Stub) => stub as unknown as DaemonPtyAdapter
 
   function stubs() {
-    const inventory = { sessions: [] as { sessionId: string }[], liveRelays: 1 }
+    const inventory: { sessions: { sessionId: string }[]; liveRelays: number } = {
+      sessions: [],
+      liveRelays: 1
+    }
     const base = {
       hasRetiredForIdle: () => false,
       wasAskedToRetireWhenIdle: () => false,

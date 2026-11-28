@@ -25,7 +25,11 @@ export function answer(
         ? payload.currentProtocolVersion
         : undefined
     // The current generation never retires on request; only a newer app may supersede this one.
-    if (typeof newer !== 'number' || !Number.isSafeInteger(newer) || newer <= connections.protocolVersion) {
+    if (
+      typeof newer !== 'number' ||
+      !Number.isSafeInteger(newer) ||
+      newer <= connections.protocolVersion
+    ) {
       throw new Error('retireWhenIdle refused: no newer generation named')
     }
     const client = connections.get(clientId)
