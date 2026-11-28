@@ -1,5 +1,7 @@
 import { RuntimeConnectionChangedBeforeSendError } from '../../../runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { isOrchestrationMutation } from '../../../../../shared/orchestration/orchestration-rpc-contract'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { WebRuntimePendingRequest } from './web-runtime-connection-frame-router'
 
 const REQUEST_TIMEOUT_MS = 30_000
@@ -88,12 +90,16 @@ export class WebRuntimeRequestRegistry {
         },
         timeout
       })
+      const orchestrationEnvelope = isOrchestrationMutation(method, params)
+        ? { orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
+        : undefined
       if (
         !this.options.sendEncrypted({
           id,
           deviceToken: this.options.deviceToken,
           method,
-          params
+          params,
+          ...orchestrationEnvelope
         })
       ) {
         this.pending.delete(id)
