@@ -1682,6 +1682,7 @@
     "settings.mcpServers.fileAgent.allow",
     "settings.mcpServers.fileAgent.line",
     "settings.mcpServers.fileAgent.title",
+    "settings.mcpServers.signInAgain",
     "settings.mcpServers.status.commandFailed",
     "settings.mcpServers.status.needsSignIn",
     "settings.mcpServers.status.signedIn",

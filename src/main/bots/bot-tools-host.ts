@@ -35,14 +35,14 @@ import {
   changeBotToolServers,
   type BotToolNewCredential
 } from './bot-tools-file'
-import { resolveBotToolInput } from './bot-tool-details'
+import { resolveBotToolInput, withSavedBotToolHeaders } from './bot-tool-details'
 import { claudeBotToolProblems } from './bot-tools-claude-check'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { redactBotToolProblems } from './bot-tool-redaction'
 import { cliWithLaunchTools, withRelayProblems } from './bot-launch-tools'
 import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import type { BotAgent } from '../../shared/bot-types'
-import { botToolCredentialsReader, withSavedBotToolHeaders } from './bot-tool-credentials'
+import { botToolCredentialsReader } from './bot-tool-credentials'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export type BotToolsFolder = {

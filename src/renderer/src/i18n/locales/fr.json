@@ -1598,7 +1598,8 @@
         "add": "Ajouter un serveur pour ce dépôt",
         "files": "Issus des fichiers de ce dépôt",
         "open": "Ouvrir {{file}}"
-      }
+      },
+      "unreadable": "La connexion ou la clé enregistrée ne peut pas être ouverte sur cet ordinateur"
     }
   },
   "menu": {
@@ -22544,7 +22545,9 @@
           "pending": "Connexion au serveur…",
           "tools_many": "{{count}} outils",
           "tools_one": "{{count}} outil",
-          "tools_other": "{{count}} outils"
+          "tools_other": "{{count}} outils",
+          "orcaRemoved": "Supprimé : redémarre au prochain message",
+          "orcaChanged": "Modifié : redémarre au prochain message"
         },
         "signIn": {
           "external": "Terminez sur la page qui s’est ouverte",
@@ -22586,7 +22589,8 @@
           "user": "Utilisateur",
           "plugin": "Plugin",
           "session": "Session"
-        }
+        },
+        "stillFailing": "Échoue toujours après la reconnexion."
       }
     },
     "tab": {
