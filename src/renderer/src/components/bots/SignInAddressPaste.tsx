@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNativeChatViewGuard } from '../native-chat/pane/ownership/native-chat-view-memory'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewGuard
+} from '../native-chat/pane/ownership/native-chat-view-memory'
 
 /**
  * A sign-in finished in a browser that can't reach the computer it signs in to ends on a page that
@@ -30,9 +33,18 @@ export function SignInAddressPaste({
   )
   const [refusal, setRefusal] = useNativeChatViewGuard<{ address: string; why: string } | null>(
     memoryKey === undefined ? undefined : `sign-in-address-refused:${memoryKey}`,
-    null
+    null,
+    KEPT_PROMPT_VIEWS
   )
   const [address, setAddress] = useState(() => refusal?.address ?? '')
+  // A refusal landing after this view mounted brings back the address it refused, unless something was typed since.
+  const [seenRefusal, setSeenRefusal] = useState(refusal)
+  if (refusal !== seenRefusal) {
+    setSeenRefusal(refusal)
+    if (refusal && address === '') {
+      setAddress(refusal.address)
+    }
+  }
   const refused = refusal?.why ?? null
   const finish = () => {
     const tried = address

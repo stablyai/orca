@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
@@ -9,7 +9,10 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { createNonSecureContextUuid } from '../../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { WorkerDockRowView } from './WorkerDockRow'
 import type { WorkerDockStopBlock } from './worker-dock-stop-check'
-import { useNativeChatViewGuard } from '../../../pane/ownership/native-chat-view-memory'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewGuard
+} from '../../../pane/ownership/native-chat-view-memory'
 
 /** A strip failure and the retry of the request that failed; no retry when none applies. */
 export type WorkerDockFailure = { message: string; retry?: () => void }
@@ -29,10 +32,21 @@ export function useWorkerDockOwnerActions(
   const t = useTranslate()
   // Kept with the chat tab: a dock released mid-request returns with those rows still pending.
   const [pending, setPending] = useNativeChatViewGuard('worker-dock-pending', NO_PENDING)
-  // Kept with it, so a request failing while the chat is switched away still offers its message and Retry.
-  const [failure, setFailure] = useNativeChatViewGuard<WorkerDockFailure | null>(
+  // Kept with it, so a request failing while the chat is switched away still says why on return. Only the message:
+  // Retry stays with the view that made it, whose stop check is current.
+  const [kept, setKept] = useNativeChatViewGuard<{ message: string } | null>(
     'worker-dock-failure',
-    null
+    null,
+    KEPT_PROMPT_VIEWS
+  )
+  const [retryOf, setRetryOf] = useState<{ failure: object; retry: () => void } | null>(null)
+  const failure = useMemo<WorkerDockFailure | null>(
+    () =>
+      kept && {
+        message: kept.message,
+        ...(retryOf?.failure === kept ? { retry: retryOf.retry } : {})
+      },
+    [kept, retryOf]
   )
   const acknowledge = useCallback(
     async (settlements: { dispatchId: string; settlement: string }[]) => {
@@ -52,16 +66,16 @@ export function useWorkerDockOwnerActions(
   const track = useCallback(
     (ids: ReadonlySet<string>, request: () => Promise<unknown>) => {
       const attempt = () => {
-        setFailure(null)
+        setKept(null)
         setPending((current) => new Set([...current, ...ids]))
         void request()
-          .catch((value) =>
-            setFailure(
-              value instanceof FinalWorkerDockError
-                ? { message: message(value) }
-                : { message: message(value), retry: attempt }
+          .catch((value) => {
+            const failed = { message: message(value) }
+            setKept(failed)
+            setRetryOf(
+              value instanceof FinalWorkerDockError ? null : { failure: failed, retry: attempt }
             )
-          )
+          })
           .finally(() =>
             setPending((current) => {
               const left = new Set([...current].filter((id) => !ids.has(id)))
@@ -72,7 +86,7 @@ export function useWorkerDockOwnerActions(
       }
       attempt()
     },
-    [setFailure, setPending]
+    [setKept, setPending]
   )
   const action = useCallback(
     (row: WorkerDockRowView, kind: 'stop' | 'clear') => {
@@ -121,7 +135,7 @@ export function useWorkerDockOwnerActions(
   return {
     pending,
     failure,
-    dismissFailure: () => setFailure(null),
+    dismissFailure: () => setKept(null),
     action,
     clearAll
   }
