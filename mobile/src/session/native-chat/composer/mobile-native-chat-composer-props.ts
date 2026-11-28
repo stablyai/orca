@@ -4,12 +4,37 @@ import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared
 import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { ComposerRoomMention } from './menus/MobileNativeChatComposerMenu'
 import type { MobileNativeChatSessionOptionPickersProps } from '../input/session-options/MobileNativeChatSessionOptionPickers'
+import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
 import type { PendingNativeChatImage } from './attachments/mobile-native-chat-image-attachment'
 import type { MobilePastedImages } from './attachments/mobile-native-chat-composer-paste'
 import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
 import type { MobileNativeChatMicProps } from './dictation/MobileNativeChatComposerMic'
 import type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
 import type { MobileNativeChatSteerHead } from './menus/use-mobile-native-chat-composer-tray'
+import type { Translate } from '../../../i18n/mobile-i18n'
+
+export const NO_FILE_PATHS: string[] = []
+export const NO_ATTACHMENTS: PendingNativeChatImage[] = []
+export const NO_FILES: PendingNativeChatFile[] = []
+
+export function composerPlaceholder(
+  goalPlaceholder: string | null | undefined,
+  placeholder: string | null | undefined,
+  mentionBots: { bots: readonly unknown[] } | null | undefined,
+  t: Translate
+): string {
+  const hasMentionBots = mentionBots != null && mentionBots.bots.length > 0
+  return (
+    goalPlaceholder ??
+    placeholder ??
+    (hasMentionBots
+      ? t(
+          'bots.chat.mentionPlaceholder',
+          'Ask anything, @ to mention bots or files, / for commands'
+        )
+      : t('chat.composer.placeholder', 'Ask anything, @ to mention files, / for commands'))
+  )
+}
 
 export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
   roomReplies?: React.ReactNode
@@ -66,4 +91,8 @@ export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
   onNeedSkills?: () => void
   /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
   stop?: { onStop?: () => void; held: boolean } | null
+  /** At the screen's bottom edge: even margins and bottom corners that follow the screen's. */
+  fitScreenCorners?: boolean
+  /** On the iPhone Duo: whether the chat runs across the status column, and the switch for it. */
+  widthToggle?: { expanded: boolean; onToggle: () => void } | null
 }

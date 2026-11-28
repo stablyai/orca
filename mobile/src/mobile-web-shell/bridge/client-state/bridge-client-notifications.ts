@@ -18,6 +18,11 @@ import { captureBridgeError } from '../protocol/bridge-error-capture'
 import { BRIDGE_LIVENESS_PROBE_NOTIFY } from '../native-capabilities/bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from '../page-lifecycle/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from '../page-lifecycle/bridge-page-location'
+import {
+  BRIDGE_SIDE_STRIP_COVER_GRANT,
+  BRIDGE_SIDE_STRIP_COVER_NOTIFY,
+  type BridgeSideStripFree
+} from '../page-geometry/bridge-side-strip-cover'
 import { BRIDGE_SWAP_SAFE_NOTIFY } from '../page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../page-lifecycle/bridge-page-painted'
 import {
@@ -56,6 +61,7 @@ export type BridgeClientNotifications = {
     inputOwner?: string,
     toolbar?: BridgeTerminalToolbar
   ) => void
+  notifySideStripCover: (covered: boolean, free?: BridgeSideStripFree | null) => void
 }
 
 export function createBridgeClientNotifications(
@@ -166,6 +172,18 @@ export function createBridgeClientNotifications(
           ...(inputOwner === undefined ? {} : { inputOwner }),
           ...(toolbar === undefined ? {} : { toolbar }),
           claimed
+        })
+      }
+    },
+    // Only to a shell that granted it: any other refuses the name.
+    notifySideStripCover: (covered, free) => {
+      if (deps.hasGrant(BRIDGE_SIDE_STRIP_COVER_GRANT)) {
+        post({
+          v: BRIDGE_PROTOCOL_VERSION,
+          type: 'notify',
+          name: BRIDGE_SIDE_STRIP_COVER_NOTIFY,
+          covered,
+          ...(free ? { free } : {})
         })
       }
     }

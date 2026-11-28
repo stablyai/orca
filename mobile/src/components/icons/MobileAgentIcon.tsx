@@ -96,6 +96,18 @@ function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number 
   )
 }
 
+const DRAWN_AGENT_ICONS = new Set(['claude', 'claude-agent-teams', 'codex', 'pi', 'omp', 'aider'])
+
+/** False where MobileAgentIcon would only draw the agent's initial. */
+export function hasMobileAgentIcon(agentId: string): boolean {
+  const iconAgentId = agentId === 'dsb' ? 'dsh' : agentId
+  return (
+    DRAWN_AGENT_ICONS.has(agentId) ||
+    iconAssets[iconAgentId] !== undefined ||
+    MOBILE_AGENT_CATALOG.some((entry) => entry.id === agentId && entry.faviconDomain)
+  )
+}
+
 export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?: number }) {
   const colors = useMobileColors()
   if (agentId === 'claude' || agentId === 'claude-agent-teams') {

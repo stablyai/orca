@@ -165,10 +165,11 @@ export function botItemsClosedInTimeOrder(
           : []
   )
   const cutoff = tails.length > 0 ? Math.max(...tails) : -Infinity
+  // Copy, then sort. Hermes has no Array.prototype.toSorted, and the Items sheet calls this on mount.
   return bots
     .flatMap(({ closed }) => closed)
     .filter((item) => item.lastActivityAt >= cutoff)
-    .toSorted((a, b) => b.lastActivityAt - a.lastActivityAt || b.number - a.number)
+    .sort((a, b) => b.lastActivityAt - a.lastActivityAt || b.number - a.number)
 }
 
 /** The tab's badge: items in Needs you that aren't stale or snoozed. */

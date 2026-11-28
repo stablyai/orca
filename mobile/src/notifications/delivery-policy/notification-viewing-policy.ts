@@ -1,8 +1,6 @@
 import { AppState } from 'react-native'
+import type { ViewedWorkspace } from '../../navigation/page-location-session'
 
-type ViewedWorkspace = { worktreeId: string; executionHost?: string }
-
-// `executionHost` is the route's server; absent for the desktop's own workspaces.
 // A host document shows sessions inside itself, so on its route the session comes from what its page reports.
 type Viewing = ({ hostId: string } & (ViewedWorkspace | { hostDocument: true })) | null
 let viewing: Viewing = null
@@ -32,23 +30,6 @@ export function setHostDocumentSession(hostId: string, session: ViewedWorkspace 
     hostDocumentSessions.delete(hostId)
   } else {
     hostDocumentSessions.set(hostId, session)
-  }
-}
-
-// The session a page location names, or null for any other screen.
-export function sessionOfPageLocation(href: string): ViewedWorkspace | null {
-  const match = /^\/h\/[^/?]+\/session\/([^/?]+)(?:\?(.*))?$/.exec(href)
-  if (match === null) {
-    return null
-  }
-  try {
-    const executionHost = new URLSearchParams(match[2] ?? '').get('executionHost')
-    return {
-      worktreeId: decodeURIComponent(match[1]!),
-      ...(executionHost ? { executionHost } : {})
-    }
-  } catch {
-    return null
   }
 }
 

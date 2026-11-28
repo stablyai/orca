@@ -274,6 +274,7 @@ export function MobileBotNeedsYouGroup({
   onOpenAsk,
   ownerOf,
   client,
+  clientOf,
   onSkipFailed
 }: {
   botName: string
@@ -289,6 +290,8 @@ export function MobileBotNeedsYouGroup({
   onOpenAsk: (ask: PhoneAsk) => void
   /** The host's client, which a chat's Skip saves through. */
   client: RpcClient | null
+  /** The client that owns one ask, when a group lists asks from more than one host. */
+  clientOf?: (ask: PhoneAsk) => RpcClient | null
   onSkipFailed: (message: string) => void
 }) {
   const t = useMobileTranslation()
@@ -353,7 +356,7 @@ export function MobileBotNeedsYouGroup({
                     botName={botName}
                     owner={ownerOf?.(row.ask)}
                     now={now}
-                    client={client}
+                    client={clientOf?.(row.ask) ?? client}
                     disabled={disabled}
                     onOpen={() => onOpenAsk(row.ask!)}
                     onSkipFailed={onSkipFailed}

@@ -1,10 +1,8 @@
 import { useCallback, useEffect } from 'react'
 import { useLocalSearchParams, useNavigation } from 'expo-router'
 import { firstParam } from '../../navigation/route-param-reader'
-import {
-  sessionOfPageLocation,
-  setHostDocumentSession
-} from '../../notifications/delivery-policy/notification-viewing-policy'
+import { setHostDocumentSession } from '../../notifications/delivery-policy/notification-viewing-policy'
+import { sessionOfPageLocation } from '../../navigation/page-location-session'
 import {
   BRIDGE_OPEN_ROUTE_PARAM,
   type BridgeClearableRouteParam

@@ -4,6 +4,8 @@ export type PageBackConsumer = () => boolean
 export type PageBackConsumers = {
   readonly claim: (consumer: PageBackConsumer) => () => void
   readonly press: () => void
+  // Same walk as press, without the shell's unclaimed handoff. A page control reports that itself.
+  readonly dispatch: () => boolean
   // Reassert held state after init because ready clears the shell claim; when unheld, its false state is already established and needs no extra frame.
   readonly reassert: () => void
   readonly clear: () => void
@@ -23,6 +25,17 @@ export function createPageBackConsumers(args: {
     }
   }
 
+  // Snapshot, then walk newest first. Hermes has no toReversed, and disposing one consumer must not skip the one beneath it.
+  function taken(): boolean {
+    const stack = held.slice()
+    for (let index = stack.length - 1; index >= 0; index--) {
+      if (stack[index].consumer()) {
+        return true
+      }
+    }
+    return false
+  }
+
   return {
     claim: (consumer) => {
       const entry = { consumer }
@@ -39,12 +52,12 @@ export function createPageBackConsumers(args: {
         publish(heldBefore)
       }
     },
-    // Walk a copy so a handler disposing itself cannot skip the consumer beneath it.
     press: () => {
-      if (!held.toReversed().some((entry) => entry.consumer())) {
+      if (!taken()) {
         args.onUnclaimed()
       }
     },
+    dispatch: () => taken(),
     reassert: () => {
       if (held.length > 0) {
         args.publishClaim(true)
