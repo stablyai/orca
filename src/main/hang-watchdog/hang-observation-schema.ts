@@ -64,6 +64,8 @@ export type HangObservation = {
   escalatedAt?: number
   /** The version that observed it; the next launch may run another one. */
   appVersion?: string
+  /** Last watchdog tick while this stall was live; stopping before escalation means the watchdog was blocked too. */
+  watchdogTickAt?: number
 }
 /** Pre-tier records are hangs: the watchdog used to observe nothing shorter than its timeout. */
 export function isHangTierObservation(record: HangObservation): boolean {
@@ -74,9 +76,24 @@ export function hangObservationUnresponsiveMs(record: HangObservation): number {
   // An escalated hang lasted at least to escalation, even if its resolution was stamped earlier.
   const lastKnownAt = Math.max(
     record.resolution?.wallMs ?? record.detectedAt,
-    record.escalatedAt ?? record.detectedAt
+    record.escalatedAt ?? record.detectedAt,
+    // Each tick saw main still silent, so a run killed mid-stall was unresponsive at least that long.
+    record.watchdogTickAt ?? record.detectedAt
   )
   return record.durationMs + Math.max(0, lastKnownAt - record.detectedAt)
+}
+/** Tier plus the build and last watchdog tick a stall record carries. */
+export function parseHangStallTrailFields(
+  data: Record<string, unknown>
+): Pick<HangObservation, 'tier' | 'escalatedAt' | 'appVersion' | 'watchdogTickAt'> {
+  const { appVersion, watchdogTickAt } = data
+  return {
+    ...parseHangTierFields(data),
+    ...(typeof appVersion === 'string' && appVersion.length <= 64 ? { appVersion } : {}),
+    ...(typeof watchdogTickAt === 'number' && Number.isFinite(watchdogTickAt)
+      ? { watchdogTickAt }
+      : {})
+  }
 }
 type HangTierFields = Pick<HangObservation, 'tier' | 'escalatedAt'>
 export function parseHangTierFields(data: Record<string, unknown>): HangTierFields {

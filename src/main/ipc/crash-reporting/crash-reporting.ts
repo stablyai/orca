@@ -3,6 +3,7 @@ import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { nativeHangCaptureDirectory } from '../../hang-watchdog/native-hang-capture-store'
 import { createPreviousNativeHangReport } from '../../hang-watchdog/previous-native-hang-report'
+import { unrecoveredStallImportSettled } from '../../hang-watchdog/previous-unrecovered-stall-import'
 import {
   type CrashReportCopyDiagnosticsArgs,
   type CrashReportSubmitArgs,
@@ -65,6 +66,8 @@ export function registerCrashReportingHandlers(
   ipc.handle('crashReports:getLatestPending', () => getLatestPendingReport(store))
 
   ipc.handle('crashReports:getLatestReport', async () => {
+    // Every platform with the watchdog files the startup stall import; wait so Help never races it.
+    await unrecoveredStallImportSettled()
     await previousHang?.ensureImported()
     return getLatestSendableReport(store)
   })

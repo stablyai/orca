@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from '../../storage/mirrored-storage-keys'
 
-import './terminal-accessory-keys'
 import type { TerminalAccessoryKey } from './terminal-accessory-keys'
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from './terminal-key-definitions'
 

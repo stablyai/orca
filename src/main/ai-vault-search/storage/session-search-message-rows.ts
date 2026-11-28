@@ -53,34 +53,68 @@ export function* searchMessageRows(
   }
 }
 
+type InsertMessageStatements = {
+  insertMessage: ReturnType<SyncDatabase['prepare']>
+  insertFts: ReturnType<SyncDatabase['prepare']>
+}
+
+type DeleteMessageStatements = {
+  selectMessageIds: ReturnType<SyncDatabase['prepare']>
+  deleteFts: ReturnType<SyncDatabase['prepare']>
+  deleteMessage: ReturnType<SyncDatabase['prepare']>
+}
+
+// Reuse compiled sqlite3_stmt handles per database to avoid native statement churn across thousands of indexed messages.
+const insertStatementsByDb = new WeakMap<SyncDatabase, InsertMessageStatements>()
+const deleteStatementsByDb = new WeakMap<SyncDatabase, DeleteMessageStatements>()
+
 /** Insert metadata and FTS content together in the caller’s transaction. */
 export function insertSearchMessage(
   db: SyncDatabase,
   sessionId: number,
   message: TranscriptMessage
 ): void {
+  let stmts = insertStatementsByDb.get(db)
+  if (!stmts) {
+    stmts = {
+      insertMessage: db.prepare(
+        'INSERT INTO messages(session_row_id, role, ts, text_truncated) VALUES (?, ?, ?, ?)'
+      ),
+      insertFts: db.prepare(
+        'INSERT INTO messages_fts(rowid,user_text,assistant_text,tool_text,identifiers) VALUES (?,?,?,?,?)'
+      )
+    }
+    insertStatementsByDb.set(db, stmts)
+  }
   const text = message.text
-  const id = db
-    .prepare('INSERT INTO messages(session_row_id, role, ts, text_truncated) VALUES (?, ?, ?, ?)')
-    .run(sessionId, message.role, message.timestamp, message.textTruncated ? 1 : 0).lastInsertRowid
+  const id = stmts.insertMessage.run(
+    sessionId,
+    message.role,
+    message.timestamp,
+    message.textTruncated ? 1 : 0
+  ).lastInsertRowid
   const user = message.role === 'user' ? text : ''
   const assistant = message.role === 'assistant' ? text : ''
   const tool = message.role === 'tool' ? text : ''
-  db.prepare(
-    'INSERT INTO messages_fts(rowid,user_text,assistant_text,tool_text,identifiers) VALUES (?,?,?,?,?)'
-  ).run(id, user, assistant, tool, identifierShadowText(text))
+  stmts.insertFts.run(id, user, assistant, tool, identifierShadowText(text))
 }
 
 /** Delete matching metadata and FTS rows in the caller’s transaction; limit retention work per step. */
 export function deleteSearchMessages(db: SyncDatabase, sessionId: number, limit = -1): number {
-  const ids = db
-    .prepare('SELECT id FROM messages WHERE session_row_id = ? LIMIT ?')
-    .all(sessionId, limit) as { id: number }[]
-  const full = db.prepare('DELETE FROM messages_fts WHERE rowid = ?')
-  const message = db.prepare('DELETE FROM messages WHERE id = ?')
+  let stmts = deleteStatementsByDb.get(db)
+  if (!stmts) {
+    stmts = {
+      selectMessageIds: db.prepare('SELECT id FROM messages WHERE session_row_id = ? LIMIT ?'),
+      deleteFts: db.prepare('DELETE FROM messages_fts WHERE rowid = ?'),
+      deleteMessage: db.prepare('DELETE FROM messages WHERE id = ?')
+    }
+    deleteStatementsByDb.set(db, stmts)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT id FROM messages returns rows with numeric id.
+  const ids = stmts.selectMessageIds.all(sessionId, limit) as { id: number }[]
   for (const { id } of ids) {
-    full.run(id)
-    message.run(id)
+    stmts.deleteFts.run(id)
+    stmts.deleteMessage.run(id)
   }
   return ids.length
 }

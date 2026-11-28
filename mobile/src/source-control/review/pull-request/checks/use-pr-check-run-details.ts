@@ -1,7 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { PRCheckDetail } from '../../../../../../src/shared/github/checks/check-types'
 import { fetchPRCheckDetails } from '../../github-operations/github-pr-rpc'
-import '../../github-operations/github-pr-repo-slug'
 import type { GitHubPrRepoSlug } from '../../github-operations/github-pr-repo-slug'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type { DetailEntry } from './PRCheckDetail'

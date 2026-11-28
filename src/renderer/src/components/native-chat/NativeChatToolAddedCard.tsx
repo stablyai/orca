@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useCardBot } from '@/lib/bot-catalog'
 import { Wrench } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -20,6 +19,7 @@ import {
   NATIVE_CHAT_INLINE_NAME,
   NATIVE_CHAT_ROW_SHARE
 } from './messages/events/native-chat-inline-chip'
+import { useNativeChatViewGuard } from './pane/ownership/native-chat-view-memory'
 
 type ToolAdded = NonNullable<NativeChatMessage['toolAdded']>
 
@@ -47,7 +47,8 @@ export function NativeChatToolAddedCard({
   const { botId, tool } = added
   const { ref: bot } = useCardBot(botId)
   const { view } = useBotTools(bot)
-  const [busy, setBusy] = useState(false)
+  // Kept with the chat tab: a card released mid-request returns still busy.
+  const [busy, setBusy] = useNativeChatViewGuard(`bot-tool-added:${botId}:${tool.name}`, false)
   const own = view.status === 'ready' && 'own' in view.tools ? view.tools.own : null
   // The tool as the host has it now: the card's copy is from when it was added.
   const live = own?.find((entry) => entry.name === tool.name)

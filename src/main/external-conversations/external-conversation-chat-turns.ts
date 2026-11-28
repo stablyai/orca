@@ -232,6 +232,7 @@ export class ChatTurns {
     }
     if (news.kind !== 'prompt') {
       this.deps.turnEnded?.(paneKey)
+      this.workers.turnEnding(paneKey)
     }
     const linked = this.deps.linkedFor(paneKey)
     const mirrored = news.kind === 'turn-ended' ? this.deps.mirrorTurn?.(news.sessionId) : null
@@ -276,7 +277,7 @@ export class ChatTurns {
       agent: linked.link.agent,
       emit: this.deps.emit,
       turnFor: chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId)),
-      workersChecked: () => this.workers.check(paneKey, 'turn-ended'),
+      workersChecked: () => this.workers.check(paneKey, 'turn-ended', ended.turnId),
       current: live,
       leave: turnLeave(linked.link, ended.turnId, this.deps.leaveLines, live)
     }
@@ -315,7 +316,7 @@ export class ChatTurns {
         }
         return end.leave.settle()
       }
-      const [workLinks] = await Promise.all([links(), this.workers.check(paneKey, 'turn-ended')])
+      const [workLinks] = await Promise.all([links(), end.workersChecked()])
       if (generation !== this.generation) {
         return
       }

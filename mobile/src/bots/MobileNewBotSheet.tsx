@@ -133,7 +133,7 @@ function NewBotForm(props: NewBotSheetProps) {
   const choices = answer?.agents ?? null
   const importRead = useBotImportSources(seed ? null : client)
   const nudge = importRead.status === 'ready' ? botImportNudge(importRead.sources) : null
-  // The kept agent moves to the computer's default (else its first) when it lacks it, as does none
+  // The kept agent moves to the computer's default (else by rank) when it lacks it, as does none
   // kept; until it answers, the kept one shows.
   const kept = picked && (!choices?.length || choices.includes(picked)) ? picked : undefined
   const agent = kept ?? answer?.defaultAgent ?? choices?.[0] ?? 'claude'

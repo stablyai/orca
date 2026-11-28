@@ -22,6 +22,7 @@ import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-gran
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/retention/browser-page-mount-admission'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'
+import { forgetBrowserAgentPage } from '@/components/browser-pane/agent-cursor/browser-agent-activity-state'
 
 export function createBrowserPageCreateActions(
   set: BrowserSliceSet,
@@ -129,6 +130,7 @@ export function createBrowserPageCreateActions(
 
     closeBrowserPage: (pageId) => {
       discardKagiPrivateInitialNavigation(pageId)
+      forgetBrowserAgentPage(pageId)
       const closeHere = (): void => {
         let closedWorkspaceIdForLabel: string | null = null
         let docPageIdToRelease: string | null = null

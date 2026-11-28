@@ -17,6 +17,7 @@ import { redactFailure } from './worker-turn-stop-wording'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 import { readChatWorkerUsageLimit } from './chat-worker-usage-limit-read'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
+import { BACKGROUND_WAKE_SENDER } from '../../../../../shared/orchestration/mailbox/background-wake-sender'
 
 type ChatWorkerDispatch = { dispatch: DispatchContextRow; from: string }
 
@@ -75,8 +76,11 @@ function lastReportWasUsageLimit(
     return false
   }
   const sentSince = db.db
-    .prepare('SELECT 1 FROM messages WHERE to_handle = ? AND sequence > ? LIMIT 1')
-    .get(`dispatch:${dispatch.id}`, row.sequence)
+    .prepare(
+      'SELECT 1 FROM messages WHERE to_handle = ? AND sequence > ? AND from_handle != ? LIMIT 1'
+    )
+    // A background task's wake is no new work.
+    .get(`dispatch:${dispatch.id}`, row.sequence, BACKGROUND_WAKE_SENDER)
   return sentSince === undefined
 }
 

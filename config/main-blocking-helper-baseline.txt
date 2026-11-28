@@ -136,7 +136,6 @@
 16 src/main/browser/cookies/staging/browser-session-cookie-staging.ts
 3 src/main/browser/extensions/api-runtime/browser-extension-worker-shim-source.ts
 3 src/main/browser/extensions/browser-extension-management.ts
-1 src/main/browser/extensions/browser-extension-startup.ts
 6 src/main/browser/extensions/installation/browser-extension-load-directory.ts
 2 src/main/browser/extensions/installation/browser-extension-webstore-install.ts
 1 src/main/browser/extensions/native-messaging/browser-extension-native-host-process.ts
@@ -398,11 +397,12 @@
 5 src/main/daemon/executable-host/macos/macos-retired-daemon-recovery.ts
 11 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
 2 src/main/daemon/executable-host/windows/daemon-host-file-hash-cache.ts
+2 src/main/daemon/executable-host/windows/daemon-host-manifest.ts # copyFilteredTreeSync replaces a filtered cpSync (sync-fs row raised with it); once per daemon-host staging; #51222 replaces it
 1 src/main/daemon/executable-host/windows/daemon-host-reclaim.ts
 18 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
 4 src/main/daemon/health/daemon-health.ts
 3 src/main/daemon/health/daemon-liveness-report.ts
-5 src/main/daemon/history/restoration/history-reader.ts
+6 src/main/daemon/history/restoration/history-reader.ts # +1: openDirectorySync replaces its own opendirSync (sync-fs count dropped by 1); one-shot restore listing
 16 src/main/daemon/history/storage/history-manager.ts
 3 src/main/daemon/history/storage/terminal-history-file-reader.ts
 6 src/main/daemon/history/storage/terminal-history-metadata.ts
@@ -546,7 +546,7 @@
 17 src/main/grok/hook-service.ts
 1 src/main/hang-watchdog/hang-detection-marker.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog.ts
-6 src/main/hang-watchdog/previous-hang-detection.ts
+5 src/main/hang-watchdog/previous-hang-detection.ts
 4 src/main/hang-watchdog/renderer-hang-records.ts
 4 src/main/hermes/hermes-acp-launch-spec.ts
 4 src/main/hermes/hermes-default-home.ts
@@ -1121,7 +1121,7 @@
 8 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 2 src/main/runtime/agent-session/records/agent-session-store-transactions.ts
 1 src/main/runtime/agent-session/records/local-agent-session-record-store-startup-open.ts
-4 src/main/runtime/browser/commands/browser-profiles.ts
+3 src/main/runtime/browser/commands/browser-profiles.ts
 1 src/main/runtime/client/settings/runtime-client-settings.ts
 3 src/main/runtime/construction/desktop-workspace-services.ts
 1 src/main/runtime/construction/runtime-identity-state.ts
@@ -1228,8 +1228,6 @@
 1 src/main/runtime/rpc/methods/host-management/managed-runtime-install.ts
 3 src/main/runtime/rpc/methods/mcp-servers-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 3 src/main/runtime/rpc/methods/mcp-servers.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
-1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
-8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-outcome.ts # one savepoint per dropped question, around orchestration DB writes that were already synchronous, so the read and its take commit together
 2 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-sender-notice.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
@@ -1355,8 +1353,8 @@
 1 src/main/startup/main-process-ipc-bootstrap.ts
 2 src/main/startup/main-process-observers.ts
 1 src/main/startup/main-process-preflight-failure.ts
-25 src/main/startup/main-process-preflight.ts
-15 src/main/startup/main-process-ready-foundation.ts
+23 src/main/startup/main-process-preflight.ts
+14 src/main/startup/main-process-ready-foundation.ts
 2 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
@@ -1372,7 +1370,8 @@
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
 1 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
-15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
+6 src/main/startup/runtime-startup/launch-serve-mode.ts # one-shot headless serve startup split out of main-process-runtime-launch.ts for lazy desktop boot (net -1)
+8 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 3 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts
 3 src/main/startup/serve-launch/main-process-serve.ts
@@ -1380,7 +1379,7 @@
 1 src/main/startup/serve-launch/serve-user-data-path-guard.ts
 4 src/main/startup/shell-environment/windows-shell-path-hydration.ts
 1 src/main/startup/uninstall/agent-hooks-uninstall-preflight.ts
-2 src/main/startup/uninstall/wsl-holder-uninstall-preflight.ts
+1 src/main/startup/uninstall/wsl-holder-uninstall-preflight.ts
 3 src/main/startup/windows-install-permissions/windows-install-dir-acl-probe.ts
 13 src/main/startup/windows-install-permissions/windows-install-dir-acl-recovery.ts
 4 src/main/startup/windows-install-permissions/windows-install-dir-package-acl-grant.ts
@@ -1468,7 +1467,8 @@
 3 src/main/wsl/discovery/wsl-availability.ts
 2 src/main/wsl/discovery/wsl-console-running-distros.ts
 2 src/main/wsl/discovery/wsl-distro-boot-id.ts
-4 src/main/wsl/discovery/wsl-distro-holder.ts
+2 src/main/wsl/discovery/wsl-distro-holder-command.ts # moved from wsl-distro-holder.ts with spawnDetachedHolder (cached wsl.exe path, interop cwd stat)
+2 src/main/wsl/discovery/wsl-distro-holder.ts
 4 src/main/wsl/discovery/wsl-installation.ts
 1 src/main/wsl/discovery/wsl-registered-distro-fallback.ts
 2 src/main/wsl/execution/wsl-exe-process.ts
@@ -1491,15 +1491,16 @@
 8 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
-4 src/main/wsl/host-lifecycle/wsl-host-connector.ts
+1 src/main/wsl/host-lifecycle/wsl-host-account-migration.ts # per user Connect of an unpinned host after a mismatch: one root wsl.exe transport; its only sync step is the cached wsl.exe existsSync
+3 src/main/wsl/host-lifecycle/wsl-host-connector.ts
 6 src/main/wsl/host-lifecycle/wsl-host-kept-for-peers.ts
 2 src/main/wsl/host-lifecycle/wsl-host-removal.ts
 1 src/main/wsl/host-lifecycle/wsl-host-uninstall-server-stop.ts
 1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
-1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
+1 src/main/wsl/orcad/wsl-orcad-account-facts.ts # per connect of a pinned host: one default-user wsl.exe transport; its only sync step is the cached wsl.exe existsSync
 1 src/main/wsl/orcad/wsl-orcad-active-probe.ts
 2 src/main/wsl/orcad/wsl-orcad-connection.ts
-7 src/main/wsl/orcad/wsl-orcad-deploy.ts
+6 src/main/wsl/orcad/wsl-orcad-deploy.ts
 1 src/main/wsl/orcad/wsl-orcad-failed-install-removal.ts
 2 src/main/wsl/orcad/wsl-orcad-host-transport.ts
 5 src/main/wsl/orcad/wsl-orcad-instance-adoption.ts
@@ -1527,6 +1528,7 @@
 2 src/shared/agent-hook-listener/providers/muse/muse-session-log.ts
 2 src/shared/agent-hook-listener/transcript-lines.ts
 2 src/shared/agent-hook-listener/transcript-reader.ts
+1 src/shared/agent-hook-listener/transport/agent-hook-endpoint-temp-cleanup.ts # openDirectorySync replaces its own opendirSync (sync-fs count dropped by 1); same bounded sweep per endpoint publication
 4 src/shared/agent-hook-listener/transport/agent-hook-spool.ts
 1 src/shared/agent-hook-listener/transport/endpoint-publication.ts
 1 src/shared/agent-launch/installation/local-agent-install-dir-detection.ts

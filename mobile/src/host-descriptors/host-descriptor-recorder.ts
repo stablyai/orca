@@ -1,5 +1,4 @@
 import { recordHostDescriptor } from './host-descriptor-store'
-import '../host-catalog/host-store'
 import { updateHostDescriptor } from './host-descriptor-persistence'
 import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 

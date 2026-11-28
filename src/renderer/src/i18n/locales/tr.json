@@ -746,6 +746,26 @@
       "statusAriaLabel": "Git blame: {{summary}}",
       "openCommitHint": "Commit’i açmak için tıklayın",
       "statusBarItem": "Git blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Diskten yeniden yükle · otomatik yeniden yükleme duraklatıldı",
+      "ariaLabelPaused": "Diskten yeniden yükle, otomatik yeniden yükleme duraklatıldı",
+      "noChanges": "Diskte değişiklik yok",
+      "readFailed": "{{value0}} okunamadı",
+      "retry": "Yeniden dene",
+      "fileDeleted": "Dosya diskten silindi",
+      "cannotCheckDirty": "Kaydedilmemiş düzenlemeler varken diskle karşılaştırılamaz",
+      "changedOnDisk": "Diskte değişti",
+      "editsKept": "{{value0}} içindeki kaydedilmemiş düzenlemeler korunur",
+      "openTab": "Sekmeyi Aç",
+      "paletteTitle": "Dosyayı Diskten Yeniden Yükle",
+      "paletteDescription": "Etkin dosyayı diskten okur ve değiştiyse yeniden yükler.",
+      "verbs": {
+        "reloadFile": "dosyayı yeniden yükle",
+        "reloadFromDisk": "diskten yeniden yükle",
+        "refreshFile": "dosyayı yenile",
+        "revertFile": "dosyayı geri al"
+      }
     }
   },
   "githubChecks": {
@@ -1958,7 +1978,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Akış destekli HTTP · localhost bu botun çalıştığı bilgisayarı ifade eder.",
           "headers": "Üstbilgiler",
-          "authHint": "Sunucu tarayıcıda oturum açmanızı gerektiriyorsa, yerel kontrolün ardından Bağlan düğmesi görünür.",
+          "authHint": "Sunucu tarayıcıda oturum açmanızı gerektiriyorsa, yerel kontrolün ardından “Oturum aç” düğmesi görünür.",
           "executable": "Çalıştırılabilir dosya",
           "commandPlaceholder": "npx",
           "args": "Bağımsız değişkenler",
@@ -3259,6 +3279,17 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Bağlı sorun",
         "listeningPort": "Dinlenen port"
+      },
+      "simulator": {
+        "runtime": {
+          "emulatorRuntimeAttach": {
+            "serverAndroid": "{{host}} üzerindeki Android emülatörleri henüz desteklenmiyor. Bir iOS simülatörü seçin.",
+            "updateServer": "{{host}} üzerindeki simülatör burada gösterilemedi. {{host}} üzerindeki Orca'yı güncelleyip yeniden deneyin."
+          },
+          "emulatorRuntimeTarget": {
+            "ambiguousOwner": "Bu çalışma alanını hangi bilgisayarın çalıştırdığı belirlenemedi. Yeniden açıp tekrar deneyin."
+          }
+        }
       },
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
@@ -4978,6 +5009,7 @@
           "9d0f2eda6d": "Etiket",
           "01f3f3d161": "Yazar",
           "13b3ac0a84": "Durum",
+          "show": "Göster",
           "79c54552f7": "Filtreler",
           "8a2ffbf9b3": "{{value0}} filtresini kaldır",
           "anyState": "Herhangi biri",
@@ -6101,9 +6133,8 @@
             "84c3b15dca": "Ajan kullanım sınırları",
             "d663430cf9": "Kullanım izlemeyi yapılandır",
             "remoteLabel": "{{host}} üzerinde kullanım yok",
-            "remoteTitle": "{{host}} üzerindeki kullanım",
-            "remoteBody": "Bu çalışma alanı {{host}} üzerinde çalıştığından çubuk o ana makinenin kullanımını gösterir. Oradaki bir ajanda oturum açın veya bu bilgisayarın kullanımını görmek için yerel bir çalışma alanına odaklanın.",
-            "remoteOpenAccounts": "{{host}} hesaplarını aç"
+            "remoteNoUsageYet": "Henüz kullanım yok. Orada oturum açın.",
+            "remoteAccounts": "Hesaplar"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Beceriler güncelleniyor",
@@ -15761,7 +15792,10 @@
             "operationResolve": "Çöz",
             "operationResolveLabel": "Conflict'leri AI ile çöz",
             "operationMoreActions": "Diğer işlemler",
-            "operationAbortConfirm": "İptal etmek için tekrar seçin"
+            "operationAbortConfirm": "İptal etmek için tekrar seçin",
+            "operationRunChangedTitle": "Hiçbir şey iptal edilmedi",
+            "operationRunChangedDescription": "İptal seçildikten sonra işlem değişti. Güncel durumunu kontrol edip tekrar deneyin.",
+            "operationRunUnknown": "Hangi çalıştırmanın duraklatıldığı anlaşılamıyor, bu yüzden İptal burada kapalı. Kaynak Denetimi’ni yenileyin veya bir terminalde iptal edin."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
@@ -19890,7 +19924,7 @@
           "runStatusDispatchFailed": "Başarısız"
         },
         "runContent": {
-          "noOutput": "Çıktı içeriği yok."
+          "noOutput": "Çıktı yok."
         },
         "runViewState": {
           "viewRun": "Çalıştırmayı görüntüle",
@@ -20510,7 +20544,12 @@
           "reconnectCopy": "Hesabınız üzerinden paylaşılan artifact'leri görüntülemek ve yönetmek için yeniden oturum açın.",
           "signInAgainAction": "Yeniden oturum aç",
           "unconfiguredCopy": "Orca hesap girişi bu makinede henüz yapılandırılmadı.",
-          "openAccountSettings": "Hesap ayarlarını aç"
+          "openAccountSettings": "Hesap ayarlarını aç",
+          "deleteManyDescription_one": "{{count}} artifact'e artık herkese açık bağlantısı üzerinden erişilemeyecek.",
+          "deleteManyDescription_other": "{{count}} artifact'e artık herkese açık bağlantıları üzerinden erişilemeyecek.",
+          "deleteNamedFailed": "“{{name}}” silinemedi.",
+          "deleteBatchStopped_one": "“{{name}}” silinemedi. Kalan {{count}} artifact silinmedi.",
+          "deleteBatchStopped_other": "“{{name}}” silinemedi. Kalan {{count}} artifact silinmedi."
         },
         "copySuccess": "Artifact bağlantısı kopyalandı",
         "copyFailed": "Artifact bağlantısı kopyalanamadı",
@@ -20524,7 +20563,8 @@
           "more": "Daha fazla artifact işlemi"
         },
         "ArtifactCollection": {
-          "loadMore": "Daha fazla yükle"
+          "loadMore": "Daha fazla yükle",
+          "noMatchingArtifacts": "Eşleşen artifact yok"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Bu bağlantıya sahip olan herkes görüntüleyebilir",
@@ -20586,14 +20626,34 @@
           "size": "Boyut",
           "updated": "Güncellendi",
           "expires": "Süresi Doluyor",
-          "actions": "İşlemler"
+          "actions": "İşlemler",
+          "selectAll": "Tümünü seç"
         },
         "ArtifactsPageSkeleton": {
           "loading": "Artifact'ler yükleniyor"
         },
         "expiredCompact": "Süresi doldu",
         "typeMarkdown": "Markdown",
-        "typeHtml": "HTML"
+        "typeHtml": "HTML",
+        "ArtifactListFilterMenu": {
+          "clearFilters": "Filtreleri temizle",
+          "any": "Tüm zamanlar",
+          "today": "Bugün",
+          "pastWeek": "Son 7 gün",
+          "pastMonth": "Son 30 gün",
+          "anyExpiry": "Tümü",
+          "withinWeek": "7 gün içinde",
+          "expired": "Süresi doldu"
+        },
+        "ArtifactListRow": {
+          "select": "{{name}} öğesini seç"
+        },
+        "ArtifactListSelectionBar": {
+          "delete": "Sil",
+          "clear": "Temizle",
+          "selected_one": "{{count}} seçili",
+          "selected_other": "{{count}} seçili"
+        }
       },
       "BrowserCookieImportMachineNotice": {
         "remoteLabel": "{{value0}} üzerindeki tarayıcılar",
@@ -20880,6 +20940,9 @@
           "featuredDetail": "her kategoriden en çok kurulan bir eklenti",
           "newlyAdded": "Yeni eklenenler",
           "newlyAddedDetail": "tüm kataloglarınızda"
+        },
+        "PluginsPage": {
+          "close": "Eklentileri kapat"
         }
       },
       "agent-workspace-trust-decision": {
@@ -23876,6 +23939,9 @@
           "setUp": "Kur"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "Sorun giderme için düşük seviyeli uyumluluk ayarları. Bu ayarlar {{host}} üzerinde değil, bu bilgisayarda saklanır."
+      },
       "repositoryHooks": {
         "availableEnvVars": "Kullanılabilir ortam değişkenleri"
       },
@@ -23884,7 +23950,6 @@
           "dialog": {
             "createToken": "Oluştur",
             "environmentManagedLine": "ORCA_BITBUCKET_* ortam değişkenleriyle ayarlandı. Burada kaydetmek için bunları kaldırın.",
-            "savedLocallyOnly": "Yalnızca bu bilgisayara kaydedilir.",
             "accessTokenNeeds": "Pull request'lere okuma erişimi gerekir.",
             "atlassianEmail": "Atlassian e-postası",
             "requiredScopes": "Gerekli kapsamlar",
@@ -23970,6 +24035,7 @@
           "deleted": "Silindi",
           "kept": "Korunan: {{count}}",
           "showMore": "{{count}} tane daha göster",
+          "showFewer": "Daha az göster",
           "waiting": "Etkin olmayan süre: {{elapsed}} gün · Eşik: {{after}} gün",
           "title": "Etkinlik",
           "notListed_one": "Korunan 1 çalışma alanı daha listede gösterilmiyor.",
@@ -25642,7 +25708,10 @@
       "chatPasteCode": "Kodu yapıştır",
       "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi",
       "launchesUse": "Yeni agy başlatmaları bu hesabı kullanır",
-      "loginNow": "agy'nin şu anki oturumu"
+      "loginNow": "agy'nin şu anki oturumu",
+      "signedInUnread": "agy'de oturum açık",
+      "unreadDetail": "Hangisi olduğunu görmek için hesabı gösterin. macOS anahtar zinciri erişimine izin vermenizi isteyebilir.",
+      "showAccount": "Hesabı göster"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",
@@ -27538,11 +27607,14 @@
       "missing": "Kayıtlı cihaz artık bu bilgisayarda değil. Başka bir cihaz seçin.",
       "unavailable": "Kayıtlı cihazın çalışma zamanı kullanılamıyor. Başka bir cihaz seçin veya çalışma zamanını yükleyin.",
       "askPrompt": "Açılacak bir cihaz seçin.",
-      "firstUse": "İlk cihazınızı seçin. Orca bu bilgisayarda başarılı seçimleri hatırlar."
+      "firstUse": "İlk cihazınızı seçin. Orca bu bilgisayarda başarılı seçimleri hatırlar.",
+      "missingOnServer": "Kayıtlı cihaz artık {{host}} üzerinde değil. Başka bir cihaz seçin.",
+      "firstUseOnServer": "İlk cihazınızı seçin. Orca {{host}} üzerinde seçip başarıyla bağlandığınız cihazları hatırlar."
     },
     "picker": {
       "starting": "Başlatılıyor",
       "stopped": "Durduruldu",
+      "otherOnServer": "{{host}} üzerindeki diğer cihazlar",
       "choose": "Emülatör seç",
       "search": "Cihazlarda ara…",
       "empty": "Eşleşen cihaz yok",
@@ -28608,8 +28680,9 @@
       },
       "loading": "Öğeler yükleniyor…",
       "row": {
-        "more": "Daha fazla",
+        "cancel": "İptal et",
         "done": "Tamam",
+        "more": "Daha fazla",
         "select": "{{title}} öğesini seç"
       },
       "snooze": {
@@ -28677,8 +28750,6 @@
         "automationEnded": "Sona erdi"
       },
       "menu": {
-        "cancel": "İptal et",
-        "done": "Tamam",
         "waiting": "Bekleniyor…"
       },
       "pill": {
@@ -29145,7 +29216,7 @@
       "repliesValue": "Yanıtlar: {{value0}}",
       "repliesPrefix": "Yanıtlar:",
       "whoAnswers": "Mesajlarınızı kim yanıtlar?",
-      "peerAsked": "{{from}} bir soru sordu. Sorunun yöneltildiği bot: {{to}}",
+      "peerAsked": "{{from}}, {{to}} botuna sordu",
       "peerTold": "{{from}}, {{to}} botuna bildirdi",
       "peerFollowedUp": "{{bot}} takip mesajı gönderdi",
       "peerReadItems": "{{bot}}, öğeleriyle ilgili bir güncellemeyi okudu",
@@ -29180,7 +29251,7 @@
       "newThreadTab": "Yeni ileti dizisi",
       "items": {
         "orNames": "{{names}} veya {{last}}",
-        "emptyBotsNeedsYou": "{{names}} tarafından oluşturulan öğeler arasında sizden işlem bekleyen yok",
+        "emptyBotsNeedsYou": "{{names}}: Sizi bekleyen öğe yok",
         "emptyBots": "{{names}} tarafından oluşturulmuş öğe yok",
         "emptyTitle": "Bu gruptan henüz öğe yok",
         "filterNamed": "Öğeleri filtrele · Geçerli filtre: {{filter}}",
@@ -29266,7 +29337,11 @@
       "seeMessage": "Mesajı gör",
       "addStep": "Oluşturduğu klasörü ekle",
       "replyLabel": "Yanıtı",
-      "rowDetail": "{{app}} {{kind}}"
+      "rowDetail": "{{app}} {{kind}}",
+      "titleFrom": "{{source}} uygulamasından içe aktar",
+      "import": "İçe aktar",
+      "importing": "İçe aktarılıyor…",
+      "fromExport": "Dışa aktarımdan"
     },
     "section": {
       "scrollLeft": "Sola kaydır · {{amount}} gizli",
@@ -30204,6 +30279,9 @@
       "unreachable": "Şu bilgisayarlara ulaşılamadı: {{hosts}}. Bot bunlardan birinde olabilir. Bağlantı yeniden kurulduğunda bağlantıyı tekrar açın.",
       "pick": "Bu bağlantıya ait bot birden fazla bilgisayarda bulundu: {{hosts}}. Botu kenar çubuğundan açın.",
       "updateNeeded": "Botu burada açabilmek için {{hosts}} üzerinde Orca’yı güncelleyin."
+    },
+    "chatOpen": {
+      "homeDidNotLoad": "Botun ana çalışma alanı yüklenemedi."
     },
     "workspaces": {
       "showMore": "{{count}} tane daha göster",

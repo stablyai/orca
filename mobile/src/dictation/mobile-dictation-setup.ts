@@ -6,7 +6,6 @@ import { translate, type Translate } from '../i18n/mobile-i18n'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
-import '../transport/connection/stable-logical-rpc-client'
 import { LogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
 import {
   dictationConfigWrite,

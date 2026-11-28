@@ -1580,7 +1580,7 @@
       "pairingTemporarilyUnavailable": "Сопряжение временно недоступно",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
       "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}",
-      "tapToPairAgain": "Нажмите, чтобы повторно выполнить сопряжение с компьютером"
+      "tapToPairAgain": "Нажмите для повторного сопряжения"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Проверка совместимости сервера"
@@ -5468,7 +5468,7 @@
       "started": "Начало",
       "trigger": "Триггер",
       "output": "Вывод",
-      "noOutput": "Нет доступного содержимого вывода.",
+      "noOutput": "Нет доступного вывода.",
       "loadingRuns": "Загрузка запусков…",
       "loading": "Загрузка…",
       "hourly": "Каждый час",
@@ -6068,7 +6068,6 @@
       "suggestThree": "{{a}}, {{b}} и {{c}}",
       "suggestMore": "{{a}}, {{b}} и ещё {{count}}",
       "pickOne": "Выберите бота",
-      "needsTwoBots": "Нужно 2 бота на {{host}}",
       "remoteReplied": "Ответ получен ({{computer}})",
       "remoteNotice": "Нет ответа ({{computer}})",
       "remoteNotSent": "Не отправлено на {{computer}}",

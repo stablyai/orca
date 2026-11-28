@@ -38,24 +38,36 @@ export async function catalogImagesFromManifest(input: {
   read: PluginRepositoryFileReader
   sha256: (bytes: Uint8Array) => string
   readHeader?: (bytes: Uint8Array) => PluginImageInfo | string
+  maxTotalBytes?: number
 }): Promise<PluginCatalogImages | null> {
   const parsed = manifestImagesSchema.safeParse(input.manifest)
   if (!parsed.success) {
     return null
   }
+  let remaining = input.maxTotalBytes ?? Number.POSITIVE_INFINITY
+  const seen = new Set<string>()
   const { name, icon, cover, screenshots } = parsed.data
   const image = async (
     kind: PluginImageKind,
     relative: string,
     alt: string
   ): Promise<CatalogImage | null> => {
+    const maxBytes = Math.min(PLUGIN_IMAGE_RULES[kind].maxBytes, remaining)
+    if (maxBytes <= 0) {
+      return null
+    }
     const path = input.prefix ? `${input.prefix}/${relative}` : relative
-    const bytes = await input.read(path, PLUGIN_IMAGE_RULES[kind].maxBytes).catch(() => null)
+    const bytes = await input.read(path, maxBytes).catch(() => null)
     const info = bytes ? (input.readHeader ?? readPluginImageHeader)(bytes) : 'missing'
     if (!bytes || typeof info === 'string' || pluginImageRuleError(kind, info, bytes.byteLength)) {
       return null
     }
-    return { path, alt, sha256: input.sha256(bytes), width: info.width, height: info.height }
+    const sha256 = input.sha256(bytes)
+    if (!seen.has(sha256)) {
+      seen.add(sha256)
+      remaining = Math.max(0, remaining - bytes.byteLength)
+    }
+    return { path, alt, sha256, width: info.width, height: info.height }
   }
   const iconImage = icon ? await image('icon', icon, name ?? 'Plugin icon') : null
   const coverImage = cover ? await image('cover', cover.path, cover.alt) : null

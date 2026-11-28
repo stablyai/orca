@@ -51,6 +51,9 @@ export const CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS = 10_000
 /** Reads a version an earlier check or prewarm already learned. */
 export const CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS = 250
 
+/** Re-probe org-managed sideload refusals periodically so policy re-enablement recovers without restart. */
+export const CLAUDE_MANAGED_REFUSAL_TTL_MS = 5 * 60 * 1_000
+
 // Only an explicit unknown-option or managed-settings refusal proves flag rejection.
 const UNKNOWN_OPTION_DIAGNOSTIC = /unknown option '(--[a-z][a-z0-9-]*)'/
 // Lists every refused item, e.g. `--plugin-dir, --agents, plugins (initialize request), CLAUDE_CODE_PLUGIN_DIRS are`.
@@ -153,7 +156,7 @@ async function within<T>(pending: Promise<T>, ms: number): Promise<T | undefined
 type BinaryFacts = {
   version?: string
   refused: Set<string>
-  refusedByAccount: Map<string, Set<string>>
+  refusedByAccount: Map<string, Map<string, number>>
 }
 
 export function createClaudeCliFlagSupport(
@@ -162,6 +165,7 @@ export function createClaudeCliFlagSupport(
     keyOf: (command: string, cwd: string) => Promise<string | null>
     budgetMs: number
     now: () => number
+    managedRefusalTtlMs?: number
   } = {
     probe: probeClaudeCliVersion,
     keyOf: claudeBinaryKey,
@@ -169,6 +173,7 @@ export function createClaudeCliFlagSupport(
     now: () => performance.now()
   }
 ): ClaudeCliFlagSupport {
+  const managedRefusalTtlMs = deps.managedRefusalTtlMs ?? CLAUDE_MANAGED_REFUSAL_TTL_MS
   const keyOf = async (launch: Pick<ClaudeCliLaunch, 'command' | 'prefixArgs' | 'cwd'>) => {
     const key = await deps.keyOf(launch.command, launch.cwd)
     return key === null ? null : JSON.stringify([key, launch.prefixArgs ?? []])
@@ -178,7 +183,7 @@ export function createClaudeCliFlagSupport(
   const touch = (key: string): BinaryFacts => {
     const facts = known.get(key) ?? {
       refused: new Set<string>(),
-      refusedByAccount: new Map<string, Set<string>>()
+      refusedByAccount: new Map<string, Map<string, number>>()
     }
     known.delete(key)
     known.set(key, facts)
@@ -198,11 +203,30 @@ export function createClaudeCliFlagSupport(
   }
   const versionOf = (key: string): string | undefined =>
     known.has(key) ? touch(key).version : undefined
+  const isAccountRefused = (
+    facts: BinaryFacts | undefined,
+    account: string,
+    option: string
+  ): boolean => {
+    const accountRefused = facts?.refusedByAccount.get(account)
+    const expiresAt = accountRefused?.get(option)
+    if (expiresAt === undefined) {
+      return false
+    }
+    if (deps.now() < expiresAt) {
+      return true
+    }
+    accountRefused?.delete(option)
+    if (accountRefused && accountRefused.size === 0) {
+      facts?.refusedByAccount.delete(account)
+    }
+    return false
+  }
   const answer = (key: string, flag: ClaudeCliFlag, launch: ClaudeCliLaunch): ClaudeCliFlagFact => {
     const facts = known.get(key)
     if (
       facts?.refused.has(flag.option) ||
-      facts?.refusedByAccount.get(defaultClaudeConfigDir(launch.env))?.has(flag.option)
+      isAccountRefused(facts, defaultClaudeConfigDir(launch.env), flag.option)
     ) {
       return 'unsupported'
     }
@@ -268,13 +292,15 @@ export function createClaudeCliFlagSupport(
           return
         }
         const facts = touch(key)
-        let refused = facts.refused
         if (perAccount) {
           const account = defaultClaudeConfigDir(launch.env)
-          refused = facts.refusedByAccount.get(account) ?? new Set<string>()
-          facts.refusedByAccount.set(account, refused)
+          const expiresAt = deps.now() + managedRefusalTtlMs
+          const accountRefused = facts.refusedByAccount.get(account) ?? new Map<string, number>()
+          facts.refusedByAccount.set(account, accountRefused)
+          options.forEach((option) => accountRefused.set(option, expiresAt))
+        } else {
+          options.forEach((option) => facts.refused.add(option))
         }
-        options.forEach((option) => refused.add(option))
       })
     }
   }

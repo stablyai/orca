@@ -294,7 +294,8 @@
       "connecting": "Connecting…",
       "backToHome": "Back to home",
       "pairThisComputer": "Pair with this computer?",
-      "onlyYourOwn": "Only pair with a computer you trust."
+      "onlyYourOwn": "Only pair with a computer you trust.",
+      "pairNamedServer": "Pair with {{server}}?"
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
@@ -990,6 +991,13 @@
     },
     "identity": {
       "hostNotFound": "Host not found"
+    },
+    "serverOwnPairing": {
+      "updateDesktop": "Update Orca on {{desktop}} to keep {{server}} reachable.",
+      "failed": "Could not reach {{server}}. Try again while {{desktop}} is awake.",
+      "thisServer": "this server",
+      "keepReachable": "Keep {{server}} reachable",
+      "evenWhenAsleep": "Even when {{desktop}} sleeps"
     }
   },
   "webShell": {
@@ -2211,7 +2219,8 @@
       "emptyState": "No files found",
       "loading": "Loading files…",
       "searching": "Searching…",
-      "searchPlaceholder": "Search files"
+      "searchPlaceholder": "Search files",
+      "inFiles": "In files"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -2247,7 +2256,19 @@
       "discardMessage": "Unsaved edits will be lost.",
       "discardMessageSaving": "The save in progress may not finish. Unsaved edits will be lost.",
       "discard": "Discard",
-      "stay": "Stay"
+      "stay": "Stay",
+      "saveFile": "Save file",
+      "editFile": "Edit file",
+      "changedOnComputer": "Changed on {{computer}}",
+      "changedSinceOpened": "Changed since you opened it",
+      "deletedOnComputer": "Deleted on {{computer}}",
+      "deletedSinceOpened": "Deleted since you opened it",
+      "reloadConfirmTitle": "Discard your changes and load the latest?",
+      "reload": "Reload",
+      "overwrite": "Overwrite",
+      "notUtf8": "This file isn't UTF-8 text, so it can't be saved here",
+      "cannotOverwrite": "The file on disk can't be edited here anymore",
+      "tooLargeToSave": "Too large to save from your phone"
     },
     "filePreviewSourceText": {
       "previewLabel": "File preview",
@@ -2272,6 +2293,7 @@
       "openFolder": "Open folder {{name}}",
       "fileUnavailable": "{{name}} unavailable on mobile",
       "previewFile": "Preview file {{name}}",
+      "openAtLine": "Open {{name}} at line {{line}}",
       "showMore": "Show {{rows}} more",
       "loadedOfTotal": "{{loaded}} of {{total}}",
       "ignored": "Ignored by .gitignore"
@@ -5697,7 +5719,6 @@
       "suggestThree": "{{a}}, {{b}} & {{c}}",
       "suggestMore": "{{a}}, {{b}} & {{count}} more",
       "pickOne": "Pick a bot",
-      "needsTwoBots": "Needs 2 bots on {{host}}",
       "items": {
         "emptyTitle": "No items from this group yet",
         "needsYouCount_one": "{{count}} needs you",
@@ -6951,6 +6972,7 @@
       "signIn": {
         "action": "Sign in",
         "step1Detail": "Sign in to {{app}} and allow access.",
+        "step1Copy": "Copy the link below and open it in your browser.",
         "step2": "Copy the address",
         "step2Detail": "The last page won’t load. That’s expected. Copy its address.",
         "step3": "Paste it here",
@@ -6961,7 +6983,11 @@
         "finish": "Finish",
         "open": "Open sign-in page",
         "notThisSignIn": "That address isn’t from this sign-in. Paste the address you landed on.",
-        "pasteLanded": "After you sign in, paste the address you landed on."
+        "pasteLanded": "After you sign in, paste the address you landed on.",
+        "copyLink": "Copy link",
+        "copyFailed": "Couldn’t copy the link.",
+        "pasteInBrowser": "Paste it into your browser to sign in.",
+        "copyThenPaste": "Copy the link, sign in from your browser, then paste the address you landed on."
       },
       "updateHost": "Update Orca on {{host}} to sign in to apps",
       "none": "None",

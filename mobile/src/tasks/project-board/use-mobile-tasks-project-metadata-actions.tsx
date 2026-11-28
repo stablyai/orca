@@ -268,11 +268,12 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
     },
     [activeGitHubProjectHost, client, projectMutating]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     mutateProjectRowMetadata,
     mutateProjectRowField,
     mutateProjectRowIssueType
-  })
+  }
 }
 
 export type ProjectMetadataActionsModel = ReturnType<typeof useMobileTasksProjectMetadataActions>

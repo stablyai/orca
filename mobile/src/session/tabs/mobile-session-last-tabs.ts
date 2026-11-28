@@ -11,12 +11,18 @@ const storedTabSchema = z.looseObject({ type: z.string(), id: z.string(), title:
 
 /** Agent dots and unread marks come only from the host's live snapshot (K1), so a stored strip carries no agent state. */
 function withoutAgentState(tab: MobileSessionTab): MobileSessionTab {
-  if (tab.type === 'terminal' && (tab.agentStatus !== undefined || tab.unread)) {
-    const { agentStatus: _agentStatus, unread: _unread, ...rest } = tab
+  if (
+    tab.type === 'terminal' &&
+    (tab.agentStatus !== undefined || tab.unread || tab.unreadAt !== undefined)
+  ) {
+    const { agentStatus: _agentStatus, unread: _unread, unreadAt: _unreadAt, ...rest } = tab
     return rest
   }
-  if (tab.type === 'agent-session' && (tab.chatStatus !== undefined || tab.unread)) {
-    const { chatStatus: _chatStatus, unread: _unread, ...rest } = tab
+  if (
+    tab.type === 'agent-session' &&
+    (tab.chatStatus !== undefined || tab.unread || tab.unreadAt !== undefined)
+  ) {
+    const { chatStatus: _chatStatus, unread: _unread, unreadAt: _unreadAt, ...rest } = tab
     return rest
   }
   return tab

@@ -1,5 +1,11 @@
-import { memoizeStringResult } from '../../collections/string-result-cache'
-import { isAgentSessionSlotTabId } from './agent-session-slot-tab-id'
+import {
+  CHAT_PANE_ADDRESS_PREFIX,
+  chatPaneAddressTabId,
+  chatPaneKey,
+  chatPaneKeySessionId,
+  structuredAgentSessionPaneLeaf,
+  structuredAgentSessionTabId
+} from './chat-pane-address'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
@@ -31,7 +37,6 @@ import {
 } from '../requests/structured-agent-session-latest-request'
 import { currentStructuredAgentSessionAnswer } from '../requests/structured-agent-session-current-answer'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
-import { sha256 } from '../../hashing/sha256'
 import { nativeChatMessageSenderFields } from '../../native-chat-message-sender-fields'
 import { tookOverGoalBlocks } from '../../native-chat/took-over-notice'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
@@ -125,9 +130,13 @@ export function projectStructuredItemToNativeChat(
 
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
-/** Legacy tab id of chats opened before slot ids were minted; still their pane/status address. */
-export function structuredAgentSessionTabId(sessionId: string): string {
-  return `structured-agent-session-${sessionId}`
+export {
+  CHAT_PANE_ADDRESS_PREFIX,
+  chatPaneAddressTabId,
+  chatPaneKey,
+  chatPaneKeySessionId,
+  structuredAgentSessionPaneLeaf,
+  structuredAgentSessionTabId
 }
 
 /** An approval or question still waiting on the user; with the host's scope, never one from an ended
@@ -259,22 +268,4 @@ export function projectStructuredAgentSessionStatusState(
       ...structuredAgentSessionAwaitedPrompt(pending)
     }
   }
-}
-
-// Why: callers walk every live chat, and a FIFO smaller than that set misses on every pass.
-const MAX_MEMOIZED_PANE_LEAVES = 32_768
-const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): string => {
-  const bytes = sha256(new TextEncoder().encode(sessionId))
-  const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
-}, MAX_MEMOIZED_PANE_LEAVES)
-
-/** The tab id a chat's pane key names: status, attention and orchestration rows still address a
- *  minted slot's chat by its session's legacy id. */
-export function structuredAgentSessionAddressTabId(tabId: string, sessionId: string): string {
-  return isAgentSessionSlotTabId(tabId) ? structuredAgentSessionTabId(sessionId) : tabId
-}
-
-export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
-  return `${structuredAgentSessionAddressTabId(tabId, sessionId)}:${structuredAgentSessionPaneLeaf(sessionId)}`
 }

@@ -247,7 +247,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     const next = githubProjectSearch
     setAppliedGithubProjectSearch(next === viewFilter ? undefined : next)
   }, [githubProjectSearch, githubProjectTable?.selectedView.filter])
-  return Object.assign(model, {
+  return {
+    ...model,
     githubPresetOptions,
     githubPresetLabel,
     gitlabFilterLabel,
@@ -271,7 +272,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     browseGitHubProjects,
     toggleRepoSelection,
     applyGitHubProjectSearch
-  })
+  }
 }
 
 export type ProviderViewProjectionModel = ReturnType<typeof useMobileTasksProviderViewProjection>

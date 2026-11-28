@@ -63,12 +63,15 @@ export function useMobileWindowsShellChoices({
       .request(client, { worktree: `id:${worktreeId}` })
       .then((response) => {
         const answer = terminalShellChoicesRead.interpret(response)
-        if (!stale && answer.accepted) {
-          setRead({ key: worktreeId, client, shells: answer.value.shells })
+        if (!stale) {
+          setRead(answer.accepted ? { key: worktreeId, client, shells: answer.value.shells } : null)
         }
       })
       .catch(() => {
-        // Keep the single Terminal action when the host can't answer.
+        // Fall back to the single Terminal action when the host can't answer.
+        if (!stale) {
+          setRead(null)
+        }
       })
     return () => {
       stale = true

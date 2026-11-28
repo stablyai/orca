@@ -152,29 +152,31 @@ export function mergeOsc52ClipboardNoticePending(
   )
 }
 
-export function readLocalWebUIState(): PersistedUIState {
+type ProjectLocalWebUIState = (stored: Partial<PersistedUIState>) => PersistedUIState
+
+export function readLocalWebUIState(): PersistedUIState
+export function readLocalWebUIState<T>(read: (project: ProjectLocalWebUIState) => T): T
+export function readLocalWebUIState<T>(
+  read?: (project: ProjectLocalWebUIState) => T
+): PersistedUIState | T {
   const defaults = getDefaultUIState()
-  // Settings migration arms OSC 52’s UI notice; reading UI first would later overwrite that arm after its one-shot stamp.
+  // Settings migration can arm OSC 52’s UI notice before the UI read.
   const storedSettings = getStoredSettings()
-  const raw = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  // Legacy web cached the host's UI level, but rendered at 100% regardless of that value.
-  const stored = {
-    ...raw,
-    ...resolveUIZoomLevels(raw.sidebarZoomLevel === undefined ? undefined : raw)
-  }
   const base = {
     ...defaults,
-    // Why: mirror the main-process missing-property seed from legacy card layout mode when runtime ui.get is unavailable.
     worktreeCardProperties: getWorktreeCardModeProperties(
       storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
     )
   }
-  if (typeof stored.rightSidebarOpen === 'boolean') {
-    return mergeWebUIState(base, stored)
-  }
-  return mergeWebUIState(base, {
-    ...stored,
-    // Why: web fallback lacks main-process normalization; migrate the retired setting only when local UI preference is absent.
-    rightSidebarOpen: storedSettings.rightSidebarOpenByDefault
-  })
+  const project: ProjectLocalWebUIState = (stored) =>
+    mergeWebUIState(base, {
+      ...stored,
+      // Legacy web cached the host's UI level, but rendered at 100% regardless of that value.
+      ...resolveUIZoomLevels(stored.sidebarZoomLevel === undefined ? undefined : stored),
+      rightSidebarOpen:
+        typeof stored.rightSidebarOpen === 'boolean'
+          ? stored.rightSidebarOpen
+          : storedSettings.rightSidebarOpenByDefault
+    })
+  return read ? read(project) : project(readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}))
 }

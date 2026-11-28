@@ -15,7 +15,7 @@ import { answerProviderRelayRequest } from '../provider-relay/provider-relay-req
 import { createDaemonProviderRelays } from '../provider-relay/daemon-provider-relays'
 import { DaemonServerLifecycle } from './daemon-server-lifecycle'
 import type { DaemonServerOptions } from './daemon-server-options'
-import { DaemonSessionAttachments } from './daemon-session-attachments'
+import type { DaemonSessionAttachments } from './daemon-session-attachments'
 import { DaemonSessionBackgroundRouting } from './daemon-session-background-routing'
 import {
   daemonClientBacklogSampler,
@@ -87,12 +87,12 @@ export class DaemonServer {
           kind: 'foreground-changed'
         })
     })
-    this.attachments = new DaemonSessionAttachments(this.host)
     const streams = createDaemonSessionStreams({
-      host: () => this.host,
-      attachments: () => this.attachments,
-      connections: () => this.connections
+      host: this.host,
+      connections: () => this.connections,
+      log: this.log
     })
+    this.attachments = streams.attachments
     this.transientFactRelay = streams.transientFactRelay
     this.streamDataBatcher = streams.streamDataBatcher
     this.preparations = new DaemonPtySpawnPreparations(

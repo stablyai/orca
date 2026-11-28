@@ -25,6 +25,7 @@ import {
   FeatureInteractionIdParam,
   UiUpdate
 } from '../../../../../shared/rpc-contract/client-ui/client-ui-params'
+import { UiSetWorkspaceNotificationMuted } from '../../../../../shared/rpc-contract/client-ui/client-ui-notification-mute-params'
 // Keep schema/PersistedUIState parity assertions in the typecheck graph so drift fails before reaching paired clients.
 
 import { TerminalQuickCommandsUpdate } from '../../../../../shared/rpc-contract/terminal/terminal-quick-command-params'
@@ -195,6 +196,25 @@ export const CLIENT_UI_METHODS = [
         ...ownPhoneFilter
       } as Partial<PersistedUIState>
       return { ui: uiForCaller(context.runtime.updateUIState(updates), context) }
+    }
+  }),
+  defineMethod({
+    name: 'ui.setWorkspaceNotificationMuted',
+    permission: 'workspace',
+    params: UiSetWorkspaceNotificationMuted,
+    handler: ({ worktreeId, muted }, context) => {
+      const next = { ...context.runtime.getUIState().notificationsMutedByWorktree }
+      if (muted) {
+        next[worktreeId] = true
+      } else {
+        delete next[worktreeId]
+      }
+      return {
+        ui: uiForCaller(
+          context.runtime.updateUIState({ notificationsMutedByWorktree: next }),
+          context
+        )
+      }
     }
   }),
   defineMethod({

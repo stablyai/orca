@@ -1091,7 +1091,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost는 이 봇의 컴퓨터를 뜻합니다.",
           "headers": "헤더",
-          "authHint": "서버에 브라우저 로그인이 필요하면 도구 확인이 끝난 뒤 “연결” 버튼이 표시됩니다.",
+          "authHint": "서버에 브라우저 로그인이 필요하면 도구 확인이 끝난 뒤 “로그인” 버튼이 표시됩니다.",
           "executable": "실행 파일",
           "commandPlaceholder": "npx",
           "args": "인수",
@@ -5374,9 +5374,8 @@
             "84c3b15dca": "에이전트 사용량 한도",
             "d663430cf9": "사용량 추적 설정",
             "remoteLabel": "{{host}}에 사용량 없음",
-            "remoteTitle": "{{host}}의 사용량",
-            "remoteBody": "이 워크스페이스는 {{host}}에서 실행되므로 상태 표시줄에는 해당 호스트의 사용량이 표시됩니다. 그 호스트에서 에이전트에 로그인하거나, 로컬 워크스페이스로 전환하면 이 컴퓨터의 사용량을 볼 수 있습니다.",
-            "remoteOpenAccounts": "{{host}} 계정 열기"
+            "remoteNoUsageYet": "아직 사용량이 없습니다. 해당 호스트에서 로그인하세요.",
+            "remoteAccounts": "계정"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "업데이트에 실패했습니다. 확장하려면 클릭하세요.",
@@ -15026,7 +15025,10 @@
             "operationResolve": "해결",
             "operationResolveLabel": "AI로 충돌 해결",
             "operationMoreActions": "추가 작업",
-            "operationAbortConfirm": "다시 선택하면 중단됩니다"
+            "operationAbortConfirm": "다시 선택하면 중단됩니다",
+            "operationRunChangedTitle": "중단된 작업이 없습니다",
+            "operationRunChangedDescription": "중단을 선택한 후 작업이 바뀌었습니다. 현재 상태를 확인하고 다시 시도하세요.",
+            "operationRunUnknown": "일시 중지된 실행을 확인할 수 없어 여기서는 중단할 수 없습니다. 소스 제어를 새로 고치거나 터미널에서 중단하세요."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 에이전트를 시작할 수 없습니다.",
@@ -19155,7 +19157,7 @@
           "runStatusDispatchFailed": "실패"
         },
         "runContent": {
-          "noOutput": "사용 가능한 출력 내용이 없습니다."
+          "noOutput": "출력이 없습니다."
         },
         "runViewState": {
           "viewRun": "실행 보기",
@@ -23154,6 +23156,9 @@
           "never": "안 함"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "문제 해결을 위한 낮은 수준의 호환성 설정입니다. 이 설정은 {{host}}이(가) 아닌 이 컴퓨터에 저장됩니다."
+      },
       "repositoryHooks": {
         "availableEnvVars": "사용 가능한 환경 변수"
       },
@@ -23225,6 +23230,7 @@
           "deleted": "삭제됨",
           "kept": "유지됨 · {{count}}개",
           "showMore": "{{count}}개 더 보기",
+          "showFewer": "간략히 표시",
           "waiting": "{{after}}일 중 {{elapsed}}일 비활성",
           "title": "활동",
           "notListed_one": "유지된 워크스페이스 1개가 더 있지만 표시하지 않았습니다.",
@@ -23390,7 +23396,6 @@
           "dialog": {
             "createToken": "만들기",
             "environmentManagedLine": "ORCA_BITBUCKET_* 환경 변수로 설정되어 있습니다. 여기에 저장하려면 해제하세요.",
-            "savedLocallyOnly": "이 컴퓨터에만 저장됩니다.",
             "accessTokenNeeds": "풀 리퀘스트 읽기 권한이 필요합니다.",
             "atlassianEmail": "Atlassian 이메일",
             "requiredScopes": "필요한 범위",
@@ -24632,6 +24637,26 @@
       "statusAriaLabel": "Git Blame: {{summary}}",
       "openCommitHint": "클릭하여 커밋 열기",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "디스크에서 다시 불러오기 · 자동 다시 불러오기 일시 중지됨",
+      "ariaLabelPaused": "디스크에서 다시 불러오기, 자동 다시 불러오기 일시 중지됨",
+      "noChanges": "디스크에 변경 사항 없음",
+      "readFailed": "{{value0}}을(를) 읽을 수 없습니다",
+      "retry": "다시 시도",
+      "fileDeleted": "디스크에서 파일이 삭제됨",
+      "cannotCheckDirty": "저장하지 않은 편집이 있어 디스크와 비교할 수 없습니다",
+      "changedOnDisk": "디스크에서 변경됨",
+      "editsKept": "{{value0}}의 저장하지 않은 편집은 유지됩니다",
+      "openTab": "탭 열기",
+      "paletteTitle": "디스크에서 파일 다시 불러오기",
+      "paletteDescription": "활성 파일을 디스크에서 읽고 변경된 경우 다시 불러옵니다.",
+      "verbs": {
+        "reloadFile": "파일 다시 불러오기",
+        "reloadFromDisk": "디스크에서 다시 불러오기",
+        "refreshFile": "파일 새로 고침",
+        "revertFile": "파일 되돌리기"
+      }
     }
   },
   "featureTips": {
@@ -25462,7 +25487,10 @@
       "chatPasteCode": "코드를 붙여넣으세요",
       "chatPasteCodeLabel": "로그인 후 Google이 보여 주는 코드 또는 그 페이지의 주소",
       "launchesUse": "새로 실행하는 agy는 이 계정을 사용합니다",
-      "loginNow": "현재 agy 로그인"
+      "loginNow": "현재 agy 로그인",
+      "signedInUnread": "agy에 로그인되어 있습니다",
+      "unreadDetail": "어떤 계정인지 보려면 계정을 표시하세요. macOS가 키체인 접근 허용을 요청할 수 있습니다.",
+      "showAccount": "계정 표시"
     },
     "claude": {
       "added": "계정이 추가되었습니다. 다음에 시작하는 Claude에 사용하려면 이 계정을 선택하세요.",
@@ -29247,10 +29275,10 @@
         "replyTo": "{{name}}에게 답장…"
       },
       "empty": {
-        "allClear": "확인이 필요한 것이 없습니다",
+        "allClear": "확인할 항목이 없습니다",
         "body": "{{bot}}이(가) 내 일을 맡으면 무엇을 하고 있는지, 나에게 무엇이 필요한지와 함께 여기에 표시됩니다.",
         "filtered": "일치하는 항목이 없습니다.",
-        "needsYou": "확인이 필요한 것이 없습니다.",
+        "needsYou": "확인할 항목이 없습니다.",
         "title": "아직 항목이 없습니다",
         "short": "아직 항목이 없습니다. {{bot}}이(가) 일을 맡으면 여기에 표시됩니다."
       },
@@ -29287,8 +29315,6 @@
         "automationEnded": "종료됨"
       },
       "menu": {
-        "cancel": "취소",
-        "done": "완료",
         "waiting": "대기 중…"
       },
       "pill": {
@@ -29297,6 +29323,7 @@
         "moveTo": "이동"
       },
       "row": {
+        "cancel": "취소",
         "done": "완료",
         "more": "더 보기",
         "select": "{{title}} 선택"

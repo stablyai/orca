@@ -80,8 +80,12 @@ export function useStructuredNativeChatSubagents({
   return {
     layer: {
       paneKey,
-      // A rewind or a /clear replaces the conversation, which closes the sheet like a new session.
-      sessionKey: `${sessionId}:${controller.epoch}:${controller.contextClear.clears}`,
+      // A rewind or a /clear replaces the conversation, which closes the sheet like a new session. Unknown while a
+      // remounted chat reads its epoch again, which is no replacement.
+      sessionKey:
+        controller.epoch === null
+          ? null
+          : `${sessionId}:${controller.epoch}:${controller.contextClear.clears}`,
       stop:
         openId === null ? undefined : (
           <NativeChatStructuredSubagentStop
