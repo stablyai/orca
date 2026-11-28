@@ -197,8 +197,11 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
     const helperTray: MacMenuBarTray = new MacMenuBarTray(baseTrayImage, {
       onCreated: () => markMacIconShown(true),
       onOwnerChange: (owned) => reportMenuBarHost(owned ? 'helper' : null),
-      onUnavailable: (reason) =>
+      onUnavailable: (reason) => {
+        // Recorded now so a toggle before the deferred swap can't relaunch the helper with fresh strikes.
+        markMacMenuBarHelperUnavailable(reason === 'fallback' ? 'in-process' : 'off')
         deferAppKitSceneMutation(() => replaceFailedHelperTray(helperTray, reason))
+      }
     })
     tray = helperTray
   } else {
@@ -236,7 +239,6 @@ function replaceFailedHelperTray(failed: MacMenuBarTray, reason: 'fallback' | 'o
   if (tray !== failed || !trayOptions || !baseTrayImage) {
     return
   }
-  markMacMenuBarHelperUnavailable(reason === 'fallback' ? 'in-process' : 'off')
   void failed.destroy()
   if (reason === 'off') {
     tray = null

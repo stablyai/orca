@@ -1,4 +1,4 @@
-// Three strikes, counted separately for helpers that never start and helpers that keep dying after starting.
+// Three strikes in a row, counted separately for helpers that never start and started helpers that hang or die.
 const MAX_STRIKES = 3
 const MAX_RETRY_DELAY = 60_000
 
@@ -14,13 +14,15 @@ export class MenuBarRestartPolicy {
    * Delay before the next helper; 'fallback' when the helper can't start at all (in-process is safe),
    * 'off' when started helpers keep hanging or dying (the in-process icon would hang main the same way).
    */
-  next(reachedReady: boolean, livedMs: number): MenuBarRestart {
+  next(reachedReady: boolean, livedMs: number, hung = false): MenuBarRestart {
     if (!reachedReady) {
       this.neverStarted++
       if (this.neverStarted >= MAX_STRIKES) {
         return 'fallback'
       }
-    } else if (livedMs < MAX_RETRY_DELAY) {
+    } else if (hung || livedMs < MAX_RETRY_DELAY) {
+      // A hang counts however long the helper lived: the scene deadlock can strike at any update.
+      this.neverStarted = 0
       this.diedAfterStart++
       if (this.diedAfterStart >= MAX_STRIKES) {
         return 'off'

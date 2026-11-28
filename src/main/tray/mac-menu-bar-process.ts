@@ -26,6 +26,7 @@ type Generation = {
   probe: number | null
   /** The open menu holds the outstanding update; its UI thread still answers probes. */
   deferred: boolean
+  hung: boolean
   started: number
 }
 
@@ -99,9 +100,7 @@ export class MacMenuBarProcess {
     }
     return this.qa.request(
       () => this.write(generation, { ...command, type: 'qa' }),
-      () => {
-        void this.retire(generation)
-      }
+      () => void this.retire(generation)
     )
   }
 
@@ -114,7 +113,7 @@ export class MacMenuBarProcess {
       child = spawnMenuBarChild(this.options.spawn, this.options.qa, this.options.executable)
     } catch (error) {
       console.warn('[menu-bar] helper could not start', error)
-      this.afterFailedGeneration(false, 0)
+      this.afterFailedGeneration(null)
       return
     }
     let observeExit!: () => void
@@ -131,6 +130,7 @@ export class MacMenuBarProcess {
       sequence: 0,
       probe: null,
       deferred: false,
+      hung: false,
       started: performance.now()
     }
     this.current = generation
@@ -157,15 +157,12 @@ export class MacMenuBarProcess {
       this.current = null
       this.clearTimer()
       this.qa.reject()
-      if (this.stopped) {
-        return
+      if (!this.stopped) {
+        this.afterFailedGeneration(generation)
       }
-      this.afterFailedGeneration(generation.ready, performance.now() - generation.started)
     }
     child.once('exit', finish)
-    const fault = (): void => {
-      void this.retire(generation)
-    }
+    const fault = (): void => void this.retire(generation)
     // Failed spawn has no process and emits no exit; a live child still needs observed exit.
     child.on('error', () => (child.pid ? fault() : finish()))
     for (const stream of [child.stdin, child.stdout, child.stderr]) {
@@ -282,7 +279,7 @@ export class MacMenuBarProcess {
 
   // retire() ignores a generation that already ended.
   private arm(generation: Generation, timeoutMs?: number): void {
-    this.deadline.arm(() => void this.retire(generation), timeoutMs)
+    this.deadline.arm(() => void this.retire(generation, true), timeoutMs)
   }
 
   private schedule(delay: number): void {
@@ -299,8 +296,9 @@ export class MacMenuBarProcess {
     this.timer.unref()
   }
 
-  private afterFailedGeneration(reachedReady: boolean, livedMs: number): void {
-    const next = this.restarts.next(reachedReady, livedMs)
+  private afterFailedGeneration(generation: Generation | null): void {
+    const lived = generation ? performance.now() - generation.started : 0
+    const next = this.restarts.next(!!generation?.ready, lived, !!generation?.hung)
     if (typeof next === 'number') {
       this.schedule(next)
       return
@@ -310,10 +308,11 @@ export class MacMenuBarProcess {
     this.options.onUnavailable?.(next)
   }
 
-  private retire(generation: Generation): Promise<void> {
+  private retire(generation: Generation, hung = false): Promise<void> {
     if (generation.retired) {
       return generation.exited
     }
+    generation.hung = hung
     generation.retired = true
     this.qa.reject()
     generation.child.stdin.destroy()

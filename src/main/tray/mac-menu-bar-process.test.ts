@@ -191,7 +191,7 @@ function failingOwner(onUnavailable: (reason: 'fallback' | 'off') => void) {
   })
   owners.push(process)
   process.update(snapshot)
-  return spawn
+  return Object.assign(spawn, { owner: process })
 }
 
 it('falls back in-process only when helpers never start', () => {
@@ -204,6 +204,22 @@ it('falls back in-process only when helpers never start', () => {
   expect(spawn).toHaveBeenCalledTimes(3)
   expect(onUnavailable.mock.calls).toEqual([['fallback']])
   expect(vi.getTimerCount()).toBe(0)
+})
+
+it('turns the icon off when helpers hang after a long healthy run', () => {
+  const onUnavailable = vi.fn()
+  const { owner: process } = failingOwner(onUnavailable)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const helper = helpers.at(-1)!
+    helper.send({ type: 'ready' })
+    helper.send({ type: 'applied', id: helper.requests.at(-1)!.id })
+    vi.advanceTimersByTime(10 * 60_000)
+    process.probe()
+    vi.advanceTimersByTime(16_000)
+    helper.exit()
+    vi.advanceTimersByTime(5_000)
+  }
+  expect(onUnavailable.mock.calls).toEqual([['off']])
 })
 
 it('turns the icon off, never in-process, when started helpers keep hanging', () => {
