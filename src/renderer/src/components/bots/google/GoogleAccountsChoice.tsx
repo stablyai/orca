@@ -114,7 +114,11 @@ export function useGoogleAccountChoice(
               }
             : {}
         ).then(
-          () => true,
+          () => {
+            // A kept choice now stands on what this save wrote, so a retried Add isn't refused as stale.
+            setPicked((current) => current && { ...current, basedOn: next })
+            return true
+          },
           async (error: unknown) => {
             toast.error(botErrorMessage(error))
             if (botFailureOf(error)?.code === 'googleAccountsChanged') {
