@@ -41,6 +41,7 @@ import {
 } from '../../../../../src/shared/agent-session/options/permissions/agent-session-permission-modes-capability'
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../../src/shared/skills/capabilities/skill-install-capability'
 import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/lifecycle/stopping/agent-session-continue-interrupted-capability'
+import { PHONE_PROVIDER_ACCOUNT_SWITCH_RUNTIME_CAPABILITY } from '../../../../../src/shared/remote-runtime/protocol/account-runtime-capabilities'
 
 export type StructuredAgentSessionHostSupport = {
   commandsOnRequest?: boolean
@@ -97,6 +98,8 @@ export type StructuredAgentSessionHostSupport = {
   skipAsyncQuestions?: boolean
   /** The host keeps its own MCP server list, which its chats' `/mcp` tray links to. */
   mcpServers?: boolean
+  /** The host takes a phone's switch between its saved Antigravity accounts. */
+  phoneProviderAccountSwitch?: boolean
 }
 
 export function structuredAgentSessionHostSupport(
@@ -151,6 +154,9 @@ export function structuredAgentSessionHostSupport(
     skipAsyncQuestions: capabilities.includes(
       AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY
     ),
-    mcpServers: capabilities.includes(MCP_SERVERS_RUNTIME_CAPABILITY)
+    mcpServers: capabilities.includes(MCP_SERVERS_RUNTIME_CAPABILITY),
+    phoneProviderAccountSwitch: capabilities.includes(
+      PHONE_PROVIDER_ACCOUNT_SWITCH_RUNTIME_CAPABILITY
+    )
   }
 }

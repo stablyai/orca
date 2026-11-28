@@ -4,7 +4,6 @@ import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   PHONE_PROVIDER_ACCOUNT_SWITCH_RUNTIME_CAPABILITY
 } from '../../../src/shared/remote-runtime/protocol/account-runtime-capabilities'
-import { ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS } from '../../../src/shared/agent-accounts/antigravity/antigravity-account-types'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -15,7 +14,6 @@ import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-cap
 import {
   ANTIGRAVITY_HOST_TARGET,
   listAntigravityAccounts,
-  selectAntigravityAccount,
   type AntigravityAccountState
 } from './provider-account-operations'
 import { useThemedStyles } from '../theme/themed-styles'
@@ -161,19 +159,5 @@ export function AntigravityAccountSection({
         </Text>
       ) : null}
     </View>
-  )
-}
-
-export async function requestAntigravitySelect(
-  client: RpcClient,
-  accountId: string
-): Promise<AntigravityAccountState> {
-  return selectAntigravityAccount.interpret(
-    // Reading agy's login may raise a keychain dialog on the host; desktop waits as long.
-    await selectAntigravityAccount.request(
-      client,
-      { target: ANTIGRAVITY_HOST_TARGET, accountId },
-      { timeoutMs: ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS }
-    )
   )
 }

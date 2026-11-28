@@ -6,7 +6,8 @@ const AntigravityAccountStateSchema = z.looseObject({
   accounts: z.array(
     z.looseObject({
       id: z.string().min(1),
-      email: z.string().nullable()
+      email: z.string().nullable(),
+      subject: z.string().nullable().optional()
     })
   ),
   activeAccountId: z.string().nullable(),

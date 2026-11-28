@@ -36,6 +36,7 @@ import { CodexResetCreditAction } from './usage/CodexResetCreditAction'
 import { UsageStatusNote } from './usage/UsageStatusNote'
 import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
+import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
@@ -75,6 +76,7 @@ export function MobileAccountsScreen() {
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
   const [notice, setNotice] = useState<AccountsNotice | null>(null)
+  const { message: toastMessage, showToast } = useTransientToast()
 
   const accounts = useMobileAccountsSnapshot({
     hostId,
@@ -358,6 +360,7 @@ export function MobileAccountsScreen() {
               onBusyAccountId={setBusyAccountId}
               onSwitched={refresh}
               onNotice={setNotice}
+              onToast={showToast}
             />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
@@ -379,6 +382,7 @@ export function MobileAccountsScreen() {
         onConfirm={acceptCodexReset}
         onCancel={cancelCodexReset}
       />
+      <TransientToast message={toastMessage} bottomInset={insets.bottom} />
       <ConfirmModal
         visible={notice !== null}
         title={notice?.title ?? ''}
