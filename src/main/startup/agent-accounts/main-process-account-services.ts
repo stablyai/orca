@@ -80,8 +80,9 @@ export async function initializeMainProcessAccountServices(
     getFloatingWorkspaceShortcutsActive: () =>
       areFloatingWorkspaceShortcutsActive(store.getSettings())
   })
+  // Map first, then the predicate committed with it, so guests never pair a stale map with it.
   browserManager.setSettingsResolver(() => ({
     keybindings: core.keybindings?.getOverrides(),
-    floatingWorkspaceShortcutsActive: areFloatingWorkspaceShortcutsActive(store.getSettings())
+    floatingWorkspaceShortcutsActive: core.keybindings?.committedFloatingWorkspaceShortcutsActive()
   }))
 }

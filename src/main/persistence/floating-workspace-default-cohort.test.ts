@@ -9,7 +9,8 @@ import {
   makeRepo,
   readPersistedState,
   testState,
-  writeDataFile
+  writeDataFile,
+  writePersistedStateJson
 } from './persistence-test-harness'
 import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
 import {
@@ -22,11 +23,36 @@ import { migrateProfileProjectTransferParticipant } from '../orca-profiles/proje
 import { normalizeProfileProjectState } from '../orca-profiles/project-transfer/profile-project-state-file'
 import { sanitizeRendererSettingsUpdate } from '../ipc/settings/renderer-settings-update'
 import { openProfileStateDatabase } from './profile-state/database/profile-state-database'
+import { ProfileStateRevisionConflictError } from './profile-state/documents/profile-state-document-validation'
+import { newProfileSeededState } from './loading-store/profile-loading/new-profile-cohort-seeds'
+import type * as DomainReader from './profile-state/documents/profile-state-domain-reader'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
+const race = vi.hoisted(() => {
+  const hook: { afterOfflineRead: (() => void) | null } = { afterOfflineRead: null }
+  return hook
+})
+
+// Lets a test commit the startup's first save between the offline writer's read and its write.
+vi.mock('./profile-state/documents/profile-state-domain-reader', async (importActual) => {
+  const actual = await importActual<typeof DomainReader>()
+  return {
+    ...actual,
+    readProfileStateDomainsWithRevisionFromDatabase: (
+      ...args: Parameters<typeof actual.readProfileStateDomainsWithRevisionFromDatabase>
+    ) => {
+      const result = actual.readProfileStateDomainsWithRevisionFromDatabase(...args)
+      const interleave = race.afterOfflineRead
+      race.afterOfflineRead = null
+      interleave?.()
+      return result
+    }
+  }
+})
 
 const TELEMETRY_ONLY = {
   settings: {
@@ -126,20 +152,32 @@ describe('floating workspace default cohort', () => {
     expect(await loadedCohort()).toEqual([true, true])
   })
 
-  it('seeds a provably empty SQLite authority and leaves a written one to the loader', async () => {
+  it('seeds a provably empty SQLite authority', async () => {
     // A fresh startup leaves an empty revision-zero database before its first write.
     openProfileStateDatabase(profileStateDatabaseFile(testState.dir), 'persistence-test').db.close()
     updateAgentHookSettingsInProfileState(offlineLocation(), true)
     expect(await loadedCohort()).toEqual([false, false])
-    rmSync(testState.dir, { recursive: true, force: true })
+  })
 
-    // Startup won the race: the retried write sees its saved state and keeps the frozen cohort.
-    const store = createStore()
-    await store.flushAsync()
-    await closeTestStores()
+  it('rejects an offline write that raced the first save, and its retry keeps the new cohort', async () => {
+    openProfileStateDatabase(profileStateDatabaseFile(testState.dir), 'persistence-test').db.close()
+    // The startup's first save commits through its own connection after the writer saw revision 0.
+    race.afterOfflineRead = () =>
+      writePersistedStateJson(
+        dataFile(),
+        JSON.stringify({
+          ...newProfileSeededState(),
+          settings: { ...newProfileSeededState().settings, theme: 'light' }
+        })
+      )
+    expect(() => updateAgentHookSettingsInProfileState(offlineLocation(), true)).toThrow(
+      ProfileStateRevisionConflictError
+    )
     updateAgentHookSettingsInProfileState(offlineLocation(), true)
     const settings = createStore().getSettings()
     expect(settings.floatingWorkspaceInSettings).toBe(false)
+    expect(settings.floatingTerminalEnabled).toBe(false)
+    expect(settings.theme).toBe('light')
     expect(settings.agentStatusHooksEnabled).toBe(true)
   })
 

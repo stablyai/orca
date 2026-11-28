@@ -2815,8 +2815,7 @@
         "automationsTitle": "Automatizaciones",
         "automationsDescription": "Programa el trabajo del agente y elige si Automatizaciones aparece en la barra lateral.",
         "shareSkillsTitle": "Compartir skills",
-        "shareSkillsDescription": "Comparte tus skills con un enlace no listado. Cualquiera que lo tenga puede instalarlos.",
-        "floatingWorkspaceWebDescription": "Pestañas globales de terminal y markdown."
+        "shareSkillsDescription": "Comparte tus skills con un enlace no listado. Cualquiera que lo tenga puede instalarlos."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."

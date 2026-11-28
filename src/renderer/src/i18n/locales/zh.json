@@ -2785,8 +2785,7 @@
         "automationsTitle": "自动化",
         "automationsDescription": "安排代理工作，并控制侧边栏是否显示自动化",
         "shareSkillsTitle": "分享技能",
-        "shareSkillsDescription": "通过非公开链接分享技能，任何拥有链接的人都可以安装",
-        "floatingWorkspaceWebDescription": "全局终端和 Markdown 选项卡"
+        "shareSkillsDescription": "通过非公开链接分享技能，任何拥有链接的人都可以安装"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大"

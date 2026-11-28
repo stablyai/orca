@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { registerAppHandlers } from '../app'
 import { canCreateWslHostService } from '../wsl/wsl-host-service-availability'
 import { registerNonWindowsWslIpcStubs } from '../wsl/non-windows-wsl-ipc-stubs'
@@ -131,12 +132,15 @@ export async function registerCoreHandlers(
       registerLazyKeybindingHandlers(keybindings, () => {
         void pluginService?.reconcileActivationState()
       })
-      // Registration runs once per app, so this listener lives exactly as long as the store.
-      installFloatingWorkspaceKeybindingSync({
-        store,
-        keybindings,
-        onChanged: () => pluginService?.reconcileActivationState()
-      })
+      // Registration runs once per app; quitting stops the listener with the store it watches.
+      app.once(
+        'will-quit',
+        installFloatingWorkspaceKeybindingSync({
+          store,
+          keybindings,
+          onChanged: () => pluginService?.reconcileActivationState()
+        })
+      )
     }
     if (pluginService) {
       registerPluginHandlers(store, pluginService, marketplaceServices)

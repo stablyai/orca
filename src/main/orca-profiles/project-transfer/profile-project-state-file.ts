@@ -128,8 +128,10 @@ export function normalizeProfileProjectState(parsed: Partial<PersistedState>): P
     nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
     nativeChatAutoContinueAfterUsageLimitDefaultedOn: _autoContinueMigrated,
     artifactSharingEnabled: _artifactSharingEnabled,
-    // Unstamped profiles re-derive floatingTerminalEnabled on load, so the stamp must not be spread in.
+    // The loader derives floatingTerminalEnabled from these two and the cohort, so a missing value
+    // must stay missing instead of becoming the new default's false.
     floatingTerminalDefaultedForAllUsers: _floatingTerminalDefaulted,
+    floatingTerminalEnabled: _floatingTerminalEnabled,
     ...settingsDefaults
   } = defaults.settings
   // Whole-root provenance: only a never-loaded secondary profile is new.
@@ -155,9 +157,10 @@ export function normalizeProfileProjectState(parsed: Partial<PersistedState>): P
     worktreeMeta: recordOrEmpty(parsed.worktreeMeta),
     worktreeLineageById: recordOrEmpty(parsed.worktreeLineageById),
     workspaceLineageByChildKey: recordOrEmpty(parsed.workspaceLineageByChildKey),
-    settings: isRecord(parsed.settings)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: floatingTerminalEnabled may stay absent; the loader re-derives it on first load.
+    settings: (isRecord(parsed.settings)
       ? { ...settingsDefaults, ...cohortSeeds, ...parsed.settings }
-      : { ...settingsDefaults, ...cohortSeeds },
+      : { ...settingsDefaults, ...cohortSeeds }) as PersistedState['settings'],
     ui: isRecord(parsed.ui) ? { ...defaults.ui, ...parsed.ui } : defaults.ui,
     githubCache: isRecord(parsed.githubCache)
       ? {

@@ -3537,8 +3537,7 @@
         "automationsTitle": "Otomasyonlar",
         "automationsDescription": "Ajan işini zamanlayın ve Otomasyonlar'ın kenar çubuğunda görünüp görünmeyeceğini seçin.",
         "shareSkillsTitle": "Becerileri paylaş",
-        "shareSkillsDescription": "Becerilerinizi listelenmemiş bir bağlantıyla paylaşın. Bağlantıya sahip olan herkes onları yükleyebilir.",
-        "floatingWorkspaceWebDescription": "Genel terminal ve markdown sekmeleri."
+        "shareSkillsDescription": "Becerilerinizi listelenmemiş bir bağlantıyla paylaşın. Bağlantıya sahip olan herkes onları yükleyebilir."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Yapıştırılan içerik çok büyük."

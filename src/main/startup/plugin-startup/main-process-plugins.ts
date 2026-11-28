@@ -1,5 +1,4 @@
 import { join } from 'node:path'
-import { areFloatingWorkspaceShortcutsActive } from '../../../shared/settings/floating-workspace-cohort'
 import { PluginImageCache } from '../../plugins/media/plugin-image-cache'
 import { PLUGIN_IMAGE_SCHEME } from '../../../shared/plugins/images/plugin-image-url'
 import { getPluginDesktopFrameServices } from '../../plugins/panels/desktop-actions/plugin-frame-desktop-services'
@@ -127,7 +126,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     getDevPluginPaths: () => normalizePluginIdList(store.getSettings().devPluginPaths),
     getKeybindings: () => core.keybindings?.getOverrides() ?? {},
     getFloatingWorkspaceShortcutsActive: () =>
-      areFloatingWorkspaceShortcutsActive(store.getSettings()),
+      core.keybindings?.committedFloatingWorkspaceShortcutsActive() === true,
     getPluginKillListEntry: getPluginBlock,
     hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged),
     getDesktopFrameServices: getPluginDesktopFrameServices,

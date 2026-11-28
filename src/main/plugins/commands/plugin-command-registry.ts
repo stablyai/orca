@@ -4,6 +4,7 @@ import {
   type PluginCommandAliasActionId
 } from '../../../shared/plugins/contributions/plugin-command-actions'
 import { getKeybindingConflictIdentity } from '../../../shared/keybindings/matching-key'
+import { isFloatingWorkspaceKeybindingActionId } from '../../../shared/settings/floating-workspace-cohort'
 import type { KeybindingOverrides } from '../../../shared/keybindings/types'
 import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
 import type { PluginCommandContribution } from '../../../shared/plugins/contributions/plugin-command-contribution'
@@ -56,7 +57,8 @@ export class PluginCommandRegistry {
     discovered: readonly DiscoveredPlugin[],
     isApproved: (plugin: ValidDiscoveredPlugin) => boolean,
     overrides: KeybindingOverrides = {},
-    platform: NodeJS.Platform = process.platform
+    platform: NodeJS.Platform = process.platform,
+    floatingWorkspaceShortcutsActive = false
   ): void {
     const candidates = discovered.filter(
       (plugin): plugin is ValidDiscoveredPlugin =>
@@ -78,6 +80,10 @@ export class PluginCommandRegistry {
     const chordOwners = new Map<string, CommandOwner[]>()
     for (const plugin of approved) {
       for (const command of plugin.commands) {
+        // An alias of an inactive floating action never fires, so it owns no chord to clash over.
+        if (isInactiveFloatingWorkspaceAlias(command, floatingWorkspaceShortcutsActive)) {
+          continue
+        }
         for (const keybinding of effectiveCommandKeybindings(command, overrides)) {
           const identity = getKeybindingConflictIdentity(keybinding.key, platform)
           const owners = chordOwners.get(identity) ?? []
@@ -109,6 +115,17 @@ export class PluginCommandRegistry {
       .filter((plugin) => !conflicted.has(plugin.pluginKey))
       .flatMap((plugin) => plugin.commands)
   }
+}
+
+function isInactiveFloatingWorkspaceAlias(
+  command: PluginCommandRegistration,
+  floatingWorkspaceShortcutsActive: boolean
+): boolean {
+  return (
+    !floatingWorkspaceShortcutsActive &&
+    command.handler.type === 'built-in' &&
+    isFloatingWorkspaceKeybindingActionId(command.handler.action)
+  )
 }
 
 function effectiveCommandKeybindings(

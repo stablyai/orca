@@ -14,6 +14,15 @@ export function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): v
       console.error('[keybindings] Failed to send keybindings to a window:', error)
     }
   }
-  refreshGrabShortcutPolicies()
-  rebuildAppMenu()
+  // Each consumer refreshes on its own, so one failing cannot leave the other stale.
+  try {
+    refreshGrabShortcutPolicies()
+  } catch (error) {
+    console.error('[keybindings] Failed to refresh grab shortcut policies:', error)
+  }
+  try {
+    rebuildAppMenu()
+  } catch (error) {
+    console.error('[keybindings] Failed to rebuild the app menu:', error)
+  }
 }

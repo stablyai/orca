@@ -40,7 +40,9 @@ export class PluginContentPackRegistry {
     contentVerifier: PluginContentVerifier,
     /** No caller predicate may readmit revoked contributions. */
     private readonly isKilled: (pluginKey: string) => boolean,
-    private readonly appearance?: PluginAppearanceService | null
+    private readonly appearance?: PluginAppearanceService | null,
+    /** Read per reconcile: inert floating aliases own no chord while it is false. */
+    private readonly floatingWorkspaceShortcutsActive: () => boolean = () => false
   ) {
     this.languagePacks = new PluginLanguagePackRegistry(contentVerifier)
     this.themes = createPluginThemeRegistry(contentVerifier, appearance?.overlayAppThemes)
@@ -59,6 +61,7 @@ export class PluginContentPackRegistry {
     isApproved: (plugin: ValidDiscoveredPlugin) => boolean,
     keybindings: KeybindingOverrides = {}
   ): Promise<void> {
+    const floatingWorkspaceShortcutsActive = this.floatingWorkspaceShortcutsActive()
     this.appearance?.reconcile(discovered)
     const approvedKeys = new Set(
       discovered
@@ -97,7 +100,9 @@ export class PluginContentPackRegistry {
         !excluded.has(plugin.pluginKey) &&
         !this.isKilled(plugin.pluginKey)
       await Promise.all(
-        this.families(keybindings).map((family) => family.reconcile(discovered, approveAtomically))
+        this.families(keybindings, floatingWorkspaceShortcutsActive).map((family) =>
+          family.reconcile(discovered, approveAtomically)
+        )
       )
 
       let foundNewError = false
@@ -130,7 +135,10 @@ export class PluginContentPackRegistry {
   }
 
   /** Keep contribution errors in this family order. */
-  private families(keybindings: KeybindingOverrides = {}): readonly ContentFamily[] {
+  private families(
+    keybindings: KeybindingOverrides = {},
+    floatingWorkspaceShortcutsActive = false
+  ): readonly ContentFamily[] {
     return [
       this.languagePacks,
       this.themes,
@@ -140,7 +148,13 @@ export class PluginContentPackRegistry {
       this.vmRecipes,
       {
         reconcile: async (discovered, isApproved) =>
-          this.commands.reconcile(discovered, isApproved, keybindings),
+          this.commands.reconcile(
+            discovered,
+            isApproved,
+            keybindings,
+            process.platform,
+            floatingWorkspaceShortcutsActive
+          ),
         error: (pluginKey) => this.commands.error(pluginKey)
       }
     ]
@@ -154,6 +168,7 @@ export function createPluginContentPacks(
   return new PluginContentPackRegistry(
     contentVerifier,
     (key) => Boolean(options.getPluginKillListEntry?.(key)),
-    options.appearance
+    options.appearance,
+    () => options.getFloatingWorkspaceShortcutsActive?.() === true
   )
 }

@@ -25,8 +25,6 @@ import {
   type TextShortcutInput
 } from '../../../shared/keybindings/text-input-shortcut-policy'
 
-import { areFloatingWorkspaceShortcutsActive } from '../../../shared/settings/floating-workspace-cohort'
-
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
   mainWindow: BrowserWindow
@@ -153,9 +151,8 @@ export function installMainWindowShortcutRouting(args: {
       context: 'app',
       terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
     }
-    const floatingWorkspaceShortcutsActive = areFloatingWorkspaceShortcutsActive(
-      nativeSettings?.getSettings()
-    )
+    // Read after getKeybindings so predicate and map come from the same committed snapshot.
+    const floatingWorkspaceShortcutsActive = opts?.getFloatingWorkspaceShortcutsActive?.() === true
 
     if (textInputOwnsComposition(input)) {
       doubleTapDetector.reset()

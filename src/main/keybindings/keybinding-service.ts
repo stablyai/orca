@@ -1,4 +1,5 @@
 import {
+  getKeybindingPlatform,
   getLegacySearchBindings,
   LEGACY_TAB_SWITCH_BINDINGS
 } from '../../shared/keybindings/definitions'
@@ -15,7 +16,11 @@ import {
   writeKeybindingOverride,
   type KeybindingReadOptions
 } from './keybinding-file'
-import { omitInactiveFloatingWorkspaceOverrides } from '../../shared/settings/floating-workspace-cohort'
+import {
+  inactiveFloatingWorkspaceActionIds,
+  omitInactiveFloatingWorkspaceOverrides
+} from '../../shared/settings/floating-workspace-cohort'
+import { resolveKeybindingOverrides } from '../../shared/keybindings/profile-defaults'
 
 export type KeybindingServiceOptions = {
   homePath: string
@@ -105,12 +110,36 @@ export class KeybindingService {
     return this.publish(snapshot)
   }
 
-  /** Fail closed when a reload cannot finish: the floating actions go inert on the last good map. */
+  /** The predicate published with the current map; never reads disk, so matchers can pair it safely. */
+  committedFloatingWorkspaceShortcutsActive(): boolean {
+    return this.snapshot?.floatingWorkspaceShortcutsActive === true
+  }
+
+  /** Fail closed when a reload cannot finish: inert floating actions on the last good map, or on
+   *  an in-memory default map when nothing loaded yet. Never touches disk, so it cannot throw. */
   publishInactiveFloatingWorkspaceFallback(): KeybindingFileSnapshot {
-    const current = this.getSnapshot()
+    const current = this.snapshot
+    if (current) {
+      return this.publish({
+        ...current,
+        overrides: omitInactiveFloatingWorkspaceOverrides(current.overrides, false),
+        floatingWorkspaceShortcutsActive: false
+      })
+    }
     return this.publish({
-      ...current,
-      overrides: omitInactiveFloatingWorkspaceOverrides(current.overrides, false),
+      path: this.configPath,
+      platform: getKeybindingPlatform(this.platform),
+      exists: false,
+      defaultOverrides: this.defaultOverrides,
+      overrides: resolveKeybindingOverrides(
+        this.platform,
+        this.fallbackOverrides,
+        this.defaultOverrides,
+        inactiveFloatingWorkspaceActionIds(false)
+      ),
+      commonOverrides: {},
+      platformOverrides: {},
+      diagnostics: [],
       floatingWorkspaceShortcutsActive: false
     })
   }

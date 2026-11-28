@@ -3547,8 +3547,7 @@
         "automationsTitle": "Automations",
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
-        "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."

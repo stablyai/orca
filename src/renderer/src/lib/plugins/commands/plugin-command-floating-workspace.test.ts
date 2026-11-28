@@ -7,6 +7,8 @@ import {
 } from './plugin-command-floating-workspace'
 import { shadowedKeybindingTitles } from '@/components/plugins/presentation/plugin-keybinding-conflicts'
 import { inactiveFloatingWorkspaceActionIds } from '../../../../../shared/settings/floating-workspace-cohort'
+import { buildShortcutDefinitionCatalog } from '@/components/settings/shortcuts/shortcut-definition-catalog'
+import { pluginCommandKeybindingActionId } from '../../../../../shared/plugins/contributions/plugin-command-actions'
 
 const CHORD = {
   key: 'k',
@@ -39,7 +41,8 @@ const replacement = command('replacement', { type: 'worker' }, 'floatingWorkspac
 const unrelated = command('unrelated', { type: 'built-in', action: 'sidebar.left.toggle' })
 
 describe('plugin commands while the floating workspace is inactive', () => {
-  it('drops only aliases of an inactive floating action from shortcut dispatch', () => {
+  // Policy (K3 ruling): a worker replacement is the plugin's own command on its own chord, so it keeps dispatching.
+  it('drops only aliases of an inactive floating action from dispatch; worker replacements still run', () => {
     const find = (commands: ActivePluginCommand[], active: boolean) =>
       findPluginCommandForKeybinding(commands, CHORD, 'darwin', {}, true, {}, active)?.id ?? null
     expect(find([alias], false)).toBeNull()
@@ -70,5 +73,22 @@ describe('plugin commands while the floating workspace is inactive', () => {
       shadowedKeybindingTitles('Mod+Alt+A', 'darwin', {}, inactiveFloatingWorkspaceActionIds(false))
     ).toEqual([])
     expect(shadowedKeybindingTitles('Mod+Alt+A', 'darwin', {})).not.toEqual([])
+  })
+
+  it('lists no Settings row for an inert alias, keeps worker replacements, and frees the chord', () => {
+    const catalogIds = (active: boolean) =>
+      buildShortcutDefinitionCatalog({
+        disabledTuiAgents: [],
+        pluginCommands: [alias, replacement],
+        keybindings: {},
+        platform: 'darwin',
+        missionControlConflictMessage: '',
+        floatingWorkspaceShortcutsActive: active
+      }).definitions.map((definition) => definition.id)
+    const aliasId = pluginCommandKeybindingActionId('test-plugin', 'alias')
+    const replacementId = pluginCommandKeybindingActionId('test-plugin', 'replacement')
+    expect(catalogIds(false)).not.toContain(aliasId)
+    expect(catalogIds(false)).toContain(replacementId)
+    expect(catalogIds(true)).toContain(aliasId)
   })
 })

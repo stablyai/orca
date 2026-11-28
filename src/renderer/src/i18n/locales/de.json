@@ -3198,8 +3198,7 @@
         "automationsTitle": "Automatisierungen",
         "automationsDescription": "Agentenaufgaben planen und festlegen, ob Automatisierungen in der Seitenleiste angezeigt werden.",
         "shareSkillsTitle": "Skills teilen",
-        "shareSkillsDescription": "Skills über einen nicht gelisteten Link teilen. Alle, die den Link haben, können sie installieren.",
-        "floatingWorkspaceWebDescription": "Globale Terminal- und Markdown-Tabs."
+        "shareSkillsDescription": "Skills über einen nicht gelisteten Link teilen. Alle, die den Link haben, können sie installieren."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Der einzufügende Inhalt ist zu groß."

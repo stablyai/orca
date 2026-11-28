@@ -5,14 +5,22 @@ import type { KeybindingService } from './keybinding-service'
 
 type FloatingWorkspaceKeybindingSyncArgs = {
   store: {
-    getSettings(): Readonly<GlobalSettings>
     onSettingsChanged(
       listener: (updates: Partial<GlobalSettings>, settings: GlobalSettings) => void
     ): () => void
   }
-  keybindings: Pick<KeybindingService, 'reload' | 'publishInactiveFloatingWorkspaceFallback'>
+  keybindings: Pick<
+    KeybindingService,
+    | 'reload'
+    | 'publishInactiveFloatingWorkspaceFallback'
+    | 'committedFloatingWorkspaceShortcutsActive'
+  >
   broadcast?: (snapshot: KeybindingFileSnapshot) => void
   onChanged?: () => Promise<void> | void
+}
+
+function logFailure(step: string, error: unknown): void {
+  console.error(`[keybindings] Floating workspace change: ${step} failed:`, error)
 }
 
 /** Republishes keybindings when the floating predicate flips, so no reader pairs it with a stale map. */
@@ -22,47 +30,40 @@ export function installFloatingWorkspaceKeybindingSync({
   broadcast = (snapshot) => {
     void import('./keybindings-broadcast')
       .then(({ broadcastKeybindingsChanged }) => broadcastKeybindingsChanged(snapshot))
-      .catch((error: unknown) => {
-        console.error('[keybindings] Failed to broadcast the floating workspace change:', error)
-      })
+      .catch((error: unknown) => logFailure('broadcast', error))
   },
   onChanged
 }: FloatingWorkspaceKeybindingSyncArgs): () => void {
-  let active = areFloatingWorkspaceShortcutsActive(store.getSettings())
   return store.onSettingsChanged((updates, settings) => {
     if (!('floatingTerminalEnabled' in updates)) {
       return
     }
-    const next = areFloatingWorkspaceShortcutsActive(settings)
-    if (next === active) {
+    // Compare with what is published, not a private flag, so a failed reload retries next time.
+    if (
+      areFloatingWorkspaceShortcutsActive(settings) ===
+      keybindings.committedFloatingWorkspaceShortcutsActive()
+    ) {
       return
     }
-    active = next
     let snapshot: KeybindingFileSnapshot
     try {
-      // Synchronous, so main's next keydown already sees the republished map.
+      // Synchronous, so main's next keydown already matches against the republished snapshot.
       snapshot = keybindings.reload()
     } catch (error) {
-      console.error('[keybindings] Failed to reload for the floating workspace change:', error)
+      logFailure('reload', error)
       snapshot = keybindings.publishInactiveFloatingWorkspaceFallback()
     }
     try {
       broadcast(snapshot)
     } catch (error) {
-      console.error('[keybindings] Failed to broadcast the floating workspace change:', error)
+      logFailure('broadcast', error)
     }
     try {
-      void Promise.resolve(onChanged?.()).catch((error: unknown) => {
-        console.error(
-          '[keybindings] Plugin reconcile after the floating workspace change failed:',
-          error
-        )
-      })
-    } catch (error) {
-      console.error(
-        '[keybindings] Plugin reconcile after the floating workspace change failed:',
-        error
+      void Promise.resolve(onChanged?.()).catch((error: unknown) =>
+        logFailure('plugin reconcile', error)
       )
+    } catch (error) {
+      logFailure('plugin reconcile', error)
     }
   })
 }

@@ -2782,8 +2782,7 @@
         "artifactsTitle": "아티팩트",
         "artifactsDescription": "팀과 HTML 및 Markdown 파일을 공유하고 공개 링크를 관리하세요.",
         "shareSkillsTitle": "스킬 공유",
-        "shareSkillsDescription": "비공개 링크로 스킬을 공유하세요. 링크가 있는 사람은 누구나 설치할 수 있습니다.",
-        "floatingWorkspaceWebDescription": "전역 터미널 및 markdown 탭."
+        "shareSkillsDescription": "비공개 링크로 스킬을 공유하세요. 링크가 있는 사람은 누구나 설치할 수 있습니다."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
