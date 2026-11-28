@@ -1,5 +1,6 @@
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { BotGroupTurnSchema } from '../../../../../shared/bots/bot-group-schema'
+import type { BotGroupTurnDetailPage } from '../../../../../shared/bots/use-bot-group-turn-details'
 import {
   HISTORY_PAGE_CONTENT_BUDGET_BYTES,
   oversizedHistoryItem
