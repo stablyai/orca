@@ -19,7 +19,12 @@ import { peerMailSendingAskers } from './peer-mail-sending-askers'
 import { sendClientAsk } from './client-ask-send'
 import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
-import { uploadPeerMailFiles } from './peer-mail-files'
+import {
+  assertPeerMailFilesAddress,
+  assertPeerMailServerTakesFiles,
+  uploadPeerMailFiles
+} from './peer-mail-files'
+import { peerMailStoredNothing, withUnattachedUploads } from './peer-mail-unattached'
 import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import {
   forgetPeerQuestionOut,
@@ -62,10 +67,12 @@ export async function sendPeerMail(args: {
       NOTHING_SENT
     )
   }
+  assertPeerMailFilesAddress(params)
   const caller = peerMailLocalCaller({ ...args, from: params.from })
   const toBot =
     parseBotAddress(to) !== null || params.chat !== undefined || params.item !== undefined
   const server = await requirePeerMailServer(runtime, params.on, toBot, type)
+  assertPeerMailServerTakesFiles(server, params)
   const askers = await peerMailSendingAskers(runtime, args.orchestrationCaller, caller, {
     ...params,
     to
@@ -77,37 +84,33 @@ export async function sendPeerMail(args: {
     localPaneKey: caller.paneKey
   })
   const id = peerMailMessageId(args.orchestrationMutation)
-  // An Orca from before files keeps the words and drops the files, so they go only where they're taken.
-  const files = server.takesFiles ? params.files : undefined
-  const attachments = await uploadPeerMailFiles(runtime, server, { ...params, files })
-  const warnings: SendRecipientWarning[] =
-    params.files?.length && !server.takesFiles
-      ? [
-          {
-            code: 'files_not_sent',
-            recipient: to,
-            message: `${server.name}'s Orca needs an update to receive files, so the message went without them.`
-          }
-        ]
-      : []
+  const attachments = await uploadPeerMailFiles(runtime, server, params)
+  const warnings: SendRecipientWarning[] = []
   const db = runtime.getOrchestrationDb()
-  if (type === 'question') {
-    // Kept until its answer or notice comes back, so an unpair can tell the asker none will;
-    // recorded first, so an answer pulled before delivery returns still settles it.
-    recordPeerQuestionOut(db, {
-      messageId: id,
-      conversationId: conversation.conversation_id,
-      environmentId: server.environmentId,
-      peerFingerprint: conversation.peer_fingerprint,
-      asker: caller.address,
-      threadId: params.threadId
-    })
-  }
+  // Until the server is asked, nothing was delivered, whatever fails.
+  let recorded = false
+  let delivering = false
   try {
+    const senderLabel = peerMailSenderLabel(runtime, caller.address)
+    const sender = peerMailSender(runtime, caller.address)
+    if (type === 'question') {
+      // Kept until its answer or notice comes back, so an unpair can tell the asker none will;
+      // recorded first, so an answer pulled before delivery returns still settles it.
+      recordPeerQuestionOut(db, {
+        messageId: id,
+        conversationId: conversation.conversation_id,
+        environmentId: server.environmentId,
+        peerFingerprint: conversation.peer_fingerprint,
+        asker: caller.address,
+        threadId: params.threadId
+      })
+      recorded = true
+    }
+    delivering = true
     const held = await deliverPeerMail(runtime, server, conversation, {
       id,
       to,
-      senderLabel: peerMailSenderLabel(runtime, caller.address),
+      senderLabel,
       subject: params.subject,
       body: params.body,
       type,
@@ -116,15 +119,40 @@ export async function sendPeerMail(args: {
       chat: params.chat,
       item: params.item,
       attachments,
-      sender: peerMailSender(runtime, caller.address),
+      sender,
       ...(askers ? { askers } : {})
     })
     warnings.push(...held)
   } catch (error) {
-    if (type === 'question') {
-      forgetPeerQuestionOut(db, id)
+    const storedNothing = !delivering || peerMailStoredNothing(error)
+    if (!storedNothing) {
+      // The server may hold the mail: pull its reply as a delivered send would.
+      try {
+        runtime.ensureOrchestrationPeerMailRelay(server.environmentId)
+      } catch (relay) {
+        console.warn('[orchestration] arming the peer mail relay failed', relay)
+      }
     }
-    throw error
+    // Kept only for mail the server says it stored, so an answer can settle it or an unpair can say
+    // it may be lost. An unknown outcome forgets it as before: one that never arrived would settle
+    // a later reply in its thread.
+    const stored = error instanceof OrchestrationError && error.code === 'peer_mail_stored'
+    if (recorded && !stored) {
+      // A cleanup that fails too mustn't hide why the send failed, or the files it left there.
+      try {
+        forgetPeerQuestionOut(db, id)
+      } catch (cleanup) {
+        console.warn('[orchestration] forgetting a failed peer question failed', cleanup)
+      }
+    }
+    // A refusal names the files it left there; a timeout may yet have delivered them with the mail.
+    throw storedNothing
+      ? withUnattachedUploads(error, server, {
+          copied: attachments?.length ?? 0,
+          // Only the server's refusal can follow its eager claim for the item's chat.
+          forItem: delivering && params.item !== undefined
+        })
+      : error
   }
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,

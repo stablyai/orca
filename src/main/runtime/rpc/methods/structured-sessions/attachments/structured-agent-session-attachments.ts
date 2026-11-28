@@ -16,8 +16,9 @@ import {
 import { remoteFileContentBudget } from '../../files/files-remote-content-budget'
 import type { AgentSessionAttachmentStore } from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { getAgentSessionAttachmentStore } from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
-import { botItemOwnerActor } from '../../bots-caller-gates'
+import { botItemOwnerActor, ownerOnly } from '../../bots-caller-gates'
 import { resolveItem } from '../../bots-items-write-support'
+import { botOfAddress } from '../../../../../../shared/bot-roster'
 
 async function requireStore(
   ctx: RpcContext
@@ -51,6 +52,16 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
         const item = await resolveItem(runtime.botItems.store(), params.item)
         if (!runtime.bots.list().some((bot) => bot.id === item.ownerBotId)) {
           throw new Error('The bot that owns this item is gone')
+        }
+        const { store, callerKey } = await requireStore(ctx)
+        return store.stageUpload({ callerKey, name: params.name, byteLength: params.byteLength })
+      }
+      if ('bot' in params) {
+        // Mail admits it into the chat it lands in; until then it is swept like any unclaimed upload.
+        ownerOnly(ctx, 'Only your owner sends files to a bot this way, in Orca.')
+        ctx.runtime.bots.assertEnabled()
+        if (!botOfAddress(ctx.runtime.bots.list(), params.bot)) {
+          throw new Error(`This computer has no bot ${params.bot}`)
         }
         const { store, callerKey } = await requireStore(ctx)
         return store.stageUpload({ callerKey, name: params.name, byteLength: params.byteLength })

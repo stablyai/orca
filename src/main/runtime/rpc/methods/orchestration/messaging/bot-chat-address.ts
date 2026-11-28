@@ -37,13 +37,14 @@ export async function routeBotMail(
   context: Parameters<typeof sendToBot>[0],
   input: Omit<Parameters<typeof sendToBot>[1], 'newChat'> & {
     params: { chat?: string; item?: string; files?: string[] }
-    /** From a paired Orca: files it uploaded to this Orca's store for the item's chat. */
+    /** From a paired Orca: files it uploaded to this Orca's store, for the item's chat or, with no
+     *  item, the chat the mail lands in. */
     attachments?: readonly string[]
   }
 ): Promise<{ to: string; body?: string } | { receipt: unknown }> {
   const chat = await chatForItem(context.runtime, input.to, input.params)
-  const mail = await withItemMailFiles(context.runtime, input)
   const newChat = chat === BOT_NEW_CHAT
+  const mail = await withItemMailFiles(context.runtime, input, newChat)
   let to = mail.to
   if (newChat) {
     assertNewChatAddress(to, mail.params.type)
@@ -56,6 +57,14 @@ export async function routeBotMail(
     (await sendToBot(context, { ...mail, to, newChat }))
   if (toBot) {
     return { receipt: toBot.receipt }
+  }
+  // Its files are claimed by the bot chat that stores it, so other mail can't carry them.
+  if (mail.claimFiles) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `Files go into a bot's chat, and this mail would reach ${to} as ordinary mail. Nothing was sent.`,
+      { effectsApplied: false }
+    )
   }
   // Ordinary mail takes no image blocks: its admitted files all go in its body.
   return mail.images === input.images ? { to } : { to, body: itemMailFilesBody(mail) }

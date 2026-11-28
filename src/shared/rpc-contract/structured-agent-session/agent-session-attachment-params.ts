@@ -22,7 +22,9 @@ const attachmentUploadFile = () => ({
 export const AttachmentUploadStartParams = lazyZodSchema(() =>
   z.union([
     z.strictObject({ sessionId: SessionId, ...attachmentUploadFile() }),
-    z.strictObject({ item: z.uuid(), ...attachmentUploadFile() })
+    z.strictObject({ item: z.uuid(), ...attachmentUploadFile() }),
+    // A bot's own mail from a paired Orca, for the chat it lands in (`send --on --to bot:<name> --file`).
+    z.strictObject({ bot: z.string().min(1).max(256), ...attachmentUploadFile() })
   ])
 )
 

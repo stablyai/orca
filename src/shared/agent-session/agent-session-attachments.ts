@@ -143,8 +143,11 @@ export function botItemAttachmentTarget(uid: string): string {
 
 export function agentSessionAttachmentUploadDestination(
   target: string
-): { item: string } | { sessionId: string } {
-  return target.startsWith('item:') ? { item: target.slice('item:'.length) } : { sessionId: target }
+): { item: string } | { bot: string } | { sessionId: string } {
+  if (target.startsWith('item:')) {
+    return { item: target.slice('item:'.length) }
+  }
+  return target.startsWith('bot:') ? { bot: target.slice('bot:'.length) } : { sessionId: target }
 }
 
 export type AgentSessionAttachmentPathUploadResult = {
