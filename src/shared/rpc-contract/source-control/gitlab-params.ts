@@ -143,6 +143,7 @@ export const AddMRInlineComment = lazyZodSchema(() =>
       path: requiredString('File path is required'),
       oldPath: z.string().optional(),
       line: z.number().int().positive(),
+      oldLine: z.number().int().positive().optional(),
       baseSha: requiredString('Base SHA is required'),
       startSha: requiredString('Start SHA is required'),
       headSha: requiredString('Head SHA is required')

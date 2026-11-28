@@ -1,11 +1,18 @@
-import { useId, useRef, useState } from 'react'
-import { ChevronRight, Info } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { useToastHeightChange } from '@/components/ui/toast-height-change'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getKeepLocalMainUpToDateTitle } from '@/components/settings/source-control/keep-local-main-up-to-date-setting'
 import { translate } from '@/i18n/i18n'
+import { LocalBaseRefNotUpdatedCard } from './local-base-ref-not-updated-card'
+import {
+  dismissLocalBaseRefToast,
+  isLocalBaseRefToastShowing,
+  openLocalBaseRefToastId,
+  renderLocalBaseRefToast,
+  rerenderLocalBaseRefToast,
+  retireLocalBaseRefToast
+} from './local-base-ref-toast-lifecycle'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -128,68 +135,14 @@ function shallowHistoryDescription(
   )
 }
 
-// Why: the raw Git guidance (incl. the owner worktree path) stays behind a click so the toast reads in one line.
-function RefreshFailureDetails({
-  reason,
-  detail,
-  showLabel,
-  hideLabel,
-  actions,
-  onResize
-}: {
-  reason: string
-  detail: string
-  showLabel: string
-  hideLabel: string
-  actions: React.ReactNode
-  onResize: () => void
-}): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const detailId = useId()
-  const bodyRef = useRef<HTMLDivElement>(null)
-  useToastHeightChange(bodyRef, onResize)
-  return (
-    <div ref={bodyRef} className="flex w-full min-w-0 flex-col gap-2">
-      <p className="truncate text-sm leading-5 text-popover-foreground/80" title={reason}>
-        {reason}
-      </p>
-      {open ? (
-        <p
-          id={detailId}
-          className="select-text whitespace-pre-wrap rounded-md bg-muted px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]"
-        >
-          {detail}
-        </p>
-      ) : null}
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="disclosure"
-          size="xs"
-          className="-ml-1.5 mr-auto"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          aria-controls={detailId}
-        >
-          <ChevronRight
-            className={`size-3.5 transition-transform motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
-          />
-          {open ? hideLabel : showLabel}
-        </Button>
-        {actions}
-      </div>
-    </div>
-  )
-}
-
 function stopRefreshingLocalBaseRef(
-  id: string,
+  closeToast: () => void,
   localBranch: string,
   updateSettings: AppState['updateSettings']
 ): void {
   void Promise.resolve(updateSettings({ refreshLocalBaseRefOnWorktreeCreate: false }))
     .then(() => {
-      toast.dismiss(id)
+      closeToast()
       toast.success(
         translate(
           'auto.store.slices.worktrees.localBaseRefRefreshTurnedOff',
@@ -235,20 +188,21 @@ function showUnshallowLaunchFailure(command: string): void {
 const unshallowLaunchesInFlight = new Set<string>()
 
 function runUnshallowInNewTerminalTab(
-  toastId: string,
+  target: string,
+  closeToast: () => void,
   worktreeId: string,
   executionHostId: ExecutionHostId | undefined,
   command: string
 ): void {
-  // Why: a second click would race the first fetch for Git's shallow lock.
-  if (unshallowLaunchesInFlight.has(toastId)) {
+  // Why per target: a second click, even on a re-shown toast, would race the first fetch for Git's shallow lock.
+  if (unshallowLaunchesInFlight.has(target)) {
     return
   }
-  unshallowLaunchesInFlight.add(toastId)
+  unshallowLaunchesInFlight.add(target)
   const settle = (started: boolean): void => {
-    unshallowLaunchesInFlight.delete(toastId)
+    unshallowLaunchesInFlight.delete(target)
     if (started) {
-      toast.dismiss(toastId)
+      closeToast()
     } else {
       showUnshallowLaunchFailure(command)
     }
@@ -271,6 +225,10 @@ function runUnshallowInNewTerminalTab(
   )
 }
 
+// Why: sonner's public options omit these, but an in-place variant switch must clear them.
+const CLEAR_INFO_TOAST_FIELDS: Record<string, undefined> = { type: undefined }
+const CLEAR_CUSTOM_TOAST_FIELDS: Record<string, undefined> = { jsx: undefined }
+
 export function showLocalBaseRefRefreshToast(
   result: LocalBaseRefRefreshResult | undefined,
   createdWorktree: Pick<Worktree, 'id' | 'repoId' | 'displayName' | 'branch' | 'path'> | undefined,
@@ -282,8 +240,17 @@ export function showLocalBaseRefRefreshToast(
   }
 
   const worktreeName = createdWorktree ? resolveWorktreeDisplayName(createdWorktree).trim() : ''
-  // Why: one id per repo and branch because creates toward one target share a run, so its result is one fact, not one per create.
-  const id = `local-base-ref-refresh-failed:${createdWorktree?.repoId ?? 'unknown'}:${result.localBranch}`
+  // Why: one toast per repo and branch because creates toward one target share a run, so its result is one fact, not one per create.
+  const target = `local-base-ref-refresh-failed:${createdWorktree?.repoId ?? 'unknown'}:${result.localBranch}`
+  const id = openLocalBaseRefToastId(target)
+  const onDismiss = (): void => retireLocalBaseRefToast(target, id)
+  const closeToast = (): void => dismissLocalBaseRefToast(target, id)
+  // Why: a launch settles later; a newer result shown in place since then must stay up.
+  const closeLaunchingResult = (): void => {
+    if (isLocalBaseRefToastShowing(target, id, show)) {
+      closeToast()
+    }
+  }
   const runnableCommand = result.shallowHistory ? runnableUnshallowCommand(result) : undefined
 
   const actions = (
@@ -312,7 +279,7 @@ export function showLocalBaseRefRefreshToast(
       <Button
         size="sm"
         variant="outline"
-        onClick={() => stopRefreshingLocalBaseRef(id, result.localBranch, updateSettings)}
+        onClick={() => stopRefreshingLocalBaseRef(closeToast, result.localBranch, updateSettings)}
       >
         {translate('auto.store.slices.worktrees.localBaseRefRefreshTurnOff', 'Disable Check')}
       </Button>
@@ -320,7 +287,13 @@ export function showLocalBaseRefRefreshToast(
         <Button
           size="sm"
           onClick={() =>
-            runUnshallowInNewTerminalTab(id, createdWorktree.id, executionHostId, runnableCommand)
+            runUnshallowInNewTerminalTab(
+              target,
+              closeLaunchingResult,
+              createdWorktree.id,
+              executionHostId,
+              runnableCommand
+            )
           }
         >
           {translate('auto.store.slices.worktrees.localBaseRefUnshallow', 'Unshallow')}
@@ -329,40 +302,68 @@ export function showLocalBaseRefRefreshToast(
     </>
   )
 
-  // Why re-shown on resize: opening Details grows the card, and sonner only measures on show.
-  const onResize = (): void => {
-    if (toast.getToasts().some((entry) => entry.id === id)) {
-      show()
-    }
-  }
+  // Why re-shown on resize: Details grows the card and sonner only measures on show. It re-renders the
+  // latest result, so a resize queued by an older result's card can't republish that result.
+  const onResize = (): void => rerenderLocalBaseRefToast(target, id)
   // Why an arrow: a hoisted function declaration would lose the `result` narrowing.
   const show = (): void => {
-    // Why a custom body: sonner's native action slot pinches beside a multi-line description.
-    // Infinity so create-time failures aren't buried; the opt-out lives here since the setting is opt-in.
+    if (!result.shallowHistory) {
+      // Why custom: the close and Disable share the card's right edge, which sonner's floating close can't.
+      // Infinity so create-time failures aren't buried; the opt-out lives here since the setting is opt-in.
+      toast.custom(
+        () => (
+          <LocalBaseRefNotUpdatedCard
+            title={refreshFailureTitle(result)}
+            reason={refreshFailureReason(result)}
+            detail={localBaseRefRefreshFailureDetail(result)}
+            disableLabel={translate(
+              'auto.store.slices.worktrees.localBaseRefRefreshDisable',
+              'Disable'
+            )}
+            disableTooltip={translate(
+              'auto.store.slices.worktrees.localBaseRefRefreshDisableTooltip',
+              'Stop checking {{value0}}',
+              { value0: result.localBranch }
+            )}
+            closeLabel={translate('auto.store.slices.worktrees.localBaseRefClose', 'Close')}
+            onDisable={() =>
+              stopRefreshingLocalBaseRef(closeToast, result.localBranch, updateSettings)
+            }
+            onClose={closeToast}
+            onResize={onResize}
+          />
+        ),
+        // Why a width on the toast: sonner sizes only styled toasts on wide screens; its narrow-screen width still wins.
+        // Why every field: an open toast switches variant in place, and sonner merges updates into it.
+        {
+          id,
+          className: 'w-[var(--width)]',
+          description: undefined,
+          duration: Infinity,
+          closeButton: false,
+          dismissible: true,
+          onDismiss,
+          ...CLEAR_INFO_TOAST_FIELDS
+        }
+      )
+      return
+    }
     // Why info, not warning: the workspace was created fine; only the optional local-branch refresh was skipped.
     toast.info(refreshFailureTitle(result), {
       id,
-      description: result.shallowHistory ? (
+      description: (
         <div className="flex w-full flex-col gap-3">
           {shallowHistoryDescription(result, worktreeName)}
           <div className="flex items-center justify-end gap-2">{actions}</div>
         </div>
-      ) : (
-        <RefreshFailureDetails
-          reason={refreshFailureReason(result)}
-          detail={localBaseRefRefreshFailureDetail(result)}
-          showLabel={translate('auto.store.slices.worktrees.localBaseRefShowDetails', 'Details')}
-          hideLabel={translate(
-            'auto.store.slices.worktrees.localBaseRefHideDetails',
-            'Hide details'
-          )}
-          actions={actions}
-          onResize={onResize}
-        />
       ),
+      className: undefined,
+      closeButton: undefined,
       duration: Infinity,
-      dismissible: true
+      dismissible: true,
+      onDismiss,
+      ...CLEAR_CUSTOM_TOAST_FIELDS
     })
   }
-  show()
+  renderLocalBaseRefToast(target, id, show)
 }

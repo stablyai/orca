@@ -1,3 +1,10 @@
+import { emulatorRuntimeTarget } from '@/lib/simulator/runtime/emulator-runtime-target'
+import {
+  acceptedEmulatorStreamSession,
+  emulatorSessionStartedHere,
+  noteEmulatorSessionStopped,
+  releaseEmulatorStream
+} from '@/lib/simulator/runtime/emulator-runtime-attach'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store/index'
@@ -34,10 +41,20 @@ export function useEmulatorPaneShutdown({
         useAppStore.getState().setTabLabel(tabId, 'Shutting down…')
       }
       try {
-        const res = (await callRuntimeRpc({ kind: 'local' }, 'emulator.shutdown', {
-          ...(deviceTarget ? { device: deviceTarget } : {}),
-          worktree: worktreeId
-        })) as { deviceUdid?: string }
+        const target = emulatorRuntimeTarget(worktreeId)
+        const session = acceptedEmulatorStreamSession(worktreeId)
+        const started = emulatorSessionStartedHere(worktreeId)
+        const res = await callRuntimeRpc<{ deviceUdid?: string } | null>(
+          target,
+          'emulator.shutdown',
+          { ...(deviceTarget ? { device: deviceTarget } : {}), worktree: worktreeId }
+        )
+        if (started) {
+          noteEmulatorSessionStopped(worktreeId, started.generation)
+        }
+        if (session) {
+          releaseEmulatorStream(worktreeId, session)
+        }
         const shutdownTarget = res?.deviceUdid || deviceTarget
         window.dispatchEvent(
           new CustomEvent(EMULATOR_LOCAL_SHUTDOWN_EVENT, {

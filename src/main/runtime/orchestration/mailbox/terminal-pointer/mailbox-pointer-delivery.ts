@@ -56,7 +56,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     options: {
       mailboxHandle: string
       reservedTypes?: ReadonlySet<string>
-      skipAbsenceProbe?: boolean
+      skipTerminalProbe?: boolean
     }
   ): void {
     const db = this.deps.getDb()
@@ -124,11 +124,13 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       return
     }
     if (
-      this.deps.deliveryTarget.deferForAbsenceProbe(
+      this.deps.deliveryTarget.deferForTerminalProbe(
         ptyId,
         mailboxHandle,
-        options.skipAbsenceProbe,
-        (probedMailbox) => this.redeliverAfterProbe(ptyId, probedMailbox)
+        options.skipTerminalProbe,
+        (probedMailbox, reprobe, reservedTypes) =>
+          this.redeliverAfterProbe(ptyId, probedMailbox, reprobe, reservedTypes),
+        options.reservedTypes
       )
     ) {
       return
@@ -219,10 +221,15 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     this.coldParkedPtys.delete(ptyId)
   }
 
-  private redeliverAfterProbe(ptyId: string, mailboxHandle: string): void {
+  private redeliverAfterProbe(
+    ptyId: string,
+    mailboxHandle: string,
+    reprobe: boolean,
+    reservedTypes: ReadonlySet<string> | undefined
+  ): void {
     const current = this.deps.getTerminal(ptyId)
     if (current) {
-      this.deliver(current, { mailboxHandle, skipAbsenceProbe: true })
+      this.deliver(current, { mailboxHandle, reservedTypes, skipTerminalProbe: !reprobe })
     }
   }
 

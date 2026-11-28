@@ -1,4 +1,5 @@
 import { readCommandBody } from '../arguments/command-body-input'
+import { hasImpossibleLeadingDate } from '../../shared/validation/calendar-date'
 import type {
   LinearIssueInclude,
   LinearIssueListRequest,
@@ -84,13 +85,7 @@ export function getDueDateFlag(flags: Map<string, string | boolean>, name: strin
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new RuntimeClientError('invalid_argument', `--${name} must use YYYY-MM-DD`)
   }
-  const [year, month, day] = value.split('-').map(Number)
-  const date = new Date(Date.UTC(year, month - 1, day))
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
+  if (hasImpossibleLeadingDate(value)) {
     throw new RuntimeClientError('invalid_argument', `--${name} must be a real calendar date`)
   }
   return value

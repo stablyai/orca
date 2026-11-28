@@ -1,5 +1,5 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
-import type { ProviderRelayDetachPolicy } from '../daemon/protocol/daemon-provider-relay-protocol'
+import type * as RelayProtocol from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 export {
   dropListedProviderRelay,
@@ -58,12 +58,8 @@ export type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 /** The provider's open work at detach, keyed as its markers key it. */
 export type ProviderRelayOpenWork = Record<string, string[][]>
 
-export type ProviderRelayLaunch = {
-  chatKey: string
-  markers: ProviderRelayWorkMarkers
-  /** Reattach only: lines this lets through while the rest wait for `releaseOutput()`. */
-  passWhileHeld?: (line: string) => boolean
-}
+import type { ProviderRelayLaunch } from './provider-relay-launch'
+export type { ProviderRelayLaunch }
 
 export type RelayedProviderProcess = {
   managed: ManagedProviderProcess
@@ -94,6 +90,8 @@ const handedBack = new Set<string>()
 let quitting = false
 let durableFor: ((chatKey: string, force: boolean) => Promise<boolean> | undefined) | null = null
 
+export const providerRelayRouteInstalled = (): boolean => providerRelayRoute() !== null
+
 /** The session host's journal barrier; acks wait on it so replay after a crash loses nothing. */
 export function installProviderRelayDurability(barrier: typeof durableFor): void {
   durableFor = barrier
@@ -102,7 +100,7 @@ export function installProviderRelayDurability(barrier: typeof durableFor): void
 function policyFor(
   markers: ProviderRelayWorkMarkers,
   open?: ProviderRelayOpenWork | null
-): ProviderRelayDetachPolicy {
+): RelayProtocol.ProviderRelayDetachPolicy {
   return {
     idleStopMs: providerRelayRoute()?.idleStopMs() ?? null,
     markers: [...markers.markers],
@@ -211,6 +209,8 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
       const managed = relayedManagedProcess(child, handOff)
       return { managed, child, reattached: true, keep }
     }
+    // Nothing takes this attach's held output: it goes, so the channel keeps none of it.
+    channel.release(info.relayId)
   }
   // A failed attach asks the run's daemon start again; only its word (or proof) ends the run.
   const verdict =
@@ -256,24 +256,23 @@ export async function launchRelayedProviderProcess(
   if (verdict === 'gone' && providerRelayRebinding(relay.chatKey)) {
     throw new KeptProviderRelayEndedError(relay.chatKey)
   }
-  const kept = await reattachListed(relay)
-  if (kept) {
+  if (relay.only === 'spawn' && keptProviderRelay(relay.chatKey)) {
+    throw new KeptProviderRelayUnreachableError(relay.chatKey)
+  }
+  const kept = relay.only === 'spawn' ? null : await reattachListed(relay)
+  if (kept || relay.only === 'reattach') {
     return kept
   }
   const client = await connected(await installed.current().catch(() => null))
-  const spec = client ? providerRelaySpawnSpec(launch, client, installed.appVersion) : null
+  const spec = client ? providerRelaySpawnSpec(launch, client, installed.appVersion, relay) : null
   if (!client || !spec || !(await daemonReadsFolder(client, spec.cwd))) {
     return null
   }
   const channel = providerRelayChannel(client)
   let spawned: Awaited<ReturnType<ProviderRelayChannel['spawn']>>
   try {
-    spawned = await channel.spawn(
-      spec,
-      relay.chatKey,
-      policyFor(relay.markers),
-      relay.markers.agent
-    )
+    const { chatKey, markers, keep } = relay
+    spawned = await channel.spawn(spec, chatKey, policyFor(markers), markers.agent, keep)
   } catch {
     // An unanswered spawn may still have started the agent; the daemon ends it once no one attaches.
     return null

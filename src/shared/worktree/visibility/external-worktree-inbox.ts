@@ -141,11 +141,25 @@ export function getNewExternalWorktreeInboxWorktrees(
   )
 }
 
+// Why: listings check every worktree against the same repo array; rescanning it was O(n²) at fleet scale.
+const normalizedImportedPathSets = new WeakMap<readonly string[], ReadonlySet<string>>()
+
+function getNormalizedImportedPathSet(paths: readonly string[]): ReadonlySet<string> {
+  let normalized = normalizedImportedPathSets.get(paths)
+  if (!normalized) {
+    normalized = new Set(paths.map((path) => normalizeExternalWorktreeInboxPath(path)))
+    normalizedImportedPathSets.set(paths, normalized)
+  }
+  return normalized
+}
+
 export function isExplicitlyImportedExternalWorktreePath(
   worktreePath: string,
   repo: { importedExternalWorktreePaths?: readonly string[] }
 ): boolean {
-  return (repo.importedExternalWorktreePaths ?? []).some((path) =>
-    areExternalWorktreeInboxPathsEqual(path, worktreePath)
-  )
+  const paths = repo.importedExternalWorktreePaths
+  if (!paths || paths.length === 0) {
+    return false
+  }
+  return getNormalizedImportedPathSet(paths).has(normalizeExternalWorktreeInboxPath(worktreePath))
 }

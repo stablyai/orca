@@ -3,7 +3,7 @@ import { CircleAlert, SquareTerminal } from 'lucide-react-native'
 import { MobileOfflineState, MobileStateView } from '../components/feedback/MobileStateView'
 import { describeLoadError } from '../components/feedback/load-error-description'
 import { formatOfflineAsOfTime } from '../components/host-connection/offline-as-of-time'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { useLastSessionTabsAt } from './tabs/mobile-session-last-tabs'
 
@@ -19,7 +19,8 @@ export function MobileSessionContentState({
   creating,
   createError,
   onReconnect,
-  onRetryTabs
+  onRetryTabs,
+  onNewTab
 }: {
   connState: ConnectionState
   hostName: string | null
@@ -30,6 +31,8 @@ export function MobileSessionContentState({
   createError: string
   onReconnect: (() => void) | null
   onRetryTabs: () => void
+  /** Opens the New tab sheet; the top bar has no + of its own. */
+  onNewTab: () => void
 }) {
   const t = useMobileTranslation()
   const [stalled, setStalled] = useState(false)
@@ -84,16 +87,16 @@ export function MobileSessionContentState({
     return <MobileStateView loading title={t('session.activeContent.creatingTab', 'Creating...')} />
   }
   const createFailure = createError ? describeLoadError(createError, t) : null
-  // The bar above keeps its +, so the body only says what's here.
   return (
     <MobileStateView
       icon={SquareTerminal}
       title={t('session.activeContent.noTabs', 'No tabs open')}
       message={
         createFailure?.message ??
-        t('session.activeContent.noTabsHint', 'Start an agent or a terminal with +.')
+        t('session.activeContent.noTabsStart', 'Start an agent or a terminal.')
       }
       details={createFailure?.details}
+      action={{ label: t('session.sheets.newTab', 'New tab'), onPress: onNewTab }}
     />
   )
 }
@@ -109,6 +112,7 @@ function OfflineUnderLastTabs({
   onReconnect: (() => void) | null
 }) {
   const t = useMobileTranslation()
+  const locale = useMobileUiLocale()
   const asOf = useLastSessionTabsAt(lastTabs.hostId, lastTabs.worktreeId)
   return (
     <MobileOfflineState
@@ -117,7 +121,7 @@ function OfflineUnderLastTabs({
         asOf === null
           ? undefined
           : t('session.contentState.tabsAsOf', 'Tabs as of {{time}}', {
-              time: formatOfflineAsOfTime(asOf)
+              time: formatOfflineAsOfTime(asOf, t, locale)
             })
       }
       onReconnect={onReconnect}

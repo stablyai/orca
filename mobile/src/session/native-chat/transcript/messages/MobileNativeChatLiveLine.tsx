@@ -6,9 +6,9 @@ import { formatMobileNativeChatActiveTurnLabel } from './native-chat-turn-status
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { LoadingSpinner } from '../../../../components/feedback/LoadingSpinner'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { feedback, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatReasoningBody } from '../message-content/MobileNativeChatReasoningRow'
 import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
 import type { MobileNativeChatLiveLine as LiveLine } from '../turn-state/use-mobile-native-chat-turn-disclosure'
@@ -23,7 +23,8 @@ export function MobileNativeChatLiveLine({
   onToggleReasoning: (key: string) => void
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { reasoning, reasoningExpanded } = line
   const open = reasoning !== null && reasoningExpanded
@@ -76,7 +77,7 @@ export function MobileNativeChatLiveLine({
 }
 
 // Match the finished reasoning row’s geometry so its takeover cannot shift the text.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -91,7 +92,7 @@ const styles = themedStyleSheet(() => ({
     overflow: 'visible'
   },
   pressed: {
-    opacity: 0.6
+    opacity: feedback.pressedOpacity
   },
   label: {
     color: colors.textMuted,

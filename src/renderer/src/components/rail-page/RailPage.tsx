@@ -41,15 +41,27 @@ function trackRailPageScrollGutter(element: HTMLElement | null): (() => void) | 
 
 export function RailPageScroll({
   as: Element = 'div',
+  containerGutter = false,
   ref,
   className,
   ...props
 }: React.HTMLAttributes<HTMLElement> & {
   as?: 'div' | 'section'
+  containerGutter?: boolean
   ref?: React.Ref<HTMLDivElement>
 }): React.JSX.Element {
-  const scrollRef = useComposedRefs<HTMLDivElement>(ref, trackRailPageScrollGutter)
-  return <Element ref={scrollRef} className={cn('rail-page-scroll-region', className)} {...props} />
+  const scrollRef = useComposedRefs<HTMLDivElement>(
+    ref,
+    containerGutter ? undefined : trackRailPageScrollGutter
+  )
+  return (
+    <Element
+      ref={scrollRef}
+      className={cn('rail-page-scroll-region', className)}
+      data-rail-page-container-gutter={containerGutter ? '' : undefined}
+      {...props}
+    />
+  )
 }
 
 export function RailPage({

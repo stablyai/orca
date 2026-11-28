@@ -1,4 +1,5 @@
-import { Suspense, useState, useSyncExternalStore } from 'react'
+import { Suspense, useSyncExternalStore } from 'react'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useAppStore } from '@/store'
 import {
@@ -15,12 +16,7 @@ export default function WorktreeBaseFallbackDialog(): React.JSX.Element | null {
     getWorktreeBaseFallbackNotice
   )
   const activeModal = useAppStore((state) => state.activeModal)
-  const open = notice !== null && activeModal === 'none'
-  const [hasOpened, setHasOpened] = useState(open)
-
-  if (open && !hasOpened) {
-    setHasOpened(true)
-  }
+  const hasOpened = useLatchedOpen(notice !== null && activeModal === 'none')
 
   if (!hasOpened) {
     return null

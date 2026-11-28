@@ -1,4 +1,5 @@
-import { Suspense, useState } from 'react'
+import { Suspense } from 'react'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useAppStore } from '@/store/index'
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
@@ -11,12 +12,7 @@ export default function RunningTerminalCloseDialog(): React.JSX.Element | null {
     (state) => state.runningTerminalCloseConfirm !== null
   )
   const hasPinnedRequest = useAppStore((state) => state.pinnedTabCloseConfirm !== null)
-  const shouldOpen = hasRequest && !hasPinnedRequest
-  const [hasOpened, setHasOpened] = useState(shouldOpen)
-
-  if (shouldOpen && !hasOpened) {
-    setHasOpened(true)
-  }
+  const hasOpened = useLatchedOpen(hasRequest && !hasPinnedRequest)
 
   if (!hasOpened) {
     return null

@@ -32,7 +32,6 @@ import {
   type BotRequestRefusal
 } from '../../../../../bots/bot-request-policy'
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
-import { chatPaneKey } from '../../../../../external-conversations/external-conversation-chat'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { currentRunCoordinatorOrcaSessionId } from '../../../../orchestration/db/runs/run-coordinator-orca-session'
@@ -45,6 +44,7 @@ import {
   type OrcaSessionId
 } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** `chat` is the chat an address names; null when the bot is named, which reaches its Home Chat.
  *  `newChat`: sent with `--chat new`, so it lands in a chat the bot starts for it. */

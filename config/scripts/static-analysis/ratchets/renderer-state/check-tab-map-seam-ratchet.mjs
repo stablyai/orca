@@ -21,7 +21,7 @@ export const CONSUMERS = new Map([
     {
       coldPaths: new Set(['rebuildFromSnapshot']),
       helpers: { rebuildFromSnapshot: ['advance'] },
-      imports: new Set(['structuredAgentSessionPaneKey', 'isStructuredTab', 'readTabMapChanges'])
+      imports: new Set(['chatPaneKey', 'isStructuredTab', 'readTabMapChanges', 'readTabRowChanges'])
     }
   ],
   [
@@ -46,6 +46,8 @@ export const CONSUMERS = new Map([
         'structuredAgentSessionStatusFeedKey',
         'getStructuredAgentSessionTabs',
         'getStructuredAgentSessionTabsInWorkspace',
+        // An index lookup per closed conversation, never a tab-map walk.
+        'structuredTabsShowingConversation',
         'readTabMapChanges',
         'createTabOwnerCache',
         'ownerInputChanged',
@@ -69,7 +71,7 @@ export const CONSUMERS = new Map([
     {
       coldPaths: new Set(),
       helpers: { getStructuredAgentSessionTabs: [] },
-      imports: new Set(['structuredAgentSessionPaneKey'])
+      imports: new Set(['chatPaneKey'])
     }
   ]
 ])

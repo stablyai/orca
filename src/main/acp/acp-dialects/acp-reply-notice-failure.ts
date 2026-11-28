@@ -1,13 +1,16 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AcpDialectNotification, AcpTurnEnding } from './acp-dialect'
 
 // Reads only these fields, so the many tool updates of a turn are rejected at the literal.
-const replyTextSchema = z.object({
-  update: z.object({
-    sessionUpdate: z.literal('agent_message_chunk'),
-    content: z.object({ type: z.literal('text'), text: z.string() })
+const replyTextSchema = lazyZodSchema(() =>
+  z.object({
+    update: z.object({
+      sessionUpdate: z.literal('agent_message_chunk'),
+      content: z.object({ type: z.literal('text'), text: z.string() })
+    })
   })
-})
+)
 
 /** A reply chunk that is wholly the agent's own failure notice fails the turn in its place. */
 export function acpReplyNoticeFailure(

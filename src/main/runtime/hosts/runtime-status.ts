@@ -78,6 +78,11 @@ import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-work
 import { BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY } from '../../../shared/bots/bot-item-version-capability'
 
 export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
+  /** Graph readiness alone, for the small liveness probe a restarting CLI polls. */
+  getGraphStatus(): RuntimeStatus['graphStatus'] {
+    return this.graphStatus
+  }
+
   getStatus(): RuntimeStatus {
     // Advertise screencast for renderer/offscreen backends; headless ownership prevents client-local fallback.
     const hasRenderer = Boolean(this.hasAuthoritativeWindow())

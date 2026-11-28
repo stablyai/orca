@@ -17,3 +17,32 @@ export function boundedCutKeys(
     ? keys
     : null
 }
+
+export type ProviderRelayAckFlags = {
+  cut?: true
+  held?: true
+  cutKeys?: string[]
+  savedThrough?: number
+}
+
+/** An ack's flags: a cut's names, or, for a floor naming on every ack, what a replay would split
+ *  (a release through `target`, without `keepFrom`, splits what is open there too), with where
+ *  the journal saved through: a named item's lines to there aren't replayed onto its row again. */
+export function relayAckFlags(
+  floor: ProviderRelayAckFloor | undefined,
+  cut: boolean,
+  held: boolean,
+  keepFrom: number | null,
+  target: number,
+  savedThrough: number
+): ProviderRelayAckFlags {
+  const everyAck = floor?.namesEveryAck === true
+  const cutKeys =
+    cut || everyAck ? boundedCutKeys(floor, keepFrom === null ? target : undefined) : null
+  return {
+    ...(cut ? { cut: true as const } : {}),
+    ...(held ? { held: true as const } : {}),
+    ...(cutKeys ? { cutKeys } : {}),
+    ...(cutKeys || everyAck ? { savedThrough } : {})
+  }
+}

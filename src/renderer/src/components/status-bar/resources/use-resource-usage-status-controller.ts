@@ -36,6 +36,8 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 import { useResourceViewVisible } from './use-resource-view-visible'
 import { useResourcePtyActions } from './pty/use-resource-pty-actions'
 import { useResourceMemorySnapshot } from './use-resource-memory-snapshot'
+import { useStatusBarAppMemory } from './use-status-bar-app-memory'
+import { isStatusBarMemoryShown } from '../../../../../shared/diagnostics/status-bar-memory-settings'
 import { trackResourceManagerOpen } from './resource-manager-open-request'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -72,6 +74,10 @@ export function useResourceUsageStatusController() {
   const ptyViewActive = windowVisible && open && selectedTab === 'ptys'
   const viewActive = resourceViewActive || ptyViewActive
   const fetchSnapshot = useResourceMemorySnapshot(resourceViewActive)
+  const showStatusBarMemory = useAppStore(
+    (s) => s.settings != null && isStatusBarMemoryShown(s.settings)
+  )
+  const appMemoryBytes = useStatusBarAppMemory(showStatusBarMemory)
   const localPtyInventory = useResourceSessionInventory(workspaceSessionReady, ptyViewActive, true)
   const ptyActions = useResourcePtyActions(localPtyInventory)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
@@ -231,7 +237,8 @@ export function useResourceUsageStatusController() {
     sessionsRereading,
     memorySnapshotError,
     snapshot,
-    spaceScanReady
+    spaceScanReady,
+    appMemoryBytes
   })
   const actions = useResourceUsageActions({
     setCollapsedRepos,

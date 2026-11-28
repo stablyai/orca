@@ -1,12 +1,11 @@
 import { Stack } from 'expo-router'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
 
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
-  useMobileTranslation()
-  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const colors = useMobileColors()
   return (
     <Stack
       screenOptions={{
@@ -17,7 +16,7 @@ export function HostStack({ animation }: { animation: HostStackAnimation }) {
       }}
     >
       {HOST_STACK_SCREENS.map(({ name, title }) => (
-        <Stack.Screen key={name} name={name} options={{ title }} />
+        <Stack.Screen key={name} name={name} options={{ title: title(t) }} />
       ))}
     </Stack>
   )

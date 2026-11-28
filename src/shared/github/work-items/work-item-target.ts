@@ -1,6 +1,6 @@
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../repositories/repository-identity'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from './work-item-types'
-import { githubRepoIdentityKey } from '../repositories/repository-identity-key'
+import { githubRepoIdentityKey, isDefaultGitHubHost } from '../repositories/repository-identity-key'
 
 export type GitHubWorkItemTarget = {
   repository: GitHubOwnerRepo
@@ -8,8 +8,10 @@ export type GitHubWorkItemTarget = {
   number: number
 }
 
+type GitHubWorkItemAddress = Pick<GitHubWorkItem, 'url' | 'prRepo' | 'apiHost' | 'type' | 'number'>
+
 export function matchesGitHubWorkItemTarget(
-  item: Pick<GitHubWorkItem, 'url' | 'prRepo' | 'type' | 'number'> | null | undefined,
+  item: GitHubWorkItemAddress | null | undefined,
   target: GitHubWorkItemTarget
 ): boolean {
   if (!item || item.type !== target.type || item.number !== target.number) {
@@ -26,8 +28,10 @@ export function matchesGitHubWorkItemTarget(
     ) {
       return false
     }
-    const repository = { host: url.host, owner: parts[0], repo: parts[1] }
-    const key = githubRepoIdentityKey(repository)
+    const apiHost = item.prRepo?.host ?? item.apiHost
+    // GHES web URLs can name another host than the pinned API host; dotcom reads stay URL-checked.
+    const host = apiHost && !isDefaultGitHubHost(apiHost) ? apiHost : url.host
+    const key = githubRepoIdentityKey({ host, owner: parts[0], repo: parts[1] })
     return (
       key === githubRepoIdentityKey(target.repository) &&
       (!item.prRepo || githubRepoIdentityKey(item.prRepo) === key)
@@ -75,9 +79,16 @@ export function parseGitHubItemRepository(url: string): GitHubOwnerRepo | null {
   }
 }
 
+export function resolveGitHubItemUrlRepository(
+  item: Pick<GitHubWorkItem, 'url' | 'apiHost'>
+): GitHubOwnerRepo | null {
+  const repository = parseGitHubItemRepository(item.url)
+  return repository && item.apiHost ? { ...repository, host: item.apiHost } : repository
+}
+
 export function resolveGitHubWorkItemTarget(
-  item: Pick<GitHubWorkItem, 'url' | 'prRepo' | 'type' | 'number'>
+  item: GitHubWorkItemAddress
 ): GitHubWorkItemTarget | null {
-  const repository = item.prRepo ?? parseGitHubItemRepository(item.url)
+  const repository = item.prRepo ?? resolveGitHubItemUrlRepository(item)
   return repository ? { repository, type: item.type, number: item.number } : null
 }

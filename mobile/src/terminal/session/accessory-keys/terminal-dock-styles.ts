@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, feedback, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { feedback, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
 const KEY_HEIGHT = 32
@@ -36,7 +36,7 @@ const key = {
   gap: 5
 } as const
 
-export const terminalDockStyles = themedStyleSheet(() => ({
+export const terminalDockStylesSheet = themedStyleSheet((colors) => ({
   dock: {
     zIndex: 20,
     backgroundColor: colors.bgPanel

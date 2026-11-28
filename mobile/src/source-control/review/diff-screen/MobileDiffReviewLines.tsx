@@ -11,7 +11,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { UnfoldVertical } from 'lucide-react-native'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   DIFF_LINE_ID_PREFIX,
@@ -25,13 +25,13 @@ import {
   buildMobileDiffReviewRows,
   type MobileDiffReviewRow
 } from '../diff-state/mobile-diff-review-rows'
-import { colors } from '../../../theme/mobile-theme'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { mobileDiffReviewStylesSheet } from './mobile-diff-review-screen-styles'
 import type { MobileDiffReviewThread } from '../diff-actions/mobile-diff-review-github'
 import { MobileDiffReviewThreadRow } from './MobileDiffReviewThreadRow'
 import type { PrThreadActions } from '../pull-request/comments/PrThreadRow'
 import { useNow } from '../../../hooks/use-now'
 import { triggerSelection } from '../../../platform/haptics/haptics'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 const NO_OPENED_LINES: ReadonlySet<number> = new Set()
 
@@ -84,7 +84,8 @@ export function MobileDiffReviewLines({
   onOpenThread: (threadId: string, focusReply: boolean) => void
   onEditNote: (comment: DiffComment) => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileDiffReviewStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const now = useNow(60_000, threadsByLine.size > 0)
   // Opened folds are line indexes into this load; a reload with new lines starts folded again.

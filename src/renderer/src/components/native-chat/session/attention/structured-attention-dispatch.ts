@@ -18,13 +18,13 @@ import {
   type AgentSessionAttentionEdge,
   type StructuredAttentionRead
 } from '../../../../../../shared/agent-session/view/agent-session-attention'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import {
   deliverAgentAttentionNotification,
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { noteWorktreeAgentActivity } from '@/store/slices/worktrees/session/worktree-agent-activity'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readBots } from '@/lib/bot-catalog'
 import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
@@ -44,6 +44,7 @@ import { isCoordinatorOnlyChatNews } from '../../../../../../shared/orchestratio
 import { getNotificationWorkspaceLabels } from '@/attention/notification-workspace-labels'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export function dispatchStructuredTurnCompletionAttention(
   tab: StructuredTab,
@@ -92,7 +93,7 @@ function dispatchStructuredAttention(
   }
   const attentionKey = agentSessionAttentionKey(edge)
   const state = useAppStore.getState()
-  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const paneKey = chatPaneKey(tab.entityId)
   const decision = resolveAgentAttention(
     {
       // Address the renderer tab’s workspace; host scope ids may name different remote workspaces.
@@ -109,6 +110,11 @@ function dispatchStructuredAttention(
     createStructuredAttentionSurface(state)
   )
   if (!decision.admitted) {
+    // A worker's finish raises no unread and a chat has no PTY, so stamp Recent here (#50660).
+    // A remote or environment-owned worker is left to its owning host, as the PTY path skips remote mirrors.
+    if (decision.cause === 'coordinator-only-news' && subscriptionTarget?.kind === 'local') {
+      noteWorktreeAgentActivity(state, tab.worktreeId)
+    }
     return
   }
   const row = state.agentStatusByPaneKey.get(paneKey)

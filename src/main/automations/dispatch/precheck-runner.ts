@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
+import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck } from '../../../shared/automations/automation-definition'
 import type { AutomationPrecheckResult } from '../../../shared/automations/history/automation-run'
@@ -9,6 +10,7 @@ import { getSshConnectionManager } from '../../ssh/targets/ssh-target-registry'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { admitSelfInitiatedTreeKill } from '../../pty/process-retirement/own-chromium-tree-kill-guard'
 import { errorMessage } from '../../../shared/errors/error-message'
+import { decodeWindowsShellOutput } from '../../windows/windows-shell-output-decoding'
 
 type AutomationPrecheckExecutionTarget =
   | {
@@ -35,6 +37,21 @@ function appendTail(buffer: TailBuffer, chunk: string): TailBuffer {
     content: content.slice(-MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS),
     truncated: true
   }
+}
+
+// Four bytes per character keeps enough raw output to fill the character cap after decoding.
+const MAX_PRECHECK_OUTPUT_BYTES = MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS * 4
+
+// Decode once at the end so cmd.exe messages can be decoded in its code page.
+function decodeByteTail(sink: ReturnType<typeof createOutputSink>): TailBuffer {
+  const bytes = sink.buffer()
+  const truncated = sink.truncated()
+  let start = 0
+  // Drop the rest of a UTF-8 character the cut split, or its whole line would fail UTF-8 and decode as OEM.
+  while (truncated && start < 3 && (bytes[start] & 0xc0) === 0x80) {
+    start++
+  }
+  return appendTail({ content: '', truncated }, decodeWindowsShellOutput(bytes.subarray(start)))
 }
 
 function createPrecheckResult(args: {
@@ -142,8 +159,8 @@ function runLocalPrecheck(
   const startedAt = Date.now()
   const timeoutMs = precheck.timeoutSeconds * 1000
   return new Promise((resolve) => {
-    let stdout: TailBuffer = { content: '', truncated: false }
-    let stderr: TailBuffer = { content: '', truncated: false }
+    const stdout = createOutputSink(MAX_PRECHECK_OUTPUT_BYTES, 'tail')
+    const stderr = createOutputSink(MAX_PRECHECK_OUTPUT_BYTES, 'tail')
     let timedOut = false
     let settled = false
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -171,7 +188,15 @@ function runLocalPrecheck(
         forceKillTimer = null
       }
       resolve(
-        createPrecheckResult({ precheck, startedAt, stdout, stderr, exitCode, timedOut, error })
+        createPrecheckResult({
+          precheck,
+          startedAt,
+          stdout: decodeByteTail(stdout),
+          stderr: decodeByteTail(stderr),
+          exitCode,
+          timedOut,
+          error
+        })
       )
     }
 
@@ -180,14 +205,8 @@ function runLocalPrecheck(
       forceKillTimer = killLocalPrecheckProcessTree(child)
     }, timeoutMs)
 
-    child.stdout?.setEncoding('utf8')
-    child.stderr?.setEncoding('utf8')
-    child.stdout?.on('data', (chunk: string) => {
-      stdout = appendTail(stdout, chunk)
-    })
-    child.stderr?.on('data', (chunk: string) => {
-      stderr = appendTail(stderr, chunk)
-    })
+    child.stdout?.on('data', stdout.write)
+    child.stderr?.on('data', stderr.write)
     child.on('error', (error) => {
       settle(null, error.message)
     })

@@ -22,9 +22,9 @@ import {
 } from '../../../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { isBotPRComment } from '../../../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import { threadDiffLines } from '../../../../../../src/shared/github/comments/pr-comment-diff-hunk'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
 import { canEditComment, isResolvableComment } from './pr-comment-actions'
@@ -97,7 +97,8 @@ export function PrThreadRow({
   /** Drawn under its own line in the diff, so the file link and quoted code would repeat it. */
   atLine?: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -301,7 +302,8 @@ export function PrCommentFileLink({
   location: string
   onPress?: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   return (
     <Pressable
       onPress={onPress}
@@ -319,7 +321,8 @@ export function PrCommentFileLink({
 }
 
 function SeverityPill({ severity }: { severity: PrCommentSeverity }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const color =
     severity === 'critical'
@@ -340,7 +343,7 @@ function SeverityPill({ severity }: { severity: PrCommentSeverity }) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,

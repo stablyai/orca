@@ -1,4 +1,5 @@
 import { ipcMain, shell } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { lstat, rm, writeFile } from 'node:fs/promises'
 import type { SshMutationExpectation } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { assertSshMutationExpectation } from '../../../ssh/connection/authority/ssh-connection-generation'
@@ -23,10 +24,13 @@ import type { FileBytesWritePrecondition } from '../../../../shared/file-write/f
 import { windowsFsPath } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { TRASH_DELETE_FAILED_MESSAGE } from '../../../../shared/file-access/trash-delete-failure'
 
-export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {
+export function registerFilesystemWriteHandlers(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:writeFile',
     async (
       _event,
@@ -62,7 +66,7 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:writeFileBytes',
     async (
       _event,
@@ -95,7 +99,7 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:deletePath',
     async (
       _event,
@@ -141,6 +145,6 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
     }
   )
 
-  registerFilesystemMutationHandlers(store)
-  registerAgentSessionAttachmentUploadHandlers()
+  registerFilesystemMutationHandlers(store, ipc)
+  registerAgentSessionAttachmentUploadHandlers(ipc)
 }

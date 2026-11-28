@@ -4,6 +4,7 @@ import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
 } from '../../../../../src/shared/agent-session/options/protocol/agent-session-mcp'
+import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import type { StructuredAgentSessionComposerOptions } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import type { AgentSessionMcpRequest } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp-panel'
@@ -12,6 +13,7 @@ import type { MobileStructuredAgentSessionArgs } from '../agent-session/mobile-s
 import { callAgentSession } from '../agent-session/mobile-structured-agent-session-rpc'
 import { useMobileRegisteredAgent } from '../agent-session/use-mobile-registered-agent'
 import { useMobileStructuredSessionHostExecutionPhase } from '../agent-session/use-mobile-structured-session-host-execution'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 
 // A cold Codex read or a Claude sign-in finish (exchange, reconnect, re-read) can run long.
 const MCP_TIMEOUT_MS = 90_000
@@ -24,6 +26,11 @@ export type MobileStructuredMcpPanel = {
   refreshKey: string
   /** Opens the host's MCP servers page; null on a host without one. */
   manage: (() => void) | null
+  /** The chat's agent, as the tray names it. */
+  agentLabel: string
+  /** The host's list of MCP servers, which Orca checks and signs in to itself before the agent
+   *  starts; null on a host without one. */
+  orca: { client: RpcClient; agent: string; hostId: string; online: boolean } | null
 }
 
 type McpCommands = Pick<StructuredAgentSessionComposerOptions, 'openMcpPanel'>
@@ -32,7 +39,7 @@ type McpCommands = Pick<StructuredAgentSessionComposerOptions, 'openMcpPanel'>
 export function useMobileStructuredMcpPanel<TCommands extends object>(
   session: Pick<
     MobileStructuredAgentSessionArgs,
-    'client' | 'sessionId' | 'agent' | 'hostSupport' | 'enabled' | 'hostId'
+    'client' | 'sessionId' | 'agent' | 'hostSupport' | 'enabled' | 'hostId' | 'connected'
   >,
   sessionKey: string,
   commands: TCommands
@@ -75,8 +82,14 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
   const close = useCallback(() => setOpenFor(null), [])
   const router = useRouter()
   const { hostId } = session
-  // Only a host whose MCP servers are on has a page for them.
-  const hostListsServers = session.hostSupport?.mcpServers === true
+  // Only a host whose MCP servers are on has a page for them; an open tray keeps that through a
+  // reconnect, so a sign-in under way keeps its client.
+  const listsReported = session.hostSupport ? session.hostSupport.mcpServers === true : undefined
+  const [listsKnown, setListsKnown] = useState(false)
+  if (listsReported !== undefined && listsKnown !== listsReported) {
+    setListsKnown(listsReported)
+  }
+  const hostListsServers = listsReported ?? (trayOpen && listsKnown)
   const manage = useCallback(() => {
     setOpenFor(null)
     router.push(`/h/${encodeURIComponent(hostId ?? '')}/mcp`)
@@ -99,10 +112,18 @@ export function useMobileStructuredMcpPanel<TCommands extends object>(
   )
   const refreshKey = `${opens}:${phase}`
   const canManage = hostListsServers && !!hostId
+  const agentLabel = agent ? (tuiAgentDisplayName(agent) ?? agent) : ''
+  const online = session.connected
+  const orca = useMemo(
+    () => (canManage && client && agent ? { client, agent, hostId: hostId ?? '', online } : null),
+    [agent, canManage, client, hostId, online]
+  )
   const mcpPanel = useMemo(
     () =>
-      offered ? { open, close, request, refreshKey, manage: canManage ? manage : null } : null,
-    [canManage, close, manage, offered, open, refreshKey, request]
+      offered
+        ? { open, close, request, refreshKey, manage: canManage ? manage : null, agentLabel, orca }
+        : null,
+    [agentLabel, canManage, close, manage, offered, open, orca, refreshKey, request]
   )
   const mcpCommands = useMemo(
     () => ({ ...commands, openMcpPanel: offered ? show : undefined }),

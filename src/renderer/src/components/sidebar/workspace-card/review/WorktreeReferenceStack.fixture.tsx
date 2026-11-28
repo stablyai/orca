@@ -75,11 +75,15 @@ function peekFixture(states: ReviewState[]) {
       }
     ])
   )
+  return peekHost(items, details)
+}
+
+function peekHost(items: WorkspaceAttachment[], details: WorkspaceReferenceDetailsMap) {
   return defineFixture({
     width: 240,
     render: () => (
       <div className="h-80 bg-worktree-sidebar p-1 text-worktree-sidebar-foreground">
-        <div className="flex h-9 items-center gap-2 px-2 text-[13px]">
+        <div data-worktree-card-surface="" className="flex h-9 items-center gap-2 px-2 text-[13px]">
           <span className="min-w-0 flex-1 truncate">a-very-long-workspace-name-that-truncates</span>
           <WorktreeCardMetaBadges
             issue={null}
@@ -116,3 +120,36 @@ export const peekTenMixed = peekFixture([
   MERGED,
   CLOSED
 ])
+
+// Long keys and provider statuses must truncate inside the peek, not widen it.
+const longJira: WorkspaceAttachment[] = ['PLATFORMRELIABILITY-104857', 'PLATFORMRELIABILITY-2'].map(
+  (identifier) => ({
+    provider: 'jira',
+    type: 'issue',
+    number: 0,
+    identifier,
+    url: `https://example.atlassian.net/browse/${identifier}`
+  })
+)
+export const peekLongLabels = peekHost(
+  longJira,
+  Object.fromEntries(
+    longJira.map((item, index) => [
+      getWorkspaceAttachmentKey(item),
+      {
+        title: 'Rotate the sample service credentials before the quarterly audit',
+        url: item.url ?? '',
+        stateName: index === 0 ? 'Waiting for customer approval from legal' : 'In Progress',
+        stateType: index === 0 ? 'unstarted' : 'started'
+      }
+    ])
+  )
+)
+
+// List scale: the peek must scroll by wheel and keys through every row.
+export const peekTwentyFour = peekFixture(
+  Array.from(
+    { length: 24 },
+    (_, index) => [FAILING, RUNNING, PASSING, DRAFT, MERGED, CLOSED][index % 6]
+  )
+)

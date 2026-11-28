@@ -12,11 +12,13 @@ export type SessionTerminationControllerDeps = {
   sessionId: string
   subprocess: Pick<SubprocessHandle, 'kill' | 'forceKill' | 'signal' | 'dispose'>
   isExited(): boolean
-  releaseProducerPause(opts: { resume: boolean }): void
+  releaseProducerPause(opts: { resume: boolean; reason: 'released' | 'terminating' }): void
 }
 
 export class SessionTerminationController {
   private _isTerminating = false
+  // Termination gave up on a live child: it still reserves the id, but its producer may be paused again.
+  private gaveUp = false
   private killTimer: ReturnType<typeof setTimeout> | null = null
   private forceKillRequest: Promise<void> | null = null
   private subprocessDisposed = false
@@ -32,6 +34,18 @@ export class SessionTerminationController {
     return this._isTerminating
   }
 
+  /** How a stream pause request is answered: terminating blocks it unless termination gave up; no viewer declines it. */
+  streamPauseAnswer(hasViewer: boolean): true | 'terminating' | 'detached' {
+    if (this.blocksProducerPause) {
+      return 'terminating'
+    }
+    return hasViewer || 'detached'
+  }
+
+  private get blocksProducerPause(): boolean {
+    return this._isTerminating && !this.gaveUp
+  }
+
   markPhysicalExit(): void {
     this.physicalExit.markExited()
   }
@@ -45,9 +59,7 @@ export class SessionTerminationController {
     if (this.deps.isExited() || this._isTerminating) {
       return false
     }
-    this._isTerminating = true
-    // Resume a child blocked on write before snapshotting so it can process termination.
-    this.deps.releaseProducerPause({ resume: true })
+    this.claimProducer()
     return true
   }
 
@@ -85,12 +97,14 @@ export class SessionTerminationController {
     if (this.deps.isExited()) {
       return
     }
-    if (!this._isTerminating) {
-      this._isTerminating = true
-      this.deps.releaseProducerPause({ resume: true })
+    if (!this.blocksProducerPause) {
+      this.claimProducer()
     }
     // Escalate now rather than spend the physical-exit budget waiting for graceful shutdown.
-    await this.requestForceKillWithRetry()
+    await this.requestForceKillWithRetry().catch((error: unknown) => {
+      this.giveUpProducer()
+      throw error
+    })
     try {
       await this.waitForPhysicalExit(timeoutMs)
     } catch (error) {
@@ -125,9 +139,26 @@ export class SessionTerminationController {
     }
   }
 
+  private claimProducer(): void {
+    this._isTerminating = true
+    this.gaveUp = false
+    // Resume a child blocked on write before snapshotting so it can process termination.
+    this.deps.releaseProducerPause({ resume: true, reason: 'terminating' })
+  }
+
+  /** Every force-kill attempt was refused; the child lives on, so its stream owner may pause it again. */
+  private giveUpProducer(): void {
+    if (!this.gaveUp && this._isTerminating && !this.deps.isExited()) {
+      this.gaveUp = true
+      this.deps.releaseProducerPause({ resume: false, reason: 'released' })
+    }
+  }
+
   private resetTerminationAfterSignalFailure(): void {
     this._isTerminating = false
     this.cancelForceKillFallback()
+    // The producer lives on; let its stream owner pause it again.
+    this.deps.releaseProducerPause({ resume: false, reason: 'released' })
   }
 
   private armForceKillFallback(delayMs: number, attemptsRemaining: number): void {
@@ -139,6 +170,8 @@ export class SessionTerminationController {
           // A transient force-kill rejection must not consume the only fallback attempt.
           if (attemptsRemaining > 1) {
             this.armForceKillFallback(SESSION_FORCE_KILL_RETRY_MS, attemptsRemaining - 1)
+          } else {
+            this.giveUpProducer()
           }
         })
       }

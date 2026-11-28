@@ -137,7 +137,7 @@ export function MobileBotSettingsTab(props: {
         node: (
           <DrillRow
             label={t('bots.settings.whoCanAsk', 'Who can ask')}
-            value={whoCanAskLine(bot.members, access?.requests.length ?? 0)}
+            value={whoCanAskLine(bot.members, access?.requests.length ?? 0, t)}
             detail
             onPress={() => setPage('who-can-ask')}
           />

@@ -11,8 +11,7 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotToolValuePage } from '../bots/tools/MobileBotToolValuePage'
 import { mcpServerAdd, mcpServerPreviewPaste, type PhoneMcpServer } from './mcp-server-operations'
@@ -65,7 +64,7 @@ export function MobileMcpCustomServerPage(props: {
   onAdded: (server: PhoneMcpServer) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const [source, setSource] = useState(props.preset?.source ?? '')
   const [headers, setHeaders] = useState<Header[]>(() =>
     (props.preset?.headers ?? []).map((header) => ({ id: createUuid(), ...header }))

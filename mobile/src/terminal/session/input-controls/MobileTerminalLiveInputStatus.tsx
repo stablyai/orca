@@ -1,9 +1,8 @@
 import { useContext, type RefObject } from 'react'
 import { Text, View, type HostInstance } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../../theme/mobile-theme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { themedStyleSheet } from '../../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import { TailClippedText } from '../../../components/list/TailClippedText'
 import {
   mobileDictationStatusTitle,
@@ -34,10 +33,10 @@ export function MobileTerminalLiveInputStatus({
   isAttaching,
   heard
 }: MobileTerminalLiveInputStatusProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const live = useContext(MobileDictationLiveContext)
-  const dictationTitle = mobileDictationStatusTitle(dictation)
+  const dictationTitle = mobileDictationStatusTitle(dictation, t)
   if (live?.failureReason != null) {
     return (
       <View style={[styles.status, styles.dictating]} pointerEvents="box-none">
@@ -93,7 +92,7 @@ export function MobileTerminalLiveInputStatus({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   // Cover the field in place so the dock, and with it the PTY, keeps its height.
   status: {
     position: 'absolute',

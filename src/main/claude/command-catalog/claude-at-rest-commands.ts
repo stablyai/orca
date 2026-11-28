@@ -9,7 +9,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 import { structuredSlashCommands } from '../../../shared/agent-session/view/structured-agent-session-slash-menu'
-import { discoverSkills } from '../../skills/discovery/skill-native-discovery'
+import type { discoverSkills } from '../../skills/discovery/skill-native-discovery'
 import { scanClaudeCommandFolders } from './claude-command-folder-scan'
 import { supportsClaudeStructuredLocation } from '../structured/launch/claude-structured-location-support'
 import type { ClaudeCommandCatalogProbe } from './claude-command-catalog-probe'
@@ -104,12 +104,17 @@ async function scanClaudeAtRest(
         [join(cwd, '.claude', 'commands'), join(account, 'commands')],
         signal
       ),
-      (deps.discover ?? discoverSkills)({
-        signal,
-        repos: [],
-        cwd,
-        providerRootOverrides: { claude: join(account, 'skills') }
-      })
+      (async () => {
+        const discover =
+          deps.discover ??
+          (await import('../../skills/discovery/skill-native-discovery')).discoverSkills
+        return discover({
+          signal,
+          repos: [],
+          cwd,
+          providerRootOverrides: { claude: join(account, 'skills') }
+        })
+      })()
     ]),
     signal
   )

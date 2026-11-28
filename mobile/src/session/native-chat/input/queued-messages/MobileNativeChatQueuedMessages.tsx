@@ -5,9 +5,8 @@ import { useContext, useLayoutEffect, useState, type ReactNode } from 'react'
 import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
 import { ChevronDown, ChevronUp, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
-import { colors } from '../../../../theme/mobile-theme'
 import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
@@ -24,11 +23,12 @@ import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-ed
 import { MobileQueuedMessageCardRow } from './MobileQueuedMessageCardRow'
 import { MobileQueuedMessageScrollList } from './MobileQueuedMessageScrollList'
 import { useQueuedRowShow } from './mobile-queued-row-frame'
-import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
+import { queuedMessageStylesSheet } from './mobile-native-chat-queued-message-styles'
 import {
   MobileNativeChatQueueAbovePromptContext,
   useMobileNativeChatLowerRegion
 } from '../../lower-region/mobile-native-chat-lower-region-context'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 // Use NUL-prefixed header keys because message ids cannot contain NUL.
 // Resume and Clear all share one key: a Resume would send the cards a Clear is deleting.
@@ -98,7 +98,8 @@ export function MobileNativeChatQueuedMessages({
   agentWorking = false,
   steerOrder
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
-  useMobileColorScheme()
+  const styles = useThemedStyles(queuedMessageStylesSheet)
+  const colors = useMobileColors()
   const lowerRegion = useMobileNativeChatLowerRegion()
   useLayoutEffect(() => lowerRegion?.layoutChanged())
   const t = useMobileTranslation()

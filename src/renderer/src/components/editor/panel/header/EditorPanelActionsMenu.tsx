@@ -22,6 +22,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 type EditorPanelActionsMenuProps = {
   encodingFile?: OpenFile
   fileLocationActions?: React.ReactNode
+  /** Reload from Disk, in its own group after the file-location items. */
+  reloadAction?: React.ReactNode
   isDiffSurface: boolean
   /** Diff-only wrap preference; ignored for normal file tabs. */
   diffWordWrap: boolean
@@ -42,6 +44,7 @@ type EditorPanelActionsMenuProps = {
 export function EditorPanelActionsMenu({
   encodingFile,
   fileLocationActions,
+  reloadAction,
   isDiffSurface,
   diffWordWrap,
   diffShowWhitespace,
@@ -69,7 +72,12 @@ export function EditorPanelActionsMenu({
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-xs" aria-label={menuLabel}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={menuLabel}
+              data-editor-actions-trigger
+            >
               <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>
@@ -82,6 +90,12 @@ export function EditorPanelActionsMenu({
         {fileLocationActions ? (
           <>
             {fileLocationActions}
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        {reloadAction ? (
+          <>
+            {reloadAction}
             <DropdownMenuSeparator />
           </>
         ) : null}

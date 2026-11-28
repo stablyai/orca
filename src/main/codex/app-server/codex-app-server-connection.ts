@@ -1,4 +1,5 @@
 import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
+import { isJsonRpcAnswerAbove as isCodexAnswerAbove } from '../../provider-relay/relayed-json-rpc-lines'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import { awaitProviderChildSpawn } from '../../provider-process/provider-child'
@@ -14,7 +15,7 @@ import {
   CodexAppServerUnsupportedError
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
-import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
+import { createCodexRecordReader } from './codex-agent-message-delta-merging'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import type {
@@ -23,9 +24,8 @@ import type {
 } from './codex-app-server-connection-types'
 import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
 import {
-  codexConnectionRelay,
   CODEX_RELAY_WORK_MARKERS,
-  isCodexAnswerAbove,
+  codexConnectionRelay,
   keptInitializeResult
 } from './codex-app-server-relay'
 
@@ -127,7 +127,7 @@ async function connectCodexAppServer(
     void managed.close()
   })
 
-  const recordReader = createProviderRecordReader({
+  const recordReader = createCodexRecordReader({
     stdout: child.stdout,
     onRecord: (parsed, line) => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {

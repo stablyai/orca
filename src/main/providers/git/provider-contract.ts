@@ -13,6 +13,7 @@ import type {
   GitForkSyncResult
 } from '../../../shared/git/remotes/git-fork-sync'
 import type {
+  GitAbortOperationRequest,
   ContinueRebaseAction,
   ContinueRebaseRequest,
   ContinueRebaseResult,
@@ -62,7 +63,8 @@ export type IGitProvider = {
   recoverSequencer(
     worktreePath: string,
     operation: GitCommitAction,
-    action: 'abort' | 'continue'
+    action: 'abort' | 'continue',
+    request?: GitAbortOperationRequest
   ): Promise<GitCommitActionResult | void>
   completeMerge(worktreePath: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
@@ -91,8 +93,8 @@ export type IGitProvider = {
   discardChanges(worktreePath: string, filePath: string): Promise<void>
   bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
-  abortMerge(worktreePath: string): Promise<void>
-  abortRebase(worktreePath: string): Promise<void>
+  abortMerge(worktreePath: string, request?: GitAbortOperationRequest): Promise<void>
+  abortRebase(worktreePath: string, request?: GitAbortOperationRequest): Promise<void>
   continueRebase(
     worktreePath: string,
     action: ContinueRebaseAction,

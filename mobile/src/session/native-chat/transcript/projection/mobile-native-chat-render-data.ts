@@ -20,42 +20,33 @@ import {
 import type { AgentType } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { MobileNativeChatStatus } from '../../status/mobile-native-chat-session-status'
 import { orderNativeChatDisplayMessages } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-message-order'
-import { translate } from '../../../../i18n/mobile-i18n'
+import type { Translate } from '../../../../i18n/mobile-i18n'
 
 function mobileNativeChatEmptyStateCopy(
   kind: 'notFound' | 'empty' | 'error',
-  agentLabel: string
+  agentLabel: string,
+  t: Translate
 ): NativeChatEmptyStateCopy {
   switch (kind) {
     case 'notFound':
       return {
-        title: translate(
-          'session.nativeChatRenderData.notFoundTitle',
-          "Can't find this conversation yet"
-        ),
-        subtitle: translate(
-          'session.nativeChatRenderData.notFoundSubtitle',
-          'Send a message to start one, or open the terminal view to see what {{agent}} is doing.',
-          { agent: agentLabel }
-        )
+        title: t('session.nativeChatRenderData.notFoundTitle', "Can't find this conversation yet"),
+        subtitle: t('session.nativeChatRenderData.notFoundMessage', 'Send a message to start one.')
       }
     case 'empty':
       return {
-        title: translate('session.nativeChatRenderData.emptyTitle', 'Start a chat with {{agent}}', {
+        title: t('session.nativeChatRenderData.emptyTitle', 'Start a chat with {{agent}}', {
           agent: agentLabel
         }),
-        subtitle: translate(
-          'session.nativeChatRenderData.emptySubtitle',
-          'Ask {{agent}} to inspect code, explain output, or make a change.',
-          { agent: agentLabel }
-        )
+        // The composer is right there; the title is enough.
+        subtitle: ''
       }
     case 'error':
       return {
-        title: translate('session.nativeChatRenderData.errorTitle', 'Could not load conversation'),
-        subtitle: translate(
-          'session.nativeChatRenderData.errorSubtitle',
-          'The transcript could not be read. Toggle back to the terminal to keep working.'
+        title: t('session.nativeChatRenderData.errorTitle', 'Could not load conversation'),
+        subtitle: t(
+          'session.nativeChatRenderData.errorMessage',
+          'The conversation couldn’t be read. The terminal view still works.'
         )
       }
   }
@@ -64,6 +55,7 @@ function mobileNativeChatEmptyStateCopy(
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
   agent: string | null | undefined,
+  t: Translate,
   error?: string,
   sessionLive = false,
   /** A sent /clear hid the old rows: a blank list until its divider lands, not new-chat copy. */
@@ -71,19 +63,19 @@ export function mobileNativeChatEmptyState(
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent
     ? formatAgentTypeLabel(agent)
-    : translate('session.nativeChatRenderData.defaultAgentLabel', 'the agent')
+    : t('session.nativeChatRenderData.defaultAgentLabel', 'the agent')
   switch (status) {
     // Missing history may mean new or unreadable; promise neither in the waiting copy.
     case 'waiting-session':
-      return mobileNativeChatEmptyStateCopy('notFound', agentLabel)
+      return mobileNativeChatEmptyStateCopy('notFound', agentLabel, t)
     // A session the running agent just reported has no file until its first prompt.
     case 'awaiting-transcript':
-      return mobileNativeChatEmptyStateCopy(sessionLive ? 'empty' : 'notFound', agentLabel)
+      return mobileNativeChatEmptyStateCopy(sessionLive ? 'empty' : 'notFound', agentLabel, t)
     case 'ready':
-      return clearing ? null : mobileNativeChatEmptyStateCopy('empty', agentLabel)
+      return clearing ? null : mobileNativeChatEmptyStateCopy('empty', agentLabel, t)
     case 'error': {
-      const copy = mobileNativeChatEmptyStateCopy('error', agentLabel)
-      return error ? { ...copy, subtitle: describeLoadError(error, translate).message } : copy
+      const copy = mobileNativeChatEmptyStateCopy('error', agentLabel, t)
+      return error ? { ...copy, subtitle: describeLoadError(error, t).message } : copy
     }
     default:
       return null

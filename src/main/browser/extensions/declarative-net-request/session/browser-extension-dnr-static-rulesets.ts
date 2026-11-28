@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
 import {
   buildDnrRulesetInSlices,
   type DnrInvalidRulePolicy
 } from '../rule-compilation/ruleset-builder'
+import { resolveInsideExtensionDirectory } from '../../installation/browser-extension-manifest'
 import type { DnrRulesetIndex } from '../indexing/ruleset-index'
 import type { DnrRulesetSource } from '../rule-compilation/rule-types'
 
@@ -140,9 +140,8 @@ async function loadStaticRuleset(
   extension: Pick<Electron.Extension, 'id' | 'path'>,
   ruleset: DnrManifestRuleset
 ): Promise<DnrBuiltRuleset | null> {
-  const file = resolve(extension.path, ruleset.path.replace(/^\/+/, ''))
-  const inside = relative(extension.path, file)
-  if (inside.startsWith('..') || isAbsolute(inside)) {
+  const file = resolveInsideExtensionDirectory(extension.path, ruleset.path)
+  if (!file) {
     return null
   }
   const rules: unknown = JSON.parse(await readFile(file, 'utf8'))

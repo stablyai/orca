@@ -310,9 +310,9 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     ja: 'ブロックを検索'
   },
   'auto.components.TaskPage.eec0c5c079': {
-    ko: 'Linear 이슈 검색...',
-    zh: '搜索 Linear 议题...',
-    ja: 'Linear イシューを検索...'
+    ko: '검색...',
+    zh: '搜索...',
+    ja: '検索…'
   },
   'auto.web.WebConnect.e3bcd082ac': {
     ko: 'Orca에 연결',
@@ -331,7 +331,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
     ko: '주머니 속의 워크스페이스.',
-    zh: '您的工作区就在您的口袋里',
+    zh: '你的工作区就在你的口袋里',
     ja: 'ワークスペースをポケットに。'
   },
   'auto.components.GitHubItemDialog.dbe5e2448e': {

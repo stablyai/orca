@@ -35,10 +35,13 @@ import {
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { searchRepos } from '@/lib/workspace/catalog/repo-search'
-import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
+import { useWorkspaceOptionsFilterBadge } from './use-workspace-options-filter-badge'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
+
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+const EMPTY_STRING_SET: ReadonlySet<string> = new Set()
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -59,24 +62,22 @@ const SidebarFilter = React.memo(function SidebarFilter({
   // Expose user bindings here so the filter menu also teaches the sleeping-workspace shortcut.
   const sleepingShortcut = useShortcutLabel('sidebar.sleepingWorkspaces.toggle')
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
-  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
-  const setHideAutomationGeneratedWorkspaces = useAppStore(
-    (s) => s.setHideAutomationGeneratedWorkspaces
-  )
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
-  const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
-  const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
-  const setAlwaysShowDefaultBranchWorkspace = useAppStore(
-    (s) => s.setAlwaysShowDefaultBranchWorkspace
-  )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
-  const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const allRepos = useAppStore((s) => s.repos)
   const repos = useMemo(() => withoutHiddenRepos(allRepos), [allRepos])
-  const addRepo = useAppStore((s) => s.addRepo)
+  const {
+    setHideDefaultBranchWorkspace,
+    setHideAutomationGeneratedWorkspaces,
+    setHideCliCreatedWorkspaces,
+    setHideDetachedHeadWorkspaces,
+    setAlwaysShowDefaultBranchWorkspace,
+    setFilterRepoIds,
+    addRepo
+  } = getAppStoreState()
 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -107,6 +108,9 @@ const SidebarFilter = React.memo(function SidebarFilter({
   const canFilterRepos = repos.length > 1
   // Ignore removed repo IDs so they cannot inflate counts or imply an active filter.
   const selectedRepoIdSet = useMemo(() => {
+    if (filterRepoIds.length === 0) {
+      return EMPTY_STRING_SET
+    }
     const set = new Set<string>()
     for (const r of repos) {
       if (filterRepoIds.includes(r.id)) {
