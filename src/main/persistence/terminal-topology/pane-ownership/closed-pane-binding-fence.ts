@@ -132,6 +132,11 @@ function fencingRemovedPanes<V>(
   }
 }
 
+/** A pane main closed because its terminal ended: a window spawn that was already on its way must not bring it back. */
+export function fenceExitClosedPane(paneKey: string): void {
+  closedAtByPaneKey.set(paneKey, Date.now())
+}
+
 export function isClosedPaneFenced(paneKey: string): boolean {
   const closedAt = closedAtByPaneKey.get(paneKey)
   if (closedAt === undefined) {

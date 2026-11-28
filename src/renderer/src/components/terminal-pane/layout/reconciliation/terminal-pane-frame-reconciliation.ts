@@ -8,7 +8,7 @@ import {
 import { planTerminalLiveLayoutInsertions } from './terminal-live-layout-reconciliation'
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 
-/** Draw main’s tree by mounting added panes, attaching main-started terminals and moving existing panes/ratios. Apply requested local closes; other removals wait for main’s notice. Return whether panes changed. */
+/** Draw main’s tree by mounting added panes, attaching main-started terminals and moving existing panes/ratios. Apply requested local closes and drop panes that never attached; other removals wait for main’s notice. Return whether panes changed. */
 export function reconcileMountedPanesToLayout(args: {
   tabId: string
   manager: PaneManager
@@ -17,6 +17,8 @@ export function reconcileMountedPanesToLayout(args: {
   closePane: (paneId: number, leafId: string, kind: PaneCloseKind) => void
   /** A zoomed pane hides its siblings; their shape and ratios wait until it collapses. */
   isExpanded: boolean
+  /** Whether the pane is attached to a terminal, whose exit is main's notice of its close. */
+  isAttached: (paneId: number) => boolean
 }): boolean {
   const { tabId, manager, layout } = args
   const root = layout.root
@@ -27,7 +29,10 @@ export function reconcileMountedPanesToLayout(args: {
   let changed = false
 
   for (const pane of manager.getPanes()) {
-    const kind = target.has(pane.leafId) ? null : takePaneCloseIntent(tabId, pane.leafId)
+    // A pane that never attached gets no exit notice: main dropping it is the only close it gets.
+    const kind = target.has(pane.leafId)
+      ? null
+      : (takePaneCloseIntent(tabId, pane.leafId) ?? (args.isAttached(pane.id) ? null : 'exit'))
     // Keep the last pane until main’s notice brings its missing replacement; never leave an empty tab.
     if (kind && manager.getPanes().length > 1) {
       args.closePane(pane.id, pane.leafId, kind)

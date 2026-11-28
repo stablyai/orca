@@ -4,6 +4,7 @@ src/main/persistence/terminal-topology/terminal-leaf-move-concurrent-close.test.
 src/main/persistence/terminal-topology/terminal-topology-commit.test.ts
 src/main/persistence/terminal-topology/workspace-layout-rules.test.ts
 src/main/runtime/orchestration/mailbox/routing/slept-agent-wake-no-window.test.ts
+src/main/runtime/terminal/launch/restart-pane-late-exit.test.ts
 src/renderer/src/store/terminals/restored-relay-session-identity.test.ts
 src/shared/workspace-layout/commands/workspace-layout-commands.test.ts
 src/shared/workspace-layout/old-client/old-client-method-translation.test.ts

@@ -21,6 +21,7 @@ import type {
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { findTerminalTabForPane } from '../terminal-tab-id'
+import { isClosedPaneRefusal } from '../../../../../../shared/workspace-layout/closed-pane-spawn-refusal'
 
 export function releaseDeferredCwdFence(session: ConnectPanePtySession): void {
   if (!session.transport.getPtyId()) {
@@ -80,8 +81,13 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     session.pendingSpawnDeferral = null
     const visibleAtSpawn = session.deps.isVisibleRef.current === true
     let ownerRefused = false
+    let paneClosed = false
     const outputCallbacks = session.captureTransportOutputCallbacks(
       (message: string) => {
+        if (isClosedPaneRefusal(message)) {
+          paneClosed = true
+          return
+        }
         ownerRefused ||= isPaneOwnerRefusal(message)
         session.reportError(message)
       },
@@ -268,7 +274,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       })
       .catch(async (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        if (!ownerRefused && isPaneOwnerRefusal(message)) {
+        if (!ownerRefused && (isPaneOwnerRefusal(message) || isClosedPaneRefusal(message))) {
           outputCallbacks.callbacks.onError(message)
         }
         releaseDeferredCwdFence(session)
@@ -303,17 +309,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         ) {
           return
         }
-        if (ownerRefused) {
+        settleSpawnThatLeftPaneUnbound(session, { ownerRefused, paneClosed }, () => {
           const retry = () => session.startFreshSpawn(startupOverride, options)
           armPaneOwnerRetry(session, outputCallbacks.generation, retry, startupOverride)
-          session.settlePaneAttachAttempt?.('failed')
-          return
-        }
-        if (session.deferredSpawn) {
-          // Why no remount: the host would defer the remount's restore again, in a loop.
-          return
-        }
-        settleSpawnThatLeftPaneUnbound(session)
+        })
       })
     })
     // Key concurrent spawns by tab and pane so a remount cannot adopt its sibling’s PTY.
