@@ -2,13 +2,16 @@ import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   readAntigravityMacOSCredential,
-  writeAntigravityMacOSCredential
+  readAntigravityMacOSCredentialRevision,
+  writeAntigravityMacOSCredential,
+  type AntigravityKeychainRevision
 } from './native-macos-credentials'
 import {
   readAntigravityLinuxCredential,
   writeAntigravityLinuxCredential
 } from './native-linux-credentials'
 import type { AntigravityCredentialBackend } from './native-account-service'
+import type { AntigravityNativeCredential } from './native-credential-codec'
 import {
   createAntigravityWindowsCredentialBackend,
   getAntigravityWindowsHome
@@ -32,9 +35,18 @@ const markerPresent = (path: string): Promise<boolean> =>
 const CONFLICT =
   'The native Antigravity credential changed during selection; refresh before retrying.'
 
-function hostKeyring() {
+function hostKeyring(): {
+  read: () => Promise<AntigravityNativeCredential | null>
+  write: (contents: string) => Promise<void>
+  /** Only where reading the secret can raise a dialog: the Linux keyring refuses when locked. */
+  revision?: () => Promise<AntigravityKeychainRevision | null>
+} {
   if (process.platform === 'darwin') {
-    return { read: readAntigravityMacOSCredential, write: writeAntigravityMacOSCredential }
+    return {
+      read: () => readAntigravityMacOSCredential(),
+      write: writeAntigravityMacOSCredential,
+      revision: readAntigravityMacOSCredentialRevision
+    }
   }
   if (process.platform === 'linux') {
     return { read: readAntigravityLinuxCredential, write: writeAntigravityLinuxCredential }
@@ -61,16 +73,30 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
   }
   const keyring = hostKeyring()
   const marker = antigravityKeyringFallbackMarker(home)
-  async function read() {
+  async function refuseMarker() {
     if (await markerPresent(marker)) {
       throw new Error(
         'Antigravity has a keyring fallback marker; Orca cannot verify which credential store agy will use.'
       )
     }
+  }
+  async function read() {
+    await refuseMarker()
     return (await keyring.read()) ?? (await file.read())
   }
+  const { revision } = keyring
   return {
     read,
+    ...(revision
+      ? {
+          async readWithoutPrompt() {
+            await refuseMarker()
+            const item = await revision()
+            // With no keychain item agy uses its token file, which reads without a prompt.
+            return item ?? { credential: await file.read() }
+          }
+        }
+      : {}),
     async write(contents, expected) {
       if ((await read())?.contents !== (expected ?? undefined)) {
         throw new Error(CONFLICT)

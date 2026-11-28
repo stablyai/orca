@@ -3260,6 +3260,17 @@
         "linkedIssue": "Bağlı sorun",
         "listeningPort": "Dinlenen port"
       },
+      "simulator": {
+        "runtime": {
+          "emulatorRuntimeAttach": {
+            "serverAndroid": "{{host}} üzerindeki Android emülatörleri henüz desteklenmiyor. Bir iOS simülatörü seçin.",
+            "updateServer": "{{host}} üzerindeki simülatör burada gösterilemedi. {{host}} üzerindeki Orca'yı güncelleyip yeniden deneyin."
+          },
+          "emulatorRuntimeTarget": {
+            "ambiguousOwner": "Bu çalışma alanını hangi bilgisayarın çalıştırdığı belirlenemedi. Yeniden açıp tekrar deneyin."
+          }
+        }
+      },
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
         "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz",
@@ -4978,6 +4989,7 @@
           "9d0f2eda6d": "Etiket",
           "01f3f3d161": "Yazar",
           "13b3ac0a84": "Durum",
+          "show": "Göster",
           "79c54552f7": "Filtreler",
           "8a2ffbf9b3": "{{value0}} filtresini kaldır",
           "anyState": "Herhangi biri",
@@ -13532,8 +13544,11 @@
           "restarting": "Yeniden başlatılıyor…",
           "updated": "Güncellendi",
           "failed": "Güncelleme başarısız oldu",
-          "serviceManagerHelp": "Orca'yı sunucu host'unda güncelleyin; .deb veya .rpm'den yüklendiyse sistem paket yöneticisi üzerinden, aksi halde onu başlatan servis yöneticisi üzerinden.",
-          "unpackedHelp": "Geliştirme derlemeleri kaynak kopyalarından güncellenmelidir.",
+          "nodeServerHelp": "Uzaktan güncellemeler kapalı: Bu sunucu Orca'yı, Orca'nın Node sunucusu (orcad) gibi yerleşik güncelleyicisi olmadan çalıştırıyor. Sunucuya yeni Orca sürümünü kurun, ardından orca serve komutunu yeniden başlatın.",
+          "updaterNotStartedHelp": "Uzaktan güncellemeler kapalı: Bu sunucudaki Orca güncelleyicisini başlatmadı. Orca'yı orada yeniden başlatıp tekrar kontrol edin ya da sunucuda güncelleyin.",
+          "headlessServeHelp": "Uzaktan güncellemeler kapalı: Bu sunucu orca serve komutunu bir güncelleme denetleyicisi olmadan çalıştırıyor, bu yüzden kendini yeni bir sürümle yeniden başlatamıyor. Orca'yı sunucuda güncelleyin, ardından hizmetini yeniden başlatın.",
+          "systemPackageHelp": "Uzaktan güncellemeler kapalı: Bu sunucudaki Orca, onu güncellemesi gereken bir sistem paketi veya başka bir yükleyiciyle kuruldu. Kurulduğu şekilde güncelleyin, örneğin .deb veya .rpm için apt ya da dnf ile.",
+          "devBuildHelp": "Uzaktan güncellemeler kapalı: Bu sunucu bir geliştirme derlemesi çalıştırıyor. Kaynak kodu kopyasından güncelleyin.",
           "legacyHelp": "Bu sunucu uzaktan güncellenemiyor. Sunucunun ana makinesinde Orca'yı güncelleyin.",
           "managedOverSshHelp": "Bu masaüstü uygulaması bu sunucuyu SSH üzerinden günceller. Uzak Orca sunucuları bölümünde sunucunun satırındaki Güncelle seçeneğini kullanın."
         },
@@ -20510,7 +20525,12 @@
           "reconnectCopy": "Hesabınız üzerinden paylaşılan artifact'leri görüntülemek ve yönetmek için yeniden oturum açın.",
           "signInAgainAction": "Yeniden oturum aç",
           "unconfiguredCopy": "Orca hesap girişi bu makinede henüz yapılandırılmadı.",
-          "openAccountSettings": "Hesap ayarlarını aç"
+          "openAccountSettings": "Hesap ayarlarını aç",
+          "deleteManyDescription_one": "{{count}} artifact'e artık herkese açık bağlantısı üzerinden erişilemeyecek.",
+          "deleteManyDescription_other": "{{count}} artifact'e artık herkese açık bağlantıları üzerinden erişilemeyecek.",
+          "deleteNamedFailed": "“{{name}}” silinemedi.",
+          "deleteBatchStopped_one": "“{{name}}” silinemedi. Kalan {{count}} artifact silinmedi.",
+          "deleteBatchStopped_other": "“{{name}}” silinemedi. Kalan {{count}} artifact silinmedi."
         },
         "copySuccess": "Artifact bağlantısı kopyalandı",
         "copyFailed": "Artifact bağlantısı kopyalanamadı",
@@ -20524,7 +20544,8 @@
           "more": "Daha fazla artifact işlemi"
         },
         "ArtifactCollection": {
-          "loadMore": "Daha fazla yükle"
+          "loadMore": "Daha fazla yükle",
+          "noMatchingArtifacts": "Eşleşen artifact yok"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Bu bağlantıya sahip olan herkes görüntüleyebilir",
@@ -20586,14 +20607,34 @@
           "size": "Boyut",
           "updated": "Güncellendi",
           "expires": "Süresi Doluyor",
-          "actions": "İşlemler"
+          "actions": "İşlemler",
+          "selectAll": "Tümünü seç"
         },
         "ArtifactsPageSkeleton": {
           "loading": "Artifact'ler yükleniyor"
         },
         "expiredCompact": "Süresi doldu",
         "typeMarkdown": "Markdown",
-        "typeHtml": "HTML"
+        "typeHtml": "HTML",
+        "ArtifactListFilterMenu": {
+          "clearFilters": "Filtreleri temizle",
+          "any": "Tüm zamanlar",
+          "today": "Bugün",
+          "pastWeek": "Son 7 gün",
+          "pastMonth": "Son 30 gün",
+          "anyExpiry": "Tümü",
+          "withinWeek": "7 gün içinde",
+          "expired": "Süresi doldu"
+        },
+        "ArtifactListRow": {
+          "select": "{{name}} öğesini seç"
+        },
+        "ArtifactListSelectionBar": {
+          "delete": "Sil",
+          "clear": "Temizle",
+          "selected_one": "{{count}} seçili",
+          "selected_other": "{{count}} seçili"
+        }
       },
       "BrowserCookieImportMachineNotice": {
         "remoteLabel": "{{value0}} üzerindeki tarayıcılar",
@@ -20881,6 +20922,9 @@
           "featuredDetail": "her kategoriden en çok kurulan bir eklenti",
           "newlyAdded": "Yeni eklenenler",
           "newlyAddedDetail": "tüm kataloglarınızda"
+        },
+        "PluginsPage": {
+          "close": "Eklentileri kapat"
         }
       },
       "agent-workspace-trust-decision": {
@@ -23885,7 +23929,6 @@
           "dialog": {
             "createToken": "Oluştur",
             "environmentManagedLine": "ORCA_BITBUCKET_* ortam değişkenleriyle ayarlandı. Burada kaydetmek için bunları kaldırın.",
-            "savedLocallyOnly": "Yalnızca bu bilgisayara kaydedilir.",
             "accessTokenNeeds": "Pull request'lere okuma erişimi gerekir.",
             "atlassianEmail": "Atlassian e-postası",
             "requiredScopes": "Gerekli kapsamlar",
@@ -23971,6 +24014,7 @@
           "deleted": "Silindi",
           "kept": "Korunan: {{count}}",
           "showMore": "{{count}} tane daha göster",
+          "showFewer": "Daha az göster",
           "waiting": "Etkin olmayan süre: {{elapsed}} gün · Eşik: {{after}} gün",
           "title": "Etkinlik",
           "notListed_one": "Korunan 1 çalışma alanı daha listede gösterilmiyor.",
@@ -25643,7 +25687,10 @@
       "chatPasteCode": "Kodu yapıştır",
       "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi",
       "launchesUse": "Yeni agy başlatmaları bu hesabı kullanır",
-      "loginNow": "agy'nin şu anki oturumu"
+      "loginNow": "agy'nin şu anki oturumu",
+      "signedInUnread": "agy'de oturum açık",
+      "unreadDetail": "Hangisi olduğunu görmek için hesabı gösterin. macOS anahtar zinciri erişimine izin vermenizi isteyebilir.",
+      "showAccount": "Hesabı göster"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",
@@ -25757,6 +25804,7 @@
       "errors": {
         "ownerSilent": "Bu oturum açma işlemini başlatan cihaz yanıt vermeyi bıraktı.",
         "superseded": "Bu sunucudaki bir hesap değişikliği oturum açma işlemini durdurdu. Yeniden başlatın.",
+        "noPrompt": "Sunucudaki oturum açma komutu bir dakika içinde oturum açma bağlantısı göstermedi. Sunucudaki Orca'yı güncelleyin, ardından tekrar deneyin.",
         "failed": "Oturum açılamadı. Yeniden deneyin."
       }
     },
@@ -27541,11 +27589,14 @@
       "missing": "Kayıtlı cihaz artık bu bilgisayarda değil. Başka bir cihaz seçin.",
       "unavailable": "Kayıtlı cihazın çalışma zamanı kullanılamıyor. Başka bir cihaz seçin veya çalışma zamanını yükleyin.",
       "askPrompt": "Açılacak bir cihaz seçin.",
-      "firstUse": "İlk cihazınızı seçin. Orca bu bilgisayarda başarılı seçimleri hatırlar."
+      "firstUse": "İlk cihazınızı seçin. Orca bu bilgisayarda başarılı seçimleri hatırlar.",
+      "missingOnServer": "Kayıtlı cihaz artık {{host}} üzerinde değil. Başka bir cihaz seçin.",
+      "firstUseOnServer": "İlk cihazınızı seçin. Orca {{host}} üzerinde seçip başarıyla bağlandığınız cihazları hatırlar."
     },
     "picker": {
       "starting": "Başlatılıyor",
       "stopped": "Durduruldu",
+      "otherOnServer": "{{host}} üzerindeki diğer cihazlar",
       "choose": "Emülatör seç",
       "search": "Cihazlarda ara…",
       "empty": "Eşleşen cihaz yok",
@@ -29269,7 +29320,11 @@
       "seeMessage": "Mesajı gör",
       "addStep": "Oluşturduğu klasörü ekle",
       "replyLabel": "Yanıtı",
-      "rowDetail": "{{app}} {{kind}}"
+      "rowDetail": "{{app}} {{kind}}",
+      "titleFrom": "{{source}} uygulamasından içe aktar",
+      "import": "İçe aktar",
+      "importing": "İçe aktarılıyor…",
+      "fromExport": "Dışa aktarımdan"
     },
     "section": {
       "scrollLeft": "Sola kaydır · {{amount}} gizli",
@@ -30207,6 +30262,9 @@
       "unreachable": "Şu bilgisayarlara ulaşılamadı: {{hosts}}. Bot bunlardan birinde olabilir. Bağlantı yeniden kurulduğunda bağlantıyı tekrar açın.",
       "pick": "Bu bağlantıya ait bot birden fazla bilgisayarda bulundu: {{hosts}}. Botu kenar çubuğundan açın.",
       "updateNeeded": "Botu burada açabilmek için {{hosts}} üzerinde Orca’yı güncelleyin."
+    },
+    "chatOpen": {
+      "homeDidNotLoad": "Botun ana çalışma alanı yüklenemedi."
     },
     "workspaces": {
       "showMore": "{{count}} tane daha göster",

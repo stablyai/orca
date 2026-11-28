@@ -12741,8 +12741,11 @@
           "restarting": "Restarting…",
           "updated": "Updated",
           "failed": "Update failed",
-          "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
-          "unpackedHelp": "Las compilaciones de desarrollo deben actualizarse desde su copia del código fuente.",
+          "nodeServerHelp": "Las actualizaciones remotas están desactivadas: este servidor ejecuta Orca sin su actualizador integrado, como hace el servidor Node de Orca (orcad). Instala la versión más reciente de Orca en el servidor y luego reinicia orca serve.",
+          "updaterNotStartedHelp": "Las actualizaciones remotas están desactivadas: Orca en este servidor no ha iniciado su actualizador. Reinicia Orca allí y vuelve a comprobarlo, o actualízalo en el servidor.",
+          "headlessServeHelp": "Las actualizaciones remotas están desactivadas: este servidor ejecuta orca serve sin un supervisor de actualizaciones, así que no puede reiniciarse en una versión nueva. Actualiza Orca en el servidor y luego reinicia su servicio.",
+          "systemPackageHelp": "Las actualizaciones remotas están desactivadas: Orca se instaló en este servidor con un paquete del sistema u otro instalador que debe actualizarlo. Actualízalo de la misma forma en que se instaló, por ejemplo con apt o dnf para un .deb o .rpm.",
+          "devBuildHelp": "Las actualizaciones remotas están desactivadas: este servidor ejecuta una compilación de desarrollo. Actualízala desde su copia del código fuente.",
           "legacyHelp": "Las actualizaciones remotas no están disponibles para este servidor. Actualiza Orca en el servidor.",
           "managedOverSshHelp": "Este escritorio actualiza este servidor por SSH. Usa Actualizar en su fila de Servidores remotos de Orca."
         },
@@ -23137,6 +23140,7 @@
           "deleted": "Eliminado",
           "kept": "Conservados · {{count}}",
           "showMore": "Mostrar {{count}} más",
+          "showFewer": "Mostrar menos",
           "waiting": "Inactivo {{elapsed}} de {{after}} días",
           "title": "Actividad",
           "notListed_one": "1 espacio de trabajo conservado más no aparece en la lista.",
@@ -23312,7 +23316,6 @@
           "dialog": {
             "createToken": "Crear uno",
             "environmentManagedLine": "Definido por variables de entorno ORCA_BITBUCKET_*. Quítalas para guardar uno aquí.",
-            "savedLocallyOnly": "Se guarda solo en este equipo.",
             "accessTokenNeeds": "Necesita acceso de lectura a las pull requests.",
             "atlassianEmail": "Correo de Atlassian",
             "requiredScopes": "Ámbitos necesarios",
@@ -24752,7 +24755,10 @@
       "chatPasteCode": "Pega el código",
       "chatPasteCodeLabel": "El código que muestra Google después de iniciar sesión, o la dirección de esa página",
       "launchesUse": "Los nuevos inicios de agy usan esta cuenta",
-      "loginNow": "Sesión actual de agy"
+      "loginNow": "Sesión actual de agy",
+      "signedInUnread": "agy tiene la sesión iniciada",
+      "unreadDetail": "Muestra la cuenta para ver cuál es. macOS puede pedirte que permitas el acceso al llavero.",
+      "showAccount": "Mostrar cuenta"
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",
@@ -24855,6 +24861,7 @@
       "errors": {
         "ownerSilent": "El dispositivo desde el que se intentó iniciar sesión dejó de responder.",
         "superseded": "Un cambio de cuenta en este host detuvo el inicio de sesión. Vuelve a iniciarlo.",
+        "noPrompt": "El comando de inicio de sesión del servidor no mostró un enlace de inicio de sesión en un minuto. Actualiza Orca en el servidor y vuelve a intentarlo.",
         "failed": "No se pudo iniciar sesión. Vuelve a intentarlo."
       }
     },

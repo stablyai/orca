@@ -13016,8 +13016,11 @@
           "restarting": "Redémarrage…",
           "updated": "Mis à jour",
           "failed": "Échec de la mise à jour",
-          "serviceManagerHelp": "Mettez à jour Orca via le gestionnaire de services qui démarre ce serveur.",
-          "unpackedHelp": "Les builds de développement doivent être mis à jour depuis leur checkout source.",
+          "nodeServerHelp": "Les mises à jour à distance sont désactivées : ce serveur exécute Orca sans son programme de mise à jour intégré, comme le fait le serveur Node d’Orca (orcad). Installez la nouvelle version d’Orca sur le serveur, puis redémarrez orca serve.",
+          "updaterNotStartedHelp": "Les mises à jour à distance sont désactivées : Orca n’a pas démarré son programme de mise à jour sur ce serveur. Redémarrez Orca sur le serveur et vérifiez à nouveau, ou mettez-le à jour sur place.",
+          "headlessServeHelp": "Les mises à jour à distance sont désactivées : ce serveur exécute orca serve sans superviseur de mise à jour, il ne peut donc pas redémarrer sur une nouvelle version. Mettez à jour Orca sur le serveur, puis redémarrez son service.",
+          "systemPackageHelp": "Les mises à jour à distance sont désactivées : Orca a été installé sur ce serveur par un paquet système ou un autre installateur qui doit le mettre à jour. Mettez-le à jour de la même façon, par exemple avec apt ou dnf pour un .deb ou un .rpm.",
+          "devBuildHelp": "Les mises à jour à distance sont désactivées : ce serveur exécute une version de développement. Mettez-la à jour depuis son dépôt source.",
           "legacyHelp": "Les mises à jour à distance ne sont pas disponibles pour ce serveur. Mettez Orca à jour sur le serveur.",
           "managedOverSshHelp": "Ce bureau met à jour ce serveur via SSH. Utilisez Mettre à jour sur sa ligne dans Serveurs Orca distants."
         },
@@ -23590,6 +23593,7 @@
           "deleted": "Supprimé",
           "kept": "Conservés · {{count}}",
           "showMore": "Afficher {{count}} de plus",
+          "showFewer": "Afficher moins",
           "waiting": "Inactivité : {{elapsed}} / {{after}} j",
           "title": "Activité",
           "notListed_one": "{{count}} autre espace de travail conservé n'est pas listé.",
@@ -23765,7 +23769,6 @@
           "dialog": {
             "createToken": "En créer un",
             "environmentManagedLine": "Défini par les variables d'environnement ORCA_BITBUCKET_*. Supprimez-les pour en enregistrer un ici.",
-            "savedLocallyOnly": "Enregistré uniquement sur cet ordinateur.",
             "accessTokenNeeds": "Nécessite un accès en lecture aux pull requests.",
             "atlassianEmail": "E-mail Atlassian",
             "requiredScopes": "Portées requises",
@@ -25491,7 +25494,10 @@
       "chatPasteCode": "Collez le code",
       "chatPasteCodeLabel": "Le code que Google affiche après la connexion, ou l'adresse de cette page",
       "launchesUse": "Les nouveaux lancements d'agy utilisent ce compte",
-      "loginNow": "Connexion agy actuelle"
+      "loginNow": "Connexion agy actuelle",
+      "signedInUnread": "agy est connecté",
+      "unreadDetail": "Affichez le compte pour savoir lequel c’est. macOS peut vous demander d’autoriser l’accès au trousseau.",
+      "showAccount": "Afficher le compte"
     },
     "claude": {
       "added": "Compte ajouté. Sélectionnez-le pour l'utiliser pour le prochain Claude que vous démarrez.",
@@ -25594,6 +25600,7 @@
       "errors": {
         "ownerSilent": "L’appareil à l’origine de cette connexion ne répond plus.",
         "superseded": "Un changement de compte sur cet hôte a interrompu la connexion. Relancez-la.",
+        "noPrompt": "La commande de connexion du serveur n’a affiché aucun lien de connexion en une minute. Mettez à jour Orca sur le serveur, puis réessayez.",
         "failed": "Échec de la connexion. Réessayez."
       }
     },

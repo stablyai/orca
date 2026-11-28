@@ -5,8 +5,19 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/file-access/cross-platform-path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
-import { forEachCodexSessionLedgerRecord } from '../rollouts/codex-session-ledger-stream'
+import {
+  bufferSliceContains,
+  forEachCodexSessionLedgerRecord
+} from '../rollouts/codex-session-ledger-stream'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
+
+const UNICODE_ESCAPE_BYTES = Buffer.from('\\u')
+const TARGET_BYTES = Buffer.from('target')
+const HARDLINK_BYTES = Buffer.from('hardlink')
+const COPY_BYTES = Buffer.from('copy')
+const EXISTING_BYTES = Buffer.from('existing')
+const HEALED_BYTES = Buffer.from('healed')
+const MISSING_BYTES = Buffer.from('missing')
 
 // Bump after semantics changes to retry outcomes recorded under older versions.
 export const CODEX_SESSION_INDEX_HEAL_VERSION = 3
@@ -81,10 +92,12 @@ export async function collectPendingHealThreads(
     },
     {
       throwOnReadFailure: true,
-      shouldParseLine: (raw) =>
-        raw.includes('\\u') ||
-        (raw.includes('target') &&
-          (raw.includes('hardlink') || raw.includes('copy') || raw.includes('existing')))
+      shouldParseBuffer: (buf, start, end) =>
+        bufferSliceContains(buf, start, end, UNICODE_ESCAPE_BYTES) ||
+        (bufferSliceContains(buf, start, end, TARGET_BYTES) &&
+          (bufferSliceContains(buf, start, end, HARDLINK_BYTES) ||
+            bufferSliceContains(buf, start, end, COPY_BYTES) ||
+            bufferSliceContains(buf, start, end, EXISTING_BYTES)))
     }
   )
   return [...pendingByThreadId.values()].sort((left, right) =>
@@ -128,8 +141,10 @@ async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Prom
       }
     },
     {
-      shouldParseLine: (raw) =>
-        raw.includes('\\u') || raw.includes('healed') || raw.includes('missing')
+      shouldParseBuffer: (buf, start, end) =>
+        bufferSliceContains(buf, start, end, UNICODE_ESCAPE_BYTES) ||
+        bufferSliceContains(buf, start, end, HEALED_BYTES) ||
+        bufferSliceContains(buf, start, end, MISSING_BYTES)
     }
   )
   return {

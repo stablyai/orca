@@ -26,6 +26,8 @@ export type GitExecOptions = {
   useConfiguredSshCommandForNetwork?: boolean
   terminationBarrier?: boolean | 'wait-for-posix-group'
   observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
+  /** Observes the Git runtime selected for each capture attempt, including retries. */
+  observeGitRuntime?: (runsIn: string) => void
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier
   /** File materialization during worktree creation has a separate concurrency budget. */

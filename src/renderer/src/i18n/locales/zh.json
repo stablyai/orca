@@ -2642,6 +2642,17 @@
         "linkedIssue": "关联的议题",
         "listeningPort": "监听端口"
       },
+      "simulator": {
+        "runtime": {
+          "emulatorRuntimeAttach": {
+            "serverAndroid": "暂不支持 {{host}} 上的 Android 模拟器，请选择 iOS 模拟器",
+            "updateServer": "无法在此显示 {{host}} 的模拟器，请更新 {{host}} 上的 Orca 后重试"
+          },
+          "emulatorRuntimeTarget": {
+            "ambiguousOwner": "无法确定此工作区在哪台电脑上运行，请重新打开后重试"
+          }
+        }
+      },
       "environmentSetupAgentLaunch": {
         "noAgent": "此工作区未检测到已启用的 AI 智能体",
         "noWorkspace": "请先为此项目打开一个工作区，然后重试"
@@ -3546,6 +3557,8 @@
         "8c967b4d15": "稍后"
       },
       "TaskPage": {
+        "issueFilterState": "状态",
+        "issueFilterPreset": "预设",
         "ff69a30681": "取消",
         "8ff6fdc368": "创建中…",
         "919a20dd5b": "输入 {{value0}}",
@@ -4222,6 +4235,7 @@
           "9d0f2eda6d": "标签",
           "01f3f3d161": "作者",
           "13b3ac0a84": "状态",
+          "show": "显示",
           "79c54552f7": "筛选条件",
           "8a2ffbf9b3": "删除 {{value0}} 筛选条件",
           "anyState": "任意",
@@ -12716,8 +12730,11 @@
           "restarting": "正在重启…",
           "updated": "已更新",
           "failed": "更新失败",
-          "serviceManagerHelp": "通过启动此服务器的服务管理器更新 Orca",
-          "unpackedHelp": "开发版本必须在其源码目录中更新",
+          "nodeServerHelp": "远程更新已关闭：此服务器运行 Orca 时没有内置更新程序，Orca 的 Node 服务器（orcad）就是这样。请在服务器上安装较新的 Orca 版本，然后重启 orca serve。",
+          "updaterNotStartedHelp": "远程更新已关闭：此服务器上的 Orca 尚未启动更新程序。请在服务器上重启 Orca 后再检查一次，或直接在服务器上更新。",
+          "headlessServeHelp": "远程更新已关闭：此服务器运行 orca serve 时没有更新监督程序，因此无法自行以新版本重启。请在服务器上更新 Orca，然后重启其服务。",
+          "systemPackageHelp": "远程更新已关闭：此服务器上的 Orca 是通过系统软件包或其他安装程序安装的，必须由它来更新。请按安装时的方式更新，例如 .deb 或 .rpm 使用 apt 或 dnf。",
+          "devBuildHelp": "远程更新已关闭：此服务器运行的是开发版本。请从其源码目录更新。",
           "legacyHelp": "此服务器无法远程更新，请在服务器主机上更新 Orca",
           "managedOverSshHelp": "此桌面通过 SSH 更新此服务器。请在远程 Orca 服务器中该服务器所在行使用“更新”"
         },
@@ -19572,7 +19589,10 @@
           "reconnectCopy": "重新登录以查看和管理通过账户分享的产物",
           "signInAgainAction": "重新登录",
           "unconfiguredCopy": "此机器尚未配置 Orca 账户登录",
-          "openAccountSettings": "打开账户设置"
+          "openAccountSettings": "打开账户设置",
+          "deleteManyDescription_other": "{{count}} 个产物将无法再通过其公开链接访问",
+          "deleteNamedFailed": "无法删除“{{name}}”",
+          "deleteBatchStopped_other": "无法删除“{{name}}”，另有 {{count}} 个未删除"
         },
         "ArtifactPublishButton": {
           "a4a49da6af": "分享为产物",
@@ -19623,7 +19643,8 @@
           "more": "更多产物操作"
         },
         "ArtifactCollection": {
-          "loadMore": "加载更多"
+          "loadMore": "加载更多",
+          "noMatchingArtifacts": "没有匹配的产物"
         },
         "ArtifactDetailHeader": {
           "publicLink": "任何持有此链接的人都可以查看",
@@ -19648,14 +19669,33 @@
           "size": "大小",
           "updated": "更新时间",
           "expires": "过期时间",
-          "actions": "操作"
+          "actions": "操作",
+          "selectAll": "全选"
         },
         "ArtifactsPageSkeleton": {
           "loading": "正在加载产物"
         },
         "expiredCompact": "已过期",
         "typeMarkdown": "Markdown",
-        "typeHtml": "超文本标记语言"
+        "typeHtml": "超文本标记语言",
+        "ArtifactListFilterMenu": {
+          "clearFilters": "清除筛选",
+          "any": "任意时间",
+          "today": "今天",
+          "pastWeek": "过去 7 天",
+          "pastMonth": "过去 30 天",
+          "anyExpiry": "任意",
+          "withinWeek": "7 天内",
+          "expired": "已过期"
+        },
+        "ArtifactListRow": {
+          "select": "选择 {{name}}"
+        },
+        "ArtifactListSelectionBar": {
+          "delete": "删除",
+          "clear": "清除",
+          "selected_other": "已选择 {{count}} 项"
+        }
       },
       "ComposerParentWorktreePicker": {
         "label": "父工作树",
@@ -19985,6 +20025,9 @@
           "featuredDetail": "每个类别中安装量最多的一个",
           "newlyAdded": "最近添加",
           "newlyAddedDetail": "来自你的所有目录"
+        },
+        "PluginsPage": {
+          "close": "关闭插件"
         }
       },
       "agent-workspace-trust-decision": {
@@ -21660,6 +21703,7 @@
         "readFailed": "无法加载",
         "retry": "重试",
         "empty": "此聊天未设置任何服务器",
+        "unreported": "{{agent}} 不报告连接状态",
         "cancel": "取消",
         "reconnect": "重新连接",
         "toggle": "使用 {{name}}",
@@ -22961,6 +23005,7 @@
           "deleted": "已删除",
           "kept": "已保留 · {{count}}",
           "showMore": "再显示 {{count}} 个",
+          "showFewer": "收起",
           "waiting": "已不活跃 {{elapsed}}/{{after}} 天",
           "title": "活动记录",
           "notListed_other": "另有 {{count}} 个保留的工作区未列出",
@@ -23116,7 +23161,6 @@
           "dialog": {
             "createToken": "创建令牌",
             "environmentManagedLine": "已由 ORCA_BITBUCKET_* 环境变量设置。取消设置后才能在此保存",
-            "savedLocallyOnly": "仅保存在这台电脑上",
             "accessTokenNeeds": "需要拉取请求的读取权限",
             "atlassianEmail": "Atlassian 邮箱",
             "requiredScopes": "所需范围",
@@ -24985,6 +25029,7 @@
     "antigravityChatToCli": "聊天 → CLI"
   },
   "common": {
+    "new": "新建",
     "search": "搜索",
     "retry": "重试",
     "cancel": "取消",
@@ -25153,7 +25198,10 @@
       "locationGlobal": "global",
       "signInGoogle": "使用 Google 登录",
       "launchesUse": "新启动的 agy 将使用此账号",
-      "loginNow": "agy 当前的登录"
+      "loginNow": "agy 当前的登录",
+      "signedInUnread": "agy 已登录",
+      "unreadDetail": "显示账户以查看是哪一个。macOS 可能会要求你允许访问钥匙串。",
+      "showAccount": "显示账户"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于你下次启动的 Claude",
@@ -25250,6 +25298,7 @@
       "errors": {
         "ownerSilent": "发起此次登录的设备已停止响应",
         "superseded": "此主机上的账户变更中断了登录。请重新开始",
+        "noPrompt": "服务器上的登录命令在一分钟内没有显示登录链接。请更新服务器上的 Orca，然后重试。",
         "failed": "登录失败。请重试"
       }
     },
@@ -25814,7 +25863,9 @@
     "statusFilters": {
       "loadFailed": "无法加载 Jira 状态筛选器",
       "saveFailed": "无法保存 Jira 状态筛选器",
+      "unavailable": "此视图暂无可用状态",
       "manualQuery": "状态筛选器适用于预设视图，清除搜索后即可使用",
+      "favouriteActive": "清除 Jira 收藏或选择预设视图，即可使用状态筛选器",
       "label": "按状态筛选 Jira 议题",
       "clear": "清除状态",
       "jql": "状态筛选器 JQL",
@@ -26241,6 +26292,7 @@
       "fileExplorerCopyPath": "复制文件路径",
       "fileExplorerCopyRelativePath": "复制文件相对路径",
       "fileExplorerDelete": "删除文件",
+      "fileExplorerToggleDotfiles": "显示/隐藏点文件",
       "terminalCopySelection": "复制终端选中内容",
       "terminalSelectAll": "全选终端文本",
       "terminalPaste": "粘贴到终端",
@@ -27256,7 +27308,9 @@
       "missing": "保存的设备已不在此计算机上。请选择其他设备",
       "unavailable": "保存的设备运行时不可用。请选择其他设备或安装其运行时",
       "askPrompt": "选择要打开的设备",
-      "firstUse": "选择第一台设备。Orca 会记住在此计算机上成功选择的设备"
+      "firstUse": "选择第一台设备。Orca 会记住在此计算机上成功选择的设备",
+      "missingOnServer": "已保存的设备已不在 {{host}} 上，请选择其他设备",
+      "firstUseOnServer": "首次使用时，请选择一台设备。Orca 会记住你在 {{host}} 上成功连接的设备"
     },
     "picker": {
       "choose": "选择模拟器",
@@ -27268,7 +27322,8 @@
       "runtimeUnavailable": "运行时不可用",
       "running": "运行中",
       "starting": "正在启动",
-      "stopped": "已停止"
+      "stopped": "已停止",
+      "otherOnServer": "{{host}} 上的其他设备"
     }
   },
   "ephemeralVm": {
@@ -27455,6 +27510,9 @@
       "unreachable": "无法连接到 {{hosts}}。bot 可能在那里，请在其恢复连接后重新打开链接",
       "pick": "多台电脑上都有与此链接对应的 bot：{{hosts}}。请从侧边栏打开",
       "updateNeeded": "请更新 {{hosts}} 上的 Orca，以便在这里打开此 bot"
+    },
+    "chatOpen": {
+      "homeDidNotLoad": "bot 的主聊天未能加载"
     },
     "activity": {
       "title": "活动",
@@ -30028,7 +30086,11 @@
       "seeMessage": "查看消息",
       "addStep": "添加它生成的文件夹",
       "replyLabel": "它的回复",
-      "rowDetail": "{{app}} {{kind}}"
+      "rowDetail": "{{app}} {{kind}}",
+      "titleFrom": "从 {{source}} 导入",
+      "import": "导入",
+      "importing": "导入中…",
+      "fromExport": "使用导出副本"
     },
     "avatar": {
       "intake": {

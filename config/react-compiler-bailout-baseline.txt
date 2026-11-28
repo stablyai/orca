@@ -197,7 +197,7 @@
 6 src/renderer/src/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts.ts
 1 src/renderer/src/components/native-chat/pane/actions/use-native-chat-hand-off.tsx
 1 src/renderer/src/components/native-chat/paste/native-chat-paste-destination.ts
-2 src/renderer/src/components/native-chat/paste/use-native-chat-paste-lifetime.ts
+1 src/renderer/src/components/native-chat/paste/use-native-chat-paste-lifetime.ts
 5 src/renderer/src/components/native-chat/queue/editing/use-structured-agent-session-queued-edit.ts
 1 src/renderer/src/components/native-chat/selection-quotes/AddToChatMenu.tsx
 1 src/renderer/src/components/native-chat/session/options/controls/NativeChatSessionOptionRows.tsx

@@ -694,7 +694,7 @@
 2 src/main/ipc/wsl/wsl-host-automation-wake-wiring.ts
 8 src/main/ipc/wsl/wsl-host-handlers.ts
 6 src/main/ipc/wsl/wsl-move-driver-wiring.ts
-3 src/main/ipc/wsl/wsl-move-orchestrator-wiring.ts
+2 src/main/ipc/wsl/wsl-move-orchestrator-wiring.ts
 1 src/main/ipc/wsl/wsl-move-release-here.ts
 2 src/main/ipc/wsl/wsl-move-undo-wiring.ts
 8 src/main/jcode/hook-service.ts
@@ -1121,7 +1121,7 @@
 8 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 2 src/main/runtime/agent-session/records/agent-session-store-transactions.ts
 1 src/main/runtime/agent-session/records/local-agent-session-record-store-startup-open.ts
-4 src/main/runtime/browser/commands/browser-profiles.ts
+3 src/main/runtime/browser/commands/browser-profiles.ts
 1 src/main/runtime/client/settings/runtime-client-settings.ts
 3 src/main/runtime/construction/desktop-workspace-services.ts
 1 src/main/runtime/construction/runtime-identity-state.ts

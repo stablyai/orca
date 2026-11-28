@@ -51,6 +51,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
   | { kind: 'chat-exists'; sessionId: string }
+  | { kind: 'message-chats'; messageId: string }
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
@@ -73,6 +74,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
   | { kind: 'chat-exists'; exists: boolean }
+  | { kind: 'message-chats'; sessionIds: string[] }
   | { kind: 'legacy-compares'; compares: JournalLegacyCompare[] }
   | { kind: 'retired-heads'; heads: JournalRetiredHead[]; through: string | null }
   | {
@@ -241,5 +243,20 @@ function read(
       }
     case 'deleted-chats':
       return { kind: 'deleted-chats', chats: readDeletedChats(db) }
+    case 'message-chats':
+      return { kind: 'message-chats', sessionIds: readMessageChats(db, operation.messageId) }
   }
+}
+
+/** Chats whose current history holds a message by this id, sent or queued. No index leads with it:
+ *  callers read this once per run Orca lost track of, never per message. */
+function readMessageChats(db: Database.Database, messageId: string): string[] {
+  const current = 'JOIN journal_chat_state c ON c.session_id=r.session_id AND c.epoch=r.epoch'
+  return db
+    .prepare(
+      `SELECT r.session_id FROM journal_submission_attempts r ${current} WHERE r.message_id=?1 AND r.current=1
+      UNION SELECT r.session_id FROM journal_queue_cards r ${current} WHERE r.message_id=?1`
+    )
+    .all(messageId)
+    .map((row) => String(row.session_id))
 }
