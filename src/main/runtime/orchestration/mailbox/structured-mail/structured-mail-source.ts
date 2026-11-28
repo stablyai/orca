@@ -1,4 +1,5 @@
 import type { ChatMailPlace } from '../../../../../shared/connectors/external-conversation-link'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-mail-sender'
 import { AGENT_MAIL_REPLY_RULE } from '../../../../../shared/orchestration/mailbox/agent-mail-reply-rule'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
@@ -181,7 +182,7 @@ export function structuredMailMessage(input: {
         }).text
       : formatted.text
     // The reply rule is dropped first, so a long mail keeps the line saying where its answer goes.
-    const noted = withConversationNotes(guided, from, input).find(
+    const noted = withConversationNotes(guided, from, input, input.message.from_handle).find(
       (blocks) => !structuredAgentSessionBlocksTooLarge(blocks)
     )
     return {
@@ -217,8 +218,10 @@ export function structuredMailMessage(input: {
   }
 }
 
-/** Mail carries the agent-mail reply rule and, in a chat bound to a conversation, where the bot's
- *  answer lands: there for its own workers' reports and other bots' answers to its asks, else Orca.
+/** In a chat bound to a conversation, mail says where the bot's answer lands: there for its own
+ *  workers' reports and other bots' answers to its asks, else Orca. Peer agent mail whose answer
+ *  stays in Orca also carries the agent-mail reply rule; owner item mail and mail answered in a
+ *  thread never do, so a person's instruction never reads as "answer only if asked".
  *  Returns the fullest note first, then one without the rule. */
 function withConversationNotes(
   text: string,
@@ -229,7 +232,8 @@ function withConversationNotes(
   }: {
     cliCommand: OrchestrationCliCommand
     conversationPlace?: (from: AgentMessageSource) => ChatMailPlace | null
-  }
+  },
+  sender: string
 ): { type: 'text'; text: string }[][] {
   const bound = conversationPlace?.(from)
   const place = !bound
@@ -237,11 +241,12 @@ function withConversationNotes(
     : bound.answersThere
       ? `[Orca: your final message and \`${cliCommand} bot reply\` (with any files) go to ${bound.place}.]`
       : `[Orca: this mail did not come from ${bound.place}, so your final message stays in Orca.]`
+  const placed = [{ type: 'text' as const, text: place ? `${text}\n\n${place}` : text }]
+  if (sender === BOT_ITEM_MAIL_SENDER || bound?.answersThere) {
+    return [placed]
+  }
   const rule = `[${AGENT_MAIL_REPLY_RULE}]`
-  return [
-    [{ type: 'text', text: `${text}\n\n${place ? `${rule}\n${place}` : rule}` }],
-    [{ type: 'text', text: place ? `${text}\n\n${place}` : text }]
-  ]
+  return [[{ type: 'text', text: `${text}\n\n${place ? `${rule}\n${place}` : rule}` }], placed]
 }
 
 /** The worker this mail was recorded from when it was written. */
