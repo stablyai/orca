@@ -36,7 +36,7 @@ import { useWorktreeDropCommitContext } from '../drag/use-drop-commit-context'
 import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
-import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { renderWorktreeVirtualRows } from '../rows/virtual-row-dispatch'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
@@ -416,10 +416,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
             headerDrag,
             worktreeDragState: runtime.worktreeDragState
           })}
-          {virtualItems.map((vItem) => {
-            const row = renderRows[vItem.index]
-            return row ? renderWorktreeVirtualRow(rowContext, row, vItem, t) : null
-          })}
+          {renderWorktreeVirtualRows(rowContext, virtualItems, t)}
         </div>
       </div>
       {showScrollToTop ? <WorktreeListScrollToTopButton onClick={scrollToTop} /> : null}
