@@ -1,9 +1,6 @@
-// Centralize ORCA_LAYOUT_OWNER so all branch points are searchable; main enables the dark path.
-// Off in shipped builds; remove with the old path in phase F.
-
-/** Substituted by electron.vite.config.ts; absent (off) in tests, the CLI and the web client. */
-declare const ORCA_LAYOUT_OWNER: 'window' | 'main' | undefined
+// Centralize the layout owner so all branch points are searchable; main enables the new path.
+// Read once per process from the internal startup setting (layout-owner-startup.ts); off by default.
+import { readStartupLayoutOwner } from './layout-owner-startup'
 
 export const ORCA_LAYOUT_OWNER_IS_MAIN =
-  // oxlint-disable-next-line unicorn/no-typeof-undefined -- undeclared outside electron-vite builds; a bare read throws.
-  typeof ORCA_LAYOUT_OWNER !== 'undefined' && ORCA_LAYOUT_OWNER === 'main'
+  readStartupLayoutOwner(globalThis, (message) => console.warn(message)) === 'main'
