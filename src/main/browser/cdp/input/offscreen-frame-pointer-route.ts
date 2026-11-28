@@ -3,8 +3,10 @@ import {
   crossSiteFrameTargets,
   forgetFrameSession,
   frameSessionFor,
+  isCrossSiteFrameTarget,
   sendFrameSessionInput,
   settle,
+  type CrossSiteFrameTargets,
   type GuestSessionCdpSender
 } from './guest-frame-input-sessions'
 import { assertExpectedPageUrlForStep } from './browser-expected-page-url'
@@ -100,10 +102,14 @@ async function resolvePointerRoute(
   point: Point,
   { pressing }: { pressing: boolean }
 ): Promise<PointerRoute> {
-  // A press reads a fresh frame list; moves and wheels reuse it for a second, as key routing does.
-  let crossSite = await crossSiteFrameTargets(webContents, send, { refresh: pressing })
-  if (crossSite.size === 0 || !(await pageHostsCrossSiteFrame(send, crossSite))) {
-    return PAGE_ROUTE
+  let known: CrossSiteFrameTargets | null = null
+  if (!pressing) {
+    // Moves and wheels skip the hit test on a page that hosted no cross-site frame a second ago; a
+    // press hit-tests anyway, so a frame that loaded since then still gets the click.
+    known = await crossSiteFrameTargets(webContents, send, { refresh: false })
+    if (known.size === 0 || !(await pageHostsCrossSiteFrame(send, known))) {
+      return PAGE_ROUTE
+    }
   }
   let route = PAGE_ROUTE
   for (let depth = 0; depth < MAX_FRAME_DEPTH; depth += 1) {
@@ -116,12 +122,12 @@ async function resolvePointerRoute(
     if (!frame) {
       return route
     }
-    if (!crossSite.has(frame.frameId)) {
-      // A frame that just loaded may be missing from the cached target list.
-      crossSite = await crossSiteFrameTargets(webContents, send, { refresh: true })
-      if (!crossSite.has(frame.frameId)) {
-        return route
-      }
+    // The gate's list still answers if this event's probes outlasted its cache lifetime.
+    if (
+      !known?.has(frame.frameId) &&
+      !(await isCrossSiteFrameTarget(webContents, send, frame.frameId))
+    ) {
+      return route
     }
     const sessionId = await frameSessionFor(webContents, send, frame.frameId)
     if (!sessionId) {

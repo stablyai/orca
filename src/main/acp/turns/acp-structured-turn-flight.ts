@@ -1,77 +1,35 @@
 import type { PromptResponse } from '../generated/acp-protocol.generated'
-import { acpPromptTurnId } from '../timeline/acp-prompt-turns'
+import { acpPromptTurnId, type AcpPromptOpening } from '../timeline/acp-prompt-turns'
 import { AcpAgentError, AcpConnectionClosedError } from '../transport/acp-errors'
 import {
+  openAcpPromptTurn,
   rejectAcpPreOpenSend,
+  sendAcpTurnPrompt,
   settleAcpActiveAgentFailure,
   settleAcpUnexpectedError,
   type AcpInFlightTurn,
-  type AcpTurnSend
+  type AcpTurnSettlementSink
 } from './acp-structured-turn-settlement'
-import type { AcpStructuredTurnsDeps } from './acp-turn-dispatch-contract'
-
-export function openAcpPromptTurn(
-  lane: AcpStructuredTurnsDeps['lane'],
-  send: AcpTurnSend
-): { promptId: string } {
-  lane.agentTurn.end()
-  const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
-  lane.apply(opened.events)
-  return opened
-}
-
-export function sendAcpTurnPrompt(
-  deps: Pick<AcpStructuredTurnsDeps, 'connection' | 'lane'>,
-  entry: AcpInFlightTurn,
-  promptId: string,
-  handlers: {
-    onResult: (result: PromptResponse) => void
-    onError: (error: unknown) => void
-  }
-): void {
-  const meta = deps.lane.translator.injectsPromptIdentity
-    ? { promptId, requestId: promptId }
-    : undefined
-  let settled = false
-  const onResult = (result: PromptResponse): void => {
-    if (settled) {
-      return
-    }
-    settled = true
-    handlers.onResult(result)
-  }
-  const onError = (error: unknown): void => {
-    if (settled) {
-      return
-    }
-    settled = true
-    handlers.onError(error)
-  }
-  // Handle replies synchronously so steering settles and promotes in wire frame order.
-  const answered = deps.connection.prompt(entry.send.prompt, meta, onResult, onError)
-  entry.sent = true
-  answered.then(onResult, onError)
-}
+import type { AcpStructuredTurnsDeps, AcpTurnSend } from './acp-turn-dispatch-contract'
 
 export type AcpTurnFlightContext = {
   deps: AcpStructuredTurnsDeps
-  unsettled: Set<string>
+  sink: AcpTurnSettlementSink
   isEnded: () => boolean
   isStopped: () => boolean
   isPreparingSteers: () => boolean
   markEnded: () => void
   clearStop: () => void
-  accept: (clientMessageId: string) => void
+  advanceSteers: () => void
   notifyIdle: () => void
 }
 
-/** Owns the active prompt, at most one overlapping steer on the wire, and queued follow-up steers. */
+/** Owns the active prompt and at most one overlapping steer on the wire. */
 export class AcpTurnFlight {
   active: AcpInFlightTurn | null = null
   steering: AcpInFlightTurn | null = null
   steerCancelled: AcpTurnSend | null = null
   cancelPromoted = false
-  readonly steers: AcpTurnSend[] = []
 
   constructor(private readonly ctx: AcpTurnFlightContext) {}
 
@@ -115,6 +73,23 @@ export class AcpTurnFlight {
     this.advanceActive(entry)
   }
 
+  adoptEarlier(
+    id: string,
+    answered: () => Promise<PromptResponse>,
+    ...opening: AcpPromptOpening
+  ): void {
+    const at = this.ctx.deps.now()
+    const opened = this.ctx.deps.lane.translator.openPrompt(id, at, ...opening)
+    this.ctx.deps.lane.apply(opened.events)
+    const entry: AcpInFlightTurn = {
+      send: { clientMessageId: id, prompt: [], requestedAt: at, adopted: true },
+      sent: true
+    }
+    this.active = entry
+    this.send(entry, opened.promptId, answered())
+    this.advanceActive(entry)
+  }
+
   launchSteer(send: AcpTurnSend): void {
     const entry: AcpInFlightTurn = { send, sent: false }
     this.steering = entry
@@ -132,17 +107,24 @@ export class AcpTurnFlight {
     }
     this.steerCancelled = send
     this.ctx.deps.connection.cancel().catch(() => {
+      // A failed write lets the next steer retry.
       if (this.steerCancelled === send) {
         this.steerCancelled = null
       }
     })
   }
 
-  private send(entry: AcpInFlightTurn, promptId: string): void {
-    sendAcpTurnPrompt(this.ctx.deps, entry, promptId, {
-      onResult: (result) => this.onResult(entry, result),
-      onError: (error) => this.onError(entry, error)
-    })
+  private send(entry: AcpInFlightTurn, promptId: string, earlier?: Promise<PromptResponse>): void {
+    sendAcpTurnPrompt(
+      this.ctx.deps,
+      entry,
+      promptId,
+      {
+        onResult: (result) => this.onResult(entry, result),
+        onError: (error) => this.onError(entry, error)
+      },
+      earlier
+    )
   }
 
   private advanceActive(entry: AcpInFlightTurn): void {
@@ -151,12 +133,8 @@ export class AcpTurnFlight {
     }
     if (this.ctx.isPreparingSteers()) {
       this.cancelForSteer()
-    } else if (this.steers.length > 0) {
-      if (this.canPromptSteer()) {
-        this.launchNextSteer()
-      } else if (!this.promptSteers) {
-        this.cancelForSteer()
-      }
+    } else {
+      this.ctx.advanceSteers()
     }
   }
 
@@ -188,7 +166,8 @@ export class AcpTurnFlight {
       this.cancelForSteer()
       return
     }
-    this.launchNextSteer()
+    this.ctx.advanceSteers()
+    this.ctx.notifyIdle()
   }
 
   private onResult(entry: AcpInFlightTurn, result: PromptResponse): void {
@@ -203,12 +182,13 @@ export class AcpTurnFlight {
     const cancelled = this.ctx.isStopped() || this.steerCancelled === entry.send
     const { clientMessageId } = entry.send
     lane.apply(lane.translator.promptResult(clientMessageId, result, now(), cancelled))
-    this.ctx.accept(clientMessageId)
+    this.ctx.sink.accept(clientMessageId)
     this.finish(entry, lane.translator.failures.takeSessionLoss())
   }
 
   private onError(entry: AcpInFlightTurn, error: unknown): void {
     if (error instanceof AcpConnectionClosedError) {
+      // Connection teardown owns unknown-send settlement.
       return
     }
     if (this.steering === entry) {
@@ -219,17 +199,13 @@ export class AcpTurnFlight {
       return
     }
     if (!(error instanceof AcpAgentError)) {
+      // Unreadable replies fail the turn but allow the next send.
       settleAcpUnexpectedError(this.ctx.deps, entry.send.clientMessageId, error)
-      this.ctx.accept(entry.send.clientMessageId)
+      this.ctx.sink.accept(entry.send.clientMessageId)
       this.finish(entry)
       return
     }
-    const loss = settleAcpActiveAgentFailure(
-      this.ctx.deps,
-      this.ctx.unsettled,
-      entry.send.clientMessageId,
-      error
-    )
+    const loss = settleAcpActiveAgentFailure(this.ctx.deps, this.ctx.sink, entry.send, error)
     this.finish(entry, loss)
   }
 
@@ -239,17 +215,20 @@ export class AcpTurnFlight {
       return
     }
     this.steering = null
-    rejectAcpPreOpenSend(this.ctx.deps, this.ctx.unsettled, entry.send.clientMessageId, error)
+    rejectAcpPreOpenSend(this.ctx.deps, this.ctx.sink, entry.send.clientMessageId, error)
     if (this.ctx.deps.lane.translator.sessionLost(error)) {
       this.ctx.markEnded()
+      this.ctx.notifyIdle()
       this.ctx.deps.sessionLost(error)
       return
     }
-    this.launchNextSteer()
+    this.ctx.advanceSteers()
+    this.ctx.notifyIdle()
   }
 
   private finish(entry: AcpInFlightTurn, sessionLoss?: Error): void {
     if (sessionLoss) {
+      // Held steers must not reach the dead session.
       this.ctx.markEnded()
     }
     if (this.active === entry) {
@@ -261,9 +240,7 @@ export class AcpTurnFlight {
     if (this.ctx.isEnded()) {
       this.ctx.clearStop()
       this.cancelPromoted = false
-      if (!this.running) {
-        this.ctx.notifyIdle()
-      }
+      this.ctx.notifyIdle()
       if (sessionLoss) {
         this.ctx.deps.sessionLost(sessionLoss)
       }
@@ -277,20 +254,7 @@ export class AcpTurnFlight {
     }
     this.ctx.clearStop()
     this.cancelPromoted = false
-    const next = this.steers.shift()
-    if (next) {
-      this.start(next)
-    } else if (!this.active) {
-      this.ctx.notifyIdle()
-    }
-  }
-
-  private launchNextSteer(): void {
-    if (this.steers.length > 0 && this.canPromptSteer()) {
-      const next = this.steers.shift()
-      if (next) {
-        this.launchSteer(next)
-      }
-    }
+    this.ctx.advanceSteers()
+    this.ctx.notifyIdle()
   }
 }

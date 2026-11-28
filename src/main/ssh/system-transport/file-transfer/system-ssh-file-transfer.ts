@@ -1,6 +1,6 @@
 import { DirectoryTransferBudget } from '../../file-transfer/ssh-directory-transfer-budget'
 import { spawn } from 'node:child_process'
-import { access, lstat, opendir } from 'node:fs/promises'
+import { access, lstat } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
@@ -14,6 +14,7 @@ import {
   type SystemSshBuildArgsOptions
 } from '../system-ssh-args'
 import { spawnSystemSshCommand } from '../system-ssh-command'
+import { terminateSystemSsh } from '../system-ssh-termination'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -39,6 +40,7 @@ import {
   makeDirectoriesViaSftp
 } from './system-ssh-sftp-transfer'
 import { getWindowsRemoteWriteCapabilities } from './system-ssh-windows-write-capabilities'
+import { openDirectory } from '../../../../shared/open-directory'
 
 type SystemSshOperationOptions = SystemSshBuildArgsOptions & {
   signal?: AbortSignal
@@ -90,7 +92,7 @@ export async function uploadDirectoryViaSystemSsh(
       options?.signal,
       () => {
         killProcess(tarCreate)
-        killProcess(sshExtract)
+        terminateSystemSsh(sshExtract)
       },
       settleUploadPipeline(
         waitForProcess(tarCreate, 'local tar relay upload'),
@@ -100,7 +102,7 @@ export async function uploadDirectoryViaSystemSsh(
     )
   } catch (err) {
     killProcess(tarCreate)
-    killProcess(sshExtract)
+    terminateSystemSsh(sshExtract)
     throw err
   }
 
@@ -187,7 +189,7 @@ export async function collectLocalUploadPlan(
   throwIfAborted(signal)
   budget.record([localDir, remoteDir], depth)
   plan.directories.push(remoteDir)
-  for await (const entry of await opendir(localDir)) {
+  for await (const entry of await openDirectory(localDir)) {
     throwIfAborted(signal)
     const localPath = pathJoin(localDir, entry.name)
     const remotePath = joinRemotePath(hostPlatform, remoteDir, entry.name)

@@ -1,7 +1,8 @@
 import type { MobileFileMedia } from '../media/mobile-file-media'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
-import { translate } from '../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { translate, type Translate } from '../../i18n/mobile-i18n'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import type { SupportedUiLocale } from '../../../../src/shared/i18n/ui-locale'
 import type { RpcFailure } from '../../transport/rpc/rpc-wire-types'
 import { isMarkdownPath } from '../explorer/file-tree'
 import { isTerminalArtifactGrantError } from '../terminal-artifacts/terminal-artifact-grant-error'
@@ -133,22 +134,27 @@ export function previewError(message: string): MobileFilePreviewResult {
   }
 }
 
-export function formatPreviewByteLength(byteLength: number): string {
+export function formatPreviewByteLength(
+  byteLength: number,
+  t: Translate,
+  locale: SupportedUiLocale
+): string {
+  const intlLocale = intlLocaleFor(locale)
   if (!Number.isFinite(byteLength) || byteLength < 0) {
-    return translate('files.filePreviewResponse.unknownSize', 'unknown size')
+    return t('files.filePreviewResponse.unknownSize', 'unknown size')
   }
   if (byteLength < 1024) {
-    return translate('files.filePreviewResponse.bytes', '{{size}} B', {
-      size: byteLength.toLocaleString(getUiIntlLocale(), { useGrouping: false })
+    return t('files.filePreviewResponse.bytes', '{{size}} B', {
+      size: byteLength.toLocaleString(intlLocale, { useGrouping: false })
     })
   }
   if (byteLength < 1024 * 1024) {
-    return translate('files.filePreviewResponse.kilobytes', '{{size}} KB', {
-      size: Math.round(byteLength / 1024).toLocaleString(getUiIntlLocale(), { useGrouping: false })
+    return t('files.filePreviewResponse.kilobytes', '{{size}} KB', {
+      size: Math.round(byteLength / 1024).toLocaleString(intlLocale, { useGrouping: false })
     })
   }
-  return translate('files.filePreviewResponse.megabytes', '{{size}} MB', {
-    size: (byteLength / (1024 * 1024)).toLocaleString(getUiIntlLocale(), {
+  return t('files.filePreviewResponse.megabytes', '{{size}} MB', {
+    size: (byteLength / (1024 * 1024)).toLocaleString(intlLocale, {
       useGrouping: false,
       minimumFractionDigits: 1,
       maximumFractionDigits: 1

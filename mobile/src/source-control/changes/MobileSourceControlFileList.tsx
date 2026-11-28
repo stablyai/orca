@@ -1,17 +1,17 @@
 import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, SectionList, Text, View } from 'react-native'
 import { SectionHeader } from '../../components/list/ListGroup'
-import { colors } from '../../theme/mobile-theme'
 import { BranchFileRow, ChangeFileRow, type FileRowState } from './MobileSourceControlFileRows'
 import type {
   MobileBranchEntryView,
   MobileGitStatusEntryView
 } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColorScheme, useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { styles } from '../mobile-source-control-styles'
-import { hubStyles } from '../panel/mobile-source-control-hub-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
+import { hubStylesSheet } from '../panel/mobile-source-control-hub-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type FileEntry = MobileGitStatusEntryView | MobileBranchEntryView
 function isWorkingTreeEntry(entry: FileEntry): entry is MobileGitStatusEntryView {
@@ -53,6 +53,8 @@ export function MobileSourceControlFileList({
   bottomInset: number
   stageAllInBar?: boolean
 }) {
+  const styles = useThemedStyles(stylesSheet)
+  const hubStyles = useThemedStyles(hubStylesSheet)
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
   const busy = state.busyAction !== null
@@ -163,7 +165,8 @@ export function MobileSourceControlFileList({
 
 // Loading or failure under "On this branch", where its rows would be.
 function BranchCompareState({ state }: { state: FileListState }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { branchCompareState, branchCompareResult } = state
   const message =

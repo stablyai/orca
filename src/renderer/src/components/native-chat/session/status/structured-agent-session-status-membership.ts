@@ -1,7 +1,7 @@
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredTab } from './structured-agent-session-tabs'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type HostGroup = {
   members: Set<Member>
@@ -126,15 +126,18 @@ export function createStructuredSessionMembership() {
       }
     }
   }
-  const detach = (member: Member): void => {
-    if (members.get(member.paneKey) === member) {
-      members.delete(member.paneKey)
-    }
+  const unindexTab = (member: Member): void => {
     const tabMembers = membersByTabId.get(member.tab.id)
     tabMembers?.delete(member)
     if (tabMembers && !tabMembers.size) {
       membersByTabId.delete(member.tab.id)
     }
+  }
+  const detach = (member: Member): void => {
+    if (members.get(member.paneKey) === member) {
+      members.delete(member.paneKey)
+    }
+    unindexTab(member)
     legacy.delete(member)
     ungroupedOwed.delete(member)
     const group = member.group
@@ -171,7 +174,15 @@ export function createStructuredSessionMembership() {
       member = { paneKey, tab, hostKey, group }
       attach(member)
     }
+    // A conversation's pane key outlives its tab: re-file a reused member under its new tab id.
+    const retabbed = member.tab.id !== tab.id
+    if (retabbed) {
+      unindexTab(member)
+    }
     member.tab = tab
+    if (retabbed) {
+      indexTab(member)
+    }
     if (tab.executionHostId) {
       legacy.delete(member)
     } else {
@@ -184,18 +195,25 @@ export function createStructuredSessionMembership() {
     owe(member)
     return member
   }
-  /** Places listed tabs that changed and returns members no longer listed: all of them, or within `tabIds`. */
+  /** Places listed tabs that changed and returns members no longer listed: all of them, or within
+   *  `tabIds`, where `showing` names the open tabs, in any workspace, still showing a conversation. */
   const reconcileTabs = (
     listedTabs: Iterable<StructuredTab>,
     tabIds: ReadonlySet<string> | null,
-    placeTab: (tab: StructuredTab, paneKey: string) => void
+    placeTab: (tab: StructuredTab, paneKey: string) => void,
+    showing?: (paneKey: string) => Iterable<StructuredTab>
   ): Member[] => {
     const listed = new Set<string>()
-    for (const tab of listedTabs) {
+    const tabs = [...listedTabs]
+    for (const tab of tabs) {
       if (tabIds && !tabIds.has(tab.id)) {
         continue
       }
-      const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+      const paneKey = chatPaneKey(tab.entityId)
+      // One member per conversation: the first listed tab holds it, so passes don't flip it.
+      if (listed.has(paneKey)) {
+        continue
+      }
       listed.add(paneKey)
       if (members.get(paneKey)?.tab !== tab) {
         placeTab(tab, paneKey)
@@ -203,8 +221,23 @@ export function createStructuredSessionMembership() {
     }
     const candidates = tabIds
       ? [...tabIds].flatMap((tabId) => [...(membersByTabId.get(tabId) ?? [])])
-      : members.values()
-    return [...candidates].filter((member) => !listed.has(member.paneKey))
+      : [...members.values()]
+    const orphaned = new Set(
+      candidates.filter((member) => !listed.has(member.paneKey)).map((m) => m.paneKey)
+    )
+    // A closed tab's conversation that another open tab still shows moves there instead of retiring.
+    if (tabIds && showing) {
+      for (const paneKey of orphaned) {
+        for (const tab of showing(paneKey)) {
+          if (!tabIds.has(tab.id)) {
+            listed.add(paneKey)
+            placeTab(tab, paneKey)
+            break
+          }
+        }
+      }
+    }
+    return candidates.filter((member) => !listed.has(member.paneKey))
   }
   const clear = (): void => {
     members.clear()

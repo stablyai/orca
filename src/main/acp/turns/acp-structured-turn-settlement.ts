@@ -1,17 +1,11 @@
-import {
-  agentSessionFailureFact,
-  type SubmissionRejectionFact
-} from '../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionCommandRun } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { GENERIC_ACP_DIALECT } from '../acp-dialects/acp-dialect'
-import type { ContentBlock, PromptResponse } from '../generated/acp-protocol.generated'
+import type { PromptResponse } from '../generated/acp-protocol.generated'
 import { AcpAuthRequiredError, type AcpAgentError } from '../transport/acp-errors'
 import { acpCompactPrompt } from './acp-compaction-turn'
 import { acpPromptErrorDetail, acpPromptRejection } from './acp-prompt-failure'
-import type { AcpStructuredTurnsDeps } from './acp-turn-dispatch-contract'
-
-export type AcpTurnSend = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
+import type { AcpStructuredTurnsDeps, AcpTurnSend } from './acp-turn-dispatch-contract'
 
 export type AcpInFlightTurn = {
   send: AcpTurnSend
@@ -21,35 +15,54 @@ export type AcpInFlightTurn = {
   settled?: { ok: true; result: PromptResponse } | { ok: false; error: unknown }
 }
 
-export const ACP_PROVIDER_EXITED_FACT = agentSessionFailureFact('providerExited')
-export const ACP_WITHDRAWN_STEER_FACT = agentSessionFailureFact('cancelled', {
-  neverReachedAgent: true
-})
+export type AcpTurnSettlementSink = {
+  accept: (clientMessageId: string) => void
+  reject: (clientMessageId: string, fact: SubmissionRejectionFact) => void
+  unknown: (clientMessageId: string, reason: string) => void
+}
 
-export class AcpTurnIdleWaiters {
-  private readonly waiters = new Set<() => void>()
+export function openAcpPromptTurn(
+  lane: AcpStructuredTurnsDeps['lane'],
+  send: AcpTurnSend
+): { promptId: string } {
+  lane.agentTurn.end()
+  const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
+  lane.apply(opened.events)
+  return opened
+}
 
-  wait(running: boolean, signal?: AbortSignal): Promise<void> {
-    if (!running || signal?.aborted) {
-      return Promise.resolve()
+export function sendAcpTurnPrompt(
+  deps: Pick<AcpStructuredTurnsDeps, 'connection' | 'lane'>,
+  entry: AcpInFlightTurn,
+  promptId: string,
+  handlers: {
+    onResult: (result: PromptResponse) => void
+    onError: (error: unknown) => void
+  },
+  earlier?: Promise<PromptResponse>
+): void {
+  const meta = deps.lane.translator.injectsPromptIdentity
+    ? { promptId, requestId: promptId }
+    : undefined
+  let settled = false
+  const onResult = (result: PromptResponse): void => {
+    if (settled) {
+      return
     }
-    return new Promise((resolve) => {
-      const wake = (): void => {
-        this.waiters.delete(wake)
-        signal?.removeEventListener('abort', wake)
-        resolve()
-      }
-      this.waiters.add(wake)
-      signal?.addEventListener('abort', wake, { once: true })
-    })
+    settled = true
+    handlers.onResult(result)
   }
-
-  notify(): void {
-    for (const wake of this.waiters) {
-      wake()
+  const onError = (error: unknown): void => {
+    if (settled) {
+      return
     }
-    this.waiters.clear()
+    settled = true
+    handlers.onError(error)
   }
+  // Handle replies synchronously so steering settles and promotes in wire frame order.
+  const answered = earlier ?? deps.connection.prompt(entry.send.prompt, meta, onResult, onError)
+  entry.sent = true
+  answered.then(onResult, onError)
 }
 
 export function interruptAcpUnpromptedTurn(
@@ -63,7 +76,7 @@ export function interruptAcpUnpromptedTurn(
 }
 
 export async function runAcpCompactTurn(
-  deps: Pick<AcpStructuredTurnsDeps, 'agentName' | 'dialect' | 'lane' | 'now'>,
+  deps: Pick<AcpStructuredTurnsDeps, 'agentName' | 'compactCommand' | 'dialect' | 'lane' | 'now'>,
   command: StructuredAgentSessionCommandRun,
   isBusy: () => boolean,
   begin: (send: AcpTurnSend, promptId: string) => void
@@ -82,7 +95,10 @@ export async function runAcpCompactTurn(
   }
   const send: AcpTurnSend = {
     clientMessageId: command.clientMessageId,
-    prompt: acpCompactPrompt(command.instructions, deps.dialect?.compactCommand),
+    prompt: acpCompactPrompt(
+      command.instructions,
+      deps.compactCommand ?? deps.dialect?.compactCommand
+    ),
     requestedAt: deps.now()
   }
   lane.beginCommand(command)
@@ -99,70 +115,36 @@ export async function runAcpCompactTurn(
   }
 }
 
-export function rejectAcpTurnSend(
-  deps: Pick<AcpStructuredTurnsDeps, 'agentName' | 'settle'>,
-  unsettled: Set<string>,
-  clientMessageId: string,
-  fact: SubmissionRejectionFact
-): void {
-  if (!unsettled.delete(clientMessageId)) {
-    return
-  }
-  deps.settle({
-    clientMessageId,
-    state: 'rejected',
-    ...agentSessionFailureWords(fact, { surface: 'rejection', agentName: deps.agentName })
-  })
-}
-
-export function rejectAcpQueuedSends(
-  deps: Pick<AcpStructuredTurnsDeps, 'agentName' | 'settle'>,
-  unsettled: Set<string>,
-  sends: readonly AcpTurnSend[],
-  fact: SubmissionRejectionFact
-): void {
-  for (const send of sends) {
-    rejectAcpTurnSend(deps, unsettled, send.clientMessageId, fact)
-  }
-}
-
 export function rejectAcpPreOpenSend(
-  deps: Pick<AcpStructuredTurnsDeps, 'agentName' | 'dialect' | 'lane' | 'modelRefusal' | 'settle'>,
-  unsettled: Set<string>,
+  deps: Pick<AcpStructuredTurnsDeps, 'dialect' | 'lane' | 'modelRefusal'>,
+  sink: Pick<AcpTurnSettlementSink, 'reject'>,
   clientMessageId: string,
   error: AcpAgentError
 ): void {
   const detail = acpPromptErrorDetail(deps.dialect ?? GENERIC_ACP_DIALECT, error)
   const signedOut = deps.lane.translator.authenticationRequired(error)
   const noModel = deps.modelRefusal?.(error)
-  rejectAcpTurnSend(
-    deps,
-    unsettled,
-    clientMessageId,
-    acpPromptRejection(detail, signedOut, noModel)
-  )
+  sink.reject(clientMessageId, acpPromptRejection(detail, signedOut, noModel))
 }
 
 export function settleAcpActiveAgentFailure(
-  deps: Pick<AcpStructuredTurnsDeps, 'agentName' | 'lane' | 'modelRefusal' | 'now' | 'settle'>,
-  unsettled: Set<string>,
-  clientMessageId: string,
+  deps: Pick<AcpStructuredTurnsDeps, 'lane' | 'modelRefusal' | 'now'>,
+  sink: Pick<AcpTurnSettlementSink, 'accept' | 'reject'>,
+  send: AcpTurnSend,
   error: AcpAgentError
 ): Error | undefined {
   const { lane } = deps
-  const refusal = lane.translator.promptRefused(clientMessageId, error)
+  const refusal = lane.translator.promptRefused(send.clientMessageId, error)
   // Also retires the proof of a model the agent turned out not to have.
   const noModel = deps.modelRefusal?.(error)
   if (refusal !== null) {
     const signedOut = lane.translator.authenticationRequired(error)
-    rejectAcpTurnSend(
-      deps,
-      unsettled,
-      clientMessageId,
-      acpPromptRejection(refusal, signedOut, noModel)
-    )
+    sink.reject(send.clientMessageId, acpPromptRejection(refusal, signedOut, noModel))
   } else {
-    lane.apply(lane.translator.promptFailed(clientMessageId, error, deps.now()))
+    lane.apply(lane.translator.promptFailed(send.clientMessageId, error, deps.now()))
+    if (send.adopted) {
+      sink.accept(send.clientMessageId)
+    }
   }
   return lane.translator.sessionLost(error) ? error : undefined
 }
@@ -177,11 +159,8 @@ export function settleAcpUnexpectedError(
 }
 
 export function settleAcpEndedTurns(
-  deps: Pick<
-    AcpStructuredTurnsDeps,
-    'agentName' | 'dialect' | 'lane' | 'modelRefusal' | 'now' | 'settle'
-  >,
-  unsettled: Set<string>,
+  deps: Pick<AcpStructuredTurnsDeps, 'dialect' | 'lane' | 'modelRefusal' | 'now'>,
+  sink: AcpTurnSettlementSink,
   inFlight: { active: AcpInFlightTurn | null; steering: AcpInFlightTurn | null },
   reason: string,
   cause: Error | undefined
@@ -193,12 +172,12 @@ export function settleAcpEndedTurns(
   for (const { send, opened } of entries) {
     if (cause instanceof AcpAuthRequiredError) {
       if (opened) {
-        settleAcpActiveAgentFailure(deps, unsettled, send.clientMessageId, cause)
+        settleAcpActiveAgentFailure(deps, sink, send, cause)
       } else {
-        rejectAcpPreOpenSend(deps, unsettled, send.clientMessageId, cause)
+        rejectAcpPreOpenSend(deps, sink, send.clientMessageId, cause)
       }
-    } else if (unsettled.delete(send.clientMessageId)) {
-      deps.settle({ clientMessageId: send.clientMessageId, state: 'unknown', reason })
+    } else {
+      sink.unknown(send.clientMessageId, reason)
     }
   }
 }

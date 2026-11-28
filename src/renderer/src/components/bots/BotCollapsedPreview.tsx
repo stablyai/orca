@@ -1,6 +1,7 @@
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { ActivityThreadHoverCardRoot } from '@/components/activity/thread-preview/activity-thread-hover-card-root'
 import { openBotHomeTab } from '@/lib/bot-catalog'
@@ -26,6 +27,7 @@ import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import { BotAvatar } from './BotAvatar'
 import { BotHoverDetails, useBotRowDetails } from './BotHoverDetails'
 import { openBotHomePanelFromSidebar } from './BotRow'
+import { BotRowContextMenuContent } from './BotRowContextMenu'
 import { botErrorMessage } from './bot-presentation'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { BotPreviewEdge, BotPreviewPip } from './bot-preview-indicators'
@@ -90,12 +92,18 @@ function label(fact: Facts, t: Translate): string {
 const FACE_CLASS_NAME =
   'pointer-events-auto absolute top-1 size-5 shrink-0 cursor-pointer rounded-full ring-2 outline-none focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid'
 
+// The gap sits inside the face so the ring adds only 1.5px per side: neighbors 4px apart stay 1px clear.
+const ATTENTION_RING_CLASS_NAME =
+  'ring-0 after:pointer-events-none after:absolute after:inset-0 after:rounded-full after:shadow-[inset_0_0_0_1px_var(--gap),0_0_0_1.5px_var(--color-status-warning-text)]'
+
 export function BotCollapsedPreview({
   facts,
-  onOpenBot
+  onOpenBot,
+  onRenameBot
 }: {
   facts: Facts[]
   onOpenBot: () => void
+  onRenameBot: (entryKey: string) => void
 }) {
   const t = useTranslate()
   const activeChat = useAppStore(
@@ -107,6 +115,7 @@ export function BotCollapsedPreview({
     })
   )
   const [openCardKey, setOpenCardKey] = useState<string | null>(null)
+  const [openMenuKey, setOpenMenuKey] = useState<string | null>(null)
   const [focusedFace, setFocusedFace] = useState<{ key: string; keyboard: boolean } | null>(null)
   const focusedKey = focusedFace?.key ?? null
   const { ordered, indexByKey, attentionCount } = useMemo(() => {
@@ -164,11 +173,17 @@ export function BotCollapsedPreview({
             overscan: 1,
             count: ordered.length
           },
-          [focusedKey === null ? undefined : indexByKey.get(focusedKey)]
+          [
+            focusedKey === null ? undefined : indexByKey.get(focusedKey),
+            openMenuKey === null ? undefined : indexByKey.get(openMenuKey)
+          ]
         )
       : []
   if (openCardKey !== null && !indexByKey.has(openCardKey)) {
     setOpenCardKey(null)
+  }
+  if (openMenuKey !== null && !indexByKey.has(openMenuKey)) {
+    setOpenMenuKey(null)
   }
   if (focusedKey !== null && !indexByKey.has(focusedKey)) {
     setFocusedFace(null)
@@ -224,64 +239,89 @@ export function BotCollapsedPreview({
             {renderedIndexes.map((index) => {
               const { fact, key, signal } = ordered[index]!
               const isCurrent = index === currentIndex
-              const cardOpen = key === openCardKey
+              const cardOpen = key === openCardKey && openMenuKey === null
               return (
-                <ActivityThreadHoverCardRoot
+                <ContextMenu
                   key={key}
-                  open={cardOpen}
-                  onOpenChange={(open) =>
-                    setOpenCardKey(
-                      open ? key : (currentKey) => (currentKey === key ? null : currentKey)
-                    )
-                  }
-                  pointerOpenMode={openCardKey === null ? 'rest' : 'immediate'}
-                  closeDelay={120}
-                  trigger={
-                    <button
-                      type="button"
-                      aria-label={label(fact, t)}
-                      aria-current={isCurrent || undefined}
-                      className={cn(
-                        FACE_CLASS_NAME,
-                        isCurrent
-                          ? 'ring-sidebar-foreground'
-                          : 'ring-sidebar hover:ring-sidebar-ring'
-                      )}
-                      style={{ left: botPreviewFaceStart(index) }}
-                      onFocus={(event) => {
-                        const keyboard = event.currentTarget.matches(':focus-visible')
-                        setFocusedFace({ key, keyboard })
-                        if (keyboard) {
-                          revealAvatar(index)
-                        }
-                      }}
-                      onBlur={() => setFocusedFace(null)}
-                      onClick={() => openChat(fact.bot)}
-                    >
-                      <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
-                      {index >= firstFull && index < endFull ? (
-                        <BotPreviewPip signal={signal} />
-                      ) : null}
-                    </button>
-                  }
+                  onOpenChange={(open) => {
+                    setOpenMenuKey(open ? key : (current) => (current === key ? null : current))
+                    if (open) {
+                      setOpenCardKey(null)
+                    }
+                  }}
                 >
-                  {cardOpen ? (
-                    <HoverCardContent
-                      side="top"
-                      sideOffset={8}
-                      collisionPadding={8}
-                      variant="workspace-details"
-                      motion="none"
-                      className="max-h-(--radix-hover-card-content-available-height)"
-                    >
-                      <CollapsedBotHoverDetails
-                        fact={fact}
-                        showHostOnFocus={focusedFace?.key === key && focusedFace.keyboard}
-                        onOpenHome={() => openHomePanel(fact.bot)}
-                      />
-                    </HoverCardContent>
-                  ) : null}
-                </ActivityThreadHoverCardRoot>
+                  <ActivityThreadHoverCardRoot
+                    open={cardOpen}
+                    enabled={openMenuKey === null}
+                    onOpenChange={(open) =>
+                      setOpenCardKey(
+                        open ? key : (currentKey) => (currentKey === key ? null : currentKey)
+                      )
+                    }
+                    pointerOpenMode={openCardKey === null ? 'rest' : 'immediate'}
+                    closeDelay={120}
+                    trigger={
+                      <ContextMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={label(fact, t)}
+                          aria-current={isCurrent || undefined}
+                          className={cn(
+                            FACE_CLASS_NAME,
+                            signal === 'attention'
+                              ? cn(
+                                  ATTENTION_RING_CLASS_NAME,
+                                  isCurrent
+                                    ? 'after:[--gap:var(--color-sidebar-foreground)]'
+                                    : 'after:[--gap:var(--color-worktree-sidebar)]'
+                                )
+                              : isCurrent
+                                ? 'ring-sidebar-foreground'
+                                : 'ring-sidebar hover:ring-sidebar-ring'
+                          )}
+                          style={{ left: botPreviewFaceStart(index) }}
+                          onFocus={(event) => {
+                            const keyboard = event.currentTarget.matches(':focus-visible')
+                            setFocusedFace({ key, keyboard })
+                            if (keyboard) {
+                              revealAvatar(index)
+                            }
+                          }}
+                          onBlur={() => setFocusedFace(null)}
+                          onClick={() => openChat(fact.bot)}
+                          onContextMenu={() => setOpenCardKey(null)}
+                        >
+                          <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
+                          {index >= firstFull && index < endFull ? (
+                            <BotPreviewPip signal={signal} />
+                          ) : null}
+                        </button>
+                      </ContextMenuTrigger>
+                    }
+                  >
+                    {cardOpen ? (
+                      <HoverCardContent
+                        side="top"
+                        sideOffset={8}
+                        collisionPadding={8}
+                        variant="workspace-details"
+                        motion="none"
+                        className="max-h-(--radix-hover-card-content-available-height)"
+                      >
+                        <CollapsedBotHoverDetails
+                          fact={fact}
+                          showHostOnFocus={focusedFace?.key === key && focusedFace.keyboard}
+                          onOpenHome={() => openHomePanel(fact.bot)}
+                        />
+                      </HoverCardContent>
+                    ) : null}
+                  </ActivityThreadHoverCardRoot>
+                  <BotRowContextMenuContent
+                    bot={fact.bot}
+                    home={fact.home}
+                    onRename={() => onRenameBot(key)}
+                  />
+                </ContextMenu>
               )
             })}
           </span>

@@ -1,5 +1,7 @@
 // What Composio's answers can mean to Orca, each as its own error so callers can tell them apart.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 
 /** Composio refused the key: deleted, regenerated, or not a project key. */
 export class ComposioKeyRejectedError extends Error {
@@ -13,6 +15,30 @@ export class ComposioNeedsOwnSignInError extends Error {
   constructor(readonly app: string) {
     super(
       'This app needs a one-time setup in Composio: your own developer app, added under Auth Configs.'
+    )
+  }
+}
+
+/**
+ * The key works, but was made without a permission this call needs (Composio's 403
+ * APIKey_InsufficientPermissions). Only calls in that area fail, so the key is not marked refused.
+ */
+export class ComposioKeyScopeError extends BotFailureError {
+  constructor(composioMessage: string | undefined) {
+    const needed = /requires "(\w+)" (read|write) access/.exec(composioMessage ?? '')
+    if (!needed) {
+      super('composioKeyMissingPermission')
+      return
+    }
+    const [, area, access] = needed
+    // Composio's own labels, as its key settings show them.
+    const label = area.charAt(0).toUpperCase() + area.slice(1).replace(/_/g, ' ')
+    const permission = `${label}: ${access === 'write' ? 'Read and write' : 'Read'}`
+    super(
+      area === 'session_management' && access === 'write'
+        ? 'composioKeyCantCreateSessions'
+        : 'composioKeyNeedsPermission',
+      { permission }
     )
   }
 }
@@ -70,9 +96,11 @@ export function isComposioLimit(status: number, slug?: string, message?: string)
   )
 }
 
-const ErrorBody = z.object({
-  error: z.object({ message: z.string().optional(), slug: z.string().optional() })
-})
+const ErrorBody = lazyZodSchema(() =>
+  z.object({
+    error: z.object({ message: z.string().optional(), slug: z.string().optional() })
+  })
+)
 
 export const composioErrorOf = (json: unknown) => ErrorBody.safeParse(json).data?.error
 

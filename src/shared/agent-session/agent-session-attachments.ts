@@ -136,6 +136,17 @@ export type AgentSessionAttachmentUploadTarget = {
   expectedEnvironmentRuntimeId: string
 }
 
+/** Item composers keep the same upload target as their pending files when the bot changes chats. */
+export function botItemAttachmentTarget(uid: string): string {
+  return `item:${uid}`
+}
+
+export function agentSessionAttachmentUploadDestination(
+  target: string
+): { item: string } | { sessionId: string } {
+  return target.startsWith('item:') ? { item: target.slice('item:'.length) } : { sessionId: target }
+}
+
 export type AgentSessionAttachmentPathUploadResult = {
   /** Input order; `path` is where the server stored the file. */
   uploaded: { sourcePath: string; path: string }[]

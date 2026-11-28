@@ -11,8 +11,9 @@ import { FakeAcpChild } from '../process/testing/acp-scripted-connection.test-fi
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { ProviderTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import type { StructuredAgentSessionTransitionStep } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import { AcpRelayTurns } from '../process/acp-relay-turns'
 import { AcpStructuredTurns } from './acp-structured-turns'
-import type { AcpDispatchSettlement } from './acp-turn-dispatch-contract'
+import type { AcpDispatchSettlement, AcpSteerMode } from './acp-turn-dispatch-contract'
 
 const SESSION_ID = 'sess-1'
 const PROVIDER_SESSION_ID = 'acp-sess-1'
@@ -106,12 +107,15 @@ async function createHarness(options: { promptSteers: boolean }) {
     settlements,
     sessionLosses,
     withdrawRequests,
-    send: (clientMessageId: string, text: string) => {
-      turns.dispatch({
-        clientMessageId,
-        prompt: [{ type: 'text', text }],
-        requestedAt: ++clock
-      })
+    send: (clientMessageId: string, text: string, mode: AcpSteerMode = 'mail') => {
+      turns.dispatch(
+        {
+          clientMessageId,
+          prompt: [{ type: 'text', text }],
+          requestedAt: ++clock
+        },
+        mode
+      )
     }
   }
   harnesses.push(harness)
@@ -497,5 +501,96 @@ describe('AcpStructuredTurns concurrent prompt steering', () => {
     await tick()
 
     expect(h.prompts).toHaveLength(2)
+  })
+
+  it('steers concurrently for both mail and cancel modes when promptSteers is enabled', async () => {
+    const h = await createHarness({ promptSteers: true })
+    h.send('m1', 'first', 'cancel')
+    await tick()
+    h.send('m2', 'manual steer button', 'cancel')
+    await tick()
+
+    expect(h.prompts).toHaveLength(2)
+    expect(h.cancels).toHaveLength(0)
+
+    h.agent.reply(h.prompts[0], { stopReason: 'end_turn' })
+    await tick()
+    h.agent.reply(h.prompts[1], { stopReason: 'end_turn' })
+    await tick()
+
+    expect(endedTurnRows(h.steps).map((row) => row.turnId)).toEqual(['prompt:m1', 'prompt:m2'])
+    expect(h.cancels).toHaveLength(0)
+    expect(h.turns.running).toBe(false)
+  })
+
+  it('steers an adopted earlier prompt without cancelling it', async () => {
+    const h = await createHarness({ promptSteers: true })
+    const earlier = Promise.withResolvers<{ stopReason: 'end_turn' }>()
+    h.turns.adoptEarlier('m-adopted', () => earlier.promise)
+    h.send('m-steer', 'steer adopted turn', 'mail')
+    await tick()
+
+    expect(h.prompts).toHaveLength(1)
+    expect(h.cancels).toHaveLength(0)
+    expect(h.turns.holdsSteers).toBe(true)
+
+    earlier.resolve({ stopReason: 'end_turn' })
+    await tick()
+    h.agent.reply(h.prompts[0], { stopReason: 'end_turn' })
+    await tick()
+
+    expect(endedTurnRows(h.steps).map((row) => row.turnId)).toEqual([
+      'prompt:m-adopted',
+      'prompt:m-steer'
+    ])
+    expect(h.turns.running).toBe(false)
+  })
+
+  it('keeps relay ack floor active when a concurrent steer is refused before opening', async () => {
+    const relay = new AcpRelayTurns()
+    const floor = relay.ackFloor()
+    const first = Promise.withResolvers<string>()
+    const second = Promise.withResolvers<string>()
+    const p1 = relay.track(
+      (onId) => {
+        onId(101)
+        return first.promise
+      },
+      false,
+      true
+    )
+    const p2 = relay.track(
+      (onId) => {
+        onId(102)
+        return second.promise
+      },
+      false,
+      true
+    )
+    expect(floor.promptId).toBe(101)
+
+    // Steer prompt 2 fails before opening; active prompt 1 must keep the turn floor open.
+    second.reject(new Error('invalid steer'))
+    await expect(p2).rejects.toThrow('invalid steer')
+    expect(floor.promptId).toBe(101)
+
+    // A third prompt tracks concurrently and becomes active once prompt 1 finishes.
+    const third = Promise.withResolvers<string>()
+    const p3 = relay.track(
+      (onId) => {
+        onId(103)
+        return third.promise
+      },
+      false,
+      true
+    )
+    first.resolve('done-1')
+    await expect(p1).resolves.toBe('done-1')
+    expect(floor.promptId).toBe(103)
+
+    third.resolve('done-3')
+    await expect(p3).resolves.toBe('done-3')
+    const nextFloor = relay.ackFloor()
+    expect(nextFloor.promptId).toBeNull()
   })
 })

@@ -39,8 +39,8 @@ export function createKeyedTrailingEdgeCoalescer(
     emit(key)
   }
 
-  const arm = (key: string): ReturnType<typeof setTimeout> => {
-    const timer = setTimeout(() => fire(key), options.flushMs)
+  const arm = (key: string, remainingMs: number): ReturnType<typeof setTimeout> => {
+    const timer = setTimeout(() => fire(key), Math.min(options.flushMs, remainingMs))
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
@@ -49,18 +49,20 @@ export function createKeyedTrailingEdgeCoalescer(
 
   return {
     schedule(key: string): void {
-      const now = Date.now()
+      // Monotonic so a wall-clock change cannot move the maxWaitMs deadline.
+      const now = performance.now()
       const existing = pending.get(key)
       if (existing) {
-        if (now - existing.firstScheduledAt >= options.maxWaitMs) {
+        const remainingMs = options.maxWaitMs - (now - existing.firstScheduledAt)
+        if (remainingMs <= 0) {
           fire(key)
           return
         }
         clearTimeout(existing.timer)
-        existing.timer = arm(key)
+        existing.timer = arm(key, remainingMs)
         return
       }
-      pending.set(key, { timer: arm(key), firstScheduledAt: now })
+      pending.set(key, { timer: arm(key, options.maxWaitMs), firstScheduledAt: now })
     },
     cancel(key: string): void {
       clear(key)

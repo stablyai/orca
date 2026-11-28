@@ -100,7 +100,7 @@ function DropdownMenuContent({
               className={cn(
                 'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',
                 MENU_SURFACE_CLASS,
-                dropdownMenuContentVariants({ variant }),
+                dropdownMenuContentVariants({ density, variant }),
                 'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
                 className
               )}
@@ -132,8 +132,16 @@ function DropdownMenuItem({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   inset?: boolean
   /** `launch`: rows in the shared agent menu; at least 36px tall in either density.
-   *  `sortable`: compact drag-handle rows that lift while `data-dragging` is set. */
-  variant?: 'default' | 'destructive' | 'launch' | 'sortable' | 'create'
+   *  `sortable`: compact drag-handle rows that lift while `data-dragging` is set.
+   *  `account-row` / `account-row-action`: an account row and its inline action; the row's wrapper draws one fill for both. */
+  variant?:
+    | 'default'
+    | 'destructive'
+    | 'launch'
+    | 'sortable'
+    | 'create'
+    | 'account-row'
+    | 'account-row-action'
   density?: MenuDensity
 }) {
   const rowDensity = useMenuDensity(density)
@@ -145,6 +153,8 @@ function DropdownMenuItem({
       className={cn(
         menuItemVariants({ density: rowDensity, menu: 'dropdown' }),
         'data-[variant=create]:rounded-[7px] data-[variant=create]:px-2 data-[variant=create]:py-1.5 data-[variant=create]:text-[12px] data-[variant=create]:leading-5 data-[variant=create]:font-medium',
+        'data-[variant=account-row]:min-h-9 data-[variant=account-row]:rounded-[8px] data-[variant=account-row]:focus:bg-transparent data-[variant=account-row]:data-[current=true]:bg-transparent dark:data-[variant=account-row]:focus:bg-transparent',
+        'data-[variant=account-row-action]:gap-1 data-[variant=account-row-action]:px-2.5 data-[variant=account-row-action]:text-xs data-[variant=account-row-action]:font-medium data-[variant=account-row-action]:focus:bg-transparent dark:data-[variant=account-row-action]:focus:bg-transparent',
         className
       )}
       onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}
@@ -191,9 +201,11 @@ function DropdownMenuRadioItem({
   className,
   children,
   density,
+  indicator = 'dot',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & {
   density?: MenuDensity
+  indicator?: 'dot' | 'check'
 }) {
   const rowDensity = useMenuDensity(density)
   return (
@@ -204,7 +216,11 @@ function DropdownMenuRadioItem({
     >
       <span className={MENU_ITEM_INDICATOR_CLASS}>
         <DropdownMenuPrimitive.ItemIndicator>
-          <CircleIcon className="size-2 fill-current" />
+          {indicator === 'check' ? (
+            <CheckIcon className="size-3.5" />
+          ) : (
+            <CircleIcon className="size-2 fill-current" />
+          )}
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -310,15 +326,18 @@ function DropdownMenuSubTrigger({
 }
 
 const dropdownMenuContentVariants = cva('', {
-  variants: { variant: { default: '', picker: 'p-0' } },
-  defaultVariants: { variant: 'default' }
+  variants: {
+    density: { default: '', compact: '', comfortable: 'p-2' },
+    variant: { default: '', picker: 'p-0' }
+  },
+  defaultVariants: { density: 'default', variant: 'default' }
 })
 
 function DropdownMenuSubContent({
   className,
   portalContainer,
   style,
-  alignOffset = -5,
+  alignOffset,
   scrollable = false,
   variant = 'default',
   density,
@@ -334,6 +353,7 @@ function DropdownMenuSubContent({
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   const subDensity = useMenuDensity(density)
+  const resolvedAlignOffset = alignOffset ?? (subDensity === 'comfortable' ? -9 : -5)
   return (
     <PortalContainerContext value={container}>
       <DropdownMenuPrimitive.Portal container={container ?? undefined}>
@@ -343,12 +363,12 @@ function DropdownMenuSubContent({
               data-slot="dropdown-menu-sub-content"
               data-variant={variant}
               // Level the first submenu row with its trigger (border + padding).
-              alignOffset={alignOffset}
+              alignOffset={resolvedAlignOffset}
               className={cn(
                 'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden',
                 MENU_SURFACE_CLASS,
                 'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
-                dropdownMenuContentVariants({ variant }),
+                dropdownMenuContentVariants({ density: subDensity, variant }),
                 scrollable &&
                   'max-h-(--radix-dropdown-menu-content-available-height) overflow-x-hidden overflow-y-auto scrollbar-sleek',
                 className

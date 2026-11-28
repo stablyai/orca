@@ -35,7 +35,6 @@ import {
   type FederatedFleetRuntime
 } from '../../../../orchestration/legacy-remote-home/federated-fleet-snapshot'
 import { structuredWorkerSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
-import { structuredAgentSessionStatusPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { latestLiveAgentStatusRowsByPaneKey } from '../../../../../../shared/agent-status/live-agent-status-rows'
 import {
   projectTerminalPresence,
@@ -43,6 +42,7 @@ import {
   type TerminalPresenceReads
 } from './session-worker-terminal-presence'
 import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export const ORCHESTRATION_SESSION_WORKERS_METHODS = [
   defineOrchestrationMethod({
@@ -149,7 +149,10 @@ export async function projectDispatchFleet(
     limit: rows.length,
     now,
     completeProjection: true,
-    observeSession: createSessionWorkerLivenessReader(db, statuses, undefined, read.parties)
+    observeSession: createSessionWorkerLivenessReader(db, statuses, undefined, {
+      parties: read.parties,
+      includeResumeGuidance: true
+    })
   })
   // This machine's statuses cover only its own panes; a paired host's worker needs that host's verdict.
   const openIds = new Set(
@@ -268,6 +271,12 @@ function sessionWorker(
     paneKey: structured ? null : durable.paneKey,
     chatSessionId,
     summary: task?.result ? workerResultSummary(task.result) : null,
+    ...(dispatch?.progress_note
+      ? {
+          progressNote: dispatch.progress_note,
+          progressUpdatedAt: epochMs(dispatch.progress_updated_at)
+        }
+      : {}),
     startedAt: epochMs(dispatch?.dispatched_at ?? dispatch?.created_at ?? null) ?? Date.now(),
     settledAt
   }
@@ -285,7 +294,7 @@ export function sessionWorkerActivity(
   if (worker.stage.activity !== 'unknown' || !chatSessionId) {
     return worker.stage.activity
   }
-  return chatStatusRows.get(structuredAgentSessionStatusPaneKey(chatSessionId))?.state ?? 'unknown'
+  return chatStatusRows.get(chatPaneKey(chatSessionId))?.state ?? 'unknown'
 }
 
 /** A worker report is stored as JSON; its body (else its short subject) is the readable result. */

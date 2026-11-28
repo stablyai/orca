@@ -262,18 +262,5 @@ export async function runAgentModelCatalogSession<C extends AgentModelCatalogPro
       await withTimeout(cleanup(), 1_000, undefined)
     }
     await connection.close().catch(() => undefined)
-    await untilExited(connection)
-  }
-}
-
-const EXIT_WAIT_MS = 5_000
-const EXIT_POLL_MS = 100
-
-/** A close can return once the kill is sent; the agent may still write its listing session on the
- *  way out, so whatever discards that session waits for the exit (at most EXIT_WAIT_MS). */
-async function untilExited(connection: AgentModelCatalogProbeConnection): Promise<void> {
-  const until = Date.now() + EXIT_WAIT_MS
-  while ('exited' in connection && connection.exited === false && Date.now() < until) {
-    await new Promise((resolve) => setTimeout(resolve, EXIT_POLL_MS))
   }
 }

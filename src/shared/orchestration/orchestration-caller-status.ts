@@ -35,4 +35,7 @@ export type OrchestrationPartyLocation =
 export type OrchestrationPartyLocationResult = {
   location: OrchestrationPartyLocation | null
   lost?: 'chat' | 'terminal'
+  /** With a null location: the paired server (environment ID) this host started the party on,
+   *  which alone knows where it runs now. */
+  pairedServer?: string
 }

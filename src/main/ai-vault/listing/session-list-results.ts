@@ -54,6 +54,7 @@ export function restampAiVaultListResult(
             id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
           }
     ),
+    ...(result.hiddenRowCount ? { hiddenRowCount: result.hiddenRowCount } : {}),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
     scannedAt: result.scannedAt
   }
@@ -68,17 +69,20 @@ export function mergeAiVaultListResults(
   const depth = requestedAiVaultSessionDepth({ limit: rawLimit, unlimited })
   const byId = new Map<string, AiVaultSession>()
   const issues: AiVaultScanIssue[] = []
+  let hiddenRowCount = 0
   for (const result of results) {
     for (const session of result.sessions) {
       byId.set(session.id, session)
     }
     issues.push(...result.issues)
+    hiddenRowCount += result.hiddenRowCount ?? 0
   }
   return truncateAiVaultListResult(
     {
       sessions: [...byId.values()].sort(
         (left, right) => sessionSortTime(right) - sessionSortTime(left)
       ),
+      ...(hiddenRowCount > 0 ? { hiddenRowCount } : {}),
       issues,
       // Reuse accepted scan times so unchanged host results cannot fabricate freshness.
       scannedAt: latestAiVaultScannedAt(results)

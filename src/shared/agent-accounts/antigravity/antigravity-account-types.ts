@@ -1,4 +1,8 @@
-import type { ProviderRateLimits } from '../../agent-usage/rate-limits/rate-limit-types'
+/** Long enough to answer the macOS keychain's access or unlock dialog, which reading agy's login
+ *  can raise. */
+export const ANTIGRAVITY_KEYCHAIN_PROMPT_WAIT_MS = 60_000
+/** Clients wait this long for an account action that may read agy's login. */
+export const ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS = ANTIGRAVITY_KEYCHAIN_PROMPT_WAIT_MS + 30_000
 
 export type AntigravityAccountSummary = {
   id: string
@@ -7,8 +11,6 @@ export type AntigravityAccountSummary = {
   authMethod: string
   createdAt: number
   updatedAt: number
-  /** Last reading verified as this account on this runtime; null when never read, absent from older hosts. */
-  usage?: ProviderRateLimits | null
 }
 
 export type AntigravityAccountState = {
@@ -19,8 +21,15 @@ export type AntigravityAccountState = {
     subject: string | null
     authMethod: string
     identityKnown: boolean
+    /** agy is signed in, but Orca hasn't read which account since its login last changed: that
+     *  read may ask for keychain access, so only `accounts.antigravityReadCurrent` makes it. The
+     *  other fields are empty and no saved account is active. Absent from older hosts. */
+    unread?: true
   } | null
   selectedAccountId: string | null
+  /** New agy launches put the selected account back when another saved one took agy's login.
+   *  Absent from older hosts, Windows and WSL, where a moved login stays as it is. */
+  restoresSelectionAtLaunch?: true
   /** Host only: new chats run on agy and its signed-in account; false runs them elsewhere, or on a
    *  signed-out agy (`chatAgySignedOut`). Absent from older hosts and WSL. */
   chatUsesAgy?: boolean

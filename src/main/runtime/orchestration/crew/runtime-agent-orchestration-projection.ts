@@ -1,10 +1,6 @@
 import type { OrchestrationTerminalCandidates } from './orchestration-terminal-candidates'
 import { composeOrchestrationDispatch } from './orchestration-dispatch-context'
 import { orchestrationProjectionFacts } from './orchestration-projection-facts'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -20,6 +16,7 @@ import { createOrchestrationProjectionScope } from './runtime-agent-orchestratio
 import { isRecentPresentationDispatch } from '../db/dispatch-context/dispatch-presentation'
 import type { DispatchContextRow } from '../db/orchestration-records'
 import type { PtyPaneOf } from '../../terminal/surface/pty-pane-query'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   createDispatchSessionLivenessReader,
   type DispatchSessionObserver
@@ -217,7 +214,7 @@ export class RuntimeAgentOrchestrationProjection {
       return undefined
     }
     const session = parsed.tabId.slice(prefix.length)
-    if (structuredAgentSessionPaneKey(structuredAgentSessionTabId(session), session) !== paneKey) {
+    if (chatPaneKey(session) !== paneKey) {
       return undefined
     }
     const ids = new Set([session])

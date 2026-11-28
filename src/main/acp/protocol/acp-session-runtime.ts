@@ -1,16 +1,15 @@
 import type { AcpSessionRuntimeOptions } from './acp-session-runtime-options'
 import type { Readable, Writable } from 'node:stream'
 import { z } from 'zod'
+import { AcpRpcError } from '../transport/acp-errors'
 import { AcpPromptRequest } from './acp-prompt-request'
 import {
-  acpCheckProtocolVersion,
-  acpConfigOptionRequest,
-  acpInitializeRequest,
-  acpWithMeta,
   callAcpSession,
   dispatchAcpSessionNotification,
-  handleAcpSessionRequest
+  handleAcpSessionRequest,
+  type AcpSessionCallOptions
 } from './acp-session-call'
+export type { AcpSessionCallOptions }
 import { AcpJsonRpcPeer, type AcpRequestContext } from '../transport/acp-json-rpc-peer'
 import type { AcpSessionEvent } from './acp-session-events'
 import {
@@ -20,6 +19,7 @@ import {
 } from './acp-session-setup'
 
 import {
+  ACP_PROTOCOL_VERSION,
   InitializeResponseSchema,
   AuthenticateResponseSchema,
   PromptResponseSchema,
@@ -27,6 +27,7 @@ import {
   SetSessionModelResponseSchema,
   SetSessionConfigOptionResponseSchema,
   SessionIdSchema,
+  type InitializeRequest,
   type InitializeResponse,
   type AuthenticateResponse,
   type CancelNotification,
@@ -39,10 +40,12 @@ import {
   type SetSessionModelRequest,
   type SetSessionModelResponse
 } from '../generated/acp-protocol.generated'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
-const ForkSessionResponseSchema = z.looseObject({ sessionId: SessionIdSchema })
+const ForkSessionResponseSchema = lazyZodSchema(() => z.looseObject({ sessionId: SessionIdSchema }))
 
 type Meta = PromptRequest['_meta']
+const withMeta = (meta: Meta): { _meta?: Meta } => (meta ? { _meta: meta } : {})
 
 /** Stream-level protocol seam; production agents use createAcpAgentConnection. */
 export class AcpSessionRuntime {
@@ -57,7 +60,7 @@ export class AcpSessionRuntime {
   constructor(
     input: Readable,
     output: Writable,
-    private readonly options: AcpSessionRuntimeOptions = {}
+    protected readonly options: AcpSessionRuntimeOptions = {}
   ) {
     this.prompts = new AcpPromptRequest(
       options.retryBusyPrompts === true,
@@ -95,10 +98,28 @@ export class AcpSessionRuntime {
   initialize(): Promise<InitializeResponse> {
     this.initialized ??= this.call(
       'initialize',
-      acpInitializeRequest(this.options),
+      {
+        protocolVersion: ACP_PROTOCOL_VERSION,
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false,
+          ...this.options.clientCapabilities
+        },
+        ...(this.options.clientInfo === undefined ? {} : { clientInfo: this.options.clientInfo })
+      } satisfies InitializeRequest,
       InitializeResponseSchema
     )
-      .then((response) => acpCheckProtocolVersion(response, (error) => this.peer.close(error)))
+      .then((response) => {
+        if (response.protocolVersion !== ACP_PROTOCOL_VERSION) {
+          const error = new AcpRpcError(
+            -32602,
+            `Unsupported ACP protocol version: ${response.protocolVersion}`
+          )
+          this.peer.close(error)
+          throw error
+        }
+        return response
+      })
       .catch((error) => {
         this.initialized = undefined
         throw error
@@ -165,7 +186,7 @@ export class AcpSessionRuntime {
     received?: (response: PromptResponse) => void,
     rejected?: (error: unknown) => void
   ): Promise<PromptResponse> {
-    const params: PromptRequest = { sessionId: this.sessionId(), prompt, ...acpWithMeta(meta) }
+    const params: PromptRequest = { sessionId: this.sessionId(), prompt, ...withMeta(meta) }
     return this.prompts.run((release) =>
       this.call(
         'session/prompt',
@@ -176,10 +197,12 @@ export class AcpSessionRuntime {
           received?.(response)
         },
         null,
-        (error) => {
-          if (!this.prompts.willRetry(error)) {
-            release()
-            rejected?.(error)
+        {
+          rejected: (error) => {
+            if (!this.prompts.willRetry(error)) {
+              release()
+              rejected?.(error)
+            }
           }
         }
       )
@@ -194,17 +217,13 @@ export class AcpSessionRuntime {
     this.prompts.cancel()
     const params: CancelNotification = {
       sessionId: this.started.sessionId,
-      ...acpWithMeta(options.meta)
+      ...withMeta(options.meta)
     }
     return this.peer.notify('session/cancel', params)
   }
 
   async setMode(modeId: string, meta?: Meta): Promise<SetSessionModeResponse> {
-    const params: SetSessionModeRequest = {
-      sessionId: this.sessionId(),
-      modeId,
-      ...acpWithMeta(meta)
-    }
+    const params: SetSessionModeRequest = { sessionId: this.sessionId(), modeId, ...withMeta(meta) }
     return this.call('session/set_mode', params, SetSessionModeResponseSchema)
   }
 
@@ -224,7 +243,7 @@ export class AcpSessionRuntime {
     const params: SetSessionModelRequest = {
       sessionId: this.sessionId(),
       modelId,
-      ...acpWithMeta(meta)
+      ...withMeta(meta)
     }
     return this.call(
       'session/set_model',
@@ -241,7 +260,11 @@ export class AcpSessionRuntime {
     received?: (response: SetSessionConfigOptionResponse) => void,
     timeoutMs: number | null = null
   ): Promise<SetSessionConfigOptionResponse> {
-    const request = acpConfigOptionRequest(this.sessionId(), configId, value, meta)
+    const params = { configId, sessionId: this.sessionId(), ...withMeta(meta) }
+    const request =
+      typeof value === 'boolean'
+        ? ({ ...params, value, type: 'boolean' } satisfies SetSessionConfigOptionRequest)
+        : ({ ...params, value } satisfies SetSessionConfigOptionRequest)
     return this.call(
       'session/set_config_option',
       request,
@@ -256,9 +279,7 @@ export class AcpSessionRuntime {
     this.listeners.clear()
   }
 
-  protected drainNotifications(error?: Error): void {
-    this.peer.drainNotifications(error)
-  }
+  protected drainNotifications = (error?: Error): void => this.peer.drainNotifications(error)
 
   private sessionId(): string {
     if (!this.started) {
@@ -273,30 +294,16 @@ export class AcpSessionRuntime {
     schema: z.ZodType<T>,
     received?: (response: T) => void,
     timeoutMs: number | null = null,
-    rejected?: (error: unknown) => void
+    options?: AcpSessionCallOptions
   ): Promise<T> {
-    return callAcpSession(
-      this.peer,
-      method,
-      params,
-      schema,
-      this.options.onAuthAnswered,
-      received,
-      timeoutMs,
-      rejected
-    )
+    const auth = this.options.onAuthAnswered
+    return callAcpSession(this.peer, method, params, schema, auth, received, timeoutMs, options)
   }
 
-  private handleRequest(method: string, params: unknown, context: AcpRequestContext): unknown {
-    return handleAcpSessionRequest(
-      method,
-      params,
-      context,
-      this.started?.sessionId,
-      this.options,
-      (message) => this.diagnose(message)
+  private handleRequest = (method: string, params: unknown, context: AcpRequestContext): unknown =>
+    handleAcpSessionRequest(method, params, context, this.started?.sessionId, this.options, (m) =>
+      this.diagnose(m)
     )
-  }
 
   private diagnose(message: string): void {
     try {
@@ -306,20 +313,14 @@ export class AcpSessionRuntime {
     }
   }
 
-  private handleNotification(method: string, params: unknown): void {
+  protected handleNotification(method: string, params: unknown): void {
     dispatchAcpSessionNotification(
       method,
       params,
       this.listeners,
       this.options.onExtensionNotification,
       (message) => this.diagnose(message),
-      () => {
-        if (this.reportedUpdateAnomaly) {
-          return false
-        }
-        this.reportedUpdateAnomaly = true
-        return true
-      }
+      () => !this.reportedUpdateAnomaly && ((this.reportedUpdateAnomaly = true), true)
     )
   }
 }

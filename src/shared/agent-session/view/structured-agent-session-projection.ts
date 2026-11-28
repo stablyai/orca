@@ -1,5 +1,4 @@
 import { memoizeStringResult } from '../../collections/string-result-cache'
-import { isAgentSessionSlotTabId } from './agent-session-slot-tab-id'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
@@ -115,7 +114,8 @@ export function projectStructuredItemToNativeChat(
         ...(projected.drawnMarkdown !== undefined
           ? { drawnMarkdown: projected.drawnMarkdown }
           : {}),
-        ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {})
+        ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {}),
+        journalRevision: item.revision
       }
     : null
   projectedItems.set(item, message)
@@ -124,7 +124,7 @@ export function projectStructuredItemToNativeChat(
 
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
-/** Legacy tab id of chats opened before slot ids were minted; still their pane/status address. */
+/** Legacy tab id of chats opened before slot ids were minted. */
 export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
@@ -262,18 +262,33 @@ export function projectStructuredAgentSessionStatusState(
 
 // Why: callers walk every live chat, and a FIFO smaller than that set misses on every pass.
 const MAX_MEMOIZED_PANE_LEAVES = 32_768
-const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): string => {
+export const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): string => {
   const bytes = sha256(new TextEncoder().encode(sessionId))
   const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
 }, MAX_MEMOIZED_PANE_LEAVES)
 
-/** The tab id a chat's pane key names: status, attention and orchestration rows still address a
- *  minted slot's chat by its session's legacy id. */
-export function structuredAgentSessionAddressTabId(tabId: string, sessionId: string): string {
-  return isAgentSessionSlotTabId(tabId) ? structuredAgentSessionTabId(sessionId) : tabId
+/** The tab part of a chat's pane key: a conversation address, not the id of any tab it shows in. */
+export function chatPaneAddressTabId(sessionId: string): string {
+  return structuredAgentSessionTabId(sessionId)
 }
 
-export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
-  return `${structuredAgentSessionAddressTabId(tabId, sessionId)}:${structuredAgentSessionPaneLeaf(sessionId)}`
+/** A chat's pane address follows its conversation, never the tab it sits in, so status, attention
+ *  and worker links survive the chat moving tabs and match on every client and host. */
+export const chatPaneKey = memoizeStringResult(
+  (sessionId: string): string =>
+    `${chatPaneAddressTabId(sessionId)}:${structuredAgentSessionPaneLeaf(sessionId)}`,
+  MAX_MEMOIZED_PANE_LEAVES
+)
+
+export const CHAT_PANE_ADDRESS_PREFIX = chatPaneAddressTabId('')
+
+/** The session a chat's pane key addresses, or null for any other pane key. */
+export function chatPaneKeySessionId(paneKey: string): string | null {
+  if (!paneKey.startsWith(CHAT_PANE_ADDRESS_PREFIX)) {
+    return null
+  }
+  const separator = paneKey.lastIndexOf(':')
+  const sessionId = paneKey.slice(CHAT_PANE_ADDRESS_PREFIX.length, separator)
+  return separator > 0 && chatPaneKey(sessionId) === paneKey ? sessionId : null
 }

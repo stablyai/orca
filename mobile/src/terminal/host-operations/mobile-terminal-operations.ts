@@ -5,8 +5,10 @@ import {
   terminalBufferClearedSchema,
   terminalSendAcceptedSchema,
   terminalInputSessionSchema,
+  terminalProcessInspectionSchema,
   terminalViewportUpdatedSchema
 } from './terminal-reply-schema'
+import { sessionWriteUnreadReplySchema } from '../../transport/rpc/rpc-uninterpreted-reply-schemas'
 
 // All terminal writers share object-result-or-null; changing it would change lost-ack handling for every input surface.
 export const terminalInputSend = bindDeferredRpcOperation(
@@ -68,5 +70,27 @@ export const terminalBufferClear = bindDeferredRpcOperation(
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('terminal-buffer-cleared', terminalBufferClearedSchema)
+  })
+)
+
+// Read-only process evidence for one terminal; a refusal or odd reply proves nothing.
+export const terminalProcessInspect = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.inspect-process',
+    method: 'terminal.inspectProcess',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-process-inspection', terminalProcessInspectionSchema)
+  })
+)
+
+// Waits for a terminal's exit; only settling matters, so the reply stays unread.
+export const terminalExitWait = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.exit-wait',
+    method: 'terminal.wait',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-exit-waited', sessionWriteUnreadReplySchema)
   })
 )

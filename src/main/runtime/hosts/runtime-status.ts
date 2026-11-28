@@ -75,8 +75,14 @@ import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../../shared/brows
 import { darkSwitchRuntimeCapabilities } from '../construction/dark-switch-runtime-capabilities'
 import { supportsDurableTerminalPromptDelivery } from '../terminal/input/durable-terminal-prompt-delivery-support'
 import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-workspace-change-events'
+import { BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY } from '../../../shared/bots/bot-item-version-capability'
 
 export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
+  /** Graph readiness alone, for the small liveness probe a restarting CLI polls. */
+  getGraphStatus(): RuntimeStatus['graphStatus'] {
+    return this.graphStatus
+  }
+
   getStatus(): RuntimeStatus {
     // Advertise screencast for renderer/offscreen backends; headless ownership prevents client-local fallback.
     const hasRenderer = Boolean(this.hasAuthoritativeWindow())
@@ -112,6 +118,7 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
         // Only hosts running their own usage poller can consume saved keys.
         (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY || this.getUsageRateLimits() !== null)
     )
+    capabilities.push(BOTS_ITEM_SET_VERSION_RUNTIME_CAPABILITY)
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }

@@ -34,6 +34,7 @@ import type { SourceControlAi } from '../ai/use-ai'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 /** Persist generation records so results completed after unmount hydrate the textarea once on return. */
 export function useSourceControlCommitMessageGeneration({
@@ -137,72 +138,78 @@ export function useSourceControlCommitMessageGeneration({
           runtimeTarget: activeRepoTarget
         })
       )
-      try {
-        const result = await generateRuntimeCommitMessage(
-          {
-            // Route generation through workspace ownership rather than focused runtime.
-            target: activeRepoTarget,
-            prefs: useAppStore.getState().settings,
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          overrides
-        )
+      await runWithFinally(
+        async () => {
+          try {
+            const result = await generateRuntimeCommitMessage(
+              {
+                // Route generation through workspace ownership rather than focused runtime.
+                target: activeRepoTarget,
+                prefs: useAppStore.getState().settings,
+                worktreeId: activeWorktreeId,
+                worktreePath,
+                connectionId
+              },
+              overrides
+            )
 
-        if (!result.success) {
-          // Cancellation is an intentional action and must not surface as failure.
-          if (result.canceled) {
+            if (!result.success) {
+              // Cancellation is an intentional action and must not surface as failure.
+              if (result.canceled) {
+                operationStore.setState({ generateError: null })
+                updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
+                  resolveCommitMessageGenerationFailure({
+                    record,
+                    requestId,
+                    canceled: true,
+                    error: null
+                  })
+                )
+                return
+              }
+              operationStore.setState({ generateError: result.error })
+              updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
+                resolveCommitMessageGenerationFailure({
+                  record,
+                  requestId,
+                  error: result.error
+                })
+              )
+              return
+            }
+
+            const succeeded = resolveCommitMessageGenerationSuccess({
+              record:
+                useAppStore.getState().commitMessageGenerationRecords[
+                  activeCommitMessageGenerationKey
+                ],
+              requestId,
+              message: result.message
+            })
+            if (succeeded) {
+              setCommitMessageGenerationRecord(activeCommitMessageGenerationKey, succeeded)
+            }
+            // Preserve typed edits and drop cancelled runs even if the host succeeds; their message may describe obsolete changes.
+            updateCommitDraft((current) =>
+              !succeeded || current.length > 0 ? current : result.message
+            )
+            useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
             operationStore.setState({ generateError: null })
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : 'Failed to generate commit message'
+            operationStore.setState({ generateError: message })
             updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
               resolveCommitMessageGenerationFailure({
                 record,
                 requestId,
-                canceled: true,
-                error: null
+                error: message
               })
             )
-            return
           }
-          operationStore.setState({ generateError: result.error })
-          updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
-            resolveCommitMessageGenerationFailure({
-              record,
-              requestId,
-              error: result.error
-            })
-          )
-          return
-        }
-
-        const succeeded = resolveCommitMessageGenerationSuccess({
-          record:
-            useAppStore.getState().commitMessageGenerationRecords[activeCommitMessageGenerationKey],
-          requestId,
-          message: result.message
-        })
-        if (succeeded) {
-          setCommitMessageGenerationRecord(activeCommitMessageGenerationKey, succeeded)
-        }
-        // Preserve typed edits and drop cancelled runs even if the host succeeds; their message may describe obsolete changes.
-        updateCommitDraft((current) =>
-          !succeeded || current.length > 0 ? current : result.message
-        )
-        useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
-        operationStore.setState({ generateError: null })
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to generate commit message'
-        operationStore.setState({ generateError: message })
-        updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
-          resolveCommitMessageGenerationFailure({
-            record,
-            requestId,
-            error: message
-          })
-        )
-      } finally {
-        operationStore.setState({ generateInFlight: false })
-      }
+        },
+        () => operationStore.setState({ generateInFlight: false })
+      )
     },
     [
       scope,

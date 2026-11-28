@@ -31,7 +31,7 @@ export async function closeMR(
       try {
         await glabExecFileAsync(['mr', 'close', String(iid), '-R', repoFlag], {
           ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
-          ...glabHostEnvOptions(projectRef, connectionId)
+          ...glabHostEnvOptions(projectRef)
         })
         return { ok: true }
       } catch (err) {
@@ -69,7 +69,7 @@ export async function reopenMR(
       try {
         await glabExecFileAsync(['mr', 'reopen', String(iid), '-R', repoFlag], {
           ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
-          ...glabHostEnvOptions(projectRef, connectionId)
+          ...glabHostEnvOptions(projectRef)
         })
         return { ok: true }
       } catch (err) {
@@ -112,7 +112,7 @@ export async function mergeMR(
           ['mr', 'merge', String(iid), '-R', repoFlag, '--yes', ...methodFlag],
           {
             ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
-            ...glabHostEnvOptions(projectRef, connectionId)
+            ...glabHostEnvOptions(projectRef)
           }
         )
         return { ok: true }

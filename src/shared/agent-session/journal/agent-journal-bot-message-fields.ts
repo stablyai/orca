@@ -55,6 +55,9 @@ export type AgentJournalBotMessageFields = {
    *  turn, by the content they had when read: its admission settles them, or refuses if any changed.
    *  Host-written, never sent to the agent. */
   carriedCards?: AgentJournalCarriedCard[]
+  /** Who asked each message carried in, its own carried ones included; null for one Orca can't
+   *  name. The turn acts for the least trusted of them. Host-written, never sent to the agent. */
+  carriedAskers?: (ConnectorMessageAsker | null)[]
   /** On a continuation Orca sends after a cut: the requests it answers in the cut's place.
    *  Host-written, never sent to the agent. */
   connectorClaim?: AgentJournalConnectorClaim

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'
@@ -7,7 +8,7 @@ import { resolvePluginProject } from './plugin-host-project-target'
 
 // Optional: a host that predates hidden projects answers without `hidden`, which must read as a
 // refusal, never as done.
-const repoSetHiddenAnswer = z.object({ hidden: z.boolean().optional() })
+const repoSetHiddenAnswer = lazyZodSchema(() => z.object({ hidden: z.boolean().optional() }))
 
 export const PLUGIN_PROJECT_VISIBILITY_HANDLERS = {
   'project.setHidden': bind(PLUGIN_HOST_API['project.setHidden'], async (params, ctx) => {

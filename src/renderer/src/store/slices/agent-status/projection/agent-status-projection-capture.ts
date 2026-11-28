@@ -12,9 +12,12 @@ export function captureProjectionState(
     revision: data.tabProjection.revision
   }
   captured.display = data.display.capture()
-  captured.activeDashboardOwners = new Set(data.activeDashboardOwners)
+  captured.activeDashboardOwners = data.activeDashboardOwners
+    ? new Set(data.activeDashboardOwners)
+    : null
   captured.dashboardTotals = data.dashboardTotals
   captured.inputs = data.inputs
+  captured.remoteRows = data.remoteRows
   captured.activeAgentCount = data.activeAgentCount
   for (const [tabId, bucket] of data.terminalTypes) {
     captured.terminalTypes.set(tabId, { leaves: new Map(bucket.leaves), output: bucket.output })
@@ -34,6 +37,9 @@ export function captureProjectionState(
   }
   for (const [key, value] of data.handleByKey) {
     captured.handleByKey.set(key, value)
+  }
+  for (const [key, value] of data.acceptedTabByKey) {
+    captured.acceptedTabByKey.set(key, value)
   }
   for (const [key, value] of data.countedRows) {
     captured.countedRows.set(key, value)

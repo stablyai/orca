@@ -12,6 +12,8 @@ import {
 } from '../terminal/key-input/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/key-input/terminal-custom-keys'
 import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
+import type { ClosingTerminalTab } from './tabs/closing-terminal-tab-handles'
+import type { TerminalRowHandles } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { useWorktreeSessionTabsLoaded } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import type { DiffComment } from '../../../src/shared/file-review/diff-comment-types'
@@ -38,6 +40,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
   const appliedSessionTabsRevisionRef = useRef(0)
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
+  const closingTerminalTabsRef = useRef(new Set<ClosingTerminalTab>())
+  const terminalRowHandlesRef = useRef<TerminalRowHandles>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   const [terminalFontStyle, setTerminalFontStyle] = useState(DEFAULT_TERMINAL_FONT_STYLE)
@@ -69,7 +73,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
   const [showQuickCommands, setShowQuickCommands] = useState(false)
-  const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [showTerminalLayout, setShowTerminalLayout] = useState(false)
   const [textSizeSheet, setTextSizeSheet] = useState<MobileSessionTextSizeSheetKind | null>(null)
@@ -117,6 +120,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
+    closingTerminalTabsRef,
+    terminalRowHandlesRef,
     terminalsLoaded,
     setTerminalsLoaded,
     terminalTextScale,
@@ -163,8 +168,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateTabDrawer,
     showQuickCommands,
     setShowQuickCommands,
-    showCreateBrowserModal,
-    setShowCreateBrowserModal,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
     showTerminalLayout,

@@ -59,7 +59,12 @@ const GOAL = {
 // The composer box is mocked, as the worker lifetime fixture does.
 function fixture(
   state: Partial<AgentSessionMcpPanelState>,
-  options: { runtime?: 'local' | 'remote'; underGoal?: boolean } = {}
+  options: {
+    runtime?: 'local' | 'remote'
+    underGoal?: boolean
+    manageable?: boolean
+    agentLabel?: string
+  } = {}
 ) {
   return defineFixture({
     width: 640,
@@ -85,6 +90,7 @@ function fixture(
             failure: null,
             ...state
           }}
+          agentLabel={options.agentLabel ?? 'Claude Code'}
           runtime={options.runtime ?? 'local'}
           run={() => {}}
           retry={() => {}}
@@ -92,6 +98,7 @@ function fixture(
           dismissSignIn={() => {}}
           openUrl={() => {}}
           onClose={() => {}}
+          {...(options.manageable ? { manageServers: () => {} } : {})}
         />
         <div className="px-3 pt-2 sm:px-4">
           <div className="mx-auto h-20 w-full max-w-(--chat-content-max-width) rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
@@ -146,3 +153,43 @@ export const notRunning = fixture({ result: { status: 'not-running' } })
 export const readFailed = fixture({ result: { status: 'failed', message: null } })
 
 export const underGoal = fixture({ servers: SIGN_IN_SERVERS }, { underGoal: true })
+
+// A host with MCP servers on: Orca's group first, and the link to its settings.
+export const orcaServers = fixture(
+  {
+    servers: [
+      server('claude.ai Notion', 'connected', { source: 'claudeai', toolCount: 77 }),
+      server('Linear', 'connected', { source: 'orca', toolCount: 23 }),
+      server('Sentry', 'needs-auth', { source: 'orca', canSignIn: true }),
+      server('Postgres', 'connected', { source: 'orca', toolCount: 8 }),
+      server('Context7', 'connected', { source: 'orca', toolCount: 2 })
+    ]
+  },
+  { manageable: true }
+)
+
+// Before the first message: the servers its next start gets, under the line saying so.
+export const orcaServersAtRest = fixture(
+  {
+    result: { status: 'not-running' },
+    servers: [
+      server('Linear', 'not-started', { source: 'orca', canToggle: false }),
+      server('Sentry', 'needs-auth', { source: 'orca', canToggle: false }),
+      server('github', 'not-started', { source: 'project', canToggle: false }),
+      server('playwright', 'disabled', { source: 'user', canToggle: false })
+    ]
+  },
+  { manageable: true }
+)
+
+// A running agent that doesn't report how its servers are doing.
+export const unreportedServers = fixture(
+  {
+    servers: [
+      server('Linear', 'unreported', { source: 'orca', canToggle: false }),
+      server('Context7', 'unreported', { source: 'orca', canToggle: false }),
+      server('figma', 'unreported', { source: 'user', canToggle: false })
+    ]
+  },
+  { manageable: true, agentLabel: 'Gemini CLI' }
+)

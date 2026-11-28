@@ -4,7 +4,6 @@ import { isLinkedIssueNumber } from '../../shared/source-control/ai/recipes/sour
 import type { WorkspaceLinkedItem } from '../../shared/worktree/types'
 import type { GitRuntimeOptions } from '../git/command-runner/git-runtime-options'
 import { getIssue as getGitHubIssue } from '../github/issues/issues'
-import { getIssue as getGitLabIssue } from '../gitlab/issues/gitlab-issue-queries'
 
 export type PullRequestLinkedIssueMeta = {
   linkedIssue?: number | null
@@ -69,7 +68,9 @@ export async function loadPullRequestLinkedIssue(args: {
   const issue =
     provider === 'github'
       ? await getGitHubIssue(args.repoPath, number, args.connectionId, args.localGitOptions)
-      : await getGitLabIssue(args.repoPath, number, args.connectionId, args.localGitOptions)
+      : await (
+          await import('../gitlab/issues/gitlab-issue-queries')
+        ).getIssue(args.repoPath, number, args.connectionId, args.localGitOptions)
 
   return {
     provider,

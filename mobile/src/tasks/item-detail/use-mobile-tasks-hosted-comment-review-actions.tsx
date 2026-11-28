@@ -280,7 +280,8 @@ export function useMobileTasksHostedCommentReviewActions<
     [claimPublication, client, detailPayload, itemReviewersDraft, tryBeginMutation]
   )
 
-  return Object.assign(model, {
+  return {
+    ...model,
     commentSendNotice,
     addHostedItemComment,
     copyTaskLink,
@@ -288,7 +289,7 @@ export function useMobileTasksHostedCommentReviewActions<
     requestGitHubReviewers,
     refreshGitHubChecks: (item: Extract<TaskItem, { provider: 'github' }>) =>
       refreshMobileTaskPRChecks(model, item)
-  })
+  }
 }
 
 export type HostedCommentReviewActionsModel = HostedMetadataActionsModel &

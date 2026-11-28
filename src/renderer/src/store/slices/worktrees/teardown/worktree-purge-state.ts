@@ -125,8 +125,9 @@ export function buildFullWorktreePurgeState(
   const {
     omitByWorktree,
     omitWorkspaceLineageByWorktree,
+    omitWorkspaceSessionKeyByWorktree,
     pruneRightSidebarTabByWorktree,
-    omitByPaneKeyTabPrefix
+    omitByPaneKey
   } = omitters
 
   const removedActive = s.activeWorktreeId != null && worktreeIdSet.has(s.activeWorktreeId)
@@ -150,8 +151,8 @@ export function buildFullWorktreePurgeState(
     return next
   })()
   const tabPrefixedSleeping = {
-    sleepingAgentSessionsByPaneKey: omitByPaneKeyTabPrefix(s.sleepingAgentSessionsByPaneKey),
-    agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey)
+    sleepingAgentSessionsByPaneKey: omitByPaneKey(s.sleepingAgentSessionsByPaneKey),
+    agentLaunchConfigByPaneKey: omitByPaneKey(s.agentLaunchConfigByPaneKey)
   }
   // Why both: tab-prefix omission misses a sleeping record whose tab is already gone.
   const nextSleeping = {
@@ -170,15 +171,12 @@ export function buildFullWorktreePurgeState(
       tabIds: doomed.doomedTabIds,
       activeFileCleared
     }),
-    ...buildWorktreePurgeSurfacePatch(
-      s,
-      omitters,
-      doomed.doomedTabIds,
-      nextSleeping,
-      changedPaneKeys
-    ),
+    ...buildWorktreePurgeSurfacePatch(s, omitters, nextSleeping, changedPaneKeys),
     worktreeLineageById: omitByWorktree(s.worktreeLineageById),
     workspaceLineageByChildKey: omitWorkspaceLineageByWorktree(s.workspaceLineageByChildKey),
+    contestedPrimaryHostBySessionKey: omitWorkspaceSessionKeyByWorktree(
+      s.contestedPrimaryHostBySessionKey
+    ),
     deleteStateByWorktreeId: removeDeleteStatesForWorktreeIds(
       s.deleteStateByWorktreeId,
       worktreeIdSet
@@ -196,6 +194,7 @@ export function buildFullWorktreePurgeState(
     gitRebaseIndexObservationByWorktree: omitByWorktree(
       s.gitRebaseIndexObservationByWorktree ?? {}
     ),
+    gitOperationRunIdentityByWorktree: omitByWorktree(s.gitOperationRunIdentityByWorktree ?? {}),
     gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
     gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
     gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),

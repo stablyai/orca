@@ -19,10 +19,17 @@ import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
 import { createTerminalClipboardCopiedFiles } from '../../clipboard/terminal-clipboard-copied-files'
-import type { ReadClipboardTextOptions } from '../../../../../../shared/clipboard/clipboard-text'
+import type {
+  ClipboardPasteContent,
+  ReadClipboardPasteContentOptions
+} from '../../../../../../shared/clipboard/clipboard-paste-content'
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
+import {
+  reportUnpastedClipboardEventFiles,
+  requestNativePasteForUnreadWindowsClipboard
+} from './terminal-unread-clipboard-native-paste'
 
 export type TerminalPanePasteExecution = ReturnType<typeof createTerminalPanePasteExecution>
 
@@ -146,8 +153,19 @@ export function createTerminalPanePasteExecution(
   const pasteFromClipboard = (
     pane: ManagedPane,
     source: Extract<TerminalPasteSource, 'keyboard' | 'paste-event'>,
-    readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string> = window.api.ui
-      .readClipboardText
+    {
+      readClipboardContent = window.api.ui.readClipboardPasteContent,
+      eventCopiedFilePaths,
+      eventCarriedFiles = false,
+      isUnreadWindowsClipboardFallback = false
+    }: {
+      readClipboardContent?: (
+        options: ReadClipboardPasteContentOptions
+      ) => Promise<ClipboardPasteContent>
+      eventCopiedFilePaths?: string[]
+      eventCarriedFiles?: boolean
+      isUnreadWindowsClipboardFallback?: boolean
+    } = {}
   ): void => {
     const connectionId = getConnectionId(worktreeId) ?? null
     const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
@@ -157,9 +175,10 @@ export function createTerminalPanePasteExecution(
     )
     const activeElementAtDispatch = document.activeElement
     void pasteTerminalClipboard({
-      readClipboardText,
+      readClipboardContent,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       copiedFiles: createPaneClipboardCopiedFiles(pane),
+      eventCopiedFilePaths,
       connectionId,
       runtimeEnvironmentId,
       onLocalImagePasted: (path) => recordRecentTerminalImage(pane.terminal, path, true),
@@ -169,9 +188,22 @@ export function createTerminalPanePasteExecution(
       onTextPasteError: () =>
         setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
       onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
-    }).catch(() => {
-      setTerminalError('Paste failed.')
     })
+      .then((result) => {
+        // The paste event this may trigger must not fall back again.
+        if (source === 'keyboard') {
+          requestNativePasteForUnreadWindowsClipboard(result, pane)
+        } else if (
+          isUnreadWindowsClipboardFallback ||
+          !eventCarriedFiles ||
+          !requestNativePasteForUnreadWindowsClipboard(result, pane)
+        ) {
+          reportUnpastedClipboardEventFiles(result, eventCarriedFiles)
+        }
+      })
+      .catch(() => {
+        setTerminalError('Paste failed.')
+      })
   }
 
   return {

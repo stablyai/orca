@@ -94,11 +94,9 @@ export function showFramePatch(
   }
   const before = store.getState()
   const shown = withMovedTabSelections(before, patch)
+  const nextTabsByWorktree = shown.patch.unifiedTabsByWorktree ?? before.unifiedTabsByWorktree
   for (const key of rebuiltWorkspaces) {
-    retireRemovedNativeChatTabs(
-      before.unifiedTabsByWorktree[key] ?? [],
-      (shown.patch.unifiedTabsByWorktree ?? before.unifiedTabsByWorktree)[key] ?? []
-    )
+    retireRemovedNativeChatTabs(before.unifiedTabsByWorktree, nextTabsByWorktree, key)
   }
   store.setState(shown.patch)
   return shown.taken

@@ -2,7 +2,7 @@ import { describePairedServerHosts } from '../../../../shared/remote-runtime/hos
 import {
   pairedRuntimeBrowserClientHostId,
   pairedRuntimeBrowserClientHostsPage
-} from '../../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+} from '../../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { prepareRuntimeEnvironmentBrowserPlacement } from '../browser-hosting/runtime-environment-browser-placement'
 import {
@@ -14,10 +14,7 @@ import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeEnvironmentStatus
 } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type {
-  MobileDesktopRelayHosts,
-  MobileDesktopRelayHostWatch
-} from '../../../runtime/mobile-desktop-relay/mobile-desktop-relay-hosts'
+import type { MobileDesktopRelayHosts } from '../../../runtime/mobile-desktop-relay/mobile-desktop-relay-hosts'
 import {
   prepareManagedRuntimeRequest,
   type ManagedRuntimeCallPreparation
@@ -35,19 +32,11 @@ import {
   listRegisteredSshTargets
 } from '../../../ssh/targets/ssh-target-registry'
 import { getRuntimeEnvironmentStatusSnapshots } from '../connections/runtime-environment-request-connections'
-import {
-  callRuntimeEnvironment,
-  subscribeRuntimeEnvironment
-} from '../requests/runtime-environment-transport-routing'
-import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
-import {
-  isRuntimeEnvironmentManuallyDisconnected,
-  runtimeEnvironmentManualDisconnectCount
-} from '../connectivity/runtime-environment-manual-disconnect'
+import { callRuntimeEnvironment } from '../requests/runtime-environment-transport-routing'
+import { runtimeEnvironmentManualDisconnectCount } from '../connectivity/runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentStatusPublished } from '../status/runtime-environment-status-owner'
 import { watchRuntimeEnvironmentRegistry } from '../catalog/runtime-environment-preference'
-import { getRuntimeEnvironmentTransportGeneration } from '../connections/runtime-environment-transport-generation'
+import { watchRuntimeEnvironmentChanges } from './watch-runtime-environment-changes'
 import { getRuntimeEnvironmentRegistryRoot } from '../catalog/runtime-environment-registry-root'
 import { recipeVmServerState } from '../managed-orcad/runtime-environment-recipe-vm-wake'
 import { RECIPE_VM_PHONE_OPEN_HOLD_MS } from '../../../../shared/remote-runtime/recipe-vm-wake'
@@ -104,10 +93,13 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
     list: async () => {
       const relayable = await listRelayableEnvironments(userDataPath)
       const environments = relayable.map(({ environment }) => environment)
+      const environmentById = new Map(
+        environments.map((environment) => [environment.id, environment])
+      )
       const reachById = new Map(relayable.map(({ environment, reach }) => [environment.id, reach]))
       const statusByEnvironmentId = new Map<string, RuntimeEnvironmentStatus>()
       for (const snapshot of getRuntimeEnvironmentStatusSnapshots()) {
-        const environment = environments.find((entry) => entry.id === snapshot.environmentId)
+        const environment = environmentById.get(snapshot.environmentId)
         // Earlier pairings cannot establish the current server status.
         if (
           environment &&
@@ -142,6 +134,8 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
         statusByEnvironmentId
       }
     },
+    configuredIds: async () =>
+      (await listEnvironments(userDataPath)).map((environment) => environment.id),
     resolve: async (environmentId, openingMethod, signal) => {
       if (
         !(await listRelayableEnvironments(userDataPath)).some(
@@ -233,84 +227,22 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
     onCatalogChanged: (listener) =>
       watchRuntimeEnvironmentRegistry(userDataPath, listener, 'Phone server list'),
     watchChanges: async (host, expected, callbacks) =>
-      await watchRuntimeEnvironmentChanges(userDataPath, host.environmentId, expected, callbacks)
+      await watchRuntimeEnvironmentChanges({
+        userDataPath,
+        environmentId: host.environmentId,
+        expected,
+        preparation: PHONE_CALL_PREPARATION,
+        findEnvironment: async () => {
+          const environment = (await listRelayableEnvironments(userDataPath)).find(
+            (entry) => entry.environment.id === host.environmentId
+          )?.environment
+          return environment
+            ? { pairingRevision: pairingRevision(environment), runtimeId: environment.runtimeId }
+            : undefined
+        },
+        callbacks
+      })
   }
-}
-
-/** Main's own client-event stream to one server, bound to the transport and pairing it opened on. */
-async function watchRuntimeEnvironmentChanges(
-  userDataPath: string,
-  environmentId: string,
-  expected: { pairingRevision: number; runtimeId: string | null },
-  callbacks: Parameters<MobileDesktopRelayHosts['watchChanges']>[2]
-): Promise<MobileDesktopRelayHostWatch> {
-  const controller = new AbortController()
-  let subscription: RemoteRuntimeTransportSubscription | null = null
-  const generation = getRuntimeEnvironmentTransportGeneration(environmentId)
-  const current = (): boolean =>
-    !controller.signal.aborted &&
-    getRuntimeEnvironmentTransportGeneration(environmentId) === generation
-  const close = (): void => {
-    controller.abort()
-    subscription?.close()
-  }
-  const end = (): void => {
-    if (!controller.signal.aborted) {
-      close()
-      callbacks.onClose()
-    }
-  }
-  const environment = (await listRelayableEnvironments(userDataPath)).find(
-    (entry) => entry.environment.id === environmentId
-  )?.environment
-  if (
-    !environment ||
-    isRuntimeEnvironmentManuallyDisconnected(environmentId) ||
-    pairingRevision(environment) !== expected.pairingRevision ||
-    environment.runtimeId !== expected.runtimeId
-  ) {
-    queueMicrotask(end)
-    return { close, current }
-  }
-  subscribeRuntimeEnvironment(
-    userDataPath,
-    environmentId,
-    'runtime.clientEvents.subscribe',
-    undefined,
-    15_000,
-    {
-      onEvent: (payload) => {
-        if (payload.type === 'response' && payload.response.ok && current()) {
-          const { response } = payload
-          // A replay may stand for missed events of any kind.
-          const change = isRuntimeSubscriptionReplayResponse(response)
-            ? 'reposChanged'
-            : workspaceChangeOf(response.result)
-          if (change) {
-            callbacks.onChange({ catalog: change !== 'worktreesChanged' })
-          }
-        }
-      },
-      onClose: end
-    },
-    current,
-    controller.signal,
-    PHONE_CALL_PREPARATION
-  ).then((opened) => {
-    subscription = opened
-    if (controller.signal.aborted) {
-      opened.close()
-    }
-  }, end)
-  return { close, current }
-}
-
-function workspaceChangeOf(message: unknown): 'ready' | 'worktreesChanged' | 'reposChanged' | null {
-  if (typeof message !== 'object' || message === null || !('type' in message)) {
-    return null
-  }
-  const { type } = message
-  return type === 'ready' || type === 'worktreesChanged' || type === 'reposChanged' ? type : null
 }
 
 function pairingRevision(environment: KnownRuntimeEnvironment): number {

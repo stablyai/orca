@@ -10,9 +10,12 @@ import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { botToolRelay } from '../bots/tool-relay/bot-tool-relay'
 import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
-import { removeManagedAgentHooksAsync } from '../agent-hooks/installation/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/installation/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/installation/structured-agent-session-runtime-teardown'
+import {
+  beginProviderRelayQuit,
+  providerRelayDetachesSettled
+} from '../provider-relay/app-provider-relays'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
 import { clearRuntimeMetadataIfOwned } from '../runtime/rpc/server/runtime-metadata'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/history/index/codex-state-db-backfill-recovery'
@@ -92,6 +95,7 @@ function stopPluginsAndSessions(
   stopCodexAccountHistoryWork()
   // Stamp resume reasons before stopping sessions; an update restart was not a user quit.
   setStructuredAgentSessionTeardownTrigger(trigger)
+  beginProviderRelayQuit()
   const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
   core.pluginService = null
   return { pluginHostShutdown, codexBackfillRecoveryShutdown, structuredAgentSessionShutdown }
@@ -103,7 +107,9 @@ function cleanUpGrokHooksOnWindows(): Promise<void> {
     return Promise.resolve()
   }
   return settleWithinMs(
-    removeManagedAgentHooksAsync({ agents: ['grok'] }),
+    import('../agent-hooks/installation/managed-agent-hook-controls').then(
+      ({ removeManagedAgentHooksAsync }) => removeManagedAgentHooksAsync({ agents: ['grok'] })
+    ),
     GROK_HOOK_CLEANUP_DEADLINE_MS
   ).then((settled) => {
     if (settled.outcome === 'timed-out') {
@@ -236,7 +242,11 @@ export function beginDesktopCoreShutdown(
     rpcStopAndClear
   ]).then(() => runtime?.closeNotificationDismissals())
   // Normal quits preserve the detached daemon for warm reattach.
-  const daemonTeardown = removalQuiescence.then(() =>
+  // Chat agents handed to the daemon need their detach to arrive before the client goes.
+  const daemonTeardown = Promise.all([
+    removalQuiescence,
+    providerRelayDetachesSettled(structuredAgentSessionShutdown)
+  ]).then(() =>
     native.isDevParentShutdown() ? daemon.shutdownDaemon() : daemon.disconnectDaemon()
   )
   return [

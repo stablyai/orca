@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { bestCmdJPaletteSectionQualityClass } from '@/components/cmd-j/palette-results'
 import {
+  bestPaletteDestination,
   bestPaletteQualityRank,
   shouldExtraSectionLeadPaletteSections,
   shouldIntentSectionLeadPaletteSections,
@@ -72,7 +73,9 @@ export function useWorktreeJumpPaletteSections({
       ),
       bestOpenTabQualityRank: bestPaletteQualityRank(
         openTabItems.map((item) => item.result.qualityClass)
-      )
+      ),
+      bestWorktreeDestination: bestPaletteDestination(worktreeItems.map((item) => item.match.rank)),
+      bestOpenTabDestination: bestPaletteDestination(openTabItems.map((item) => item.result.rank))
     })
   }, [hasQuery, openTabItems, worktreeItems])
 

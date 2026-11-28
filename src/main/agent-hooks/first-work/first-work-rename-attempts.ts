@@ -80,6 +80,12 @@ export function isFirstWorkRenameSettled(worktreeId: string, incarnation: string
   return settledIncarnation === incarnation
 }
 
+/** Stops automatic attempts for this incarnation, as a definitive verdict would. */
+export function settleFirstWorkRename(worktreeId: string, incarnation: string): void {
+  clearFirstWorkGenerationFailures(worktreeId)
+  rememberSettled(worktreeId, incarnation)
+}
+
 /** The running attempt a click may join: same incarnation and still able to generate. */
 export function runningFirstWorkAttempt(
   worktreeId: string,
@@ -87,6 +93,15 @@ export function runningFirstWorkAttempt(
 ): { attemptId: number; promise: Promise<FirstWorkAttemptResult> } | null {
   const entry = inFlight.get(worktreeId)
   return entry && entry.incarnation === incarnation && !entry.lookupExpired ? entry : null
+}
+
+/** Attempt `attemptId`'s result once it settles; null when it is not the one running (already finished). */
+export function waitForFirstWorkAttempt(
+  worktreeId: string,
+  attemptId: number
+): Promise<FirstWorkAttemptResult> | null {
+  const entry = inFlight.get(worktreeId)
+  return entry?.attemptId === attemptId ? entry.promise : null
 }
 
 function rememberSettled(worktreeId: string, incarnation: string): void {

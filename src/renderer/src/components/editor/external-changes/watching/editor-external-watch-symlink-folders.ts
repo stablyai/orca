@@ -1,77 +1,45 @@
-import type { AppState } from '@/store/types'
-import { parentDirForWatchPath } from '@/components/right-sidebar/file-explorer/watching/file-explorer-watch-path'
-import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import {
-  normalizeRuntimePathForComparison,
-  relativePathInsideRoot
-} from '../../../../../../shared/file-access/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
+import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import {
   getEditorExternalWatchTargetKey,
-  getOpenFileRuntimeOwner,
   type EditorExternalWatchTarget
 } from './editor-external-watch-targets'
 import {
-  acquireWatchRoot,
-  releaseWatchRoot,
-  type HeldWatchRoots,
-  type WatchRootArgs
+  localWatchRoot,
+  watchRootStatus,
+  type HeldWatchRoots
 } from './editor-external-watch-local-roots'
+import { SymlinkWatchPlan, type SymlinkTabFolder } from './editor-external-watch-symlink-plan'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 
 // Why: native recursive watches don't follow a symlinked folder, so a tab reached through one needs a watch on its own folder.
 
-let cachedOpenFiles: AppState['openFiles'] | null = null
-let cachedTargets: readonly EditorExternalWatchTarget[] | null = null
-let cachedKey = '[]'
+// Why: a preview-tab swap closes and reopens a folder within seconds; keeping it open for main's own watcher-reuse window
+// (WATCHER_TEARDOWN_GRACE_MS) turns that swap's 2N+2 watch requests into none. Only folders another one could share apply.
+const CLOSED_FOLDER_GRACE_MS = 30_000
 
-/** Stable key of (local target, tab folder below its root) pairs, so edits to tab content don't re-run the sync. */
-export function selectLocalTabFoldersKey(
-  openFiles: AppState['openFiles'],
-  targets: readonly EditorExternalWatchTarget[]
-): string {
-  if (openFiles === cachedOpenFiles && targets === cachedTargets) {
-    return cachedKey
-  }
-  const localTargetsById = new Map<string, EditorExternalWatchTarget[]>()
-  for (const target of targets) {
-    // Why: SSH and runtime workspaces watch through their host, not this renderer's local watcher.
-    if (target.runtimeEnvironmentId === null && target.connectionId === undefined) {
-      localTargetsById.set(target.worktreeId, [
-        ...(localTargetsById.get(target.worktreeId) ?? []),
-        target
-      ])
-    }
-  }
-  const entries = new Set<string>()
-  for (const file of openFiles) {
-    const fileTargets = localTargetsById.get(file.worktreeId)
-    if (!fileTargets || getOpenFileRuntimeOwner(file) !== null || isVirtualEditorFile(file)) {
-      continue
-    }
-    // Why not dirname: a POSIX name may contain a backslash.
-    const folder = parentDirForWatchPath(file.filePath)
-    for (const target of fileTargets) {
-      if (relativePathInsideRoot(target.worktreePath, folder)) {
-        // Why JSON: paths may contain any delimiter a joined string could use.
-        entries.add(JSON.stringify([getEditorExternalWatchTargetKey(target), folder]))
-      }
-    }
-  }
-  cachedOpenFiles = openFiles
-  cachedTargets = targets
-  cachedKey = JSON.stringify([...entries].sort())
-  return cachedKey
-}
-
-type TabFolder = { target: EditorExternalWatchTarget; watchRoot: WatchRootArgs }
-
-/** Holds a watch on each open tab's folder that a symlink below the workspace root leads to. */
+/** Holds the watches open tab folders behind a symlink need, keeping the plan in step with which tab folders are open. */
 export class SymlinkedTabFolderWatches {
-  private readonly folders = new Map<string, TabFolder>()
-  private readonly watchedByPath = new Map<string, Set<TabFolder>>()
+  private readonly folders = new Map<string, SymlinkTabFolder>()
+  /** Open tab folders per comparison path, behind a link or not; 0 while a closed one waits out its grace. */
+  private readonly openPaths = new Map<string, number>()
+  private readonly closing = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly plan: SymlinkWatchPlan
+  private handOver: ((payload: FsChangedPayload) => void) | undefined
 
-  constructor(
-    private readonly onWatchError: (target: EditorExternalWatchTarget, error: unknown) => void
-  ) {}
+  constructor(onWatchError: (target: EditorExternalWatchTarget, error: unknown) => void) {
+    this.plan = new SymlinkWatchPlan(
+      (key) => this.openPaths.has(key),
+      onWatchError,
+      (key) => this.stopGrace(key),
+      (payload) => this.handOver?.(payload)
+    )
+  }
+
+  /** Where the events a released watch hands back go: the pipeline its own payloads take. */
+  routeHandOversTo(handler: ((payload: FsChangedPayload) => void) | undefined): void {
+    this.handOver = handler
+  }
 
   sync(
     foldersKey: string,
@@ -80,13 +48,17 @@ export class SymlinkedTabFolderWatches {
   ): void {
     const nextKeys: string[] = JSON.parse(foldersKey)
     const nextKeySet = new Set(nextKeys)
-    for (const [key, folder] of this.folders) {
-      if (!nextKeySet.has(key)) {
-        this.folders.delete(key)
-        if (this.unmarkWatched(folder)) {
-          releaseWatchRoot(heldWatchRoots, folder.watchRoot)
-        }
-      }
+    // Why unlink every closed folder first: closing a parent with its children must not plan watches for the children.
+    const closed = [...this.folders].filter(([key]) => !nextKeySet.has(key))
+    for (const [, folder] of closed) {
+      folder.leaving = true
+    }
+    for (const [key, folder] of closed) {
+      this.folders.delete(key)
+      this.plan.unlink(folder, heldWatchRoots)
+    }
+    for (const [, folder] of closed) {
+      this.countOpen(folder.key, -1, heldWatchRoots)
     }
     const targetsByKey = new Map(targets.map((t) => [getEditorExternalWatchTargetKey(t), t]))
     for (const key of nextKeys) {
@@ -98,56 +70,109 @@ export class SymlinkedTabFolderWatches {
       if (!target) {
         continue
       }
-      const folder: TabFolder = {
+      const folder: SymlinkTabFolder = {
         target,
-        watchRoot: { worktreePath: folderPath, connectionId: undefined }
+        targetKey,
+        path: folderPath,
+        key: normalizeRuntimePathForComparison(folderPath),
+        candidates: undefined,
+        desired: undefined,
+        covered: false,
+        leaving: false,
+        pinnedTo: undefined
       }
       this.folders.set(key, folder)
+      this.countOpen(folder.key, 1, heldWatchRoots)
       void window.api.fs
-        .hasSymlinkBelowRoot({ rootPath: target.worktreePath, path: folderPath })
-        .catch(() => false)
-        .then((isLinked) => {
+        .findSymlinkBelowRoot({
+          rootPath: target.worktreePath,
+          path: folderPath,
+          // Why: a WSL folder is never shared, so whether a link exists is all it needs.
+          which: isWslUncPath(folderPath) ? 'first' : 'deepest'
+        })
+        .catch(() => null)
+        .then((link) => {
           // Why: the tab may have closed, or the hook unmounted, while main answered.
-          if (!isLinked || this.folders.get(key) !== folder) {
-            return
+          if (link && this.folders.get(key) === folder) {
+            this.plan.link(folder, link, heldWatchRoots)
           }
-          this.markWatched(folder)
-          void acquireWatchRoot(heldWatchRoots, folder.watchRoot, (error) =>
-            this.onWatchError(target, error)
-          )
         })
     }
   }
 
   /** Workspaces whose tabs a payload from one of these folder watches belongs to. */
-  targetsFor(worktreePath: string, connectionId: string | undefined): EditorExternalWatchTarget[] {
-    if (connectionId || this.watchedByPath.size === 0) {
+  targetsFor(
+    worktreePath: string,
+    connectionId: string | undefined,
+    heldWatchRoots: HeldWatchRoots
+  ): EditorExternalWatchTarget[] {
+    if (connectionId || !this.plan.hasRoutes()) {
       return []
     }
-    const folders = this.watchedByPath.get(normalizeRuntimePathForComparison(worktreePath))
-    return folders ? [...folders].map((folder) => folder.target) : []
+    const unheld = watchRootStatus(heldWatchRoots, localWatchRoot(worktreePath)) === undefined
+    return this.plan.targetsFor(normalizeRuntimePathForComparison(worktreePath), unheld)
+  }
+
+  /** A shared watch's status may have changed (main resynced it, or another consumer retried it); re-check what it sees. */
+  noteSettled(worktreePath: string, heldWatchRoots: HeldWatchRoots): void {
+    this.plan.replanSeenBy(normalizeRuntimePathForComparison(worktreePath), heldWatchRoots)
   }
 
   /** Forgets every folder; the caller releases the held roots. */
   clear(): void {
+    for (const timer of this.closing.values()) {
+      clearTimeout(timer)
+    }
+    this.closing.clear()
     this.folders.clear()
-    this.watchedByPath.clear()
+    this.openPaths.clear()
+    this.plan.clear()
   }
 
-  private markWatched(folder: TabFolder): void {
-    const path = normalizeRuntimePathForComparison(folder.watchRoot.worktreePath)
-    this.watchedByPath.set(path, (this.watchedByPath.get(path) ?? new Set()).add(folder))
+  private countOpen(key: string, delta: number, heldWatchRoots: HeldWatchRoots): void {
+    const count = (this.openPaths.get(key) ?? 0) + delta
+    const reopened = this.closing.get(key)
+    if (reopened && count > 0) {
+      clearTimeout(reopened)
+      this.closing.delete(key)
+      this.openPaths.set(key, count)
+      return
+    }
+    if (count > 0) {
+      this.openPaths.set(key, count)
+      if (count === delta) {
+        this.plan.replanFor(key, true, heldWatchRoots)
+      }
+      return
+    }
+    // Why only a chosen folder: closing one nobody chose changes no watch, so it needs no grace.
+    if (!this.plan.isWanted(key)) {
+      this.forgetOpen(key)
+      return
+    }
+    this.openPaths.set(key, 0)
+    this.closing.set(
+      key,
+      setTimeout(() => {
+        this.closing.delete(key)
+        this.forgetOpen(key)
+        this.plan.replanFor(key, false, heldWatchRoots)
+      }, CLOSED_FOLDER_GRACE_MS)
+    )
   }
 
-  private unmarkWatched(folder: TabFolder): boolean {
-    const path = normalizeRuntimePathForComparison(folder.watchRoot.worktreePath)
-    const folders = this.watchedByPath.get(path)
-    if (!folders?.delete(folder)) {
-      return false
+  /** Nothing wants this closed folder's watch any more, so its grace has nothing to keep. */
+  private stopGrace(key: string): void {
+    const timer = this.closing.get(key)
+    if (timer) {
+      clearTimeout(timer)
+      this.closing.delete(key)
+      this.forgetOpen(key)
     }
-    if (folders.size === 0) {
-      this.watchedByPath.delete(path)
-    }
-    return true
+  }
+
+  private forgetOpen(key: string): void {
+    this.openPaths.delete(key)
+    this.plan.forgetFailure(key)
   }
 }

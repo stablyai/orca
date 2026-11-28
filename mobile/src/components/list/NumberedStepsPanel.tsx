@@ -1,14 +1,12 @@
 import { Fragment } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 export type NumberedStep = { readonly id: string; readonly title: string; readonly desc: string }
 
 /** A panel of numbered steps with hairlines between them, as on Home's pairing guide. */
 export function NumberedStepsPanel(props: { steps: readonly NumberedStep[] }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.steps}>
       {props.steps.map((step, index) => (
@@ -31,7 +29,7 @@ export function NumberedStepsPanel(props: { steps: readonly NumberedStep[] }) {
 
 const STEP_NUMBER_SIZE = 26
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   steps: { backgroundColor: colors.bgPanel, borderRadius: radii.surface, overflow: 'hidden' },
   separator: {
     height: StyleSheet.hairlineWidth,

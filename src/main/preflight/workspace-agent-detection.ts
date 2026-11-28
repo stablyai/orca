@@ -1,6 +1,7 @@
 import { isFolderRepo } from '../../shared/repository/repo-kind'
 import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
 import { captureHostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
@@ -19,6 +20,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-work
 import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
 import type { Repo } from '../../shared/repository/repo-types'
 import {
+  resolveLocalProjectRuntimeForProject,
   resolveLocalWorkspaceRuntime,
   type ProjectRuntimeResolutionStore
 } from '../workspaces/execution-host/local-project-runtime-resolution'
@@ -54,6 +56,23 @@ export type WorkspaceAgentDetectionStore = ProjectRuntimeResolutionStore & {
 }
 
 export const HOST_DEFAULT_AGENT_DETECTION: AgentDetectionHost = { kind: 'local' }
+
+/** The configured Windows Agent runtime, which desktop probes with nothing focused (#18837). */
+export function resolveConfiguredWindowsAgentDetectionHost(
+  store: WorkspaceAgentDetectionStore
+): AgentDetectionHost {
+  if (process.platform !== 'win32' || !store.getSettings?.().localWindowsRuntimeDefault) {
+    return HOST_DEFAULT_AGENT_DETECTION
+  }
+  // 'local-project' is the renderer's id for a runtime resolved without a project.
+  const projectRuntime = resolveLocalProjectRuntimeForProject(store, {
+    id: 'local-project',
+    localWindowsRuntimePreference: { kind: 'inherit-global' }
+  })
+  return projectRuntime
+    ? { kind: 'local', context: { projectRuntime } }
+    : HOST_DEFAULT_AGENT_DETECTION
+}
 
 export type AgentDetectionWorkspace =
   | {
@@ -198,7 +217,8 @@ export async function refreshAgentsOnHost(
 /** A prospective workspace uses the create route's resolved repo, never a client host guess. */
 export async function detectProjectLaunchContext(
   store: WorkspaceAgentDetectionStore,
-  repo: Repo
+  repo: Repo,
+  onlyTuiAgent?: TuiAgent
 ): Promise<ProjectLaunchContext> {
   const host = getRepoExecutionHostId(repo)
   const ssh = getSshTargetIdForExecutionHost(host)
@@ -209,9 +229,10 @@ export async function detectProjectLaunchContext(
   if (!ssh && !projectRuntime) {
     throw new Error('worktree_execution_host_unresolved')
   }
+  const overrides = agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
   const agents = await detectAgentsOnHost(
     ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } },
-    agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
+    onlyTuiAgent ? { ...overrides, onlyTuiAgent } : overrides
   )
   return {
     agents: agents.filter(isTuiAgent),

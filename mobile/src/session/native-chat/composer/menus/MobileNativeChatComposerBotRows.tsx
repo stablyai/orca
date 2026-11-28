@@ -5,9 +5,9 @@ import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
 import { ChatBadgedIcon } from '../../../../bots/MobileBotChatLeading'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../../../../worktree/agent-lineage/agent-row-display'
 import type { ComposerMenuRow, MentionBotRow } from './MobileNativeChatComposerMenu'
 
@@ -22,7 +22,8 @@ export function MobileNativeChatComposerBotRow({
   onPick: (row: ComposerMenuRow) => void
   onOpenChats?: (row: BotRow) => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const now = useNow(30_000, row.kind === 'bot-chat')
   const { bot } = row
@@ -112,7 +113,7 @@ export function MobileNativeChatComposerBotRow({
             ) : null}
           </View>
           {chat.lastActivityAt > 0 ? (
-            <Text style={styles.muted}>{formatTimeAgo(chat.lastActivityAt, now)}</Text>
+            <Text style={styles.muted}>{formatTimeAgo(chat.lastActivityAt, now, t)}</Text>
           ) : null}
         </Pressable>
       )
@@ -150,7 +151,7 @@ export function MobileNativeChatComposerBotRow({
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

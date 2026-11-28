@@ -19,6 +19,9 @@ export function createIntegrationStateFileCache<T>(args: {
   readFromDisk: () => T | Promise<T>
 }): IntegrationStateFileCache<T> {
   let cached: { path: string; stamp: string | null; value: T } | null = null
+  // Concurrent misses that saw the same file share one read instead of each reading it.
+  let pending: { path: string; stamp: string | null; revision: number; value: Promise<T> } | null =
+    null
   let revision = 0
   return {
     async get(): Promise<T> {
@@ -26,14 +29,31 @@ export function createIntegrationStateFileCache<T>(args: {
       const path = args.filePath()
       // A write during the read leaves an older stamp and forces the next read to retry.
       const stamp = await readStamp(path)
-      if (!cached || cached.path !== path || cached.stamp !== stamp) {
-        const value = await args.readFromDisk()
-        if (revision !== reading) {
-          return this.get()
-        }
-        cached = { path, stamp, value }
+      if (cached && cached.path === path && cached.stamp === stamp) {
+        return cached.value
       }
-      return cached.value
+      let read = pending
+      if (!read || read.path !== path || read.stamp !== stamp || read.revision !== reading) {
+        const started = {
+          path,
+          stamp,
+          revision: reading,
+          value: (async () => args.readFromDisk())()
+        }
+        const settle = (): void => {
+          if (pending === started) {
+            pending = null
+          }
+        }
+        started.value.then(settle, settle)
+        pending = read = started
+      }
+      const value = await read.value
+      if (revision !== reading) {
+        return this.get()
+      }
+      cached = { path, stamp, value }
+      return value
     },
     invalidate(): void {
       // A concurrent writer may replace our write before we can stamp it.

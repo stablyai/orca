@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
-import { templateProposal } from '../../../../shared/bots/bot-proposal'
+import { BOT_PURPOSE_MAX_LENGTH, templateProposal } from '../../../../shared/bots/bot-proposal'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   LONG_FIXTURE_COMPUTER,
@@ -292,7 +292,7 @@ function blockedTemplateReview(uiLanguage: 'de' | 'ru' | 'en') {
     ),
     interact: async (frame) => {
       await i18n.changeLanguage(await loadRendererUiLanguage(uiLanguage))
-      await typeInto('textarea', 'Summarize fixture events for the example studio. '.repeat(5))()
+      await typeInto('textarea', 'Summarize fixture events for the example studio. '.repeat(21))()
       const create = frame.querySelector<HTMLButtonElement>('button[type="submit"]')
       create?.click()
       const alerts = [...frame.querySelectorAll<HTMLElement>('[role="alert"]')]
@@ -363,7 +363,9 @@ export const submitUntouchedIdentity340 = defineFixture({
       width={340}
       proposal={{
         ...templateProposal(BOT_TEMPLATES[0]),
-        watches: 'Example studio requests. '.repeat(10)
+        watches: 'Example studio requests. '.repeat(12).trim(),
+        does: 'Sorts each request and drafts a reply. '.repeat(13).slice(0, 499).trim(),
+        reports: 'Here, every weekday morning. '.repeat(7).slice(0, 199).trim()
       }}
     />
   ),
@@ -373,7 +375,7 @@ export const submitUntouchedIdentity340 = defineFixture({
     await new Promise(requestAnimationFrame)
     if (
       !identity ||
-      identity.value.length <= 200 ||
+      identity.value.length <= BOT_PURPOSE_MAX_LENGTH ||
       identity.ariaInvalid ||
       templateCreates() !== 1
     ) {

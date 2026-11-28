@@ -31,6 +31,7 @@ import {
   type EnvironmentStatus,
   type EnvironmentStatusSnapshot
 } from './environment-provider-driver'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export const SHELL_RECIPE_DRIVER_ID = 'shell-recipe'
 
@@ -44,12 +45,14 @@ type RecipeStepFailure = {
   timedOut?: true
 }
 
-const DriverStateSchema = z.object({
-  recipeResult: EphemeralVmRecipeResultSchema,
-  projectId: z.string().optional(),
-  workspaceId: z.string().optional(),
-  workspaceName: z.string().optional()
-})
+const DriverStateSchema = lazyZodSchema(() =>
+  z.object({
+    recipeResult: EphemeralVmRecipeResultSchema,
+    projectId: z.string().optional(),
+    workspaceId: z.string().optional(),
+    workspaceName: z.string().optional()
+  })
+)
 
 export class ShellRecipeDriver implements EnvironmentProviderDriver {
   readonly id = SHELL_RECIPE_DRIVER_ID

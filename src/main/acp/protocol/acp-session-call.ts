@@ -1,65 +1,55 @@
 import type { z } from 'zod'
 import {
-  ACP_PROTOCOL_VERSION,
-  type InitializeRequest,
-  type InitializeResponse,
-  type PromptRequest,
-  type SetSessionConfigOptionRequest
-} from '../generated/acp-protocol.generated'
-import {
   AcpAgentError,
   AcpInvalidResponseError,
   AcpRpcError,
   acpAuthRequiredError
 } from '../transport/acp-errors'
 import type { AcpJsonRpcPeer, AcpRequestContext } from '../transport/acp-json-rpc-peer'
+import type { AcpResponse } from '../transport/acp-response-settlement'
 import { answerAcpPermission, readAcpPermissionRequest } from './acp-permission-requests'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
 import type { AcpSessionRuntimeOptions } from './acp-session-runtime-options'
 
-type Meta = PromptRequest['_meta']
-
-export function acpWithMeta(meta: Meta): { _meta?: Meta } {
-  return meta ? { _meta: meta } : {}
+export type AcpSessionCallOptions = {
+  onId?: (id: number) => void
+  rejected?: (error: unknown) => void
 }
 
-export function acpInitializeRequest(
-  options: Pick<AcpSessionRuntimeOptions, 'clientCapabilities' | 'clientInfo'>
-): InitializeRequest {
-  return {
-    protocolVersion: ACP_PROTOCOL_VERSION,
-    clientCapabilities: {
-      fs: { readTextFile: false, writeTextFile: false },
-      terminal: false,
-      ...options.clientCapabilities
-    },
-    ...(options.clientInfo === undefined ? {} : { clientInfo: options.clientInfo })
+/** Reads a session call's answer: auth refusals, schema check, and the sign-in answer. */
+export function settleAcpSessionCall<T>(
+  method: string,
+  schema: z.ZodType<T>,
+  answered: ((signedIn: boolean) => void) | undefined,
+  received?: (response: T) => void,
+  rejected?: (error: unknown) => void
+): (response: AcpResponse) => T {
+  return (response) => {
+    if ('error' in response) {
+      const error = response.error
+      const mapped =
+        error instanceof AcpAgentError && error.code === -32000
+          ? (answered?.(false), acpAuthRequiredError(error))
+          : error
+      rejected?.(mapped)
+      throw mapped
+    }
+    const parsed = schema.safeParse(response.value)
+    if (!parsed.success) {
+      const invalid = new AcpInvalidResponseError(
+        `Invalid ACP response: ${method}`,
+        response.value,
+        parsed.error.issues
+      )
+      rejected?.(invalid)
+      throw invalid
+    }
+    if (['session/new', 'session/load', 'session/resume'].includes(method)) {
+      answered?.(true)
+    }
+    received?.(parsed.data)
+    return parsed.data
   }
-}
-
-export function acpCheckProtocolVersion(
-  response: InitializeResponse,
-  close: (error: Error) => void
-): InitializeResponse {
-  if (response.protocolVersion !== ACP_PROTOCOL_VERSION) {
-    const error = new AcpRpcError(
-      -32602,
-      `Unsupported ACP protocol version: ${response.protocolVersion}`
-    )
-    close(error)
-    throw error
-  }
-  return response
-}
-
-export function acpConfigOptionRequest(
-  sessionId: string,
-  configId: SetSessionConfigOptionRequest['configId'],
-  value: SetSessionConfigOptionRequest['value'],
-  meta?: Meta
-): SetSessionConfigOptionRequest {
-  const params = { configId, sessionId, ...acpWithMeta(meta) }
-  return typeof value === 'boolean' ? { ...params, value, type: 'boolean' } : { ...params, value }
 }
 
 export function callAcpSession<T>(
@@ -70,38 +60,14 @@ export function callAcpSession<T>(
   answered: ((signedIn: boolean) => void) | undefined,
   received?: (response: T) => void,
   timeoutMs: number | null = null,
-  rejected?: (error: unknown) => void
+  options?: AcpSessionCallOptions
 ): Promise<T> {
   return peer.request(method, params, {
     timeoutMs,
+    ...(options?.onId ? { onId: options.onId } : {}),
     // A bounded session control fails only itself; the agent is asked to drop it.
     ...(timeoutMs === null ? {} : { onTimeout: 'cancel' as const }),
-    settle: (response) => {
-      if ('error' in response) {
-        const error = response.error
-        const mapped =
-          error instanceof AcpAgentError && error.code === -32000
-            ? (answered?.(false), acpAuthRequiredError(error))
-            : error
-        rejected?.(mapped)
-        throw mapped
-      }
-      const parsed = schema.safeParse(response.value)
-      if (!parsed.success) {
-        const invalid = new AcpInvalidResponseError(
-          `Invalid ACP response: ${method}`,
-          response.value,
-          parsed.error.issues
-        )
-        rejected?.(invalid)
-        throw invalid
-      }
-      if (['session/new', 'session/load', 'session/resume'].includes(method)) {
-        answered?.(true)
-      }
-      received?.(parsed.data)
-      return parsed.data
-    }
+    settle: settleAcpSessionCall(method, schema, answered, received, options?.rejected)
   })
 }
 

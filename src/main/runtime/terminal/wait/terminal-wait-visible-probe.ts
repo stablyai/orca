@@ -108,6 +108,21 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
       : buildPtyTerminalWaitResult(handle, 'tui-idle', pty)
   }
 
+  /** Whether the setup Orca typed into this terminal is still running: its completion token is known
+   *  (none after a restart) and has not printed. Read-only, so a later completion wait still sees it. */
+  isSetupTerminalRunning(handle: string): boolean {
+    const ptyId = this.getTerminalPtyIdForHandle(handle)
+    const completionToken = ptyId ? this.setupCompletionTokenByPtyId.get(ptyId) : undefined
+    if (!ptyId || !completionToken) {
+      return false
+    }
+    let completed = false
+    createSetupCompletionScanner(completionToken, () => {
+      completed = true
+    }).scan(this.recentPtyOutputById.get(ptyId)?.read() ?? '')
+    return !completed
+  }
+
   async waitForSetupTerminalCompletion(
     handle: string,
     signal?: AbortSignal

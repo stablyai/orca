@@ -7,7 +7,8 @@ import { AgentRowDisplayIndex } from './agent-row-display-index'
 import type { AppState } from '../../../types'
 import type {
   AgentType,
-  AgentStatusEntry
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
@@ -32,7 +33,7 @@ export class AgentStatusProjectionState {
   activeAgentCount = 0
   readonly transitionListeners = new Set<AgentStatusChangeListener>()
   readonly transitionBatches: (readonly AgentStatusChange[])[] = []
-  activeDashboardOwners = new Set<string>()
+  activeDashboardOwners: Set<string> | null = new Set<string>()
   readonly countedRows = new Map<string, CountedRow>()
   readonly countsByWorktree = new Map<string, DashboardCounts>()
   dashboardTotals: DashboardCounts = EMPTY_COUNTS
@@ -43,6 +44,8 @@ export class AgentStatusProjectionState {
   readonly notices = new Set<string>()
   notifying = false
   inputs: AppState | null = null
+  /** Remote contexts applied to rows at the last publish, to tell which rows a host's reply moved. */
+  remoteRows: Readonly<Record<string, AgentStatusOrchestrationContext>> = {}
   readonly tabs = new Map<string, TerminalTab>()
   readonly tabWorktrees = new Map<string, string>()
   readonly represented = new Map<string, Tab>()
@@ -51,6 +54,8 @@ export class AgentStatusProjectionState {
   readonly handleByKey = new Map<string, string>()
   readonly keysByHandle = new Map<string, Set<string>>()
   readonly acceptedByTab = new Map<string, Set<string>>()
+  /** The tab each accepted key is filed under: a chat's tab can't be re-derived once it changed. */
+  readonly acceptedTabByKey = new Map<string, string>()
   readonly worktrees = new Map<string, Bucket>()
   readonly mobileKeys = new Map<string, Set<string>>()
   readonly mobileOwners = new Map<string, string>()
@@ -74,6 +79,8 @@ export class AgentStatusProjectionState {
   }
   nextRank = 0
   nextRowRevision = 0
+  /** Workspaces whose rows, arrangement or summary moved in the commit being published. */
+  readonly touchedWorktrees = new Set<string>()
   freshEvidence = 0
   /** Bumped when a source gains or loses its workspace row. */
   rowOwnersRevision = 0
@@ -194,6 +201,7 @@ export class AgentStatusProjectionState {
           summary[flag] = (b.counts.get(flag) ?? 0) > 0
         }
         b.summary = summary
+        this.touchedWorktrees.add(owner)
       }
     }
     if (previous) {

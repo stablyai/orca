@@ -1,35 +1,55 @@
-// Steers wait for cancellation or overlap on dialects that yield in place; agent-initiated turns accept sends directly.
+// Steers wait for cancellation, inject via extension, or overlap on dialects that yield in place.
 
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { PromptResponse } from '../generated/acp-protocol.generated'
+import type { AcpPromptOpening } from '../timeline/acp-prompt-turns'
+import { AcpPendingSteers } from './acp-pending-steers'
 import { AcpTurnFlight } from './acp-structured-turn-flight'
 import {
-  ACP_PROVIDER_EXITED_FACT,
-  ACP_WITHDRAWN_STEER_FACT,
-  AcpTurnIdleWaiters,
   interruptAcpUnpromptedTurn,
-  rejectAcpQueuedSends,
   runAcpCompactTurn,
-  settleAcpEndedTurns,
-  type AcpTurnSend
+  settleAcpEndedTurns
 } from './acp-structured-turn-settlement'
-import type { AcpStructuredTurnsDeps } from './acp-turn-dispatch-contract'
+import type {
+  AcpSteerMode,
+  AcpStructuredTurnsDeps,
+  AcpTurnSend as Send
+} from './acp-turn-dispatch-contract'
+import { AcpTurnIdleWaiters } from './acp-turn-idle-waiters'
 
 export class AcpStructuredTurns {
-  private readonly unsettled = new Set<string>()
-  private readonly idle = new AcpTurnIdleWaiters()
+  private readonly steers: AcpPendingSteers
   private readonly flight: AcpTurnFlight
+  /** Mail joins a running prompt via steering extension or concurrent prompt instead of cancelling. */
+  readonly steersMail: boolean
+  private readonly idleWaiters = new AcpTurnIdleWaiters()
   private ended = false
   private stopAt: number | null = null
   private preparingSteers = 0
   private withdrawals = 0
 
   constructor(private readonly deps: AcpStructuredTurnsDeps) {
+    this.steersMail = deps.steeringSessionId !== undefined || deps.dialect?.promptSteers === true
+    const joinableTurn = () =>
+      this.flight.active && this.acceptsRequests
+        ? deps.lane.promptTurnIdentity(this.flight.active.send.clientMessageId)
+        : null
+    this.steers = new AcpPendingSteers(deps, {
+      // A preparing steer's model command owns the prompt slot, so nothing may start under it.
+      busy: () => this.running || this.preparingSteers > 0,
+      joinableTurn,
+      start: (send) => this.flight.start(send),
+      cancel: () => this.flight.cancelForSteer(),
+      canPromptSteer: () => this.flight.canPromptSteer(),
+      launchPromptSteer: (send) => this.flight.launchSteer(send),
+      onSettled: () => this.notifyIdle()
+    })
     this.flight = new AcpTurnFlight({
       deps,
-      unsettled: this.unsettled,
+      sink: this.steers,
       isEnded: () => this.ended,
       isStopped: () => this.stopAt !== null,
       isPreparingSteers: () => this.preparingSteers > 0,
@@ -39,9 +59,16 @@ export class AcpStructuredTurns {
       clearStop: () => {
         this.stopAt = null
       },
-      accept: (clientMessageId) => this.accept(clientMessageId),
-      notifyIdle: () => this.idle.notify()
+      advanceSteers: () => this.steers.advance(),
+      notifyIdle: () => this.notifyIdle()
     })
+    if (deps.steeringSessionId !== undefined) {
+      deps.lane.onTurnOpened(() => {
+        if (this.steers.held && joinableTurn()) {
+          this.steers.advance()
+        }
+      })
+    }
   }
 
   capturePendingSend(clientMessageId: string): () => boolean {
@@ -71,13 +98,11 @@ export class AcpStructuredTurns {
   }
 
   get heldSends(): ReadonlySet<string> {
-    return this.unsettled
+    return this.steers.unsettled
   }
 
   get holdsSteers(): boolean {
-    return (
-      this.flight.steering !== null || this.flight.steers.length > 0 || this.preparingSteers > 0
-    )
+    return this.flight.steering !== null || this.steers.held || this.preparingSteers > 0
   }
 
   get withdrawalEpoch(): number {
@@ -107,9 +132,9 @@ export class AcpStructuredTurns {
       }
     }
     this.withdrawals += 1
-    const withdrawn = this.flight.steers.splice(0)
-    rejectAcpQueuedSends(this.deps, this.unsettled, withdrawn, ACP_WITHDRAWN_STEER_FACT)
-    return withdrawn.length > 0
+    const withdrawn = this.steers.stop()
+    this.notifyIdle()
+    return withdrawn
   }
 
   /** Earlier admitted steers retain their native queue and settlement while the host holds new input. */
@@ -122,15 +147,22 @@ export class AcpStructuredTurns {
     this.flight.cancelForSteer()
   }
 
-  whenIdle(signal?: AbortSignal): Promise<void> {
-    return this.idle.wait(this.running, signal)
+  whenIdle(signal?: AbortSignal, scope: 'all' | 'prompt' = 'all'): Promise<void> {
+    const promptOnly = scope === 'prompt'
+    const idle = () => this.ended || (!this.running && (promptOnly || !this.holdsSteers))
+    return signal?.aborted || idle() ? Promise.resolve() : this.idleWaiters.wait(idle, signal)
   }
 
   /** A steer whose controls must run as a prompt first holds its place until released. */
   holdSteer(): () => void {
     this.preparingSteers += 1
+    this.flight.cancelPromoted ||= this.flight.steering !== null
     this.flight.cancelForSteer()
-    return () => void this.preparingSteers--
+    return () => {
+      this.preparingSteers -= 1
+      this.steers.advance()
+      this.notifyIdle()
+    }
   }
 
   /** A Stop or teardown since `epoch` withdraws a preparing steer like any held steer. */
@@ -138,20 +170,13 @@ export class AcpStructuredTurns {
     return this.ended ? 'ended' : this.withdrawals === epoch ? null : 'stopped'
   }
 
-  dispatch(send: AcpTurnSend): void {
-    this.unsettled.add(send.clientMessageId)
-    if (!this.flight.active) {
+  dispatch(send: Send, mode: AcpSteerMode): void {
+    this.steers.unsettled.add(send.clientMessageId)
+    if (!this.running && !this.steers.held && this.preparingSteers === 0) {
       this.flight.start(send)
       return
     }
-    if (this.flight.canPromptSteer()) {
-      this.flight.launchSteer(send)
-      return
-    }
-    this.flight.steers.push(send)
-    if (this.deps.dialect?.promptSteers !== true) {
-      this.flight.cancelForSteer()
-    }
+    this.steers.submit(send, mode)
   }
 
   /** The host owns compaction-message settlement; reuse its open command turn. */
@@ -159,34 +184,39 @@ export class AcpStructuredTurns {
     await runAcpCompactTurn(
       this.deps,
       command,
-      () => this.running || this.ended,
+      () => this.running || this.steers.held || this.ended,
       (send, promptId) => this.flight.startCompact(send, promptId)
     )
     return { state: 'accepted', providerIdentity: null }
   }
 
   accept(clientMessageId: string): void {
-    if (this.unsettled.delete(clientMessageId)) {
-      this.deps.settle({ clientMessageId, providerIdentity: { provider: 'orca', clientMessageId } })
-    }
+    this.steers.accept(clientMessageId)
   }
 
   /** Teardown rejects held steers; unconfirmed in-flight sends remain unknown. */
   end(reason: string, cause?: Error): void {
     this.ended = true
     this.flight.cancelPromoted = false
-    rejectAcpQueuedSends(
-      this.deps,
-      this.unsettled,
-      this.flight.steers.splice(0),
-      ACP_PROVIDER_EXITED_FACT
-    )
+    this.steers.end(reason)
     const inFlight = { active: this.flight.active, steering: this.flight.steering }
     this.flight.active = null
     this.flight.steering = null
     this.flight.steerCancelled = null
     this.stopAt = null
-    settleAcpEndedTurns(this.deps, this.unsettled, inFlight, reason, cause)
-    this.idle.notify()
+    settleAcpEndedTurns(this.deps, this.steers, inFlight, reason, cause)
+    this.notifyIdle()
+  }
+
+  /** An earlier app's prompt to a kept agent: its answer ends the open turn; its send settles here. */
+  adoptEarlier(id: string, answered: () => Promise<PromptResponse>, ...opening: AcpPromptOpening) {
+    if (!this.running && !this.ended) {
+      this.steers.unsettled.add(id)
+      this.flight.adoptEarlier(id, answered, ...opening)
+    }
+  }
+
+  private notifyIdle(): void {
+    this.idleWaiters.wake()
   }
 }

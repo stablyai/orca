@@ -4,13 +4,13 @@ import { useTranslate } from '@/i18n/use-translate'
 import { PaneTopBanner } from '../../terminal-pane/appearance/pane-top-banner/PaneTopWarningBanner'
 import { workerAutoCloseBannerProps } from '../../terminal-pane/worker-lifetime/worker-auto-close-banner'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** A temporary orchestration worker chat's banner, as a terminal worker shows it, above the messages. */
 export function NativeChatWorkerAutoCloseBanner({
-  pane: { tabId, sessionId, target: chatTarget, isVisible }
+  pane: { sessionId, target: chatTarget, isVisible }
 }: {
-  pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'sessionId' | 'target' | 'isVisible'>
+  pane: Pick<NativeChatStructuredViewProps, 'sessionId' | 'target' | 'isVisible'>
 }): React.JSX.Element | null {
   const t = useTranslate()
   const environmentId = chatTarget.kind === 'local' ? null : (chatTarget.environmentId ?? null)
@@ -25,12 +25,13 @@ export function NativeChatWorkerAutoCloseBanner({
   const { state, nowMs, keepOpen } = useWorkerAutoClose(
     target,
     subject,
-    structuredAgentSessionPaneKey(tabId, sessionId),
+    chatPaneKey(sessionId),
     isVisible
   )
   const banner = workerAutoCloseBannerProps(state, nowMs, keepOpen, t, environmentId)
   // In flow, so messages start below it. Not `font-sans`: chat maps that to its font, which can be monospace.
+  // px-2 lines it up with the chat's pane header, which has no floating controls to clear.
   return banner ? (
-    <PaneTopBanner {...banner} className="shrink-0 font-(family-name:--font-sans)" />
+    <PaneTopBanner {...banner} className="shrink-0 px-2 font-(family-name:--font-sans)" />
   ) : null
 }

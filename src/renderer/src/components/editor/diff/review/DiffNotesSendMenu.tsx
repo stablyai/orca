@@ -5,6 +5,14 @@ import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { formatDiffComments } from '../../../../../../shared/file-review/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
+import type { SendNotesButtonSize } from '../../review-note-delivery/SendNotesButton'
+import {
+  copyNotesText,
+  diffNotesClearRequest,
+  type NotesClearRequest,
+  NotesMenuCopyClearItems,
+  useClearNotesConfirm
+} from '../../review-note-delivery/notes-copy-clear'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
@@ -19,12 +27,11 @@ export function DiffNotesSendMenu({
   filePath,
   showFileScope = false,
   triggerClassName,
-  triggerLabel,
-  triggerCount,
-  actionLabel,
   iconClassName = 'size-3.5',
   align = 'end',
-  respondToOpenRequest = false
+  batch,
+  requestClear,
+  openRequestTabId
 }: {
   /** The copy `comments` were read from, so delivered notes clear there. */
   owner: DiffCommentOwner | null
@@ -34,30 +41,27 @@ export function DiffNotesSendMenu({
   filePath?: string
   showFileScope?: boolean
   triggerClassName?: string
-  triggerLabel?: string
-  triggerCount?: number
-  actionLabel?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
-  // Enable on exactly one instance per worktree to avoid opening multiple menus for one shortcut.
-  respondToOpenRequest?: boolean
+  /** The shared "Send N notes" button, with Copy and Clear for the file (or all notes) in its menu. */
+  batch?: { size?: SendNotesButtonSize; flush?: boolean }
+  requestClear?: (request: NotesClearRequest) => void
+  openRequestTabId?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const openRequest = useAppStateValue((s) =>
-    respondToOpenRequest && s.diffNotesSendMenuOpenRequest?.worktreeId === worktreeId
+    openRequestTabId && s.diffNotesSendMenuOpenRequest?.tabId === openRequestTabId
       ? s.diffNotesSendMenuOpenRequest
       : null
   )
   // Enforce TTL when opening commits in NotesSendMenu; render-time clocks are stale or require polling.
-  const hasPendingOpenRequest = respondToOpenRequest && openRequest?.worktreeId === worktreeId
-  const openRequestNonce = hasPendingOpenRequest ? (openRequest?.nonce ?? null) : null
-  const openRequestExpiresAt = hasPendingOpenRequest
-    ? (openRequest?.issuedAt ?? 0) + OPEN_REQUEST_TTL_MS
-    : null
-  const handleOpenRequestHandled = useCallback(
-    () => useAppStore.getState().consumeDiffNotesSendMenuOpenRequest(worktreeId),
-    [worktreeId]
+  const claimOpenRequest = useCallback(
+    () =>
+      Boolean(
+        openRequest && useAppStore.getState().consumeDiffNotesSendMenuOpenRequest(openRequest)
+      ),
+    [openRequest]
   )
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
   const fileNotes = useMemo(
@@ -88,27 +92,49 @@ export function DiffNotesSendMenu({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [canSendFileScope, unsentFileNotes, unsentNotes, languageRevision, t])
 
+  const clearConfirm = useClearNotesConfirm()
+  const requestedNotes = canSendFileScope ? fileNotes : comments
+  const menuFooter =
+    batch && owner ? (
+      <NotesMenuCopyClearItems
+        onCopy={() => void copyNotesText(formatDiffComments(requestedNotes))}
+        onClear={() =>
+          (requestClear ?? clearConfirm.requestClear)(
+            diffNotesClearRequest(owner, requestedNotes, canSendFileScope ? filePath : undefined)
+          )
+        }
+      />
+    ) : null
+
   return (
-    <NotesSendMenu
-      owner={owner}
-      worktreeId={worktreeId}
-      groupId={groupId}
-      modeIdParts={['diff-notes', worktreeId, groupId, filePath ?? 'all']}
-      scopes={scopes}
-      // File menus must not broaden delivery before the user enters All unsent notes.
-      defaultScopeId={canSendFileScope ? 'file' : 'all'}
-      triggerClassName={triggerClassName}
-      triggerLabel={triggerLabel}
-      triggerCount={triggerCount}
-      actionLabel={actionLabel}
-      iconClassName={iconClassName}
-      align={align}
-      openRequestNonce={openRequestNonce}
-      openRequestExpiresAt={openRequestExpiresAt}
-      onOpenRequestHandled={handleOpenRequestHandled}
-      onDelivered={(notes) =>
-        void (owner && useAppStore.getState().clearDeliveredDiffComments(owner, notes))
-      }
-    />
+    <>
+      <NotesSendMenu
+        owner={owner}
+        worktreeId={worktreeId}
+        groupId={groupId}
+        modeIdParts={[
+          'diff-notes',
+          worktreeId,
+          groupId,
+          filePath ?? 'all',
+          ...(openRequestTabId ? [openRequestTabId] : [])
+        ]}
+        scopes={scopes}
+        // File menus must not broaden delivery before the user enters All unsent notes.
+        defaultScopeId={canSendFileScope ? 'file' : 'all'}
+        triggerClassName={triggerClassName}
+        iconClassName={iconClassName}
+        align={align}
+        batchTrigger={batch}
+        menuFooter={menuFooter}
+        openRequestNonce={openRequest?.nonce}
+        openRequestExpiresAt={openRequest ? openRequest.issuedAt + OPEN_REQUEST_TTL_MS : null}
+        onClaimOpenRequest={claimOpenRequest}
+        onDelivered={(notes) =>
+          void (owner && useAppStore.getState().clearDeliveredDiffComments(owner, notes))
+        }
+      />
+      {batch && !requestClear ? clearConfirm.dialog : null}
+    </>
   )
 }
