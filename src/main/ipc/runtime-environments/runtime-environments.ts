@@ -33,7 +33,7 @@ import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-hand
 import { registerLazyRuntimeEnvironmentHandlers } from './lazy-runtime-environment-handlers'
 import { reconcileOrphanedRuntimeSessions } from './catalog/runtime-environment-session-reconcile'
 import { readSavedRuntimeEnvironmentIds } from './catalog/runtime-environment-saved-ids'
-import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { hasLoadedPairedRuntimeBrowserClientHosts } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import {
   forgetPortForwardsOfRemovedEnvironments,
   registerRuntimeEnvironmentPortForwardHandlers
@@ -103,6 +103,11 @@ export async function invalidateRuntimeEnvironmentTransport(environmentId: strin
   retireMobileDesktopRelayEnvironment(environmentId)
   resetDesktopBrowserBridgeEnvironment(environmentId)
   await reactivateRuntimeEnvironmentStatus(environmentId)
+  if (!hasLoadedPairedRuntimeBrowserClientHosts()) {
+    return
+  }
+  const { retirePairedRuntimeBrowserClientHostEnvironment } =
+    await import('../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime')
   return retirePairedRuntimeBrowserClientHostEnvironment(
     environmentId,
     new Error('Runtime environment transport was invalidated')

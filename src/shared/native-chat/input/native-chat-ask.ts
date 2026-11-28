@@ -11,6 +11,7 @@ import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput
 } from './questions/codex-async-question-input'
+import { OMP_ASK_TOOL, parseOmpAskFormInput } from './questions/omp-ask-form-input'
 import {
   isDeliveredNativeChatUserMessage,
   isPendingNativeChatUserMessage,
@@ -19,10 +20,6 @@ import {
 } from './questions/native-chat-ask-answer'
 
 const QUESTION_TOOL_PARSERS = new Map<string, InteractiveQuestionParser>()
-
-export function registerQuestionTool(toolName: string, parser: InteractiveQuestionParser): void {
-  QUESTION_TOOL_PARSERS.set(toolName, parser)
-}
 
 function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
   if (!input || typeof input !== 'object' || !('questions' in input)) {
@@ -97,6 +94,7 @@ for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) 
 }
 
 QUESTION_TOOL_PARSERS.set(CODEX_ASYNC_QUESTION_TOOL, parseCodexAsyncQuestionsInput)
+QUESTION_TOOL_PARSERS.set(OMP_ASK_TOOL, parseOmpAskFormInput)
 
 function parseToolInput(toolName: string | undefined, input: unknown): AskPrompt | null {
   const parser = toolName ? QUESTION_TOOL_PARSERS.get(toolName) : undefined

@@ -122,10 +122,11 @@
     },
     "clientHosted": {
       "preparationFailed": "Impossible de démarrer le navigateur distant sur ce bureau. Vérifiez la connexion couplée et réessayez.",
-      "unavailableTitle": "Navigateur hébergé par le client indisponible",
-      "unavailableDescription": "Cette page n'est pas disponible sur ce bureau pour le moment.",
-      "unavailableOtherDesktopDescription": "Cette page est ouverte sur un autre bureau.",
-      "unavailableHostOfflineDescription": "{{host}} est hors ligne. Cette page se rechargera ici dès sa reconnexion.",
+      "runsOnServerTitle": "Cet onglet s’exécute sur votre serveur",
+      "runsOnServerBody": "Ouvrez-le là-bas pour continuer.",
+      "details": "Détails",
+      "noBrowserTitle": "Impossible d’ouvrir cet onglet ici",
+      "noBrowserBody": "Ce serveur n’a pas de navigateur.",
       "download": {
         "started": "Téléchargement de {{filename}}…",
         "completed": "Téléchargé {{filename}}",
@@ -150,9 +151,9 @@
       "reload": "Recharger"
     },
     "reopenOnServer": {
-      "action": "Réouvrir sur le serveur",
-      "pending": "Réouverture…",
-      "caveat": "Cela ouvre une nouvelle page sur l'hôte distant à la dernière adresse de cette page. L'état de la page connectée et celui des autres pages transitoires peuvent différer, et une page provenant d'une soumission de formulaire s'ouvre en blanc.",
+      "action": "Ouvrir sur le serveur",
+      "pending": "Ouverture…",
+      "caveat": "S’ouvre sur le serveur à la dernière adresse de cette page. L’état de connexion peut différer.",
       "failed": "Impossible d'ouvrir cette page sur l'hôte distant. Vérifiez la connexion et réessayez."
     },
     "deviceMove": {
@@ -1597,7 +1598,8 @@
         "add": "Ajouter un serveur pour ce dépôt",
         "files": "Issus des fichiers de ce dépôt",
         "open": "Ouvrir {{file}}"
-      }
+      },
+      "unreadable": "La connexion ou la clé enregistrée ne peut pas être ouverte sur cet ordinateur"
     }
   },
   "menu": {
@@ -1876,8 +1878,6 @@
           "localBaseRefNotUpdatedDirty": "Modifications non commitées dans {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Commits uniquement locaux sur {{value0}}.",
           "localBaseRefNotUpdatedError": "Erreur Git.",
-          "localBaseRefHideDetails": "Masquer les détails",
-          "localBaseRefShowDetails": "Détails",
           "0216895fb5": "Échec de la suppression de la branche",
           "c6cf133786": "Cet espace de travail n'est plus disponible.",
           "5366d13eec": "Espace de travail supprimé, branche conservée",
@@ -1913,6 +1913,9 @@
           "localBaseRefShallowHistory": "Votre espace de travail a été créé à partir de {{value0}} et n'est pas affecté. Orca n'a toutefois pas pu mettre à jour votre branche locale {{value1}}, car ce clone ne contient que l'historique récent : Git ne peut donc pas confirmer que {{value1}} locale est seulement en retard. Pour corriger cela pour tous les nouveaux espaces de travail, exécutez une fois :",
           "localBaseRefRefreshTurnOff": "Désactiver la vérification",
           "localBaseRefRefreshTurnOffHelp": "Ce que fait Désactiver la vérification",
+          "localBaseRefRefreshDisable": "Désactiver",
+          "localBaseRefRefreshDisableTooltip": "Ne plus vérifier {{value0}}",
+          "localBaseRefClose": "Fermer",
           "localBaseRefRefreshTurnOffTooltip": "Désactive le paramètre Orca {{value0}}. Orca cessera de mettre à jour {{value1}} locale lors de la création d'un espace de travail, et cet avertissement n'apparaîtra plus. Les nouveaux espaces de travail ne sont pas affectés. Réactivez-le à tout moment dans Paramètres › Git.",
           "localBaseRefUnshallow": "Récupérer l'historique complet",
           "localBaseRefUnshallowFailed": "Impossible d'ouvrir un terminal pour cet espace de travail",
@@ -15217,12 +15220,7 @@
             "keepFile": "Conserver le fichier",
             "keepDeletion": "Conserver la suppression",
             "refreshAll": "Tout actualiser",
-            "rebaseConflictCount_one": "{{count}} conflit",
-            "rebaseConflictCount_other": "{{count}} conflits",
-            "rebaseConflictCount_many": "{{count}} conflits",
-            "rebasePaused": "Rebase en pause",
             "rebaseResolveConflictsFirst": "Résolvez d’abord les conflits",
-            "rebaseAbort": "Annuler",
             "rebaseContinue": "Continuer",
             "continueRebasePausedAgain": "Rebase en pause au conflit suivant",
             "continueRebaseFailed": "Échec de la poursuite du rebase",
@@ -15233,7 +15231,6 @@
             "rebaseStopMovedOn": "Le rebase a déjà avancé. Vérifiez le panneau et réessayez.",
             "rebaseEmptyStep": "Rien à commiter à cette étape. Annulez le rebase ou terminez-le dans un terminal.",
             "rebaseStepUnreadableShort": "Échec de vérification",
-            "rebaseCheckAgain": "Vérifier à nouveau",
             "rebaseRetryInspect": "Réessayer",
             "rebaseRetryInspectLabel": "Revérifier l’étape du rebase",
             "rebaseStoppedFinishInTerminal": "Git a mis cette étape en pause. Terminez-la dans un terminal ou annulez.",
@@ -15267,7 +15264,11 @@
             "scopeNoUncommitted": "Aucune modification non validée.",
             "scopeCommitFiles": "Fichiers",
             "gitGraphButton": "Graphe",
-            "compareLoadingAgainst": "Comparaison avec {{base}}"
+            "compareLoadingAgainst": "Comparaison avec {{base}}",
+            "operationResolve": "Résoudre",
+            "operationResolveLabel": "Résoudre les conflits avec l'IA",
+            "operationMoreActions": "Plus d'actions",
+            "operationAbortConfirm": "Sélectionnez à nouveau pour abandonner"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -15893,15 +15894,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Conflits de fusion",
-                    "7f3af87549": "Conflits de rebase",
-                    "6a8e9ad490": "Conflits de cherry-pick",
-                    "bdf8772106": "Conflits",
-                    "edc2d82a2b": "Fusion en cours",
-                    "5c3707aa44": "Rebase en cours",
-                    "ffe53a1da6": "Cherry-pick en cours",
-                    "35eb76d323": "Opération en cours",
-                    "completeMerge": "Terminer la fusion"
+                    "bdf8772106": "Conflits"
                   }
                 }
               },
@@ -20528,7 +20521,10 @@
         "resumedMany_other": "Repris : {{count}} agents",
         "needYou_one": "{{count}} a besoin de vous",
         "needYou_many": "{{count}} ont besoin de vous",
-        "needYou_other": "{{count}} ont besoin de vous"
+        "needYou_other": "{{count}} ont besoin de vous",
+        "resumedCount_one": "Repris : {{count}}",
+        "resumedCount_many": "Repris : {{count}}",
+        "resumedCount_other": "Repris : {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Aucune distro WSL trouvée",
@@ -22549,7 +22545,9 @@
           "pending": "Connexion au serveur…",
           "tools_many": "{{count}} outils",
           "tools_one": "{{count}} outil",
-          "tools_other": "{{count}} outils"
+          "tools_other": "{{count}} outils",
+          "orcaRemoved": "Supprimé : redémarre au prochain message",
+          "orcaChanged": "Modifié : redémarre au prochain message"
         },
         "signIn": {
           "external": "Terminez sur la page qui s’est ouverte",
@@ -22591,7 +22589,8 @@
           "user": "Utilisateur",
           "plugin": "Plugin",
           "session": "Session"
-        }
+        },
+        "stillFailing": "Échoue toujours après la reconnexion."
       }
     },
     "tab": {
@@ -24967,6 +24966,9 @@
         "planModelWithoutThinking": "Le modèle « {{model}} » ne prend pas en charge les niveaux d’effort de réflexion.",
         "planThinkingLevelInvalid": "Le niveau de réflexion « {{level}} » n’est pas valide pour {{model}}.",
         "openCodeInvalidEvents": "OpenCode a renvoyé des événements JSON invalides.",
+        "antigravityInvalidEvents": "Antigravity a renvoyé des événements JSON invalides.",
+        "antigravityInvalidResult": "Antigravity a renvoyé un résultat invalide.",
+        "antigravityNoFinalResult": "Antigravity n’a renvoyé aucun résultat final.",
         "kimiUnreadableOutput": "Kimi a renvoyé une sortie qu’Orca n’a pas pu lire. Réessayez.",
         "kimiSessionOccupied": "Kimi n’a pas pu utiliser cette session car elle est active dans un autre client. Arrêtez la session dans ce client ou quittez-le, puis réessayez.",
         "kimiInterrupted": "Kimi a été interrompu avant d’avoir terminé la génération de texte. Réessayez.",
@@ -25715,7 +25717,9 @@
     "failed": "La recherche a échoué. Essayer à nouveau.",
     "filters": {
       "toggle": "Afficher ou masquer les détails de la recherche",
-      "active": "{{count}} actifs"
+      "active": "{{count}} actifs",
+      "includeSummary": "Inclure : {{patterns}}",
+      "excludeSummary": "Exclure : {{patterns}}"
     },
     "noResults": "Aucun résultat. Essayez une autre recherche ou ajustez vos filtres."
   },
@@ -26108,8 +26112,7 @@
         "failing": "en échec",
         "running": "en attente",
         "cancelled": "annulés",
-        "passing": "réussis",
-        "more": "+{{count}} de plus"
+        "passing": "réussis"
       }
     },
     "attachments": {
@@ -27716,13 +27719,10 @@
     "loadFailed": "Impossible de charger l’historique Git",
     "updateHost": "Mettez à jour Orca sur {{host}} pour ouvrir le graphe Git",
     "title": "Graphe Git",
-    "revertConflicts": "Conflits de réversion",
-    "revertInProgress": "Réversion en cours",
     "abortOperationTitle": "Abandonner {{operation}} ?",
     "abortOperationDescription": "Cette action annule l’opération en cours et peut supprimer les résolutions de conflits effectuées pendant celle-ci.",
     "abortOperation": "Abandonner {{operation}}",
     "recoveryFailed": "Impossible de terminer l’opération. Actualisez le contrôle de code source et réessayez.",
-    "continueOperation": "Continuer {{operation}}",
     "reverting": "Réversion",
     "updateActionsHost": "Mettez à jour Orca sur {{host}} pour agir sur les commits",
     "thisHost": "cet hôte",
@@ -27835,15 +27835,11 @@
       "colorSlate": "Ardoise",
       "colorGraphite": "Graphite",
       "colorInk": "Encre",
-      "noChatAgents": "Aucun agent de chat disponible sur cet ordinateur.",
-      "change": "Modifier",
       "computer": "Ordinateur",
-      "computerHint": "Où le bot s’exécute.",
       "computerAccountHint": "Où le bot s’exécute, connecté à Orca en tant que {{account}}.",
       "useChatDefaults": "Utiliser les réglages par défaut du chat",
       "chatDefault": "Du chat",
       "agent": "Agent",
-      "folder": "Dossier : {{path}}",
       "name": "Nom",
       "validation": {
         "addName": "Ajoutez un nom",

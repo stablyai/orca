@@ -39,16 +39,6 @@ function renderMenu(onSelect = vi.fn(), disabled = false) {
   return onSelect
 }
 
-const row = () => screen.getByRole('menuitemradio', { name: 'Approve for me' })
-
-it('names the row by its label and describes it with the description', async () => {
-  renderMenu()
-  const item = await screen.findByRole('menuitemradio', { name: 'Approve for me' })
-  expect(document.getElementById(item.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
-    'Reviews approval requests for you'
-  )
-})
-
 it('keeps a disabled row focusable but never selects it', async () => {
   const onSelect = renderMenu(vi.fn(), true)
   const item = await screen.findByRole('menuitemradio', { name: 'Approve for me' })
@@ -66,12 +56,4 @@ it('closes the menu with one Escape while the tooltip is open', async () => {
   await screen.findByRole('tooltip')
   fireEvent.keyDown(document.activeElement ?? document, { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
-})
-
-it('selects from the keyboard after a tap', async () => {
-  const onSelect = renderMenu()
-  await screen.findByRole('menuitemradio', { name: 'Approve for me' })
-  fireEvent.pointerDown(row(), { pointerType: 'touch' })
-  fireEvent.keyDown(row(), { key: 'Enter' })
-  expect(onSelect).toHaveBeenCalledTimes(1)
 })

@@ -46,26 +46,6 @@ export function appRailAccount(
   return { name, email, initial }
 }
 
-function AccountInitial({
-  initial,
-  className
-}: {
-  initial: string
-  className: string
-}): React.JSX.Element {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        'flex shrink-0 items-center justify-center rounded-full bg-foreground/15 font-semibold text-foreground',
-        className
-      )}
-    >
-      {initial}
-    </span>
-  )
-}
-
 /**
  * The rail's one bottom button: the account avatar (signed in) or the Settings gear (signed out), opening one flat
  * menu with the account, Milestones, Settings, every Help row and Sign in/out. It never folds into More. The signed-out
@@ -124,8 +104,19 @@ export function AppRailAccountMenu({
     }
   }
 
+  // The avatar has no tile behind it: its fill strengthens on hover, and open/active add a ring.
   const face = account ? (
-    <AccountInitial initial={account.initial} className="size-5 text-[10px]" />
+    <span
+      aria-hidden
+      className={cn(
+        'flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/15 text-[10px] font-semibold text-foreground transition-[background-color,box-shadow]',
+        'group-hover:bg-foreground/25 group-aria-expanded:bg-foreground/25 group-aria-expanded:ring-1 group-aria-expanded:ring-foreground/50 group-aria-[current=page]:bg-foreground/25 group-aria-[current=page]:ring-1 group-aria-[current=page]:ring-foreground/50',
+        // Forced colors drop the fill, so outline the circle and mark open/active with the system highlight.
+        'forced-colors:border forced-colors:border-[CanvasText] forced-colors:group-aria-expanded:border-2 forced-colors:group-aria-expanded:border-[Highlight] forced-colors:group-aria-[current=page]:border-2 forced-colors:group-aria-[current=page]:border-[Highlight]'
+      )}
+    >
+      {account.initial}
+    </span>
   ) : (
     <Settings size={APP_RAIL_ICON_SIZE} strokeWidth={APP_RAIL_ICON_STROKE_WIDTH} aria-hidden />
   )
@@ -153,6 +144,8 @@ export function AppRailAccountMenu({
                 // Setup progress shows as the menu's Milestones row; screen readers also hear it on the button.
                 aria-describedby={milestones ? setupDescriptionId : undefined}
                 active={settingsActive}
+                tile={!account}
+                className={account ? 'group' : undefined}
                 tabStop={tabStop}
                 icon={face}
               />

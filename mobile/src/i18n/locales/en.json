@@ -2659,7 +2659,7 @@
       "goal": "Set a goal"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Resume in New CLI"
+      "continueInTerminal": "Continue in terminal"
     },
     "nativeChatRenderData": {
       "notFoundTitle": "Can't find this conversation yet",
@@ -3269,6 +3269,18 @@
       "needsYou": "Needs you",
       "files": "Files",
       "otherWorkspaces": "Other workspaces"
+    },
+    "terminalChatContinuation": {
+      "busy": "Another chat or terminal is opening. Wait, then try again.",
+      "continueInChat": "Continue in chat",
+      "failed": "Couldn't continue in chat. {{detail}}",
+      "failedAfterClose": "Couldn't continue in chat. {{detail}} The conversation is in Agent History.",
+      "otherJob": "{{process}} is running in this terminal. Quit it, then continue in chat.",
+      "terminalChanged": "This terminal changed while Orca checked it. Try again.",
+      "tryAgain": "Try again.",
+      "unavailable": "{{agent}} chats aren't available on this computer.",
+      "uncheckable": "Orca couldn't check what's running in this terminal. Try again.",
+      "unconfirmed": "Orca couldn't confirm the chat opened. Check your tabs before trying again."
     }
   },
   "chat": {
@@ -3851,7 +3863,11 @@
         "tools_one": "{{count}} tool",
         "tools_other": "{{count}} tools",
         "disabled": "Disabled",
-        "notStarted": "Not started"
+        "notStarted": "Not started",
+        "commandNotFound": "Command not found",
+        "unreachable": "Can’t reach {{host}}",
+        "orcaRemoved": "Removed: restarts on next message",
+        "orcaChanged": "Changed: restarts on next message"
       },
       "title": "MCP servers",
       "notRunning": "MCP servers connect when you send your next message.",
@@ -3877,7 +3893,8 @@
         "failed": "{{count}} failed"
       },
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here.",
-      "manage": "Manage MCP servers"
+      "manage": "Manage MCP servers",
+      "stillFailing": "Still failing after reconnecting."
     },
     "selectionQuote": {
       "action": "Quote",
@@ -4635,6 +4652,9 @@
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
+      "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
+      "antigravityInvalidResult": "Antigravity returned an invalid result.",
+      "antigravityNoFinalResult": "Antigravity returned no final result.",
       "kimiUnreadableOutput": "Kimi returned output Orca couldn't read. Try again.",
       "kimiSessionOccupied": "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",
       "kimiInterrupted": "Kimi was interrupted before it finished generating text. Try again.",
@@ -8528,6 +8548,7 @@
     "workspacesCount": "{{count}} workspaces",
     "workspacesAllButCount": "All but {{count}}",
     "headerMissing": "Fill in {{header}} to add this server.",
-    "servers": "Servers"
+    "servers": "Servers",
+    "unreadable": "Saved sign-in or key can’t be opened. Sign in again."
   }
 }

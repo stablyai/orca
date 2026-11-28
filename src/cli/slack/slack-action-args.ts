@@ -11,7 +11,7 @@ import {
 } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { readTextOrFileFlag } from '../arguments/command-body-input'
-import { hasImpossibleLeadingDate } from '../arguments/calendar-date'
+import { hasImpossibleLeadingDate } from '../../shared/validation/calendar-date'
 import { refuseForwardedShell } from './slack-action-files'
 
 /** A message's words from --text or --text-file <path|->; words that are only blanks post nothing. */

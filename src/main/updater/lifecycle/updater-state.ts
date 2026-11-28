@@ -36,7 +36,8 @@ export type UpdateInstallMode =
   | 'supervised-headless-serve'
   | 'unsupported-headless-serve'
 export type PreQuitCleanupFailureMode = 'continue' | 'abort'
-export type UpdateInstallTrigger = 'manual' | 'automatic' | 'team-policy'
+/** 'manual' is the local window's preload, which checkpoints the renderer before invoking; every other trigger needs main to. */
+export type UpdateInstallTrigger = 'manual' | 'remote' | 'automatic' | 'team-policy'
 
 export function isPendingTeamRestart(status: UpdateStatus): boolean {
   return (
@@ -81,7 +82,7 @@ export abstract class UpdaterState {
   protected macInstallerStagingVersion: string | null = null
   protected macDeferredStagingTimer: ReturnType<typeof setTimeout> | null = null
   protected quitAndInstallInProgress = false
-  protected cancelAutomaticInstallPreparation: (() => void) | null = null
+  protected cancelRendererInstallPreparation: (() => void) | null = null
   protected updateInstallMode: UpdateInstallMode = 'interactive'
   protected lastInstallDeferralVersion = {
     download: null as string | null,

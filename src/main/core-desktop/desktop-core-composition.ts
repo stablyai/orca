@@ -8,7 +8,6 @@ import type { RuntimeDesktopWindowStatus } from '../../shared/remote-runtime/ses
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { BrowserClientPageAutomationRpc } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
-import { StarNagService } from '../star-nag/service'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import {
   DESKTOP_RPC_CALLER,
@@ -32,9 +31,9 @@ import {
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { createRendererShutdownCheckpointService } from './renderer-shutdown-checkpoint-service'
 import { initializeMainProcessPlugins } from '../startup/plugin-startup/main-process-plugins'
-import { scheduleStalePluginGitTempSweep } from '../plugins/installation/plugin-git-temp-sweep'
 import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
 import {
+  registerDeferredDesktopCoreServices,
   scheduleDeferredMaintenance,
   WORKTREE_TRASH_SWEEP_FALLBACK_MS
 } from './desktop-core-deferred-maintenance'
@@ -42,7 +41,6 @@ import { logStartupMilestone } from '../startup/diagnostics/startup-diagnostics'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { DEFAULT_RPC_DISPATCH_CONFIG } from '../runtime/rpc/methods/eager-rpc-method-registry'
-import { startWorkspaceCleanupRunner } from '../workspaces/cleanup/workspace-cleanup-runner-startup'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { installHookStatusSessionTabsRepublish } from '../agent-hooks/runtime/hook-status-session-tabs-republish'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
@@ -203,6 +201,10 @@ export async function composeDesktopCore(
     attachBrowserHost: native.attachBrowserHost,
     registerCleanup: deps.registerCleanup
   })
+  if (!native.isServeMode()) {
+    // Its copy is swapped in only by the desktop quit.
+    runtime.allowOrchestrationDbCompaction()
+  }
   core.rendererCheckpoint = createRendererShutdownCheckpointService(
     store,
     (session) => runtime.quitResumeRecordsFor(session),
@@ -220,7 +222,6 @@ export async function composeDesktopCore(
     // A macOS update closes windows long before will-quit.
     isHostQuitting: () => native.isQuitting() || native.isNativeUpdateInstallUnderWay()
   })
-  startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(core, runtime, {
     store,
     userDataPath: paths.userData,
@@ -229,15 +230,18 @@ export async function composeDesktopCore(
   installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
   installAgentTurnWorktreeActivity()
   await initializeMainProcessPlugins(core, store)
-  scheduleStalePluginGitTempSweep()
-  core.starNag = new StarNagService(store, core.stats!)
-  core.starNag.start()
-  core.starNag.registerIpcHandlers()
   startBrowserAutomation(core, runtime, native)
   let releaseProviderMaintenance: () => void = () => {}
   const providerMaintenanceReady = new Promise<void>((resolve) => {
     releaseProviderMaintenance = resolve
   })
+  registerDeferredDesktopCoreServices(
+    core,
+    runtime,
+    store,
+    native.isQuitting,
+    providerMaintenanceReady
+  )
   scheduleDeferredMaintenance(runtime, store, deps, () => releaseProviderMaintenance())
   native.startThemeAndSpeech(WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   void providerMaintenanceReady.then(async () => {

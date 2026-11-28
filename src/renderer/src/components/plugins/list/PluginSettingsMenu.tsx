@@ -22,7 +22,8 @@ export function PluginSettingsMenu({
   open,
   onOpenChange,
   onSources,
-  onDevelopment
+  onDevelopment,
+  railPage = false
 }: {
   featureEnabled: boolean
   suggestionsEnabled: boolean
@@ -33,6 +34,8 @@ export function PluginSettingsMenu({
   onOpenChange: (open: boolean) => void
   onSources: () => void
   onDevelopment: () => void
+  /** Rail page header sizing: a ghost icon like the other pages' "…". */
+  railPage?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const label = t('auto.components.settings.PluginSettingsMenu.label', 'Plugin settings')
@@ -41,12 +44,16 @@ export function PluginSettingsMenu({
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon-sm" aria-label={label}>
-              <Ellipsis />
+            <Button
+              variant={railPage ? 'ghost' : 'outline'}
+              size={railPage ? 'icon-toolbar' : 'icon-sm'}
+              aria-label={label}
+            >
+              <Ellipsis className={railPage ? 'size-4' : undefined} />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
+        <TooltipContent side={railPage ? 'bottom' : 'top'} sideOffset={railPage ? 6 : 4}>
           {label}
         </TooltipContent>
       </Tooltip>
@@ -106,7 +113,7 @@ export function PluginsHeaderActions({
 }): React.JSX.Element {
   return (
     <div className="flex items-center gap-1.5">
-      <PluginAddMenu disabled={!menu.featureEnabled} onChoose={onAdd} />
+      <PluginAddMenu disabled={!menu.featureEnabled} onChoose={onAdd} railPage={menu.railPage} />
       <PluginSettingsMenu {...menu} />
     </div>
   )

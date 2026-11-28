@@ -9,6 +9,11 @@ export function sliceAtCodeUnitLimit(value: string, limit: number): string {
   return value.slice(0, end)
 }
 
+/** Cut to `limit` code units, then append an ellipsis past the limit only when the text was longer. */
+export function ellipsizeCodeUnits(value: string, limit: number): string {
+  return value.length > limit ? `${sliceAtCodeUnitLimit(value, limit)}\u2026` : value
+}
+
 function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff
 }

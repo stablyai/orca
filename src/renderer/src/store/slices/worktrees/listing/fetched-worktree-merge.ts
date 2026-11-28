@@ -45,7 +45,7 @@ export function preserveConcurrentManualOrder<T extends Worktree>(
   current: readonly Worktree[] | undefined,
   matchesRefreshHost: (worktree: Worktree) => boolean
 ): T[] {
-  if (!requestStarted || !current) {
+  if (!requestStarted || !current || requestStarted === current) {
     return [...incoming]
   }
   const startedById = new Map(

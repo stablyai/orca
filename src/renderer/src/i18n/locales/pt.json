@@ -175,6 +175,9 @@
         "planModelWithoutThinking": "O modelo \"{{model}}\" não suporta um nível de esforço de raciocínio.",
         "planThinkingLevelInvalid": "O nível de raciocínio \"{{level}}\" não é válido para {{model}}.",
         "openCodeInvalidEvents": "OpenCode retornou eventos JSON inválidos.",
+        "antigravityInvalidEvents": "Antigravity retornou eventos JSON inválidos.",
+        "antigravityInvalidResult": "Antigravity retornou um resultado inválido.",
+        "antigravityNoFinalResult": "Antigravity não retornou nenhum resultado final.",
         "kimiUnreadableOutput": "Kimi retornou uma saída que o Orca não conseguiu ler. Tente novamente.",
         "kimiSessionOccupied": "Kimi não pôde usar esta sessão porque ela está ativa em outro cliente. Pare a sessão nesse cliente ou saia dele e tente novamente.",
         "kimiInterrupted": "Kimi foi interrompido antes de concluir a geração de texto. Tente novamente.",
@@ -1351,8 +1354,11 @@
     },
     "clientHosted": {
       "preparationFailed": "Não foi possível iniciar o navegador remoto neste desktop. Verifique a conexão pareada e tente novamente.",
-      "unavailableTitle": "Navegador hospedado no cliente indisponível",
-      "unavailableDescription": "Esta página está vinculada a outro desktop ou já não está disponível.",
+      "runsOnServerTitle": "Esta aba é executada no seu servidor",
+      "runsOnServerBody": "Abra-a lá para continuar.",
+      "details": "Detalhes",
+      "noBrowserTitle": "Não é possível abrir esta aba aqui",
+      "noBrowserBody": "Este servidor não tem navegador.",
       "download": {
         "started": "Baixando {{filename}}…",
         "completed": "{{filename}} baixado",
@@ -1369,9 +1375,7 @@
       "hostRowOfflineNamed": "Off-line — estava hospedada em {{device}}",
       "hostRowOffline": "Off-line — o dispositivo que a hospedava foi encerrado",
       "hostRowNamed": "Hospedada em {{device}}",
-      "hostRow": "Hospedada em outro dispositivo",
-      "unavailableOtherDesktopDescription": "Esta página está aberta em outro computador.",
-      "unavailableHostOfflineDescription": "{{host}} está offline. Esta página será recarregada aqui quando ele se reconectar."
+      "hostRow": "Hospedada em outro dispositivo"
     },
     "navigation": {
       "back": "Voltar",
@@ -1379,9 +1383,9 @@
       "reload": "Recarregar"
     },
     "reopenOnServer": {
-      "action": "Reabrir no servidor",
-      "pending": "Reabrindo…",
-      "caveat": "Isso abre uma nova página no host remoto no último endereço desta página. O login e outros estados temporários da página podem ser diferentes, e uma página originada de um envio de formulário abre em branco.",
+      "action": "Abrir no servidor",
+      "pending": "Abrindo…",
+      "caveat": "Abre no servidor no último endereço desta página. O estado de login pode ser diferente.",
       "failed": "Não foi possível abrir esta página no host remoto. Verifique a conexão e tente novamente."
     },
     "deviceMove": {
@@ -3095,7 +3099,8 @@
         "add": "Adicionar um servidor para este repositório",
         "files": "Dos arquivos deste repositório",
         "open": "Abrir {{file}}"
-      }
+      },
+      "unreadable": "O login ou a chave salvos não podem ser abertos neste computador"
     }
   },
   "auto": {
@@ -3392,8 +3397,6 @@
           "localBaseRefNotUpdatedDirty": "Alterações não confirmadas em {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Commits apenas locais em {{value0}}.",
           "localBaseRefNotUpdatedError": "Erro do Git.",
-          "localBaseRefHideDetails": "Ocultar detalhes",
-          "localBaseRefShowDetails": "Detalhes",
           "0216895fb5": "Falha ao excluir a branch",
           "c6cf133786": "Este espaço de trabalho não está mais disponível.",
           "5366d13eec": "Espaço de trabalho excluído, branch mantida",
@@ -3429,6 +3432,9 @@
           "localBaseRefShallowHistory": "Seu espaço de trabalho foi criado a partir de {{value0}} e não foi afetado. O Orca não conseguiu também atualizar sua branch local {{value1}} porque este clone só tem o histórico recente, então o Git não consegue confirmar que a {{value1}} local está apenas atrasada. Para corrigir isso em todos os novos espaços de trabalho, execute uma vez:",
           "localBaseRefRefreshTurnOff": "Desativar verificação",
           "localBaseRefRefreshTurnOffHelp": "O que Desativar verificação faz",
+          "localBaseRefRefreshDisable": "Desativar",
+          "localBaseRefRefreshDisableTooltip": "Parar de verificar {{value0}}",
+          "localBaseRefClose": "Fechar",
           "localBaseRefRefreshTurnOffTooltip": "Desativa a configuração do Orca {{value0}}. O Orca deixará de atualizar a {{value1}} local ao criar um espaço de trabalho, e este aviso deixará de aparecer. Novos espaços de trabalho não são afetados. Reative quando quiser em Configurações › Git.",
           "localBaseRefUnshallow": "Buscar histórico completo",
           "localBaseRefUnshallowFailed": "Não foi possível abrir um terminal para este espaço de trabalho",
@@ -11732,12 +11738,7 @@
             "keepDeletion": "Manter exclusão",
             "refreshAll": "Atualizar tudo",
             "statusReadFailed": "O Git não conseguiu ler este espaço de trabalho. As alterações mostradas podem estar desatualizadas.",
-            "rebaseConflictCount_one": "{{count}} conflito",
-            "rebaseConflictCount_other": "{{count}} conflitos",
-            "rebaseConflictCount_many": "{{count}} conflitos",
-            "rebasePaused": "Rebase pausado",
             "rebaseResolveConflictsFirst": "Resolva os conflitos primeiro",
-            "rebaseAbort": "Abortar",
             "rebaseContinue": "Continuar",
             "continueRebasePausedAgain": "Rebase pausado no próximo conflito",
             "continueRebaseFailed": "Falha ao continuar o rebase",
@@ -11748,7 +11749,6 @@
             "rebaseStopMovedOn": "O rebase já avançou. Verifique o painel e tente novamente.",
             "rebaseEmptyStep": "Nada para fazer commit nesta etapa. Aborte o rebase ou conclua-o em um terminal.",
             "rebaseStepUnreadableShort": "Falha na verificação",
-            "rebaseCheckAgain": "Verificar novamente",
             "rebaseRetryInspect": "Tentar novamente",
             "rebaseRetryInspectLabel": "Verificar a etapa do rebase novamente",
             "rebaseStoppedFinishInTerminal": "O Git pausou esta etapa. Termine-a em um terminal ou aborte.",
@@ -11782,7 +11782,11 @@
             "gitGraphButton": "Grafo",
             "scopeFileCount_many": "{{count}} arquivos",
             "scopeCommitCount_many": "{{count}} commits",
-            "compareLoadingAgainst": "Comparando com {{base}}"
+            "compareLoadingAgainst": "Comparando com {{base}}",
+            "operationResolve": "Resolver",
+            "operationResolveLabel": "Resolver conflitos com IA",
+            "operationMoreActions": "Mais ações",
+            "operationAbortConfirm": "Selecione novamente para abortar"
           },
           "checks": {
             "panel": {
@@ -12287,15 +12291,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "Conflitos de merge",
-                    "7f3af87549": "Conflitos de rebase",
-                    "6a8e9ad490": "Conflitos de cherry-pick",
-                    "bdf8772106": "Conflitos",
-                    "edc2d82a2b": "Merge em andamento",
-                    "5c3707aa44": "Rebase em andamento",
-                    "ffe53a1da6": "Cherry-pick em andamento",
-                    "35eb76d323": "Operação em andamento",
-                    "completeMerge": "Concluir mesclagem"
+                    "bdf8772106": "Conflitos"
                   }
                 }
               },
@@ -22052,9 +22048,12 @@
         "resumedMany_one": "Retomado: {{count}} agente",
         "resumedMany_many": "Retomados: {{count}} agentes",
         "resumedMany_other": "Retomados: {{count}} agentes",
-        "needYou_one": "{{count}} precisa de você",
-        "needYou_many": "{{count}} precisam de você",
-        "needYou_other": "{{count}} precisam de você"
+        "needYou_one": "{{count}} aguarda você",
+        "needYou_many": "{{count}} aguardam você",
+        "needYou_other": "{{count}} aguardam você",
+        "resumedCount_one": "Retomado: {{count}}",
+        "resumedCount_many": "Retomados: {{count}}",
+        "resumedCount_other": "Retomados: {{count}}"
       },
       "RunTargetCombobox": {
         "noWslDistros": "Nenhuma distribuição WSL encontrada",
@@ -24105,7 +24104,9 @@
           "pending": "Conectando…",
           "tools_many": "{{count}} ferramentas",
           "tools_one": "{{count}} ferramenta",
-          "tools_other": "{{count}} ferramentas"
+          "tools_other": "{{count}} ferramentas",
+          "orcaRemoved": "Removido: reinicia na próxima mensagem",
+          "orcaChanged": "Alterado: reinicia na próxima mensagem"
         },
         "signIn": {
           "external": "Conclua na página que foi aberta",
@@ -24147,7 +24148,8 @@
           "user": "Usuário",
           "plugin": "Plugin",
           "session": "Sessão"
-        }
+        },
+        "stillFailing": "Continua falhando após reconectar."
       },
       "botContext": {
         "soul": "Alma atualizada aplicada",
@@ -26123,7 +26125,9 @@
     "failed": "A busca falhou. Tente novamente.",
     "filters": {
       "toggle": "Alternar detalhes da busca",
-      "active": "Filtros ativos: {{count}}"
+      "active": "Filtros ativos: {{count}}",
+      "includeSummary": "Incluir: {{patterns}}",
+      "excludeSummary": "Excluir: {{patterns}}"
     },
     "noResults": "Nenhum resultado. Tente outra busca ou ajuste os filtros."
   },
@@ -26387,8 +26391,7 @@
         "failing": "falhando",
         "running": "pendente",
         "cancelled": "cancelado",
-        "passing": "com sucesso",
-        "more": "+{{count}} mais"
+        "passing": "com sucesso"
       },
       "addEmoji": "Adicionar emoji",
       "addEmojiTooltip": "Adicione emoji (ou digite :)",
@@ -28103,13 +28106,10 @@
     "loadFailed": "Não foi possível carregar o histórico do Git",
     "updateHost": "Atualize o Orca em {{host}} para abrir o grafo do Git",
     "title": "Grafo do Git",
-    "revertConflicts": "Conflitos de reversão",
-    "revertInProgress": "Reversão em andamento",
     "abortOperationTitle": "Abortar {{operation}}?",
     "abortOperationDescription": "Isso cancela a operação em andamento e pode descartar as resoluções de conflitos feitas durante ela.",
     "abortOperation": "Abortar {{operation}}",
     "recoveryFailed": "Não foi possível concluir a operação. Atualize o controle de código-fonte e tente novamente.",
-    "continueOperation": "Continuar {{operation}}",
     "reverting": "Revertendo",
     "updateActionsHost": "Atualize o Orca em {{host}} para executar ações em commits",
     "thisHost": "este host",
@@ -28830,7 +28830,6 @@
     "new": {
       "fromTemplate": "Modelo",
       "agent": "Agente",
-      "change": "Alterar",
       "colorButter": "Manteiga",
       "colorGraphite": "Grafite",
       "colorInk": "Tinta",
@@ -28844,11 +28843,8 @@
       "colorWhite": "Branco",
       "computer": "Computador",
       "computerAccountHint": "Onde o bot é executado, conectado ao Orca como {{account}}.",
-      "computerHint": "Onde o bot é executado.",
-      "folder": "Pasta: {{path}}",
       "hostNeedsServer": "Precisa de um servidor Orca",
       "hostNeedsServerHint": "Configure um servidor Orca em {{host}} em Configurações → Servidores Orca Remotos para executar bots.",
-      "noChatAgents": "Nenhum agente de chat disponível neste computador.",
       "pictureColor": "Cor de fundo",
       "pictureColorCustom": "Cor personalizada",
       "pictureOutfit": "Traje",
@@ -28923,11 +28919,8 @@
       "nextPicture": "Próxima imagem",
       "pictureMascot": "Mascote {{n}} de {{total}}",
       "pictureUpload": "Sua imagem",
-      "runsOn": "É executado em <host/> com <agent/>",
-      "runsOnAs": "É executado em <host/>, como <account/>, com <agent/>",
       "usingChatDefault": "Usando o padrão do seu chat. Execuções em segundo plano usam sua configuração de Agentes.",
       "cancel": "Cancelar",
-      "creating": "Criando…",
       "create": "Criar",
       "openFailed": "{{name}} foi criado, mas ainda não pôde ser aberto.",
       "watches": "Monitora",
@@ -30103,7 +30096,6 @@
       "nudgeDismiss": "Não mostrar novamente",
       "nudgeMany": "Encontramos {{count}} bots no {{app}}.",
       "nudgeOne": "Encontramos um bot no {{app}}.",
-      "newBotLabel": "Novo bot",
       "nudgeActionOne": "Trazer para cá",
       "nudgeActionMany": "Trazer um para cá",
       "updateDraft": "Traga tudo o que houver de novo em {{name}} no {{app}}.",
@@ -30111,10 +30103,8 @@
       "description": "Seu novo bot lê o antigo e se configura sozinho.",
       "exportDescription": "Peça ao seu bot antigo uma cópia de si mesmo, depois entregue a cópia ao seu novo bot.",
       "importedBefore": "{{bot}} veio deste bot",
-      "neverCopied": "Chaves, tokens e logins nunca são copiados; você os reconecta aqui.",
       "back": "Voltar",
       "update": "Atualizar {{bot}}",
-      "create": "Criar {{name}}",
       "copyMessage": "Copiar mensagem",
       "dropHint": "Solte aqui, ou",
       "chooseFolder": "escolher uma pasta…",
@@ -30123,26 +30113,16 @@
       "defaultProfile": "perfil padrão",
       "profile": "perfil",
       "agent": "agente",
-      "looking": "Procurando neste computador…",
       "noneFoundNote": "Nenhum bot encontrado no OpenClaw (~/.openclaw), Hermes (~/.hermes) ou OpenBot.",
-      "otherApp": "Outro app…",
-      "otherAppNote": "Seu bot antigo copia os arquivos para você",
-      "addFolder": "Adicionar a pasta dele",
       "exportNotOnServer": "Pastas de exportação neste computador ainda não podem ir para {{host}}. Copie a pasta para {{host}}, ou crie o bot aqui.",
-      "nameIt": "Nomeie seu bot",
-      "oldBot": "Bot antigo",
       "nameAnother": "Nomeie um novo bot",
-      "keysStay": "Chaves e logins ficam para trás",
       "removePath": "Remover {{name}}",
       "sendStep": "Envie esta mensagem ao seu bot antigo",
       "copied": "Copiado",
       "seeMessage": "Ver a mensagem",
       "addStep": "Adicionar a pasta que ele criou",
       "replyLabel": "Resposta dele",
-      "changePicture": "Trocar imagem",
-      "rowDetail": "{{app}} {{kind}}",
-      "bringOver": "Trazer para cá",
-      "found": "Encontrados: {{count}}"
+      "rowDetail": "{{app}} {{kind}}"
     },
     "composio": {
       "key": {

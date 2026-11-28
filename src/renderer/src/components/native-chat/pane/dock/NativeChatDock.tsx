@@ -53,14 +53,15 @@ function NativeChatDockBox({
   )
 }
 
-/** The transcript above a fitted dock: it keeps a sliver of room until the dock's fallbacks give it up. */
+/** The transcript above a fitted dock: it keeps a sliver of room until the dock's fallbacks give it
+ *  up, and even then the worker chip's height, so the chip floating at its end never covers the dock. */
 export function NativeChatDockTranscript({
   children
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="relative flex min-h-[calc(var(--spacing)*20)] flex-1 flex-col [[data-native-chat-dock-fit~=transcript]_&]:min-h-0">
+    <div className="relative flex min-h-[calc(var(--spacing)*20)] flex-1 flex-col [[data-native-chat-dock-fit~=transcript]_&]:min-h-[var(--native-chat-worker-chip-floor,0px)]">
       {children}
     </div>
   )

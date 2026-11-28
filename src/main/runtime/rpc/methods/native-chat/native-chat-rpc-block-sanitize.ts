@@ -4,6 +4,10 @@ import {
 } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import { fitInteractivePrompt } from '../../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { parseAskFromToolInput } from '../../../../../shared/native-chat/input/native-chat-ask'
+import {
+  isOmpAskFormInput,
+  OMP_ASK_TOOL
+} from '../../../../../shared/native-chat/input/questions/omp-ask-form-input'
 import type {
   NativeChatBlock,
   NativeChatSubagentState
@@ -89,16 +93,20 @@ function fitAskToolInput(block: Extract<NativeChatBlock, { type: 'tool-call' }>)
   if (typeof input === 'string' && input.length <= MOBILE_BLOCK_CHAR_CAP) {
     return input
   }
-  if (!parseAskFromToolInput(name, input)) {
+  const ask = parseAskFromToolInput(name, input)
+  if (!ask) {
     return input
   }
   const encoded = typeof input === 'string' ? input : JSON.stringify(input)
   if (encoded.length <= MOBILE_BLOCK_CHAR_CAP) {
     return input
   }
-  const fitted = fitInteractivePrompt(encoded, (text) => text.length <= MOBILE_BLOCK_CHAR_CAP)
+  // OMP's html form cannot be shortened; its questions[] shape can, and the `ask` reader falls back to it.
+  const htmlForm = name === OMP_ASK_TOOL && isOmpAskFormInput(input)
+  const shortenable = htmlForm ? JSON.stringify({ questions: ask.questions }) : encoded
+  const fitted = fitInteractivePrompt(shortenable, (text) => text.length <= MOBILE_BLOCK_CHAR_CAP)
   if (fitted === null) {
-    return input
+    return htmlForm ? { questions: ask.questions } : input
   }
   return typeof input === 'string' ? fitted : JSON.parse(fitted)
 }

@@ -113,7 +113,12 @@ export function SourceControlUncommittedSections(props: {
             <SectionHeader
               label={t(sectionLabel.key, sectionLabel.fallback)}
               count={items.length}
-              conflictCount={items.filter((entry) => entry.conflictStatus === 'unresolved').length}
+              // The Conflicts section's own count already says it; repeating it reads as a duplicate.
+              conflictCount={
+                id === 'conflicts'
+                  ? 0
+                  : items.filter((entry) => entry.conflictStatus === 'unresolved').length
+              }
               isCollapsed={isCollapsed}
               onToggle={() => props.toggleSection(id)}
               actions={
