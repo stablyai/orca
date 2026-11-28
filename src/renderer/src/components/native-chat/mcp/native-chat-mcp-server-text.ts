@@ -4,6 +4,7 @@ import type {
 } from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import {
   agentSessionMcpServerDisplayName,
+  agentSessionMcpShownStatus,
   ORCA_MCP_SOURCE
 } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
 import { urlHost } from '@/components/settings/mcp-servers/mcp-server-words'
@@ -37,6 +38,13 @@ export function mcpServerStatusLine(
   t: Translate,
   hostName?: string
 ): string {
+  // The chat keeps its launch copy of a server Orca changed until the next message restarts it.
+  if (server.orcaChange === 'removed') {
+    return t('components.native-chat.mcp.status.orcaRemoved', 'Removed: restarts on next message')
+  }
+  if (server.orcaChange === 'changed' && server.status !== 'connected') {
+    return t('components.native-chat.mcp.status.orcaChanged', 'Changed: restarts on next message')
+  }
   switch (server.status) {
     case 'connected':
       return server.toolCount === null
@@ -101,7 +109,7 @@ export function mcpTraySummary(
     ]
   }
   const count = (status: AgentSessionMcpServer['status']): number =>
-    servers.filter((server) => server.status === status).length
+    servers.filter((server) => agentSessionMcpShownStatus(server) === status).length
   const connected = count('connected')
   const needsAuth = count('needs-auth')
   const failed = count('failed')

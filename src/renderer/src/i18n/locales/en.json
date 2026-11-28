@@ -2252,7 +2252,8 @@
         "add": "Add a server for this repo",
         "files": "From this repo’s files",
         "open": "Open {{file}}"
-      }
+      },
+      "unreadable": "Saved sign-in or key can’t be opened on this computer"
     }
   },
   "menu": {
@@ -22747,7 +22748,9 @@
           "failedReason": "Failed: {{error}}",
           "disabled": "Disabled",
           "notStarted": "Not started",
-          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
+          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here.",
+          "orcaRemoved": "Removed: restarts on next message",
+          "orcaChanged": "Changed: restarts on next message"
         },
         "signIn": {
           "action": "Sign in",
@@ -22762,7 +22765,8 @@
           "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
           "pastePlaceholder": "http://localhost:…"
         },
-        "manage": "Manage MCP servers"
+        "manage": "Manage MCP servers",
+        "stillFailing": "Still failing after reconnecting."
       },
       "cardKindHidden": {
         "description": "You can change this anytime in",
