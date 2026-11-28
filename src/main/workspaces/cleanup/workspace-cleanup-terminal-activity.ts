@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../../providers/pty/provider-contract'
+import type { LocalPtyLifecycleProvider } from '../../providers/pty/local-lifecycle-provider'
 import { inspectPtyProviderProcess } from '../../providers/pty/process-inspection'
 import { worktreePtyOwnership } from '../../providers/pty/worktree-ownership'
 import type { RuntimeTerminalListResult } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
@@ -23,7 +23,7 @@ export type WorkspaceCleanupTerminalRuntime = {
     limit?: number,
     opts?: { requireFreshPtyLiveness?: boolean }
   ): Promise<RuntimeTerminalListResult>
-  getLocalProvider(): IPtyProvider | null
+  getLocalProvider(): LocalPtyLifecycleProvider | null
 }
 
 const TERMINAL_LIST_LIMIT = 10_000
@@ -50,7 +50,7 @@ function classifyInspection(
 
 async function listWorktreePtyIds(
   runtime: WorkspaceCleanupTerminalRuntime,
-  provider: IPtyProvider,
+  provider: LocalPtyLifecycleProvider,
   worktreeId: string
 ): Promise<Map<string, string | null>> {
   const [listed, sessions] = await Promise.all([

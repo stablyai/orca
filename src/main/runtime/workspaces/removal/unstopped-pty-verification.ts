@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { LocalPtyLifecycleProvider } from '../../../providers/pty/local-lifecycle-provider'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 type UnstoppedPtyRuntime = Pick<OrcaRuntimeService, 'getPtyLivenessVerdict'>
@@ -19,7 +19,7 @@ export const WORKTREE_TEARDOWN_VERIFY_GRACE_MS = 2_000
 /** Give post-stop verification its own budget; the spent sweep deadline falsely timed out reachable inventories and blocked removal (#11960). Preserve live/exited/unverifiable distinctions. */
 export async function verifyUnstoppedPtys(
   failedPtyIds: readonly string[],
-  provider: IPtyProvider,
+  provider: LocalPtyLifecycleProvider,
   sweepBudgetMs: number
 ): Promise<UnstoppedPtyVerdict> {
   const verifyBudgetMs = Math.max(WORKTREE_TEARDOWN_VERIFY_GRACE_MS, sweepBudgetMs)
@@ -64,7 +64,7 @@ export function unverifiableStopVerdict(
 
 export async function resolveUnstoppedPtyVerdict(
   failedPtyIds: readonly string[],
-  provider: IPtyProvider,
+  provider: LocalPtyLifecycleProvider,
   sweepBudgetMs: number,
   providerObservesOwningHost: boolean,
   runtime?: UnstoppedPtyRuntime

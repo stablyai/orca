@@ -142,6 +142,12 @@
       "fontSize": {
         "decrease": "글꼴 크기 줄이기",
         "increase": "글꼴 크기 늘리기"
+      },
+      "rexBackend": {
+        "title": "터미널 백엔드 (실험적)",
+        "description": "Rex를 사용하려면 실행 중인 로컬 Rex 서버와 승인된 Ghostty WASM 아티팩트가 필요합니다. 지원되는 새 로컬 터미널만 Rex를 사용하며 기존 세션은 백엔드를 유지합니다.",
+        "default": "기본값",
+        "rex": "Rex"
       }
     },
     "appearance": {
@@ -25740,7 +25746,8 @@
       "gotIt": "확인",
       "body": "숨기려면 Claude Code에 /diff를 입력하세요. Claude는 이후 세션을 위해 해당 선택을 기억합니다.",
       "title": "Claude Code는 넓은 터미널에서 채팅 옆에 자체 diff 패널을 열 수 있습니다. 이 패널은 Orca가 아닌 Claude의 패널입니다."
-    }
+    },
+    "rexInputModeResetUnavailable": "Rex는 아직 터미널 초기화를 지원하지 않습니다."
   },
   "fileSearch": {
     "failed": "검색에 실패했습니다. 다시 시도하세요.",

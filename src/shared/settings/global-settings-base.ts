@@ -45,6 +45,11 @@ type DesktopWindowSettings = {
   linuxTilingWindowMode?: boolean
 }
 
+type TerminalBackendSettings = {
+  /** Experimental backend for new local PTYs; existing PTYs retain their owner. */
+  terminalLocalBackend?: 'default' | 'rex'
+}
+
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
@@ -66,6 +71,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &
   TerminalScrollSettings &
+  TerminalBackendSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
   DesktopWindowSettings &

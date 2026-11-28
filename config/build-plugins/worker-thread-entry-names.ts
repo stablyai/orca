@@ -2,6 +2,8 @@
 export const WORKER_THREAD_ENTRY_NAMES = [
   'runtime-environment-store-worker-entry',
   'warp-theme-parser-worker',
+  'rex-launch-worker-entry',
+  'rex-snapshot-worker-entry',
   'foreign-sqlite-reader-entry',
   'agent-identity-worker-entry',
   'bots-db-worker-entry',

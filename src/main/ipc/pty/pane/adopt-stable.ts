@@ -10,7 +10,7 @@ import { reconcilePaneOwner } from './stable-pane-attach'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence/loading-store/store'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { getProvider } from '../provider/registry'
+import { getProviderForSpawn } from '../provider/registry'
 import {
   joinPaneSpawn,
   makePaneSpawnReservationKey,
@@ -165,7 +165,10 @@ export async function adoptStablePane(
           owner,
           worktreeId: args.worktreeId,
           connectionId: args.connectionId,
-          provider: getProvider(getConnectionExecutionHostId(args.connectionId)),
+          provider: getProviderForSpawn(
+            getConnectionExecutionHostId(args.connectionId),
+            owner.ptyId
+          ),
           spawnOptions: { cols: args.cols, rows: args.rows, cwd: args.cwd, signal: args.signal },
           resolveOwner,
           preAllocatedHandle: args.preAllocatedHandle,

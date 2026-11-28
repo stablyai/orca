@@ -57,7 +57,7 @@ export async function activateBackendRuntime(
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const { createOrcadRuntimeRpcServer } = await import('../orcad/host-runtime/orcad-runtime-rpc')
   const { registerHeadlessPtyRuntime } = await import('../ipc/pty/register-headless-runtime')
-  const { getLocalPtyProvider } = await import('../ipc/pty/provider/registry')
+  const { getLocalPtyLifecycleProvider } = await import('../ipc/pty/provider/registry')
   const { installOrcadObservability } = await import('../orcad/diagnostics/orcad-observability')
   setObservabilityCleanup(installOrcadObservability())
   const { ServeReadinessPublisher } = await import('../server/serve-readiness')
@@ -182,7 +182,7 @@ export async function activateBackendRuntime(
       profileStore.getSettings()
     ),
     // Resolve lazily because daemon swaps replace the provider after construction.
-    getLocalProvider: () => getLocalPtyProvider(),
+    getLocalProvider: () => getLocalPtyLifecycleProvider(),
     ...pairedEnvironments.runtimeOptions,
     // Read current daemon ownership; failed/degraded launch cannot claim fresh PTY persistence.
     canRecoverPersistentLocalPtys: () => daemonOwnsFreshPersistentPtys(),
@@ -241,7 +241,7 @@ export async function activateBackendRuntime(
 
   await restoreOrcadTerminalAuthority(runtime, timed, featureReadiness)
   runtime.agentTransitions.seedRestoredRows()
-  void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())
+  void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyLifecycleProvider())
 
   registerOrcadRuntimeShutdownSteps(runtime, registerCleanup)
 

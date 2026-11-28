@@ -2116,6 +2116,12 @@
       "fontSize": {
         "decrease": "Diminuir tamanho da fonte",
         "increase": "Aumentar tamanho da fonte"
+      },
+      "rexBackend": {
+        "title": "Backend do terminal (experimental)",
+        "description": "Rex requer um servidor Rex local em execução e o artefato WASM do Ghostty aprovado. Somente novos terminais locais compatíveis usam Rex; as sessões existentes mantêm seu backend.",
+        "default": "Padrão",
+        "rex": "Rex"
       }
     },
     "agents": {
@@ -25987,7 +25993,8 @@
       "decline": "Não, obrigado",
       "failed": "Não foi possível ativar a sincronização de tema do Claude Code",
       "failedDescription": "Ative-a nas Configurações."
-    }
+    },
+    "rexInputModeResetUnavailable": "O Rex ainda não permite redefinir o terminal."
   },
   "fileExplorer": {
     "root": {

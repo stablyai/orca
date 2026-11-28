@@ -142,6 +142,12 @@
       "fontSize": {
         "decrease": "フォントサイズを小さくする",
         "increase": "フォントサイズを大きくする"
+      },
+      "rexBackend": {
+        "title": "ターミナルバックエンド（試験的）",
+        "description": "Rex の利用には、稼働中のローカル Rex Server と承認済みの Ghostty WASM が必要です。対応する新規ローカルターミナルのみ Rex を使用し、既存のセッションは元のバックエンドを維持します。",
+        "default": "標準",
+        "rex": "Rex"
       }
     },
     "appearance": {
@@ -25434,7 +25440,8 @@
       "gotIt": "了解",
       "title": "Claude Code は、ワイドターミナルでチャットの横に独自の差分パネルを開くことができます。そのパネルは Claude のものであり、Orca のものではありません。",
       "body": "非表示にするには、Claude Code で /diff と入力してください。Claude はこの選択を今後のセッションでも記憶します。"
-    }
+    },
+    "rexInputModeResetUnavailable": "Rex はまだターミナルのリセットに対応していません。"
   },
   "fileSearch": {
     "failed": "検索失敗。もう一度お試しください",

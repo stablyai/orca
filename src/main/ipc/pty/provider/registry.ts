@@ -1,3 +1,8 @@
+import { mintRexPtyId } from '../../../providers/rex-pty/rex-session-record'
+import { mintPtySessionId } from '../../../daemon/sessions/pty-session-id'
+import { createLocalLifecycleProvider } from './local-lifecycle-routing'
+import { selectLocalPtyBackend } from './backend-routing'
+import { getLocalPtyBackendId } from '../../../../shared/terminal/pty/lifecycle/pty-backend-id'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import {
@@ -17,6 +22,8 @@ import {
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 
 export let localProvider: IPtyProvider = new LocalPtyProvider()
+let rexProvider: IPtyProvider | undefined
+let readRexPreference: (() => boolean) | undefined
 let colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
 
 // Push theme updates to every PTY owner before its next OSC query; never erase a surviving daemon's theme with unknown.
@@ -47,7 +54,18 @@ export type RegisteredPtyProvider = {
 }
 
 export function registeredPtyProviders(): RegisteredPtyProvider[] {
-  return [{ provider: localProvider, hostId: LOCAL_EXECUTION_HOST_ID }]
+  const providers: RegisteredPtyProvider[] = [
+    { provider: localProvider, hostId: LOCAL_EXECUTION_HOST_ID }
+  ]
+  if (rexProvider) {
+    providers.push({ provider: rexProvider, hostId: LOCAL_EXECUTION_HOST_ID })
+  }
+  return providers
+}
+
+/** The experimental interactive-only Rex backend cannot own agent claims. */
+export function registeredAgentClaimProviders(): RegisteredPtyProvider[] {
+  return registeredPtyProviders().filter(({ provider }) => provider !== rexProvider)
 }
 
 function ptyHostNotDispatchableMessage(hostId: ResolvedPtyHost): string {
@@ -113,12 +131,15 @@ export function getProviderForPty(ptyId: string): IPtyProvider {
   if (hostId === 'foreign') {
     throw new PtyHostNotDispatchableError(hostId)
   }
-  return getProvider(hostId)
+  return getProviderForSpawn(hostId, ptyId)
 }
 
 export function hasPtyProviderForInspection(ptyId: string): boolean {
   // Why: process inspection is background polling; other hosts read as idle, not repeated IPC errors.
-  return resolvePtyExecutionHost(ptyId) === LOCAL_EXECUTION_HOST_ID
+  return (
+    resolvePtyExecutionHost(ptyId) === LOCAL_EXECUTION_HOST_ID &&
+    (getLocalPtyBackendId(ptyId) !== 'rex' || rexProvider !== undefined)
+  )
 }
 
 export function getAppPtyId(connectionId: string | null | undefined, ptyId: string): string {
@@ -156,4 +177,38 @@ export function getLocalPtyProvider(): IPtyProvider {
 export function setLocalPtyProvider(provider: IPtyProvider): void {
   localProvider = provider
   pushColorQueryReplyColors(provider)
+}
+
+export function getProviderForSpawn(
+  hostId: ExecutionHostId,
+  id?: string,
+  freshShell = false
+): IPtyProvider {
+  const standard = getProvider(hostId)
+  if (id === undefined && freshShell && readRexPreference?.() && rexProvider) {
+    return rexProvider
+  }
+  return selectLocalPtyBackend(id, standard, rexProvider)
+}
+
+export function setRexPtyProvider(
+  provider: IPtyProvider | undefined,
+  readPreference?: () => boolean
+): void {
+  rexProvider = provider
+  readRexPreference = readPreference
+  if (provider) {
+    pushColorQueryReplyColors(provider)
+  }
+}
+
+export function mintLocalProviderSessionId(provider: IPtyProvider, worktreeId?: string): string {
+  if (provider !== rexProvider) {
+    return mintPtySessionId(worktreeId)
+  }
+  return mintRexPtyId(worktreeId)
+}
+
+export function getLocalPtyLifecycleProvider() {
+  return createLocalLifecycleProvider(localProvider, rexProvider)
 }

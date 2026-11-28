@@ -70,7 +70,7 @@ async function startOrcadManagedIdleExit(
     version: string
   }
 ): Promise<void> {
-  const { getLocalPtyProvider } = await import('../../../ipc/pty/provider/registry')
+  const { getLocalPtyLifecycleProvider } = await import('../../../ipc/pty/provider/registry')
   const { getCurrentDaemonPid, getDaemonEndpointFacts, isDaemonTerminalAdmissionClosed } =
     await import('../../../daemon/providers/lifecycle/daemon-provider-state')
   const { countLiveOrcadDaemonSessions, retireOrcadDaemonIfIdle } =
@@ -80,7 +80,7 @@ async function startOrcadManagedIdleExit(
     (getStructuredAgentSessionHost()?.chatSessionCount() ?? 0) > 0
   const ports: OrcadManagedIdleExitPorts = {
     readClientActivity: () => input.rpc.readClientActivity(),
-    listTerminals: () => getLocalPtyProvider().listProcesses(),
+    listTerminals: () => getLocalPtyLifecycleProvider().listProcesses(),
     countDaemonSessions: countLiveOrcadDaemonSessions,
     hasDaemon: () => getDaemonEndpointFacts() !== null,
     agentStates: input.agentStates,

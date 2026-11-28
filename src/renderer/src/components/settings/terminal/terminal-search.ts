@@ -1,3 +1,4 @@
+import { getRexBackendSearchEntry } from './rex-backend-search'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import {
   getTerminalAdvancedSearchEntries,
@@ -76,6 +77,7 @@ export function getTerminalPaneSearchEntries(
     isWindows: boolean
     isWindowsTerminalHost?: boolean
     isMac: boolean
+    isRexTerminalHost?: boolean
   },
   t: Translate = translate
 ): SettingsSearchEntry[] {
@@ -83,6 +85,7 @@ export function getTerminalPaneSearchEntries(
   // Mirror visible platform controls so search cannot link to hidden options.
   return [
     ...getTerminalRenderingSearchEntries(),
+    ...(platform.isRexTerminalHost ? [getRexBackendSearchEntry(t)] : []),
     ...getTerminalPaneInteractionSearchEntries(),
     ...(platform.isWindows ? getTerminalWindowsAdministratorSearchEntry() : []),
     ...(!isWindowsTerminalHost

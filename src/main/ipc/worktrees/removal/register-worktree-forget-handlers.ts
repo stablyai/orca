@@ -14,7 +14,7 @@ import {
 
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import { getLocalPtyProvider } from '../../pty/provider/registry'
+import { getLocalPtyLifecycleProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
@@ -115,7 +115,7 @@ export function registerWorktreeForgetHandlers(
           ...(ownerHost?.kind === 'runtime'
             ? { resolvedRuntimeEnvironmentId: ownerHost.environmentId }
             : {}),
-          localProvider: getLocalPtyProvider(),
+          localProvider: getLocalPtyLifecycleProvider(),
           onPtyStopped: clearProviderPtyState,
           // Metadata removal must retire structured chats even when no provider child is attached.
           closeStructuredSessions: teardownStops('worktree-removal', 'structured-chat'),

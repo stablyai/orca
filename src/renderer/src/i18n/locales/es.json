@@ -142,6 +142,12 @@
       "fontSize": {
         "decrease": "Reducir el tamaño de fuente",
         "increase": "Aumentar el tamaño de fuente"
+      },
+      "rexBackend": {
+        "title": "Motor de terminal (experimental)",
+        "description": "Rex requiere un servidor Rex local en ejecución y el artefacto WASM de Ghostty aprobado. Solo los nuevos terminales locales compatibles usan Rex; las sesiones existentes conservan su motor.",
+        "default": "Predeterminado",
+        "rex": "Rex"
       }
     },
     "appearance": {
@@ -25859,7 +25865,8 @@
       "gotIt": "Entendido",
       "body": "Para ocultarlo, escriba /diff en Claude Code. Claude recuerda esa elección para sesiones posteriores.",
       "title": "Claude Code puede abrir su propio panel de diferencias al lado del chat en terminales anchas. Ese panel es de Claude, no de Orca."
-    }
+    },
+    "rexInputModeResetUnavailable": "Rex aún no permite restablecer el terminal."
   },
   "quickOpen": {
     "moreMatchesAvailable": "Puede haber más coincidencias disponibles. Refina tu búsqueda para acotar los resultados.",

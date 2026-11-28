@@ -1,5 +1,10 @@
 import { getPtyIdsForHost } from '../provider/ownership-state'
-import { getProvider, localProvider, registeredPtyProviders } from '../provider/registry'
+import {
+  getProvider,
+  localProvider,
+  registeredPtyProviders,
+  getLocalPtyLifecycleProvider
+} from '../provider/registry'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -51,7 +56,7 @@ export async function listProcessesWithHostScopeFromRuntimeController(
   const respondingSessions = providerSessions.filter((session) => session !== null)
   return {
     processes: respondingSessions.flatMap((session) => session.processes),
-    hostIds: respondingSessions.map((session) => session.hostId)
+    hostIds: [...new Set(respondingSessions.map((session) => session.hostId))]
   }
 }
 
@@ -67,7 +72,7 @@ export async function listProcessesFromRuntimeController(
 ) {
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
     // Local inventory keeps its own deadline (#18078); only a target scope is forwarded.
-    return localProvider.listProcesses(
+    return getLocalPtyLifecycleProvider().listProcesses(
       opts?.ptyIds ? { ptyIds: opts.ptyIds, targetOwnerOnly: opts.targetOwnerOnly } : undefined
     )
   }
@@ -158,7 +163,7 @@ async function mayUnlistedLocalDaemonOwnPtys(): Promise<boolean> {
 /** Exit proof needs the provider that owns local PTYs, so it waits out startup and names who answered. */
 export async function listLocalProcessesForExitProofFromRuntimeController(
   deps: Pick<PtyRuntimeControllerDeps, 'getLocalPtyProviderStartupPromise'>,
-  readProvider: () => Pick<IPtyProvider, 'listProcesses'> = () => localProvider,
+  readProvider: (() => Pick<IPtyProvider, 'listProcesses'>) | undefined = undefined,
   startupBudgetMs = PTY_CONTROLLER_LIST_TIMEOUT_MS,
   mayUnlistedDaemonOwnPtys: () => boolean | Promise<boolean> = mayUnlistedLocalDaemonOwnPtys
 ): Promise<{ processes: PtyProcessInfo[]; inProcessOwner: boolean }> {
@@ -166,7 +171,7 @@ export async function listLocalProcessesForExitProofFromRuntimeController(
   if (startup && !(await localStartupFinishedWithinSharedBudget(startup, startupBudgetMs))) {
     throw new Error('Local terminals are still starting; a missing process proves nothing yet.')
   }
-  const provider = readProvider()
+  const provider = readProvider?.() ?? localProvider
   if (!(provider instanceof LocalPtyProvider) && (await mayUnlistedDaemonOwnPtys())) {
     throw new Error(
       'A daemon outside the inventory may still run local terminals; absence proves nothing.'
@@ -174,8 +179,19 @@ export async function listLocalProcessesForExitProofFromRuntimeController(
   }
   // Every generation listed under a PTY id, routed or not: a live unrouted generation is still alive,
   // and the routed view alone would read it as gone. An incomplete inventory still refuses.
-  const processes = await provider.listProcesses({ includeUnrouted: true })
-  if (provider !== readProvider()) {
+  const providers = readProvider
+    ? [provider]
+    : registeredPtyProviders().map((entry) => entry.provider)
+  const processes = (
+    await Promise.all(providers.map((owner) => owner.listProcesses({ includeUnrouted: true })))
+  ).flat()
+  const current = readProvider
+    ? [readProvider()]
+    : registeredPtyProviders().map((entry) => entry.provider)
+  if (
+    providers.length !== current.length ||
+    providers.some((owner, index) => owner !== current[index])
+  ) {
     throw new Error('The local PTY provider changed while listing; its answer proves nothing.')
   }
   return { processes, inProcessOwner: provider instanceof LocalPtyProvider }

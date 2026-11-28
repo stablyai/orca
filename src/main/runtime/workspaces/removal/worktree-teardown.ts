@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { LocalPtyLifecycleProvider } from '../../../providers/pty/local-lifecycle-provider'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   isUnstoppedPtyRemovalError,
@@ -46,7 +46,7 @@ export type WorktreeTeardownDeps = {
   resolvedConnectionId?: string
   /** Runtime environment owning a mirrored `resolvedWorktreeId`. */
   resolvedRuntimeEnvironmentId?: string
-  localProvider: IPtyProvider
+  localProvider: LocalPtyLifecycleProvider
   onPtyStopped?: (ptyId: string) => void
   timeoutMs?: number
   requirePhysicalStop?: boolean

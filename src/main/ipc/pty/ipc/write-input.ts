@@ -1,3 +1,4 @@
+import { shouldSuppressProviderQueryReply } from '../provider/backend-query-authority'
 import { isTerminalInputPaused } from '../../../runtime/terminal/input/terminal-input-admission'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
@@ -78,6 +79,9 @@ export function createPtyWriteInput(deps: {
     verify = false
   ): boolean | Promise<boolean> => {
     const { id, data } = args
+    if (shouldSuppressProviderQueryReply(provider, args.inputKind, data)) {
+      return false
+    }
     if (runtime && isTerminalInputPaused(runtime, id, 'desktop')) {
       return false
     }

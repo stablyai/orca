@@ -1,3 +1,4 @@
+import { getRexBackendSearchEntry } from './rex-backend-search'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
@@ -8,7 +9,11 @@ import { cn } from '@/lib/class-names'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
-import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
+import {
+  isLinuxUserAgent,
+  isMacUserAgent,
+  isWindowsUserAgent
+} from '@/app-shell/platform/user-agent-platform'
 import { getManageSessionsSearchEntries } from './session-management/manage-sessions-search'
 import { getTerminalDefaultShellSearchEntry } from './terminal-default-shell-search'
 import {
@@ -275,6 +280,29 @@ export function TerminalPane({
 
   const visibleSections = [
     defaultShellSection,
+    (!hostScope || hostScope.target.kind === 'local') &&
+    (isMac || isLinuxUserAgent()) &&
+    matchesSettingsSearch(searchQuery, getRexBackendSearchEntry(t)) ? (
+      <SettingsGroup
+        key="rex-backend"
+        title={getRexBackendSearchEntry(t).title}
+        description={getRexBackendSearchEntry(t).description}
+      >
+        <div className="py-3">
+          <SettingsSegmentedControl
+            ariaLabel={getRexBackendSearchEntry(t).title}
+            value={settings.terminalLocalBackend ?? 'default'}
+            options={[
+              { value: 'default', label: t('settings.terminal.rexBackend.default', 'Default') },
+              { value: 'rex', label: t('settings.terminal.rexBackend.rex', 'Rex') }
+            ]}
+            onChange={(value) =>
+              updateSettings({ terminalLocalBackend: value === 'rex' ? 'rex' : 'default' })
+            }
+          />
+        </div>
+      </SettingsGroup>
+    ) : null,
     isWindows &&
     matchesSettingsSearch(searchQuery, getTerminalWindowsAdministratorSearchEntry()) ? (
       <SettingsGroup

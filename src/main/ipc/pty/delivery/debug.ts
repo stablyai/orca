@@ -1,3 +1,4 @@
+import { rexPowerLifecycle } from '../../../providers/rex-pty/rex-power-lifecycle'
 import { getPtyPower } from '../pty-host-bindings'
 import {
   type PtyMainDeliveryDiagnostics,
@@ -50,10 +51,12 @@ export function installPowerSignalBreadcrumbs(): void {
   powerSignalBreadcrumbsInstalled = true
   const powerMonitor = getPtyPower()
   powerMonitor.on('suspend', () => {
+    rexPowerLifecycle.suspend()
     lastPowerSuspendAtMs = Date.now()
     mainDeliveryBreadcrumbs.record('power-suspend')
   })
   powerMonitor.on('resume', () => {
+    void rexPowerLifecycle.resume()
     lastPowerResumeAtMs = Date.now()
     mainDeliveryBreadcrumbs.record('power-resume')
   })

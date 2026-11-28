@@ -520,6 +520,12 @@
       "fontSize": {
         "decrease": "Réduire la taille de police",
         "increase": "Augmenter la taille de police"
+      },
+      "rexBackend": {
+        "title": "Moteur de terminal (expérimental)",
+        "description": "Rex nécessite un serveur Rex local en cours d’exécution et l’artefact WASM Ghostty approuvé. Seuls les nouveaux terminaux locaux compatibles utilisent Rex ; les sessions existantes conservent leur moteur.",
+        "default": "Par défaut",
+        "rex": "Rex"
       }
     },
     "appearance": {
@@ -26208,7 +26214,8 @@
       "gotIt": "J'ai compris",
       "title": "Claude Code peut ouvrir son propre panneau de différences à côté du chat dans les terminaux larges. Ce panneau appartient à Claude, pas à Orca.",
       "body": "Pour le masquer, tapez /diff dans Claude Code. Claude se souvient de ce choix pour les sessions ultérieures."
-    }
+    },
+    "rexInputModeResetUnavailable": "Rex ne prend pas encore en charge la réinitialisation du terminal."
   },
   "fileSearch": {
     "failed": "La recherche a échoué. Essayer à nouveau.",

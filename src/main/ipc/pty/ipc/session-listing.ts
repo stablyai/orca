@@ -52,7 +52,7 @@ export function installPtySessionListingIpcHandler(deps: {
       const admission = new PtyProcessListAdmission()
       const diagnostic = scope?.includeUnrouted === true
       await visitPtyProcessListingsInBatches(
-        scope === undefined
+        scope === undefined || scope.connectionId === null
           ? registeredPtyProviders()
           : [
               {

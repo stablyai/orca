@@ -9,7 +9,7 @@ import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentat
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import { notifyWorktreesChanged } from '../worktree-remote'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
-import { getLocalPtyProvider } from '../../pty/provider/registry'
+import { getLocalPtyLifecycleProvider } from '../../pty/provider/registry'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { getFolderWorkspaceRootId } from '../folder-workspace-model'
@@ -64,7 +64,7 @@ export async function removeFolderWorkspace(
         ...(ownerHost?.kind === 'runtime'
           ? { resolvedRuntimeEnvironmentId: ownerHost.environmentId }
           : {}),
-        localProvider: getLocalPtyProvider(),
+        localProvider: getLocalPtyLifecycleProvider(),
         onPtyStopped: clearProviderPtyState,
         // PTY inventories cannot see structured sessions; close them before forgetting the workspace.
         closeStructuredSessions: teardownStops('folder-removal', 'structured-chat'),

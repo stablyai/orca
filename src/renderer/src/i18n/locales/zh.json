@@ -142,6 +142,12 @@
       "fontSize": {
         "decrease": "减小字体大小",
         "increase": "增大字体大小"
+      },
+      "rexBackend": {
+        "title": "终端后端（实验性）",
+        "description": "Rex 需要正在运行的本地 Rex Server 和经过批准的 Ghostty WASM 工件。仅受支持的新建本地终端使用 Rex；现有会话保留原有后端。",
+        "default": "默认",
+        "rex": "Rex"
       }
     },
     "appearance": {
@@ -25436,7 +25442,8 @@
       "decline": "不用了",
       "failed": "无法开启 Claude Code 主题同步",
       "failedDescription": "请在设置中开启"
-    }
+    },
+    "rexInputModeResetUnavailable": "Rex 尚不支持重置终端。"
   },
   "fileSearch": {
     "failed": "搜索失败，再试一次",

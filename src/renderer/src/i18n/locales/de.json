@@ -884,6 +884,12 @@
       "fontSize": {
         "decrease": "Schrift verkleinern",
         "increase": "Schrift vergrößern"
+      },
+      "rexBackend": {
+        "title": "Terminal-Backend (experimentell)",
+        "description": "Rex benötigt einen laufenden lokalen Rex Server und das zugelassene Ghostty-WASM-Artefakt. Nur unterstützte neue lokale Terminals verwenden Rex; bestehende Sitzungen behalten ihr Backend.",
+        "default": "Standard",
+        "rex": "Rex"
       }
     },
     "appearance": {
@@ -25563,7 +25569,8 @@
       "decline": "Nein danke",
       "failed": "Claude-Code-Designsynchronisierung konnte nicht aktiviert werden",
       "failedDescription": "Aktiviere sie in den Einstellungen."
-    }
+    },
+    "rexInputModeResetUnavailable": "Rex unterstützt das Zurücksetzen des Terminals noch nicht."
   },
   "fileExplorer": {
     "root": {

@@ -154,6 +154,7 @@ export function normalizeLoadedGlobalSettings(
     floatingTerminalTrustedCwds: migratedFloatingTerminalTrustedCwds,
     floatingTerminalCwdMigratedToAppWorkspace: true,
     terminalScrollbackRows: migratedTerminalScrollback.rows,
+    terminalLocalBackend: parsed.settings?.terminalLocalBackend === 'rex' ? 'rex' : 'default',
     terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
     newTabMenuLayout: normalizeNewTabMenuLayout(parsed.settings?.newTabMenuLayout),
