@@ -18,6 +18,7 @@ export function getUsageProviderAccountsSectionId(
     case 'cursor':
       return 'accounts-cursor'
     case 'antigravity':
+      return 'accounts-antigravity'
     case 'kimi':
     case 'muse':
       // These CLIs keep their own credentials; Orca has no account settings for them.
