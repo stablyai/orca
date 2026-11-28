@@ -326,9 +326,7 @@ export function MobileWebShellScreen({
 
   usePublishedSafeAreaInsets(bridge.publishSafeAreaInsets, pageInsets)
   const publishKeyboardInset = bridge.publishKeyboardInset
-  useEffect(() => {
-    publishKeyboardInset(keyboardInset)
-  }, [publishKeyboardInset, keyboardInset])
+  useEffect(() => publishKeyboardInset(keyboardInset), [publishKeyboardInset, keyboardInset])
   usePublishedFoldDivision(bridge.publishFoldDivision, pageFold.division)
   usePublishedShellKeyRail(keyRail.keys, bridge, keyRail.inputOwner, keyRail.toolbar)
 
