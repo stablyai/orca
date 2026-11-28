@@ -12,6 +12,7 @@ import { deliverLocalCall } from './local-webhook-delivery'
 import { createLocalWebhookHandler } from './local-webhook-listener'
 import { localWebhookCalls } from './local-webhook-routes'
 import { LocalWebhookStore } from './local-webhook-store'
+import { webhookRuleId } from '../../../shared/connector-webhook-contract'
 import { listenOnLoopback, webhookAutomation } from './local-webhook.test-fixture'
 
 let dir: string | undefined
@@ -128,6 +129,116 @@ describe('a local webhook call', () => {
     expect(JSON.parse(readFileSync(join(dir, 'webhook-host.json'), 'utf8'))).toMatchObject({
       account: 'cloud-account'
     })
+  })
+
+  it("keeps the other mode's call files from the sweep", () => {
+    dir = mkdtempSync(join(tmpdir(), 'local-webhooks-pipeline-'))
+    let account = 'local-webhooks'
+    const ledger = new WebhookHostLedger(
+      dir,
+      () => account,
+      () => new Set()
+    )
+    const callId = 'call_AAAAAAAAAAAAAAAAAAAA'
+    const file = join(dir, 'bot', 'webhook-calls', `${callId}.untrusted.json`)
+    ledger.receive(
+      {
+        callId,
+        hookId: 'wh_AAAAAAAAAAAAAAAA',
+        automationId: 'auto-1',
+        triggerId: 'rule-1',
+        occurredAt: 1,
+        epoch: 0
+      },
+      1
+    )
+    ledger.bind(callId, { file })
+    account = 'cloud-account'
+    expect(ledger.files().has(file)).toBe(true)
+  })
+
+  it('offers a local call again when local webhooks come back on', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'local-webhooks-pipeline-'))
+    const botFolder = join(dir, 'bot')
+    mkdirSync(botFolder)
+    const store = new LocalWebhookStore(dir)
+    const hook = await store.mint('op-1', 'auto-1', 'bot-1')
+    const automation = webhookAutomation(hook)
+    const local = await store.hook(hook.hookId)
+    const call =
+      local &&
+      (await store.admit(
+        local,
+        { receivedAt: 1, state: 'queued' },
+        {
+          receivedAt: 1,
+          contentType: null,
+          headers: {},
+          body: { kind: 'text', value: '' },
+          truncated: false
+        }
+      ))
+    if (!call || call === 'queue_full') {
+      throw new Error('not taken')
+    }
+    await store.handOverQueued(call.callId, () => true)
+    // Handed over and taken by the local ledger, then local webhooks went off before it was offered.
+    new WebhookHostLedger(
+      dir,
+      () => 'local-webhooks',
+      () => new Set()
+    ).receive(
+      {
+        callId: call.callId,
+        hookId: hook.hookId,
+        automationId: automation.id,
+        triggerId: webhookRuleId(hook.hookId),
+        occurredAt: 1,
+        epoch: hook.epoch
+      },
+      1
+    )
+    let on = false
+    const routes = localWebhookCalls({
+      store,
+      baseUrl: () => 'http://127.0.0.1:6790',
+      deliver: async () => {}
+    })
+    const started: string[] = []
+    service = new WebhookHostService({
+      userDataPath: dir,
+      account: () => (on ? 'local-webhooks' : 'cloud-account'),
+      cloud: () => null,
+      local: () => (on ? routes : null),
+      automations: {
+        list: () => [automation],
+        runs: () => [],
+        setTriggers: () => {},
+        remove: () => {}
+      },
+      botFolder: () => botFolder,
+      botFolders: () => [botFolder],
+      botExists: () => true,
+      newerAgentBotIds: () => new Set(),
+      bot: () => undefined,
+      notifyOwner: () => {},
+      runForEvent: async (_id, _event, gate) => {
+        const reserved = await gate.reserve(automation)
+        if (!('runId' in reserved)) {
+          return null
+        }
+        started.push(reserved.runId)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the webhook pipeline reads only a run's id, status and error.
+        const run = { id: reserved.runId, status: 'dispatched' } as AutomationRun
+        gate.created(run)
+        return run
+      }
+    })
+    await service.start()
+    expect(started).toHaveLength(0)
+    on = true
+    service.modeChanged()
+    await expect.poll(() => started.length).toBe(1)
   })
 
   it("keeps a card's answer out of the ledger when local webhooks switched meanwhile", async () => {

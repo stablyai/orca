@@ -70,7 +70,7 @@ export class WebhookHostLedger {
       return null
     }
     if (this.stored?.account !== account) {
-      const loaded = this.read(account)
+      const loaded = this.read(this.path(account))
       const ledger = loaded?.account === account ? loaded : emptyLedger(account)
       ledger.hooks = this.newerAgentHooks(account).load(account, ledger.hooks)
       this.stored = ledger
@@ -86,9 +86,9 @@ export class WebhookHostLedger {
     }
   }
 
-  private read(account: string): StoredLedger | null {
+  private read(path: string): StoredLedger | null {
     try {
-      const parsed = StoredLedger.safeParse(JSON.parse(readFileSync(this.path(account), 'utf8')))
+      const parsed = StoredLedger.safeParse(JSON.parse(readFileSync(path, 'utf8')))
       return parsed.success ? parsed.data : null
     } catch (error) {
       if (!isMissingFileError(error)) {
@@ -141,9 +141,15 @@ export class WebhookHostLedger {
     this.write()
   }
 
-  /** Every file a call row still owns. */
+  /** Every file a call row still owns, also a row of the other mode's ledger, waiting for that mode. */
   files(): ReadonlySet<string> {
-    return new Set(this.ledger()?.calls.flatMap((call) => (call.file ? [call.file] : [])) ?? [])
+    const active = this.ledger()
+    const own = active ? this.path(active.account) : null
+    const others = [join(this.userDataPath, LEDGER_FILE), this.path(LOCAL_WEBHOOKS_ACCOUNT)]
+      .filter((path) => path !== own)
+      .map((path) => this.read(path))
+    const calls = [active, ...others].flatMap((ledger) => ledger?.calls ?? [])
+    return new Set(calls.flatMap((call) => (call.file ? [call.file] : [])))
   }
 
   hooks(): readonly LedgerHook[] {

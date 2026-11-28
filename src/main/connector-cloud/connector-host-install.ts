@@ -74,7 +74,7 @@ export function installConnectorHost({
     bots: () => store.getBots(),
     modeChanged: () => {
       runtime.getConnectorCloud()?.helloInputsChanged()
-      webhooks.changed()
+      webhooks.modeChanged()
       runtime.notifyBotsChanged({ kinds: ['settings'] })
     }
   })

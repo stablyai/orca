@@ -196,6 +196,12 @@ export class WebhookHostService {
     this.changed()
   }
 
+  /** Local webhooks went on or off: the other ledger is active, so its waiting calls go again. */
+  modeChanged(): void {
+    this.runs.resume()
+    this.changed()
+  }
+
   /** An automation, run or bot changed. */
   changed(): void {
     void this.hooks.reconcile().then(() => this.sweep.arm())
