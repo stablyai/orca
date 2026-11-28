@@ -106,8 +106,10 @@ export function RailUsageStack({
     paddingBottom: COLUMN_PADDING_BOTTOM,
     peek: CUT_FADE,
     // Under the status glyph the top gap stays put. Below Back it tightens with the rings.
-    tightenTop: !standalone && !atStripTop
+    tightenTop: !standalone && !atStripTop,
+    minRing: DUO_STATUS_RING_DIAMETER * 0.75
   })
+  const diameter = fit.diameter ?? DUO_STATUS_RING_DIAMETER
   if (usages.length === 0 || (strip === null && !standalone)) {
     return null
   }
@@ -129,7 +131,7 @@ export function RailUsageStack({
             standalone
               ? styles.centered
               : {
-                  paddingLeft: center - DUO_STATUS_RING_DIAMETER / 2,
+                  paddingLeft: center - diameter / 2,
                   paddingTop: fit.paddingTop,
                   gap: fit.gap,
                   paddingBottom: fit.paddingBottom
@@ -146,7 +148,7 @@ export function RailUsageStack({
               key={usage.provider}
               usage={usage}
               now={now}
-              diameter={standalone ? STANDALONE_RING_DIAMETER : undefined}
+              diameter={standalone ? STANDALONE_RING_DIAMETER : fit.diameter}
               onPress={() => open(usage.provider)}
             />
           ))}
