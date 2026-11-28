@@ -48,7 +48,7 @@ import {
   recordStructuredAgentSessionStartFailure
 } from '../startup/structured-agent-session-start-failure-row'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
-import { endCutChild } from '../host/structured-agent-session-permission-revocation'
+import { serializeCutEnd } from '../host/structured-agent-session-permission-revocation'
 
 export function createStructuredAgentSessionConversationLifetime(
   host: StructuredAgentSessionConversationLifetimeHost
@@ -84,8 +84,7 @@ export function createStructuredAgentSessionConversationLifetime(
   const closeContext = { sessions, serialize, closeConversation, deps }
   // An end the host cut, run in the lane: one that fails (or, `always`, never begins its stop)
   // leaves the child live and in use, so its permission writes are its own again.
-  const serializeEnd = <T>(id: string, always: boolean, end: () => Promise<T>) =>
-    serialize(id, () => endCutChild(deps().adapter, id, sessions.get(id), end, always))
+  const serializeEnd = serializeCutEnd(serialize, () => deps().adapter, sessions)
 
   const hasOpenDispatch = (sessionId: string): boolean => {
     const record = deps().store.getConversation(sessionId)

@@ -44,3 +44,15 @@ export async function endCutChild<T>(
     throw error
   }
 }
+
+/** `endCutChild` run in a session's lane, on the child the lane finds. */
+export function serializeCutEnd(
+  serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>,
+  adapter: () => Adapter,
+  sessions: ReadonlyMap<string, Pick<StructuredAgentSessionHostSession, 'child'>>
+) {
+  return <T>(sessionId: string, always: boolean, end: () => Promise<T>): Promise<T> =>
+    serialize(sessionId, () =>
+      endCutChild(adapter(), sessionId, sessions.get(sessionId), end, always)
+    )
+}
