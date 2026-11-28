@@ -119,8 +119,12 @@ export async function recordStartedHandle(
   const { store, logger } = context.deps
   const { link } = event
   if (!link) {
-    // Only an already-proven handle permits open without a new link.
-    return store.getRecord(event.sessionId)?.lease.provenHandleLinkId != null
+    // A resume must show an already-proven handle; a first conversation has none to prove —
+    // its provider (zcode) mints the handle at its first turn.
+    const record = store.getRecord(event.sessionId)
+    return (
+      record?.lease.provenHandleLinkId != null || (record?.providerHandleChain.length ?? 0) === 0
+    )
   }
   try {
     const committed = await store.updateRecord(event.sessionId, {

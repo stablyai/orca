@@ -1511,6 +1511,7 @@
 7 src/main/zcode/hook-service.ts # zcode-app-cli setting.json is read on the same one-shot startup, toggle and uninstall paths as config.json
 3 src/main/zcode/zcode-plan-credential-commands.ts
 3 src/main/zcode/zcode-v2-plan-credentials.ts
+1 src/main/zcode/structured/zcode-turn-process.ts # spawns one foreground zcode -p turn process; the shared provider-process spawn path, as claude-stream-json-connection.ts
 13 src/shared/agent-hook-listener/claude-session-continuation.ts
 2 src/shared/agent-hook-listener/command-code-transcript.ts
 3 src/shared/agent-hook-listener/grok-result-discovery.ts
