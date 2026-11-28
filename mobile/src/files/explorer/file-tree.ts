@@ -1,5 +1,6 @@
 import { MEDIA_FILE_MIME_TYPES } from '../../../../src/shared/file-preview/media-mime-types'
 import { compareFileNames } from '../../../../src/shared/file-listing/file-name-sort'
+import type { UploadNode } from './mobile-file-explorer-upload-rows'
 
 export type MobileDirEntry = {
   name: string
@@ -76,6 +77,7 @@ export type FileExplorerRow =
   | FolderPagingNode
   | SectionNode
   | ContentHitNode
+  | UploadNode
 
 /** Rows per "Show more"; a folder bigger than this shows its entry count. */
 export const DIRECTORY_PAGE_SIZE = 500

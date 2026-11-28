@@ -2082,8 +2082,8 @@
       "loadFailed": "Dateien konnten nicht geladen werden.",
       "title": "Dateien",
       "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt",
-      "more": "Mehr",
-      "newEntry": "Neu"
+      "newEntry": "Neu",
+      "add": "Hinzufügen"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} auf Mobilgeräten nicht verfügbar",
@@ -2119,7 +2119,35 @@
       "share": "Teilen",
       "shareFailed": "{{name}} konnte nicht geteilt werden",
       "shareTooLarge": "Dateien über 256 MB können nicht vom Telefon geteilt werden",
-      "shareHostOutdated": "Aktualisiere Orca dort, wo dieser Workspace läuft, um Dateien zu teilen"
+      "shareHostOutdated": "Aktualisiere Orca dort, wo dieser Workspace läuft, um Dateien zu teilen",
+      "uploadHere": "Hierher hochladen",
+      "uploadFiles": "Dateien hochladen",
+      "noFreeCopyName": "Kein freier Name für eine Kopie von {{name}}"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Wartet",
+      "waitingForConnection": "Wartet auf Verbindung",
+      "failed": "{{reason}} · Zum Wiederholen tippen",
+      "failedReason": "Hochladen fehlgeschlagen",
+      "dismiss": "{{name}} nicht hochladen",
+      "tooLarge": "Dateien über {{max}} MB können noch nicht vom Telefon hochgeladen werden.",
+      "busy": "Du kannst bis zu {{max}} Dateien gleichzeitig hochladen.",
+      "pickFailed": "Deine Dateien konnten nicht geöffnet werden. {{reason}}",
+      "clashMessage": "Bereits in {{folder}}",
+      "keepBoth": "Beide behalten",
+      "keepBothAs": "Wird als {{name}} gespeichert",
+      "keepBothCopies": "Speichert jede als Kopie",
+      "skip": "Überspringen",
+      "skipAll": "Alle überspringen",
+      "uploaded_one": "{{count}} Datei nach {{folder}} hochgeladen",
+      "uploaded_other": "{{count}} Dateien nach {{folder}} hochgeladen",
+      "clashTitleSeveral_one": "{{count}} Datei ist bereits in {{folder}}",
+      "clashTitleSeveral_other": "{{count}} Dateien sind bereits in {{folder}}",
+      "lost_one": "{{count}} Datei wurde nicht hochgeladen, das Telefon hat sie verworfen. Wähle sie erneut aus.",
+      "lost_other": "{{count}} Dateien wurden nicht hochgeladen, das Telefon hat sie verworfen. Wähle sie erneut aus.",
+      "nameTaken": "Name vergeben · Zum Auswählen tippen",
+      "workspaceRoot": "den Stammordner des Arbeitsbereichs",
+      "unconfirmed": "Der Upload konnte nicht bestätigt werden. Prüfe den Ordner."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Geladenen Markdown-Quelltext kopieren",

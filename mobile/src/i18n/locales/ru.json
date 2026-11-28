@@ -2264,8 +2264,8 @@
       "title": "Файлы",
       "truncatedList": "{{worktreeLabel}} — показаны первые 5000",
       "loading": "Загрузка файлов…",
-      "more": "Ещё",
-      "newEntry": "Создать"
+      "newEntry": "Создать",
+      "add": "Добавить"
     },
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
@@ -2301,7 +2301,41 @@
       "share": "Поделиться",
       "shareFailed": "Не удалось поделиться {{name}}",
       "shareTooLarge": "Файлы больше 256 МБ нельзя отправить с телефона",
-      "shareHostOutdated": "Обновите Orca там, где работает это рабочее пространство, чтобы делиться файлами"
+      "shareHostOutdated": "Обновите Orca там, где работает это рабочее пространство, чтобы делиться файлами",
+      "uploadHere": "Загрузить сюда",
+      "uploadFiles": "Загрузить файлы",
+      "noFreeCopyName": "Нет свободного имени для копии {{name}}"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Ожидание",
+      "waitingForConnection": "Ожидание подключения",
+      "failed": "{{reason}} · Нажмите, чтобы повторить",
+      "failedReason": "Не удалось загрузить",
+      "dismiss": "Не загружать {{name}}",
+      "tooLarge": "Файлы больше {{max}} МБ пока нельзя загрузить с телефона.",
+      "busy": "За раз можно загрузить не больше {{max}} файлов.",
+      "pickFailed": "Не удалось открыть файлы. {{reason}}",
+      "clashMessage": "Уже есть в {{folder}}",
+      "keepBoth": "Оставить оба",
+      "keepBothAs": "Сохранится как {{name}}",
+      "keepBothCopies": "Каждый сохранится как копия",
+      "skip": "Пропустить",
+      "skipAll": "Пропустить все",
+      "uploaded_few": "{{count}} файла загружено в {{folder}}",
+      "uploaded_many": "{{count}} файлов загружено в {{folder}}",
+      "uploaded_one": "{{count}} файл загружен в {{folder}}",
+      "uploaded_other": "{{count}} файла загружено в {{folder}}",
+      "clashTitleSeveral_few": "{{count}} файла уже есть в {{folder}}",
+      "clashTitleSeveral_many": "{{count}} файлов уже есть в {{folder}}",
+      "clashTitleSeveral_one": "{{count}} файл уже есть в {{folder}}",
+      "clashTitleSeveral_other": "{{count}} файла уже есть в {{folder}}",
+      "lost_few": "{{count}} файла не загружены: телефон их отпустил. Выберите их снова.",
+      "lost_many": "{{count}} файлов не загружены: телефон их отпустил. Выберите их снова.",
+      "lost_one": "{{count}} файл не загружен: телефон его отпустил. Выберите его снова.",
+      "lost_other": "{{count}} файла не загружены: телефон их отпустил. Выберите их снова.",
+      "nameTaken": "Имя занято · Нажмите, чтобы выбрать",
+      "workspaceRoot": "корень рабочей области",
+      "unconfirmed": "Не удалось подтвердить загрузку. Проверьте папку."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",

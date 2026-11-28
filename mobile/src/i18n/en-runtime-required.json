@@ -1121,6 +1121,16 @@
       "sessionLost": "Dictation lost its connection to the computer. Try again."
     }
   },
+  "files": {
+    "fileExplorerUpload": {
+      "clashTitleSeveral_one": "{{count}} file is already in {{folder}}",
+      "clashTitleSeveral_other": "{{count}} files are already in {{folder}}",
+      "lost_one": "{{count}} file wasn't uploaded: the phone let go of it. Pick it again.",
+      "lost_other": "{{count}} files weren't uploaded: the phone let go of them. Pick them again.",
+      "uploaded_one": "Uploaded {{count}} file to {{folder}}",
+      "uploaded_other": "Uploaded {{count}} files to {{folder}}"
+    }
+  },
   "home": {
     "bots": {
       "waits": {

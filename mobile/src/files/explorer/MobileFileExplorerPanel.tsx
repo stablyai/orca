@@ -296,6 +296,7 @@ export function MobileFileExplorerPanel(props: {
   const { openRowActions, rootMenuButton, newEntry, overlays } = useMobileFileExplorerActions({
     hostId,
     client,
+    scope,
     target,
     pagedListing: rootRead?.kind === 'directory',
     headerless: headerless === true,

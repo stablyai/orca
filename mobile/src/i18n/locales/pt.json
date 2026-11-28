@@ -2144,8 +2144,8 @@
       "title": "Arquivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando os primeiros 5000",
       "loading": "Carregando arquivos…",
-      "more": "Mais",
-      "newEntry": "Novo"
+      "newEntry": "Novo",
+      "add": "Adicionar"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponível no celular",
@@ -2181,7 +2181,38 @@
       "share": "Compartilhar",
       "shareFailed": "Não foi possível compartilhar {{name}}",
       "shareTooLarge": "Arquivos maiores que 256 MB não podem ser compartilhados pelo celular",
-      "shareHostOutdated": "Atualize o Orca onde este workspace é executado para compartilhar arquivos"
+      "shareHostOutdated": "Atualize o Orca onde este workspace é executado para compartilhar arquivos",
+      "uploadHere": "Enviar para cá",
+      "uploadFiles": "Enviar arquivos",
+      "noFreeCopyName": "Nenhum nome livre para uma cópia de {{name}}"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Aguardando",
+      "waitingForConnection": "Aguardando conexão",
+      "failed": "{{reason}} · Toque para tentar de novo",
+      "failedReason": "Falha no envio",
+      "dismiss": "Não enviar {{name}}",
+      "tooLarge": "Arquivos com mais de {{max}} MB ainda não podem ser enviados pelo celular.",
+      "busy": "Você pode enviar até {{max}} arquivos por vez.",
+      "pickFailed": "Não foi possível abrir seus arquivos. {{reason}}",
+      "clashMessage": "Já está em {{folder}}",
+      "keepBoth": "Manter ambos",
+      "keepBothAs": "Salva como {{name}}",
+      "keepBothCopies": "Salva cada um como cópia",
+      "skip": "Pular",
+      "skipAll": "Pular todos",
+      "uploaded_many": "{{count}} arquivos enviados para {{folder}}",
+      "uploaded_one": "{{count}} arquivo enviado para {{folder}}",
+      "uploaded_other": "{{count}} arquivos enviados para {{folder}}",
+      "clashTitleSeveral_many": "{{count}} arquivos já estão em {{folder}}",
+      "clashTitleSeveral_one": "{{count}} arquivo já está em {{folder}}",
+      "clashTitleSeveral_other": "{{count}} arquivos já estão em {{folder}}",
+      "lost_many": "{{count}} arquivos não foram enviados: o celular os descartou. Escolha-os de novo.",
+      "lost_one": "{{count}} arquivo não foi enviado: o celular o descartou. Escolha-o de novo.",
+      "lost_other": "{{count}} arquivos não foram enviados: o celular os descartou. Escolha-os de novo.",
+      "nameTaken": "Nome em uso · Toque para escolher",
+      "workspaceRoot": "a raiz do espaço de trabalho",
+      "unconfirmed": "Não foi possível confirmar o envio. Verifique a pasta."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",

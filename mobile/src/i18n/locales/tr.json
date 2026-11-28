@@ -2249,8 +2249,8 @@
       "loading": "Dosyalar yükleniyor…",
       "searching": "Aranıyor…",
       "searchPlaceholder": "Dosyalarda ara",
-      "more": "Daha Fazla",
-      "newEntry": "Yeni"
+      "newEntry": "Yeni",
+      "add": "Ekle"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} mobilde kullanılamıyor",
@@ -2286,7 +2286,35 @@
       "share": "Paylaş",
       "shareFailed": "{{name}} paylaşılamadı",
       "shareTooLarge": "256 MB’tan büyük dosyalar telefondan paylaşılamaz",
-      "shareHostOutdated": "Dosya paylaşmak için bu çalışma alanının çalıştığı yerde Orca’yı güncelleyin"
+      "shareHostOutdated": "Dosya paylaşmak için bu çalışma alanının çalıştığı yerde Orca’yı güncelleyin",
+      "uploadHere": "Buraya yükle",
+      "uploadFiles": "Dosya yükle",
+      "noFreeCopyName": "{{name}} kopyası için boş ad yok"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Bekliyor",
+      "waitingForConnection": "Bağlantı bekleniyor",
+      "failed": "{{reason}} · Yeniden denemek için dokunun",
+      "failedReason": "Yükleme başarısız",
+      "dismiss": "{{name}} yüklenmesin",
+      "tooLarge": "{{max}} MB üzerindeki dosyalar henüz telefondan yüklenemiyor.",
+      "busy": "Tek seferde en fazla {{max}} dosya yükleyebilirsiniz.",
+      "pickFailed": "Dosyalarınız açılamadı. {{reason}}",
+      "clashMessage": "{{folder}} içinde zaten var",
+      "keepBoth": "İkisini de tut",
+      "keepBothAs": "{{name}} olarak kaydedilir",
+      "keepBothCopies": "Her birini kopya olarak kaydeder",
+      "skip": "Atla",
+      "skipAll": "Tümünü atla",
+      "uploaded_one": "{{count}} dosya {{folder}} klasörüne yüklendi",
+      "uploaded_other": "{{count}} dosya {{folder}} klasörüne yüklendi",
+      "clashTitleSeveral_one": "{{count}} dosya {{folder}} içinde zaten var",
+      "clashTitleSeveral_other": "{{count}} dosya {{folder}} içinde zaten var",
+      "lost_one": "{{count}} dosya yüklenmedi: telefon onu bıraktı. Yeniden seçin.",
+      "lost_other": "{{count}} dosya yüklenmedi: telefon onları bıraktı. Yeniden seçin.",
+      "nameTaken": "Ad kullanımda · Seçmek için dokunun",
+      "workspaceRoot": "çalışma alanının kökü",
+      "unconfirmed": "Yükleme doğrulanamadı. Klasörü kontrol edin."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Yüklenen Markdown kaynağını kopyala",
