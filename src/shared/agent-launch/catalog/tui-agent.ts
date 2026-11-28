@@ -38,6 +38,7 @@ export type TuiAgent =
   | 'devin'
   | 'ante' // Ante (Antigma Labs)
   | 'trae'
+  | 'san'
   | 'muse' // Muse (Meta `muse` CLI)
   | 'zcode' // ZCode (Z.ai `zcode` CLI)
   | 'prime-agent' // Prime Agent (Prime Intellect)

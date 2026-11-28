@@ -20,6 +20,18 @@ function promptLaunch(
 }
 
 describe('argv prompt separator (#48072)', () => {
+  it('passes a San prompt as text rather than a CLI flag', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'san',
+      prompt: '--help',
+      cmdOverrides: {},
+      platform: 'linux',
+      shell: 'posix'
+    })
+
+    expect(plan?.launchCommand).toBe("san '--' '--help'")
+  })
+
   it('ends option parsing so a trailing variadic flag cannot take the prompt', () => {
     expect(promptLaunch('--permission-mode auto --disallowedTools Agent', 'posix')).toBe(
       "claude '--permission-mode' 'auto' '--disallowedTools' 'Agent' '--' 'Reply OK'"
