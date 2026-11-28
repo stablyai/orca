@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type * as NativeChatTextSettings from './native-chat-text-settings'
 
 vi.mock('react-native', () => ({
   Dimensions: {
@@ -17,7 +18,7 @@ vi.mock('@react-native-async-storage/async-storage', async () => {
 
 const KEY = 'orca:nativeChatText'
 
-type Settings = typeof import('./native-chat-text-settings')
+type Settings = typeof NativeChatTextSettings
 /** What a build of any age can leave under the key; `v` and `font` are absent on some. */
 type SavedText = { size: number; font?: string; lineSpacing: string; v?: number }
 
