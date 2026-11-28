@@ -22,7 +22,10 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../workspaces/removal/worktree-pty-stop-verdict'
-import { clearClosedWorktreeResumeRecords } from './worktree-sleep-resume-records'
+import {
+  clearClosedWorktreeResumeRecords,
+  clearWorkspaceTerminals
+} from './worktree-sleep-resume-records'
 import {
   anySleepKeyNames,
   listSleepWorkspaceId,
@@ -48,8 +51,8 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
       : { resolvedConnectionId: parsedHost?.kind === 'ssh' ? parsedHost.targetId : null }
   }
 
-  /** `list`: whose terminals. The host's list closes its tabs first; a teammate's terminals leave
-   *  their list as they stop, so closing them is stopping them and dropping their resume records. */
+  /** `list`: whose terminals. The host's list closes its tabs first; a teammate's are stopped, then
+   *  their saved tabs and resume records dropped from their own workspace. */
   async closeTerminalsForWorktree(
     worktreeSelector: string,
     { list = 'host' }: { list?: PtyList } = {}
@@ -103,8 +106,10 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         ...hostFence
       })
       if (!hostTabs) {
-        // Their terminals' tabs left their list as they stopped; their slept ones' records go too.
-        await this.clearWorktreeTerminalResumeRecords(listWorkspaceId, sessionHostId, [])
+        // No window closes their tabs: their saved ones, slept ones included, go with their records.
+        await this.commitWorkspaceSessionEdit(sessionHostId, (session) =>
+          clearWorkspaceTerminals(session, listWorkspaceId)
+        )
       }
       const ptyStop = summarizeWorktreePtyStopVerdict(
         targetPtyIds,
