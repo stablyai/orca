@@ -37,6 +37,7 @@ import { holdTabStripPointerGestureUntilRelease } from '../tab-bar/strip/tab-str
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
+/** The panel draws attached strips; external hosts provide their single strip in shell chrome. */
 export type TabGroupPanelTabStrip = 'attached' | 'external'
 
 export default function TabGroupPanel({
@@ -62,6 +63,7 @@ export default function TabGroupPanel({
   isFocused: boolean
   hasSplitGroups: boolean
   tabStrip?: TabGroupPanelTabStrip
+  /** Off for scratch workspaces (the floating panel) whose markdown is not a review surface. */
   markdownAnnotationsEnabled?: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
@@ -77,6 +79,7 @@ export default function TabGroupPanel({
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
+  // A bot's page chrome sits in the top-right strip, the one that spacing flag marks, so splits show it once.
   const bot = useBotForWorkspace(reserveClosedExplorerToggleSpace ? worktreeId : null)
   const quickCommandsSlotRef = useRef<HTMLDivElement>(null)
   const {
@@ -91,6 +94,7 @@ export default function TabGroupPanel({
   const showsSplitLanding = useAppStore((state) =>
     isSplitLandingGroup(state, worktreeId, model.group ?? undefined)
   )
+  // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
       resolveClientHostedBrowserRowStripGroupId(
@@ -128,7 +132,9 @@ export default function TabGroupPanel({
   )
   const attachEditorFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const backdropActive = useWindowBackdropActive()
+  // Why: per-group anchor-name lets the worktree-level overlay position panes without remounting live surfaces.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
+  // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
   const bodyAnchorStyle = useMemo(
     () => ({ anchorName: bodyAnchorName }) as React.CSSProperties,
     [bodyAnchorName]
@@ -239,6 +245,7 @@ export default function TabGroupPanel({
     />
   )
 
+  // Why: actions hide before the tab bar's floor is reached; clipping is only a backstop.
   const actionChromeClassName = cn(
     'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
@@ -259,6 +266,7 @@ export default function TabGroupPanel({
   }, [])
   return (
     <div
+      // Why: store focus, not DOM focus, so clicking the sidebar or a dialog keeps the active tab's underline.
       data-unfocused-split-group={hasSplitGroups && !isFocused ? '' : undefined}
       data-split-group={hasSplitGroups ? '' : undefined}
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
@@ -268,8 +276,10 @@ export default function TabGroupPanel({
       }`}
       style={splitFocusStyle}
       onPointerDown={commands.focusGroup}
+      // Why: keyboard/AT focus can enter a split group without a pointer event.
       onFocusCapture={commands.focusGroup}
     >
+      {/* Each visible split needs its own strip; hidden duplicates would register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
           className="h-(--workspace-tab-row-height) shrink-0 border-b border-border bg-tab-bar"
@@ -279,6 +289,7 @@ export default function TabGroupPanel({
           onPointerDownCapture={holdTabStripPointerGesture}
         >
           <div className="flex h-full items-stretch pr-1">
+            {/* Why: this no-drag spacer keeps the collapsed sidebar toggle clickable. */}
             {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
               <div
                 className="shrink-0"
@@ -290,8 +301,10 @@ export default function TabGroupPanel({
                 }
               />
             ) : null}
+            {/* Why: the tab-strip container excludes reserved spacers, so width rules see only shared room. */}
             <div className="@container/tab-strip group/tab-strip-row flex min-w-0 flex-1 items-stretch">
               <div className="min-w-10 flex-1 h-full">{tabBar}</div>
+              {/* Why: preserve a window-drag handle in narrow strips without clipping controls. */}
               {reserveRightTitlebarSpace ? (
                 <div className="workspace-tab-drag-handle w-10 min-w-0 @max-[203px]/tab-strip:hidden group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[243px]/tab-strip:hidden" />
               ) : null}
@@ -299,6 +312,7 @@ export default function TabGroupPanel({
                 className={actionChromeClassName}
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
+                {/* Why: drop an action whole once it cannot fit beside the tab floor. */}
                 <div
                   ref={quickCommandsSlotRef}
                   className="contents @max-[163px]/tab-strip:invisible @max-[163px]/tab-strip:absolute @max-[163px]/tab-strip:end-0 @max-[163px]/tab-strip:top-0 @max-[163px]/tab-strip:block group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:invisible group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:absolute group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:end-0 group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:top-0 group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:block"
@@ -322,6 +336,7 @@ export default function TabGroupPanel({
                 ) : null}
               </div>
             </div>
+            {/* Why: this no-drag spacer keeps right-sidebar controls clickable. */}
             {reserveRightTitlebarSpace ? (
               <div
                 className="shrink-0"
@@ -351,6 +366,7 @@ export default function TabGroupPanel({
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
+        {/* Why: the empty anchor places the agent-sessions tip in terminal-area content. */}
         {isFocused ? (
           <div
             className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
@@ -359,6 +375,7 @@ export default function TabGroupPanel({
           />
         ) : null}
         {activeTab && toVisibleTabType(activeTab.contentType) === 'editor' && (
+          // Why: capture the drop before Monaco so the file opens as a tab here.
           <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
             <Suspense
               fallback={
