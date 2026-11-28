@@ -1,6 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { AgentCliUpdateAgent } from '../../../../shared/agent-launch/installation/agent-cli-update'
+import {
+  AGENT_CLI_COPILOT_SHORT_PRODUCT_NAME,
+  AGENT_CLI_PRODUCT_NAMES as NAMES
+} from '../../../../shared/agent-launch/installation/agent-cli-product-names'
 
 /** The product the user installed, as its own docs name it; `short` fits a list row. */
 export function agentCliProductName(
@@ -10,42 +14,42 @@ export function agentCliProductName(
 ): string {
   switch (agent) {
     case 'claude':
-      return t('agentCliUpdate.claudeProduct', 'Claude Code')
+      return t('agentCliUpdate.claudeProduct', NAMES.claude)
     case 'codex':
-      return t('agentCliUpdate.codexProduct', 'Codex CLI')
+      return t('agentCliUpdate.codexProduct', NAMES.codex)
     case 'grok':
-      return t('agentCliUpdate.grokProduct', 'Grok Build')
+      return t('agentCliUpdate.grokProduct', NAMES.grok)
     case 'opencode':
-      return t('agentCliUpdate.opencodeProduct', 'OpenCode')
+      return t('agentCliUpdate.opencodeProduct', NAMES.opencode)
     case 'opencode2':
-      return t('agentCliUpdate.opencode2Product', 'OpenCode 2')
+      return t('agentCliUpdate.opencode2Product', NAMES.opencode2)
     case 'omp':
-      return t('agentCliUpdate.ompProduct', 'OMP')
+      return t('agentCliUpdate.ompProduct', NAMES.omp)
     case 'copilot':
       return length === 'short'
-        ? t('agentCliUpdate.copilotShortProduct', 'Copilot CLI')
-        : t('agentCliUpdate.copilotProduct', 'GitHub Copilot CLI')
+        ? t('agentCliUpdate.copilotShortProduct', AGENT_CLI_COPILOT_SHORT_PRODUCT_NAME)
+        : t('agentCliUpdate.copilotProduct', NAMES.copilot)
     case 'kimi':
-      return t('agentCliUpdate.kimiProduct', 'Kimi Code')
+      return t('agentCliUpdate.kimiProduct', NAMES.kimi)
     case 'cursor':
-      return t('agentCliUpdate.cursorProduct', 'Cursor CLI')
+      return t('agentCliUpdate.cursorProduct', NAMES.cursor)
     case 'hermes':
-      return t('agentCliUpdate.hermesProduct', 'Hermes Agent')
+      return t('agentCliUpdate.hermesProduct', NAMES.hermes)
     case 'goose':
-      return t('agentCliUpdate.gooseProduct', 'Goose CLI')
+      return t('agentCliUpdate.gooseProduct', NAMES.goose)
     case 'aug':
-      return t('agentCliUpdate.auggieProduct', 'Auggie')
+      return t('agentCliUpdate.auggieProduct', NAMES.aug)
     case 'kilo':
-      return t('agentCliUpdate.kiloProduct', 'Kilo CLI')
+      return t('agentCliUpdate.kiloProduct', NAMES.kilo)
     case 'mimo-code':
-      return t('agentCliUpdate.mimoCodeProduct', 'MiMo Code')
+      return t('agentCliUpdate.mimoCodeProduct', NAMES['mimo-code'])
     case 'qwen-code':
-      return t('agentCliUpdate.qwenCodeProduct', 'Qwen Code')
+      return t('agentCliUpdate.qwenCodeProduct', NAMES['qwen-code'])
     case 'devin':
-      return t('agentCliUpdate.devinProduct', 'Devin CLI')
+      return t('agentCliUpdate.devinProduct', NAMES.devin)
     case 'codebuddy':
-      return t('agentCliUpdate.codebuddyProduct', 'CodeBuddy Code')
+      return t('agentCliUpdate.codebuddyProduct', NAMES.codebuddy)
     case 'antigravity':
-      return t('agentCliUpdate.antigravityProduct', 'Antigravity CLI')
+      return t('agentCliUpdate.antigravityProduct', NAMES.antigravity)
   }
 }

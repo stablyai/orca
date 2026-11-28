@@ -77,9 +77,7 @@
       "skipped_one": "跳过了 {{count}} 个记录",
       "skipped_other": "跳过了 {{count}} 个记录",
       "title": "智能体会话历史",
-      "unavailable": "智能体会话历史不可用",
       "unknownHostPlatform": "无法确定主机平台",
-      "updateHost": "请更新此主机上的 Orca，以浏览智能体会话历史",
       "waitingForHost": "正在等待主机…",
       "workspace": "工作区"
     },
@@ -291,8 +289,7 @@
       "certificateChallengeExpired": "此证书审批已过期，请重试该页面以请求新的审批",
       "certificateChallengeChanged": "证书请求已更改，请重试该页面并查看新的警告",
       "certificateProceedFailed": "Orca 无法批准此证书请求，请重试该页面后再试，",
-      "certificateChallengeUnavailable": "此证书请求已不可用，请重试该页面以重新请求",
-      "certificateProceedNeedsHostUpdate": "请更新此主机上的 Orca，以便在手机上接受证书警告"
+      "certificateChallengeUnavailable": "此证书请求已不可用，请重试该页面以重新请求"
     },
     "pagePrompt": {
       "downloadStarted": "正在下载到主机上的 {{path}}",
@@ -903,7 +900,6 @@
       },
       "title": "MCP 服务器",
       "notRunning": "MCP 服务器会在你发送下一条消息时连接",
-      "unsupported": "请更新此聊天所在主机上的 Orca，以便在这里管理 MCP 服务器",
       "readFailed": "无法加载 MCP 服务器",
       "retry": "重试",
       "empty": "此聊天没有设置任何 MCP 服务器",
@@ -1555,7 +1551,6 @@
       "connectHint": "请在 Orca 桌面端的“设置 → 集成”中添加 Jira 站点，然后再次检查",
       "connectOnDesktop": "在桌面端连接 Jira",
       "credentialUnreadable": "Jira 凭据已保存，但无法读取：{{credentialError}}",
-      "updateDesktop": "更新此主机上的 Orca",
       "connectTitle": "连接你的 Jira 账户",
       "connectMessage": "直接在“任务”中浏览分配给你的 Jira 问题并开始工作。",
       "connect": "连接 Jira"
@@ -2336,7 +2331,6 @@
       "scheduled": "已计划",
       "showFor": "选择要显示自动化的桌面",
       "toggleFailed": "无法更新 {{name}}",
-      "updateDesktop": "请更新 {{desktop}} 上的 Orca，以使用自动化",
       "pairComputer": "请先配对一台电脑，才能查看和运行自动化"
     },
     "listFooter": {
@@ -2395,7 +2389,6 @@
     "bots": {
       "noBotsTitle": "还没有 bots",
       "seeAll": "查看全部 bots",
-      "updateOneBody": "它的 Orca 版本还无法在手机上显示 bots",
       "updateManyTitle": "更新你各台电脑上的 Orca",
       "updateManyBody": "这些电脑上的 Orca 版本还无法在手机上显示 bots",
       "offOneBody": "要开启 bots，请在 {{host}} 上打开 Orca，然后前往“设置 › Bots › 启用 bots”",
@@ -2484,7 +2477,6 @@
       "ignoredNamesMore": "{{names}} 等",
       "ignoredNamesCount": "{{names}} +{{value0}}",
       "ignoredUnchecked": "无法完整检查 Git 忽略的文件",
-      "needsUpdate": "请更新电脑上的 Orca，以便在手机上删除此工作区",
       "removeTitle": "移除工作区",
       "removeFolderMessage": "要从 Orca 中移除“{{name}}”吗？磁盘上的文件夹会保留"
     },
@@ -3122,7 +3114,6 @@
       "committedDiffUnavailable": "已提交的差异不可用",
       "commitLoadFailed": "无法加载此提交",
       "commitDiffUnavailable": "提交差异不可用",
-      "desktopUpdateRequired": "请更新此主机上的 Orca，以便在手机上评审更改",
       "diffLoadFailed": "无法加载差异",
       "reviewNotesLoadFailed": "无法加载评审笔记"
     },
@@ -3518,8 +3509,7 @@
       "messageNotSent": "消息未发送"
     },
     "tabStrip": {
-      "checkingCapabilities": "正在检查桌面支持的功能，请稍后重试",
-      "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用"
+      "checkingCapabilities": "正在检查桌面支持的功能，请稍后重试"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清空终端",
@@ -4395,8 +4385,7 @@
       "pullRequest": "PR"
     },
     "loaders": {
-      "loadFailed": "无法加载源代码控制",
-      "updateDesktop": "请更新此主机上的 Orca，以在手机上使用源代码控制"
+      "loadFailed": "无法加载源代码控制"
     },
     "modals": {
       "discardButton": "放弃",
@@ -4866,9 +4855,7 @@
       "connectLinearButton": "连接 Linear",
       "connectLinearMessage": "直接在“任务”中浏览并开始处理分配给你的 Linear 议题",
       "connectLinearTitle": "连接你的 Linear 账户",
-      "jiraStatusFailed": "读取 Jira 状态失败",
-      "updateDesktopMessage": "此移动端“任务”视图需要此主机上更高版本的 Orca",
-      "updateDesktopTitle": "更新此主机上的 Orca"
+      "jiraStatusFailed": "读取 Jira 状态失败"
     },
     "options": {
       "all": "全部",

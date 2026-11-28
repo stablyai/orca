@@ -6,8 +6,11 @@ import { describeLoadError } from '../components/feedback/load-error-description
 import { MobileLoadErrorState } from '../components/feedback/MobileStateView'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { SettingsNote } from '../settings/settings-screen-frame'
+import { ListGroup } from '../components/list/ListGroup'
+import { automationHostOutdated } from './automation-error'
 import { automationStylesSheet as stylesSheet } from './automation-styles'
 import { useThemedStyles } from '../theme/themed-styles'
+import { HostUpdateNotice } from '../host-update-notice/HostUpdateNotice'
 
 export type AutomationHeaderBar = {
   /** On an automation's page: its name, next run and the way back to the list, in place of the tabs. */
@@ -43,7 +46,14 @@ export function AutomationCatalogNotes(props: {
           {t('automations.mobile.offlineSaved', 'Offline. Showing saved automations.')}
         </SettingsNote>
       ) : null}
-      {props.failedLoad ? (
+      {automationHostOutdated(props.error, t) ? (
+        <ListGroup>
+          <HostUpdateNotice
+            variant="row"
+            feature={t('automations.mobile.needsNewerOrca', 'Needed to run automations here')}
+          />
+        </ListGroup>
+      ) : props.failedLoad ? (
         <MobileLoadErrorState error={props.error} onRetry={props.onRetry} />
       ) : props.error ? (
         <SettingsNote error>{describeLoadError(props.error, t).message}</SettingsNote>

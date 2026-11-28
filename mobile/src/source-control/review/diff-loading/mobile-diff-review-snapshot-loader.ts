@@ -77,9 +77,10 @@ async function buildWorktreeSnapshot(
   if (read.kind === 'unavailable') {
     return {
       kind: 'unavailable',
+      hostUpdate: true,
       message: translate(
-        'session.diffReviewLoaders.desktopUpdateRequired',
-        'Update Orca on this host to review changes on mobile.'
+        'session.diffReviewLoaders.needsNewerOrca',
+        'Review needs a newer version.'
       )
     }
   }

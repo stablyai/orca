@@ -16,6 +16,7 @@ import type { MobileAutomationRow } from './automation-reply-schema'
 import type { PresentAutomationSheet } from './AutomationSheets'
 import { BotAutomationEditor } from './BotAutomationEditor'
 import type { AutomationLeaveSlot } from './AutomationEditorNavigation'
+import { HostUpdateNotice } from '../host-update-notice/HostUpdateNotice'
 
 export function AutomationPageBotEditor(props: {
   visible: boolean
@@ -62,18 +63,20 @@ export function AutomationPageBotEditor(props: {
             title={t('automations.mobile.editAutomation', 'Edit automation')}
             leading={{ label: t('automations.mobile.cancel', 'Cancel'), onPress: props.onClose }}
           />
-          {read === null ? null : (
+          {read === 'no-capability' ? (
+            <ListGroup>
+              <HostUpdateNotice
+                variant="row"
+                feature={t('automations.mobile.needsNewerOrca', 'Needed to run automations here')}
+              />
+            </ListGroup>
+          ) : read === null ? null : (
             <>
               <SettingsNote error>
-                {read === 'no-capability'
-                  ? t(
-                      'automations.mobile.hostUnavailable',
-                      'Automations are unavailable on this host. Update Orca on that host and reconnect.'
-                    )
-                  : t(
-                      'automations.mobile.hostUnreachable',
-                      'Could not reach this host. Reconnect, then refresh to check its current state.'
-                    )}
+                {t(
+                  'automations.mobile.hostUnreachable',
+                  'Could not reach this host. Reconnect, then refresh to check its current state.'
+                )}
               </SettingsNote>
               <ListGroup>
                 <ListRow

@@ -1,4 +1,4 @@
-import { CircleAlert, Inbox } from 'lucide-react-native'
+import { Inbox } from 'lucide-react-native'
 import {
   HostOfflineBanner,
   useHostOfflineBanner
@@ -15,6 +15,7 @@ import { useHostDisplay } from '../../host-descriptors/use-host-display'
 import { useHostProfile } from '../../host-catalog/use-host-profile'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { clearMobileTasksSearch } from '../screen/mobile-tasks-search-control'
+import { HostUpdateNotice } from '../../host-update-notice/HostUpdateNotice'
 
 export function ignoreKeptRowPress(): void {}
 
@@ -86,13 +87,9 @@ export function renderMobileTasksSupportState(
   const { t } = model
   if (model.tasksUnsupported) {
     return (
-      <MobileStateView
-        icon={CircleAlert}
-        title={t('tasks.listSurface.updateDesktopTitle', 'Update Orca on this host')}
-        message={t(
-          'tasks.listSurface.updateDesktopMessage',
-          'This mobile Tasks view needs a newer Orca on this host.'
-        )}
+      <HostUpdateNotice
+        variant="screen"
+        feature={t('tasks.listSurface.needsNewerOrca', 'Tasks needs a newer version.')}
         bottomInset={bottomBarHeight}
       />
     )

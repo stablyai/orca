@@ -21,6 +21,7 @@ import { displayHostEndpoint } from '../../../src/transport/hosts/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/hosts/host-endpoint-edit'
 import {
   useForgetHostClient,
+  useHostClient,
   usePrimeHosts,
   useRefreshHostClient
 } from '../../../src/transport/connection/host-client-hooks'
@@ -41,7 +42,8 @@ import {
   SettingsSection,
   settingsScreenStylesSheet
 } from '../../../src/settings/settings-screen-frame'
-import { HostOrcaVersionSection } from '../../../src/host-screen/identity/HostOrcaVersionSection'
+import { HostUpdatesSection } from '../../../src/host-screen/identity/updates/HostUpdatesSection'
+import { TransientToast, useTransientToast } from '../../../src/components/feedback/TransientToast'
 
 export default function EditHostScreen() {
   const styles = useThemedStyles(stylesSheet)
@@ -51,10 +53,12 @@ export default function EditHostScreen() {
   const t = useMobileTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { hostId } = useLocalSearchParams<{ hostId: string }>()
+  const { hostId, update } = useLocalSearchParams<{ hostId: string; update?: string }>()
   const primeHosts = usePrimeHosts()
   const refreshHostClient = useRefreshHostClient()
   const forgetHostClient = useForgetHostClient()
+  const hostConnection = useHostClient(hostId)
+  const { message: toastMessage, showToast } = useTransientToast()
   const queryClient = useQueryClient()
 
   const [host, setHost] = useState<HostProfile | null>(null)
@@ -309,7 +313,14 @@ export default function EditHostScreen() {
               />
             </SettingsSection>
 
-            <HostOrcaVersionSection />
+            <HostUpdatesSection
+              hostId={host.id}
+              hostName={hostTitle}
+              client={hostConnection.client}
+              online={hostConnection.state === 'connected'}
+              showToast={showToast}
+              openUpdate={update === 'orca'}
+            />
 
             <SettingsSection>
               <ListRow
@@ -323,6 +334,7 @@ export default function EditHostScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       )}
+      <TransientToast message={toastMessage} bottomInset={insets.bottom} />
       <ConfirmModal
         visible={confirmRemove}
         title={t('home.screen.removeComputerTitle', 'Remove computer')}

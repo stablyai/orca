@@ -84,9 +84,12 @@ export function SettingsSection({
   first = false,
   separatorInset,
   radioGroup = false,
+  trailing,
   children
 }: {
   title?: string
+  /** Beside the title, e.g. a compact action for the whole group. */
+  trailing?: ReactNode
   /** Explains the group; a string becomes a note, anything else renders as is. */
   footer?: ReactNode
   /** The first section on the screen sits closer to the bar. */
@@ -102,7 +105,7 @@ export function SettingsSection({
       style={!title && !first && settingsScreenStyles.untitledGap}
       accessibilityRole={radioGroup ? 'radiogroup' : undefined}
     >
-      {title ? <SectionHeader title={title} first={first} /> : null}
+      {title ? <SectionHeader title={title} first={first} trailing={trailing} /> : null}
       <ListGroup separatorInset={separatorInset}>{children}</ListGroup>
       {typeof footer === 'string' ? <SettingsNote>{footer}</SettingsNote> : footer}
     </View>

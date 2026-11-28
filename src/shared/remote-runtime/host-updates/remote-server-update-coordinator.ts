@@ -1,99 +1,34 @@
-import {
-  compareAppVersions,
-  hasReachedAppVersion,
-  isPerfPrereleaseAppVersion,
-  isPrereleaseAppVersion,
-  isValidAppVersion
-} from '../../app-lifecycle/identity/app-version'
-import {
-  REMOTE_SERVER_UPDATE_CAPABILITY,
-  type RemoteServerUpdateInstallResult,
-  type RemoteServerUpdaterSnapshot,
-  type RemoteServerUpdateSupport
-} from '../host-catalog/remote-server-update'
-
+import { compareAppVersions, isValidAppVersion } from '../../app-lifecycle/identity/app-version'
+import { REMOTE_SERVER_UPDATE_CAPABILITY } from '../host-catalog/remote-server-update'
 import {
   getOrcadSshDeployment,
   type PublicKnownRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 import type { UpdateCheckOptions } from '../../updater/update-status-types'
-import { waitForReplacementRuntime } from './remote-server-restart-wait'
+import {
+  DEFAULT_REMOTE_SERVER_UPDATE_TIMING,
+  describeRemoteServerUpdateError,
+  type RemoteServerUpdateEntry,
+  type RemoteServerUpdateRunOptions,
+  type RemoteServerUpdateTiming,
+  type RemoteServerUpdateTransport
+} from './remote-server-update-entry'
+import {
+  downloadRemoteServerUpdate,
+  installRemoteServerUpdate
+} from './remote-server-update-stages'
 import { getRemoteServerNewerThanClientVersion } from './remote-server-version-skew'
 import { pollRemoteServerUpdater } from './remote-server-updater-polling'
 
-export type RemoteServerUpdatePhase =
-  | 'checking'
-  | 'available'
-  | 'current'
-  | 'manual'
-  | 'offline'
-  | 'queued'
-  | 'checking-update'
-  | 'downloading'
-  | 'restarting'
-  | 'updated'
-  | 'failed'
-
-export type RemoteServerUpdateEntry = {
-  environmentId: string
-  name: string
-  phase: RemoteServerUpdatePhase
-  currentVersion: string | null
-  targetVersion: string | null
-  progress: number | null
-  runtimeId: string | null
-  liveTabCount: number
-  liveLeafCount: number
-  support: RemoteServerUpdateSupport | null
-  error: string | null
-  /** This desktop updates it over SSH, not through the host's own updater. */
-  managedOverSsh?: boolean
-  /** This app's version when it was compared; read through getRemoteServerNewerThanClientVersion. */
-  clientVersion?: string | null
-}
-
-export type RemoteServerUpdateTransport = {
-  getRuntimeStatus: (
-    environmentId: string,
-    timeoutMs?: number,
-    options?: { force?: true }
-  ) => Promise<RuntimeStatus>
-  getUpdaterStatus: (
-    environmentId: string,
-    timeoutMs?: number
-  ) => Promise<RemoteServerUpdaterSnapshot>
-  check: (
-    environmentId: string,
-    options: UpdateCheckOptions
-  ) => Promise<RemoteServerUpdaterSnapshot>
-  download: (environmentId: string) => Promise<RemoteServerUpdaterSnapshot>
-  install: (environmentId: string) => Promise<RemoteServerUpdateInstallResult>
-  wait: (milliseconds: number) => Promise<void>
-  now?: () => number
-  /** Words a failure for this client's UI; defaults to the raw error message. */
-  describeError?: (error: unknown) => string
-}
-
-const describeError = (transport: RemoteServerUpdateTransport, error: unknown): string =>
-  transport.describeError?.(error) ?? (error instanceof Error ? error.message : String(error))
-
-export type RemoteServerUpdateTiming = {
-  operationTimeoutMs: number
-  reconnectTimeoutMs: number
-  pollIntervalMs: number
-}
-
-export const DEFAULT_REMOTE_SERVER_UPDATE_TIMING: RemoteServerUpdateTiming = {
-  operationTimeoutMs: 10 * 60 * 1000,
-  reconnectTimeoutMs: 3 * 60 * 1000,
-  pollIntervalMs: 500
-}
-
-export type RemoteServerUpdateRunOptions = {
-  checkOptions?: UpdateCheckOptions
-  timing?: RemoteServerUpdateTiming
-}
+export type {
+  RemoteServerUpdateEntry,
+  RemoteServerUpdatePhase,
+  RemoteServerUpdateRunOptions,
+  RemoteServerUpdateTiming,
+  RemoteServerUpdateTransport
+} from './remote-server-update-entry'
+export { DEFAULT_REMOTE_SERVER_UPDATE_TIMING } from './remote-server-update-entry'
 
 export function checkingRemoteServerUpdateEntry(
   environment: PublicKnownRuntimeEnvironment
@@ -196,7 +131,7 @@ export async function inspectRemoteServerUpdate(
         ...statusFields,
         phase: 'failed',
         targetVersion: null,
-        error: describeError(transport, error)
+        error: describeRemoteServerUpdateError(transport, error)
       }
     }
   }
@@ -215,106 +150,9 @@ export async function runRemoteServerUpdate(
   onProgress: (entry: RemoteServerUpdateEntry) => void,
   options: RemoteServerUpdateRunOptions = {}
 ): Promise<RemoteServerUpdateEntry> {
-  const timing = options.timing ?? DEFAULT_REMOTE_SERVER_UPDATE_TIMING
-  let next: RemoteServerUpdateEntry = {
-    ...entry,
-    phase: 'checking-update',
-    progress: null,
-    error: null
+  const downloaded = await downloadRemoteServerUpdate(entry, transport, onProgress, options)
+  if (downloaded.phase !== 'downloaded') {
+    return downloaded
   }
-  onProgress(next)
-  try {
-    const inferredCheckOptions = {
-      includePrerelease:
-        entry.targetVersion !== null && isPrereleaseAppVersion(entry.targetVersion),
-      includePerfPrerelease:
-        entry.targetVersion !== null && isPerfPrereleaseAppVersion(entry.targetVersion)
-    }
-    await transport.check(entry.environmentId, options.checkOptions ?? inferredCheckOptions)
-    const available = await pollRemoteServerUpdater(
-      entry.environmentId,
-      transport,
-      timing,
-      (snapshot) =>
-        snapshot.status.state === 'available' || snapshot.status.state === 'not-available',
-      () => undefined
-    )
-    if (available.status.state === 'not-available') {
-      const status = await transport.getRuntimeStatus(entry.environmentId, 10_000)
-      const currentVersion = status.appVersion?.trim() ?? ''
-      if (!hasReachedAppVersion(currentVersion, entry.targetVersion)) {
-        throw new Error('remote_update_requested_version_unavailable')
-      }
-      next = {
-        ...next,
-        phase: 'current',
-        currentVersion,
-        runtimeId: status.runtimeId
-      }
-      onProgress(next)
-      return next
-    }
-    if (available.status.state !== 'available') {
-      throw new Error('remote_update_status_unavailable')
-    }
-
-    next = {
-      ...next,
-      phase: 'downloading',
-      targetVersion: available.status.version,
-      progress: 0
-    }
-    onProgress(next)
-    await transport.download(entry.environmentId)
-    const downloaded = await pollRemoteServerUpdater(
-      entry.environmentId,
-      transport,
-      timing,
-      (snapshot) => snapshot.status.state === 'downloaded',
-      (snapshot) => {
-        if (snapshot.status.state === 'downloading') {
-          next = { ...next, progress: snapshot.status.percent }
-          onProgress(next)
-        }
-      }
-    )
-    if (downloaded.status.state !== 'downloaded') {
-      throw new Error('remote_update_download_incomplete')
-    }
-
-    const install = await transport.install(entry.environmentId)
-    next = {
-      ...next,
-      phase: 'restarting',
-      targetVersion: install.targetVersion,
-      progress: null
-    }
-    onProgress(next)
-
-    const replacement = await waitForReplacementRuntime(
-      entry.environmentId,
-      transport,
-      install,
-      timing
-    )
-    next = {
-      ...next,
-      phase: 'updated',
-      currentVersion: replacement.appVersion?.trim() ?? '',
-      runtimeId: replacement.runtimeId,
-      liveTabCount: replacement.liveTabCount,
-      liveLeafCount: replacement.liveLeafCount
-    }
-    onProgress(next)
-    return next
-  } catch (error) {
-    next = {
-      ...next,
-      phase: 'failed',
-      progress: null,
-      error: describeError(transport, error)
-    }
-    onProgress(next)
-    return next
-  }
+  return installRemoteServerUpdate(downloaded, transport, onProgress, options)
 }

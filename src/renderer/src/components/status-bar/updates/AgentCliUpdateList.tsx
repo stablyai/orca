@@ -7,22 +7,19 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { agentCliProductName } from '@/components/agent-cli-update/agent-cli-product-name'
 import { AgentCliUpdateFailedChip } from '@/components/agent-cli-update/AgentCliUpdateFailedChip'
 import { openAgentCliUpdateFailure } from '@/components/agent-cli-update/agent-cli-update-failure-modal'
+import { agentCliUpdateHostTarget } from '@/store/slices/runtime-host-updates/agent-cli-updates'
 import {
-  agentCliUpdateHostTarget,
+  agentCliUpdateHostRows,
+  agentCliUpdateStartable,
   type AgentCliUpdateHost,
-  type AgentCliUpdateRun
-} from '@/store/slices/runtime-host-updates/agent-cli-updates'
-import {
-  AGENT_CLI_UPDATE_AGENTS,
-  type AgentCliUpdate,
-  type AgentCliUpdateAgent
-} from '../../../../../shared/agent-launch/installation/agent-cli-update'
+  type AgentCliUpdateHostRow
+} from '../../../../../shared/agent-launch/installation/agent-cli-update-runs'
 
-export type AgentCliUpdateRow = {
-  hostKey: string
-  agent: AgentCliUpdateAgent
-  update: AgentCliUpdate | null
-  run: AgentCliUpdateRun | null
+export type AgentCliUpdateRow = AgentCliUpdateHostRow & { hostKey: string }
+
+/** Every update offered or run on a host, including one started from a chat's notice. */
+export function agentCliUpdateRows(hostKey: string, host: AgentCliUpdateHost): AgentCliUpdateRow[] {
+  return agentCliUpdateHostRows(host).map((row) => ({ hostKey, ...row }))
 }
 
 export type AgentCliUpdateGroup = {
@@ -30,28 +27,6 @@ export type AgentCliUpdateGroup = {
   /** Null when every row is on this computer and no other host is added, so no host heading is needed. */
   label: string | null
   rows: readonly AgentCliUpdateRow[]
-}
-
-/** Every update offered or run on a host, including one started from a chat's notice. */
-export function agentCliUpdateRows(hostKey: string, host: AgentCliUpdateHost): AgentCliUpdateRow[] {
-  const agents = AGENT_CLI_UPDATE_AGENTS.filter(
-    (agent) => host.runs[agent] || host.updates.some((update) => update.agent === agent)
-  )
-  return agents.map((agent) => ({
-    hostKey,
-    agent,
-    update: host.updates.find((update) => update.agent === agent) ?? null,
-    run: host.runs[agent] ?? null
-  }))
-}
-
-/** Rows Update all may start: offered, runnable and not already queued or running. */
-export function agentCliUpdateStartable(row: AgentCliUpdateRow): boolean {
-  return row.update?.runnable === true && !agentCliUpdateBusy(row)
-}
-
-export function agentCliUpdateBusy(row: AgentCliUpdateRow): boolean {
-  return row.run?.phase === 'running' || row.run?.phase === 'queued'
 }
 
 export function runAgentCliUpdateRow(row: AgentCliUpdateRow): void {

@@ -1145,6 +1145,12 @@
       }
     }
   },
+  "host": {
+    "updates": {
+      "terminals_one": "{{count}} terminal",
+      "terminals_other": "{{count}} terminals"
+    }
+  },
   "hostScreen": {
     "deleteConfirm": {
       "changes_one": "{{count}} uncommitted change",

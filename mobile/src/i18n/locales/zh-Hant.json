@@ -77,9 +77,7 @@
       "skipped_one": "跳過了 {{count}} 個記錄",
       "skipped_other": "跳過了 {{count}} 個記錄",
       "title": "代理程式工作階段歷史",
-      "unavailable": "無法使用代理程式工作階段歷史",
       "unknownHostPlatform": "無法判斷主機平台。",
-      "updateHost": "請更新此主機上的 Orca，以瀏覽代理程式工作階段歷史。",
       "waitingForHost": "正在等待主機…",
       "workspace": "工作區"
     },
@@ -275,8 +273,7 @@
       "certificateChallengeExpired": "此憑證的核准已過期。請重試此頁面以重新要求核准。",
       "certificateChallengeChanged": "憑證要求已變更。請重試該頁面並檢視新的警告。",
       "certificateProceedFailed": "Orca 無法核准此憑證要求。請重試該頁面後再試。",
-      "certificateChallengeUnavailable": "此憑證要求已無法使用。請重試該頁面以提出新的要求。",
-      "certificateProceedNeedsHostUpdate": "請更新此主機上的 Orca，才能從手機接受憑證警告。"
+      "certificateChallengeUnavailable": "此憑證要求已無法使用。請重試該頁面以提出新的要求。"
     },
     "pagePrompt": {
       "downloadStarted": "正在下載至主機上的 {{path}}",
@@ -1198,7 +1195,6 @@
       },
       "title": "MCP 伺服器",
       "notRunning": "MCP 伺服器會在你傳送下一則訊息時連線。",
-      "unsupported": "更新此聊天主機上的 Orca，即可在這裡管理 MCP 伺服器。",
       "readFailed": "無法載入 MCP 伺服器。",
       "retry": "重試",
       "empty": "此聊天尚未設定任何 MCP 伺服器。",
@@ -1466,7 +1462,6 @@
       "connectHint": "在 Orca 桌面版的「設定 → 整合」中新增 Jira 網站，然後再次檢查。",
       "connectOnDesktop": "在電腦上連線至 Jira",
       "credentialUnreadable": "Jira 憑證已儲存，但無法讀取：{{credentialError}}",
-      "updateDesktop": "更新此主機上的 Orca",
       "connectTitle": "連接你的 Jira 帳號",
       "connectMessage": "直接在「任務」中瀏覽指派給你的 Jira 問題並開始工作。",
       "connect": "連接 Jira"
@@ -2236,7 +2231,6 @@
       "scheduled": "已排定",
       "showFor": "選擇要顯示自動化的電腦",
       "toggleFailed": "無法更新 {{name}}",
-      "updateDesktop": "請更新 {{desktop}} 上的 Orca，以使用自動化。",
       "pairComputer": "請先配對電腦，才能檢視及執行自動化。"
     },
     "listFooter": {
@@ -2366,7 +2360,6 @@
       "ignoredNamesMore": "{{names}} 等檔案",
       "ignoredNamesCount": "{{names}} 及另外 {{value0}} 個",
       "ignoredUnchecked": "無法完整檢查 Git 忽略的檔案",
-      "needsUpdate": "請更新電腦上的 Orca，才能從手機刪除此工作區。",
       "removeTitle": "移除工作區",
       "removeFolderMessage": "要從 Orca 移除「{{name}}」嗎？磁碟上的資料夾會保留。"
     },
@@ -2992,7 +2985,6 @@
       "committedDiffUnavailable": "無法取得已提交的差異",
       "commitLoadFailed": "無法載入此提交",
       "commitDiffUnavailable": "無法取得提交的差異",
-      "desktopUpdateRequired": "請更新此主機上的 Orca，以便在手機上審查變更。",
       "diffLoadFailed": "無法載入差異",
       "reviewNotesLoadFailed": "無法載入審查備註"
     },
@@ -3388,8 +3380,7 @@
       "messageNotSent": "訊息未傳送"
     },
     "tabStrip": {
-      "checkingCapabilities": "正在檢查桌面版支援的功能，請稍後再試",
-      "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令"
+      "checkingCapabilities": "正在檢查桌面版支援的功能，請稍後再試"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清除終端機",
@@ -4221,8 +4212,7 @@
       "pullRequest": "PR"
     },
     "loaders": {
-      "loadFailed": "無法載入原始碼控制",
-      "updateDesktop": "請更新此主機上的 Orca，才能在行動裝置上使用原始碼控制。"
+      "loadFailed": "無法載入原始碼控制"
     },
     "modals": {
       "discardButton": "放棄",
@@ -4721,9 +4711,7 @@
       "connectLinearButton": "連線 Linear",
       "connectLinearMessage": "直接從「任務」瀏覽並開始處理指派給你的 Linear 議題。",
       "connectLinearTitle": "連線你的 Linear 帳戶",
-      "jiraStatusFailed": "無法讀取 Jira 狀態",
-      "updateDesktopMessage": "此行動版「任務」檢視需要此主機上較新版的 Orca。",
-      "updateDesktopTitle": "更新此主機上的 Orca"
+      "jiraStatusFailed": "無法讀取 Jira 狀態"
     },
     "options": {
       "all": "全部",

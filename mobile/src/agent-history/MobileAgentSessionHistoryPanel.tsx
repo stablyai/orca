@@ -44,6 +44,7 @@ import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { HostUpdateNotice } from '../host-update-notice/HostUpdateNotice'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { AgentHistoryHandoffDrawer } from './AgentHistoryHandoffSheet'
 import { useAgentHistoryHandoff } from './use-agent-history-handoff'
@@ -203,13 +204,9 @@ function MobileAgentSessionHistoryPanelContent({
           title={t('agentHistory.panel.loading', 'Loading agent sessions…')}
         />
       ) : screenState.kind === 'unsupported' ? (
-        <MobileStateView
-          icon={History}
-          title={t('agentHistory.panel.unavailable', 'Agent history unavailable')}
-          message={t(
-            'agentHistory.panel.updateHost',
-            'Update Orca on this host to browse agent session history.'
-          )}
+        <HostUpdateNotice
+          variant="screen"
+          feature={t('agentHistory.panel.needsNewerOrca', 'Agent history needs a newer version.')}
         />
       ) : screenState.kind === 'error' && connState !== 'connected' ? (
         <MobileOfflineState onReconnect={retry} />

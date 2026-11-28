@@ -24,6 +24,8 @@ import { agentCliUpdateDefinition, type AgentCliUpdatePlan } from './agent-cli-u
 import { checkThroughGate, updateThroughGate } from './agent-cli-update-gate'
 import { runAgentCliUpdater, type UpdaterRun } from './agent-cli-updater-process'
 import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
+import { plainUpdaterOutput } from './agent-cli-updater-output'
+import { AGENT_CLI_UPDATES_AT_ONCE } from '../../shared/agent-launch/installation/agent-cli-update-runs'
 import { notifyAgentCliUpdateFinished } from './agent-cli-update-events'
 
 export {
@@ -35,6 +37,9 @@ export {
 const UNREAD_RETRY_MS = 10 * 60_000
 // Each --version starts a full CLI runtime (often Node); a dozen at once spikes memory and CPU.
 const versionReads = new PrioritySemaphore(3)
+// Each update installs a whole CLI (often through npm); the host's own bound, since a desktop and phones
+// each start up to AGENT_CLI_UPDATES_AT_ONCE.
+const installers = new PrioritySemaphore(AGENT_CLI_UPDATES_AT_ONCE)
 
 const versions = new Map<string, { stamp: string; version: string | null; at: number }>()
 const checks = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdate | null>>()
@@ -218,6 +223,7 @@ async function updateAgentCli(
   }
   const command = planCommand(cli, plan)
   let result: UpdaterRun
+  const release = await installers.acquire(0)
   try {
     result = await runAgentCliUpdater({
       program: cli.program,
@@ -227,6 +233,8 @@ async function updateAgentCli(
     })
   } catch (error) {
     return { ok: false, output: error instanceof Error ? error.message : String(error), command }
+  } finally {
+    release()
   }
   // New chats and the model list read the replaced binary.
   agentModelCatalogStore.expireLaunchScopes((catalogAgent) => catalogAgent === agent)
@@ -235,8 +243,9 @@ async function updateAgentCli(
   versions.delete(cli.program)
   versions.delete(updated.program)
   const after = await installedVersion(agent, updated)
+  // Spinners and colours mean nothing outside a terminal; every client shows this as plain text.
   const output = [result.stdout, result.stderr, result.stoppedBecause ?? '']
-    .map((text) => text.trim())
+    .map((text) => plainUpdaterOutput(text))
     .filter(Boolean)
     .join('\n')
   const latest = after ? await latestRelease(agent, after) : null

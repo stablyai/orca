@@ -164,10 +164,7 @@ function emptyNotice(
           title: t('bots.list.updateOrcaOn', 'Update Orca on {{host}}', {
             host: one.label
           }),
-          message: t(
-            'home.bots.updateOneBody',
-            'Its version of Orca can’t show bots on your phone yet.'
-          )
+          message: t('home.bots.needsNewerOrca', 'Bots need a newer version.')
         }
       : {
           kind: 'empty',

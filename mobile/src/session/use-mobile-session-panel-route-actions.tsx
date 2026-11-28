@@ -16,9 +16,11 @@ import {
   workspaceRouteParams
 } from '../navigation/workspace-execution-host'
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
+import { useHostUpdateToast } from '../host-update-notice/HostUpdateNotice'
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
   const t = useMobileTranslation()
+  const hostUpdate = useHostUpdateToast()
   const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,
@@ -140,10 +142,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     }
     showToast(
       quickCommandsSupported === false
-        ? t(
-            'session.tabStrip.quickCommandsUpdateRequired',
-            'Desktop update required for quick commands'
-          )
+        ? hostUpdate.message
         : t(
             'session.tabStrip.checkingCapabilities',
             'Checking desktop capabilities — try again in a moment'

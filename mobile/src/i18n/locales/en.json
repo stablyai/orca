@@ -275,7 +275,61 @@
       "couldNotSave": "Couldn’t save this computer.",
       "editComputer": "Edit computer",
       "save": "Save",
-      "removeComputer": "Remove computer"
+      "removeComputer": "Remove computer",
+      "updateStepsDesktop": "On the computer, open Orca and check for updates."
+    },
+    "updates": {
+      "cliFailedTitle": "{{product}} update failed",
+      "copyCommand": "Copy {{command}}",
+      "printedNothing": "The command printed nothing.",
+      "cliFailedHelp": "Run it yourself on the computer, or fix what it printed and try again.",
+      "tryAgain": "Try again",
+      "updatedTo": "Updated to {{version}}",
+      "updated": "Updated",
+      "updating": "Updating…",
+      "queued": "Queued",
+      "updateFailed": "Update failed",
+      "versions": "{{installed}} → {{latest}}",
+      "addsModels": "{{versions}} · adds {{models}}",
+      "update": "Update",
+      "commandCopied": "Command copied",
+      "commandNotCopied": "Couldn’t copy the command",
+      "title": "Updates",
+      "updateAll": "Update all",
+      "doneNote": "Updated rows leave the list next time you open this screen.",
+      "orca": "Orca",
+      "updatingTo": "Updating to {{version}}…",
+      "hide": "Hide",
+      "version": "Version",
+      "updateOrca": "Update Orca",
+      "restarting": "Restarting Orca on {{host}}…",
+      "notBack": "{{host}} hasn’t come back",
+      "mayStillInstall": "It may still be installing.",
+      "checkAgain": "Check again",
+      "couldntUpdate": "Couldn’t update",
+      "restartOrca": "Restart Orca",
+      "downloading": "Downloading",
+      "percent": "{{percent}}%",
+      "download": "Download",
+      "failedGeneric": "The update stopped before it finished.",
+      "failedManual": "This computer has to be updated by hand.",
+      "failedGone": "The computer no longer offers this update.",
+      "failedDownload": "The download was interrupted.",
+      "failedTimeout": "The computer stopped answering about the update.",
+      "failedOffline": "Lost the connection to the computer.",
+      "impactUnknown": "Couldn’t check what’s running there. Agents and terminals Orca runs itself will stop.",
+      "willRestart": "Will restart",
+      "moreRestart": "{{number}} more",
+      "chat": "Chat",
+      "terminals_one": "{{count}} terminal",
+      "terminals_other": "{{count}} terminals",
+      "upToDate": "Up to date"
+    },
+    "updateNotice": {
+      "toast": "Needs a newer Orca on {{host}}",
+      "update": "Update",
+      "howToUpdate": "How to update",
+      "title": "Update Orca on {{host}}"
     }
   },
   "app": {
@@ -473,8 +527,6 @@
       "resumeFailed": "Failed to resume session.",
       "title": "Agent history",
       "refreshSessions": "Refresh agent sessions",
-      "unavailable": "Agent history unavailable",
-      "updateHost": "Update Orca on this host to browse agent session history.",
       "placeholder": "Search sessions, repo:, path:",
       "skipped_one": "{{count}} transcript skipped",
       "skipped_other": "{{count}} transcripts skipped",
@@ -483,7 +535,8 @@
       "hideDetails": "Hide details",
       "showDetails": "Show details",
       "loading": "Loading agent sessions…",
-      "showAllAgents": "Show all agents"
+      "showAllAgents": "Show all agents",
+      "needsNewerOrca": "Agent history needs a newer version."
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",
@@ -796,11 +849,11 @@
       "newAutomation": "New automation",
       "showFor": "Show automations for",
       "emptyTitle": "Schedule agent work",
-      "updateDesktop": "Update Orca on {{desktop}} to use automations.",
       "connectDesktop": "Connect {{desktop}} to view and run automations.",
       "scheduled": "Scheduled",
       "toggleFailed": "Couldn’t update {{name}}",
-      "pairComputer": "Pair a computer to view and run automations."
+      "pairComputer": "Pair a computer to view and run automations.",
+      "needsNewerOrca": "Automations need a newer version."
     },
     "tabs": {
       "automations": "Automations",
@@ -829,7 +882,6 @@
     "bots": {
       "noBotsTitle": "No bots yet",
       "seeAll": "See all bots",
-      "updateOneBody": "Its version of Orca can’t show bots on your phone yet.",
       "updateManyTitle": "Update Orca on your computers",
       "updateManyBody": "Their version of Orca can’t show bots on your phone yet.",
       "offOneBody": "To turn them on, open Orca on {{host}} and go to Settings › Bots › Enable bots.",
@@ -846,7 +898,8 @@
         "items_one": "item",
         "items_other": "{{count}} items"
       },
-      "pairComputer": "Pair a computer to see its bots here."
+      "pairComputer": "Pair a computer to see its bots here.",
+      "needsNewerOrca": "Bots need a newer version."
     },
     "computers": {
       "pairComputer": "Pair a computer"
@@ -902,7 +955,6 @@
       "ignoredNamesMore": "{{names}} and more",
       "ignoredNamesCount": "{{names}} +{{value0}}",
       "ignoredUnchecked": "Ignored files could not be fully checked",
-      "needsUpdate": "Update Orca on your computer to delete this workspace from your phone.",
       "removeTitle": "Remove workspace",
       "removeFolderMessage": "Remove \"{{name}}\" from Orca? The folder on disk is kept."
     },
@@ -1260,14 +1312,14 @@
       "dismissNotice": "Dismiss notice"
     },
     "jiraConnectPrompt": {
-      "updateDesktop": "Update Orca on this host",
       "connectOnDesktop": "Connect Jira on your desktop",
       "credentialUnreadable": "Jira is saved but unreadable: {{credentialError}}",
       "connectHint": "Add your Jira site in Orca desktop under Settings → Integrations, then check again.",
       "checkAgain": "Check again",
       "connectTitle": "Connect your Jira account",
       "connectMessage": "Browse and start work on your assigned Jira issues directly from Tasks.",
-      "connect": "Connect Jira"
+      "connect": "Connect Jira",
+      "needsNewerOrca": "Jira needs a newer version."
     },
     "dictationSetupSheet": {
       "loadFailed": "Failed to load",
@@ -2205,8 +2257,7 @@
       "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again.",
-      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
-      "certificateProceedNeedsHostUpdate": "Update Orca on this host to accept certificate warnings from your phone."
+      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one."
     },
     "pagePrompt": {
       "downloadStarted": "Downloading to {{path}} on the host",
@@ -2580,7 +2631,6 @@
       "copyLinkFailed": "Couldn't copy link"
     },
     "tabStrip": {
-      "quickCommandsUpdateRequired": "Desktop update required for quick commands",
       "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
     },
     "quickCommandEditorForm": {
@@ -2734,12 +2784,12 @@
     "diffReviewLoaders": {
       "committedChangesUnavailable": "Committed changes unavailable",
       "committedChangesFailed": "Committed changes failed",
-      "desktopUpdateRequired": "Update Orca on this host to review changes on mobile.",
       "reviewNotesLoadFailed": "Unable to load review notes",
       "diffLoadFailed": "Unable to load diff",
       "committedDiffUnavailable": "Committed diff is unavailable",
       "commitLoadFailed": "Unable to load this commit",
-      "commitDiffUnavailable": "Commit diff is unavailable"
+      "commitDiffUnavailable": "Commit diff is unavailable",
+      "needsNewerOrca": "Review needs a newer version."
     },
     "diffReviewQueue": {
       "staged": "Staged",
@@ -3987,7 +4037,6 @@
       },
       "title": "MCP servers",
       "notRunning": "MCP servers connect when you send your next message.",
-      "unsupported": "Update Orca on this chat's host to manage MCP servers here.",
       "readFailed": "Couldn't load MCP servers.",
       "retry": "Retry",
       "empty": "No MCP servers are set up for this chat.",
@@ -4014,7 +4063,8 @@
       },
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here.",
       "manage": "Manage MCP servers",
-      "stillFailing": "Still failing after reconnecting."
+      "stillFailing": "Still failing after reconnecting.",
+      "needsNewerOrca": "Update Orca on {{host}} to manage MCP servers here."
     },
     "selectionQuote": {
       "action": "Quote",
@@ -4761,8 +4811,8 @@
       "actionFailed": "Source control action failed"
     },
     "loaders": {
-      "updateDesktop": "Update Orca on this host to use Source Control on mobile.",
-      "loadFailed": "Unable to load source control"
+      "loadFailed": "Unable to load source control",
+      "needsNewerOrca": "Source control needs a newer version."
     },
     "runners": {
       "actionFailed": "Source control action failed"
@@ -5128,12 +5178,11 @@
       "changeStatusFrom": "Change status from {{status}}"
     },
     "listSurface": {
-      "updateDesktopTitle": "Update Orca on this host",
-      "updateDesktopMessage": "This mobile Tasks view needs a newer Orca on this host.",
       "jiraStatusFailed": "Failed to read Jira status",
       "connectLinearTitle": "Connect your Linear account",
       "connectLinearMessage": "Browse and start work on your assigned Linear issues directly from Tasks.",
-      "connectLinearButton": "Connect Linear"
+      "connectLinearButton": "Connect Linear",
+      "needsNewerOrca": "Tasks needs a newer version."
     },
     "options": {
       "githubDescription": "Issues and pull requests",
@@ -8177,7 +8226,8 @@
       "filterActive": "Filter, {{count}} active",
       "reset": "Reset",
       "done": "Done",
-      "noMatchingRuns": "No matching runs"
+      "noMatchingRuns": "No matching runs",
+      "needsNewerOrca": "Needed to run automations here"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",

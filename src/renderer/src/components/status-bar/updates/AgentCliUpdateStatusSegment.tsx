@@ -6,9 +6,11 @@ import { useTranslate } from '@/i18n/use-translate'
 import { agentCliUpdateHostTarget } from '@/store/slices/runtime-host-updates/agent-cli-updates'
 import { useAgentCliUpdateGroups } from '@/components/agent-cli-update/use-agent-cli-update-groups'
 import {
-  AgentCliUpdateList,
   agentCliUpdateBusy,
-  agentCliUpdateStartable,
+  agentCliUpdateStartable
+} from '../../../../../shared/agent-launch/installation/agent-cli-update-runs'
+import {
+  AgentCliUpdateList,
   runAgentCliUpdateRow,
   type AgentCliUpdateGroup
 } from './AgentCliUpdateList'

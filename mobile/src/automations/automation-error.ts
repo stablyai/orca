@@ -18,6 +18,18 @@ export function automationOutcomeUnknownMessage(t: Translate): string {
   )
 }
 
+/** The catalog's error says the computer's Orca predates mobile automations. */
+export function automationHostOutdated(message: string | null, t: Translate): boolean {
+  return message !== null && message === automationHostUnavailableMessage(t)
+}
+
+function automationHostUnavailableMessage(t: Translate): string {
+  return t(
+    'automations.mobile.hostUnavailable',
+    'Automations are unavailable on this host. Update Orca on that host and reconnect.'
+  )
+}
+
 export function automationErrorMessage(error: unknown, t: Translate): string {
   if (error instanceof AutomationDraftValidationError) {
     switch (error.field) {
@@ -85,10 +97,7 @@ export function automationErrorMessage(error: unknown, t: Translate): string {
     )
   }
   if (/forbidden|method_not_found/.test(message)) {
-    return t(
-      'automations.mobile.hostUnavailable',
-      'Automations are unavailable on this host. Update Orca on that host and reconnect.'
-    )
+    return automationHostUnavailableMessage(t)
   }
   if (/disconnect|connection|cutover|closed|timeout/i.test(message)) {
     return t(
