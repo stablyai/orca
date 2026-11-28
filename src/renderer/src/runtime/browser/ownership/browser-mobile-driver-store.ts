@@ -45,7 +45,7 @@ export function setDriverForBrowserPage(
   browserPageId: string,
   driver: RuntimeTerminalDriverState
 ): void {
-  if (driver.kind === 'idle') {
+  if (driver.kind !== 'mobile') {
     driverByBrowserPageId.delete(browserPageId)
   } else {
     driverByBrowserPageId.set(browserPageId, driver)
@@ -93,7 +93,7 @@ export function hydrateBrowserDrivers(
 
   for (const { browserPageId, driver } of drivers) {
     affectedPageIds.add(browserPageId)
-    if (driver.kind !== 'idle') {
+    if (driver.kind === 'mobile') {
       driverByBrowserPageId.set(browserPageId, driver)
     }
   }
