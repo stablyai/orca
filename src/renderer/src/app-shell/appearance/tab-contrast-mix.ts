@@ -73,13 +73,13 @@ function unfocusedLabel(ink: Rgba, fill: Rgba, page: Rgba): Rgba {
 }
 
 function unfocusedActiveLabel(ink: Rgba, fill: Rgba, page: Rgba): string {
-  for (let percent = 50; percent <= 100; percent += 5) {
+  for (let percent = 50; percent >= 0; percent -= 5) {
     const color = painted(mix(fill, ink, percent))
     if (
       inkContrast(color, fill) >= MIN_TEXT_CONTRAST &&
       inkContrast(color, fill, page) >= MIN_TEXT_CONTRAST
     ) {
-      return `color-mix(in srgb, var(--tab-active) ${100 - percent}%, var(--tab-active-foreground) ${percent}%)`
+      return `color-mix(in srgb, var(--tab-active) ${percent}%, var(--tab-active-foreground) ${100 - percent}%)`
     }
   }
   return 'var(--tab-active-foreground)'

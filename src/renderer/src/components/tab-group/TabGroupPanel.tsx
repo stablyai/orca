@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useMemo, useRef, type CSSProperties } from 'react'
+import { Suspense, useCallback, useMemo, useRef } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store/index'
@@ -37,8 +37,6 @@ import { holdTabStripPointerGestureUntilRelease } from '../tab-bar/strip/tab-str
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
-type SplitFocusStyle = CSSProperties &
-  Record<'--tab-active-foreground' | '--tab-active-indicator', string>
 export type TabGroupPanelTabStrip = 'attached' | 'external'
 
 export default function TabGroupPanel({
@@ -245,13 +243,9 @@ export default function TabGroupPanel({
     'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
   )
-  const splitFocusStyle: SplitFocusStyle | undefined =
-    hasSplitGroups && !isFocused
-      ? {
-          ...(backdropActive ? {} : { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }),
-          '--tab-active-foreground': 'var(--tab-unfocused-active-foreground)',
-          '--tab-active-indicator': 'var(--tab-unfocused-active-foreground)'
-        }
+  const splitFocusStyle =
+    hasSplitGroups && !isFocused && !backdropActive
+      ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }
       : undefined
   const holdTabStripPointerGesture = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
