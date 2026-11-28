@@ -69,6 +69,7 @@ import {
 } from '../remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { DelegatedMobileDeviceSyncParamsSchema } from '../remote-runtime/pairing/delegated-mobile-device-contract'
+import { DelegatedPhoneServerOfferParamsSchema } from '../remote-runtime/pairing/delegated-phone-server-offer-contract'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { DeclareOrcaAccountParamsSchema } from '../remote-runtime/pairing/paired-desktop-account-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
@@ -2074,6 +2075,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairedServerAsks.introduce': PairedServerAskIntroduceParams,
   'pairedServerAsks.list': PairedServerAskListParams,
   'pairing.createOffer': PairingCreateOfferParamsSchema,
+  'pairing.delegatedMobileDevice.createOffer': DelegatedPhoneServerOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
   'pairing.getDirectEndpoints': PairingGetDirectEndpointsParamsSchema,
