@@ -22,6 +22,10 @@ import {
   STRUCTURED_CHILD_ENV_TO_DELETE
 } from '../environment/structured-session-child-env'
 import { type LinkedSkills, NO_LINKED_SKILLS } from '../../../native-chat/native-chat-skill-roots'
+import {
+  isSlackExecutionId,
+  type SlackExecutionLaunch
+} from '../../../native-chat/agent-session-wire/operations/slack-execution-authority'
 
 /** Where a launch's shared inputs come from. */
 export type StructuredAgentLaunchSources = {
@@ -36,6 +40,7 @@ export type StructuredAgentLaunchSources = {
   /** The user's per-agent environment overlay from settings. */
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
+  resolveSlackExecutionLaunch?: (record: AgentSessionRecord) => Promise<SlackExecutionLaunch>
   prepareVisuals?: PrepareNativeChatVisuals
   /** Standing instructions the agent's own system prompt carries for this session; null adds none. */
   resolveInstructions?: (
@@ -94,6 +99,7 @@ export type StructuredAgentLaunchBasis = {
   /** The run needs no tools (`toolFreeSession`): it gets no skills either, and a part that can't
    *  turn tools off refuses every request and stops the run at its first tool call. */
   toolFree: boolean
+  slackMemory?: SlackExecutionLaunch['memory']
 }
 
 export type StructuredLaunchRequest = {
@@ -184,16 +190,23 @@ async function composedPart<L>(
   permissionMode?: AgentChatPermissionChoice
 ): Promise<StructuredAgentLaunchPart<L> & { cwd: string }> {
   const record = admittedRecord(definition, sources.store, identity.sessionId)
+  const scoped = isSlackExecutionId(record.sessionId)
+  const execution = scoped ? await sources.resolveSlackExecutionLaunch?.(record) : undefined
+  if (scoped && !execution) {
+    throw new Error('Slack execution launch binding is unavailable on this host')
+  }
   const launchEnv = once(() => sources.resolveAgentLaunchEnv?.(definition.agent) ?? {})
-  const launchDirectory = once(() => resolveAgentSessionLaunchDirectory(sources, record))
+  const launchDirectory = once(
+    () => execution?.launchDirectory() ?? resolveAgentSessionLaunchDirectory(sources, record)
+  )
   const readEnvironments = () => ({
     base: once(sources.resolveBaseEnvironment),
     agent: once(() => sources.resolveAgentEnvironment(definition.agent))
   })
   let environments = readEnvironments()
   const refresh = sources.refreshAfterMissingProgram
-  const readOnly = sources.readOnlySession?.(record.sessionId) ?? null
-  const toolFree = toolFreeSession(readOnly)
+  const readOnly = execution ? 'reply-only' : (sources.readOnlySession?.(record.sessionId) ?? null)
+  const toolFree = !execution && toolFreeSession(readOnly)
   const basis: StructuredAgentLaunchBasis = {
     record,
     launchDirectory,
@@ -209,14 +222,16 @@ async function composedPart<L>(
       let read: Promise<string | null> | null = null
       return (linkedSkills: string | null = null) =>
         (read ??= (async () =>
-          sources.resolveInstructions
-            ? sources.resolveInstructions(
-                record,
-                await launchDirectory(),
-                linkedSkills,
-                definition.instructionsEachStart
-              )
-            : linkedSkills)())
+          execution
+            ? execution.instructions()
+            : sources.resolveInstructions
+              ? sources.resolveInstructions(
+                  record,
+                  await launchDirectory(),
+                  linkedSkills,
+                  definition.instructionsEachStart
+                )
+              : linkedSkills)())
     })(),
     // A read-only session gets none: Look around keeps every tool off.
     toolServers: once(async () =>
@@ -225,12 +240,12 @@ async function composedPart<L>(
         : sources.resolveToolServers(record, await launchDirectory())
     ),
     linkedSkills: once(async () =>
-      toolFree
+      execution || toolFree
         ? NO_LINKED_SKILLS
         : ((await sources.resolveLinkedSkills?.(record)) ?? NO_LINKED_SKILLS)
     ),
     linkedSkillsRefused: (linkedSkills) =>
-      sources.reportLinkedSkills?.(record.sessionId, linkedSkills),
+      execution ? undefined : sources.reportLinkedSkills?.(record.sessionId, linkedSkills),
     commandSettings: once(() => sources.resolveCommandSettings?.() ?? {}),
     ...(refresh
       ? {
@@ -243,9 +258,12 @@ async function composedPart<L>(
     // Ask, whatever the chat chose: the agent's part answers its asks from the read-only allow-list.
     ...(readOnly ? { permissionMode: 'ask' as const } : permissionMode ? { permissionMode } : {}),
     readOnly,
-    toolFree
+    toolFree,
+    ...(execution?.memory ? { slackMemory: execution.memory } : {})
   }
-  await sources.prepareLaunch?.(record, await launchDirectory())
+  if (!execution) {
+    await sources.prepareLaunch?.(record, await launchDirectory())
+  }
   const composed = await part(basis, identity)
   return {
     ...composed,
@@ -315,6 +333,9 @@ export function structuredAgentLaunchSources(
       : {}),
     ...(deps.resolveSessionInstructions
       ? { resolveInstructions: deps.resolveSessionInstructions }
+      : {}),
+    ...(deps.resolveSlackExecutionLaunch
+      ? { resolveSlackExecutionLaunch: deps.resolveSlackExecutionLaunch }
       : {}),
     ...(deps.readOnlySession ? { readOnlySession: deps.readOnlySession } : {}),
     ...(deps.resolveSessionToolServers

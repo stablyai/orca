@@ -1,3 +1,4 @@
+import { isSlackExecutionId, slackExecutionMutationRefusal } from './slack-execution-authority'
 import { neverThrowingStructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type {
   AgentSessionConversationCommand,
@@ -52,6 +53,9 @@ export function runStructuredConversationCommand(
   caller: StructuredAgentSessionCaller,
   params: ConversationCommandParams
 ): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult>> {
+  if (isSlackExecutionId(params.envelope.sessionId)) {
+    return Promise.resolve(slackExecutionMutationRefusal())
+  }
   return runAfterRewindStart(
     context,
     caller.callerKey,

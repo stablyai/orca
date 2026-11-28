@@ -29,6 +29,7 @@ import {
 import { conversationCommandInFlight } from './structured-conversation-command-admission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
+import { isSlackExecutionId, slackExecutionMutationRefusal } from './slack-execution-authority'
 
 export function rewindInDoubt(record: AgentSessionRecord | null | undefined): boolean {
   const phase = record?.rewind?.phase
@@ -36,12 +37,25 @@ export function rewindInDoubt(record: AgentSessionRecord | null | undefined): bo
 }
 
 export function structuredAgentSessionSendBlock(
-  record: AgentSessionRecord | null
+  record: AgentSessionRecord | null,
+  scopedSlackAdmitted = false
 ): { ok: false; refusal: AgentSessionWireRefusal } | null {
+  if (record && isSlackExecutionId(record.sessionId) && !scopedSlackAdmitted) {
+    return slackExecutionMutationRefusal()
+  }
   if (rewindInDoubt(record)) {
     return rewindRefusal('outcome-unknown')
   }
   return null
+}
+
+export async function structuredAgentSessionConnectorSendBlock(
+  record: AgentSessionRecord | null,
+  allowsScopedSlackSend: (record: AgentSessionRecord) => Promise<boolean> | undefined
+): Promise<ReturnType<typeof structuredAgentSessionSendBlock>> {
+  const admitted =
+    record && isSlackExecutionId(record.sessionId) ? await allowsScopedSlackSend(record) : false
+  return structuredAgentSessionSendBlock(record, admitted === true)
 }
 
 export async function openConversationForWrite(

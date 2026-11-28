@@ -18,6 +18,10 @@ import {
   agentSessionAdmissionWriteRefusal
 } from '../operations/structured-agent-session-turns'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
+import {
+  isSlackExecutionId,
+  slackExecutionMutationRefusal
+} from '../operations/slack-execution-authority'
 
 export type StructuredSendAdmissionParams = {
   envelope: { clientOperationId: string }
@@ -63,6 +67,9 @@ export async function admitStructuredAgentSessionSend(
   params: StructuredSendAdmissionParams,
   queueOnly = false
 ): Promise<TurnOutcome<AgentSessionSendResult> | null> {
+  if (queueOnly && isSlackExecutionId(ctx.sessionId)) {
+    return slackExecutionMutationRefusal()
+  }
   const captured = captureStructuredExecutionOptions(ctx, params.options, params.selection)
   if ('refusal' in captured) {
     return { ok: false as const, refusal: captured.refusal }

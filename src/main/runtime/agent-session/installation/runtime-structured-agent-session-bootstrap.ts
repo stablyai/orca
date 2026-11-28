@@ -1,3 +1,4 @@
+import { slackScopedExecutionHostDeps } from '../../../bots/slack-scoped-execution'
 import { crewChatStatusChange } from '../../orchestration/crew/crew-changes'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../launch/structured-agent-launch-support'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
@@ -149,6 +150,7 @@ export async function ensureRuntimeStructuredAgentSessionHost(
       logger,
       ...context.structuredAgentCatalogDependencies(),
       ...context.botStructuredSessionHostDeps(() => context.requireStore()),
+      ...slackScopedExecutionHostDeps(),
       claudeCliFlags: claudeCliFlagSupport,
       usageLimitAutoContinue: context.usageLimitAutoContinueHostDeps(),
       idleSweep: { idleMs: () => nativeChatIdleStopMs(context.requireStore().getSettings()) },

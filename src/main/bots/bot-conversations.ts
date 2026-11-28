@@ -1,15 +1,17 @@
 // Where a connector conversation for a bot runs: a native chat in the bot's home, while the bot takes conversations.
-import type { Bot } from '../../shared/bot-types'
+import { botSlackApps, type Bot } from '../../shared/bot-types'
 import {
   CONNECTOR_MAX_WORK_LINKS,
   ConnectorWorkLink
 } from '../../shared/connector-work-link-contract'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { ConversationBots } from '../external-conversations/external-conversation-bots'
+import type { OpenSlackExecution } from '../external-conversations/external-conversation-slack-execution'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runtimeBotChats, startBotSession } from './bot-chat-session'
 import type { BotController } from './bot-controller'
 import type { BotWorkRecord } from './bot-work-record'
+import { runtimeSlackScopedExecutions } from './slack-scoped-execution'
 
 export function botConversations(deps: {
   bots: Pick<BotController, 'enabled' | 'list'>
@@ -21,6 +23,10 @@ export function botConversations(deps: {
 }): ConversationBots {
   const find = (botId: string) => deps.bots.list().find((entry) => entry.id === botId)
   return {
+    hasSlackWorkspace: (botId, teamId) => {
+      const bot = find(botId)
+      return bot !== undefined && botSlackApps(bot).some((app) => app.teamId === teamId)
+    },
     refusal: (botId) => {
       // Bots off: the hello lists none, and a message already in flight finds none either.
       const bot = deps.bots.enabled() ? find(botId) : undefined
@@ -63,4 +69,27 @@ export function runtimeBotConversations(runtime: OrcaRuntimeService): Conversati
     startSession: (bot) => startBotSession(runtime, bot, { background: true }),
     botWork: runtime.botWork
   })
+}
+
+/** Used by hosts that explicitly select scoped Slack delivery. */
+export function openScopedSlackExecution(
+  runtime: OrcaRuntimeService,
+  bot: Bot
+): OpenSlackExecution {
+  const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
+  const scoped = runtimeSlackScopedExecutions()
+  return async ({ sessionId, operationId, requester, reply }) => {
+    if (bot.agent !== 'codex') {
+      throw new Error('Slack executions require a reply-only Codex provider')
+    }
+    await scoped.reserve(sessionId, {
+      botId: bot.id,
+      workspaceId: worktreeId,
+      operationId,
+      requester,
+      reply
+    })
+    await startBotSession(runtime, bot, { sessionId, background: true })
+    return { worktreeId, sessionId, agent: bot.agent }
+  }
 }

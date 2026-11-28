@@ -7,6 +7,10 @@ import type {
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import {
+  isSlackExecutionId,
+  slackExecutionMutationRefusal
+} from '../operations/slack-execution-authority'
 
 export type { StructuredAgentSessionCreateOptions } from './structured-agent-session-create-options'
 import type { StructuredAgentSessionCreateOptions } from './structured-agent-session-create-options'
@@ -20,6 +24,9 @@ export function createStructuredAgentSession(
   return context.tasks.trackAttach(
     context.serialize(params.envelope.sessionId, async () => {
       try {
+        if (isSlackExecutionId(params.envelope.sessionId) && options.firstMessage) {
+          return slackExecutionMutationRefusal()
+        }
         return await foundConversation(context, caller, params, options)
       } catch (error) {
         if (isAgentSessionRefusalError(error)) {

@@ -1,4 +1,5 @@
 // A conversation's delivery to a native chat, and which of the chat's turns were deliveries.
+import { deliverToChat as deliverToSlackExecution } from './external-conversation-chat-admission'
 import type {
   ConnectorAsker,
   ConnectorTurnOrigin
@@ -19,6 +20,7 @@ export type LinkableChat = {
   sessionId: string
   agent: NativeChatAgent
   bot?: ExternalConversationBot
+  slackExecution?: { bindingCurrent: () => boolean; operationId: string }
 }
 
 export function chatLink(key: ConversationKey, chat: LinkableChat): ExternalConversationLink {
@@ -29,6 +31,7 @@ export function chatLink(key: ConversationKey, chat: LinkableChat): ExternalConv
     sessionId,
     agent,
     ...(bot ? { bot } : {}),
+    ...(chat.slackExecution ? { isolatedSlack: true } : {}),
     createdAt: Date.now()
   }
 }
@@ -208,8 +211,11 @@ export class ChatDeliveries {
         sent = undefined
       }
     }
-    const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
+    const deliver = chat.slackExecution ? deliverToSlackExecution : deliverToChat
+    const outcome = await deliver((await chats?.ensure()) ?? null, chatLink(key, chat), {
       ...delivery,
+      bindingCurrent: chat.slackExecution?.bindingCurrent,
+      operationId: chat.slackExecution?.operationId,
       admitted
     }).finally(() => {
       sending.delete(attempt)
@@ -228,7 +234,9 @@ export class ChatDeliveries {
     } else {
       // Marked first, so a turn the link joins is the delivery's.
       this.delivered.add(chat.sessionId)
-      this.link(key, chat, delivery.asker?.text ?? delivery.text, delivery.asker)
+      if (!chat.slackExecution || chat.slackExecution.bindingCurrent()) {
+        this.link(key, chat, delivery.asker?.text ?? delivery.text, delivery.asker)
+      }
     }
     return outcome
   }

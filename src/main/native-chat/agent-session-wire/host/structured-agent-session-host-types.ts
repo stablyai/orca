@@ -1,3 +1,4 @@
+import type { SlackExecutionSend } from '../operations/slack-execution-authority'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { WorkerDockPresence } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
@@ -211,6 +212,10 @@ export type StructuredAgentSessionHostDeps = {
     accountWitness?: (provider: AgentSessionRecord['provider']) => string
   }
   assertQueuedMessageAllowed?: (sessionId: string, messageId: string) => void
+  allowsSlackExecutionSend?: (
+    record: AgentSessionRecord,
+    params: SlackExecutionSend
+  ) => Promise<boolean>
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
   hasOpenDispatch?: (

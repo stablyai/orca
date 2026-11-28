@@ -42,13 +42,13 @@ export class GoneChats {
     }
   }
 
-  /** The chat linked here to a conversation; 'gone' once that chat was deleted. */
+  /** The chat eligible to receive automation input; 'gone' once that chat was deleted. */
   async linkedChatOf(
     host: Pick<ExternalConversationHost, 'chat'>,
     key: ConversationKey
   ): Promise<LinkableChat | 'gone' | null> {
     const linked = findLink(this.deps.store, key)
-    if (!linked) {
+    if (!linked || linked.link.isolatedSlack) {
       return null
     }
     const chat = await host.chat?.ensure()

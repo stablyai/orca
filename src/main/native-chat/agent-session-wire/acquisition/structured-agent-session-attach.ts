@@ -40,6 +40,10 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { AdoptedTranscriptSource } from '../../agent-session-journal/history-import/adopted-transcript-source'
 import { structuredAgentSessionRefusalMessage } from '../operations/structured-agent-session-refusal-message'
+import {
+  isSlackExecutionId,
+  slackExecutionMutationRefusal
+} from '../operations/slack-execution-authority'
 
 /** Clients cannot assert spawn tokens, claim keys or owner death; only host observations grant authority. */
 export type AgentSessionAttachParams = {
@@ -104,6 +108,12 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
 export function admitAttachOrRefuse(
   params: AgentSessionAttachParams
 ): { ok: true; fingerprint: string } | { ok: false; refusal: AgentSessionWireRefusal } {
+  if (
+    isSlackExecutionId(params.envelope.sessionId) &&
+    (params.providerHandle || params.adopt || params.fork)
+  ) {
+    return slackExecutionMutationRefusal()
+  }
   // Record validation and adapter routing must agree on the agent.
   if (params.agent !== params.provider) {
     return {

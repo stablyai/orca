@@ -1,3 +1,4 @@
+import type { SlackExecutionLaunch } from '../../../native-chat/agent-session-wire/operations/slack-execution-authority'
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import type { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
@@ -61,6 +62,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Required, and asserted at install time — an absent policy must not degrade to a guess. */
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   assertQueuedMessageAllowed?: StructuredAgentSessionHostDeps['assertQueuedMessageAllowed']
+  allowsSlackExecutionSend?: StructuredAgentSessionHostDeps['allowsSlackExecutionSend']
+  resolveSlackExecutionLaunch?: (record: AgentSessionRecord) => Promise<SlackExecutionLaunch>
   usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
   idleSweep?: StructuredAgentSessionHostDeps['idleSweep']
   /** What a chat saved before its agent had modes ran with; fills that chat's mode once. */

@@ -41,6 +41,12 @@ export type ConversationChat = StructuredAgentTurnHost &
     | 'conversation'
   > & {
     deps: { store: { getConversation(sessionId: string): { currentFence: number } | null } }
+    currentWorkAtRest?: (
+      sessionId: string
+    ) => Promise<Pick<
+      NonNullable<Awaited<ReturnType<StructuredAgentSessionHost['currentWorkAtRest']>>>,
+      'working' | 'owesAnySend' | 'hasActionablePrompt'
+    > | null>
   }
 
 /** The native-chat host is installed lazily and can be replaced, so readers follow it. */

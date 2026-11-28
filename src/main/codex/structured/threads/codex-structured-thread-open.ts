@@ -12,6 +12,8 @@ import {
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import type { CodexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { readCodexThreadId } from '../../app-server/codex-structured-thread-facts'
+import { CODEX_SLACK_MEMORY_TOOL } from '../prompts/codex-slack-memory'
+import type { SlackExecutionMemory } from '../../../native-chat/agent-session-wire/operations/slack-execution-authority'
 import {
   readCodexSandboxPolicy,
   type CodexSandboxPolicy
@@ -81,6 +83,7 @@ export async function openCodexThread(
     threadConfig?: Record<string, unknown>
     commandEnv?: Record<string, string>
     developerInstructions?: string
+    slackMemory?: SlackExecutionMemory
   },
   /** null: no deadline; the start that opens the thread bounds it (`signal`). */
   timeoutMs: number | null | undefined,
@@ -102,6 +105,7 @@ export async function openCodexThread(
         // Codex shows a server's form in Full Access only on a user thread.
         threadSource: 'user',
         ...(launch.model ? { model: launch.model } : {}),
+        ...(launch.slackMemory ? { dynamicTools: [CODEX_SLACK_MEMORY_TOOL] } : {}),
         // A resumed thread keeps the instructions it started with; Codex ignores new ones.
         ...(launch.developerInstructions
           ? { developerInstructions: launch.developerInstructions }

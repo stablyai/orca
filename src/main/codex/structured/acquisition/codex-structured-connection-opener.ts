@@ -3,6 +3,7 @@ import {
   spawnRelayedCodexAppServerConnection
 } from '../../app-server/codex-app-server-connection'
 import { sharedCodexServerPool } from '../../app-server/shared-servers/codex-shared-server-pool'
+import { isSlackExecutionId } from '../../../native-chat/agent-session-wire/operations/slack-execution-authority'
 import { CodexSharedServerUncontainedError } from '../../app-server/shared-servers/codex-shared-server-windows-job'
 import { codexSkillRoots } from '../launch/codex-structured-skill-roots'
 import { takeProviderRelayHandedBack } from '../../../provider-relay/app-provider-relays'
@@ -37,6 +38,9 @@ export function codexConnectionOpener(
 ): CodexConnectionOpen {
   if (deps.openConnection) {
     return deps.openConnection
+  }
+  if (isSlackExecutionId(sessionId)) {
+    return spawnCodexAppServerConnection
   }
   // A chat's own app-server runs under the terminal daemon where it can, so it survives a restart.
   // Windows launches its own as always, and so does a bot's chat: its grants end with this app.
