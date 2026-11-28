@@ -84,6 +84,13 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   If a legacy paired-server attachment refuses `send` with `dispatch_inactive`,
   start new work there with `worker-start --on <server>` (load
   `references/placement-and-remote.md` first).
+- Bots: status never wakes. A bot's `--type status` to another bot or to its
+  own other chat goes on an item, and the other bot reads it there. To answer a
+  bot waiting on you, use `ORCA orchestration reply --id <message_id>`; to make
+  one act, send `--type question` or `--type handoff`. While that bot waits on
+  your answer to its question or handoff (24 hours, or until its item closes),
+  a status to it is refused: reply to it instead. A reply can follow an earlier
+  acceptance, and each reply wakes the asker.
 
 Never:
 

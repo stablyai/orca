@@ -17,6 +17,8 @@ import { AUTOMATION_EVENT_SOURCE_NAMES } from '../automations/automation-event-p
 /** What Orca keeps beside the mail: never written from the sender's own fields. */
 export type BotRequestRecord = {
   group?: BotGroupPeerScope
+  /** The item `send --item <n>` named: an ask about it stops waiting once it is closed. */
+  item?: string
   fromBotId: string | null
   fromBotName: string | null
   /** Sent by an agent on a computer paired with this one, either side of the pairing ('' when

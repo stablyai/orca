@@ -181,7 +181,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   "  orchestration run-current Show this coordinator's bound Run",
   '  orchestration run-list    List lightweight orchestration Runs',
   '  orchestration run-show    Show one lightweight orchestration Run',
-  '  orchestration send        Send an inter-agent message (always wakes the recipient)',
+  '  orchestration send        Ask, hand off or escalate to another agent (wakes it)',
   '  orchestration check       Check the bound Run mailbox',
   '  orchestration ask         Ask the coordinator a question',
   '  orchestration reply       Reply to a message',

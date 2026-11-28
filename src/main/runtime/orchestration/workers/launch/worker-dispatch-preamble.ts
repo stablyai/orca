@@ -110,7 +110,7 @@ ${dispatchIdentityLines(params)}
 
 The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
 below, and message it only to ask, report a blocker, or finish; it needs no progress updates
-unless the task asks (send = always wakes the recipient; task-update --note = passive, never wakes).
+unless the task asks (any send between you and it wakes it, status included; task-update --note is passive and never wakes).
 ${windowsSandboxLine(cli, params.runsOnNativeWindows)}Do only this task, yourself: no subagents or helper workers unless the task asks.
 Terminals you open with \`${cli} terminal create\` or \`split\` close with this worker; add --keep-open to one the user keeps.
 

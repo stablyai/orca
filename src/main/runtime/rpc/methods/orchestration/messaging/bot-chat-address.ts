@@ -13,8 +13,10 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { Bot } from '../../../../../../shared/bot-types'
 import { resolveItem } from '../../bots-items-write-support'
-import { refuse } from './bot-recipient'
-import { mayReachBot, sendToBot } from './bot-request-send'
+import { mayReachBot, refuse } from './bot-recipient'
+import { sendToBot } from './bot-request-send'
+import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { assertNoStatusFiles, recordedStatusSender } from './bot-status-note'
 import { itemMailFilesBody, withItemMailFiles } from './bot-item-mail-files'
 
 /** `--chat new`: the receiving bot starts a new chat for a handoff or question. */
@@ -41,7 +43,15 @@ export async function routeBotMail(
     attachments?: readonly string[]
   }
 ): Promise<{ to: string; body?: string } | { receipt: unknown }> {
-  const chat = await chatForItem(context.runtime, input.to, input.params)
+  const callerSessionId = sessionCallerOf(context.orchestrationCaller)?.sessionId
+  const statusSender = await recordedStatusSender(
+    context.runtime,
+    input,
+    input.sender,
+    callerSessionId
+  )
+  assertNoStatusFiles(statusSender, input.params.files)
+  const chat = await chatForItem(context.runtime, input.to, input.params, statusSender)
   const mail = await withItemMailFiles(context.runtime, input)
   const newChat = chat === BOT_NEW_CHAT
   let to = mail.to
@@ -65,7 +75,9 @@ export async function routeBotMail(
 async function chatForItem(
   runtime: OrcaRuntimeService,
   to: string,
-  { chat, item }: { chat?: string; item?: string }
+  { chat, item }: { chat?: string; item?: string },
+  /** A recorded status may name its sender's own item: it lands on that item, not in a chat. */
+  statusSender: Bot | null = null
 ): Promise<string | undefined> {
   if (item === undefined) {
     return chat
@@ -78,6 +90,9 @@ async function chatForItem(
   }
   const bot = addressedBot(runtime, to, '--item')
   const record = await resolveItem(runtime.botItems.store(), item)
+  if (record.ownerBotId === statusSender?.id) {
+    return undefined
+  }
   if (record.ownerBotId !== bot.id) {
     throw new OrchestrationError(
       'invalid_argument',

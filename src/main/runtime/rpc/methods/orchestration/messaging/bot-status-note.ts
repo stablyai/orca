@@ -1,0 +1,237 @@
+// A bot's `send --type status` to another bot or its own other chat wakes no one: where its work
+// stands lives on an item, so Orca records it there and the other bot reads it when it needs it.
+import {
+  BOT_ITEM_OPEN_STATUSES,
+  isOpenBotItemStatus
+} from '../../../../../../shared/bots/bot-items'
+import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
+import type { OrchestrationPartyIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import { botRequestRefusal, botNotFound } from '../../../../../bots/bot-request-policy'
+import { botOfSession } from '../../../../../bots/bot-session-tabs'
+import type { Bot } from '../../../../../../shared/bot-types'
+import type { BotItemRecord } from '../../../../../bots/bot-items-schema'
+import type { BotItemsRemote } from '../../../../../bots/bot-items-ops'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { RpcContext } from '../../../core'
+import { assertNoWaitingAsk, itemUidOfRequest } from './bot-status-waiting-ask'
+import {
+  creatorSession,
+  refuse,
+  toOtherChat,
+  type ActingSender,
+  type ReceivingBot
+} from './bot-recipient'
+
+export type BotStatusNoteReceipt = {
+  recorded: { item: number; bot: string }
+  /** Empty, so an older CLI that knows only sent mail prints this receipt's `next` too. */
+  messages: []
+  recipients: 0
+  next: string
+}
+
+type StatusMail = { subject: string; body?: string; item?: string; images?: readonly string[] }
+
+const CANDIDATES_SHOWN = 6
+
+const STATUS_FILES_REFUSAL =
+  'A status is recorded on an item, which takes no files this way. Nothing was sent. Attach them with `orca bot item comment <n> --text "..." --file <path>`.'
+
+/** Whether a bot's own status send (not an item comment, paired mail or a group room's) is recorded
+ *  instead of sent. */
+function isRecordedStatus(
+  mail: { params: { type?: string }; messageId?: string; to: string },
+  sessionId: string | null | undefined
+): boolean {
+  return (
+    mail.params.type === 'status' &&
+    mail.messageId === undefined &&
+    !mail.to.includes('bot-group-member-') &&
+    !isBotGroupMemberSession(sessionId)
+  )
+}
+
+/** The bot whose own status send this is, when Orca records it instead of sending it; null for any
+ *  other mail. Read before `--item` routing and `--file` claims, which a recorded status skips. */
+export async function recordedStatusSender(
+  runtime: OrcaRuntimeService,
+  mail: { params: { type?: string }; messageId?: string; to: string },
+  sender: OrchestrationPartyIdentity,
+  callerSessionId: string | undefined
+): Promise<Bot | null> {
+  if (mail.params.type !== 'status' || mail.messageId !== undefined) {
+    return null
+  }
+  // Which chat is a bot's is read from the session host, so it is up before the sender is placed.
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  const sessionId =
+    creatorSession(runtime.getOrchestrationDb(), sender).sessionId ?? callerSessionId
+  const bot = sessionId ? botOfSession(runtime.bots, sessionId) : null
+  return bot && isRecordedStatus(mail, sessionId) ? bot : null
+}
+
+/** A recorded status takes no files: refused before any is claimed. */
+export function assertNoStatusFiles(
+  statusSender: Bot | null,
+  files: readonly string[] | undefined
+) {
+  if (statusSender && files?.length) {
+    throw new OrchestrationError('invalid_argument', STATUS_FILES_REFUSAL)
+  }
+}
+
+/** A bot's own status send is recorded instead of sent, after the checks any bot request passes;
+ *  null for any other mail. */
+export async function statusNoteInstead(
+  context: RpcContext,
+  mail: {
+    params: StatusMail & { type?: string }
+    messageId?: string
+    to: string
+    images?: readonly string[]
+  },
+  acting: ActingSender,
+  receiving: ReceivingBot
+): Promise<{ receipt: unknown; nudge: () => void } | null> {
+  const { runtime } = context
+  const { bot, sessionId } = acting
+  if (!bot || !sessionId || !isRecordedStatus(mail, sessionId)) {
+    return null
+  }
+  const target = runtime.bots.list().find((entry) => entry.id === receiving.bot.id)
+  const refusal = target
+    ? botRequestRefusal({
+        enabled: runtime.bots.enabled(),
+        target,
+        senderBotId: bot.id,
+        toOtherChat: toOtherChat(receiving, sessionId),
+        type: 'status',
+        fromWorker: acting.worker !== undefined
+      })
+    : botNotFound(receiving.bot.name, runtime.bots.list())
+  if (refusal || !target) {
+    return refuse(refusal ?? botNotFound(receiving.bot.name, runtime.bots.list()))
+  }
+  // Cross-bot only: a bot's own chats ask each other all day, and a relay between them is a handoff.
+  if (target.id !== bot.id) {
+    const asker = { id: target.id, name: target.name }
+    await assertNoWaitingAsk(
+      runtime.getOrchestrationDb(),
+      runtime.botItems.store(),
+      asker,
+      bot.id,
+      sessionId
+    )
+  }
+  const receipt = await recordBotStatusNote(runtime, { ...acting, bot, sessionId }, target, {
+    ...mail.params,
+    images: mail.images
+  })
+  context.recordMutationReceipt?.(receipt)
+  return { receipt, nudge: () => {} }
+}
+
+async function recordBotStatusNote(
+  runtime: OrcaRuntimeService,
+  acting: ActingSender & { bot: Bot; sessionId: string },
+  target: Bot,
+  mail: StatusMail
+): Promise<BotStatusNoteReceipt> {
+  if (mail.images?.length) {
+    throw new OrchestrationError('invalid_argument', STATUS_FILES_REFUSAL)
+  }
+  const store = runtime.botItems.store()
+  const item = await statusItem(runtime, store, acting, mail.item)
+  const text = `Status from ${acting.bot.name} for ${target.name}: ${mail.subject}${mail.body?.trim() ? `\n\n${mail.body}` : ''}`
+  await store.orcaComment(item.uid, text, 'bot-status')
+  const owner = runtime.bots.list().find((bot) => bot.id === item.ownerBotId)?.name ?? 'its bot'
+  const n = item.number
+  // The bot's own other chat is the reader there, not the bot by name.
+  const reader = target.id === acting.bot.id ? 'Your other chat' : target.name
+  return {
+    recorded: { item: item.number, bot: owner },
+    messages: [],
+    recipients: 0,
+    next: `Done: ${reader} has this on item ${n} (\`orca bot item show ${n}\`). A status never notifies anyone; that is how it works, not a failed delivery. Tell your owner it is on item ${n}, and don't resend it or offer to. Only if ${target.id === acting.bot.id ? 'your other chat' : target.name} must act or answer now, send --type question or --type handoff; to pass on your owner's decision or an instruction, send --type handoff --item <n>; to answer a question or handoff of theirs, reply to it with \`orca orchestration reply --id <msg>\`.`
+  }
+}
+
+/** The item the status is about: the one `--item` names, the worker's, the item request that woke
+ *  the turn, or the sending chat's one open item. Never a guess between several. */
+async function statusItem(
+  runtime: OrcaRuntimeService,
+  store: BotItemsRemote,
+  acting: ActingSender & { bot: Bot; sessionId: string },
+  named: string | undefined
+): Promise<BotItemRecord> {
+  const chatOpen = (limit = CANDIDATES_SHOWN) =>
+    store.list({
+      botId: acting.bot.id,
+      chatIds: [runtime.botItems.chatRootOf(acting.sessionId)],
+      statuses: BOT_ITEM_OPEN_STATUSES,
+      limit
+    })
+  if (named !== undefined) {
+    const trimmed = named.trim()
+    const item = /^\d+$/.test(trimmed) ? await store.byNumber(Number(trimmed)) : undefined
+    if (!item) {
+      throw new OrchestrationError(
+        'not_found',
+        `No item ${trimmed} on this computer, so nothing was recorded. \`orca bot item list\` lists yours.`
+      )
+    }
+    if (!isOpenBotItemStatus(item.status)) {
+      const open = await chatOpen()
+      const others = open.items.length > 0 ? ` Open items in this chat: ${listed(open)}.` : ''
+      throw new OrchestrationError(
+        'item_closed',
+        `Item ${item.number} is closed, so nothing was recorded.${others}`
+      )
+    }
+    return item
+  }
+  if (acting.worker) {
+    const linked = await store.list({
+      botId: acting.bot.id,
+      link: { kind: 'dispatch', ref: acting.worker },
+      statuses: BOT_ITEM_OPEN_STATUSES,
+      limit: CANDIDATES_SHOWN
+    })
+    if (linked.items.length > 0) {
+      return pickOne(linked)
+    }
+  }
+  const woken = itemUidOfRequest(acting.turn.actingOnRequestId)
+  const wokenItem = woken ? await store.get(woken) : null
+  if (wokenItem?.ownerBotId === acting.bot.id && isOpenBotItemStatus(wokenItem.status)) {
+    return wokenItem
+  }
+  return pickOne(await chatOpen())
+}
+
+type OpenItems = Awaited<ReturnType<BotItemsRemote['list']>>
+
+/** The open items a read found, and how many there are when the read was cut off. */
+function listed({ items, counts }: OpenItems): string {
+  const total = BOT_ITEM_OPEN_STATUSES.reduce((sum, status) => sum + (counts[status] ?? 0), 0)
+  const names = items.map((item) => `${item.number} (${item.title})`).join(', ')
+  return total > items.length ? `${names} (showing ${items.length} of ${total})` : names
+}
+
+function pickOne(open: OpenItems): BotItemRecord {
+  const { items } = open
+  if (items.length === 1) {
+    return items[0]!
+  }
+  if (items.length === 0) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "No open item to record this status on, so nothing was sent. If the other bot needs to act, use --type question or --type handoff; if it is waiting on your answer, reply to its message with `orca orchestration reply --id <msg>`; otherwise there is nothing to send, so tell your owner that, and don't make an item to hold it or offer to send it as a message."
+    )
+  }
+  throw new OrchestrationError(
+    'invalid_argument',
+    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. To answer a bot waiting on you, reply to its message (\`orca orchestration reply --id <msg>\`). Otherwise send it again once, with --item <n> for the one item it is about; if it is about none of them, there is nothing to record, so don't make an item to hold it or offer to send it as a message.`
+  )
+}

@@ -70,7 +70,7 @@ function pairedSendsTo(name: string, paired: readonly CachedPairedBotRoster[]): 
 export const BOT_REQUEST_TYPE_REFUSAL: BotRequestRefusal = {
   code: 'bot_request_type',
   message:
-    'A bot takes --type status (information: no job, nothing comes back), --type question (it answers you) or --type handoff (it takes over the job), so send it again as one of those.'
+    'A bot takes --type question (it answers you), --type handoff (it takes over the job) or --type status (information with no job; a bot here records it on your item instead of waking the other bot, and refused while the other bot waits on your answer), so send it again as one of those. To answer a bot, reply to its message: orca orchestration reply --id <msg>.'
 }
 
 export const BOT_REQUEST_WORKER_HANDOFF_REFUSAL: BotRequestRefusal = {

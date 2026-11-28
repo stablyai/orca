@@ -68,6 +68,7 @@ type OrchestrationSendResult = { next?: string } & (
       lifecycle?: LifecycleSendResult
       warnings?: SendRecipientWarning[]
     }
+  | { recorded: { item: number; bot: string }; warnings?: SendRecipientWarning[] }
 )
 
 function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
@@ -194,6 +195,11 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
           )}`
         )
       }
+      if ('recorded' in value) {
+        return withWarnings(
+          `Status recorded on item ${value.recorded.item} of ${value.recorded.bot}`
+        )
+      }
       if ('relay' in value) {
         if (value.relay.destination === 'worker') {
           return withWarnings(
@@ -213,6 +219,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
 
 type SendFields = {
   messageId?: string
+  recordedOnItem?: number
   messageIds?: string[]
   recipients?: number
   dispatchId?: string
@@ -234,6 +241,9 @@ function sendFields(value: Exclude<OrchestrationSendResult, { delivery: string }
   }
   if ('message' in value) {
     return { messageId: value.message.id, ...common }
+  }
+  if ('recorded' in value) {
+    return { recordedOnItem: value.recorded.item, ...common }
   }
   if ('relay' in value) {
     return {

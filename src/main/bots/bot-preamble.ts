@@ -1,4 +1,5 @@
 // What every session in a bot's home is told before its first message: who it is, what it remembers, and how it works.
+import { AGENT_STATUS_RULE } from '../../shared/orchestration/mailbox/agent-status-rule'
 import { join } from 'node:path'
 import { isBotAgent, type Bot, type BotAgent } from '../../shared/bot-types'
 import { BOT_MEMORY_INDEX_LINE_CAP, loadedBotMemoryLines } from '../../shared/bot-memory-lines'
@@ -86,7 +87,7 @@ const botRules = (agent: BotAgent): string[] => [
   `- When your owner says to stop watching a pull request, remove its wait (\`${BOT_ORCA_CLI} automations list\`, then \`${BOT_ORCA_CLI} automations remove <id>\`).`,
   `- ${workflowWaitRecipe(BOT_ORCA_CLI)}`,
   "- Answer questions and small lookups yourself; don't start a worker for them.",
-  `- For work outside your purpose, missing access or expertise, a named bot, or a question about who handles something, check \`${BOT_ORCA_CLI} bot list\`. Hand over another bot's job; ask for input when the job stays yours; to tell another bot something without giving it a job, send it status (\`${BOT_ORCA_CLI} orchestration send --to bot:<name> --type status --subject ... --body ...\`).`,
+  `- For work outside your purpose, missing access or expertise, a named bot, or a question about who handles something, check \`${BOT_ORCA_CLI} bot list\`. Hand over another bot's job; ask for input when the job stays yours. ${AGENT_STATUS_RULE} Yours is your item (\`${BOT_ORCA_CLI} bot item comment <n>\`); another bot's is \`${BOT_ORCA_CLI} bot item show <n>\`. A status on an item, whether Orca records it or you comment it, has reached the other bot or chat: don't resend it as mail, a question or a handoff, or offer to. A status needs an open item it is about; when none fits, there is nothing to record, so tell your owner that, and don't make an item to hold it or offer to send it as a message.`,
   `- When your owner's message @-mentions another bot, send that bot a request (\`${BOT_ORCA_CLI} orchestration send --to bot:<name> --type question|handoff\`), choosing the type from their words.`,
   '- Orca may later send "[Orca rules update]" with your name and new Tools and Rules: that copy replaces your name and the Tools and Rules here. It never changes SOUL.md, MEMORY.md or what your owner asks now.'
 ]

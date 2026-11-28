@@ -1,6 +1,7 @@
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { ORCHESTRATION_SEND_FLAGS } from './orchestration-send-flags'
 import type { CommandSpec } from '../discovery/command-spec'
+import { AGENT_STATUS_RULE } from '../../shared/orchestration/mailbox/agent-status-rule'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
@@ -58,14 +59,14 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     identityFlagRoles: { from: 'caller' },
     repeatableFlags: ['file'],
     notes: [
-      'send = always wakes the recipient; task-update --note = passive, never wakes.',
+      `${AGENT_STATUS_RULE} A worker's is task-update --note; a bot's is its item (orca bot item comment). Between a worker and its coordinator, every send wakes the other, status included.`,
       'Valid --type values: status, dispatch, worker_done, merge_ready, escalation, handoff, decision_gate, question.',
       'To answer a worker question, use orchestration reply --id <msg_id> --body <text> with the same Orca CLI executable.',
       'Group addresses (@all, @idle, @codex, ...) reach the live Dispatches of your own Run; a sender in no Run must use run:<id> or dispatch:<id>. @worktree:<id> names one workspace.',
       'Run groups exclude their owning coordinator; send to run:<id> to raise something with yours. Nested coordinators receive group mail in their child Run mailbox; @worktree:<id> includes workspace coordinators. On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
-      '--to bot:<name> (or bot:<id>) mails another bot on this computer with --type handoff (it takes over), --type question (it answers you by mail) or --type status (information, with no job and nothing back); `orca bot list` prints each command. It carries whom your turn is for, and the bot takes it whoever that is: every bot runs as your owner.',
+      "--to bot:<name> (or bot:<id>) mails another bot on this computer with --type handoff (it takes over), --type question (it answers you by mail) or --type status. A bot's status to a bot on this computer (another bot or its own other chat) is recorded on an item instead of delivered, so it wakes no one: the item --item names, else the one linking your worker, else the item request that woke your turn, else your chat's one open item; it is refused, with nothing sent, while the other bot waits on your answer (24 hours after its question or handoff to you, unless the item it is about is closed), so you answer with orchestration reply --id <msg>, which wakes it. A question or handoff can take more than one reply (an acceptance, then the result), and each wakes the asker (an older Orca still delivers it as mail, and the receipt says Sent); `orca bot list` prints each command. It carries whom your turn is for, and the bot takes it whoever that is: every bot runs as your owner.",
       'With --to bot:<name>, --chat <id> (from `orca bot chats`) lands it in that chat of the bot instead of its Home Chat, and --chat new starts a new chat on the bot for a handoff or question, titled from --subject. Without --chat it lands in the Home Chat, whoever your turn is for. All three work for your own bot too; only the chat you send from is refused, and nothing is sent.',
-      "Mail about one of a bot's items goes to the chat that owns it: --item <n> with --to bot:<name> (yours too) lands it there, or in the Home Chat once that chat is gone. --file <path> (repeat it) sends files with it, copied to that bot's computer. With --to dispatch:<id> of a worker that has finished, --item <n> starts its follow-up for that item, as worker-start --item does, so its report names the item.",
+      "Mail about one of a bot's items goes to the chat that owns it: --item <n> with --to bot:<name> (yours too) lands it there, or in the Home Chat once that chat is gone. --file <path> (repeat it) sends files with it (not with a bot's --type status, which refuses --file), copied to that bot's computer. With --to dispatch:<id> of a worker that has finished, --item <n> starts its follow-up for that item, as worker-start --item does, so its report names the item.",
       "worker_done is an exact-Dispatch signal and cannot target groups; omit --to to use the Dispatch's Run mailbox. worker_done requires --outcome succeeded or --outcome failed. failed means only that the worker could not finish (e.g. no access to the repo); finished work is succeeded even when results are bad (e.g. tests found bugs), with the problems listed in the body.",
       'From a worker, an omitted recipient defaults to its coordinator, also after it finished; mail sent after finishing, worker_done included, leaves the finished task unchanged.',
       'Use --to dispatch:<id> for attempt-specific coordinator guidance; Orca durably relays it to a connected worker server.',
@@ -185,7 +186,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      'send = always wakes the recipient; task-update --note = passive, never wakes.',
+      `${AGENT_STATUS_RULE} A worker's is task-update --note; a bot's is its item (orca bot item comment). Between a worker and its coordinator, every send wakes the other, status included.`,
       '--note (<= 500 chars, active workers only, omit --id) records passive progress on your active Dispatch without changing status; coordinators update --status with --id.',
       'Valid --status values: pending, ready, dispatched, completed, failed, blocked.',
       'To cancel a Task, stop or abandon its worker, then set --status failed --result cancelled; a later worker-start --retry-of reopens it.'

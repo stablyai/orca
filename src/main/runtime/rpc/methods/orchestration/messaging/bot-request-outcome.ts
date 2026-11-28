@@ -64,11 +64,10 @@ export function botAnswerOf(
     )
   }
   const answer = db.recordBotAnswer(original.id)
+  // A later reply (the result after an acceptance) is ordinary reply mail: it wakes the asker, and
+  // Orca's one answer record and card stay the first reply's.
   if (!answer) {
-    throw new OrchestrationError(
-      'already_answered',
-      "You already answered that request, so send new mail if there's more to say."
-    )
+    return {}
   }
   return {
     botAnswer: { requestId: original.id, view: botAnswerView(record, answer.posted, shownInRoom) }
