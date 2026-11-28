@@ -84,12 +84,13 @@ export function appendWorktreeRows(
     folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
   }
 ): void {
-  const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
-  if (sectionOccurrences.length === 0) {
+  const sectionOccurrences = plan.bySection.get(options.sectionKey)
+  if (!sectionOccurrences || sectionOccurrences.length === 0) {
     return
   }
   let childIdsByParent: Map<string, string[]> | undefined
-  for (const occurrence of sectionOccurrences) {
+  for (let i = 0; i < sectionOccurrences.length; i += 1) {
+    const occurrence = sectionOccurrences[i]
     if (occurrence.parent) {
       childIdsByParent ??= new Map<string, string[]>()
       const children = childIdsByParent.get(occurrence.parent.key)
@@ -110,29 +111,36 @@ export function appendWorktreeRows(
   const folderPairByIdentity = options.folderPairByIdentity
   const hostContextLabelByWorktreeIdentity = options.hostContextLabelByWorktreeIdentity
   const hostContextLabelByRepoId = options.hostContextLabelByRepoId
-  const needsHostIdentity =
-    (folderPairByIdentity?.size ?? 0) > 0 || (hostContextLabelByWorktreeIdentity?.size ?? 0) > 0
-  for (const occurrence of occurrences) {
+  const hasFolderPairs = (folderPairByIdentity?.size ?? 0) > 0
+  const hasWorktreeHostLabels = (hostContextLabelByWorktreeIdentity?.size ?? 0) > 0
+  const hasRepoHostLabels = (hostContextLabelByRepoId?.size ?? 0) > 0
+  const needsHostIdentity = hasFolderPairs || hasWorktreeHostLabels
+  const groupDepth = options.groupDepth
+  const collapsedGroups = options.collapsedGroups
+  for (let i = 0; i < occurrences.length; i += 1) {
+    const occurrence = occurrences[i]
     const worktree = occurrence.row
     const hostIdentity = needsHostIdentity ? getWorktreeHostIdentity(worktree) : undefined
-    const folderPair = hostIdentity ? folderPairByIdentity?.get(hostIdentity) : undefined
+    const folderPair = hasFolderPairs ? folderPairByIdentity!.get(hostIdentity!) : undefined
     const hasChildren = occurrence.childCount > 0
     if (folderPair) {
       result.push(
-        buildFolderWorkspaceRow(folderPair, options.groupDepth, occurrence, {
-          collapsedGroups: options.collapsedGroups,
+        buildFolderWorkspaceRow(folderPair, groupDepth, occurrence, {
+          collapsedGroups,
           childWorktreeIds: hasChildren ? childIdsByParent?.get(occurrence.key) : undefined,
           descendantIdentities: hasChildren ? lineageRanges?.get(occurrence.key) : undefined,
-          hostContextLabel: hostIdentity
-            ? hostContextLabelByWorktreeIdentity?.get(hostIdentity)
+          hostContextLabel: hasWorktreeHostLabels
+            ? hostContextLabelByWorktreeIdentity!.get(hostIdentity!)
             : undefined
         })
       )
       continue
     }
     const hostContextLabel =
-      (hostIdentity ? hostContextLabelByWorktreeIdentity?.get(hostIdentity) : undefined) ??
-      hostContextLabelByRepoId?.get(worktree.repoId)
+      (hasWorktreeHostLabels
+        ? hostContextLabelByWorktreeIdentity!.get(hostIdentity!)
+        : undefined) ??
+      (hasRepoHostLabels ? hostContextLabelByRepoId!.get(worktree.repoId) : undefined)
     const lineageGroupKey = hasChildren ? getWorktreeLineageGroupKey(worktree) : undefined
     if (lineageGroupKey) {
       result.push({
@@ -143,7 +151,7 @@ export function appendWorktreeRows(
         worktree,
         repo: repoOf(worktree),
         depth: occurrence.depth,
-        groupDepth: options.groupDepth,
+        groupDepth,
         isLastLineageChild: occurrence.isLastChild,
         lineageChildCount: occurrence.childCount,
         lineageChildWorktreeIds: childIdsByParent?.get(occurrence.key),
@@ -151,7 +159,7 @@ export function appendWorktreeRows(
         showProjectName: occurrence.showProjectName,
         hostContextLabel,
         lineageGroupKey,
-        lineageCollapsed: options.collapsedGroups.has(lineageGroupKey)
+        lineageCollapsed: collapsedGroups.has(lineageGroupKey)
       })
     } else {
       result.push({
@@ -162,7 +170,7 @@ export function appendWorktreeRows(
         worktree,
         repo: repoOf(worktree),
         depth: occurrence.depth,
-        groupDepth: options.groupDepth,
+        groupDepth,
         isLastLineageChild: occurrence.isLastChild,
         lineageChildCount: occurrence.childCount,
         lineageChildWorktreeIds: undefined,

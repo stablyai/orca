@@ -5,7 +5,6 @@
 // Replay one seed: FUZZ_SEED=<n> FUZZ_ITERATIONS=1 pnpm test <this file>.
 
 import { describe, expect, it } from 'vitest'
-import { mulberry32 } from '../agent-tui-ansi-fuzz-stream'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../workspace/identity/floating-workspace-id'
 import { collectLayoutLeafIdsInOrder } from './terminal-topology/terminal-pane-tree'
 import { applyLayoutCommand } from './workspace-layout-commands'
@@ -13,6 +12,7 @@ import type { LayoutCommand, LayoutContext } from './workspace-layout-command-ty
 import {
   CLEAN_EXIT,
   emptyModel,
+  mulberry32,
   testContext
 } from './commands/workspace-layout-command.test-fixture'
 import { loadWorkspaceLayout } from './persistence/workspace-layout-load'

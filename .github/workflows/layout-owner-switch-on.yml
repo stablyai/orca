@@ -1,37 +1,15 @@
 name: Layout owner switch-on (advisory)
 
-# Runs the new layout path (startup setting ORCA_LAYOUT_OWNER=main) on PRs that touch layout, tabs, session, persistence,
-# PTY or terminal code, so main stops breaking it unnoticed. Advisory: not a required check.
+# Runs the new layout path (startup setting ORCA_LAYOUT_OWNER=main) on every PR into and push to the layout-owner-v2 dev branch.
+# No path filter: switch-reading code is spread too widely for one. Advisory: not a required check.
 # Known switch-on failures are marked expected-fail with their census row; a fix turns them red so the mark is dropped.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'src/shared/workspace-layout/**'
-      - 'src/shared/workspace-session/**'
-      - 'src/main/persistence/**'
-      - 'src/main/runtime/terminal/**'
-      - 'src/main/runtime/session-tabs/**'
-      - 'src/main/runtime/session-graph/**'
-      - 'src/main/runtime/session-lifecycle/**'
-      - 'src/main/ipc/pty/**'
-      - 'src/main/ipc/session.ts'
-      - 'src/renderer/src/store/slices/tabs/**'
-      - 'src/renderer/src/store/terminals/**'
-      - 'src/renderer/src/store/workspace-layout/**'
-      - 'src/renderer/src/runtime/workspace-layout/**'
-      - 'src/renderer/src/components/terminal-pane/**'
-      - 'src/renderer/src/components/tab-bar/**'
-      - 'tests/layout-owner-e2e/**'
-      - 'tests/layout-owner-playwright.config.ts'
-      - 'src/main/layout-owner/**'
-      - 'src/preload/renderer/layout-owner-bridge.ts'
-      - 'src/main/window/shared-preload-window-arguments.ts'
-      - 'config/build-plugins/layout-owner-banner.ts'
-      - 'config/scripts/ci/layout-owner/**'
-      - '.github/workflows/layout-owner-switch-on.yml'
-      - '.github/workflows/e2e.yml'
+    branches: [layout-owner-v2]
+  push:
+    branches: [layout-owner-v2]
   workflow_dispatch:
 
 permissions:
@@ -71,11 +49,20 @@ jobs:
           node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node
           mapfile -t SOURCES < <(git grep -l ORCA_LAYOUT_OWNER_IS_MAIN -- 'src/**' 'packages/**' ':!*.test.*' ':!*.spec.*')
           mapfile -t TESTS < config/scripts/ci/layout-owner/switch-on-unit-tests.txt
-          node config/scripts/test-runtime/execution-policy/run-vitest.mjs related --run --config config/vitest.config.ts \
-            --reporter=dot --reporter=json --outputFile.json=switch-on-units.json "${SOURCES[@]}" "${TESTS[@]}" || true
-          # Fails on a new failure, and on a listed failure that passes (including any run with the switch off).
+          # Vitest exits 1 for the listed failures; the check below judges every failure, so only a crash (>1) stops here.
+          status=0
+          ORCA_SWITCH_ON_RUN_ERRORS=switch-on-run-errors.json \
+            node config/scripts/test-runtime/execution-policy/run-vitest.mjs related --run --config config/vitest.config.ts \
+            --reporter=dot --reporter=json --reporter=./config/scripts/ci/layout-owner/switch-on-run-errors-reporter.mjs \
+            --outputFile.json=switch-on-units.json "${SOURCES[@]}" "${TESTS[@]}" || status=$?
+          if [ "$status" -gt 1 ]; then
+            echo "Vitest exited with $status"
+            exit "$status"
+          fi
+          # Fails on a new failure, a suite or hook error, an unlisted unhandled error, and a listed failure that
+          # passes (including any run with the switch off).
           node config/scripts/ci/layout-owner/check-switch-on-unit-results.mjs switch-on-units.json \
-            config/scripts/ci/layout-owner/switch-on-known-unit-failures.json
+            config/scripts/ci/layout-owner/switch-on-known-unit-failures.json switch-on-run-errors.json
 
   e2e-window:
     name: switch-on e2e (window)

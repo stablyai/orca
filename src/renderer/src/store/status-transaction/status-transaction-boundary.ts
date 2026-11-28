@@ -1,10 +1,14 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { StoreSetArgs } from '../diagnostics/react-commit-cascade-write-probe'
 import type { AcceptedAgentStatuses } from '../slices/agent-status/status-ownership/accepted-agent-statuses'
 import { createAgentStatusTransactionOwner } from '../slices/agent-status/status-ownership/agent-status-transaction-owner'
 import { stageHostStatusDraft } from '../slices/runtime-status/host-status-transaction-draft'
 import { createStatusTransaction, swapOpenStatusTransaction } from './status-transaction'
+
+type StorePartial =
+  | AppState
+  | Partial<AppState>
+  | ((state: AppState) => AppState | Partial<AppState>)
 
 /**
  * Outermost policy: finish transformations and getters, then per write stage each status owner's
@@ -25,9 +29,8 @@ export function withStatusTransaction(
       })
     const transaction = createStatusTransaction()
     const agentStatuses = createAgentStatusTransactionOwner()
-    const wrap =
-      (write: typeof set): typeof set =>
-      (...args: StoreSetArgs<AppState>): void => {
+    const wrap = (write: typeof set): typeof set => {
+      const wrapped = (partial: StorePartial, replace?: boolean): void => {
         const current = get()
         // An updater may write this store re-entrantly; each write keeps its own staged drafts.
         const outerOpen = swapOpenStatusTransaction(transaction)
@@ -40,7 +43,7 @@ export function withStatusTransaction(
         try {
           let requested: AppState | Partial<AppState>
           try {
-            requested = typeof args[0] === 'function' ? args[0](current) : args[0]
+            requested = typeof partial === 'function' ? partial(current) : partial
           } finally {
             transaction.base = outerBase
             swapOpenStatusTransaction(outerOpen)
@@ -48,7 +51,7 @@ export function withStatusTransaction(
           if (requested === current && transaction.hostStatuses === undefined) {
             return
           }
-          if (args[1] === true) {
+          if (replace === true) {
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Zustand's replace overload requires a complete state.
             const fullRequested = requested as AppState
             const needsMutateCopy =
@@ -70,6 +73,9 @@ export function withStatusTransaction(
         // Host status listeners wake from the root write itself.
         agentStatuses.notify(agentDraft)
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: named parameters implement both Zustand setState overloads without rest-args allocation.
+      return wrapped as typeof set
+    }
     api.setState = wrap(api.setState)
     const state = createState(wrap(set), get, api)
     const initial = agentStatuses.initialize(state)

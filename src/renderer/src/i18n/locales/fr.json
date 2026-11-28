@@ -1528,7 +1528,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost désigne l’ordinateur de ce bot.",
           "headers": "En-têtes",
-          "authHint": "Si le serveur exige une connexion via le navigateur, le bouton « Connecter » apparaît après sa vérification native.",
+          "authHint": "Si le serveur exige une connexion via le navigateur, le bouton « Se connecter » apparaît après sa vérification native.",
           "executable": "Exécutable",
           "commandPlaceholder": "npx",
           "args": "Arguments",
@@ -19799,7 +19799,7 @@
           "runStatusDispatchFailed": "Échec"
         },
         "runContent": {
-          "noOutput": "Aucun contenu de sortie disponible."
+          "noOutput": "Aucune sortie."
         },
         "runViewState": {
           "viewRun": "Voir l’exécution",
@@ -29956,7 +29956,7 @@
       "newThreadTab": "Nouveau fil",
       "items": {
         "orNames": "{{names}} ou {{last}}",
-        "emptyBotsNeedsYou": "Rien de la part de {{names}} ne requiert votre action",
+        "emptyBotsNeedsYou": "Rien de {{names}} à traiter",
         "emptyBots": "Aucun élément de {{names}}",
         "emptyTitle": "Aucun élément de ce groupe pour l’instant",
         "filterNamed": "Filtrer les éléments, filtre actif : {{filter}}",

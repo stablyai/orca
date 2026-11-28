@@ -33,7 +33,8 @@ export function reuseUnchangedSidecarSession(
     previous.createdAt === next.createdAt &&
     previous.updatedAt === next.updatedAt &&
     previous.resumeCommand === next.resumeCommand &&
-    previous.model === next.model
+    previous.model === next.model &&
+    previous.totalTokens === next.totalTokens
   ) {
     return previous
   }
@@ -44,14 +45,16 @@ export function reuseUnchangedSidecarSession(
     createdAt: next.createdAt,
     updatedAt: next.updatedAt,
     resumeCommand: next.resumeCommand,
-    model: next.model
+    model: next.model,
+    totalTokens: next.totalTokens
   }
 }
 
 export function sidecarEnrichesWithoutReparse(candidate: SessionFileCandidate): boolean {
   return (
     (candidate.agent === 'cursor' && !isCursorAcpSessionStorePath(candidate.file.path)) ||
-    candidate.agent === 'devin'
+    candidate.agent === 'devin' ||
+    candidate.agent === 'droid'
   )
 }
 
@@ -64,7 +67,6 @@ export async function enrichSessionFromSidecar(
   if (candidate.agent === 'devin') {
     return enrichDevinSessionFromDb(candidate.file.sidecar, foldSession, platform)
   }
-  // Read on transcript reparse only, so droid discovery keeps its stat cache.
   if (candidate.agent === 'droid') {
     return enrichDroidSessionFromSettings(foldSession, candidate.file.path, signal)
   }

@@ -127,6 +127,22 @@ function startFailureRowsAfter(
   return rows
 }
 
+/** Start-failure rows hidden because a later resend replaced the rejected send they answered. */
+export function structuredAgentSessionReplacedStartFailureRowIds(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[]
+): Set<string> {
+  if (!submissions.some((submission) => submission.dispatchState === 'rejected')) {
+    return new Set()
+  }
+  const { resent } = structuredAgentSessionRejectedShownInPlace(
+    submissions,
+    structuredAgentSessionCommandItemIds(items),
+    items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
+  )
+  return resent.size > 0 ? startFailureRowsAfter(items, resent) : resent
+}
+
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],

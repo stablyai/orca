@@ -110,7 +110,8 @@ export class RuntimeOrchestrationFederation {
         {
           prepareRequest: internal?.prepareRequest,
           prepareGuard: internal?.prepareGuard,
-          expectedRuntimeId
+          expectedRuntimeId,
+          readyOnly: internal?.readyOnly
         }
       )
     const response =
