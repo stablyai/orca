@@ -9,7 +9,7 @@ import {
 import type { BotListWait } from './bot-list-waits'
 import { newestBotActivity } from './bot-row-activity'
 import type { BotWorkspaceLiveCounts } from './bot-sidebar-workspaces'
-import { chatPaneKey } from '../agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../agent-session/view/chat-pane-address'
 
 /** Where a turn is: a thread's service and place as people name it, or (no service) a side chat's title. */
 export type BotRowPlace = { source: ConnectorSource | null; label: string }
