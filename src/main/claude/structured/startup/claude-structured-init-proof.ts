@@ -176,6 +176,8 @@ export type ClaudeInitProof = {
   promise: Promise<ClaudeInitObservation>
   resolve: (init: ClaudeInitObservation) => void
   reject: (error: Error) => void
+  /** Whether a proof landed: false until one does, and after a refusal or a failed child. */
+  proven: () => boolean
   refuse: () => void
   /** The proof seen so far, or null; throws when it was refused or the child failed first. */
   seen: () => ClaudeInitObservation | null
@@ -206,6 +208,7 @@ export function createClaudeInitProof(): ClaudeInitProof {
       resolvePromise(init)
     },
     reject,
+    proven: () => outcome !== null && 'init' in outcome,
     refuse: () => {
       if (outcome && 'init' in outcome) {
         return
