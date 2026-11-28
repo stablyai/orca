@@ -63,7 +63,7 @@ const long: BotItemQuestionShape = {
     two.decisions[1]!
   ]
 }
-// A long answer: past 60% it gives way too, so the question still reads.
+// A long answer: its label is cut short, and the answer wraps to 2 lines at most.
 const longAnswer: BotItemQuestionShape = {
   body: '',
   decisions: [
@@ -177,7 +177,7 @@ export const fourAllWide = defineFixture({
   width: 600,
   render: () => <Card shape={four} picked={['Ship it', 'No', 'Design', 'After the beta']} />
 })
-// A long question folds to one row: the question gives way, the answer stays whole.
+// A long question folds to a short label before its answer.
 export const longFolded = defineFixture({
   width: 300,
   render: () => <Card shape={long} picked={['Beta first', null]} />
@@ -186,12 +186,30 @@ export const longFoldedWide = defineFixture({
   width: 600,
   render: () => <Card shape={long} picked={['Beta first', null]} />
 })
-// A folded pick reopened: the pick is solid with its check, the recommended reply loses its star.
+// A folded pick reopened by Change: its line shows its rows again.
 export const reopened = defineFixture({
   width: 300,
   render: () => <Card shape={two} picked={['Beta first', null]} />,
   interact: (frame) => {
-    frame.querySelector<HTMLButtonElement>('button[title^="Ship the new sidebar"]')?.click()
+    frame.querySelector<HTMLButtonElement>('button[aria-label$="Change answer"]')?.click()
+  }
+})
+// A ~200-character typed answer at the narrowest pane: 2 lines then an ellipsis; Change (focused) stays.
+export const longTypedAnswer = defineFixture({
+  width: 300,
+  render: () => (
+    <Card
+      shape={two}
+      picked={[
+        'Ship it to the beta group first, then to everyone after two weeks, but only if the crash rate stays under the current release and support has the new help article ready before the wider rollout.',
+        null
+      ]}
+    />
+  ),
+  interact: (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('button[aria-label$="Change answer"]')
+      ?.focus({ focusVisible: true })
   }
 })
 // A line answered, or sent and on its way, folds and stays; the count is of all lines.

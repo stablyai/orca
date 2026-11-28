@@ -28734,14 +28734,12 @@
       "ask": {
         "notSentYet": "尚未发送",
         "recommended": "推荐",
-        "typeAnswer": "输入你的回答",
+        "suggested": "建议",
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
         "skipped": "已跳过",
         "send": "发送",
         "sending": "正在发送…",
-        "sendSome": "发送 {{count}}/{{total}}",
-        "sendSomeLabel": "发送 {{total}} 个回答中的 {{count}} 个",
         "changeAnswer": "{{question}}：{{answer}}。更改回答",
         "heldImagesLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 张图片。请先发送目前保留的回答，或移除一些",
         "heldSkillsLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 个技能。请先发送目前保留的回答，或移除一些"

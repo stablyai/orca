@@ -266,9 +266,9 @@ export function BotItemBody({
               bind()
               return comment.current?.restore(answer, plain) ?? false
             },
-            type: () => {
+            type: (words?: string) => {
               answerWaiting()
-              comment.current?.answer()
+              comment.current?.answer(words)
             },
             steps,
             sent

@@ -29242,7 +29242,6 @@
       "ask": {
         "notSentYet": "pas encore envoyée",
         "recommended": "Recommandé",
-        "typeAnswer": "Saisissez votre réponse",
         "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
         "replacedByNewer": "Remplacée par une question plus récente",
         "skipped": "Ignorées",
@@ -29250,9 +29249,8 @@
         "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Envoyez d’abord les réponses gardées jusqu’ici, ou retirez-en quelques-uns.",
         "send": "Envoyer",
         "sending": "Envoi…",
-        "sendSome": "Envoyer {{count}}/{{total}}",
-        "sendSomeLabel": "Envoyer {{count}} réponses sur {{total}}",
-        "changeAnswer": "{{question}} : {{answer}}. Modifier la réponse"
+        "changeAnswer": "{{question}} : {{answer}}. Modifier la réponse",
+        "suggested": "Suggérée"
       },
       "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés",
       "link": {

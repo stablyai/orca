@@ -29478,13 +29478,11 @@
         "skipped": "Ignoradas",
         "send": "Enviar",
         "sending": "Enviando…",
-        "sendSome": "Enviar {{count}}/{{total}}",
-        "sendSomeLabel": "Enviar {{count}} de {{total}} respostas",
         "changeAnswer": "{{question}}: {{answer}}. Alterar resposta",
         "heldImagesLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} imagens. Envie primeiro as respostas guardadas até agora ou remova algumas.",
         "heldSkillsLimit": "Suas respostas vão como um único comentário, que aceita até {{max}} habilidades. Envie primeiro as respostas guardadas até agora ou remova algumas.",
         "recommended": "Recomendado",
-        "typeAnswer": "Digite sua resposta"
+        "suggested": "Sugerida"
       },
       "chat": {
         "moreItems": "+{{count}} a mais",

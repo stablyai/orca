@@ -28708,17 +28708,15 @@
       "ask": {
         "notSentYet": "まだ送信されていません",
         "recommended": "推奨",
-        "typeAnswer": "回答を入力してください",
         "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
         "replacedByNewer": "新しい質問に置き換えられました",
         "skipped": "スキップ済み",
         "send": "送信",
         "sending": "送信中…",
-        "sendSome": "送信 {{count}}/{{total}}",
-        "sendSomeLabel": "{{total}} 件中 {{count}} 件の回答を送信",
         "changeAnswer": "{{question}}: {{answer}}。回答を変更",
         "heldImagesLimit": "回答は1件のコメントとして送信され、画像は{{max}}枚までです。保留中の回答を先に送信するか、いくつか削除してください。",
-        "heldSkillsLimit": "回答は1件のコメントとして送信され、スキルは{{max}}個までです。保留中の回答を先に送信するか、いくつか削除してください。"
+        "heldSkillsLimit": "回答は1件のコメントとして送信され、スキルは{{max}}個までです。保留中の回答を先に送信するか、いくつか削除してください。",
+        "suggested": "おすすめ"
       },
       "readMoreClosedFailed": "クローズ済みの項目をさらに読み込めませんでした",
       "wait": {

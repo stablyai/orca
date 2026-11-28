@@ -28800,17 +28800,15 @@
       "ask": {
         "notSentYet": "noch nicht gesendet",
         "recommended": "Empfohlen",
-        "typeAnswer": "Antwort eingeben",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
         "skipped": "Übersprungen",
         "send": "Senden",
         "sending": "Wird gesendet…",
-        "sendSome": "{{count}}/{{total}} senden",
-        "sendSomeLabel": "{{count}} von {{total}} Antworten senden",
         "changeAnswer": "{{question}}: {{answer}}. Antwort ändern",
         "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Bilder aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige.",
-        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige."
+        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige.",
+        "suggested": "Vorgeschlagen"
       },
       "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden",
       "wait": {

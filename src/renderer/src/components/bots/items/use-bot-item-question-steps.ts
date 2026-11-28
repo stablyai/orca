@@ -84,8 +84,8 @@ export type BotItemQuickReplyActions = {
    *  answers held for an earlier ask, as a comment of its own answering no line. True once the box's
    *  draft is saved, when the held copy may go. */
   restore: (answer: BotItemHeldAnswer, plain?: boolean) => boolean
-  /** Type your answer: the comment box takes focus, glowing once. */
-  type: () => void
+  /** Answer in the comment box: it takes focus, glowing once, with `words` after its own. */
+  type: (words?: string) => void
   /** The waiting ask of several questions, all its lines at once. */
   steps?: BotItemQuestionSteps | null
   /** Per ask, the answers of its sends on their way, by line. */
@@ -282,7 +282,10 @@ export function useBotItemQuestionSteps(
         // Words, files and skills alike wait like a pick: the line folds to them, the box names the
         // next open line, and Send posts them with the rest.
         hold(stored(line, answer))
-        setReopenedAt(null)
+        // Only the line it answered folds: another line reopened stays open.
+        if (line === reopened) {
+          setReopenedAt(null)
+        }
       } else if (picks.some(Boolean)) {
         // The picks name their lines; the words ride along answering none.
         post(botItemHeldAnswersComment(shape, picks, answer))
