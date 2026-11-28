@@ -31,7 +31,7 @@ import {
 } from '../pane-moves/pane-remote-session-follow'
 import { pruneClosedTerminalTabTombstones } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
-import { loadPaneCommandLayout, type PaneCommandIds } from './pane-admission-slice-load'
+import { loadPaneChange } from './pane-admission-change'
 import {
   editorViewsOfModel,
   type PartitionEditorViews
@@ -67,7 +67,7 @@ export function admitPaneToSession(
   admission: TerminalPaneAdmission
 ): PaneLayoutChange<TerminalPaneAdmissionOutcome> {
   const leafId = admission.type === 'createTerminalTab' ? admission.leafId : admission.newLeafId
-  const { loaded, write } = loadForPaneChange(hostId, session, {
+  const { loaded, write } = loadPaneChange(hostId, session, {
     workspace: admission.workspace,
     tabId: admission.tabId,
     leafIds: admission.type === 'createTerminalTab' ? [leafId] : [admission.leafId, leafId],
@@ -86,29 +86,13 @@ export function withdrawPaneFromSession(
   session: WorkspaceSessionState,
   pane: CommandOf<'closePane'>
 ): PaneLayoutChange<LayoutRefusalCode | null> {
-  const { loaded, write } = loadForPaneChange(hostId, session, {
+  const { loaded, write } = loadPaneChange(hostId, session, {
     workspace: pane.workspace,
     tabId: pane.tabId,
     leafIds: [pane.leafId]
   })
   const change = applyToSession(loaded, pane, false, {}, write)
   return { ...change, value: change.value.ok ? null : change.value.code }
-}
-
-/** A sliced load can only patch what changed; a whole load in window-owned builds still rewrites the partition. */
-function loadForPaneChange(
-  hostId: ExecutionHostId,
-  session: WorkspaceSessionState,
-  ids: PaneCommandIds
-) {
-  const { loaded, sliced } = loadPaneCommandLayout(hostId, session, ids)
-  const patches = sliced || ORCA_LAYOUT_OWNER_IS_MAIN
-  return {
-    loaded,
-    write: patches
-      ? (after: WorkspaceSessionState) => touchedRecords(session, loaded, after)
-      : undefined
-  }
 }
 
 function touchedRecords(

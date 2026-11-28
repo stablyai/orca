@@ -127,6 +127,11 @@ function fleet(): WorkspaceSessionState {
   addTerminal(session, key(22), 't22', [leaf(22), leaf(122)])
   addTerminal(session, key(23), 't23', [leaf(23)])
   session.tabsByWorktree[key(23)]!.push(session.tabsByWorktree[key(22)]![0]!)
+  // The withdrawn pane holds the slice's only incarnation; another workspace's must survive.
+  session.terminalPtyIncarnationsByPaneKey = {
+    [`t22:${leaf(122)}`]: 'incarnation-22',
+    [`t3:${leaf(3)}`]: 'incarnation-3'
+  }
   session.closedTerminalTabTombstonesByTabId = {
     'closed-tab': { closedAt: Date.now(), worktreeId: key(5) }
   }

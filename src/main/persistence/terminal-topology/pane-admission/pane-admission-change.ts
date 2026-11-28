@@ -1,0 +1,67 @@
+// Write a pane admission's change back: a sliced load patches key by key, a whole load keeps its build's write.
+
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import { patchStoredSession } from '../../../../shared/workspace-layout/persistence/workspace-layout-record-patch'
+import { saveWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-save'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { loadPaneCommandLayout, type PaneCommandIds } from './pane-admission-slice-load'
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** A slice saves only its own records, so a map it first fills or empties patches key by key; replacing or dropping it would lose other workspaces' entries. */
+export function patchSlicedSession(
+  stored: WorkspaceSessionState,
+  before: WorkspaceSessionState,
+  after: WorkspaceSessionState
+): WorkspaceSessionState {
+  const sides: [Record<string, unknown>, Record<string, unknown>] = [{ ...before }, { ...after }]
+  const emptied: string[] = []
+  for (const field of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    const [was, is] = [sides[0][field], sides[1][field]]
+    if ((was === undefined && isRecord(is)) || (isRecord(was) && is === undefined)) {
+      sides[0][field] ??= {}
+      sides[1][field] ??= {}
+      if (is === undefined) {
+        emptied.push(field)
+      }
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: copies of saved sessions with absent maps made empty.
+  const [from, to] = sides as unknown as [WorkspaceSessionState, WorkspaceSessionState]
+  const patched: Record<string, unknown> = { ...patchStoredSession(stored, from, to) }
+  // The whole save drops an emptied map only once no workspace holds an entry.
+  for (const field of emptied) {
+    const map = patched[field]
+    if (isRecord(map) && Object.keys(map).length === 0) {
+      delete patched[field]
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the patched session minus empty maps.
+  return patched as unknown as WorkspaceSessionState
+}
+
+/** A sliced load patches what changed; a whole load in window-owned builds still rewrites the partition. */
+export function loadPaneChange(
+  hostId: ExecutionHostId,
+  session: WorkspaceSessionState,
+  ids: PaneCommandIds
+): {
+  loaded: LoadedWorkspaceLayout
+  write?: (after: WorkspaceSessionState) => WorkspaceSessionState | null
+} {
+  const { loaded, sliced } = loadPaneCommandLayout(hostId, session, ids)
+  if (!sliced && !ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return { loaded }
+  }
+  const patch = sliced ? patchSlicedSession : patchStoredSession
+  return {
+    loaded,
+    write: (after) => {
+      const patched = patch(session, saveWorkspaceLayout(loaded), after)
+      return patched === session ? null : patched
+    }
+  }
+}
