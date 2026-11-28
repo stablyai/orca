@@ -118,49 +118,74 @@ function saveRecords(
   )
 }
 
-it.each([false, true])(
-  'keeps recorded SQL closures while seeding new saved chats (whole backup: %s)',
-  async (wholeBackup) => {
+it.each([
+  { primaryIndex: 'missing', sqlRecorded: true, physical: false },
+  { primaryIndex: 'backup', sqlRecorded: true, physical: true },
+  { primaryIndex: 'explicit', sqlRecorded: false, physical: true },
+  { primaryIndex: 'empty', sqlRecorded: false, physical: true },
+  { primaryIndex: 'explicit', sqlRecorded: true, physical: true }
+])(
+  'resolves tab evidence from $primaryIndex primary index and recorded SQL=$sqlRecorded',
+  async ({ primaryIndex, sqlRecorded, physical }) => {
     const { root, journal, primary, backup } = profile(3, createAgentSessionRecordTablesSql())
+    const derivedTab = structuredAgentSessionTabId
+    const wholeBackup = primaryIndex === 'backup'
     const source = new Database(journal)
     try {
       source
         .prepare('INSERT INTO agent_session_records VALUES (?,?)')
-        .run('closed-chat', JSON.stringify(stored('closed-chat', 'SQL name')))
-      source.exec("INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1')")
-      if (wholeBackup) {
+        .run('sql-saved-chat', JSON.stringify(stored('sql-saved-chat', 'SQL name')))
+      if (sqlRecorded) {
+        source.exec("INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1')")
+      }
+      if (physical) {
         source
           .prepare('INSERT INTO agent_session_records VALUES (?,?)')
           .run('opened-chat', JSON.stringify(stored('opened-chat')))
         source
           .prepare('INSERT INTO agent_session_tabs VALUES(?,?,0)')
-          .run(structuredAgentSessionTabId('conflict-chat'), 'opened-chat')
+          .run(derivedTab('conflict-chat'), 'opened-chat')
       }
     } finally {
       source.close()
     }
     const opaque = { schemaVersion: 99, future: 'original opaque value' }
+    const primaryTabs = [
+      { sessionId: 'sql-saved-chat', tabId: 'ignored-json-tab' },
+      { sessionId: 'saved-chat', tabId: 'original-json-tab' },
+      { sessionId: 'opaque-chat', tabId: 'opaque-json-tab' },
+      { sessionId: 'conflict-chat', tabId: derivedTab('conflict-chat') }
+    ]
     saveRecords(
       wholeBackup ? backup : primary,
       {
-        'closed-chat': stored('closed-chat', 'JSON name'),
+        'sql-saved-chat': stored('sql-saved-chat', 'JSON name'),
         'saved-chat': stored('saved-chat'),
         'opaque-chat': opaque,
         'conflict-chat': stored('conflict-chat'),
         'stale-chat': stored('stale-chat')
       },
-      wholeBackup
-        ? { sessionTabs: [{ sessionId: 'stale-chat', tabId: 'stale-backup-tab' }] }
-        : {}
+      primaryIndex === 'missing'
+        ? {}
+        : {
+            sessionTabs: wholeBackup
+              ? [{ sessionId: 'stale-chat', tabId: 'stale-backup-tab' }]
+              : primaryIndex === 'empty' ? [] : primaryTabs
+          }
     )
     if (wholeBackup) {
       writeFileSync(primary, '{ malformed')
     }
-    const saved = ['closed-chat', 'saved-chat', 'opaque-chat', 'conflict-chat']
+    const saved = ['sql-saved-chat', 'saved-chat', 'opaque-chat', 'conflict-chat']
     const expected = [
-      [structuredAgentSessionTabId('saved-chat'), 'saved-chat'],
-      [structuredAgentSessionTabId('opaque-chat'), 'opaque-chat'],
-      [structuredAgentSessionTabId('conflict-chat'), wholeBackup ? 'opened-chat' : 'conflict-chat']
+      ...(primaryIndex === 'empty'
+        ? []
+        : [
+            [primaryIndex === 'explicit' ? 'original-json-tab' : derivedTab('saved-chat'), 'saved-chat'],
+            [primaryIndex === 'explicit' ? 'opaque-json-tab' : derivedTab('opaque-chat'), 'opaque-chat']
+          ]),
+      [derivedTab('conflict-chat'), physical ? 'opened-chat' : 'conflict-chat'],
+      ...(sqlRecorded ? [] : [[derivedTab('sql-saved-chat'), 'sql-saved-chat']])
     ]
     for (const savedIds of [saved, []]) {
       const db = new Database(
@@ -169,7 +194,7 @@ it.each([false, true])(
       try {
         const state = loadAgentSessionStoreRows(db)
         expect(state.sessionTabs?.entries()).toEqual(expected)
-        expect(state.records.get('closed-chat')?.conversationName).toBe('SQL name')
+        expect(state.records.get('sql-saved-chat')?.conversationName).toBe('SQL name')
         expect(state.records.has('stale-chat')).toBe(true)
         expect(state.unreadableRecords.get('opaque-chat')?.raw).toEqual(opaque)
         expect(() => requireWritableAgentSessionRecord(state, 'opaque-chat')).toThrow()

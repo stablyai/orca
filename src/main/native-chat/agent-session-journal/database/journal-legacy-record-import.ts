@@ -71,13 +71,14 @@ function readLegacyDeletionAuthority(db: Database.Database) {
     }
     excluded.add(sessionId)
   }
-  return (id: string, record: AgentSessionRecord | undefined): boolean => {
+  return (id: string, readRecord: () => AgentSessionRecord | undefined): boolean => {
     if (excluded.has(id) || deleted.hasSession(id)) {
       return true
     }
     if (!hasDeletedConversations) {
       return false
     }
+    const record = readRecord()
     if (!record) {
       throw new JournalDamageError('an unreadable original chat may match a saved deletion')
     }
@@ -107,6 +108,24 @@ function decodeStagedRecord(row: SqliteRow): AgentSessionRecord | undefined {
     : undefined
 }
 
+function decodeSqlRecord(id: string, body: unknown): AgentSessionRecord | undefined {
+  if (typeof body !== 'string') {
+    return undefined
+  }
+  let value: unknown
+  try {
+    value = JSON.parse(body)
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return undefined
+    }
+    throw error
+  }
+  return isReadableAgentSessionStoreRecord(id, value)
+    ? decodePersistedAgentSessionRecord(value).record
+    : undefined
+}
+
 function stagedQuarantine(row: SqliteRow): { raw: unknown } | undefined {
   if (typeof row.quarantined === 'string') {
     const wrapper: unknown = JSON.parse(row.quarantined)
@@ -131,35 +150,56 @@ function mergeLegacyRecordRows(
   const recordedSql = db
     .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
     .get(AGENT_SESSION_TABS_RECORDED)
-  const savedPositions = new Map<string, number>()
-  if (tabs === null && recordedSql) {
-    for (const id of legacySessionTabIds) {
-      checkCancellation()
-      if (!savedPositions.has(id)) {
-        savedPositions.set(id, savedPositions.size - legacySessionTabIds.length)
-      }
-    }
-  }
+  // When just one source recorded membership, use the saved layout for the other source's rows.
+  const primaryRecorded = tabs !== null
+  const savedTabOwner =
+    Boolean(recordedSql) === primaryRecorded ? null : primaryRecorded ? 'sql' : 'json'
   const insertTab = db.prepare(`INSERT INTO agent_session_tabs(tab_id,session_id,position)
     VALUES(?,?,?) ON CONFLICT(tab_id) DO NOTHING`)
-  if (tabs !== null || savedPositions.size > 0) {
+  let lastSqlPosition = -1
+  const needsSqlTabs =
+    tabs !== null || (savedTabOwner !== null && legacySessionTabIds.length > 0)
+  if (needsSqlTabs) {
     stage.exec('CREATE TABLE sql_tab_sessions (id TEXT PRIMARY KEY)')
     const copySqlTab = stage.prepare(
       'INSERT INTO sql_tab_sessions VALUES(?) ON CONFLICT(id) DO NOTHING'
     )
     runJournalTransaction(stage, () => {
-      for (const { session_id } of db
-        .prepare('SELECT session_id FROM agent_session_tabs')
+      for (const { session_id, position } of db
+        .prepare('SELECT session_id,position FROM agent_session_tabs')
         .iterate()) {
         checkCancellation()
         copySqlTab.run(session_id)
+        lastSqlPosition = Math.max(lastSqlPosition, Number(position))
       }
     })
   }
-  const sqlTab =
-    tabs !== null || savedPositions.size > 0
-      ? stage.prepare('SELECT 1 FROM sql_tab_sessions WHERE id=?')
-      : undefined
+  const sqlTab = needsSqlTabs
+    ? stage.prepare('SELECT 1 FROM sql_tab_sessions WHERE id=?')
+    : undefined
+  const savedJsonPositions = new Map<string, number>()
+  if (savedTabOwner !== null && legacySessionTabIds.length > 0) {
+    const savedSqlRecord = db.prepare(
+      'SELECT record_json FROM agent_session_records WHERE session_id=?'
+    )
+    const seen = new Set<string>()
+    for (const [index, id] of legacySessionTabIds.entries()) {
+      checkCancellation()
+      if (seen.has(id) || sqlTab?.get(id)) {
+        continue
+      }
+      seen.add(id)
+      if (savedTabOwner === 'json') {
+        savedJsonPositions.set(id, index - legacySessionTabIds.length)
+      } else if (
+        sqlRecord.get(id) &&
+        !wasDeleted(id, () => decodeSqlRecord(id, savedSqlRecord.get(id)?.record_json))
+      ) {
+        lastSqlPosition += 1
+        insertTab.run(structuredAgentSessionTabId(id), id, lastSqlPosition)
+      }
+    }
+  }
   if (tabs !== null) {
     const tabQuery =
       tabs === 'sessionTabs'
@@ -179,8 +219,11 @@ function mergeLegacyRecordRows(
       checkCancellation()
       const id = String(session_id)
       if (!sqlTab?.get(id) && !sqlRecord.get(id)) {
-        const saved = record.get(generation, Number(salvage), id)
-        if (!wasDeleted(id, saved && decodeStagedRecord(saved))) {
+        const isDeleted = wasDeleted(id, () => {
+          const saved = record.get(generation, Number(salvage), id)
+          return saved && decodeStagedRecord(saved)
+        })
+        if (!isDeleted) {
           insertTab.run(tab_id, id, position)
         }
       }
@@ -194,8 +237,8 @@ function mergeLegacyRecordRows(
     VALUES(?,?) ON CONFLICT(session_id) DO NOTHING`)
   const insertOriginal = (id: string, body: string): void => {
     const { changes } = insertRecord.run(id, body)
-    const position = savedPositions.get(id)
-    if (changes && position !== undefined && !sqlTab?.get(id)) {
+    const position = savedJsonPositions.get(id)
+    if (changes && position !== undefined) {
       insertTab.run(structuredAgentSessionTabId(id), id, position)
     }
   }
@@ -207,8 +250,11 @@ function mergeLegacyRecordRows(
   for (const row of records.iterate(generation, Number(salvage))) {
     checkCancellation()
     const id = String(row.id)
+    if (sqlRecord.get(id)) {
+      continue
+    }
     const loaded = decodeStagedRecord(row)
-    if (sqlRecord.get(id) || wasDeleted(id, loaded)) {
+    if (wasDeleted(id, () => loaded)) {
       continue
     }
     const setAside = stagedQuarantine(row)
