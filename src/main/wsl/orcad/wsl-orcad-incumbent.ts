@@ -50,6 +50,31 @@ const UNREADABLE: WslOrcadIncumbent = {
   releaseAdmission: async () => {}
 }
 
+/** An incumbent never woken has no daemon to ask; say which check stopped it, not that the daemon was silent. */
+function unreadableBecause(because: string): WslOrcadIncumbent {
+  const census = {
+    ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+    unansweredBecause: because
+  }
+  return { ...UNREADABLE, census, recount: async () => census }
+}
+
+function wakeBlockedReason(
+  wake: Awaited<ReturnType<typeof wakeStoppedManagedOrcad>>,
+  version: string
+): string | null {
+  if (wake.outcome === 'unverifiable') {
+    return (
+      `Orca could not tell whether orcad ${version} is still running on the host: its PID ` +
+      'check was inconclusive, or another process still runs that build.'
+    )
+  }
+  if (wake.outcome === 'fenced') {
+    return 'Another launch or update holds the activation lock on the host.'
+  }
+  return wake.outcome === 'recovery-refused' ? wake.reason : null
+}
+
 export type WslOrcadIncumbentDependencies = {
   wake: typeof wakeStoppedManagedOrcad
   probe: typeof probeActiveOrcadReadiness
@@ -102,7 +127,8 @@ export async function readWslOrcadIncumbent(
         }
       )
     } else {
-      return UNREADABLE
+      const because = wakeBlockedReason(wake, record.active)
+      return because ? unreadableBecause(because) : UNREADABLE
     }
   } catch {
     return UNREADABLE

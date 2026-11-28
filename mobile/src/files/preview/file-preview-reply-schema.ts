@@ -36,5 +36,5 @@ export const terminalPathResolutionSchema = z.looseObject({
   )
 })
 
-// Save callers read acceptance only; require no reply members.
-export const terminalArtifactWriteSchema = z.unknown()
+// Save callers read acceptance, or parse the reply themselves; require no members.
+export const fileWriteReplySchema = z.unknown()

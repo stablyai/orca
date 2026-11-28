@@ -29449,8 +29449,6 @@
         "automationEnded": "Finalizada"
       },
       "menu": {
-        "cancel": "Cancelar",
-        "done": "Marcar como hecho",
         "waiting": "En espera…"
       },
       "pill": {
@@ -29461,6 +29459,7 @@
         "moveCount_many": "Mover {{count}} elementos a"
       },
       "row": {
+        "cancel": "Cancelar",
         "done": "Marcar como hecho",
         "more": "Más",
         "select": "Seleccionar {{title}}"
