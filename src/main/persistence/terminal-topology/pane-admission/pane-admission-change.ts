@@ -43,8 +43,9 @@ export function patchSlicedSession(
     workspaces
   )
   // The whole save drops an emptied map only once no workspace holds an entry.
+  const fields: Record<string, unknown> = patched
   const dropped = emptied.filter((field) => {
-    const map: unknown = patched[field as keyof WorkspaceSessionState]
+    const map = fields[field]
     return isRecord(map) && Object.keys(map).length === 0
   })
   if (dropped.length === 0) {

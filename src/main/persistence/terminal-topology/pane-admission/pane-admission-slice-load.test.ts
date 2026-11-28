@@ -5,6 +5,7 @@ import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/con
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
+import type { CommandOf } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type * as Crypto from 'node:crypto'
 import type * as SliceLoad from './pane-admission-slice-load'
@@ -155,15 +156,14 @@ const admit =
 const create = (
   workspace: string,
   tabId: string,
-  extra: Partial<TerminalPaneAdmission> = {}
-): TerminalPaneAdmission =>
-  ({
-    type: 'createTerminalTab',
-    workspace,
-    tabId,
-    leafId: leaf(500),
-    ...extra
-  }) as TerminalPaneAdmission
+  extra: Pick<CommandOf<'createTerminalTab'>, 'groupId' | 'split'> = {}
+): TerminalPaneAdmission => ({
+  type: 'createTerminalTab',
+  workspace,
+  tabId,
+  leafId: leaf(500),
+  ...extra
+})
 
 const CASES: [string, (session: WorkspaceSessionState) => Run][] = [
   ['a new tab in a plain workspace', (s) => admit(s, create(key(3), 'new-tab'))],
@@ -180,7 +180,7 @@ const CASES: [string, (session: WorkspaceSessionState) => Run][] = [
         create(key(3), 'new-tab', {
           groupId: 'group-t8',
           split: { besideGroupId: 'group-t3', direction: 'horizontal' }
-        } as Partial<TerminalPaneAdmission>)
+        })
       )
   ],
   [
@@ -193,7 +193,7 @@ const CASES: [string, (session: WorkspaceSessionState) => Run][] = [
         leafId: leaf(22),
         direction: 'vertical',
         newLeafId: leaf(501)
-      } as TerminalPaneAdmission)
+      })
   ],
   [
     'the withdrawn last pane of a row another workspace also lists',
@@ -227,6 +227,9 @@ const CASES: [string, (session: WorkspaceSessionState) => Run][] = [
   ]
 ]
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
 /** Each record the sliced write changed, as `result` holds it. */
 function rewritten(
   stored: WorkspaceSessionState,
@@ -234,17 +237,19 @@ function rewritten(
   result: WorkspaceSessionState
 ): Record<string, unknown> {
   const records: Record<string, unknown> = {}
-  const fields = new Set([...Object.keys(stored), ...Object.keys(sliced)])
-  for (const field of fields as Set<keyof WorkspaceSessionState>) {
-    const [was, is] = [stored[field], sliced[field]]
-    const keyed = (value: unknown) =>
-      value && typeof value === 'object' && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : null
-    const [wasMap, isMap, resultMap] = [keyed(was), keyed(is), keyed(result[field])]
+  const [storedFields, slicedFields, resultFields]: Record<string, unknown>[] = [
+    stored,
+    sliced,
+    result
+  ]
+  for (const field of new Set([...Object.keys(stored), ...Object.keys(sliced)])) {
+    const [was, is] = [storedFields[field], slicedFields[field]]
+    const keyed = (value: unknown): Record<string, unknown> | null =>
+      isRecord(value) ? value : null
+    const [wasMap, isMap, resultMap] = [keyed(was), keyed(is), keyed(resultFields[field])]
     if (!wasMap || !isMap) {
       if (JSON.stringify(was) !== JSON.stringify(is)) {
-        records[field] = result[field]
+        records[field] = resultFields[field]
       }
       continue
     }
