@@ -1,12 +1,5 @@
 import { translate } from '../../i18n/mobile-i18n'
 
-export type NotificationReplyFailureReason = 'unconfirmed' | 'refused' | 'unreachable'
-export class NotificationReplyFailure extends Error {
-  constructor(readonly reason: NotificationReplyFailureReason) {
-    super(reason)
-  }
-}
-
 export function notificationReplyFailureMessage(reason: string): string {
   if (reason === 'unconfirmed' || reason.startsWith('Delivery unconfirmed')) {
     return translate(

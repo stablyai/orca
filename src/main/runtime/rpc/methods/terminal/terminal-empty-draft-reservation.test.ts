@@ -73,6 +73,8 @@ it.each(['screen-unavailable', 'screen'])('refuses an unknown composer (%s)', as
 
 it('refuses input whose echo has not reached the screen', async () => {
   const facts = new TerminalRunFactsRegister()
+  let inputScreen: { draft: string; lines: string[] } = { draft: '', lines: [] }
+  facts.setInputScreenReader(async () => inputScreen)
   facts.recordInput('pty', 'driving', 'unpainted text', 10)
   const runtime = {
     terminalRunFacts: facts,
@@ -86,7 +88,14 @@ it('refuses input whose echo has not reached the screen', async () => {
   await expect(reserveEmptyTerminalDraft(runtime, 'terminal')).rejects.toThrow(
     'terminal_reply_draft_changed'
   )
-  facts.recordOutput('pty')
+  await facts.observeInputScreen('pty', Promise.resolve({ draft: '', lines: ['unrelated status'] }))
+  await expect(reserveEmptyTerminalDraft(runtime, 'terminal')).rejects.toThrow(
+    'terminal_reply_draft_changed'
+  )
+  inputScreen = { draft: 'unpainted text', lines: [] }
+  await facts.observeInputScreen('pty', Promise.resolve(inputScreen))
+  facts.recordInput('pty', 'driving', '\r')
+  await facts.observeInputScreen('pty', Promise.resolve({ draft: '', lines: ['› unpainted text'] }))
   const reserve = await reserveEmptyTerminalDraft(runtime, 'terminal')
   expect(() => reserve('pty')).not.toThrow()
 })

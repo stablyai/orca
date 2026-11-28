@@ -1,7 +1,6 @@
-import {
-  NotificationReplyFailure,
-  notificationReplyFailureMessage
-} from './notification-reply-failure'
+import { recoverNotificationReplyDrafts } from './notification-reply-draft-recovery'
+import { notificationReplyFailureMessage } from './notification-reply-failure'
+import { notificationReplyFailureReason } from './notification-reply-failure-reason'
 import { runKeyedSerializedOperation } from '../../../../src/shared/concurrency/keyed-serialized-operations'
 import { notificationReplyRecords } from './notification-reply-record-store'
 import * as Notifications from 'expo-notifications'
@@ -40,29 +39,29 @@ export async function restoreNotificationReplyDraft(data: unknown): Promise<void
     typeof data.replyDraftId === 'string'
   ) {
     await runKeyedSerializedOperation(recordQueues, data.replyDraftId, () =>
-      restoreDraft(data)
+      recoverNotificationReplyDrafts(() => restoreDraft(data), new AbortController().signal)
     ).catch((error: unknown) => {
       console.warn('[notification-reply] recovery draft unavailable', error)
     })
   }
 }
 
-async function restoreDraft(data: unknown): Promise<void> {
+async function restoreDraft(data: unknown): Promise<boolean> {
   if (
     !data ||
     typeof data !== 'object' ||
     !('replyDraftId' in data) ||
     typeof data.replyDraftId !== 'string'
   ) {
-    return
+    return true
   }
   const raw = await notificationReplyRecords.getItem(PREFIX + data.replyDraftId)
   if (!raw) {
-    return
+    return true
   }
   const saved = readNotificationReplyDraftRecord(raw)
   if (!saved) {
-    return
+    return true
   }
   const payload = readOrcaPushPayload(data)
   const pane = payload?.paneKey ? parsePaneKey(payload.paneKey) : null
@@ -70,7 +69,7 @@ async function restoreDraft(data: unknown): Promise<void> {
     ? resolveHostIdForFingerprint(payload.hostFingerprint, await loadHosts())
     : null
   if (!hostId || !payload?.worktreeId) {
-    return
+    return true
   }
   const text = saved.text
   const groupId = payload.replyTarget?.type === 'group' ? payload.replyTarget.groupId : null
@@ -84,11 +83,11 @@ async function restoreDraft(data: unknown): Promise<void> {
           ? notificationReplyPaneDraftScope(hostId, workspace, `${pane.tabId}:${pane.leafId}`)
           : null
   if (!draftKey) {
-    return
+    return true
   }
   const store = processDeviceStore()
   if ((await store.open()) !== 'ready') {
-    return
+    return false
   }
   const persisted = await persistNotificationReplyDraft(
     {
@@ -100,12 +99,13 @@ async function restoreDraft(data: unknown): Promise<void> {
     text
   )
   if (!persisted) {
-    return
+    return false
   }
   await notificationReplyRecords.setItem(
     PREFIX + data.replyDraftId,
     JSON.stringify({ ...saved, restored: true, at: Date.now() })
   )
+  return true
 }
 
 export function handleNotificationReply(
@@ -162,7 +162,7 @@ async function deliver(
       state: 'failure-pending',
       data,
       at: Date.now(),
-      reason: error instanceof NotificationReplyFailure ? error.reason : 'unreachable'
+      reason: notificationReplyFailureReason(error)
     }
     await notificationReplyRecords.setItem(key, JSON.stringify(failed))
     await finishReplyFailure(key, id, failed)

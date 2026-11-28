@@ -1,3 +1,4 @@
+import { recoverNotificationReplyDrafts } from './notification-reply-draft-recovery'
 import { useEffect } from 'react'
 import { usePageBridgeClientIfPresent } from '../../transport/connection/client-context.web'
 import { readPageDeviceStore } from '../../mobile-web-shell/bridge/page-storage/page-device-store'
@@ -9,20 +10,28 @@ export function useNotificationReplyDrafts(
 ): void {
   const client = usePageBridgeClientIfPresent()
   useEffect(() => {
-    const store = readPageDeviceStore()
-    if (!scope || !store?.available() || !client) {
+    if (!scope || !client) {
       return
     }
-    let active = true
+    let recovery: AbortController | null = null
     const restore = () => {
-      void restoreNotificationReplyDrafts(store, scope, (text) =>
-        active ? apply(text) : Promise.resolve(false)
-      ).catch(() => {})
+      recovery?.abort()
+      const current = new AbortController()
+      recovery = current
+      void recoverNotificationReplyDrafts(async () => {
+        const store = readPageDeviceStore()
+        if (!store?.available()) {
+          return false
+        }
+        return restoreNotificationReplyDrafts(store, scope, (text) =>
+          current.signal.aborted ? Promise.resolve(false) : apply(text)
+        )
+      }, current.signal).catch(() => {})
     }
     restore()
     const stop = client.onRouteUpdate(restore)
     return () => {
-      active = false
+      recovery?.abort()
       stop()
     }
   }, [apply, client, scope])

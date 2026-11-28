@@ -1,6 +1,6 @@
 import { notificationReplyPaneDraftScope } from './notification-reply-draft-handoff'
 import { useCallback } from 'react'
-import { appendReturnedDraftText } from '../../../../src/shared/native-chat/input/drafts/returned-draft-text'
+import { appendNotificationReplyDraftText } from './notification-reply-draft-text'
 import { editMobileNativeChatDraft } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
 import {
   loadMobileNativeChatDrafts,
@@ -19,7 +19,7 @@ export function useNotificationReplyChatDraft(
       if (!scope || !(await loadMobileNativeChatDrafts(hostId, worktreeId))) {
         return false
       }
-      editMobileNativeChatDraft(scope, (current) => appendReturnedDraftText(current, text))
+      editMobileNativeChatDraft(scope, (current) => appendNotificationReplyDraftText(current, text))
       return persistMobileNativeChatDrafts(hostId, worktreeId)
     },
     [hostId, scope, worktreeId]
