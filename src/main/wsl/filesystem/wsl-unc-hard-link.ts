@@ -1,6 +1,8 @@
 import { runProcess } from '@orca/process-host'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
-import { wslExeFailure, wslExeProcessSpec } from '../execution/wsl-exe-process'
+import { resolveWslInteropSpawnCwdAsync } from '../execution/wsl-interop-spawn-directory'
+import { describeWslProcessFailure } from '../execution/wsl-process-failure'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { parseWslPath } from './unc-path-access'
 import { runAsWslUserAct } from './wsl-unc-access-gate'
 
@@ -36,8 +38,14 @@ export async function tryLinkInsideWslDistro(
     from.linuxPath,
     to.linuxPath
   ])
-  const result = await runAsWslUserAct(to.distro, () =>
-    runProcess(wslExeProcessSpec(args, WSL_LINK_TIMEOUT_MS))
+  const result = await runAsWslUserAct(to.distro, async () =>
+    runProcess({
+      program: windowsSystem32Binary('wsl.exe'),
+      args,
+      env: { ...process.env, WSL_UTF8: '1' },
+      cwd: await resolveWslInteropSpawnCwdAsync(),
+      timeoutMs: WSL_LINK_TIMEOUT_MS
+    })
   )
   const stdout = String(result.stdout)
   if (stdout.includes(LINKED_MARKER)) {
@@ -46,7 +54,5 @@ export async function tryLinkInsideWslDistro(
   if (stdout.includes(NAME_TAKEN_MARKER)) {
     throw Object.assign(new Error(`'${to.linuxPath}' already exists`), { code: 'EEXIST' })
   }
-  throw new Error(
-    `Could not create the file inside WSL: ${String(result.stderr).trim() || wslExeFailure(result) || 'no answer'}`
-  )
+  throw new Error(`Could not create the file inside WSL: ${describeWslProcessFailure(result)}`)
 }
