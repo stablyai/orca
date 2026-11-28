@@ -67,7 +67,7 @@ describe('DaemonStreamBackpressure pause calls', () => {
       // Each producer exits while paused; its final output stays queued.
       for (const [sessionId, producer] of producers) {
         exited.add(sessionId)
-        producer.release({ resume: false })
+        producer.release({ resume: false, reason: 'exited' })
       }
 
       for (let echo = 0; echo < 100; echo++) {
