@@ -299,7 +299,9 @@ describe.skipIf(process.platform === 'win32')(
       // The reattach lands after its terminal ended and starts it again there: work the old generation keeps.
       held.release()
       const result = await reattach
-      await vi.waitFor(() => expect(inventory).toHaveBeenCalled())
+      // Its terminal is watched again, so the deferred check reads nothing and asks nothing.
+      expect(app.legacyAdapter.hasWatchedSessions()).toBe(true)
+      expect(inventory).not.toHaveBeenCalled()
       expect(decision).not.toHaveBeenCalled()
       expect(legacy.retired).toBe(false)
       expect(legacy.server.host.listSessions().map((s) => s.sessionId)).toEqual([result.id])
@@ -339,6 +341,7 @@ describe('the transitional recheck timer', () => {
       askRetireWhenIdle: vi.fn(async () => 'unsupported'),
       listSessionsAndRelays: vi.fn(async () => inventory),
       getActiveSessionIds: () => [],
+      hasWatchedSessions: () => false,
       isIdleRetirementAdmissionClosed: () => false,
       requestIdleRetirement: vi.fn(async () => ({ state: 'retiring' }))
     })
@@ -390,6 +393,22 @@ describe('the transitional recheck timer', () => {
     expect(vi.getTimerCount()).toBe(0)
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(listed).toHaveBeenCalledTimes(5)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('gives up after a bounded number of rechecks when the work never ends', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc } = stubs()
+    const legacy = [preRpc]
+    const retirement = new DaemonRouterLegacyIdleRetirement({
+      current: () => current,
+      legacy: () => legacy,
+      drop: () => {}
+    })
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
+    // The first read and six rechecks (1 to 30 minutes apart), then nothing until the next exit.
+    expect(vi.mocked(preRpc.listSessionsAndRelays)).toHaveBeenCalledTimes(7)
     expect(vi.getTimerCount()).toBe(0)
   })
 })

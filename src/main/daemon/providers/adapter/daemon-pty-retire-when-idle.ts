@@ -125,6 +125,11 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
     )
   }
 
+  /** This app holds a live attachment to at least one of its terminals, so their exits will arrive. */
+  hasWatchedSessions(): boolean {
+    return this.activeSessionIds.size > 0
+  }
+
   protected daemonProcessExited(pid: number | undefined): boolean {
     return preservedDaemonProcessExited(pid)
   }

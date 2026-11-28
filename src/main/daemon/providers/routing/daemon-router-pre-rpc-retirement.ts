@@ -6,6 +6,8 @@ const EXIT_SETTLE_MS = 250
 /** Their work that sends this app no exit (chat agents, unattached terminals) is rechecked, backing off. */
 const RECHECK_MS = 60_000
 const RECHECK_MAX_MS = 30 * 60_000
+/** Then it stops until the next exit: an older daemon still holding such work stays, as before, until quit. */
+const RECHECK_LIMIT = 6
 /** A hung decision must not hold reattaches; the generation's own fence still refuses them. */
 const DECISION_FENCE_MAX_MS = 2_000
 
@@ -28,6 +30,7 @@ export class DaemonRouterPreRpcRetirement {
   private readonly fences = new Set<Promise<void>>()
   // Weak: a generation can also leave through the endpoint-loss path, which never tells this class.
   private readonly recheckDelays = new WeakMap<DaemonPtyAdapter, number>()
+  private readonly rechecks = new WeakMap<DaemonPtyAdapter, number>()
   private readonly decisions = new Map<DaemonPtyAdapter, Promise<unknown>>()
   private reattachesInFlight = 0
   private reattachEpoch = 0
@@ -69,6 +72,7 @@ export class DaemonRouterPreRpcRetirement {
   /** An exit or discovery: check soon and restart the recheck backoff. */
   noteActivity(adapter: DaemonPtyAdapter): void {
     this.recheckDelays.delete(adapter)
+    this.rechecks.delete(adapter)
     this.schedule(adapter)
   }
 
@@ -123,6 +127,10 @@ export class DaemonRouterPreRpcRetirement {
       this.forget(adapter)
       return
     }
+    // A terminal this app still watches keeps it busy; that terminal's own exit checks again.
+    if (adapter.hasWatchedSessions() && !adapter.isIdleRetirementAdmissionClosed()) {
+      return
+    }
     this.checking.add(adapter)
     try {
       await this.retireIfEmpty(adapter)
@@ -147,6 +155,11 @@ export class DaemonRouterPreRpcRetirement {
   }
 
   private checkAgainLater(adapter: DaemonPtyAdapter): void {
+    const rechecks = this.rechecks.get(adapter) ?? 0
+    if (rechecks >= RECHECK_LIMIT) {
+      return
+    }
+    this.rechecks.set(adapter, rechecks + 1)
     const delayMs = this.recheckDelays.get(adapter) ?? this.options.timing?.recheckMs ?? RECHECK_MS
     this.recheckDelays.set(
       adapter,
