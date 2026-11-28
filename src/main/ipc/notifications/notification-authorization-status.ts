@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 export type NotificationAuthorizationStatus = 'authorized' | 'denied' | 'not-determined' | 'unknown'
@@ -7,37 +7,38 @@ export type NotificationAuthorizationStatus = 'authorized' | 'denied' | 'not-det
 const HELPER_EXECUTABLE = 'orca-notification-status'
 const HELPER_TIMEOUT_MS = 4000
 
-let cachedHelperPath: string | null | undefined
+let cachedHelperPathPromise: Promise<string | null> | null = null
 
 /** Place the helper beside Electron in Contents/MacOS: bundle identity controls notification records, and macOS 26 aborts helpers under Resources (#7929). */
-function resolveHelperPath(): string | null {
-  if (cachedHelperPath !== undefined) {
-    return cachedHelperPath
+function resolveHelperPath(): Promise<string | null> {
+  if (cachedHelperPathPromise) {
+    return cachedHelperPathPromise
   }
   if (process.platform !== 'darwin') {
-    cachedHelperPath = null
-    return cachedHelperPath
+    cachedHelperPathPromise = Promise.resolve(null)
+    return cachedHelperPathPromise
   }
   const candidate = join(dirname(process.execPath), HELPER_EXECUTABLE)
-  cachedHelperPath = existsSync(candidate) ? candidate : null
-  return cachedHelperPath
+  cachedHelperPathPromise = access(candidate).then(
+    () => candidate,
+    () => null
+  )
+  return cachedHelperPathPromise
 }
 
 /** Read native authorization absent from Electron APIs; return null on helper failure so callers can use weaker delivery evidence. */
 let readInFlight: Promise<NotificationAuthorizationStatus | null> | null = null
 
 export function readNotificationAuthorizationStatus(): Promise<NotificationAuthorizationStatus | null> {
-  const helperPath = resolveHelperPath()
-  if (!helperPath) {
-    return Promise.resolve(null)
-  }
   // Share one helper read across simultaneous completion notifications.
   if (readInFlight) {
     return readInFlight
   }
-  readInFlight = runStatusHelper(helperPath).finally(() => {
-    readInFlight = null
-  })
+  readInFlight = resolveHelperPath()
+    .then((helperPath) => (helperPath ? runStatusHelper(helperPath) : null))
+    .finally(() => {
+      readInFlight = null
+    })
   return readInFlight
 }
 

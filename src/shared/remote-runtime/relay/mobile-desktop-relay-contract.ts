@@ -1,4 +1,8 @@
-import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../pairing/delegated-mobile-device-contract'
+import {
+  DELEGATED_MOBILE_DEVICE_SYNC_ORIGIN_RUNTIME_CAPABILITY,
+  DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY
+} from '../pairing/delegated-mobile-device-contract'
+import { DELEGATED_PHONE_SERVER_OFFER_RUNTIME_CAPABILITY } from '../pairing/delegated-phone-server-offer-contract'
 
 // Send executionHost only after capability negotiation: older desktops ignore it and would execute locally.
 export const MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY = 'mobile.desktop-relay.v1' as const
@@ -18,6 +22,8 @@ export const MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY =
 /** A desktop relays a phone to a server that mints delegated phone devices; each side advertises. */
 export const MOBILE_RELAY_RUNTIME_CAPABILITIES = [
   DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY,
+  DELEGATED_MOBILE_DEVICE_SYNC_ORIGIN_RUNTIME_CAPABILITY,
+  DELEGATED_PHONE_SERVER_OFFER_RUNTIME_CAPABILITY,
   MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY,
   MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY,
   MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY,

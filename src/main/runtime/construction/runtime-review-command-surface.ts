@@ -46,10 +46,10 @@ export type RuntimeReviewCommandSurface = {} & Pick<RuntimeGitLabQueryCommands, 
 type RuntimeReviewCommandOwners = {
   gitLabQueries: Pick<RuntimeGitLabQueryCommands, GitLabQueryName>
   gitLabMutations: Pick<RuntimeGitLabMutationCommands, GitLabMutationName>
-  gitHubReviewQueries: RuntimeGitHubReviewQueryCommands
-  gitHubReviewMutations: RuntimeGitHubReviewMutationCommands
-  gitHubIssueComments: RuntimeGitHubIssueCommentCommands
-  gitHubProjects: RuntimeGitHubProjectCommands
+  gitHubReviewQueries: Pick<RuntimeGitHubReviewQueryCommands, GitHubReviewQueryName>
+  gitHubReviewMutations: Pick<RuntimeGitHubReviewMutationCommands, GitHubReviewMutationName>
+  gitHubIssueComments: Pick<RuntimeGitHubIssueCommentCommands, GitHubIssueCommentName>
+  gitHubProjects: Pick<RuntimeGitHubProjectCommands, GitHubProjectName>
 }
 
 export function installRuntimeReviewCommandSurface(

@@ -10,6 +10,7 @@ import {
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration/orchestration-task-summary'
+import { escapeTerminalControlCharacters } from '../../../shared/terminal/output/terminal-control-character-escape'
 import { ORCHESTRATION_TASK_UPDATE_NOTE_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
@@ -93,10 +94,15 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         .map((task) => {
           const label = task.display_name ?? task.task_title ?? task.spec
           const head = `${task.id} [${task.status}] ${label.slice(0, 60)}`
-          if (task.status === 'dispatched' && task.assignee_handle) {
-            return `${head} -> ${task.assignee_handle} (${task.dispatch_id ?? '?'})`
+          const assignment =
+            task.status === 'dispatched' && task.assignee_handle
+              ? ` -> ${task.assignee_handle} (${task.dispatch_id ?? '?'})`
+              : ''
+          const lines = [`${head}${assignment}`, `  Spec: ${task.spec.replace(/\r?\n/g, '\n    ')}`]
+          if (task.result != null) {
+            lines.push(`  Result: ${task.result.replace(/\r?\n/g, '\n    ')}`)
           }
-          return head
+          return escapeTerminalControlCharacters(lines.join('\n'))
         })
         .join('\n')
       return r.legacyReadOnly ? `Legacy Run ${r.runId} (read-only)\n${tasks}` : tasks

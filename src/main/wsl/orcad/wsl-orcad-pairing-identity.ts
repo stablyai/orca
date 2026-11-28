@@ -3,6 +3,7 @@ import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import {
+  OrcadManagedIdentityError,
   orcadIdentityRefusal,
   verifyOrcadPairingIdentity,
   type OrcadTunnelIdentity
@@ -35,19 +36,33 @@ export async function resolveWslOrcadPairing(
     return verified(paired)
   }
   let pairingOffer = ''
-  await buildWithPairingRepair(
-    {
-      ...recovery,
-      ensure: async (environment) => {
-        pairingOffer = await verified(getPreferredPairingOffer(environment))
+  await withWslIdentityWording(launch.distro, () =>
+    buildWithPairingRepair(
+      {
+        ...recovery,
+        ensure: async (environment) => {
+          pairingOffer = await verified(getPreferredPairingOffer(environment))
+        }
+      },
+      recovery.environmentId,
+      async () => {
+        pairingOffer = await verified(paired)
       }
-    },
-    recovery.environmentId,
-    async () => {
-      pairingOffer = await verified(paired)
-    }
+    )
   )
   return pairingOffer
+}
+
+/** An enrolled WSL host's proven refusal names WSL causes and fixes (#49180); a guess stays as it was. */
+async function withWslIdentityWording(distro: string, run: () => Promise<unknown>): Promise<void> {
+  try {
+    await run()
+  } catch (error) {
+    const proven =
+      error instanceof OrcadManagedIdentityError &&
+      (error.sealed || error.kind === 'replaced-server')
+    throw proven ? OrcadManagedIdentityError.wslHostServer(distro, error) : error
+  }
 }
 
 async function verifyWslOrcadPairing(

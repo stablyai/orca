@@ -16,7 +16,8 @@ export function NativeChatDockedTaskList({
     return null
   }
   return (
-    <div className="shrink-0 px-3 pb-2 sm:px-4">
+    // Under the worker chip, which sits on the transcript's end, the list keeps the dock's 8px gap.
+    <div className="shrink-0 px-3 pb-2 sm:px-4 [:is([data-native-chat-worker-dock],[data-native-chat-worker-chip-slot]):has([data-native-chat-background-tasks])+&]:pt-2">
       <div className="mx-auto w-full max-w-(--chat-content-max-width)">
         <NativeChatTaskList list={list} presentation="composer" />
       </div>

@@ -8,20 +8,23 @@ import { getStatusPluginOwnershipSource } from './status-plugin-ownership-source
 import { getStatusPluginLifecycleSource } from './status-plugin-lifecycle-source'
 import { getStatusPluginFactorySource } from './status-plugin-factory-source'
 
+let cachedOpenCodePluginSource: string | null = null
+let cachedOpenCode2PluginSource: string | null = null
+
 // Both major versions install as `opencode`; let the loader choose server() or setup().
 export function getOpenCodePluginSource(): string {
-  return getOpenCodeFamilyPluginSource('/hook/opencode', {
+  return (cachedOpenCodePluginSource ??= getOpenCodeFamilyPluginSource('/hook/opencode', {
     emitSessionStart: true,
     emitNextEvents: true,
     expectedAgent: 'opencode'
-  })
+  }))
 }
 
 export function getOpenCode2PluginSource(): string {
-  return getOpenCodeFamilyPluginSource('/hook/opencode2', {
+  return (cachedOpenCode2PluginSource ??= getOpenCodeFamilyPluginSource('/hook/opencode2', {
     emitSessionStart: true,
     emitNextEvents: true
-  })
+  }))
 }
 
 export function getOpenCodeFamilyPluginSource(

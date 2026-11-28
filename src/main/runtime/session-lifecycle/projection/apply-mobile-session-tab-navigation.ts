@@ -54,16 +54,28 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     navigation: RuntimeNavigationTarget,
     clientNavigationId?: string,
     /** The caller asked for nothing itself (a host action on its behalf), so it must be told to follow. */
-    callerFollows = false
+    callerFollows = false,
+    /** Only listeners now showing this top-level tab follow; the caller always does. */
+    showingTabId?: string
   ): RuntimeMobileSessionTabsResult {
     const deliver = this.createMobileSessionTabsDelivery()
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
     if (navigationTargetsClients(navigation)) {
       // Follow is live intent; reconnecting devices must not inherit stale navigation.
+      // Showing a tab means looking at this workspace now, not having last left it there.
+      const listeners =
+        showingTabId === undefined
+          ? [...this.mobileSessionTabListeners]
+          : this.selectMobileSessionTabsListeners(snapshot.worktree)
       const ids = new Set(
-        [...this.mobileSessionTabListeners]
+        listeners
           .map((subscription) => subscription.clientNavigationId)
           .filter((id): id is string => Boolean(id))
+          .filter(
+            (id) =>
+              showingTabId === undefined ||
+              this.clientSessionTabSelections.shownTopLevelTabId(snapshot, id) === showingTabId
+          )
       )
       if (clientNavigationId) {
         ids.add(clientNavigationId)

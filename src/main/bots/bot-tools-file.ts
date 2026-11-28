@@ -25,8 +25,7 @@ import {
   commitBotToolOAuth,
   newBotToolCredentialId,
   botToolCredentialsReader,
-  type BotToolCredential,
-  type BotToolOAuthEntry
+  type BotToolCredential
 } from './bot-tool-credentials'
 
 /** A credential saved with a tools change: saved or sourced headers, or a new Orca sign-in. */
@@ -259,23 +258,34 @@ export async function writeBotToolServers(
 
 /** `folder` is the bot's home, where a tool Orca signs in to has its sign-in. */
 export function botOwnTool(server: BotToolServer, folder: string): BotOwnTool {
-  return ownTool(server, botToolCredentialsReader(folder).oauth)
+  return ownTool(server, botToolCredentialsReader(folder), false)
 }
 
-/** `botOwnTool` for every server, from one read of the credential store. */
-export function botOwnTools(servers: readonly BotToolServer[], folder: string): BotOwnTool[] {
-  const readOAuth = botToolCredentialsReader(folder).oauth
-  return servers.map((server) => ownTool(server, readOAuth))
+/**
+ * `botOwnTool` for every server, from one read of the credential store. `unreadable`: a saved entry
+ * that doesn't open here reads as a lost sign-in, for a list whose sign-in can replace it.
+ */
+export function botOwnTools(
+  servers: readonly BotToolServer[],
+  folder: string,
+  { unreadable = false }: { unreadable?: boolean } = {}
+): BotOwnTool[] {
+  const reader = botToolCredentialsReader(folder)
+  return servers.map((server) => ownTool(server, reader, unreadable))
 }
 
 function ownTool(
   server: BotToolServer,
-  readOAuth: (id: string) => BotToolOAuthEntry | null
+  reader: ReturnType<typeof botToolCredentialsReader>,
+  unreadable: boolean
 ): BotOwnTool {
-  const signIn =
-    'url' in server && server.credential
-      ? botToolSignInStatusOf(readOAuth(server.credential))
-      : null
+  const credential = 'url' in server ? server.credential : undefined
+  const signIn = credential
+    ? (botToolSignInStatusOf(reader.oauth(credential)) ??
+      (unreadable && reader.unreadable(credential)
+        ? ({ state: 'lost', unreadable: true } as const)
+        : null))
+    : null
   return {
     name: server.name,
     detail: botToolDetail(server),

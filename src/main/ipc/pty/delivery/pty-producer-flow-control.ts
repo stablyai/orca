@@ -1,5 +1,7 @@
 // Pause producer reads to backpressure flooding shells; separate high/low watermarks prevent flush-time flapping.
 
+import { LongPauseLogLimiter } from '../../../../shared/terminal/pty/flow-control/long-pause-log-limiter'
+
 export const PRODUCER_FLOW_HIGH_WATERMARK_CHARS = 256 * 1024
 export const PRODUCER_FLOW_LOW_WATERMARK_CHARS = 32 * 1024
 // Reassert sustained backpressure after the daemon's lost-resume failsafe auto-resumes reads.
@@ -16,6 +18,9 @@ export class PtyProducerFlowController {
   private lowWatermarkChars: number
   private reassertIntervalMs: number
   private pausedAtByPty = new Map<string, number>()
+  // Reasserts refresh pausedAtByPty; this keeps the first pause for the long-pause log.
+  private pauseStartedAtByPty = new Map<string, number>()
+  private readonly longPauseLog = new LongPauseLogLimiter()
 
   constructor(
     transport: ProducerFlowControlTransport,
@@ -36,12 +41,14 @@ export class PtyProducerFlowController {
     if (pausedAt === undefined) {
       if (pendingChars > this.highWatermarkChars) {
         this.pausedAtByPty.set(id, Date.now())
+        this.pauseStartedAtByPty.set(id, Date.now())
         this.safePause(id)
       }
       return
     }
     if (pendingChars < this.lowWatermarkChars) {
       this.pausedAtByPty.delete(id)
+      this.logLongPause(id, pendingChars)
       this.safeResume(id)
       return
     }
@@ -57,6 +64,7 @@ export class PtyProducerFlowController {
   /** Teardown discards pending accounting; release any pause even without a normal drain. */
   release(id: string): void {
     if (this.pausedAtByPty.delete(id)) {
+      this.pauseStartedAtByPty.delete(id)
       this.safeResume(id)
     }
   }
@@ -70,6 +78,18 @@ export class PtyProducerFlowController {
 
   isPaused(id: string): boolean {
     return this.pausedAtByPty.has(id)
+  }
+
+  private logLongPause(id: string, pendingChars: number): void {
+    const startedAt = this.pauseStartedAtByPty.get(id)
+    this.pauseStartedAtByPty.delete(id)
+    const pausedMs = startedAt === undefined ? 0 : Date.now() - startedAt
+    const suppressed = this.longPauseLog.admit(pausedMs)
+    if (suppressed !== null) {
+      console.warn(
+        `[pty] terminal output paused ${pausedMs}ms waiting on renderer: pty=${id} pendingChars=${pendingChars} suppressedSinceLast=${suppressed}`
+      )
+    }
   }
 
   // Flow-control failures must not interrupt delivery or exit handling.
