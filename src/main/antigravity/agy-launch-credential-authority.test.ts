@@ -9,34 +9,93 @@ const HOST = {
   XDG_RUNTIME_DIR: '/run/user/1000',
   DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus,guid=aaaa'
 }
-const linux = { platform: 'linux' as const, hostEnv: HOST, hostHome: () => '/home/u' }
+// A keyring host, where `/home/me` links to `/home/u`; no other path's real path reads.
+const linux = {
+  platform: 'linux' as const,
+  hostEnv: HOST,
+  hostHome: () => '/home/u',
+  usesFileStore: async () => false,
+  realpath: async (path: string) => {
+    if (path === '/home/me' || path === '/home/u') {
+      return '/home/u'
+    }
+    throw new Error('ENOENT')
+  }
+}
+const withBus = (address: string) => ({ ...HOST, DBUS_SESSION_BUS_ADDRESS: address })
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it("reads the host's own login only from the host's home, file-or-keyring store and session bus", async () => {
-  expect(await agyLaunchIsForeign({ ...HOST }, linux)).toBe(false)
-  // The same bus, whatever server guid or spelling names it.
+it('reads a launch on the same session bus, however its address is spelled, as the host login', async () => {
+  for (const address of [
+    'unix:path=/run/user/1000/bus',
+    'unix:guid=bbbb,path=/run/user/1000/bus',
+    'unix:path=/run/user/1000//bus/',
+    'unix:path=%2Frun%2Fuser%2F1000%2Fbus',
+    'disabled:'
+  ]) {
+    expect(await agyLaunchIsForeign(withBus(address), linux)).toBe(false)
+  }
+  // The runtime folder's bus, with or without a trailing slash, is the explicit socket.
   expect(
     await agyLaunchIsForeign(
-      { ...HOST, DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus' },
-      linux
+      { HOME: '/home/u', XDG_RUNTIME_DIR: '/run/user/1000/' },
+      { ...linux, hostEnv: withBus('unix:path=/run/user/1000/bus') }
     )
   ).toBe(false)
-  expect(await agyLaunchIsForeign({ ...HOST, DBUS_SESSION_BUS_ADDRESS: 'disabled:' }, linux)).toBe(
-    false
-  )
+  // An address this can't read never turns switching off.
+  expect(await agyLaunchIsForeign(withBus('not-an-address'), linux)).toBe(false)
+})
 
-  expect(await agyLaunchIsForeign({ ...HOST, HOME: '/home/other' }, linux)).toBe(true)
-  expect(await agyLaunchIsForeign({ ...HOST }, { ...linux, envToDelete: ['HOME'] })).toBe(true)
-  // Another Secret Service holds another login.
+it('reads a launch on another session bus, or another fallback order, as another login', async () => {
+  expect(await agyLaunchIsForeign(withBus('unix:path=/tmp/dbus-other,guid=bbbb'), linux)).toBe(true)
+  expect(
+    await agyLaunchIsForeign(withBus('unix:path=/run/user/1000/bus;unix:path=/tmp/a'), {
+      ...linux,
+      hostEnv: withBus('unix:path=/run/user/1000/bus;unix:path=/tmp/b')
+    })
+  ).toBe(true)
+})
+
+it("compares buses only when both launches use the keyring, not agy's token file", async () => {
+  const fileStore = { ...linux, usesFileStore: async () => true }
+  expect(await agyLaunchIsForeign(withBus('unix:path=/tmp/dbus-other'), fileStore)).toBe(false)
+  const launchOnly = {
+    ...linux,
+    usesFileStore: async (env: NodeJS.ProcessEnv) => env !== HOST
+  }
+  expect(await agyLaunchIsForeign({ ...HOST }, launchOnly)).toBe(true)
+})
+
+it('reads a home by what it is, not how it is spelled', async () => {
+  expect(await agyLaunchIsForeign({ ...HOST, HOME: '/home/u/' }, linux)).toBe(false)
+  expect(await agyLaunchIsForeign({ ...HOST, HOME: '/home/me' }, linux)).toBe(false)
   expect(
     await agyLaunchIsForeign(
-      { ...HOST, DBUS_SESSION_BUS_ADDRESS: 'unix:path=/tmp/dbus-other,guid=bbbb' },
-      linux
+      { USERPROFILE: 'c:\\users\\u' },
+      {
+        ...linux,
+        platform: 'win32',
+        hostHome: () => 'C:\\Users\\U'
+      }
     )
-  ).toBe(true)
+  ).toBe(false)
+  expect(
+    await agyLaunchIsForeign(
+      { ...HOST, HOME: '/Users/U' },
+      {
+        ...linux,
+        platform: 'darwin',
+        hostHome: () => '/Users/u'
+      }
+    )
+  ).toBe(false)
+
+  expect(await agyLaunchIsForeign({ ...HOST, HOME: '/home/other' }, linux)).toBe(true)
+  expect(await agyLaunchIsForeign({ ...HOST, HOME: '/home/U' }, linux)).toBe(true)
+  expect(await agyLaunchIsForeign({ ...HOST }, { ...linux, envToDelete: ['HOME'] })).toBe(true)
 })
 
 it('decides a launch is foreign before anything about saved accounts, even with none selected', async () => {
