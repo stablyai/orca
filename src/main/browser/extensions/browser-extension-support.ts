@@ -12,6 +12,16 @@ export function isBrowserExtensionSupportEnabled(): boolean {
   return supportEnabled
 }
 
+// Held here while startup skips loading the extension graph, so a later Settings
+// enable still hands installBrowserExtensionSupport the saved workspace session.
+let pendingSavedBrowserTabs: SavedBrowserTabsSource | null = null
+
+export function takePendingSavedBrowserTabs(): SavedBrowserTabsSource | null {
+  const pending = pendingSavedBrowserTabs
+  pendingSavedBrowserTabs = null
+  return pending
+}
+
 /** Avoid loading the browser-extension startup graph when extensions are disabled. */
 export async function initializeBrowserExtensionSupportIfEnabled(options: {
   enabled: boolean
@@ -22,6 +32,7 @@ export async function initializeBrowserExtensionSupportIfEnabled(options: {
     initializeBrowserExtensionSupport(options)
     return
   }
+  pendingSavedBrowserTabs = options.savedBrowserTabs ?? null
   setBrowserExtensionSupportEnabled(false)
   void import('./profile-storage/browser-extension-retired-profile-storage')
     .then(({ removeRetiredBrowserExtensionProfileStorage }) =>
