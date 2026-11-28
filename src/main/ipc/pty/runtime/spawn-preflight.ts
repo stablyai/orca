@@ -100,9 +100,9 @@ export async function prepareRuntimePtySpawn(
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget, args.accountEnv)
   ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
+    ctx.isClaudeLaunch && !args.accountEnv?.CLAUDE_CONFIG_DIR && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
 
@@ -153,6 +153,7 @@ export async function prepareRuntimePtySpawn(
     shellOverride: ctx.daemonShellOverride,
     expectedWslDistro: ctx.expectedWslDistro,
     codexSelectionTarget: ctx.codexSelectionTarget,
+    callerCodexHome: args.accountEnv?.CODEX_HOME,
     preAdopted: Boolean(ctx.preAdoptedStablePane),
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     sessionId: ctx.sessionId,

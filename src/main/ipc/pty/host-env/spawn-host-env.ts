@@ -77,6 +77,8 @@ type PtySpawnHostEnvArgs = {
   shellOverride: string | undefined
   expectedWslDistro: string | null
   codexSelectionTarget: CodexAccountSelectionTarget
+  /** The caller's own CODEX_HOME: the pane's home in place of this host's selection. */
+  callerCodexHome?: string
   /** An adopted stable pane launches nothing, so it gets no launch prep. */
   preAdopted: boolean
   isDaemonHostSpawn: boolean
@@ -139,7 +141,9 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
   const baseEnv = deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch)
   const launchesCodex = args.launchAgent === 'codex'
   const selectLaunchCodexHome = async (): Promise<string | null> =>
-    (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null
+    args.callerCodexHome ??
+    (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ??
+    null
   let selectedCodexHomePath = !args.preAdopted
     ? getCompatibleSelectedCodexHomePath(
         target,
@@ -150,7 +154,7 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
           : await selectLaunchCodexHome()
       )
     : null
-  if (!args.preAdopted && launchesCodex && !args.callerNamedSession) {
+  if (!args.preAdopted && launchesCodex && !args.callerNamedSession && !args.callerCodexHome) {
     const resolution = resolveCodexHomeAfterManagedAuthReadiness({
       selectedCodexHomePath,
       getSettings: () => deps.getSettings?.(),
