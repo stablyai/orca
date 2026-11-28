@@ -1,7 +1,11 @@
+import { buildHardWrappedTableFileLogicalLineCandidates } from './hard-wrapped-terminal-table-file-links'
 import { buildTerminalHttpLogicalLines, hasHardWrappedRows } from './terminal-http-logical-lines'
 import { extractTerminalHttpLinks } from './terminal-http-url-extraction'
 import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
-import { rangeForParsedLinkOnRow } from './terminal-link-row-range'
+import {
+  rangeForParsedLinkOnRow,
+  rangeForTerminalFileLinkOnBufferLine
+} from './terminal-link-row-range'
 import { extractTerminalFileLinkReadings, type ParsedTerminalFileLink } from './terminal-links'
 import { terminalLogicalLinkHasOscLink } from './terminal-osc-link-cells'
 import {
@@ -80,9 +84,11 @@ export function buildCandidateLogicalLinesForBufferPosition(
 ): WrappedLogicalLine[] {
   const hardWrappedCandidates = buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber)
   const softWrappedLogicalLine = buildWrappedLogicalLine(buffer, bufferLineNumber)
-  const candidates = softWrappedLogicalLine
-    ? [...hardWrappedCandidates, softWrappedLogicalLine]
-    : hardWrappedCandidates
+  const candidates = [
+    ...buildHardWrappedTableFileLogicalLineCandidates(buffer, bufferLineNumber),
+    ...hardWrappedCandidates,
+    ...(softWrappedLogicalLine ? [softWrappedLogicalLine] : [])
+  ]
   return dedupeLogicalLines(candidates)
 }
 
@@ -97,7 +103,12 @@ export function findTerminalFileLinksAtBufferPosition(
   for (const logicalLine of buildCandidateLogicalLinesForBufferPosition(buffer, position.y)) {
     const readings = extractTerminalFileLinkReadings(logicalLine.text)
     const covering = (parsed: ParsedTerminalFileLink): boolean => {
-      const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+      const range = rangeForTerminalFileLinkOnBufferLine(
+        logicalLine,
+        parsed.startIndex,
+        parsed.endIndex,
+        position.y
+      )
       return range !== null && rangeContainsBufferPosition(range, position, terminalColumns)
     }
     for (const parsed of readings.links.filter(covering)) {
