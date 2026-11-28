@@ -310,6 +310,57 @@ describe('protected Antigravity account snapshots', () => {
     })
   })
 
+  it('names a keychain login only from a read made while its item is unchanged, and never reads it to list', async () => {
+    const h = harness(credential('a'), { keychain: true })
+    const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))
+    const launchRestore = { signInHoldsLogin: () => false }
+    const service = new AntigravityAccountService(
+      store,
+      h.backend,
+      Date.now,
+      h.lookupIdentity,
+      launchRestore
+    )
+    const unread = {
+      activeAccountId: null,
+      currentAccount: { email: null, subject: null, identityKnown: false, unread: true }
+    }
+    expect(await service.listAccounts()).toMatchObject(unread)
+    expect(h.backend.read).not.toHaveBeenCalled()
+
+    const id = (await service.addCurrentAccount()).activeAccountId!
+    await service.selectAccount(id)
+    vi.mocked(h.backend.read).mockClear()
+    const named = {
+      activeAccountId: id,
+      currentAccount: { email: 'a@example.invalid', subject: 'a', identityKnown: true }
+    }
+    expect(await service.listAccounts()).toMatchObject(named)
+    // The name outlives a restart while agy's keychain item is unchanged.
+    const restarted = new AntigravityAccountService(
+      store,
+      h.backend,
+      Date.now,
+      h.lookupIdentity,
+      launchRestore
+    )
+    expect(await restarted.listAccounts()).toMatchObject(named)
+    await restarted.prepareForLaunch({ mayPrompt: false })
+    expect(h.backend.read).not.toHaveBeenCalled()
+
+    // agy rewrote its login: which account it holds is unknown until Orca reads it again.
+    h.setNative(refreshedWithoutIdToken(2))
+    expect(await restarted.listAccounts()).toMatchObject({ ...unread, selectedAccountId: id })
+    await expect(restarted.prepareForLaunch({ mayPrompt: false })).rejects.toThrow(
+      'keychain access'
+    )
+    expect(h.backend.read).not.toHaveBeenCalled()
+    await restarted.prepareForLaunch()
+    expect(h.backend.read).toHaveBeenCalledTimes(1)
+    expect(await restarted.listAccounts()).toMatchObject({ activeAccountId: id })
+    expect(h.backend.read).toHaveBeenCalledTimes(1)
+  })
+
   it('removes the selected account after agy signs in to another one, unblocking launches', async () => {
     const h = harness()
     const id = (await h.service.addCurrentAccount()).activeAccountId!

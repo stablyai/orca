@@ -25640,7 +25640,10 @@
       "chatPasteCode": "Kodu yapıştır",
       "chatPasteCodeLabel": "Oturum açtıktan sonra Google'ın gösterdiği kod veya o sayfanın adresi",
       "launchesUse": "Yeni agy başlatmaları bu hesabı kullanır",
-      "loginNow": "agy'nin şu anki oturumu"
+      "loginNow": "agy'nin şu anki oturumu",
+      "signedInUnread": "agy'de oturum açık",
+      "unreadDetail": "Hangisi olduğunu görmek için hesabı gösterin. macOS anahtar zinciri erişimine izin vermenizi isteyebilir.",
+      "showAccount": "Hesabı göster"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",

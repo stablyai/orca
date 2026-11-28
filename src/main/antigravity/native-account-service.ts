@@ -11,11 +11,18 @@ import type {
   AntigravityAccountVault,
   StoredAntigravityAccount
 } from './native-account-store'
+import {
+  AntigravityLoginReader,
+  antigravityAccountState,
+  type AntigravityQuietRead
+} from './native-account-login-view'
 
 export type AntigravityCredentialBackend = {
   parse?(contents: string): AntigravityNativeCredential
   read(): Promise<AntigravityNativeCredential | null>
   write(contents: string, expected: string | null): Promise<void>
+  /** Only where `read` can raise a keychain dialog (macOS): what Orca can learn without one. */
+  readWithoutPrompt?(): Promise<AntigravityQuietRead>
 }
 
 function matches(
@@ -44,6 +51,7 @@ export type AntigravityLaunchRestore = {
 
 export class AntigravityAccountService {
   private mutation: Promise<unknown> = Promise.resolve()
+  private readonly logins: AntigravityLoginReader
   private readonly rewrittenLogins = new AntigravityRewrittenLoginIdentity(
     () => this.lookupIdentity
   )
@@ -55,14 +63,33 @@ export class AntigravityAccountService {
     private readonly lookupIdentity = fetchGoogleIdentity,
     // Only the host's service restores at launch; absent, launches still refuse a moved login.
     private readonly launchRestore?: AntigravityLaunchRestore
-  ) {}
+  ) {
+    this.logins = new AntigravityLoginReader(backend, store, (account, login) =>
+      this.matches(account, login)
+    )
+  }
 
   /** Resolves once every account operation queued before it has finished. */
   settled(): Promise<void> {
     return this.serialize(async () => {})
   }
 
+  /** Never reads a login whose read could raise a keychain dialog: such a login is named from
+   *  the last read while its keychain item is unchanged, else listed as signed in but unread. */
   listAccounts(): Promise<AntigravityAccountState> {
+    return this.serialize(async () => {
+      const quiet = await this.backend.readWithoutPrompt?.()
+      if (!quiet || 'credential' in quiet) {
+        return this.state(await this.reconcile(undefined, quiet))
+      }
+      const vault = await this.store.read()
+      const login = (await this.logins.known(vault, quiet.fingerprint)) ?? 'unread'
+      return antigravityAccountState(vault, login, Boolean(this.launchRestore))
+    })
+  }
+
+  /** Reads agy's login even where that may raise a keychain dialog; only for an explicit request. */
+  readCurrentAccount(): Promise<AntigravityAccountState> {
     return this.serialize(async () => this.state(await this.reconcile()))
   }
 
@@ -144,9 +171,24 @@ export class AntigravityAccountService {
     })
   }
 
-  prepareForLaunch(): Promise<void> {
+  /** `mayPrompt: false` refuses rather than read a login whose read could raise a keychain
+   *  dialog, unless the last read still vouches that agy holds the selected account. */
+  prepareForLaunch({ mayPrompt = true }: { mayPrompt?: boolean } = {}): Promise<void> {
     return this.serialize(async () => {
-      const { vault, current } = await this.reconcile()
+      const quiet = await this.backend.readWithoutPrompt?.()
+      if (quiet && 'fingerprint' in quiet) {
+        const known = await this.store.read()
+        const login = await this.logins.known(known, quiet.fingerprint)
+        if (!known.selectedAccountId || login?.accountId === known.selectedAccountId) {
+          return
+        }
+        if (!mayPrompt) {
+          throw new Error(
+            "Checking agy's login for the selected account could ask for keychain access, so it was left as it is."
+          )
+        }
+      }
+      const { vault, current } = await this.reconcile(undefined, quiet)
       const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
       if (!vault.selectedAccountId || (selected && current && this.matches(selected, current))) {
         return
@@ -179,7 +221,8 @@ export class AntigravityAccountService {
     if (switching) {
       await this.backend.write(selected.credentials, current?.contents ?? null)
     }
-    const readback = await this.backend.read()
+    const { current: readback, fingerprint } = await this.logins.read()
+    this.logins.note(fingerprint, readback)
     if (!readback || !this.matches(selected, readback)) {
       throw new Error(
         'Antigravity account switching could not be verified; refresh before retrying.'
@@ -195,12 +238,15 @@ export class AntigravityAccountService {
     return matches(account, current, this.backend.parse)
   }
 
-  private async reconcile(selectedId?: string) {
+  /** `quiet`: what the caller already read without a prompt, so it isn't read twice. */
+  private async reconcile(selectedId?: string, quiet?: AntigravityQuietRead) {
+    const native = await this.logins.read(quiet)
     const current = await this.rewrittenLogins.identify(
-      await this.backend.read(),
+      native.current,
       (await this.store.read()).accounts,
       (account, login) => this.matches(account, login)
     )
+    this.logins.note(native.fingerprint, current)
     // Re-read after native I/O so a delayed read never restores an older vault.
     const vault = await this.store.read()
     if (selectedId !== undefined) {
@@ -238,27 +284,8 @@ export class AntigravityAccountService {
     vault: AntigravityAccountVault
     current: AntigravityNativeCredential | null
   }): AntigravityAccountState {
-    const active = current
-      ? vault.accounts.find((entry) => this.matches(entry, current))
-      : undefined
-    const subject = current?.identity?.subject ?? active?.subject ?? null
-    return {
-      accounts: vault.accounts.map((account) => {
-        const { credentials: _credentials, ...summary } = account
-        return summary
-      }),
-      activeAccountId: active?.id ?? null,
-      selectedAccountId: vault.selectedAccountId,
-      ...(this.launchRestore ? { restoresSelectionAtLaunch: true as const } : {}),
-      currentAccount: current
-        ? {
-            email: current.identity ? current.identity.email : (active?.email ?? null),
-            subject,
-            authMethod: current.authMethod,
-            identityKnown: subject !== null
-          }
-        : null
-    }
+    const login = current ? this.logins.view(vault, current) : null
+    return antigravityAccountState(vault, login, Boolean(this.launchRestore))
   }
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {

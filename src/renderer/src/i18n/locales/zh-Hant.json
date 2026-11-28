@@ -24883,7 +24883,10 @@
       "chatPasteCode": "貼上代碼",
       "chatPasteCodeLabel": "登入後 Google 顯示的代碼，或該頁面的網址",
       "launchesUse": "新啟動的 agy 將使用此帳號",
-      "loginNow": "agy 目前的登入"
+      "loginNow": "agy 目前的登入",
+      "signedInUnread": "agy 已登入",
+      "unreadDetail": "顯示帳戶以查看是哪一個。macOS 可能會要求你允許存取鑰匙圈。",
+      "showAccount": "顯示帳戶"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於你下次啟動的 Claude。",

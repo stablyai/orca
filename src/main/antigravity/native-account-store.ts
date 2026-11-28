@@ -10,9 +10,20 @@ import { readPrivateWindowsCredentialFile } from '../../shared/secure-storage/wi
 export type StoredAntigravityAccount = AntigravityAccountSummary & {
   credentials: string
 }
+/** agy's login as Orca last read it, keyed by the fingerprint its keychain item had then, so a
+ *  later listing can name it without reading the secret, which may raise a keychain dialog. */
+export type VerifiedAntigravityLogin = {
+  fingerprint: string
+  email: string | null
+  subject: string | null
+  authMethod: string
+  accountId: string | null
+}
 export type AntigravityAccountVault = {
   accounts: StoredAntigravityAccount[]
   selectedAccountId: string | null
+  /** Older builds drop it when they write the vault; Orca then reads the login again on request. */
+  verifiedLogin?: VerifiedAntigravityLogin
 }
 export type AntigravityAccountStore = {
   read(): Promise<AntigravityAccountVault>
@@ -36,6 +47,19 @@ function isAccount(value: unknown): value is StoredAntigravityAccount {
     typeof value.createdAt === 'number' &&
     typeof value.updatedAt === 'number' &&
     typeof value.credentials === 'string'
+  )
+}
+
+const nullableString = (value: unknown): boolean => value === null || typeof value === 'string'
+
+function isVerifiedLogin(value: unknown): value is VerifiedAntigravityLogin {
+  return (
+    isRecord(value) &&
+    typeof value.fingerprint === 'string' &&
+    nullableString(value.email) &&
+    nullableString(value.subject) &&
+    typeof value.authMethod === 'string' &&
+    nullableString(value.accountId)
   )
 }
 
@@ -107,7 +131,19 @@ export function createEncryptedAntigravityAccountStore(
               ({ usage: _usage, ...account }: StoredAntigravityAccount & { usage?: unknown }) =>
                 account
             ),
-            selectedAccountId: value.selectedAccountId
+            selectedAccountId: value.selectedAccountId,
+            // A malformed cache only costs a read on request, so it never fails the vault.
+            ...(isVerifiedLogin(value.verifiedLogin)
+              ? {
+                  verifiedLogin: {
+                    fingerprint: value.verifiedLogin.fingerprint,
+                    email: value.verifiedLogin.email,
+                    subject: value.verifiedLogin.subject,
+                    authMethod: value.verifiedLogin.authMethod,
+                    accountId: value.verifiedLogin.accountId
+                  }
+                }
+              : {})
           }
         } catch {
           throw new Error(

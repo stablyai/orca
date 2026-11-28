@@ -25979,7 +25979,10 @@
       "chatPasteCode": "Cole o código",
       "chatPasteCodeLabel": "O código que o Google mostra depois que você entra, ou o endereço dessa página",
       "launchesUse": "Novas execuções do agy usam esta conta",
-      "loginNow": "Login atual do agy"
+      "loginNow": "Login atual do agy",
+      "signedInUnread": "O agy está conectado",
+      "unreadDetail": "Mostre a conta para ver qual é. O macOS pode pedir que você permita o acesso às Chaves.",
+      "showAccount": "Mostrar conta"
     },
     "claude": {
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",

@@ -24708,7 +24708,10 @@
       "chatPasteCode": "Pega el código",
       "chatPasteCodeLabel": "El código que muestra Google después de iniciar sesión, o la dirección de esa página",
       "launchesUse": "Los nuevos inicios de agy usan esta cuenta",
-      "loginNow": "Sesión actual de agy"
+      "loginNow": "Sesión actual de agy",
+      "signedInUnread": "agy tiene la sesión iniciada",
+      "unreadDetail": "Muestra la cuenta para ver cuál es. macOS puede pedirte que permitas el acceso al llavero.",
+      "showAccount": "Mostrar cuenta"
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",
