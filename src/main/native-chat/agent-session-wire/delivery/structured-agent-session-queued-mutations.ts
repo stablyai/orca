@@ -27,6 +27,7 @@ import {
 import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
 import {
   canSteerStructuredQueuedMessage,
+  exclusiveTurnHolds,
   structuredQueueHold
 } from './structured-agent-session-queued-gate'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -144,18 +145,20 @@ export function sendQueuedStructuredAgentMessage(
       }
       // Work that can't take input yet (starting, stopping, a different Codex choice) gets the card
       // as a steer: the queue hands it over once it can, or as the next message after this turn.
+      // Orca's memory save takes no steer either: the card goes first once the save ends.
       if (
         (work.activeTurnId() !== null || work.queueState().owedEnteredSubmissions.length > 0) &&
-        !canSteerStructuredQueuedMessage(
-          {
-            record,
-            work,
-            child: context.sessions.get(ctx.sessionId)?.child,
-            stopping: await context.readStopping(ctx.sessionId),
-            adapter: context.deps.adapter
-          },
-          row
-        )
+        ((await exclusiveTurnHolds(ctx.journal, work)) ||
+          !canSteerStructuredQueuedMessage(
+            {
+              record,
+              work,
+              child: context.sessions.get(ctx.sessionId)?.child,
+              stopping: await context.readStopping(ctx.sessionId),
+              adapter: context.deps.adapter
+            },
+            row
+          ))
       ) {
         const card = (await ctx.journal.queuedMessages.steerWhenReady(messageId)) ?? row
         return { ok: true, value: { clientMessageId: operationId, queued: queuedReceipt(card) } }

@@ -16,6 +16,7 @@ import {
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import { agentJournalSubmissionReturnedToCard } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
+import { isJournalExclusiveTurnOpener } from '../../../shared/agent-session/journal/agent-journal-exclusive-turn'
 import { compareJournalStatusPositions, type JournalStatusItem } from './journal-status-items'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
@@ -63,6 +64,13 @@ function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
         return null
       }
       const lifecycle = readAgentJournalTurn(item.body)
+      // Orca's memory save is never continued: a cut one just ends, and its window stays used.
+      if (
+        lifecycle?.userItemId !== undefined &&
+        isJournalExclusiveTurnOpener(state.displayed(lifecycle.userItemId))
+      ) {
+        return null
+      }
       if (lifecycle) {
         return {
           item,

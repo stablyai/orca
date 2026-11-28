@@ -222,6 +222,9 @@ export const storedMessageBody = lazyZodSchema(() =>
       .object({ workspace: z.string(), goal: text, home: z.literal(true).optional() })
       .optional(),
     memorySource: text,
+    memorySave: z
+      .object({ percent: z.number().optional(), estimated: z.boolean().optional() })
+      .optional(),
     triggeredBy: z
       .object({ source: z.string(), event: text, actor: text, actorId: text, place: text })
       .optional(),

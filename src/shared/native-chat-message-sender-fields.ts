@@ -1,3 +1,4 @@
+import type { AgentJournalMemorySave } from './agent-session/journal/agent-journal-bot-message-fields'
 import type { AgentJournalRenderItem } from './agent-session/journal/agent-session-journal-types'
 import { readAgentMessageSource } from './agent-session/journal/agent-session-message-source'
 import { otherPersonTypistOf } from './agent-session/journal/agent-journal-typed-by'
@@ -29,6 +30,10 @@ export function nativeChatMessageSenderFields(
   if (body.origin === 'bot-created' || body.origin === 'card-answer') {
     return { orcaNotice: body.origin }
   }
+  if (body.origin === 'memory-save') {
+    const memorySave = readMemorySave(body.memorySave)
+    return { orcaNotice: 'memory-save', ...(memorySave ? { memorySave } : {}) }
+  }
   if (body.origin === 'took-over') {
     const tookOver = readTookOverNotice(body.tookOver)
     return { orcaNotice: 'took-over', ...(tookOver ? { tookOver } : {}) }
@@ -41,4 +46,16 @@ export function nativeChatMessageSenderFields(
     ...(asker ? { asker } : {}),
     ...(typedByOther ? { typedByOther } : {})
   }
+}
+
+/** A stored reading as the divider may draw it; anything malformed draws as no number. */
+function readMemorySave(value: unknown): AgentJournalMemorySave | undefined {
+  if (typeof value !== 'object' || value === null || !('percent' in value)) {
+    return undefined
+  }
+  const { percent } = value
+  const estimated = 'estimated' in value && value.estimated === true
+  return typeof percent === 'number' && Number.isFinite(percent)
+    ? { percent, estimated }
+    : undefined
 }

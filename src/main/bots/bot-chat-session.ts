@@ -8,6 +8,7 @@ import {
 } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import type { Bot, BotAgent } from '../../shared/bot-types'
+import type { AgentJournalMemorySave } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import { botOnSetup } from '../../shared/bots/bot-agent-setup'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionCreateOptions } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-create-options'
@@ -92,6 +93,7 @@ export type BotChatSender =
   | 'bot-created'
   | 'card-answer'
   | { kind: 'took-over'; tookOver: TookOverNotice }
+  | { kind: 'memory-save'; memorySave: AgentJournalMemorySave }
 
 type Delivered = { sessionId: string; outcome: StructuredSessionTurnOutcome; fingerprint: string }
 
@@ -169,9 +171,11 @@ export function botChatSessions(deps: BotChatDependencies) {
         ? { origin: from }
         : from?.kind === 'took-over'
           ? { origin: 'took-over' as const, tookOver: from.tookOver }
-          : from
-            ? { from }
-            : {}
+          : from?.kind === 'memory-save'
+            ? { origin: 'memory-save' as const, memorySave: from.memorySave }
+            : from
+              ? { from }
+              : {}
     const body = { ...botMessageBody(text, run), ...sender }
     const outcome = await sendAgentTurn({
       kind: 'structured-session',

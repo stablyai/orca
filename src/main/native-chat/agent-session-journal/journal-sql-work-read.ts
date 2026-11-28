@@ -78,7 +78,7 @@ export function readJournalSqlWorkState(
     owedEnteredSubmissions: owedPhaseSubmissions(context, work, 'entered-submissions'),
     owedSendingSubmissions: owedPhaseSubmissions(context, work, 'sending-submissions'),
     activeTurn: work.activeTurn(),
-    activeTurnOpener: work.activeTurn() ? newestTurnOpener(context) : null,
+    activeTurnOpener: work.activeTurn() ? journalSqlNewestTurnOpener(context) : null,
     latestTurn: work.publishedLatestTurn(
       latestStructuredAgentSessionTurn(boundary ? [boundary] : [])
     ),
@@ -233,7 +233,9 @@ function journalOpeningSend(
 }
 
 /** The newest person's or mail's message that opened a turn, never one sent into a running turn. */
-function newestTurnOpener(context: JournalSqlStatusContext): AgentJournalRenderItem | null {
+export function journalSqlNewestTurnOpener(
+  context: JournalSqlStatusContext
+): AgentJournalRenderItem | null {
   for (const { item } of context.select({ kind: 'users', floor: 0 })) {
     if (isRootAgentJournalItem(item) && item.turnScope?.kind !== 'turn') {
       return context.displayed(item.itemId) ?? item

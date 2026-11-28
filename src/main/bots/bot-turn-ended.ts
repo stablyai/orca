@@ -16,6 +16,7 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { Bot } from '../../shared/bot-types'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import type { BotItemMail } from './bot-items-schema'
+import type { BotMemorySaveWatch } from './bot-memory-save-watch'
 import {
   botNeedsYouInChatNote,
   createBotOwnerChatCheck,
@@ -97,10 +98,21 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
     return (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
   })
   const sections: TurnSectionsMemo = new Map()
+  // Loaded on the first turn end, so startup reads no ledger.
+  let memorySave: Promise<BotMemorySaveWatch> | null = null
+  const memorySaveWatch = (): Promise<BotMemorySaveWatch> =>
+    (memorySave ??= import('./bot-memory-save-runtime').then(({ runtimeBotMemorySaveWatch }) =>
+      runtimeBotMemorySaveWatch(runtime)
+    ))
   const idleSaid = new Map<string, Map<number, string>>()
   const needsYouSaid = new Map<string, string>()
   return {
-    turnEnded: (sessionId, turnId, ended) => botTurnEnded(runtime, sessionId, turnId, ended),
+    turnEnded: (sessionId, turnId, ended) => {
+      botTurnEnded(runtime, sessionId, turnId, ended)
+      void memorySaveWatch()
+        .then((watch) => watch.turnEnded(sessionId))
+        .catch((error: unknown) => console.warn('[bots] could not check memory save', error))
+    },
     requestFailed: (failure) =>
       void import('../runtime/rpc/methods/orchestration/messaging/bot-request-outcome')
         .then(({ settleBotRequestFailure }) => settleBotRequestFailure(runtime, failure))

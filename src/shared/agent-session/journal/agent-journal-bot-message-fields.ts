@@ -24,6 +24,9 @@ export type AgentJournalConnectorClaim = {
   origin: AgentJournalConnectorDelivery[]
 }
 
+/** The ring's reading when Orca decided to save memory: `percent` only when the ring had a number. */
+export type AgentJournalMemorySave = { percent?: number; estimated?: boolean }
+
 /** What Orca writes on a message it delivers to a bot. */
 export type AgentJournalBotMessageFields = {
   /** Present on a message Orca delivered to a bot from Slack, GitHub or Linear: only then does the
@@ -31,8 +34,19 @@ export type AgentJournalBotMessageFields = {
    *  notice row. `card-answer` is an owner's click on a setup card: the card's receipt is its only
    *  visible part. `took-over` is Orca's turn handing the bot a workspace, drawn from `tookOver`.
    *  `automation-run` is a bot automation's run, drawn from `automationRun` as the automation's row.
+   *  `memory-save` is Orca's turn asking the bot to save memory before its context fills; it holds
+   *  the chat to itself while it runs and is never continued or resent by recovery.
    *  Host-written, like `from`. */
-  origin?: 'connector' | 'bot-created' | 'card-answer' | 'took-over' | 'automation-run'
+  origin?:
+    | 'connector'
+    | 'bot-created'
+    | 'card-answer'
+    | 'took-over'
+    | 'automation-run'
+    | 'memory-save'
+  /** Beside `memory-save`: the context reading that started it, as the composer ring showed it then.
+   *  Host-written, never sent to the agent. */
+  memorySave?: AgentJournalMemorySave
   /** Beside `automation-run`: the run as delivered. Host-written, never sent to the agent. */
   automationRun?: AutomationRunMessage
   /** Beside `took-over`: the workspace and the owner's goal, for the chat's divider. Host-written. */

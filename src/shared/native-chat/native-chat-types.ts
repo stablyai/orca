@@ -1,3 +1,4 @@
+import type { AgentJournalMemorySave } from '../agent-session/journal/agent-journal-bot-message-fields'
 import type { BotTidyUpNote } from '../bots/bot-tidy-up'
 import type { TookOverNotice } from './took-over-notice'
 import type {
@@ -288,7 +289,9 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** On Orca's own turn to a bot it just created: a notice row, never the person's bubble. On an
    *  owner's card answer: nothing, since the card shows its receipt. On Orca's turn handing the bot a
    *  workspace: a divider, and the owner's goal as their words. */
-  orcaNotice?: 'bot-created' | 'card-answer' | 'took-over'
+  orcaNotice?: 'bot-created' | 'card-answer' | 'took-over' | 'memory-save'
+  /** Beside `memory-save`: the context reading that started Orca's memory save. */
+  memorySave?: AgentJournalMemorySave
   /** Beside `took-over`: what its divider and goal show. */
   tookOver?: TookOverNotice
   /** On a bot automation run's message: the run, drawn as the automation's row, never the person's. */

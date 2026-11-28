@@ -23,7 +23,11 @@ import { mergedRunFailures } from '../../../../../../shared/native-chat/transcri
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
 import { NativeChatSubagentEndingRow } from '../../subagents/NativeChatSubagentEndingRow'
 import { isNativeChatSubagentEndingPresentation } from '../../subagents/native-chat-subagent-ending'
-import { NativeChatBotCreatedRow, NativeChatTookOverRow } from '../../NativeChatBotCreatedRow'
+import {
+  NativeChatBotCreatedRow,
+  NativeChatMemorySaveRow,
+  NativeChatTookOverRow
+} from '../../NativeChatBotCreatedRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
 import { ProviderFrameRow } from '../diagnostics/NativeChatProviderDetails'
@@ -260,6 +264,14 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
     return (
       <div ref={rowRef} data-native-chat-message-id={message.id}>
         <NativeChatBotCreatedRow messageId={message.id} timestamp={message.timestamp} />
+      </div>
+    )
+  }
+
+  if (message.orcaNotice === 'memory-save') {
+    return (
+      <div ref={rowRef} data-native-chat-message-id={message.id}>
+        <NativeChatMemorySaveRow memorySave={message.memorySave} timestamp={message.timestamp} />
       </div>
     )
   }

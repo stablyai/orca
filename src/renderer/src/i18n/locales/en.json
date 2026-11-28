@@ -22820,6 +22820,11 @@
         "reviewChanges_other": "Review {{count}} changes"
       },
       "tookOver": "Took over {{workspace}}",
+      "memorySave": {
+        "estimate": "Memory save · started when context was about {{percent}}% full",
+        "report": "Memory save · started when context was {{percent}}% full",
+        "unknown": "Memory save · started when context was getting full"
+      },
       "memoryUpdated": {
         "added": "Added",
         "removed": "Removed",

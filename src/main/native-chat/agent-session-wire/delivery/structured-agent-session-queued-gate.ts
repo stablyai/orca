@@ -8,6 +8,8 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { structuredAgentSessionSendBlock } from '../operations/structured-agent-session-send-preparation'
+import { isJournalExclusiveTurnOpener } from '../../../../shared/agent-session/journal/agent-journal-exclusive-turn'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 /** Host-local gate shared by admission, drain and Send-now; automatic mail steering and Send-now may join active work. */
 export type StructuredQueueHold = 'blocked' | 'working' | 'prompt'
@@ -71,4 +73,22 @@ export function canSteerStructuredQueuedMessage(
     structuredAgentSessionChildAcceptsInput({ ...input, current: true }) &&
     !codexTurnOptionsDiffer(input.record, card.options ?? undefined, input.child, input.adapter)
   )
+}
+
+/** Orca's memory save holds the chat from its handover until its turn ends: its running turn, or
+ *  its send the agent has not opened a turn for yet. Nothing steers into it. */
+export async function exclusiveTurnHolds(
+  journal: Pick<AgentSessionJournal, 'reads'>,
+  work: Pick<StructuredAgentSessionObservedWork, 'activeTurnOpener' | 'queueState'>
+): Promise<boolean> {
+  if (isJournalExclusiveTurnOpener(work.activeTurnOpener())) {
+    return true
+  }
+  for (const send of work.queueState().owedEnteredSubmissions) {
+    const body = await journal.reads.itemBody(agentJournalSubmissionKey(send.clientMessageId))
+    if (body && isJournalExclusiveTurnOpener({ body })) {
+      return true
+    }
+  }
+  return false
 }

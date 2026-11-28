@@ -181,7 +181,10 @@ export function projectQueuedMessageCards(
 
 function isOrcaNoticeSend(body: AgentSessionQueuedMessage['body']): boolean {
   return (
-    body.origin === 'bot-created' || body.origin === 'card-answer' || body.origin === 'took-over'
+    body.origin === 'bot-created' ||
+    body.origin === 'card-answer' ||
+    body.origin === 'took-over' ||
+    body.origin === 'memory-save'
   )
 }
 

@@ -10,6 +10,8 @@ import {
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlQueueFacts } from './journal-sql-queued-messages'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { isJournalExclusiveTurnOpener } from '../../../shared/agent-session/journal/agent-journal-exclusive-turn'
+import { journalSqlNewestTurnOpener } from './journal-sql-work-read'
 
 const MAX_OWED_MAIL_STEERS = 32
 
@@ -33,7 +35,9 @@ export function journalDomainInputEligibility(
     prompts,
     pending: context.firstQueuedInput(),
     handover: [...context.enteredSubmissions()].filter((send) => work.owesSend(send)),
-    activeTurnId: work.activeTurn()?.turnId
+    activeTurnId: work.activeTurn()?.turnId,
+    // Read only for a turn something could steer into.
+    exclusiveTurn: () => isJournalExclusiveTurnOpener(journalSqlNewestTurnOpener(context))
   }
 }
 
@@ -71,7 +75,8 @@ export function journalDomainResolvedInputEligibility(
     prompts: work.actionablePrompts,
     pending: context.firstQueuedInput(),
     handover: work.owedEnteredSubmissions,
-    activeTurnId: work.activeTurn?.turnId
+    activeTurnId: work.activeTurn?.turnId,
+    exclusiveTurn: () => isJournalExclusiveTurnOpener(work.activeTurnOpener ?? null)
   }
 }
 
@@ -99,6 +104,10 @@ export function selectJournalEligibleQueueCard(
   const none = { kind: 'selected' as const, card: null, steer: false, command: false }
   const steer = state.activeTurnId !== undefined
   if (state.blocked || state.prompts.length > 0 || state.pending || (steer && !allowSteer)) {
+    return none
+  }
+  // Orca's memory save has the chat to itself: nothing joins it, mail and connectors included.
+  if (steer && state.exclusiveTurn()) {
     return none
   }
   const mailOnly = state.handover.length > 0
