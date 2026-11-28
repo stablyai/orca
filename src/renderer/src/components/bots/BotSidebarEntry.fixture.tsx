@@ -1,8 +1,14 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { AppState } from '@/store/types'
 import type { BotChatTreeChat, BotChatTreeWorker } from '../../../../shared/bots/bot-chat-tree'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { chat, clickText, fixtureFor, HOUR, NOW, worker } from './bot-sidebar-entry-fixture'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
+import { BOT, chat, clickText, fixtureFor, HOUR, NOW, worker } from './bot-sidebar-entry-fixture'
 
 const HOME_WORKERS = [
   worker('paired-bots-relay-auth', 'needs-you'),
@@ -113,6 +119,38 @@ function normalDay(homeWorkers: BotChatTreeWorker[]): BotChatTreeChat[] {
 
 /** v3: only the open tabs, each chat's live lines then its last 2 finished; the new threads stay off the list. */
 export const normal = fixtureFor(normalDay(HOME_WORKERS))
+
+/** The bot's own Home workspace open, its Home Chat tab in front: what a press on that chat row leaves. */
+function homeChatOpen(): Partial<AppState> {
+  const homeKey = folderWorkspaceKey(BOT.folderWorkspaceId)
+  const tabId = structuredAgentSessionTabId('home')
+  const tab = makeUnifiedTab({
+    id: tabId,
+    entityId: 'home',
+    worktreeId: homeKey,
+    groupId: 'g',
+    contentType: 'agent-session',
+    agentSessionAgent: 'claude'
+  })
+  return {
+    activeWorktreeId: homeKey,
+    activeWorkspaceKey: homeKey,
+    unifiedTabsByWorktree: { [homeKey]: [tab] },
+    groupsByWorktree: {
+      [homeKey]: [{ id: 'g', worktreeId: homeKey, activeTabId: tabId, tabOrder: [tabId] }]
+    },
+    activeGroupIdByWorktree: { [homeKey]: 'g' }
+  }
+}
+
+/** The bot's Home workspace is open and its Home Chat tab is in front, as after clicking that row. */
+export const chatOpen = defineFixture({
+  ...normal,
+  store: {
+    ...normal.store,
+    ...homeChatOpen()
+  }
+})
 
 /** Two live chats folded by hand: live counts, then the chevron at the right edge. */
 export const folded = fixtureFor(normalDay(HOME_WORKERS), { home: 'folded', 'side-2': 'folded' })

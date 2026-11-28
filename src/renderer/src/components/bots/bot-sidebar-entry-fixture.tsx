@@ -24,7 +24,7 @@ import { getLineageGroupKey } from '../../../../shared/sidebar-list/sections/gro
 export const NOW = Date.now()
 export const HOUR = 3_600_000
 
-const BOT: Bot = {
+export const BOT: Bot = {
   id: 'builder',
   name: 'Bot builder',
   hostId: 'local',

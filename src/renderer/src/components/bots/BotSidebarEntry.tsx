@@ -24,7 +24,8 @@ import { ROOT_PROJECT_GROUP_HEADER_BUCKET } from '@/components/sidebar/worktree-
 import { BotRow } from './BotRow'
 import { BotSidebarChats } from './BotSidebarChats'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
-import { useBotOwnChatTree } from './use-bot-chat-tree'
+import { botSidebarListedChats } from '../../../../shared/bots/bot-sidebar-chat-groups'
+import { useBotOwnChatTree, type BotChatTree } from './use-bot-chat-tree'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useBotWorkspaceOrder } from './use-bot-workspace-order'
@@ -36,6 +37,7 @@ import { useBotSidebarPaging } from './bot-sidebar-paging'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useBotsRevealSettle } from './bots-sidebar-reveal-context'
+import { frontBotChat } from './BotChatRowControls'
 
 // The bot row's status lane and gap, so a line's status glyph lands under the bot's avatar.
 export const BOT_WORKSPACE_LINE_INDENT = 19
@@ -77,6 +79,16 @@ export function BotSidebarEntry({
   const groupKey = getLineageGroupKey(folderWorkspaceKey(home.id))
   const folded = useAppStore((s) => s.collapsedGroups.has(groupKey))
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
+  const homeKey = folderWorkspaceKey(home.id)
+  const rowsListed = botListsUnderRow({ folded, hostDown: offline })
+  const chatTree = useBotOwnChatTree(rowsListed ? bot : null)
+  // A chat row in front carries the selection by itself, so the card steps back instead of doubling it (#47091).
+  const frontChatId = useAppStore((s) => {
+    const front = frontBotChat(s)
+    return front?.homeKey === homeKey ? front.chatId : null
+  })
+  const cardHoldsSelection =
+    isActive && !botSidebarListedChats(chatTree.chats).some((chat) => chat.chatId === frontChatId)
   const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
   // Full-page Tasks/Activity views have no open workspace line, as in AttachedWorktreeCards.
   const activeWorktreeId = useAppStore((s) =>
@@ -141,7 +153,7 @@ export function BotSidebarEntry({
       <BotRow
         bot={bot}
         home={home}
-        isActive={isActive}
+        isActive={cardHoldsSelection}
         onOpen={onOpen}
         dragHandle={drag !== undefined && !offline}
         beginRename={beginRename}
@@ -174,6 +186,7 @@ export function BotSidebarEntry({
         >
           <BotSidebarList
             bot={bot}
+            chatTree={chatTree}
             workspaces={workspaces}
             allWorkspaces={ordered}
             lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
@@ -191,6 +204,7 @@ export function BotSidebarEntry({
  *  Nothing until the first read lands, so the workers never flash unfolded before their folded chats. */
 function BotSidebarList({
   bot,
+  chatTree,
   workspaces,
   allWorkspaces,
   lineageChildrenByParentIdentity,
@@ -199,6 +213,7 @@ function BotSidebarList({
   onOpen
 }: {
   bot: Bot
+  chatTree: BotChatTree
   workspaces: Worktree[]
   /** Every worker line, sleeping ones too, for what the fold of old chats must see. */
   allWorkspaces: readonly Worktree[]
@@ -208,7 +223,6 @@ function BotSidebarList({
   onOpen: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const chatTree = useBotOwnChatTree(bot)
   const entryKey = botSidebarEntryKey(bot)
   useEffect(() => {
     if (chatTree.state === 'ready') {
