@@ -59,27 +59,19 @@ jobs:
       skipped_count: ${{ steps.publish_drafts.outputs.skipped_count }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
-      - name: Resolve the source commit
-        id: source
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
-        run: |
-          set -euo pipefail
-          sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/${REF:-main}" --jq .sha)"
-          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Could not resolve ref $REF."; exit 1; }
-          echo "sha=$sha" >>"$GITHUB_OUTPUT"
-
-      # The draft publisher reads HEAD and tags, so it runs in a source checkout with the workflow commit's scripts.
-      - name: Checkout source for draft recovery
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+      # Same ref resolution the cut always used; the draft publisher also reads this checkout's HEAD and tags.
+      - name: Checkout ref
         uses: actions/checkout@v6
         with:
-          ref: ${{ steps.source.outputs.sha }}
+          ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
           filter: blob:none
           fetch-tags: true
           persist-credentials: false
+
+      - name: Resolve the source commit
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
 
       - name: Restore draft-publish scripts from the workflow ref
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
@@ -87,7 +79,8 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
-          git fetch -q --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          # No --depth: a shallow graft would hide tag parents from the publisher's built-from-this-ref check.
+          git fetch -q --no-tags origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- \
             config/scripts/release/publication/publish-complete-draft-releases.mjs \
             config/scripts/release/publication/verify-release-required-assets.mjs
@@ -806,7 +799,7 @@ jobs:
             git -c transfer.fsckObjects=true fetch -q --no-tags --depth=1 origin "+refs/tags/$TAG:refs/tags/$TAG"
           fi
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+(\.[0-9A-Za-z]+)?)?$ && "$TAG" == "v$VERSION" ]] || fail "not a release version tag"
-          # Bind the version's shape to what was dispatched; the exact number comes from prepare's release math.
+          # Bind the version to what was dispatched, against the stable floor read here rather than from prepare.
           if [[ "$DRY_RUN" == true ]]; then
             [[ -n "$NEW_TAG" && "$VERSION" == "0.0.0-rc.$GITHUB_RUN_ID" ]] || fail "a dry run must use its placeholder version"
           elif [[ -n "$EXPLICIT_VERSION" ]]; then
@@ -817,14 +810,37 @@ jobs:
           else
             [[ "$VERSION" != *-* ]] || fail "a $KIND cut must be a stable version"
           fi
+          if [[ "$DRY_RUN" != true && -z "$EXPLICIT_VERSION" ]]; then
+            # prepare's floor: the newest published desktop stable, raised to the source package.json's stable version.
+            floor="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft != true) | .tag_name' |
+              { grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || true; } | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)"
+            pkg="$(git show "$SOURCE_SHA:package.json" | jq -r '.version // ""')"
+            if [[ "$pkg" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              floor="$(printf '%s\n%s\n' "${floor:-0.0.0}" "$pkg" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)"
+            fi
+            IFS=. read -r fM fm fp <<<"${floor:-0.0.0}"
+            IFS=. read -r vM vm vp <<<"${VERSION%%-*}"
+            vM=$((10#$vM)) vm=$((10#$vm)) vp=$((10#$vp))
+            ok=false
+            # The upper bounds match prepare's 100-step tag-collision loop.
+            case "$KIND" in
+              rc) (( vM == fM && vm == fm && vp == fp + 1 )) && ok=true ;;
+              patch) (( vM == fM && vm == fm && vp > fp && vp <= fp + 100 )) && ok=true ;;
+              minor) (( vM == fM && vm > fm && vm <= fm + 100 && vp == 0 )) && ok=true ;;
+              major) (( vM > fM && vM <= fM + 100 && vm == 0 && vp == 0 )) && ok=true ;;
+            esac
+            # recover_unpublished_tag may also reuse the source's own unpublished stable tag, which is the floor.
+            [[ -z "$NEW_TAG" && "$KIND" != rc && "$VERSION" == "$floor" ]] && ok=true
+            [[ "$ok" == true ]] || fail "$VERSION is not the next $KIND after stable ${floor:-0.0.0}"
+          fi
           commit="$(git rev-parse "refs/tags/$TAG^{commit}")"
           [[ "$commit" == "$RELEASE_SHA" ]] || fail "tag commit $commit is not prepare's $RELEASE_SHA"
           if [[ -z "$NEW_TAG" && "$commit" == "$SOURCE_SHA" ]]; then
             echo "Recovered tag $TAG is the source commit itself."
             exit 0
           fi
-          # Raw object and two-tree reads: a depth-1 fetch grafts away parents.
-          [[ "$(git cat-file -p "$commit" | awk '/^parent /{ print $2 }')" == "$SOURCE_SHA" ]] || fail "release commit is not a single-parent child of $SOURCE_SHA"
+          # Raw header and two-tree reads: a depth-1 fetch grafts away parents, and the message must not count.
+          [[ "$(git cat-file -p "$commit" | sed '/^$/q' | awk '/^parent /{ print $2 }')" == "$SOURCE_SHA" ]] || fail "release commit is not a single-parent child of $SOURCE_SHA"
           changed="$(git diff-tree --name-only -r "$SOURCE_SHA" "$commit")"
           [[ -z "$changed" || "$changed" == package.json ]] || fail "release commit changes more than package.json"
           # Byte-for-byte: the source package.json with only its version line replaced.
