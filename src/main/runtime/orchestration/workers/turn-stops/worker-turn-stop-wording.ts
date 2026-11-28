@@ -58,6 +58,32 @@ export function redactFailure(text: string): string {
   return redactString(replaceDispatchCapabilities(text).value)
 }
 
+/** Times are UTC: the coordinator may read them on another machine's clock. */
+function describeUsageLimitNextStep(
+  limit: { resetsAt?: number; continuesAt?: number; continues?: boolean } | undefined,
+  context: StopContext
+): string[] {
+  const at = (ms: number) => new Date(ms).toISOString()
+  const move = `stop the worker with your Orca CLI's \`orchestration worker-stop --dispatch ${context.dispatchId}\` and retry the task on another agent with \`orchestration worker-start --task ${context.taskId} --retry-of ${context.dispatchId} --agent <other>\``
+  if (limit?.continues) {
+    const when =
+      limit.continuesAt !== undefined
+        ? `at ${at(limit.continuesAt)}, after the limit resets`
+        : `once its account has room again (${limit.resetsAt !== undefined ? `the limit reported a reset at ${at(limit.resetsAt)}` : 'the agent gave no reset time'})`
+    const check = limit.continuesAt !== undefined ? `after ${at(limit.continuesAt)}` : 'later'
+    return [
+      `Orca continues this worker by itself ${when}. If it is still stopped ${check}, ${move}.`
+    ]
+  }
+  const reset =
+    limit?.resetsAt !== undefined
+      ? `the limit resets at ${at(limit.resetsAt)}`
+      : 'the agent gave no reset time'
+  return [
+    `Orca has not scheduled a continue for this worker (${reset}). To move the task, ${move}, or wait until the limit resets.`
+  ]
+}
+
 export function describeStop(stop: WorkerTurnStop, context: StopContext): string {
   if (stop.requestError) {
     const { text, detail, kind } = stop.requestError
@@ -68,9 +94,7 @@ export function describeStop(stop: WorkerTurnStop, context: StopContext): string
       ...(detail ? [`Details from the agent: ${detail}`] : []),
       ...(chat ? ['The task is still assigned to this chat, which keeps its history.'] : []),
       ...(kind === 'usageLimitReached'
-        ? [
-            `Stop the worker with your Orca CLI's \`orchestration worker-stop --dispatch ${context.dispatchId}\` and retry the task on another agent with \`orchestration worker-start --task ${context.taskId} --retry-of ${context.dispatchId} --agent <other>\`, or wait until the limit resets.`
-          ]
+        ? describeUsageLimitNextStep(stop.requestError.usageLimit, context)
         : chat
           ? []
           : describeNextStep(stop, context)),

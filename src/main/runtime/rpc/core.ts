@@ -1,3 +1,7 @@
+import type {
+  DelegatedPhoneServerOfferParams,
+  DelegatedPhoneServerOfferResult
+} from '../../../shared/remote-runtime/pairing/delegated-phone-server-offer-contract'
 import type { DeclareOrcaAccountParams } from '../../../shared/remote-runtime/pairing/paired-desktop-account-contract'
 import type { RuntimeClientCapabilities } from './callers/runtime-client-capabilities'
 import type { ZodError, ZodType } from 'zod'
@@ -202,9 +206,17 @@ export type RpcContext = {
     /** Tags this socket with the caller's installation until it closes. */
     declare(clientInstanceId: string): void
   }
-  // Authenticated runtime devices may manage only their own delegated phones.
+  // Authenticated runtime devices manage the phones of the installation they name. A claim is enough:
+  // the same device can already open a terminal here and revoke any device as this host's owner.
   delegatedMobileDevices?: {
-    sync(phones: readonly DelegatedPhone[]): DelegatedMobileDeviceSyncResult
+    sync(
+      phones: readonly DelegatedPhone[],
+      clientInstanceId?: string
+    ): DelegatedMobileDeviceSyncResult
+  }
+  // A desktop-relayed phone row only: a pairing of the phone's own with this host, chained to that row.
+  delegatedPhoneServerOffers?: {
+    create(params: DelegatedPhoneServerOfferParams): Promise<DelegatedPhoneServerOfferResult>
   }
   // Binary terminal transport is absent on Unix and non-E2EE WebSocket paths.
   sendBinary?: RpcBinarySender

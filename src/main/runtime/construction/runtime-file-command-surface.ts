@@ -75,8 +75,6 @@ export function installRuntimeFileCommandSurface(
     renameFileExplorerPath: fileMutations.renameFileExplorerPath.bind(fileMutations),
     copyFileExplorerPath: fileMutations.copyFileExplorerPath.bind(fileMutations),
     deleteFileExplorerPath: fileMutations.deleteFileExplorerPath.bind(fileMutations),
-    deleteFileExplorerPathIfUnchanged:
-      fileMutations.deleteFileExplorerPathIfUnchanged.bind(fileMutations),
     searchRuntimeFiles: fileSearch.searchRuntimeFiles.bind(fileSearch),
     listRuntimeFiles: fileSearch.listRuntimeFiles.bind(fileSearch),
     listRuntimeMarkdownDocuments: fileAccess.listRuntimeMarkdownDocuments.bind(fileAccess),

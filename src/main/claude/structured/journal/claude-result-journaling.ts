@@ -133,7 +133,13 @@ export function journalClaudeResult(
   const terminalFailure =
     notice || usageLimit || (authFailure && !authFailure.shown ? authFailure.row : null)
   if (command && commandResult?.row && !terminalFailure) {
-    sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })
+    const identity =
+      commandResult.end.outcome === 'success' && command.compacted
+        ? command.compacted
+        : command.resultIdentity
+    sink.appendItem(identity, commandResult.row, {
+      turnScope: endedTurnScope
+    })
   } else if (command && commandResult?.row && stopCheck) {
     // Stopped, the command's own result row stands in for the failure.
     const { resultIdentity: identity } = command

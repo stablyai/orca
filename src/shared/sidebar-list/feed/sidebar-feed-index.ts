@@ -1,4 +1,5 @@
 import {
+  getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
   getWorktreeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -7,11 +8,6 @@ import {
 } from '../../execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../execution-host/execution-host-registry'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
-import {
-  getRepoHostIdentity,
-  getRepoHostIdentityForParts,
-  type HostScopedRepoKey
-} from '../../repository/repo-host-identity'
 import type { Repo } from '../../repository/repo-types'
 import {
   getWorktreeHostIdentity,
@@ -133,15 +129,12 @@ export type SidebarFeedIndex = {
 /** Prefer the row host’s registration; missing same-ID registrations use repoMap fallback like the window. */
 function repoOfWorktree(
   repoMap: ReadonlyMap<string, Repo>,
-  reposByKey: ReadonlyMap<HostScopedRepoKey, Repo>,
+  reposByHost: ReadonlyMap<ExecutionHostId, ReadonlyMap<string, Repo>>,
   worktree: Pick<Worktree, 'repoId' | 'hostId'>
 ): Repo | undefined {
   // An unqualified row is a local one whose metadata names no host (workspace-rows.ts).
   const hostId = worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
-  return (
-    reposByKey.get(getRepoHostIdentityForParts(worktree.repoId, hostId)) ??
-    repoMap.get(worktree.repoId)
-  )
+  return reposByHost.get(hostId)?.get(worktree.repoId) ?? repoMap.get(worktree.repoId)
 }
 
 /** Each row's own host's registration, for lists whose repoMap keeps one registration per id. */
@@ -159,8 +152,27 @@ export function createHostScopedRepoOf(
   repos: readonly Repo[],
   repoMap: ReadonlyMap<string, Repo>
 ): SidebarFeedIndex['repoOf'] {
-  const reposByKey = new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo]))
-  return (worktree) => repoOfWorktree(repoMap, reposByKey, worktree)
+  let needsHostMap = false
+  for (const repo of repos) {
+    if (repoMap.get(repo.id) !== repo) {
+      needsHostMap = true
+      break
+    }
+  }
+  if (!needsHostMap) {
+    return (worktree) => repoMap.get(worktree.repoId)
+  }
+  const reposByHost = new Map<ExecutionHostId, Map<string, Repo>>()
+  for (const repo of repos) {
+    const hostId = getRepoExecutionHostId(repo)
+    let byId = reposByHost.get(hostId)
+    if (!byId) {
+      byId = new Map()
+      reposByHost.set(hostId, byId)
+    }
+    byId.set(repo.id, repo)
+  }
+  return (worktree) => repoOfWorktree(repoMap, reposByHost, worktree)
 }
 
 export function indexSidebarFeed(

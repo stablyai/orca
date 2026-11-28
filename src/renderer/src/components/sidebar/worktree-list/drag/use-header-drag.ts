@@ -8,10 +8,7 @@ import type { ProjectGroup } from '../../../../../../shared/project/groups/proje
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import type {
-  HostHeaderRow,
-  HostSectionRow
-} from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import {
@@ -31,11 +28,21 @@ import {
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
-const readLiveRepos = (): readonly Repo[] => useAppStore.getState().repos
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+const readLiveRepos = (): readonly Repo[] => getAppStoreState().repos
+
+const EMPTY_BUCKET_MAP = new Map<string, string[]>()
+const EMPTY_INDEX_MAP = new Map<string, number>()
+const EMPTY_STRING_MAP = new Map<string, string>()
+const EMPTY_PROJECT_GROUP_MAP = new Map<string, ProjectGroup>()
+const EMPTY_OWNER_HOST_MAP = new Map<string, ExecutionHostId | null>()
 
 export type WorktreeSidebarHeaderDrag = ReturnType<typeof useWorktreeSidebarHeaderDrag>
 
 function indexById(byBucket: ReadonlyMap<string, readonly string[]>): Map<string, number> {
+  if (byBucket.size === 0) {
+    return EMPTY_INDEX_MAP
+  }
   const map = new Map<string, number>()
   for (const ids of byBucket.values()) {
     ids.forEach((id, index) => {
@@ -46,6 +53,9 @@ function indexById(byBucket: ReadonlyMap<string, readonly string[]>): Map<string
 }
 
 function bucketById(byBucket: ReadonlyMap<string, readonly string[]>): Map<string, string> {
+  if (byBucket.size === 0) {
+    return EMPTY_STRING_MAP
+  }
   const map = new Map<string, string>()
   for (const [bucketKey, ids] of byBucket) {
     for (const id of ids) {
@@ -83,9 +93,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     onHostDragActiveChange,
     onScrollIntent
   } = args
-  const reorderRepos = useAppStore((s) => s.reorderRepos)
-  const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
-  const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
+  const { reorderRepos, moveProjectToGroup, updateProjectGroup } = getAppStoreState()
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders = groupBy === 'repo' && projectOrderBy === 'manual'
   const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
@@ -103,8 +111,11 @@ export function useWorktreeSidebarHeaderDrag(args: {
     [hasProjectGroups, projectOrderBy, rows]
   )
   const projectGroupByIdForHeaderDrag = useMemo(
-    () => new Map(projectGroups.map((group) => [group.id, group])),
-    [projectGroups]
+    () =>
+      hasProjectGroups
+        ? new Map(projectGroups.map((group) => [group.id, group]))
+        : EMPTY_PROJECT_GROUP_MAP,
+    [hasProjectGroups, projectGroups]
   )
   const rootProjectHeaderCountByOccurrenceKey = useMemo(
     () => getRootProjectHeaderCountByOccurrenceKey(rootProjectHeaderKeys),
@@ -112,6 +123,9 @@ export function useWorktreeSidebarHeaderDrag(args: {
   )
   // Why: an id shared by two hosts has no single owner, so leave it unrouted rather than guess.
   const projectGroupOwnerHostIdByGroupId = useMemo(() => {
+    if (!hasProjectGroups) {
+      return EMPTY_OWNER_HOST_MAP
+    }
     const byGroupId = new Map<string, ExecutionHostId | null>()
     for (const group of projectGroups) {
       const hostId = getRepoExecutionHostId(group)
@@ -119,7 +133,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
       byGroupId.set(group.id, existing === undefined || existing === hostId ? hostId : null)
     }
     return byGroupId
-  }, [projectGroups])
+  }, [hasProjectGroups, projectGroups])
 
   const commitRepoReorder = useCallback(
     (orderedIds: string[]) => {
@@ -128,13 +142,19 @@ export function useWorktreeSidebarHeaderDrag(args: {
     },
     [reorderRepos, onScrollIntent]
   )
-  const orderedHostIds = useMemo(
-    () =>
-      rows
-        .filter((row): row is HostHeaderRow => row.type === 'host-header')
-        .map((row) => row.hostId),
-    [rows]
-  )
+  const { orderedHostIds, nonHostRows } = useMemo(() => {
+    const hosts: ExecutionHostId[] = []
+    const nonHosts: Row[] = []
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i]
+      if (row.type === 'host-header') {
+        hosts.push(row.hostId)
+      } else {
+        nonHosts.push(row)
+      }
+    }
+    return { orderedHostIds: hosts, nonHostRows: nonHosts }
+  }, [rows])
   const hostDrag = useHostHeaderDrag({
     orderedHostIds,
     onCommit: onReorderHostSections,
@@ -146,19 +166,15 @@ export function useWorktreeSidebarHeaderDrag(args: {
   useEffect(() => () => onHostDragActiveChange(false), [onHostDragActiveChange])
 
   const sidebarRepoHeaderIdsByBucket = useMemo(
-    () =>
-      getSidebarOrderedRepoHeaderIdsByBucket(
-        rows.filter((row): row is Row => row.type !== 'host-header')
-      ),
-    [rows]
+    () => getSidebarOrderedRepoHeaderIdsByBucket(nonHostRows),
+    [nonHostRows]
   )
   const sidebarProjectGroupHeaderIdsByBucket = useMemo(
     () =>
-      getSidebarOrderedProjectGroupHeaderIdsByBucket(
-        rows.filter((row): row is Row => row.type !== 'host-header'),
-        projectGroupByIdForHeaderDrag
-      ),
-    [projectGroupByIdForHeaderDrag, rows]
+      hasProjectGroups
+        ? getSidebarOrderedProjectGroupHeaderIdsByBucket(nonHostRows, projectGroupByIdForHeaderDrag)
+        : EMPTY_BUCKET_MAP,
+    [hasProjectGroups, nonHostRows, projectGroupByIdForHeaderDrag]
   )
   const repoHeaderIndexByRepoId = useMemo(
     () => indexById(sidebarRepoHeaderIdsByBucket),
@@ -261,7 +277,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     () =>
       hasProjectGroups
         ? getRootProjectHeaderSectionEndByKey(renderRows, firstHeaderIndex)
-        : new Map<string, number>(),
+        : EMPTY_INDEX_MAP,
     [hasProjectGroups, renderRows, firstHeaderIndex]
   )
 

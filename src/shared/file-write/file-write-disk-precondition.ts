@@ -21,6 +21,9 @@ export const FILE_DELETE_IF_UNCHANGED_RUNTIME_CAPABILITY = 'files.delete.if-unch
 /** Only a host that can hold the file open while it checks and deletes it may answer the guarded delete. */
 export const FILE_DELETE_LOCAL_ONLY_MESSAGE = 'files.deleteIfUnchanged is local to this host'
 
+// Why: earlier hosts refuse `files.writeIfUnchanged` from phones, so a phone offers Edit only with this.
+export const MOBILE_FILE_WRITE_RUNTIME_CAPABILITY = 'files.mobile-write-if-unchanged.v1' as const
+
 /** v1 hosts cannot check bytes or skip identical writes; require a client-side read only for saves that must refuse non-UTF-8 files. */
 export function hostEnforcesPrecondition(
   capabilities: readonly unknown[],

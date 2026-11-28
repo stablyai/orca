@@ -1,4 +1,4 @@
-import { terminalArtifactPreviewMatchesBase } from '../terminal-artifacts/mobile-file-preview-editability'
+import { terminalArtifactPreviewMatchesBase } from './mobile-file-preview-editability'
 import { mobileFileMedia } from '../media/mobile-file-media'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import type { RpcAcceptedResult } from '../../transport/rpc/rpc-accepted-result'

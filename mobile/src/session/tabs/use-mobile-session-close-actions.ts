@@ -161,14 +161,18 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     }
   }
 
-  /** `closingTogether` names every tab going with this one (a split's panes), so the landing is outside them. */
+  /** True once the host closed the tab. `closingTogether` names every tab going with this one (a
+   *  split's panes), so the landing is outside them. `expectedTerminal` refuses a pane now running
+   *  another terminal; send it only to hosts advertising continue-terminal-in-chat. */
   async function handleCloseSessionTab(
     tab: MobileSessionTab,
-    closingTogether: readonly string[] = [tab.id]
-  ) {
+    closingTogether: readonly string[] = [tab.id],
+    options: { expectedTerminal?: string } = {}
+  ): Promise<boolean> {
     if (!client) {
-      return
+      return false
     }
+    let closed = false
     const closingTerminal =
       tab.type === 'terminal' ? createClosingTerminalTab(tab, terminalRowHandlesRef.current) : null
     if (closingTerminal) {
@@ -196,7 +200,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         tabId: tab.id,
         // Why: a tapped tab close is explicit user intent; older hosts strip
         // the unknown field and keep their legacy behavior.
-        reason: 'user'
+        reason: 'user',
+        ...(options.expectedTerminal ? { terminal: options.expectedTerminal } : {})
       })
       const response = sessionTabClose.interpret(reply)
       if (!response.accepted || response.value.refused) {
@@ -267,6 +272,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           activeHandleRef.current = null
           setActiveHandle(null)
         }
+        closed = true
       }
     } catch {
       keepTab()
@@ -275,6 +281,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         closingTerminalTabsRef.current.delete(closingTerminal)
       }
     }
+    return closed
   }
   return {
     handleRenameTerminal,

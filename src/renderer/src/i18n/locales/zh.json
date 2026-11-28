@@ -1235,7 +1235,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost 指此 bot 所在的电脑",
           "headers": "请求头",
-          "authHint": "如果服务器需要在浏览器中登录，原生检查完成后会出现“连接”",
+          "authHint": "如果服务器需要在浏览器中登录，原生检查完成后会出现“登录”。",
           "executable": "可执行文件",
           "commandPlaceholder": "npx",
           "args": "参数",
@@ -1516,7 +1516,8 @@
         "add": "为此仓库添加服务器",
         "files": "来自此仓库的文件",
         "open": "打开 {{file}}"
-      }
+      },
+      "unreadable": "无法在这台电脑上打开已保存的登录或密钥"
     },
     "navigation": {
       "accounts": {
@@ -1798,13 +1799,14 @@
           "localBaseRefNotUpdatedDirty": "{{value0}} 有未提交的更改",
           "localBaseRefNotUpdatedNotFastForward": "{{value0}} 有仅存在于本地的提交",
           "localBaseRefNotUpdatedError": "Git 错误",
-          "localBaseRefHideDetails": "隐藏详情",
-          "localBaseRefShowDetails": "详情",
           "localBaseRefShallowHistoryTitle": "本地 {{value0}} 未更新：浅克隆",
           "localBaseRefShallowHistoryNamed": "“{{value0}}”由 {{value1}} 创建，不受影响。Orca 无法同时更新你的本地 {{value2}} 分支：此克隆只包含较近的历史，Git 无法确认本地 {{value2}} 只是落后。要为之后每个新工作区解决此问题，请运行一次：",
           "localBaseRefShallowHistory": "你的工作区由 {{value0}} 创建，不受影响。Orca 无法同时更新你的本地 {{value1}} 分支：此克隆只包含较近的历史，Git 无法确认本地 {{value1}} 只是落后。要为之后每个新工作区解决此问题，请运行一次：",
           "localBaseRefRefreshTurnOff": "禁用检查",
           "localBaseRefRefreshTurnOffHelp": "了解“禁用检查”的作用",
+          "localBaseRefRefreshDisable": "禁用",
+          "localBaseRefRefreshDisableTooltip": "停止检查 {{value0}}",
+          "localBaseRefClose": "关闭",
           "localBaseRefRefreshTurnOffTooltip": "关闭 Orca 设置 {{value0}}。创建工作区时 Orca 将不再更新本地 {{value1}}，此警告也不会再出现。新工作区不受影响。可随时在设置 › Git 中重新开启",
           "localBaseRefUnshallow": "取消浅克隆",
           "localBaseRefUnshallowFailed": "无法为此工作区打开终端",
@@ -2639,6 +2641,17 @@
         "mergeRequest": "合并请求",
         "linkedIssue": "关联的议题",
         "listeningPort": "监听端口"
+      },
+      "simulator": {
+        "runtime": {
+          "emulatorRuntimeAttach": {
+            "serverAndroid": "暂不支持 {{host}} 上的 Android 模拟器，请选择 iOS 模拟器",
+            "updateServer": "无法在此显示 {{host}} 的模拟器，请更新 {{host}} 上的 Orca 后重试"
+          },
+          "emulatorRuntimeTarget": {
+            "ambiguousOwner": "无法确定此工作区在哪台电脑上运行，请重新打开后重试"
+          }
+        }
       },
       "environmentSetupAgentLaunch": {
         "noAgent": "此工作区未检测到已启用的 AI 智能体",
@@ -3534,6 +3547,8 @@
         "8c967b4d15": "稍后"
       },
       "TaskPage": {
+        "issueFilterState": "状态",
+        "issueFilterPreset": "预设",
         "ff69a30681": "取消",
         "8ff6fdc368": "创建中…",
         "919a20dd5b": "输入 {{value0}}",
@@ -3646,7 +3661,7 @@
         "99c2755218": "搜索议题或输入 JQL，例如 project = ABC",
         "2ff9fd71fd": "刷新 Jira 议题",
         "0b65d3fb2c": "搜索 Linear 项目...",
-        "eec0c5c079": "搜索 Linear 议题...",
+        "eec0c5c079": "搜索...",
         "8964184a8b": "刷新 Linear",
         "3feb524d42": "新建 Linear 议题",
         "0cbf7e5cf3": "Linear 任务模式",
@@ -4210,6 +4225,7 @@
           "9d0f2eda6d": "标签",
           "01f3f3d161": "作者",
           "13b3ac0a84": "状态",
+          "show": "显示",
           "79c54552f7": "筛选条件",
           "8a2ffbf9b3": "删除 {{value0}} 筛选条件",
           "anyState": "任意",
@@ -5324,9 +5340,8 @@
             "84c3b15dca": "代理用量限制",
             "d663430cf9": "设置用量跟踪",
             "remoteLabel": "{{host}} 上没有用量",
-            "remoteTitle": "{{host}} 上的用量",
-            "remoteBody": "此工作区运行在 {{host}} 上，因此状态栏显示的是该主机的用量，请在该主机上登录代理，或切换到本地工作区以查看这台电脑的用量",
-            "remoteOpenAccounts": "打开 {{host}} 的账户"
+            "remoteNoUsageYet": "暂无用量。请在该主机上登录。",
+            "remoteAccounts": "账户"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "更新失败，单击以展开",
@@ -12673,8 +12688,11 @@
           "restarting": "正在重启…",
           "updated": "已更新",
           "failed": "更新失败",
-          "serviceManagerHelp": "通过启动此服务器的服务管理器更新 Orca",
-          "unpackedHelp": "开发版本必须在其源码目录中更新",
+          "nodeServerHelp": "远程更新已关闭：此服务器运行 Orca 时没有内置更新程序，Orca 的 Node 服务器（orcad）就是这样。请在服务器上安装较新的 Orca 版本，然后重启 orca serve。",
+          "updaterNotStartedHelp": "远程更新已关闭：此服务器上的 Orca 尚未启动更新程序。请在服务器上重启 Orca 后再检查一次，或直接在服务器上更新。",
+          "headlessServeHelp": "远程更新已关闭：此服务器运行 orca serve 时没有更新监督程序，因此无法自行以新版本重启。请在服务器上更新 Orca，然后重启其服务。",
+          "systemPackageHelp": "远程更新已关闭：此服务器上的 Orca 是通过系统软件包或其他安装程序安装的，必须由它来更新。请按安装时的方式更新，例如 .deb 或 .rpm 使用 apt 或 dnf。",
+          "devBuildHelp": "远程更新已关闭：此服务器运行的是开发版本。请从其源码目录更新。",
           "legacyHelp": "此服务器无法远程更新，请在服务器主机上更新 Orca",
           "managedOverSshHelp": "此桌面通过 SSH 更新此服务器。请在远程 Orca 服务器中该服务器所在行使用“更新”"
         },
@@ -14828,10 +14846,7 @@
             "keepDeletion": "保留删除",
             "refreshAll": "全部刷新",
             "statusReadFailed": "Git 无法读取此工作区，显示的更改可能不是最新的",
-            "rebaseConflictCount_other": "{{count}} 个冲突",
-            "rebasePaused": "变基已暂停",
             "rebaseResolveConflictsFirst": "请先解决冲突",
-            "rebaseAbort": "中止",
             "rebaseContinue": "继续",
             "continueRebasePausedAgain": "变基在下一个冲突处暂停",
             "continueRebaseFailed": "继续变基失败",
@@ -14842,7 +14857,6 @@
             "rebaseStopMovedOn": "变基已经继续进行。请查看面板后重试",
             "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它",
             "rebaseStepUnreadableShort": "检查失败",
-            "rebaseCheckAgain": "重新检查",
             "rebaseRetryInspect": "重试",
             "rebaseRetryInspectLabel": "重新检查变基步骤",
             "rebaseStoppedFinishInTerminal": "Git 已在此步骤暂停。请在终端中完成或中止",
@@ -14874,7 +14888,14 @@
             "scopeNoUncommitted": "没有未提交的更改",
             "scopeCommitFiles": "文件",
             "gitGraphButton": "图谱",
-            "compareLoadingAgainst": "正在与 {{base}} 比较"
+            "compareLoadingAgainst": "正在与 {{base}} 比较",
+            "operationResolve": "解决",
+            "operationResolveLabel": "用 AI 解决冲突",
+            "operationMoreActions": "更多操作",
+            "operationAbortConfirm": "再次选择以中止",
+            "operationRunChangedTitle": "没有中止任何操作",
+            "operationRunChangedDescription": "选择中止后，操作已更改。请检查当前状态后重试。",
+            "operationRunUnknown": "无法判断哪一次运行已暂停，因此这里无法中止。请刷新源代码管理，或在终端中中止。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",
@@ -15020,7 +15041,6 @@
                 "failingCount_other": "{{count}} 个失败",
                 "pendingCount_other": "{{count}} 个等待中",
                 "unresolvedCount_other": "{{count}} 个未解决",
-                "sendQueuedCommentsToAi_other": "发送 {{count}} 条排队评论给 AI",
                 "conflictsBlockThisMr": "冲突阻止了此 MR",
                 "conflictsBlockThisPr": "冲突阻止了此 PR",
                 "copyComment": "复制评论",
@@ -15479,15 +15499,7 @@
               "conflict": {
                 "status": {
                   "cards": {
-                    "5302a1ddba": "合并冲突",
-                    "7f3af87549": "变基冲突",
-                    "6a8e9ad490": "挑选冲突",
-                    "bdf8772106": "冲突",
-                    "edc2d82a2b": "正在合并",
-                    "5c3707aa44": "正在变基",
-                    "ffe53a1da6": "正在挑选",
-                    "35eb76d323": "操作进行中",
-                    "completeMerge": "完成合并"
+                    "bdf8772106": "冲突"
                   }
                 }
               },
@@ -17042,10 +17054,6 @@
           "39b6b9e4e4": "已提交到分支"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "发送",
-          "84898c548d": "清除",
-          "88b70d0ef5": "复制",
-          "bb84b4c374": "AI 笔记",
           "948a5fd6c8": "清除笔记",
           "0f806a2ab1": "取消",
           "b6c3b84476": "显示文件树",
@@ -17055,7 +17063,6 @@
           "820ec01f24": "冲突文件单独评审",
           "fd8892b120": "没有显示任何变化",
           "eb5f40e49c": "此差异视图排除了未解决的冲突，因为普通的双向差异管道不是冲突安全的",
-          "45cf23b418": "无法清除笔记",
           "ec5053c7f5": "并排",
           "f786fd54e1": "内联",
           "ea08dae15b": "全部折叠",
@@ -17070,13 +17077,9 @@
           "noExtension": "（无扩展名）",
           "diffLoadTimedOut": "差异加载未完成",
           "diffLoadFailed": "无法加载差异",
-          "moreNotesInSourceControl_other": "源代码控制中还有 {{count}} 条笔记",
-          "clearNotesConfirm_other": "清除此工作树中的 {{count}} 条笔记？",
           "changedFilesVs_other": "相比 {{baseRef}}，有 {{count}} 个文件更改",
           "changedFilesIn_other": "{{compareRef}} 中有 {{count}} 个已更改文件",
           "changedFiles_other": "{{count}} 个已更改文件",
-          "showAiNotes_other": "显示 {{count}} 条 AI 笔记",
-          "send": "发送",
           "openDiff": "打开差异",
           "openInEditor": "在编辑器中打开",
           "skippedConflictsExcluded": "{{count}} 个未解决的冲突已被排除在此差异视图之外"
@@ -17272,7 +17275,6 @@
           "b1bfc04034": "选定的文本",
           "f37b98999e": "此注",
           "2b2b31382c": "前言",
-          "bb629de58a": "复制备注给代理",
           "322afab6ff": "复习笔记",
           "0f9969a159": "跳转到第一个评论笔记",
           "12052c639c": "关闭搜索",
@@ -17345,7 +17347,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "发送笔记",
-          "433928cd9f": "将 {{value0}} 发送给代理",
           "thisNote": "这条笔记",
           "noteAlreadySent": "笔记已发送",
           "sendNotesToAgent": "将笔记发送给智能体",
@@ -17431,8 +17432,6 @@
           "3ababd949d": "复习笔记"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "复制备注给代理",
-          "a807596997": "复制笔记",
           "8aaf2c4c69": "显示评论笔记",
           "af02dc2456": "隐藏评论注释"
         },
@@ -18310,8 +18309,6 @@
             "b472c5fe03": "添加浏览器注释",
             "b5ba6085de": "疑问",
             "143204e423": "改变",
-            "d51ef37351": "复制",
-            "6f4ab3592b": "已复制",
             "168350ae6a": "单击或悬停一个元素，然后按 C 进行复制或按 S 进行屏幕截图",
             "777b5bc4ec": "单击一个元素可为代理添加反馈",
             "b733a91bd9": "为所选元素添加反馈",
@@ -18351,12 +18348,9 @@
             "devToolsDockBottom": "停靠到底部",
             "devToolsUndock": "在单独窗口中打开",
             "devToolsClose": "关闭 DevTools",
-            "499b31b84e": "全部复制",
             "e852e20cea": "已复制 — 按 S 进行屏幕截图，或选择另一个元素",
             "074f0ed10b": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
-            "a2164a6e5a": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈",
-            "11c5084aa2": "清晰的注释",
-            "734e4343ec": "清除浏览器注释"
+            "a2164a6e5a": "{{value0}} 条注释已准备好，请选择另一个元素或复制所有反馈"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "取消",
@@ -18983,7 +18977,7 @@
           "runStatusDispatchFailed": "失败"
         },
         "runContent": {
-          "noOutput": "没有可用的输出内容"
+          "noOutput": "没有输出"
         },
         "runViewState": {
           "viewRun": "查看运行",
@@ -19556,7 +19550,10 @@
           "reconnectCopy": "重新登录以查看和管理通过账户分享的产物",
           "signInAgainAction": "重新登录",
           "unconfiguredCopy": "此机器尚未配置 Orca 账户登录",
-          "openAccountSettings": "打开账户设置"
+          "openAccountSettings": "打开账户设置",
+          "deleteManyDescription_other": "{{count}} 个产物将无法再通过其公开链接访问",
+          "deleteNamedFailed": "无法删除“{{name}}”",
+          "deleteBatchStopped_other": "无法删除“{{name}}”，另有 {{count}} 个未删除"
         },
         "ArtifactPublishButton": {
           "a4a49da6af": "分享为产物",
@@ -19608,7 +19605,7 @@
         },
         "ArtifactCollection": {
           "loadMore": "加载更多",
-          "noMatches": "没有匹配的产物"
+          "noMatchingArtifacts": "没有匹配的产物"
         },
         "ArtifactDetailHeader": {
           "publicLink": "任何持有此链接的人都可以查看",
@@ -19633,14 +19630,33 @@
           "size": "大小",
           "updated": "更新时间",
           "expires": "过期时间",
-          "actions": "操作"
+          "actions": "操作",
+          "selectAll": "全选"
         },
         "ArtifactsPageSkeleton": {
           "loading": "正在加载产物"
         },
         "expiredCompact": "已过期",
         "typeMarkdown": "Markdown",
-        "typeHtml": "超文本标记语言"
+        "typeHtml": "超文本标记语言",
+        "ArtifactListFilterMenu": {
+          "clearFilters": "清除筛选",
+          "any": "任意时间",
+          "today": "今天",
+          "pastWeek": "过去 7 天",
+          "pastMonth": "过去 30 天",
+          "anyExpiry": "任意",
+          "withinWeek": "7 天内",
+          "expired": "已过期"
+        },
+        "ArtifactListRow": {
+          "select": "选择 {{name}}"
+        },
+        "ArtifactListSelectionBar": {
+          "delete": "删除",
+          "clear": "清除",
+          "selected_other": "已选择 {{count}} 项"
+        }
       },
       "ComposerParentWorktreePicker": {
         "label": "父工作树",
@@ -19970,6 +19986,9 @@
           "featuredDetail": "每个类别中安装量最多的一个",
           "newlyAdded": "最近添加",
           "newlyAddedDetail": "来自你的所有目录"
+        },
+        "PluginsPage": {
+          "close": "关闭插件"
         }
       },
       "agent-workspace-trust-decision": {
@@ -20010,7 +20029,7 @@
         "dismiss": "忽略",
         "retry": "重试",
         "stateResumed": "已恢复",
-        "stateNeedsYou": "需要你处理",
+        "stateNeedsYou": "需要你",
         "stateResuming": "正在恢复",
         "stateStopped": "已停止",
         "resumingOne": "正在恢复 {{name}}…",
@@ -20018,7 +20037,8 @@
         "failedSome_other": "无法恢复：{{total}} 个中的 {{count}} 个",
         "resumedOne": "已恢复 {{name}}",
         "resumedMany_other": "已恢复 {{count}} 个智能体",
-        "needYou_other": "{{count}} 个需要你处理"
+        "needYou_other": "{{count}} 个需要你",
+        "resumedCount_other": "已恢复 {{count}} 个"
       },
       "NativeChatResumeFailureGuidance": {
         "fallbackShort": "无法恢复",
@@ -20980,9 +21000,9 @@
         "prompt": "提示词",
         "result": "结果",
         "close": "关闭",
-        "needsYou": "需要你处理",
-        "agentNeedsYou": "{{name}} 需要你处理",
-        "mainNeedsYou": "主代理需要你处理",
+        "needsYou": "需要你",
+        "agentNeedsYou": "{{name}} 需要你",
+        "mainNeedsYou": "主代理需要你",
         "show": "查看"
       },
       "drop": {
@@ -21544,7 +21564,7 @@
         "task": "任务",
         "workerCount_other": "{{count}} 个工作者",
         "failedCount": "{{count}} 个失败",
-        "needsYouCount": "{{count}} 个等待你处理",
+        "needsYouCount": "{{count}} 个需要你",
         "newQuestions_other": "{{count}} 个新的工作者问题等待你回答",
         "waitingOnYouName": "{{name}} · 等待你处理",
         "moreQuestions": "另有 {{count}} 个等待你处理",
@@ -21644,6 +21664,7 @@
         "readFailed": "无法加载",
         "retry": "重试",
         "empty": "此聊天未设置任何服务器",
+        "unreported": "{{agent}} 不报告连接状态",
         "cancel": "取消",
         "reconnect": "重新连接",
         "toggle": "使用 {{name}}",
@@ -21670,7 +21691,9 @@
           "failedReason": "失败：{{error}}",
           "disabled": "已禁用",
           "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录",
-          "notStarted": "尚未启动"
+          "notStarted": "尚未启动",
+          "orcaRemoved": "已移除：下一条消息时重新启动",
+          "orcaChanged": "已更改：下一条消息时重新启动"
         },
         "signIn": {
           "action": "登录",
@@ -21685,7 +21708,8 @@
           "unfinished": "尚未完成登录，请在打开的页面上完成，然后点击“完成”",
           "pastePlaceholder": "http://localhost:…"
         },
-        "manage": "管理 MCP 服务器"
+        "manage": "管理 MCP 服务器",
+        "stillFailing": "重新连接后仍然失败。"
       },
       "ciResultLine": {
         "failingLead": "CI 失败于",
@@ -22873,6 +22897,9 @@
         },
         "localOnlyNotice": "在任意面板中用说话代替打字。这些设置仅对此电脑生效，{{host}} 会保留自己的设置"
       },
+      "advanced": {
+        "localOnlyNotice": "排查问题用的底层兼容性设置。这些设置保存在此电脑上，而不是 {{host}}"
+      },
       "repositoryHooks": {
         "availableEnvVars": "可用的环境变量"
       },
@@ -22942,6 +22969,7 @@
           "deleted": "已删除",
           "kept": "已保留 · {{count}}",
           "showMore": "再显示 {{count}} 个",
+          "showFewer": "收起",
           "waiting": "已不活跃 {{elapsed}}/{{after}} 天",
           "title": "活动记录",
           "notListed_other": "另有 {{count}} 个保留的工作区未列出",
@@ -23097,7 +23125,6 @@
           "dialog": {
             "createToken": "创建令牌",
             "environmentManagedLine": "已由 ORCA_BITBUCKET_* 环境变量设置。取消设置后才能在此保存",
-            "savedLocallyOnly": "仅保存在这台电脑上",
             "accessTokenNeeds": "需要拉取请求的读取权限",
             "atlassianEmail": "Atlassian 邮箱",
             "requiredScopes": "所需范围",
@@ -23440,7 +23467,7 @@
       "collapse": "收起编排面板",
       "show": "显示编排：{{counts}}",
       "summary": "编排：{{counts}}",
-      "needsYou_other": "{{count}} 个需要你处理",
+      "needsYou_other": "{{count}} 个需要你",
       "waitingPrefix": "等待你回复 · ",
       "noTask": "无共享任务",
       "open": "打开 {{name}}",
@@ -23521,6 +23548,21 @@
         "address": "地址",
         "finish": "完成",
         "pasteLanded": "登录后，请粘贴最终跳转到的页面地址"
+      }
+    },
+    "notes": {
+      "sendButton": {
+        "sending": "正在发送…",
+        "sendShort": "发送 {{count}} 条",
+        "clearNotes": "清除备注…",
+        "sendCommentsToAgent_other": "将 {{count}} 条评论发送给智能体",
+        "sendNotes_other": "发送 {{count}} 条备注",
+        "sendComments_other": "发送 {{count}} 条评论",
+        "clearPageNotes_other": "清除此页面中的 {{count}} 条备注？",
+        "copyNotes": "复制备注",
+        "sendNotesToAgent_other": "将 {{count}} 条备注发送给智能体",
+        "sentNotesStillListed": "备注已发送，但仍在列表中。",
+        "removeSentNotes": "移除"
       }
     }
   },
@@ -23706,10 +23748,11 @@
     },
     "clientHosted": {
       "preparationFailed": "无法在此桌面上启动远程浏览器，请检查配对连接后重试",
-      "unavailableTitle": "客户端托管的浏览器不可用",
-      "unavailableDescription": "此页面目前在此桌面上不可用",
-      "unavailableOtherDesktopDescription": "此页面已在另一台桌面上打开",
-      "unavailableHostOfflineDescription": "{{host}} 已离线，重新连接后，此页面将在此处重新加载",
+      "runsOnServerTitle": "此标签页在你的服务器上运行",
+      "runsOnServerBody": "请在那里打开以继续。",
+      "details": "详细信息",
+      "noBrowserTitle": "无法在此打开此标签页",
+      "noBrowserBody": "此服务器没有浏览器。",
       "download": {
         "started": "正在下载 {{filename}}…",
         "completed": "已下载 {{filename}}",
@@ -23734,9 +23777,9 @@
       "reload": "重新加载"
     },
     "reopenOnServer": {
-      "action": "在服务器上重新打开",
-      "pending": "正在重新打开…",
-      "caveat": "这会在远程主机上按此页面最后的地址打开新页面，登录状态及其他临时页面状态可能不同，如果页面来自表单提交，新页面将为空白",
+      "action": "在服务器上打开",
+      "pending": "正在打开…",
+      "caveat": "将在服务器上以此页面的最后地址打开。登录状态可能不同。",
       "failed": "无法在远程主机上打开此页面，请检查连接后重试"
     },
     "deviceMove": {
@@ -24295,6 +24338,26 @@
       "title": "文件过大，无法显示差异",
       "detail": "此文件的某个版本超过 10 MB，因此 Orca 不会加载它来显示文本差异",
       "connectionDetail": "此差异过大，无法通过远程连接打开"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "从磁盘重新加载 · 自动重新加载已暂停",
+      "ariaLabelPaused": "从磁盘重新加载，自动重新加载已暂停",
+      "noChanges": "磁盘上没有更改",
+      "readFailed": "无法读取 {{value0}}",
+      "retry": "重试",
+      "fileDeleted": "文件已从磁盘删除",
+      "cannotCheckDirty": "有未保存的编辑时无法与磁盘比较",
+      "changedOnDisk": "磁盘上已更改",
+      "editsKept": "{{value0}} 中未保存的编辑已保留",
+      "openTab": "打开标签页",
+      "paletteTitle": "从磁盘重新加载文件",
+      "paletteDescription": "从磁盘读取当前文件，如有更改则重新加载。",
+      "verbs": {
+        "reloadFile": "重新加载文件",
+        "reloadFromDisk": "从磁盘重新加载",
+        "refreshFile": "刷新文件",
+        "revertFile": "还原文件"
+      }
     }
   },
   "featureTips": {
@@ -24416,7 +24479,7 @@
       "groupComposer": "给 {{group}} 发消息，输入 @ 提及 bot",
       "items": "事项",
       "inProgress": "进行中",
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "itemMeta": "事项 {{number}} · {{bot}} · 刚刚",
       "activity": "活动",
       "activityAdded": "<b>{{bot}}</b> 添加了此事项",
@@ -24429,7 +24492,7 @@
       "itemDocs": "更新文档",
       "idle": "空闲",
       "inProgressCount": "{{count}} 项进行中",
-      "needsYouCount": "{{count}} 项需要你处理",
+      "needsYouCount": "{{count}} 项需要你",
       "itemsAsk": "修复 CSV 导出和 Safari 登录问题，再更新一下文档",
       "itemsReply": "收到。我会把每件事都作为一个事项来跟踪",
       "askAnything": "随心输入",
@@ -24648,6 +24711,9 @@
         "planModelWithoutThinking": "模型“{{model}}”不支持思考强度设置",
         "planThinkingLevelInvalid": "思考级别“{{level}}”对 {{model}} 无效",
         "openCodeInvalidEvents": "OpenCode 返回了无效的 JSON 事件",
+        "antigravityInvalidEvents": "Antigravity 返回了无效的 JSON 事件",
+        "antigravityInvalidResult": "Antigravity 返回了无效的结果",
+        "antigravityNoFinalResult": "Antigravity 未返回最终结果",
         "kimiUnreadableOutput": "Kimi 返回了 Orca 无法读取的输出。请重试",
         "kimiSessionOccupied": "Kimi 无法使用此会话，因为它在另一个客户端中处于活动状态。请在该客户端中停止会话或退出该客户端，然后重试",
         "kimiInterrupted": "Kimi 在完成文本生成前被中断。请重试",
@@ -24947,6 +25013,7 @@
     "antigravityChatToCli": "聊天 → CLI"
   },
   "common": {
+    "new": "新建",
     "search": "搜索",
     "retry": "重试",
     "cancel": "取消",
@@ -25115,7 +25182,10 @@
       "locationGlobal": "global",
       "signInGoogle": "使用 Google 登录",
       "launchesUse": "新启动的 agy 将使用此账号",
-      "loginNow": "agy 当前的登录"
+      "loginNow": "agy 当前的登录",
+      "signedInUnread": "agy 已登录",
+      "unreadDetail": "显示账户以查看是哪一个。macOS 可能会要求你允许访问钥匙串。",
+      "showAccount": "显示账户"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于你下次启动的 Claude",
@@ -25212,6 +25282,7 @@
       "errors": {
         "ownerSilent": "发起此次登录的设备已停止响应",
         "superseded": "此主机上的账户变更中断了登录。请重新开始",
+        "noPrompt": "服务器上的登录命令在一分钟内没有显示登录链接。请更新服务器上的 Orca，然后重试。",
         "failed": "登录失败。请重试"
       }
     },
@@ -25371,7 +25442,9 @@
     "failed": "搜索失败，再试一次",
     "filters": {
       "toggle": "切换搜索详情",
-      "active": "{{count}} 个已启用"
+      "active": "{{count}} 个已启用",
+      "includeSummary": "包含：{{patterns}}",
+      "excludeSummary": "排除：{{patterns}}"
     },
     "noResults": "没有结果。请尝试其他搜索或调整筛选条件"
   },
@@ -25684,8 +25757,7 @@
         "failing": "失败",
         "running": "待处理",
         "cancelled": "已取消",
-        "passing": "通过",
-        "more": "另有 {{count}} 项"
+        "passing": "通过"
       },
       "addEmoji": "添加表情符号",
       "addEmojiTooltip": "添加表情符号（或输入 :）",
@@ -25775,7 +25847,9 @@
     "statusFilters": {
       "loadFailed": "无法加载 Jira 状态筛选器",
       "saveFailed": "无法保存 Jira 状态筛选器",
+      "unavailable": "此视图暂无可用状态",
       "manualQuery": "状态筛选器适用于预设视图，清除搜索后即可使用",
+      "favouriteActive": "清除 Jira 收藏或选择预设视图，即可使用状态筛选器",
       "label": "按状态筛选 Jira 议题",
       "clear": "清除状态",
       "jql": "状态筛选器 JQL",
@@ -26202,6 +26276,7 @@
       "fileExplorerCopyPath": "复制文件路径",
       "fileExplorerCopyRelativePath": "复制文件相对路径",
       "fileExplorerDelete": "删除文件",
+      "fileExplorerToggleDotfiles": "显示/隐藏点文件",
       "terminalCopySelection": "复制终端选中内容",
       "terminalSelectAll": "全选终端文本",
       "terminalPaste": "粘贴到终端",
@@ -27217,7 +27292,9 @@
       "missing": "保存的设备已不在此计算机上。请选择其他设备",
       "unavailable": "保存的设备运行时不可用。请选择其他设备或安装其运行时",
       "askPrompt": "选择要打开的设备",
-      "firstUse": "选择第一台设备。Orca 会记住在此计算机上成功选择的设备"
+      "firstUse": "选择第一台设备。Orca 会记住在此计算机上成功选择的设备",
+      "missingOnServer": "已保存的设备已不在 {{host}} 上，请选择其他设备",
+      "firstUseOnServer": "首次使用时，请选择一台设备。Orca 会记住你在 {{host}} 上成功连接的设备"
     },
     "picker": {
       "choose": "选择模拟器",
@@ -27229,7 +27306,8 @@
       "runtimeUnavailable": "运行时不可用",
       "running": "运行中",
       "starting": "正在启动",
-      "stopped": "已停止"
+      "stopped": "已停止",
+      "otherOnServer": "{{host}} 上的其他设备"
     }
   },
   "ephemeralVm": {
@@ -27376,13 +27454,10 @@
     "loadFailed": "无法加载 Git 历史记录",
     "updateHost": "请更新 {{host}} 上的 Orca 以打开 Git 图",
     "title": "Git 图",
-    "revertConflicts": "撤销提交冲突",
-    "revertInProgress": "正在撤销提交",
     "abortOperationTitle": "中止{{operation}}？",
     "abortOperationDescription": "这会取消正在进行的操作，并可能丢弃在此期间完成的冲突解决",
     "abortOperation": "中止{{operation}}",
     "recoveryFailed": "无法完成操作。请刷新源代码管理后重试",
-    "continueOperation": "继续{{operation}}",
     "reverting": "正在撤销提交",
     "updateActionsHost": "请更新{{host}}上的 Orca 以操作提交",
     "thisHost": "此主机",
@@ -27420,6 +27495,9 @@
       "pick": "多台电脑上都有与此链接对应的 bot：{{hosts}}。请从侧边栏打开",
       "updateNeeded": "请更新 {{hosts}} 上的 Orca，以便在这里打开此 bot"
     },
+    "chatOpen": {
+      "homeDidNotLoad": "bot 的主聊天未能加载"
+    },
     "activity": {
       "title": "活动",
       "completed": "已完成",
@@ -27436,7 +27514,7 @@
       "branch": "分支",
       "startedIn": "在 {{name}} 中启动",
       "idle": "空闲",
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "askedCoordinator": "已向 {{name}} 提问",
       "waitsOnBackground": "正在等待它的后台任务",
       "chat": "聊天"
@@ -27979,20 +28057,13 @@
       "colorSlate": "岩灰",
       "colorGraphite": "石墨灰",
       "colorInk": "墨黑",
-      "runsOn": "在 <host/> 上使用 <agent/> 运行",
-      "runsOnAs": "在 <host/> 上以 <account/> 身份使用 <agent/> 运行",
-      "noChatAgents": "此电脑上没有可用的聊天智能体",
-      "change": "更改",
       "computer": "电脑",
-      "computerHint": "bot 运行的位置",
       "computerAccountHint": "bot 运行的位置，以 {{account}} 身份登录 Orca",
       "useChatDefaults": "使用聊天默认设置",
       "chatDefault": "聊天默认",
       "usingChatDefault": "正在使用你的聊天默认设置。后台运行使用你的“智能体”设置",
       "agent": "智能体",
-      "folder": "文件夹：{{path}}",
       "cancel": "取消",
-      "creating": "创建中…",
       "create": "创建",
       "openFailed": "{{name}} 已创建，但暂时无法打开",
       "watches": "关注",
@@ -28455,7 +28526,7 @@
       "open": "打开",
       "actions": "聊天操作",
       "hideOlder": "隐藏更早的",
-      "needsYouCount": "{{count}} 项需要你处理"
+      "needsYouCount": "{{count}} 项需要你"
     },
     "items": {
       "view": {
@@ -28488,7 +28559,7 @@
         "replyingTo": "回复：{{question}}。转到该问题",
         "linked": "关联了 {{links}}",
         "made": "添加了此事项",
-        "madeNeedsYou": "添加了此事项，并标记为“需要你处理”",
+        "madeNeedsYou": "添加了此事项，并标记为“需要你”",
         "moved": "将此事项移至",
         "noComments": "还没有评论",
         "notSent": "未发送",
@@ -28567,10 +28638,10 @@
         "replyTo": "回复 {{name}}…"
       },
       "empty": {
-        "allClear": "没有需要你处理的事项，也没有正在运行的工作",
+        "allClear": "暂无事项需要你",
         "body": "当 {{bot}} 为你接手任务时，会在这里显示它正在做什么，以及需要你做什么",
         "filtered": "没有匹配的事项",
-        "needsYou": "没有需要你处理的事项",
+        "needsYou": "暂无事项需要你",
         "title": "还没有事项",
         "short": "还没有事项。当 {{bot}} 接手任务时，会显示在这里"
       },
@@ -28584,7 +28655,7 @@
       "filter": {
         "clearAll": "清除筛选",
         "label": "筛选事项",
-        "needsYou": "仅显示需要你处理的",
+        "needsYou": "只看需要你",
         "remove": "移除筛选条件 {{name}}"
       },
       "group": {
@@ -28607,8 +28678,6 @@
         "automationOn": "会为这个事项唤醒智能体"
       },
       "menu": {
-        "cancel": "取消事项",
-        "done": "完成",
         "waiting": "等待中…"
       },
       "pill": {
@@ -28618,6 +28687,7 @@
         "moveTo": "移至"
       },
       "row": {
+        "cancel": "取消事项",
         "done": "完成",
         "more": "更多",
         "select": "选择“{{title}}”"
@@ -28633,7 +28703,7 @@
       "status": {
         "canceled": "已取消",
         "done": "已完成",
-        "needsYou": "需要你处理",
+        "needsYou": "需要你",
         "planned": "已计划",
         "working": "进行中",
         "waiting": "等待中"
@@ -29446,7 +29516,7 @@
       "newThreadTab": "新话题",
       "items": {
         "orNames": "{{names}} 或 {{last}}",
-        "emptyBotsNeedsYou": "{{names}} 没有需要你处理的事项",
+        "emptyBotsNeedsYou": "{{names}} 暂无事项需要你",
         "emptyBots": "没有来自 {{names}} 的事项",
         "emptyTitle": "此群组还没有事项",
         "filterNamed": "筛选事项，当前筛选：{{filter}}",
@@ -29979,10 +30049,8 @@
       "description": "新 bot 会读取旧 bot，并自行完成设置",
       "exportDescription": "让旧 bot 生成一份自己的副本，再把副本交给新 bot",
       "importedBefore": "{{bot}} 源自此 bot",
-      "neverCopied": "密钥、令牌和登录信息绝不会被复制；你需要在这里重新连接它们",
       "back": "返回",
       "update": "更新 {{bot}}",
-      "create": "创建 {{name}}",
       "copyMessage": "复制消息",
       "dropHint": "拖放到这里，或",
       "chooseFolder": "选择文件夹…",
@@ -29991,28 +30059,21 @@
       "defaultProfile": "默认配置文件",
       "profile": "配置文件",
       "agent": "智能体",
-      "looking": "正在此电脑上查找…",
       "noneFoundNote": "在 OpenClaw（~/.openclaw）、Hermes（~/.hermes）或 OpenBot 中未找到 bots",
-      "otherApp": "其他应用…",
-      "otherAppNote": "旧 bot 会为你复制它的文件",
       "menu": "从其他应用导入…",
-      "addFolder": "添加它的文件夹",
       "exportNotOnServer": "此电脑上的导出文件夹暂时无法传到 {{host}}。请将文件夹复制到 {{host}}，或在此电脑上创建 bot",
-      "nameIt": "为你的 bot 命名",
-      "oldBot": "旧 bot",
       "nameAnother": "为新 bot 命名",
-      "keysStay": "密钥和登录信息不会迁移过来",
       "removePath": "移除 {{name}}",
       "sendStep": "把这条消息发给旧 bot",
       "copied": "已复制",
       "seeMessage": "查看消息",
       "addStep": "添加它生成的文件夹",
       "replyLabel": "它的回复",
-      "newBotLabel": "新 bot",
-      "changePicture": "更换头像",
       "rowDetail": "{{app}} {{kind}}",
-      "bringOver": "要迁移的 bot",
-      "found": "找到 {{count}} 个"
+      "titleFrom": "从 {{source}} 导入",
+      "import": "导入",
+      "importing": "导入中…",
+      "fromExport": "使用导出副本"
     },
     "avatar": {
       "intake": {
@@ -30054,7 +30115,7 @@
       "emptyTemplates": "模板",
       "expand": "展开 Bots",
       "collapse": "折叠 Bots",
-      "summary": "{{action}}，{{total}} 个 bot，{{attention}} 项需要你处理，{{unread}} 个未读，{{working}} 个工作中",
+      "summary": "{{action}}，{{total}} 个 bot，{{attention}} 个需要你，{{unread}} 个未读，{{working}} 个工作中",
       "new": "新建 bot 或群组",
       "expandAll": "展开所有 bots",
       "collapseAll": "折叠所有 bots"

@@ -1,17 +1,18 @@
-import { useState } from 'react'
 import { Bot as BotIcon } from 'lucide-react'
-import { toast } from 'sonner'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
-import { isSameBot, ownBotHost } from '@/lib/bot-hosts'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { isSameBot } from '@/lib/bot-hosts'
 import { useBotHostLabels } from '@/components/bots/use-bot-host-label'
 import { BotAvatar } from '@/components/bots/BotAvatar'
 import { pairedAskSenderName } from '@/components/bots/BotPairedAskNeedRow'
 import { usePairedServerCardsForChat } from '@/components/bots/use-paired-server-asks'
 import { NativeChatApprovalCard } from '../prompts/NativeChatApprovalCard'
+import {
+  usePairedServerAskDecisions,
+  type PairedServerAskDecision
+} from './use-paired-server-ask-decisions'
 import { NativeChatPromptPill } from '../composer/editor/NativeChatPromptPill'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -20,7 +21,7 @@ import {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { PairedServerAskCard } from '../../../../../shared/rpc-contract/paired-server-asks-params'
 
-type Decision = 'once' | 'always' | 'deny'
+type Decision = PairedServerAskDecision
 const DECISIONS: readonly string[] = ['once', 'always', 'deny']
 const isDecision = (value: string): value is Decision => DECISIONS.includes(value)
 
@@ -38,25 +39,7 @@ export function NativeChatPairedServerAskStack({
     target.kind === 'environment' ? target.environmentId : null,
     party
   )
-  const [submitting, setSubmitting] = useState<ReadonlyMap<string, Decision>>(new Map())
-  const decide = (card: PairedServerAskCard, decision: Decision): void => {
-    setSubmitting((current) => new Map(current).set(card.messageId, decision))
-    // On this computer's own Orca, which holds the card; the list drops it once answered anywhere.
-    callRuntimeRpc(ownBotHost().target, 'pairedServerAsks.decide', {
-      messageId: card.messageId,
-      decision
-    })
-      .catch((error: unknown) =>
-        toast.error(error instanceof Error ? error.message : String(error))
-      )
-      .finally(() =>
-        setSubmitting((current) => {
-          const next = new Map(current)
-          next.delete(card.messageId)
-          return next
-        })
-      )
-  }
+  const { submitting, decide } = usePairedServerAskDecisions()
   if (cards.length === 0) {
     return null
   }

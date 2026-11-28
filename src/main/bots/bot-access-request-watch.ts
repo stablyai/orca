@@ -9,11 +9,11 @@ import { botHasConnector } from '../../shared/bot-types'
 import type { ConnectorAccessRequest } from '../../shared/connector-bot-access-contract'
 import type { BotSlackResult } from '../../shared/connector-bot-slack-contract'
 import { CONNECTOR_SOURCE_NAMES } from '../../shared/connectors/external-conversation-link'
-import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import type { OwnerNotice } from '../runtime/push/notifications/runtime-mobile-notification-controller'
 import { listHostAccessRequests, type BotAccessHostDeps } from './bot-access-host'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { botOwnerNoticeText } from './bot-owner-notice-copy'
 
 export const BOT_ACCESS_WATCH_INTERVAL_MS = 5 * 60_000
@@ -66,7 +66,7 @@ function requestNotice(
       .join(' · '),
     // A phone's tap opens the bot's Home Chat and the request's decision there.
     worktreeId: folderWorkspaceKey(folderWorkspaceId),
-    ...(chatSessionId ? { paneKey: structuredAgentSessionStatusPaneKey(chatSessionId) } : {}),
+    ...(chatSessionId ? { paneKey: chatPaneKey(chatSessionId) } : {}),
     desktop: false
   }
 }

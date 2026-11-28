@@ -13,7 +13,10 @@ export function TaskPageSurface({
   model: TaskPageComposerActionsModel
 }): React.JSX.Element {
   return (
-    <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
+    <div
+      data-task-page=""
+      className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground"
+    >
       <TaskPageFrame model={model} />
 
       <TaskPageGitHubIssueDialog model={model} />

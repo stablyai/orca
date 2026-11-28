@@ -3,20 +3,14 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RuntimeConstructionDependencies } from './runtime-construction-dependencies'
 import { findWorkspaceEphemeralVmRuntime } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/catalog/runtime-environment-registry-root'
-import { suspendEphemeralVmWorkspace } from '../../ephemeral-vm/workspace-suspend'
-import {
-  acceptEphemeralVmWorkspaceWake,
-  resumeEphemeralVmWorkspace
-} from '../../ephemeral-vm/workspace-resume'
+import { acceptEphemeralVmWorkspaceWake } from '../../ephemeral-vm/workspace-resume'
 import { registerRecipeVmWaker } from '../workspaces/sleep/recipe-vm-waker-registry'
 import {
   isRecipeVmSshTargetAsleep,
   setRecipeVmAsleepStoreRoot
 } from '../../ephemeral-vm/recipe-vm-asleep'
 import { setSshHostAsleepCheck } from '../../ssh/connection/ssh-host-sleep-hold'
-import { openRecipeVmEnvironment } from '../../ipc/runtime-environments/managed-orcad/runtime-environment-recipe-vm-wake'
 import { ArtifactCloudService } from '../../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../../skills/cloud/skill-cloud-package-service'
 import { isArtifactSharingEnabled } from '../../../shared/artifacts/artifact-sharing-gate'
@@ -26,19 +20,28 @@ export function desktopWorkspaceSleepPlatform(
   userDataPath: () => string
 ): RuntimeConstructionDependencies['workspaceSleepPlatform'] {
   return {
-    callEnvironment: (environmentId, method, params, timeoutMs) =>
-      callRuntimeEnvironment(
+    callEnvironment: async (environmentId, method, params, timeoutMs) => {
+      const { callRuntimeEnvironment } =
+        await import('../../ipc/runtime-environments/requests/runtime-environment-transport-routing')
+      return callRuntimeEnvironment(
         getRuntimeEnvironmentRegistryRoot(),
         environmentId,
         method,
         params,
         timeoutMs
-      ),
+      )
+    },
     ownsVm: (workspaceId) =>
       findWorkspaceEphemeralVmRuntime(userDataPath(), workspaceId) !== undefined,
-    suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId),
+    suspendVm: async (workspaceId) => {
+      const { suspendEphemeralVmWorkspace } = await import('../../ephemeral-vm/workspace-suspend')
+      return suspendEphemeralVmWorkspace(store, workspaceId)
+    },
     acceptWake: (workspaceId) => acceptEphemeralVmWorkspaceWake(workspaceId),
-    resumeVm: (workspaceId, request) => resumeEphemeralVmWorkspace(store, workspaceId, request)
+    resumeVm: async (workspaceId, request) => {
+      const { resumeEphemeralVmWorkspace } = await import('../../ephemeral-vm/workspace-resume')
+      return resumeEphemeralVmWorkspace(store, workspaceId, request)
+    }
   }
 }
 
@@ -54,7 +57,11 @@ export function installDesktopWorkspaceVmWaker(
       runtime.holdWorkspaceVmOpen(workspaceId, suspended, timeoutMs, signal),
     openEnvironment: async (selector) => {
       const root = getRuntimeEnvironmentRegistryRoot()
-      return openRecipeVmEnvironment(root, await resolveEnvironment(root, selector))
+      const [{ openRecipeVmEnvironment }, environment] = await Promise.all([
+        import('../../ipc/runtime-environments/managed-orcad/runtime-environment-recipe-vm-wake'),
+        resolveEnvironment(root, selector)
+      ])
+      return openRecipeVmEnvironment(root, environment)
     }
   })
   // A sleeping VM's SSH host takes no background login until its workspace wakes (#36363).

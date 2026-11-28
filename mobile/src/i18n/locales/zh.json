@@ -866,7 +866,9 @@
         "tools_one": "{{count}} 个工具",
         "tools_other": "{{count}} 个工具",
         "disabled": "已禁用",
-        "notStarted": "尚未启动"
+        "notStarted": "尚未启动",
+        "orcaRemoved": "已移除：下一条消息时重新启动",
+        "orcaChanged": "已更改：下一条消息时重新启动"
       },
       "title": "MCP 服务器",
       "notRunning": "MCP 服务器会在你发送下一条消息时连接",
@@ -891,7 +893,8 @@
         "failed": "{{count}} 个失败"
       },
       "pasteHint": "当浏览器跳转到一个无法加载的页面时，复制它的地址并粘贴到这里",
-      "manage": "管理 MCP 服务器"
+      "manage": "管理 MCP 服务器",
+      "stillFailing": "重新连接后仍然失败。"
     },
     "fork": {
       "busy": "另一个聊天或终端正在打开。请稍候，再次为 {{agent}} 聊天创建分支",
@@ -1494,14 +1497,14 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
-      "needsYou_one": "{{count}} 个需要你处理",
-      "needsYou_other": "{{count}} 个需要你处理",
+      "needsYou_one": "{{count}} 个需要你",
+      "needsYou_other": "{{count}} 个需要你",
       "openHost": "打开 {{title}}",
       "pairingInvalid": "配对无效",
       "pairingTemporarilyUnavailable": "配对暂时不可用",
       "unlockHint": "解锁手机后，轻点重试",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 个活跃",
-      "tapToPairAgain": "轻点以重新与桌面配对"
+      "tapToPairAgain": "轻点重新配对"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "正在检查主机兼容性"
@@ -1801,7 +1804,9 @@
         "permissionAcceptEditsDescription": "批准文件编辑和文件命令，其余操作会询问",
         "permissionAutoDescription": "代你审核批准请求",
         "permissionFullAccessCodexDescription": "从不询问，可以编辑任何文件并使用网络",
-        "permissionFullAccessDescription": "编辑或运行命令前从不询问"
+        "permissionFullAccessDescription": "编辑或运行命令前从不询问",
+        "permissionAgentSettings": "{{agent}} 设置",
+        "permissionFromAgentSettings": "{{mode}}，来自 {{agent}} 设置"
       },
       "goal": {
         "sentAsGoal": "作为目标发送"
@@ -1861,7 +1866,7 @@
         "taskCount_one": "{{count}} 个任务",
         "taskCount_other": "{{count}} 个任务",
         "failedCount": "{{count}} 个失败",
-        "needsYouCount": "{{count}} 个等待你处理",
+        "needsYouCount": "{{count}} 个需要你",
         "runningCount": "{{count}} 个运行中",
         "workersRegion": "工作者",
         "stopOnComputer": "请在工作者运行的电脑上停止或清除它们"
@@ -3226,7 +3231,7 @@
       "terminalTitle": "终端",
       "terminalLayout": "终端布局",
       "sourceControl": "源代码管理",
-      "itemsNeedYou": "事项，{{count}} 个需要你处理",
+      "itemsNeedYou": "事项，{{count}} 个需要你",
       "quickCommands": "快捷命令",
       "items": "事项",
       "textSize": "文字大小"
@@ -3255,7 +3260,7 @@
       "collapse": "收起"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "在新 CLI 中恢复"
+      "continueInTerminal": "在终端中继续"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "滚动到最新消息"
@@ -3787,7 +3792,7 @@
       "yes": "是"
     },
     "tabsSheet": {
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "working": "工作中",
       "everythingElse": "其他",
       "closeTab": "关闭 {{title}}",
@@ -3820,8 +3825,8 @@
       "tabCount": "{{count}} 个标签页",
       "actionsHint": "显示此标签页的操作",
       "hint": "显示所有标签页",
-      "needYou_one": "{{count}} 个需要你处理",
-      "needYou_other": "{{count}} 个需要你处理"
+      "needYou_one": "{{count}} 个需要你",
+      "needYou_other": "{{count}} 个需要你"
     },
     "textSizeSheet": {
       "chatTitle": "聊天文字",
@@ -3844,9 +3849,21 @@
     },
     "sidebar": {
       "backTo": "返回 {{title}}",
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "files": "文件",
       "otherWorkspaces": "其他工作区"
+    },
+    "terminalChatContinuation": {
+      "busy": "另一个聊天或终端正在打开。请稍候再试。",
+      "continueInChat": "在聊天中继续",
+      "failed": "无法在聊天中继续。{{detail}}",
+      "failedAfterClose": "无法在聊天中继续。{{detail}} 对话在智能体历史记录中。",
+      "otherJob": "此终端中正在运行 {{process}}。请先退出它，然后在聊天中继续。",
+      "terminalChanged": "Orca 检查时此终端已更改。请重试。",
+      "tryAgain": "请重试。",
+      "unavailable": "此电脑上无法使用 {{agent}} 聊天。",
+      "uncheckable": "Orca 无法检查此终端中正在运行的内容。请重试。",
+      "unconfirmed": "Orca 无法确认聊天已打开。重试前请检查你的标签页。"
     }
   },
   "settings": {
@@ -4006,9 +4023,6 @@
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
-    },
-    "agents": {
-      "permissionOwnAll": "各智能体自己的设置"
     },
     "voiceTranscribeOn": {
       "heading": "转写位置",
@@ -4441,6 +4455,9 @@
       "agentCouldNotStart": "无法启动 {{label}}。请在设置中检查智能体命令后重试",
       "agentFailedToStart": "{{label}} 启动失败。请在设置中检查智能体命令后重试",
       "agentReportedError": "{{label}} 报告了错误",
+      "antigravityInvalidEvents": "Antigravity 返回了无效的 JSON 事件",
+      "antigravityInvalidResult": "Antigravity 返回了无效的结果",
+      "antigravityNoFinalResult": "Antigravity 未返回最终结果",
       "chatNameAgentUnsupported": "请在设置 -> 聊天 -> 聊天名称中为此操作选择支持的聊天命名智能体。支持的智能体：{{agents}}，或选择“自定义命令”",
       "chatNameCustomCommandEmpty": "自定义命令为空。请在设置 -> 聊天 -> 聊天名称中添加",
       "cliFailed": "{{label}} CLI 命令执行失败，退出码为 {{exitCode}}",
@@ -5290,7 +5307,7 @@
       "started": "开始",
       "trigger": "触发",
       "output": "输出",
-      "noOutput": "没有可用的输出内容",
+      "noOutput": "没有可用输出",
       "loadingRuns": "正在加载运行…",
       "loading": "加载中…",
       "hourly": "每小时",
@@ -5915,7 +5932,7 @@
     },
     "section": {
       "title": "Bots",
-      "summary": "{{title}}，{{total}} 个 bot，{{attention}} 个需要你处理，{{unread}} 个未读，{{working}} 个工作中",
+      "summary": "{{title}}，{{total}} 个 bot，{{attention}} 个需要你，{{unread}} 个未读，{{working}} 个工作中",
       "newBot": "新建 bot",
       "reorderTitle": "调整 bots 顺序",
       "reorder": "调整顺序…"
@@ -5947,12 +5964,12 @@
       "peerFollowedUp": "{{bot}} 跟进了",
       "items": {
         "emptyTitle": "此群组还没有事项",
-        "needsYouCount_one": "{{count}} 项需要你处理",
-        "needsYouCount_other": "{{count}} 项需要你处理",
+        "needsYouCount_one": "{{count}} 项需要你",
+        "needsYouCount_other": "{{count}} 项需要你",
         "workingCount_one": "{{count}} 个进行中",
         "workingCount_other": "{{count}} 个进行中",
         "filterBot": "Bot",
-        "needsYouCount": "{{count}} 项需要你处理",
+        "needsYouCount": "{{count}} 项需要你",
         "workingCount": "{{count}} 个进行中"
       },
       "newThreadTab": "新话题",
@@ -5985,7 +6002,6 @@
       "suggestThree": "{{a}}、{{b}} 和 {{c}}",
       "suggestMore": "{{a}}、{{b}} 及另外 {{count}} 个",
       "pickOne": "请选择一个 bot",
-      "needsTwoBots": "需要 {{host}} 上有 2 个 bot",
       "stopCouldNotBeConfirmed": "无法确认是否已停止",
       "notStarted": "尚未启动",
       "workingCount_one": "{{count}} 个工作中",
@@ -6515,16 +6531,16 @@
         "planned": "已计划",
         "working": "进行中",
         "waiting": "等待中",
-        "needsYou": "需要你处理",
+        "needsYou": "需要你",
         "done": "已完成",
         "canceled": "已取消"
       },
-      "needYouCount_one": "{{count}} 个事项需要你处理",
-      "needYouCount_other": "{{count}} 个事项需要你处理",
+      "needYouCount_one": "{{count}} 个事项需要你",
+      "needYouCount_other": "{{count}} 个事项需要你",
       "homeChat": "主聊天",
       "chatFallback": "聊天",
       "filter": {
-        "needsYou": "仅显示需要你处理的",
+        "needsYou": "只看需要你",
         "label": "筛选事项",
         "clear": "清除筛选",
         "clearAll": "清除筛选"
@@ -6545,7 +6561,7 @@
         "canceled": "取消了此事项",
         "reopened": "重新打开了此事项",
         "moved": "将此事项移至",
-        "madeNeedsYou": "添加了此事项，并标记为“需要你处理”",
+        "madeNeedsYou": "添加了此事项，并标记为“需要你”",
         "made": "添加了此事项",
         "linked": "关联了 {{links}}",
         "workerStarted": "工作者已启动：",
@@ -6659,8 +6675,8 @@
       "empty": {
         "title": "还没有事项",
         "body": "当 {{bot}} 为你接手任务时，会在这里显示它正在做什么，以及需要你做什么",
-        "needsYou": "没有需要你处理的事项",
-        "allClear": "没有需要你处理的事项，也没有正在运行的工作",
+        "needsYou": "暂无事项需要你",
+        "allClear": "暂无事项需要你",
         "filtered": "没有匹配的事项"
       },
       "toast": {
@@ -8155,7 +8171,7 @@
       "moreMatches_other": "还有 {{count}} 个匹配项。输入更完整的名称以缩小范围",
       "readFailedTitle": "无法加载聊天",
       "runningCount": "{{count}} 个运行中",
-      "needsYouCount": "{{count}} 项需要你处理",
+      "needsYouCount": "{{count}} 项需要你",
       "open": "打开",
       "delete": "删除聊天"
     },
@@ -8174,7 +8190,7 @@
       "needYou_one": "{{count}} 个需要你",
       "needYou_other": "{{count}} 个需要你",
       "working": "{{count}} 个工作中",
-      "itemsNeedYou": "事项，{{count}} 个需要你处理",
+      "itemsNeedYou": "事项，{{count}} 个需要你",
       "chats": "聊天",
       "files": "文件",
       "backTo": "返回 {{name}}"
@@ -8245,7 +8261,7 @@
       "placeholder": "搜索智能体"
     },
     "sections": {
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "working": "工作中",
       "done": "已完成",
       "offline": "离线",
@@ -8371,7 +8387,8 @@
     "workspacesCount": "{{count}} 个工作区",
     "workspacesAllButCount": "除 {{count}} 个外的全部",
     "headerMissing": "填写 {{header}} 后才能添加此服务器",
-    "servers": "服务器"
+    "servers": "服务器",
+    "unreadable": "无法打开已保存的登录或密钥。请重新登录。"
   },
   "chats": {
     "delete": {

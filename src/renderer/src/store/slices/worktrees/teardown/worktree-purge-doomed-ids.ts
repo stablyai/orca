@@ -1,6 +1,7 @@
 import { discardKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import type { AppState } from '../../../types'
-import { structuredAgentSessionAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatTabsShowingConversation } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-session/launch/startup/agent-startup-delivery-guards'
@@ -9,6 +10,7 @@ import { forgetDetachedHeadAutoDerivedDisplayName } from '../metadata/detached-h
 
 export type WorktreePurgeDoomedIds = {
   doomedTabIds: Set<string>
+  doomedChatPaneKeys: ReadonlySet<string>
   doomedPtyIds: Set<string>
   doomedBrowserWorkspaceIds: Set<string>
   doomedPageIds: Set<string>
@@ -20,18 +22,16 @@ export function collectWorktreePurgeDoomedIds(
   worktreeIdSet: Set<string>
 ): WorktreePurgeDoomedIds {
   const tabs: { id: string; ptyId: string | null }[] = []
+  const chatPaneKeys = new Set<string>()
   const browserWorkspaceIds: string[] = []
   const fileIds: string[] = []
   for (const id of worktreeIdSet) {
     tabs.push(...(s.tabsByWorktree[id] ?? []))
-    // Why unifiedTabs too: chat tabs live only there, and a slot tab's panes are keyed by its session address.
+    // Chat tabs live only in unifiedTabs, and a conversation can outlive its tab.
     for (const tab of s.unifiedTabsByWorktree?.[id] ?? []) {
       tabs.push({ id: tab.id, ptyId: null })
       if (tab.contentType === 'agent-session') {
-        const addressTabId = structuredAgentSessionAddressTabId(tab.id, tab.entityId)
-        if (addressTabId !== tab.id) {
-          tabs.push({ id: addressTabId, ptyId: null })
-        }
+        chatPaneKeys.add(chatPaneKey(tab.entityId))
       }
     }
     for (const workspace of s.browserTabsByWorktree[id] ?? []) {
@@ -47,7 +47,15 @@ export function collectWorktreePurgeDoomedIds(
       }
     }
   }
-  return collectSurfacePurgeDoomedIds(s, { tabs, browserWorkspaceIds, fileIds })
+  for (const paneKey of chatPaneKeys) {
+    for (const tab of chatTabsShowingConversation(s.unifiedTabsByWorktree, paneKey)) {
+      if (!worktreeIdSet.has(tab.worktreeId)) {
+        chatPaneKeys.delete(paneKey)
+        break
+      }
+    }
+  }
+  return collectSurfacePurgeDoomedIds(s, { tabs, chatPaneKeys, browserWorkspaceIds, fileIds })
 }
 
 /** Doomed ids for named surfaces, which may sit in a workspace that stays (a surviving twin's). */
@@ -55,6 +63,7 @@ export function collectSurfacePurgeDoomedIds(
   s: AppState,
   surfaces: {
     tabs: readonly { id: string; ptyId: string | null }[]
+    chatPaneKeys?: ReadonlySet<string>
     browserWorkspaceIds: Iterable<string>
     fileIds: Iterable<string>
   }
@@ -99,6 +108,7 @@ export function collectSurfacePurgeDoomedIds(
   }
   return {
     doomedTabIds,
+    doomedChatPaneKeys: surfaces.chatPaneKeys ?? new Set(),
     doomedPtyIds,
     doomedBrowserWorkspaceIds,
     doomedPageIds,

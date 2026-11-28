@@ -5,8 +5,10 @@ import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
-import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { getMountedWorktreeOptionsById } from '../rows/option-dom'
+
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+const EMPTY_VISIBLE_REVIEW_IDS: string[] = []
 
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
   document.addEventListener('visibilitychange', onChange)
@@ -42,19 +44,26 @@ export function visibleReviewCardIds(args: {
   viewportTop: number
   viewportHeight: number
 }): string[] {
-  const bottom = args.viewportTop + args.viewportHeight
-  return args.virtualItems
-    .filter((item) => item.start < bottom && item.end > args.viewportTop)
-    .map((item) => args.renderRows[item.index])
-    .flatMap((row): WorktreeItemRow[] => (row?.type === 'item' ? [row] : []))
-    .filter(
-      (row) =>
-        (row.repo?.kind ?? 'git') === 'git' &&
-        !row.worktree.isBare &&
-        !row.worktree.isArchived &&
-        Boolean(row.worktree.branch)
-    )
-    .map((row) => row.worktree.id)
+  const { renderRows, virtualItems, viewportTop, viewportHeight } = args
+  const bottom = viewportTop + viewportHeight
+  const ids: string[] = []
+  for (let i = 0; i < virtualItems.length; i += 1) {
+    const item = virtualItems[i]
+    if (item.start >= bottom || item.end <= viewportTop) {
+      continue
+    }
+    const row = renderRows[item.index]
+    if (
+      row?.type === 'item' &&
+      (row.repo?.kind ?? 'git') === 'git' &&
+      !row.worktree.isBare &&
+      !row.worktree.isArchived &&
+      Boolean(row.worktree.branch)
+    ) {
+      ids.push(row.worktree.id)
+    }
+  }
+  return ids
 }
 
 export function useVisiblePrRefreshReporting(args: {
@@ -66,7 +75,7 @@ export function useVisiblePrRefreshReporting(args: {
   virtualItems: readonly VirtualItem[]
   scrollRef: React.RefObject<HTMLDivElement | null>
 }): void {
-  const publish = useAppStore((s) => s.setVisibleReviewCardWorktreeIds)
+  const { setVisibleReviewCardWorktreeIds: publish } = getAppStoreState()
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const enabled =
     args.groupBy === 'pr-status' ||
@@ -78,7 +87,7 @@ export function useVisiblePrRefreshReporting(args: {
     const update = (): void => {
       const scroll = args.scrollRef.current
       if (!enabled || !scroll || document.visibilityState !== 'visible') {
-        publish([])
+        publish(EMPTY_VISIBLE_REVIEW_IDS)
         return
       }
       const candidates = visibleReviewCardIds({
@@ -88,7 +97,7 @@ export function useVisiblePrRefreshReporting(args: {
         viewportHeight: scroll.clientHeight
       })
       if (candidates.length === 0) {
-        publish([])
+        publish(EMPTY_VISIBLE_REVIEW_IDS)
         return
       }
       const viewport = scroll.getBoundingClientRect()
@@ -113,5 +122,5 @@ export function useVisiblePrRefreshReporting(args: {
     }
   }, [enabled, args.renderRows, args.virtualItems, args.scrollRef, publish])
 
-  useEffect(() => () => publish([]), [publish])
+  useEffect(() => () => publish(EMPTY_VISIBLE_REVIEW_IDS), [publish])
 }

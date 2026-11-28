@@ -185,6 +185,7 @@ export function buildDefaultSettings(args: {
     showTitlebarAppName: true,
     linuxTilingWindowMode: false,
     showTasksButton: true,
+    showStatusBarMemory: true,
     showAutomationsButton: true,
     artifactsEnabled: true,
     // New profiles only; stored profiles without the key load as false (normalizeLoadedGlobalSettings).
@@ -196,6 +197,7 @@ export function buildDefaultSettings(args: {
     orchestrationCoordinatorApprovalsEnabled: false,
     showArtifactsButton: false,
     showSkillsButton: false,
+    showPluginsButton: false,
     showMobileButton: true,
     showPinnedWorktreesInGroups: false,
     ctrlTabOrderMode: 'mru',

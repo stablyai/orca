@@ -1,5 +1,5 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import type { WorkerDispatchRow } from '../../db/orchestration-records'
+import type { DispatchContextRow, WorkerDispatchRow } from '../../db/orchestration-records'
 import { observeWorker, type WorkerGone } from '../turn-stops/worker-presence-report'
 import type { WorkerTurnStopReportDeps } from '../turn-stops/worker-turn-stop-report'
 
@@ -39,35 +39,59 @@ export function observeTerminalWorkerExit(
   if (!dispatch) {
     return false
   }
+  observeWorkerEnd(
+    db,
+    runtimeId,
+    dispatch,
+    { ...exit, fence: exit.processIncarnation ?? exit.handle, from: exit.handle },
+    deps
+  )
+  return true
+}
+
+export type WorkerEnd = Pick<TerminalWorkerExit, 'error' | 'options' | 'processExited' | 'gone'> & {
+  /** The process or provider that ended. */
+  fence: string
+  from: string
+}
+
+/** A worker that ended without its coordinator asking: its Dispatch fails, and the coordinator
+ *  hears so in the same transaction. A stop the coordinator asked for settles quietly. */
+export function observeWorkerEnd(
+  db: OrchestrationDb,
+  runtimeId: string,
+  dispatch: DispatchContextRow,
+  end: WorkerEnd,
+  deps: WorkerTurnStopReportDeps
+): void {
   // Only this runtime's in-flight stop claims the outcome; durable stopping rows from a crashed runtime cannot absorb later failures.
   const state = db.getWorkerDispatch?.(dispatch.id)
   if (state?.state === 'stopping' && state.runtime_epoch === runtimeId) {
-    if (exit.processExited) {
+    if (end.processExited) {
       db.settleWorkerStop(dispatch.id)
     }
-    return true
+    return
   }
   // A stop asked for earlier (unconfirmed, or by a runtime before a restart) settles the Dispatch as failed, but sends no mail.
   if (isWorkerStopRequested(state?.state)) {
-    db.failDispatch(dispatch.id, exit.error, exit.options)
-    return true
+    db.failDispatch(dispatch.id, end.error, end.options)
+    return
   }
   observeWorker(
     db,
     { kind: 'local', dispatch },
     {
       presence: 'gone',
-      fence: exit.processIncarnation ?? exit.handle,
+      fence: end.fence,
       legacyStopKey: 'gone',
-      gone: { from: exit.handle, ...exit.gone },
+      gone: { from: end.from, ...end.gone },
       settle: () => {
-        const settled = db.failDispatch(dispatch.id, exit.error, exit.options)?.status
+        const settled = db.failDispatch(dispatch.id, end.error, end.options)?.status
         return settled === 'failed' || settled === 'circuit_broken' ? settled : undefined
       }
     },
     deps
   )
-  return true
 }
 
 /** A paired server's worker has no local Dispatch; any exit it did not report reaches the Run home through the stop relay. */

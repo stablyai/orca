@@ -20,7 +20,7 @@ import type { StructuredSessionOpenFeedback } from './activate-ai-vault-structur
 import { agentMessageSenderUnavailableText } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import type { AgentMessageSenderTarget } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import { activateWorktreeAgentPane } from '@/components/sidebar/workspace-card/activity/use-worktree-agent-activation'
-import { findTabByIdOrChatAlias } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { findTabByChatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '@/store/types'
@@ -82,15 +82,20 @@ function heldTabId(
   state: Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>,
   location: LocatedAgentSender
 ): string | null {
+  const chat = findTabByChatPaneKey(
+    state.unifiedTabsByWorktree[location.worktreeId],
+    location.paneKey
+  )
+  if (chat?.contentType === 'agent-session') {
+    return chat.id
+  }
   const tabId = parsePaneKey(location.paneKey)?.tabId
   if (!tabId) {
     return null
   }
-  if ((state.tabsByWorktree[location.worktreeId] ?? []).some((tab) => tab.id === tabId)) {
-    return tabId
-  }
-  const chat = findTabByIdOrChatAlias(state.unifiedTabsByWorktree[location.worktreeId], tabId)
-  return chat?.contentType === 'agent-session' ? chat.id : null
+  return (state.tabsByWorktree[location.worktreeId] ?? []).some((tab) => tab.id === tabId)
+    ? tabId
+    : null
 }
 
 /** The handle the located pane holds: its status row's, when that row is known to be this pane's

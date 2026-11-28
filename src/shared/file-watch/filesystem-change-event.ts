@@ -13,3 +13,10 @@ export type FsChangedPayload = {
   /** Set on an overflow sent because the watch was down (re-watch, late install, reconnect), not because events were too many. */
   resync?: true
 }
+
+/** Main -> renderer: auto-reload for a local watch root stopped (crash-fuse cooldown, capacity or distro wait, unwatchable root, stalled OS events) or resumed. */
+export type FsWatchPausedPayload = {
+  /** The watch root path, spelled as in FsChangedPayload.worktreePath. */
+  worktreePath: string
+  paused: boolean
+}

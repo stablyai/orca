@@ -9,7 +9,6 @@ import {
   DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_TAB_CREATE_FOCUS_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY,
-  isDesktopBrowserBridgeMethod,
   isHostReachableDocument
 } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import { DESKTOP_BROWSER_BRIDGE_FILE_TRANSFER_CAPABILITY } from '../../../shared/browser/client-hosting/desktop-browser-bridge-file-transfer-protocol'
@@ -32,8 +31,11 @@ import {
 import { executeDesktopBrowserBridgeRequest } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-executor'
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { EAGER_RPC_METHODS } from '../../runtime/rpc/methods/eager-rpc-method-registry'
+import type { RpcDispatcher } from '../../runtime/rpc/dispatcher'
+import {
+  createDesktopBrowserBridgeRpcDispatcher,
+  dispatchDesktopBrowserBridgeRpc
+} from '../../browser/desktop-browser-bridge/desktop-browser-bridge-rpc-dispatcher'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
@@ -142,12 +144,7 @@ export function installDesktopBrowserBridge(options: {
   registerDesktopBrowserBridgeHostControlIpc(hostControlDeps)
   let dispatcher: RpcDispatcher | null = null
   const getDispatcher = (): RpcDispatcher => {
-    dispatcher ??= new RpcDispatcher({
-      runtime,
-      // Restrict the registry even if an upstream caller misroutes a method.
-      methods: EAGER_RPC_METHODS.filter((method) => isDesktopBrowserBridgeMethod(method.name)),
-      callerScope: { kind: 'runtime-paired', grants: [] }
-    })
+    dispatcher ??= createDesktopBrowserBridgeRpcDispatcher(runtime)
     return dispatcher
   }
   manager = new DesktopBrowserBridgeManager({
@@ -222,11 +219,7 @@ export function installDesktopBrowserBridge(options: {
           worktreeIdForPage: (browserPageId) =>
             browserManager.getWorktreeIdForTab(browserPageId) ?? null,
           dispatch: (method, params) =>
-            // Why: the SSH host's orca CLI is an agent caller; the cursor and tab badge key off it.
-            getDispatcher().dispatch(
-              { id: randomUUID(), authToken: '', method, params },
-              { caller: { kind: 'local-cli' } }
-            ),
+            dispatchDesktopBrowserBridgeRpc(getDispatcher(), method, params),
           hostFiles: hostFilesFor(candidate),
           audit: (entry) => log(`audit ${JSON.stringify(entry)}`)
         },
