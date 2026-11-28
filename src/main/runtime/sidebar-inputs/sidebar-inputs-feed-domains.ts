@@ -232,7 +232,6 @@ export function sidebarInputsFeedDomains(
               changed(urgent)
             }
           }),
-          // The feed can start before the WSL host service is installed; this follows it either way.
           onWslHostStatusesChanged(changed)
         ]
         let watching = true
