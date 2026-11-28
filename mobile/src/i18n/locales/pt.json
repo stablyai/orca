@@ -3764,6 +3764,10 @@
       "terminalTitle": "Texto do terminal",
       "pointsAndColumns": "{{points}} · {{count}} colunas",
       "moreTerminal": "Mais configurações do terminal"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "Este texto colado tem mais de {{max}} MB, por isso não pode ser anexado",
+      "terminalFileReference": "Arquivo do meu telefone, salvo neste computador como {{path}}"
     }
   },
   "settings": {

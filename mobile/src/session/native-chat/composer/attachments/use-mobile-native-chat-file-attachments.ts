@@ -12,7 +12,11 @@ import type {
   MobilePickedFileSource,
   PickedMobileFile
 } from '../../../../platform/media-picking/media-picker-contract'
-import { agentSessionPastedTextName } from '../../../../../../src/shared/agent-session/agent-session-attachments'
+import {
+  AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  agentSessionPastedTextName
+} from '../../../../../../src/shared/agent-session/agent-session-attachments'
+import { translate } from '../../../../i18n/mobile-i18n'
 import { uploadMobileAgentSessionAttachmentBytes } from '../../../../files/attachments/mobile-agent-session-attachment-upload'
 import {
   uploadPickedNativeChatFiles,
@@ -109,9 +113,20 @@ export function useMobileNativeChatFileAttachments(args: {
     [attach, picker]
   )
   const attachPastedText = useCallback(
-    (text: string) =>
-      attach(async function* () {
-        const bytes = new TextEncoder().encode(text)
+    async (text: string) => {
+      const bytes = new TextEncoder().encode(text)
+      // Only picked files stream up to the upload ceiling; a paste keeps the in-memory one.
+      if (bytes.byteLength > AGENT_SESSION_ATTACHMENT_MAX_BYTES) {
+        showToast(
+          translate(
+            'session.nativeChatFileAttachments.pastedTextTooLarge',
+            'This paste is over {{max}} MB, so it cannot be attached',
+            { max: AGENT_SESSION_ATTACHMENT_MAX_BYTES / (1024 * 1024) }
+          )
+        )
+        return
+      }
+      await attach(async function* () {
         yield {
           name: agentSessionPastedTextName(Date.now(), createUuidV4()),
           mime: 'text/plain',
@@ -120,8 +135,9 @@ export function useMobileNativeChatFileAttachments(args: {
             yield bytes
           }
         }
-      }),
-    [attach]
+      })
+    },
+    [attach, showToast]
   )
 
   const removeFiles = useCallback(

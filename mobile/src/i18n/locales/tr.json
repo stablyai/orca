@@ -4023,6 +4023,10 @@
       "skip": "Atla",
       "stop": "Durdur",
       "yes": "Evet"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "Bu yapıştırma {{max}} MB üzerinde, bu yüzden eklenemiyor",
+      "terminalFileReference": "Telefonumdan dosya, bu bilgisayara {{path}} olarak kaydedildi"
     }
   },
   "settings": {

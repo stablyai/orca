@@ -3346,6 +3346,10 @@
     },
     "orcaCommands": {
       "desktopOnly": "Available in the desktop app"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "This paste is over {{max}} MB, so it cannot be attached",
+      "terminalFileReference": "File from my phone, saved on this computer as {{path}}"
     }
   },
   "chat": {

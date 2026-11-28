@@ -4241,6 +4241,10 @@
     },
     "tabMenu": {
       "closeTab": "Закрыть вкладку"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "Вставленный текст больше {{max}} МБ, поэтому его нельзя прикрепить",
+      "terminalFileReference": "Файл с моего телефона, сохранён на этом компьютере как {{path}}"
     }
   },
   "settings": {

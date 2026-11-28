@@ -11,6 +11,7 @@ import {
 } from '../drafts/mobile-native-chat-draft-inputs'
 import { setMobileNativeChatDraftText } from '../drafts/mobile-native-chat-draft-store'
 import { uploadPickedNativeChatFiles } from './mobile-native-chat-file-attachment'
+import { translate } from '../../../../i18n/mobile-i18n'
 
 type ShowToast = (message: string, durationMs?: number) => void
 
@@ -19,8 +20,13 @@ const NOOP = (): void => {}
 /** Plain words, not an @ mention: a mentioned PDF reaches Claude Code's model as its size alone. */
 export function nativeChatDraftWithFile(draft: string, path: string): string {
   const separator = draft.length === 0 || /\s$/.test(draft) ? '' : ' '
+  const reference = translate(
+    'session.nativeChatFileAttachments.terminalFileReference',
+    'File from my phone, saved on this computer as {{path}}',
+    { path: `\`${path}\`` }
+  )
   // The trailing space keeps the next typed word off the reference.
-  return `${draft}${separator}[File from my phone, saved on this computer as \`${path}\`] `
+  return `${draft}${separator}[${reference}] `
 }
 
 /** A terminal has no chat attachment list, so each file streams to the host and its path joins the draft. */

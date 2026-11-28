@@ -3450,6 +3450,10 @@
       "terminalTitle": "終端機文字",
       "pointsAndColumns": "{{points}} · {{count}} 欄",
       "moreTerminal": "更多終端機設定"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "貼上的內容超過 {{max}} MB，無法附加",
+      "terminalFileReference": "來自我手機的檔案，已在這台電腦上儲存為 {{path}}"
     }
   },
   "settings": {

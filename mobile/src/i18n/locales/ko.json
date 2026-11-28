@@ -3653,6 +3653,10 @@
       "terminalTitle": "터미널 텍스트",
       "pointsAndColumns": "{{points}} · {{count}}열",
       "moreTerminal": "터미널 설정 더 보기"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "붙여 넣은 텍스트가 {{max}}MB를 넘어 첨부할 수 없습니다",
+      "terminalFileReference": "내 휴대폰의 파일, 이 컴퓨터에 {{path}}(으)로 저장됨"
     }
   },
   "settings": {

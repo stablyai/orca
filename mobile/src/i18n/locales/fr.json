@@ -3493,6 +3493,10 @@
       "next": "Onglet suivant",
       "previous": "Onglet précédent",
       "hint": "Affiche tous les onglets"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "Ce texte collé dépasse {{max}} Mo, il ne peut donc pas être joint",
+      "terminalFileReference": "Fichier de mon téléphone, enregistré sur cet ordinateur sous {{path}}"
     }
   },
   "settings": {

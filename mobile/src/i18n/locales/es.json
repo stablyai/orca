@@ -3101,6 +3101,10 @@
       "next": "Pestaña siguiente",
       "previous": "Pestaña anterior",
       "hint": "Muestra todas las pestañas"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "Este texto pegado supera los {{max}} MB, así que no se puede adjuntar",
+      "terminalFileReference": "Archivo de mi teléfono, guardado en este equipo como {{path}}"
     }
   },
   "settings": {

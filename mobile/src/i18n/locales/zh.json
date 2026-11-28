@@ -3886,6 +3886,10 @@
     },
     "orcaCommands": {
       "desktopOnly": "可在桌面端使用"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "粘贴的内容超过 {{max}} MB，无法添加为附件",
+      "terminalFileReference": "来自我手机的文件，已在这台电脑上保存为 {{path}}"
     }
   },
   "settings": {

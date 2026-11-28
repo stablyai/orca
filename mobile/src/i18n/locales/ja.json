@@ -3526,6 +3526,10 @@
       "terminalTitle": "ターミナルのテキスト",
       "pointsAndColumns": "{{points}} · {{count}} 列",
       "moreTerminal": "その他のターミナル設定"
+    },
+    "nativeChatFileAttachments": {
+      "pastedTextTooLarge": "貼り付けたテキストが {{max}} MB を超えているため添付できません",
+      "terminalFileReference": "スマートフォンのファイル。このコンピュータに {{path}} として保存済み"
     }
   },
   "settings": {
