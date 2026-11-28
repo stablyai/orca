@@ -12,31 +12,41 @@ vi.mock('../../composer/pickers/use-native-chat-picker-command-dispatch', () => 
   useNativeChatPickerCommandDispatch: () => () => {}
 }))
 
+type EditSessionArgs = Parameters<typeof useNativeChatComposerEditSession>[0]
+const noop = (): void => {}
+
 function notesBlocked(options: { disabled?: boolean; acceptsImages?: boolean }) {
   const ref = createRef<NativeChatComposerHandle>()
-  const handle = { current: {} as NativeChatComposerHandle }
+  const own: NativeChatComposerHandle = {
+    insertAgentReferences: () => false,
+    focus: () => true,
+    insertTypedText: () => false,
+    acceptsText: () => true,
+    appendText: noop,
+    handlePasteEvent: noop,
+    pasteFromClipboard: noop,
+    contains: () => false
+  }
+  const transport = { acceptsImages: options.acceptsImages, optionSnapshot: [] }
   renderHook(() =>
     useNativeChatComposerEditSession({
       editSession: undefined,
       root: { current: null },
-      handle,
+      handle: { current: own },
       ref,
       draftScopeKey: 'agent-session:notes-blocked',
       agent: 'claude',
-      structuredTransport: {
-        acceptsImages: options.acceptsImages,
-        optionSnapshot: []
-      } as unknown as NativeChatStructuredComposerTransport,
-      sendStructured: () => {},
-      ptyCommandRouting: {} as Parameters<
-        typeof useNativeChatComposerEditSession
-      >[0]['ptyCommandRouting'],
-      setNotice: () => {},
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test stub; outside an edit the hook reads only acceptsImages and optionSnapshot of the transport.
+      structuredTransport: transport as unknown as NativeChatStructuredComposerTransport,
+      sendStructured: noop,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test stub; the picker dispatch that reads it is mocked above.
+      ptyCommandRouting: {} as EditSessionArgs['ptyCommandRouting'],
+      setNotice: noop,
       disabled: options.disabled ?? false,
       sendHeld: false,
-      submission: { send: () => {}, messageDelivery: true },
-      peekSendClassification: () => 'message' as never,
-      completeItem: () => {}
+      submission: { send: noop, messageDelivery: true },
+      peekSendClassification: () => 'chat',
+      completeItem: noop
     })
   )
   return ref.current?.notesBlocked?.()
