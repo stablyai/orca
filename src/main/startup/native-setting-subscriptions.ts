@@ -1,6 +1,5 @@
 import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import type { MainThreadHangWatchdogHandle } from '../hang-watchdog/main-thread-hang-watchdog'
-import { switchBrowserExtensionSupport } from '../browser/extensions/browser-extension-startup'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { syncMacMenuBarIcon } from './main-window/main-window-actions'
 
@@ -22,7 +21,12 @@ export function followNativeSettingChanges(
       )
     }
     if ('browserExtensionsEnabled' in updates) {
-      void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
+      const enabled = settings.browserExtensionsEnabled !== false
+      void import('../browser/extensions/browser-extension-startup')
+        .then(({ switchBrowserExtensionSupport }) => switchBrowserExtensionSupport(enabled))
+        .catch((error: unknown) =>
+          console.warn('[browser-extensions] Could not switch browser extension support:', error)
+        )
     }
     if ('showMenuBarIcon' in updates) {
       options.hangWatchdog?.setMenuBarIconSetting(settings.showMenuBarIcon !== false)

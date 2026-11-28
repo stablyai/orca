@@ -10,7 +10,8 @@ import {
 } from './api-runtime/browser-extension-api-host'
 import {
   isBrowserExtensionSupportEnabled,
-  setBrowserExtensionSupportEnabled
+  setBrowserExtensionSupportEnabled,
+  takePendingSavedBrowserTabs
 } from './browser-extension-support'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
@@ -121,7 +122,7 @@ function installBrowserExtensionSupport(): void {
     return
   }
   initialized = true
-  setSavedBrowserTabsSource(savedBrowserTabs, (profileId) =>
+  setSavedBrowserTabsSource(savedBrowserTabs ?? takePendingSavedBrowserTabs(), (profileId) =>
     browserSessionRegistry.resolveKnownPartition(profileId)
   )
   // An SSH or This-device page's instance lasts as long as its local profile.
