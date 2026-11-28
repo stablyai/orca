@@ -34,6 +34,8 @@ export const WorkerStartParams = lazyZodSchema(() =>
       agent: OptionalString,
       model: OptionalWorkerLaunchPreference,
       effort: OptionalWorkerLaunchPreference,
+      // Why: an id or email resolved by the worker host, which is the one that owns the accounts.
+      account: OptionalWorkerLaunchPreference,
       retryOf: OptionalString,
       timeoutMs: OptionalFiniteNumber,
       devMode: z.boolean().optional(),
@@ -64,6 +66,20 @@ export const WorkerStartParams = lazyZodSchema(() =>
           code: z.ZodIssueCode.custom,
           path: ['spec'],
           message: '--task and --spec are mutually exclusive'
+        })
+      }
+      if (params.account && params.terminal) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['account'],
+          message: '--account applies to a new Claude terminal and cannot combine with --terminal.'
+        })
+      }
+      if (params.account && params.on) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['account'],
+          message: "--account runs Claude on this host's accounts and cannot combine with --on."
         })
       }
       // spec creates a new Task, so retryOf cannot refer to a prior Dispatch for it.

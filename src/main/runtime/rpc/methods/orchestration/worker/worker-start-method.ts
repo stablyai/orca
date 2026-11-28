@@ -257,11 +257,7 @@ export async function prepareWorkerStart(
     )
   }
   if (helperCreator && !followUp) {
-    assertHelperStartScope(db, helperCreator, {
-      task: existingTask,
-      params,
-      ...(followUp ? { followUp } : {})
-    })
+    assertHelperStartScope(db, helperCreator, { task: existingTask, params })
   }
   if (existingTask) {
     await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec)

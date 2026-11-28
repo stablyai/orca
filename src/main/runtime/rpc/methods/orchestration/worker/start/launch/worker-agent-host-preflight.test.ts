@@ -97,3 +97,22 @@ it("refuses a new workspace's chat worker whose agent the repo's computer lacks"
   }).catch((error: unknown) => error)
   expect(refused).toMatchObject({ code: 'worker_agent_unavailable' })
 })
+
+it("starts a new workspace's chat worker in a repo pinned to a saved Claude account as a terminal", async () => {
+  const { runtime } = repoHost({ supported: true })
+  const showRepo = vi.fn(async () => ({
+    id: 'repo',
+    agentAccounts: { claude: { mode: 'account', accountId: 'acct-b' } }
+  }))
+  const receipt = await preflightWorkerAgentOnHost({
+    runtime: Object.assign(runtime, { showRepo }),
+    mode: DEFAULT_CHAT,
+    agent: 'claude',
+    creationTarget: { repoSelector: 'id:repo' }
+  })
+  expect(showRepo).toHaveBeenCalledWith('id:repo')
+  expect(receipt).toMatchObject({
+    mode: 'terminal',
+    detail: expect.stringContaining('saved account')
+  })
+})

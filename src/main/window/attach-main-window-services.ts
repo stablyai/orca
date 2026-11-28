@@ -18,6 +18,7 @@ import { registerPtyHandlers } from '../ipc/pty/register-handlers'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
   GetSelectedCodexHomePath,
+  PrepareClaudeAuth,
   PrepareCodexSessionResume
 } from '../ipc/pty/host-env/types'
 import { registerLazyDaemonManagementHandlers } from '../ipc/pty/ipc/lazy-pty-management-ipc'
@@ -35,8 +36,6 @@ import type {
   UpdateInstallMode
 } from '../updater/lifecycle/updater-state'
 import { listLiveDaemonPtyIds } from '../daemon/providers/lifecycle/daemon-provider-state'
-import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth/runtime-auth-types'
-import type { ClaudeAccountSelectionTarget } from '../claude-accounts/selection/runtime-selection'
 import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
@@ -59,9 +58,7 @@ export async function attachMainWindowServices(
   nativeSettings: NativeSettingsProjection,
   runtime: OrcaRuntimeService,
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
-  prepareClaudeAuth?: (
-    target?: ClaudeAccountSelectionTarget
-  ) => Promise<ClaudeRuntimeAuthPreparation>,
+  prepareClaudeAuth?: PrepareClaudeAuth,
   options?: {
     deferSshInitialization?: boolean
     hostInitialization?: Promise<void>

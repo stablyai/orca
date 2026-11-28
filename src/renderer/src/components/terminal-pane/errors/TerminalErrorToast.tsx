@@ -20,6 +20,8 @@ import {
 } from './terminal-spawn-error-display'
 import { isWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSignInRequiredTerminalError } from './terminal-ssh-sign-in-error'
+import { StartOnActiveAccountButton } from '../StartOnActiveAccountButton'
+import { describeClaudePinnedLaunchError } from '../claude-pinned-launch-error-copy'
 import { runWithFinally } from '@/lib/run-with-finally'
 
 export function TerminalErrorToast({
@@ -29,6 +31,7 @@ export function TerminalErrorToast({
   onDismiss,
   onRestartDaemon,
   onRetry,
+  onStartOnActiveAccount,
   onRestoreTerminalFocus,
   onOpenNewTerminal,
   onClosePane
@@ -40,6 +43,7 @@ export function TerminalErrorToast({
   onDismiss: () => void
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
+  onStartOnActiveAccount?: () => void
   onRestoreTerminalFocus?: () => void
   /** Leaves this pane and its saved session untouched. */
   onOpenNewTerminal?: () => void
@@ -52,6 +56,9 @@ export function TerminalErrorToast({
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
   const showClientEnvironment = paneOnClient && !ssh
   const paneOwnerUnverified = isPaneOwnerRecoveryError(error)
+  const showStartOnActiveAccount = Boolean(
+    onStartOnActiveAccount && describeClaudePinnedLaunchError(error)?.offerActiveAccount
+  )
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
   // Restart cannot recover a session after its owning daemon exits.
   const showIssueLink =
@@ -195,6 +202,7 @@ export function TerminalErrorToast({
           </p>
         ) : null}
         {showDaemonRestart ||
+        showStartOnActiveAccount ||
         (paneOwnerUnverified && (onRetry || onOpenNewTerminal)) ||
         (onClosePane && isRemoteTerminalClosedError(error)) ? (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -210,6 +218,7 @@ export function TerminalErrorToast({
                   : t('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
               </Button>
             ) : null}
+            <StartOnActiveAccountButton error={error} onClick={onStartOnActiveAccount} />
             {paneOwnerUnverified && onOpenNewTerminal ? (
               <Button
                 variant={onRetry ? 'secondary' : 'default'}

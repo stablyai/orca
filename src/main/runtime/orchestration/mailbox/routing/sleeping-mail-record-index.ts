@@ -45,6 +45,8 @@ function sameWake(a: SleepingAgentSessionRecord, b: SleepingAgentSessionRecord):
       la?.agentCommand === lb?.agentCommand &&
       la?.agentArgs === lb?.agentArgs &&
       la?.ompResumeFilePath === lb?.ompResumeFilePath &&
+      la?.claudeAccountId === lb?.claudeAccountId &&
+      a.claudeAccountId === b.claudeAccountId &&
       sameEnv(la?.agentEnv, lb?.agentEnv))
   )
 }

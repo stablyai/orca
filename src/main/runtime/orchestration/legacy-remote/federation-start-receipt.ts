@@ -1,3 +1,4 @@
+import { stripClaudePinnedLaunchMarker } from '../../../../shared/claude/claude-pinned-launch-error'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { isFederationEffectUnknown } from './federation-effects'
@@ -13,9 +14,10 @@ export function failFederatedAttachmentWithReceipt(args: {
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
 }): unknown {
-  const reason =
+  const reason = stripClaudePinnedLaunchMarker(
     formatTerminalStartFailure(args.error) ??
-    (args.error instanceof Error ? args.error.message : String(args.error))
+      (args.error instanceof Error ? args.error.message : String(args.error))
+  )
   const unknown = isFederationEffectUnknown(args.error, args.failedStage)
   const attachment = args.db.failRemoteAttachment(
     args.dispatchId,

@@ -38,6 +38,7 @@ import {
   releaseRetriedWorkerTerminal
 } from '../release/retried-worker-terminal-release'
 import { requireWorkerAuthority } from './placement/worker-placement-topology'
+import { assertLocalWorktree } from './launch/worker-start-validation'
 import { joinWorkerStartWarnings } from './launch/worker-launch-preferences'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
 import { handOverWhenReady, wakeReusedSleptAgent } from './readiness/placed-worker-readiness'
@@ -95,6 +96,7 @@ export async function startLocalWorker(args: {
   const {
     agent,
     launch,
+    claudeAccount,
     warning: retryLaunchWarning
   } = await resolveLocalWorkerStartLaunch({
     params,
@@ -115,16 +117,15 @@ export async function startLocalWorker(args: {
     await refuseUnmatchedWorkerSelector(targetLabel, () =>
       resolveExistingWorkerWorkspace(runtime, creationTarget, existingWorktree)
     )
-  if (terminal) {
-    await assertExplicitWorkerUsable({
-      runtime,
-      db,
-      terminal,
-      from: params.from,
-      coordinator,
-      resolvedWorktreeId: resolvedWorktree?.id
-    })
-  }
+  await assertExplicitWorkerUsable({
+    runtime,
+    db,
+    terminal: terminal || null,
+    from: params.from,
+    coordinator,
+    resolvedWorktreeId: resolvedWorktree?.id
+  })
+  await assertLocalWorktree(runtime, claudeAccount && resolvedWorktree?.id)
   const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
   const host = { runtime, agent, resolvedWorktree, creationTarget, terminal: params.terminal }
   let mode = chatWorkerMode(await preflightWorkerAgentOnHost({ ...host, mode: decided }), chat)
@@ -193,6 +194,7 @@ export async function startLocalWorker(args: {
       mode,
       agent,
       launch,
+      ...(claudeAccount ? { claudeAccountId: claudeAccount.accountId } : {}),
       effects,
       onStage,
       followUp:

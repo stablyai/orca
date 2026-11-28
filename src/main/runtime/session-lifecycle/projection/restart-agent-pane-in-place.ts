@@ -2,6 +2,9 @@ import { OrcaRuntimeWithResumeAgentSessionInWorkspace } from './resume-agent-ses
 import { retireReplacedPaneBinding } from '../../../ipc/pty/pane/pane-owner-replacement'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { heldLaunchConfig } from '../../terminal/launch/launch-evidence'
+import { getPinnedClaudeAccountIdForPty } from '../../../claude-accounts/claude-pinned-pty-registry'
+import { isPinnableClaudeAccountId } from '../../../../shared/claude/project-claude-account-preference'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { replacedPaneBindingState } from '../../../persistence/loading-store/terminal-bindings/replaced-pane-binding'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -35,8 +38,8 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
   protected abstract readonly sleepResumeRecords: WorktreeSleepResumeRecorder
 
   /** Restarts a pane's agent conversation in a new terminal in the same tab and leaf; the spawn
-   *  applies whatever account is selected now. Refusals other than `stop_failed` and
-   *  `create_failed` stop nothing. `stillCurrent` confirms, last before the stop, that the pane still
+   *  keeps a pinned Claude account, else applies whatever account is selected now. Refusals other
+   *  than `stop_failed` and `create_failed` stop nothing. `stillCurrent` confirms, last before the stop, that the pane still
    *  runs `session` and should move. */
   async restartAgentPaneInPlace(
     ptyId: string,
@@ -67,16 +70,30 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     let held: AgentSessionResumeClaim | null = null
     let dispatched = false
     try {
+      const claudeAccountId =
+        session.agent === 'claude'
+          ? (heldLaunchConfig(pty, session.agent)?.claudeAccountId ??
+            getPinnedClaudeAccountIdForPty(ptyId))
+          : undefined
       // Resolved before the stop, so nothing after it can leave the pane without its agent.
       const resume = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
         .then((workspace) =>
           this.resolveMobileSessionResumeCommand(workspace, {
             ...session,
-            launchConfig: pty.launchConfig ?? undefined
+            launchConfig: pty.launchConfig ?? undefined,
+            ...(claudeAccountId ? { claudeAccountId } : {})
           })
         )
         .catch(() => null)
-      if (!resume) {
+      const resumeAccountId = resume?.launchConfig?.claudeAccountId
+      // The spawn refuses a removed account, but only after the stop; WSL spawns ignore it.
+      const accountRemoved =
+        !pty.isWsl &&
+        isPinnableClaudeAccountId(resumeAccountId) &&
+        !this.store
+          ?.getSettings()
+          .claudeManagedAccounts?.some((account) => account.id === resumeAccountId)
+      if (!resume || accountRemoved) {
         return { ok: false, reason: 'no_resume_command' }
       }
       const ownPaneKey = makePaneKey(tabId, pane.leafId)

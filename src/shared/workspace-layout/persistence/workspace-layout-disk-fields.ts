@@ -244,6 +244,7 @@ const SLEEPING = {
   mainAgent: resumeRecord('mainAgent'),
   connectionId: resumeRecord('connectionId'),
   launchConfig: resumeRecord('launchConfig'),
+  claudeAccountId: resumeRecord('claudeAccountId'),
   origin: resumeRecord('origin'),
   restoreOnTabOpenOnly: resumeRecord('restoreOnTabOpenOnly'),
   terminalHandle: resumeRecord('terminalHandle')

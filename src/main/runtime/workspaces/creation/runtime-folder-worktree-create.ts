@@ -1,3 +1,4 @@
+import { appendWorktreeTerminalFailure } from '../startup/worktree-terminal-start-warning'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { RuntimeLineageError } from '../lineage/runtime-lineage-error'
@@ -58,6 +59,8 @@ type RuntimeFolderWorktreeCreateDeps = {
 
 export async function createRuntimeFolderWorktree(args: {
   request: RuntimeManagedWorktreeCreateArgs
+  /** Resolved `--account`; only the startup agent terminal runs on it. */
+  startupClaudeAccountId?: string
   repo: Repo
   startup?: WorktreeStartupLaunch
   startupFollowup?: WorktreeStartupFollowup
@@ -197,6 +200,7 @@ export async function createRuntimeFolderWorktree(args: {
         env: args.startup.env,
         ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
+        ...(args.startupClaudeAccountId ? { claudeAccountId: args.startupClaudeAccountId } : {}),
         ...(launchRuntime instanceof Error
           ? { startFailure: launchRuntime }
           : launchRuntime
@@ -226,12 +230,7 @@ export async function createRuntimeFolderWorktree(args: {
         surface: 'background'
       }
     } catch (error) {
-      const message = readableWslDistroHoldText(
-        formatTerminalStartFailure(error) ??
-          (error instanceof Error ? error.message : String(error))
-      )
-      warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
-      console.warn(`[worktree-create] ${warning}`)
+      warning = appendWorktreeTerminalFailure(undefined, worktree.path, 'startup', error)
     }
   }
   if (
@@ -266,9 +265,10 @@ export async function createRuntimeFolderWorktree(args: {
       worktree.id,
       undefined,
       // Main retains failed startup presentation; the window must not take it over.
+      // Why the account check: the renderer's fallback launch cannot honour --account; it would use the active one.
       ORCA_LAYOUT_OWNER_IS_MAIN
         ? undefined
-        : args.startup && !didSpawnStartup
+        : args.startup && !didSpawnStartup && !args.startupClaudeAccountId
           ? args.startup
           : undefined,
       ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])

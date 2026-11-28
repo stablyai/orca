@@ -34,6 +34,8 @@ type WorkerStartModePlacement = {
   worktree?: string
   model?: string
   effort?: string
+  /** Read: `--account` is only honoured by a terminal worker. */
+  account?: string
 }
 
 export function decideWorkerStartMode(args: {
@@ -43,7 +45,10 @@ export function decideWorkerStartMode(args: {
   chatLineage?: boolean
 }): WorkerStartModeReceipt {
   return decideAgentLaunchMode({
-    placement: args.params,
+    placement: {
+      ...args.params,
+      ...(args.params.account ? { claudeAccount: args.params.account } : {})
+    },
     settings: args.settings,
     chatLineage: args.chatLineage,
     vocabulary: WORKER_START_VOCABULARY
@@ -51,7 +56,8 @@ export function decideWorkerStartMode(args: {
 }
 
 export async function resolveWorkerStartModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
+  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'> &
+    Partial<Pick<OrcaRuntimeService, 'listRepos' | 'showRepo'>>,
   mode: WorkerStartModeReceipt,
   place: AgentLaunchSupportPlace | undefined,
   agent: TuiAgent | undefined

@@ -9,10 +9,18 @@ import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { AgentMessageSender } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 
+/** `--account`: which managed Claude account ran, and whether that needed a pinned launch. */
+export type OrchestrationWorkerLaunchAccount = {
+  id: string
+  email: string
+  mode: 'pinned' | 'active'
+}
+
 export type OrchestrationWorkerLaunchSelection = {
   agent: TuiAgent | null
   model: string | null
   effort: string | null
+  account?: OrchestrationWorkerLaunchAccount
 }
 
 export type OrchestrationWorkerLaunchReceipt = {
@@ -31,6 +39,19 @@ export function createWorkerLaunchReceipt(args: {
     effort: args.effort ?? null
   }
   return { requested: selection, effective: { ...selection } }
+}
+
+export function withWorkerLaunchAccount(
+  receipt: OrchestrationWorkerLaunchReceipt,
+  account: OrchestrationWorkerLaunchAccount | undefined
+): OrchestrationWorkerLaunchReceipt {
+  if (!account) {
+    return receipt
+  }
+  return {
+    requested: { ...receipt.requested, account },
+    effective: receipt.effective ? { ...receipt.effective, account } : null
+  }
 }
 
 /** A chat worker launches with the model and effort its session was seeded with, not only those the caller asked for. */
@@ -241,7 +262,8 @@ const RecordedStartOptions = lazyZodSchema(() =>
           .looseObject({
             agent: z.string().nullish(),
             model: z.string().nullish(),
-            effort: z.string().nullish()
+            effort: z.string().nullish(),
+            account: z.looseObject({ id: z.string(), email: z.string().nullish() }).nullish()
           })
           .nullish()
       })
@@ -254,6 +276,8 @@ export type RecordedWorkerLaunchOptions = {
   requestedAgent?: string
   model?: string
   effort?: string
+  account?: string
+  accountEmail?: string
 }
 
 function nonEmptyOption(value: string | null | undefined): string | undefined {
@@ -278,6 +302,8 @@ export function parseRecordedWorkerLaunchOptions(raw: string): RecordedWorkerLau
     agent: nonEmptyOption(parsed.data.agent) ?? requestedAgent,
     requestedAgent,
     model: nonEmptyOption(requested?.model),
-    effort: nonEmptyOption(requested?.effort)
+    effort: nonEmptyOption(requested?.effort),
+    account: nonEmptyOption(requested?.account?.id),
+    accountEmail: nonEmptyOption(requested?.account?.email)
   }
 }

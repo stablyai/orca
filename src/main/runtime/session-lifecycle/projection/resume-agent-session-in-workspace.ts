@@ -47,6 +47,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       captureHostId: ExecutionHostId
       /** Names the new pane, so a retry of one request reconciles the pane it may have started. */
       mutationId: string
+      /** The Claude account the resumed conversation ran on, when it was pinned. */
+      claudeAccountId?: string
       /** The caller's complete recipe; without one, the conversation's own pane record supplies it. */
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
@@ -97,6 +99,7 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     request: {
       captureHostId: ExecutionHostId
       mutationId: string
+      claudeAccountId?: string
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
     },
@@ -153,7 +156,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     try {
       resume = this.resolveMobileSessionResumeCommand(workspace, {
         ...session,
-        launchConfig: request.launchConfig ?? record?.launchConfig
+        launchConfig: request.launchConfig ?? record?.launchConfig,
+        ...(record?.claudeAccountId ? { claudeAccountId: record.claudeAccountId } : {})
       })
     } catch (error) {
       if (error instanceof WslHostWindowsOnlyAgentError) {
@@ -188,6 +192,9 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
         startupCommandDelivery: resume.startupCommandDelivery,
         launchConfig: resume.launchConfig,
         launchAgent: resume.launchAgent,
+        ...(request.claudeAccountId && session.agent === 'claude'
+          ? { claudeAccountId: request.claudeAccountId }
+          : {}),
         launchRuntime: resume.launchRuntime,
         resumeProviderSession: resume.resumeProviderSession,
         spawnIntent: 'user-resume',

@@ -1,3 +1,4 @@
+import { stripClaudePinnedLaunchMarker } from '../../../shared/claude/claude-pinned-launch-error'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type {
   AutomationDispatchResult,
@@ -42,7 +43,7 @@ export class AutomationDispatchRefusedError extends Error {
 }
 
 function describeDispatchError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return stripClaudePinnedLaunchMarker(error instanceof Error ? error.message : String(error))
 }
 
 /** A launch the runtime held for a stopped WSL distro is a retryable skip, not a crash (E9). */

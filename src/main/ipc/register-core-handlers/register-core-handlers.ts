@@ -104,7 +104,7 @@ export async function registerCoreHandlers(
     registerLazyRareIpcHandlers(store)
     registerLazySetupIpcHandlers(store, codexAccounts, keybindings)
     registerLazyCodexAccountHandlers(codexAccounts, () => store.getSettings())
-    registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
+    registerAgentHookHandlers(runtime, { getPtyIdForPaneKey, sessionStore: store })
     registerLazyClaudeAccountHandlers(claudeAccounts, (change, held) =>
       runtime.moveRunningClaudePanes(change, held)
     )

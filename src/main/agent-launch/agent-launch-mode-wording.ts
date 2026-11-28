@@ -51,6 +51,8 @@ export const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
   chat_unavailable_on_windows:
     "on Windows this agent's chat runs on agy, which is missing, outdated, or not signed in with a personal Google account",
   structured_unsupported_on_host: 'the execution host cannot create one here',
+  pinned_claude_account:
+    '--account runs Claude on a non-active account, which only a terminal can do',
   chat_runtime_not_installed:
     "its chat runtime isn't installed on this host (install it from a new chat tab in Orca)",
   chat_cannot_run_orca_commands:
@@ -60,9 +62,10 @@ export const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
 export function downgraded(
   reason: AgentLaunchDowngradeReason,
   vocabulary: AgentLaunchModeVocabulary,
-  preference: ChatPreference = 'default'
+  preference: ChatPreference = 'default',
+  detail?: string
 ): AgentLaunchModeReceipt {
-  const why = vocabulary.detailOverrides?.[reason] ?? DOWNGRADE_DETAIL[reason]
+  const why = detail ?? vocabulary.detailOverrides?.[reason] ?? DOWNGRADE_DETAIL[reason]
   return {
     mode: 'terminal',
     preferred: 'structured',

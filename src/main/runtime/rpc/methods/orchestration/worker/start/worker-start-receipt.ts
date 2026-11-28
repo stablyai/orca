@@ -8,6 +8,7 @@ import type { WorkerDispatchRow } from '../../../../../orchestration/db/orchestr
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { tearDownFailedWorkerStart } from './readiness/failed-worker-start-teardown'
 import { reportFailedWorkerStart } from '../../../../../orchestration/workers/turn-stops/failed-worker-start-report'
+import { stripClaudePinnedLaunchMarker } from '../../../../../../../shared/claude/claude-pinned-launch-error'
 import {
   isUnknownWorkerStartOutcome,
   monitorWorkerSetup,
@@ -88,12 +89,15 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
   const hostCap = readTerminalHostCapRefusal(args.error)
   // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
-  const reason = redactString(
-    replaceDispatchCapabilities(
-      (hostCap && describeTerminalHostCapRefusal(hostCap, "the worker's terminal")) ??
-        formatTerminalStartFailure(args.error) ??
-        (args.error instanceof Error ? args.error.message : String(args.error))
-    ).value
+  // The pinned-launch marker is stripped too: only the renderer's PTY spawn path reads it.
+  const reason = stripClaudePinnedLaunchMarker(
+    redactString(
+      replaceDispatchCapabilities(
+        (hostCap && describeTerminalHostCapRefusal(hostCap, "the worker's terminal")) ??
+          formatTerminalStartFailure(args.error) ??
+          (args.error instanceof Error ? args.error.message : String(args.error))
+      ).value
+    )
   )
   const unknown = isUnknownWorkerStartOutcome(args.error)
   const worker = unknown

@@ -28,8 +28,7 @@ import { RepositoryRemoveProjectSection } from './RepositoryRemoveProjectSection
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
-import { getRepositoryIconSectionId } from './repository-settings-targets'
-import { RepositoryIconPicker } from './identity/RepositoryIconPicker'
+import { RepositoryIconSection } from './identity/RepositoryIconSection'
 import { getRepositoryPaneSearchMetadata } from './repository-search'
 import { RepositoryHostSetupsSection } from './hosts/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
@@ -42,6 +41,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRuntimeSection'
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './worktrees/RepositoryWorktreeDefaultsSection'
+import { RepositoryClaudeAccountSection } from './RepositoryClaudeAccountSection'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 import { RepositoryWorkspaceCleanupSection } from './workspace-cleanup/RepositoryWorkspaceCleanupSection'
 import { getProjectRuntimeSessionSummary } from './runtime/repository-runtime-session-summary'
@@ -263,28 +263,11 @@ export function RepositoryPane({
           />
         </SearchableSetting>
 
-        <SearchableSetting
-          title={t('auto.components.settings.RepositoryPane.e856e61455', 'Project icon')}
-          description={t(
-            'auto.components.settings.RepositoryPane.e641c359de',
-            'Project icon and color used in the sidebar and tabs.'
-          )}
-          keywords={[
-            repo.displayName,
-            repo.path,
-            'project icon',
-            'repository icon',
-            'color',
-            'badge',
-            'emoji',
-            'favicon'
-          ]}
-          className="space-y-2 py-3"
-          id={getRepositoryIconSectionId(repo.id)}
+        <RepositoryIconSection
+          repo={repo}
+          updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}
-        >
-          <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
-        </SearchableSetting>
+        />
 
         <RepositoryJiraProjectSection
           key={`${selectedHostId}:${repo.id}`}
@@ -294,6 +277,12 @@ export function RepositoryPane({
         />
 
         <RepositoryAgentTrustSection
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
+        <RepositoryClaudeAccountSection
           repo={repo}
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}

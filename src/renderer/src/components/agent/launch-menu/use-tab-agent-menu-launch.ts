@@ -12,7 +12,12 @@ import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telem
 import type { NewTabAgentMenuRow } from '../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
+import {
+  captureNativeChatComposerFocusIntent,
+  type NativeChatComposerFocusIntent
+} from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { launchWithClaudeAccountChoice } from '../../claude-account-prompt/choose-claude-launch-account'
 import {
   agentLaunchPromptOwnership,
   newAgentPromptOutcome
@@ -42,6 +47,8 @@ export type QuickLaunchAgentMenuItemsProps = {
   disabled?: boolean
 }
 
+type NewTabLaunchableRow = Exclude<NewTabAgentMenuRow, { kind: 'chat-unavailable' }>
+
 export function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
   return getAgentCatalog().find((a) => a.id === agent) ?? null
 }
@@ -58,33 +65,31 @@ export function useTabAgentMenuLaunch({
   onPromptHandedOff,
   disabled,
   onFocusHostTerminal,
-  onFocusChat
+  onFocusChat,
+  afterDeferredLaunch
 }: QuickLaunchAgentMenuItemsProps & {
   onFocusHostTerminal?: () => void
   /** A New Chat opened at once: its composer takes the focus the menu gives back. */
   onFocusChat?: (tabId: string) => void
+  /** Runs after a launch the Claude account prompt delayed past the menu's close. */
+  afterDeferredLaunch?: () => void
 }) {
-  const runLaunch = useCallback(
-    (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, pickerEntry?: AgentPickerEntry) => {
-      if (
-        disabled ||
-        row.kind === 'chat-unavailable' ||
-        (row.kind !== 'chat' &&
-          readAgentMenuTerminalPending(useAppStore.getState(), readRuntimeStatuses(), {
-            worktreeId
-          }))
-      ) {
-        return false
-      }
-      if (canSendPrompt && !canSendPrompt()) {
-        return false
-      }
+  const launchOnAccount = useCallback(
+    (
+      row: NewTabLaunchableRow,
+      focusIntent: NativeChatComposerFocusIntent,
+      claudeAccountId: string | undefined,
+      deferred: boolean,
+      draft?: AgentPickerDraft,
+      pickerEntry?: AgentPickerEntry
+    ) => {
       const { agent } = row
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTabWithOutcome({
         requestId: createNonSecureContextUuid(),
-        focusIntent: captureNativeChatComposerFocusIntent(),
+        focusIntent,
+        ...(claudeAccountId ? { claudeAccountId } : {}),
         ...(row.kind === 'chat' || row.kind === 'cli'
           ? {
               requestedSurface: row.kind === 'chat' ? ('chat' as const) : ('terminal' as const),
@@ -139,6 +144,9 @@ export function useTabAgentMenuLaunch({
         onFocusChat?.(result.surface.tabId)
       } else if (result.surface.kind !== 'local-terminal') {
         onFocusHostTerminal?.()
+      } else if (deferred && !afterDeferredLaunch) {
+        // Why: after the account prompt the menu has closed, so a queued focus runs only if flushed.
+        focusTerminalTabSurface(result.surface.tabId)
       } else {
         onFocusTerminal(result.surface.tabId)
       }
@@ -152,14 +160,39 @@ export function useTabAgentMenuLaunch({
       prompt,
       promptDelivery,
       launchSource,
-      canSendPrompt,
       onPromptDelivered,
       onPromptHandedOff,
-      disabled,
       onFocusHostTerminal,
-      onFocusChat
+      onFocusChat,
+      afterDeferredLaunch
     ]
   )
 
-  return runLaunch
+  return useCallback(
+    (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, pickerEntry?: AgentPickerEntry) => {
+      if (
+        disabled ||
+        row.kind === 'chat-unavailable' ||
+        (row.kind !== 'chat' &&
+          readAgentMenuTerminalPending(useAppStore.getState(), readRuntimeStatuses(), {
+            worktreeId
+          }))
+      ) {
+        return false
+      }
+      if (canSendPrompt && !canSendPrompt()) {
+        return false
+      }
+      // Why captured before the account prompt: the prompt itself takes focus.
+      const focusIntent = captureNativeChatComposerFocusIntent()
+      const launched = launchWithClaudeAccountChoice(
+        row.agent,
+        { worktreeId, afterDeferredLaunch },
+        (claudeAccountId, deferred) =>
+          launchOnAccount(row, focusIntent, claudeAccountId, deferred, draft, pickerEntry)
+      )
+      return launched instanceof Promise ? launched.then((owned) => owned ?? false) : launched
+    },
+    [disabled, canSendPrompt, worktreeId, afterDeferredLaunch, launchOnAccount]
+  )
 }

@@ -20,6 +20,10 @@ import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 import { getRepositoryBrowserProfileSearchEntry } from './RepositoryBrowserProfileSection'
 import { getRepositoryWorkspaceCleanupSearchEntry } from './workspace-cleanup/repository-workspace-cleanup-search'
+import {
+  getRepositoryClaudeAccountSearchEntry,
+  getRepositoryGitHubAccountSearchEntry
+} from './repository-account-search-entries'
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -101,32 +105,6 @@ function getRepositorySearchParts(
       ...translateSearchKeyword('auto.components.settings.repository.search.27733eb6c1', 'favicon')
     ]
   }
-  const github = !isFolder
-    ? {
-        title: t('auto.components.settings.repository.search.eefc3e51ef', 'GitHub account'),
-        description: t(
-          'auto.components.settings.repository.search.githubAccountDescription',
-          'Bind a keyring gh login for this project’s GitHub API calls.'
-        ),
-        keywords: [
-          repo.displayName,
-          ...translateSearchKeyword(
-            'auto.components.settings.repository.search.9dc60d7f6d',
-            'github'
-          ),
-          ...translateSearchKeyword(
-            'auto.components.settings.repository.search.githubAccountKeyword',
-            'github account'
-          ),
-          ...translateSearchKeyword(
-            'auto.components.settings.repository.search.ghAccount',
-            'gh account'
-          ),
-          ...translateSearchKeyword('auto.components.settings.repository.search.login', 'login'),
-          ...translateSearchKeyword('auto.components.settings.repository.search.token', 'token')
-        ]
-      }
-    : undefined
   const fork =
     repo.upstream && !isFolder
       ? {
@@ -212,7 +190,8 @@ function getRepositorySearchParts(
     jira,
     displayName,
     icon,
-    github,
+    claudeAccount: getRepositoryClaudeAccountSearchEntry(repo, t),
+    github: isFolder ? undefined : getRepositoryGitHubAccountSearchEntry(repo, t),
     fork,
     projectRuntime,
     sidebarVisibility,
@@ -235,7 +214,8 @@ export function getRepositoryPaneSearchEntries(
     parts.browserProfile,
     parts.jira,
     parts.displayName,
-    parts.icon
+    parts.icon,
+    parts.claudeAccount
   ]
   if (parts.github) {
     entries.push(parts.github)
@@ -275,7 +255,8 @@ export function getRepositoryPaneSearchMetadata(
     parts.browserProfile,
     parts.jira,
     parts.displayName,
-    parts.icon
+    parts.icon,
+    parts.claudeAccount
   ]
   if (parts.github) {
     identity.push(parts.github)

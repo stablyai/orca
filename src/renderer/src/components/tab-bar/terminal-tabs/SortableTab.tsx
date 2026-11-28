@@ -4,10 +4,8 @@ import React, { useCallback, useEffect } from 'react'
 import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { Minimize2 } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-status/title/agent-title-decoration'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
-import { basename } from '@/lib/path'
 import { Input } from '@/components/ui/input'
-import { TabHoverCard } from '../strip/TabHoverCard'
+import { TerminalTabHoverCard } from './TerminalTabHoverCard'
 import type { SortableTabProps } from './sortable-tab-props'
 
 import { useAppStore } from '../../../store/index'
@@ -334,19 +332,13 @@ export default function SortableTab({
           {isEditing || menuOpen ? (
             tabRoot
           ) : (
-            <TabHoverCard
+            <TerminalTabHoverCard
+              tab={tab}
               title={displayTitle}
-              showWhenUnclipped={identityDetail !== undefined}
-              programNameIsProse={identityDetail !== undefined}
+              agent={tabAgent}
+              shell={shellForIcon}
+              identityDetail={identityDetail}
               {...(fork && { description: fork.describeSource, showWhenUnclipped: true })}
-              programName={
-                identityDetail ??
-                (tabAgent
-                  ? getAgentLabel(tabAgent)
-                  : shellForIcon
-                    ? basename(shellForIcon)
-                    : t('tabHoverCard.terminal', 'Terminal'))
-              }
               icon={
                 <TerminalTabLeadingIcon
                   agent={tabAgent}
@@ -369,7 +361,7 @@ export default function SortableTab({
               }
             >
               {tabRoot}
-            </TabHoverCard>
+            </TerminalTabHoverCard>
           )}
         </div>
       </ContextMenuTrigger>

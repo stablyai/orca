@@ -32,6 +32,25 @@ describe('liveResumeRecordChange', () => {
     })
   })
 
+  it('keeps the account a slept conversation ran on when its finished turn lost it', () => {
+    const pinned = {
+      ...slept,
+      launchConfig: { agentArgs: '', agentEnv: {}, claudeAccountId: 'acct-b' }
+    }
+    const live = {
+      ...slept,
+      origin: 'live' as const,
+      launchConfig: { agentArgs: '--model opus', agentEnv: {} }
+    }
+    expect(liveResumeRecordChange(pinned, live)).toEqual({
+      set: {
+        ...slept,
+        launchConfig: { agentArgs: '--model opus', agentEnv: {}, claudeAccountId: 'acct-b' }
+      }
+    })
+    expect(liveResumeRecordChange(pinned, { ...slept, origin: 'live' })).toBeNull()
+  })
+
   it('replaces it once the same conversation is working again', () => {
     const live = { ...slept, origin: 'live' as const, state: 'working' as const }
     expect(liveResumeRecordChange(slept, live)).toEqual({ set: live })

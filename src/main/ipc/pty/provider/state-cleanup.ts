@@ -3,6 +3,7 @@ import { unregisterPty } from '../../../memory/pty-registry'
 import { forgetCodexPaneAccount } from '../../../codex/configuration/homes/codex-pane-account-registry'
 import { openCodeHookService } from '../../../opencode/status-hooks/hook-service'
 import { piTitlebarExtensionService } from '../../../pi/managed-extensions/titlebar-extension-service'
+import { markPinnedClaudePtyExited } from '../../../claude-accounts/claude-pinned-pty-registry'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { clearMigrationUnsupportedPty } from '../../../agent-hooks/observations/migration-unsupported-pty-state'
 import { clearNativeWindowsConptyPty } from '../../../runtime/terminal/output/terminal-model-query-authority'
@@ -48,8 +49,10 @@ export function clearProviderPtyState(
   )
   if (!opts.preserveAgentSessionOwners) {
     agentSessionOwners.release(id)
-    // Persisted launch-account identity survives reconnectable disconnects, but real teardown must prevent reuse.
+    // Persisted launch-account identity survives reconnectable disconnects, but real teardown must prevent
+    // reuse of a dead pane's Codex or pinned Claude account.
     forgetCodexPaneAccount(id)
+    markPinnedClaudePtyExited(id)
   }
   // Release agent overlay/hook state even on teardown paths outside the local process table.
   openCodeHookService.clearPty(id)

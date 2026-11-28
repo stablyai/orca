@@ -74,6 +74,7 @@ export function TerminalPaneLazyOverlays({
     setSearchOpen,
     setSessionStateSaveFailureMessage,
     showSshReconnectOverlay,
+    startPaneOnActiveAccount,
     tabId,
     terminalLinkActionRequest,
     terminalManager,
@@ -96,6 +97,7 @@ export function TerminalPaneLazyOverlays({
                 paneOnClient={paneOnClient}
                 onDismiss={dismissTerminalError}
                 onRestartDaemon={() => daemonActions.setPending('restart')}
+                onStartOnActiveAccount={() => startPaneOnActiveAccount(activePane.id)}
                 onRestoreTerminalFocus={() => activePane.terminal.focus()}
                 onRetry={
                   isPaneOwnerRecoveryError(visibleTerminalError.error)

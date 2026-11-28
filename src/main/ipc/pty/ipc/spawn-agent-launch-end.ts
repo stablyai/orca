@@ -13,6 +13,7 @@ import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { agentLaunchFailureCode } from '../../../runtime/rpc/methods/agent-launch/agent-launch-failure-code'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { readClaudePinnedLaunchErrorCode } from '../../../../shared/claude/claude-pinned-launch-error'
 
 export type PaneAgentLaunch = {
   runtime: OrcaRuntimeService
@@ -75,7 +76,10 @@ export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEn
           ...diagnosticFields(readTerminalStartFailure(end.error))
         }
   )
-  return launch.returnLaunchFailure ? toError(end.error) : new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
+  // Why the refusal itself: its pane offers "Start on active account", which the generic code hides.
+  return launch.returnLaunchFailure || isClaudePinnedRefusal(end.error)
+    ? toError(end.error)
+    : new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
 }
 
 /** A pane closed during launch must stop any agent that may already have spawned. */
@@ -85,6 +89,10 @@ function stopClosed(launch: PaneAgentLaunch): void {
     void launch.runtime.closeTerminal(handle).catch(() => {})
   }
   launch.running.finish({ kind: 'withdrawn' })
+}
+
+function isClaudePinnedRefusal(error: unknown): boolean {
+  return error instanceof Error && readClaudePinnedLaunchErrorCode(error.message) !== null
 }
 
 function toError(error: unknown): Error {

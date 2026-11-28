@@ -1,11 +1,9 @@
-import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getProvider } from '../provider/registry'
 import {
-  isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
@@ -15,6 +13,12 @@ import {
 } from '../../../daemon/sessions/pty-session-id'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
+import {
+  applyRuntimeClaudeProfileTerminalEnv,
+  isRuntimeClaudeLaunch,
+  prepareRuntimeSpawnClaudeAuth,
+  resolveRuntimeSpawnClaudeAccount
+} from './spawn-claude-account'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
 import { resolvePtySpawnStartupTarget } from '../host-env/spawn-startup-target'
 import { resolvePtySpawnHostEnv } from '../host-env/spawn-host-env'
@@ -50,7 +54,6 @@ export async function prepareRuntimePtySpawn(
   if (freshSpawnRecovery) {
     await freshSpawnRecovery
   }
-  ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
   ctx.isDaemonHostSpawn =
     !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
   ctx.callerRequestedSessionId = args.sessionId
@@ -100,11 +103,10 @@ export async function prepareRuntimePtySpawn(
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
-      : null
+  const pinnedClaudeAccountId = resolveRuntimeSpawnClaudeAccount(ctx)
+  ctx.isClaudeLaunch = isRuntimeClaudeLaunch(ctx, pinnedClaudeAccountId)
+  ctx.claudeAuth = await prepareRuntimeSpawnClaudeAuth(ctx, pinnedClaudeAccountId)
+  applyRuntimeClaudeProfileTerminalEnv(ctx)
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
   if (ctx.shouldPersistHostSessionBinding) {

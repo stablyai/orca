@@ -21,6 +21,7 @@ import {
 } from '../pane-authority/agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from '../orchestration/agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { claudeAccountIdField } from './agent-status-claude-account'
 import {
   localAgentConversationAcceptance,
   conversationSessionStartedAt
@@ -229,6 +230,7 @@ export function buildAgentStatusLiveEntry(
       : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+    ...claudeAccountIdField(existing, payload, identity.agentType),
     ...(payload.paneSleep ? { paneSleep: payload.paneSleep } : {}),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,
     ...(payload.observation ? { observation: payload.observation } : {}),

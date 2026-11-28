@@ -6,8 +6,7 @@ import { RUNTIME_CAPABILITIES } from '../../shared/remote-runtime/protocol/proto
 import {
   readStructuredCreateSupport,
   REGISTERED_STRUCTURED_AGENTS,
-  type AgentLaunchSupportPlace,
-  type CreateSupportRuntime
+  type AgentLaunchSupportPlace
 } from './agent-launch-support-place'
 import {
   nativeChatPreferenceFor,
@@ -21,6 +20,11 @@ import type {
   StructuredAgentCreateSupportReply
 } from '../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 import type { WorkspaceLaunchKind } from '../../shared/agent-launch/contracts/workspace-launch-kind'
+import {
+  PROJECT_CLAUDE_ACCOUNT_DETAIL,
+  projectClaudeAccountForLaunch,
+  type AgentLaunchModeHostRuntime
+} from './agent-launch-project-claude-account'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
@@ -56,6 +60,8 @@ export type AgentLaunchModePlacement = {
   terminal?: string
   /** Derived by the host; absent means unknown, not a default workspace kind. */
   workspaceKind?: WorkspaceLaunchKind
+  /** `--account`: a structured session cannot run on a non-active account. */
+  claudeAccount?: string
   /** Structured sessions cannot honor a cwd outside their workspace root. */
   cwd?: string
   /** Missing until materialization; a requested cwd cannot be classified without it. */
@@ -129,6 +135,9 @@ export function decideAgentLaunchMode(args: {
   if (placement.on) {
     return blocked('remote_execution_host')
   }
+  if (placement.claudeAccount) {
+    return blocked('pinned_claude_account')
+  }
   const cwdRelation = launchCwdRelation(placement)
   const support = resolveStructuredNativeChatSupport({
     agent,
@@ -177,7 +186,7 @@ export function decideAgentLaunchMode(args: {
 export type { AgentLaunchSupportPlace }
 
 export async function resolveAgentLaunchModeOnHost(
-  runtime: CreateSupportRuntime & WslHostChatSettingsSource,
+  runtime: AgentLaunchModeHostRuntime & WslHostChatSettingsSource,
   receipt: AgentLaunchModeReceipt,
   place: AgentLaunchSupportPlace | undefined,
   agent: TuiAgent | undefined,
@@ -187,25 +196,39 @@ export async function resolveAgentLaunchModeOnHost(
   if (receipt.mode !== 'structured' || !place) {
     return receipt
   }
+  const settlement = context ? { ...context, agent } : undefined
   if (context && launchCwdRelation(context) !== 'root') {
     return unavailableLaunchMode(
       'tui_launch_command',
       vocabulary,
       chatPreferenceOf(receipt),
-      {
-        ...context,
-        agent
-      },
+      settlement,
       launchCwdRelation(context) === 'custom'
     )
   }
   const support = await readStructuredCreateSupport(runtime, place, agent)
-  const settlement = context ? { ...context, agent } : undefined
+  let settled: AgentLaunchModeReceipt
   try {
-    return downgradeAgentLaunchModeForHost(receipt, support, vocabulary, settlement)
+    settled = downgradeAgentLaunchModeForHost(receipt, support, vocabulary, settlement)
   } catch (error) {
     throw await withWslHostChatRecovery(error, context?.workspacePath, runtime)
   }
+  // Why after the host verdict: an SSH or WSL workspace, which never pins, keeps its own reason.
+  if (
+    settled.mode !== 'structured' ||
+    !(await projectClaudeAccountForLaunch(runtime, place, agent))
+  ) {
+    return settled
+  }
+  // Why refused: an explicit chat request must not quietly become a terminal before anything opens.
+  return unavailableLaunchMode(
+    'pinned_claude_account',
+    vocabulary,
+    chatPreferenceOf(settled),
+    settlement,
+    true,
+    PROJECT_CLAUDE_ACCOUNT_DETAIL
+  )
 }
 
 export function downgradeAgentLaunchModeForHost(
@@ -270,15 +293,16 @@ function unavailableLaunchMode(
   vocabulary: AgentLaunchModeVocabulary,
   preference: ChatPreference,
   context?: AgentLaunchModeSettlement,
-  conclusive = true
+  conclusive = true,
+  detail?: string
 ): AgentLaunchModeReceipt {
   if (preference === 'requested' && conclusive && context?.phase === 'before-effects') {
     throw new AgentLaunchSurfaceUnavailableError(
-      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
+      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${detail ?? DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
       reason
     )
   }
-  return downgraded(reason, vocabulary, preference)
+  return downgraded(reason, vocabulary, preference, detail)
 }
 
 export function warnStructuredLaunchDowngrade(

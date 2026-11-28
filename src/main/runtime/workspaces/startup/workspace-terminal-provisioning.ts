@@ -4,6 +4,11 @@ import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/r
 import { OrcaRuntimeWithActivateManagedWorktree } from './workspace-activation'
 import type { WorktreeTerminalProvisioningHost } from './runtime-worktree-terminal-provisioning'
 import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-readiness'
+import {
+  resolveWorktreeStartupClaudeAccount,
+  worktreeStartupClaudeAccountTarget
+} from '../../runtime-worktree-startup-claude-account'
+import { preparePinnableClaudeAuth } from '../../../ipc/pty/claude-pinned-spawn'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -73,6 +78,29 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
     }
+  }
+
+  protected async resolveStartupClaudeAccount(
+    request: Parameters<typeof resolveWorktreeStartupClaudeAccount>[0]['request'],
+    createRouteKind: Parameters<typeof resolveWorktreeStartupClaudeAccount>[0]['createRouteKind'],
+    target: Parameters<typeof worktreeStartupClaudeAccountTarget>[0]
+  ): Promise<string | undefined> {
+    const accountId = resolveWorktreeStartupClaudeAccount({
+      request,
+      createRouteKind,
+      canSpawn: Boolean(this.ptyController?.spawn),
+      listClaudeAccounts: () => this.getClaudeAccountsSnapshot()
+    })
+    // Why before the checkout: a startup that fails to prepare is only a warning on a successful create.
+    // Without a runtime preparer (headless serve) the PTY layer's own one decides at spawn.
+    if (accountId && this.prepareClaudeAuth) {
+      await preparePinnableClaudeAuth(
+        this.prepareClaudeAuth,
+        worktreeStartupClaudeAccountTarget(target),
+        accountId
+      )
+    }
+    return accountId
   }
 
   private getLayoutOwnerTerminalProvisioningHost(

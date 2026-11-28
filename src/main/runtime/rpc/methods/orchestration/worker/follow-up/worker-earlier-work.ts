@@ -28,13 +28,26 @@ export function parseStartOptions(raw: string): {
   agent?: string
   model?: string
   effort?: string
+  account?: string
+  accountEmail?: string
 } {
   const parsed = parseRecordedWorkerLaunchOptions(raw)
   return {
     agent: isTuiAgent(parsed.agent) ? parsed.agent : undefined,
     model: parsed.model,
-    effort: parsed.effort
+    effort: parsed.effort,
+    account: parsed.account,
+    accountEmail: parsed.accountEmail
   }
+}
+
+/** A resumed conversation lives in the Claude account its worker started on. */
+export function workerStartAccount(
+  db: OrchestrationDb | null,
+  dispatchId: string
+): string | undefined {
+  const startOptions = db?.getWorkerDispatch(dispatchId)?.start_options
+  return startOptions ? parseStartOptions(startOptions).account : undefined
 }
 
 /** The earlier task and report, for a fresh agent that cannot reopen the conversation. */

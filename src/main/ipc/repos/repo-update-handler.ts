@@ -15,6 +15,8 @@ import {
   normalizeGhAccountBinding,
   type GhAccountBinding
 } from '../../../shared/github/accounts/account-binding'
+import { normalizeRepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
+import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import {
@@ -78,6 +80,7 @@ export function registerRepoUpdateHandler(
             | null
           hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
+          agentAccounts?: RepoAgentAccounts | null
           browserProfileId?: string | null
         }
       }
@@ -116,6 +119,13 @@ export function registerRepoUpdateHandler(
           } else {
             updates.ghAccount = normalized
           }
+        }
+      }
+      if ('agentAccounts' in updates) {
+        const raw = updates.agentAccounts
+        updates.agentAccounts = raw == null ? null : normalizeRepoAgentAccounts(raw)
+        if (raw != null && !updates.agentAccounts) {
+          delete updates.agentAccounts
         }
       }
       // Worktree materialization trims each path; reject malformed arrays at the IPC boundary.

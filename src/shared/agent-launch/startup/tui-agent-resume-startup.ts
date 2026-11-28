@@ -31,6 +31,7 @@ export function buildAgentResumeStartupPlan(args: {
   agentEnv?: Record<string, string> | null
   agentCommand?: string | null
   ompResumeFilePath?: string | null
+  claudeAccountId?: string | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean

@@ -13,6 +13,7 @@ import {
   type ClaudeHostSelectionChange,
   type ClaudePaneFolder
 } from '../../../../shared/agent-accounts/claude/claude-pane-account-folder'
+import { getPinnedClaudeAccountIdForPty } from '../../../claude-accounts/claude-pinned-pty-registry'
 import { readAgentPaneForeground } from './agent-pane-foreground-read'
 import { answeredClaudeMove, claudeHostAccountSwitch } from './claude-host-account-switch'
 import type {
@@ -194,7 +195,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     return resolveClaudePaneFolder(pane.session?.transcriptPath, saved, host, process.platform)
   }
 
-  /** This host's own live terminals with Claude evidence: a status row, a saved record or the launch. */
+  /** This host's own live, unpinned terminals with Claude evidence (status row, saved record, launch). */
   private listClaudePanes(): ClaudePane[] {
     const panes: ClaudePane[] = []
     for (const [ptyId, pty] of this.ptysById) {
@@ -202,7 +203,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
         this.restartedClaudePanes.delete(ptyId)
         continue
       }
-      const pane = this.claudePaneOf(pty)
+      const pane = getPinnedClaudeAccountIdForPty(ptyId) ? null : this.claudePaneOf(pty)
       if (pane && !this.restartingClaudePanes.has(pane.paneKey)) {
         panes.push(pane)
       }
@@ -216,9 +217,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     if (pty.connectionId !== null || isRemoteRuntimePtyId(pty.ptyId) || pty.isWsl || !recorded) {
       return null
     }
-    const row = this.getAgentStatusRowsForPane(recorded).find(
-      (candidate) => candidate.agentType === 'claude'
-    )
+    const row = this.getAgentStatusRowsForPane(recorded).find((r) => r.agentType === 'claude')
     if (row?.structuredHost) {
       return null
     }
