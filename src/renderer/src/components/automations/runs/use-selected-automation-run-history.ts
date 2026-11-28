@@ -10,7 +10,14 @@
 
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
-import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
+import type {
+  AutomationAuthorityRef,
+  AutomationOwnerRef
+} from '../../../../../shared/automations/ownership/automation-owner-ref'
+import {
+  automationNavigationMatchesOwner,
+  useAutomationNavigationRevision
+} from '../hosts/automation-navigation-owner'
 import {
   capturedAutomationOwner,
   capturedAutomationOwnerKey,
@@ -38,6 +45,7 @@ export type SelectedAutomationRunNavigation = {
   automationId: string
   runId?: string | null
   hostId?: string | null
+  owner?: AutomationOwnerRef
 } | null
 
 export type SelectedAutomationRunHistoryOutcome = {
@@ -85,6 +93,7 @@ function listedTargetForHost(hostId: string): AutomationHostTarget {
 }
 
 export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHistoryInput): void {
+  const navigationRevision = useAutomationNavigationRevision(input.navigation)
   const acquired = useRef<{
     selected: AutomationListRow
     context: AutomationDispatchContext
@@ -103,7 +112,9 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
       previous.token !== input.acquisitionToken)
   ) {
     const captured = capturedAutomationOwner(input.context.capturedOwners, selected.key)
-    const navigationHost = navigationHostId(input.navigation, selected.automation.id)
+    const navigationHost = input.navigation?.owner
+      ? null
+      : navigationHostId(input.navigation, selected.automation.id)
     const target = captured.owner
       ? getAutomationAuthorityTarget(captured.owner.authority)
       : navigationHost
@@ -143,12 +154,27 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
   })
   const reloadToken = input.reloadToken
   const navigation =
-    input.navigation?.runId && input.navigation.automationId === request?.selected.automation.id
+    input.navigation?.runId &&
+    input.navigation.automationId === request?.selected.automation.id &&
+    (!input.navigation.owner ||
+      (navigationRevision &&
+        request?.captured.owner &&
+        automationNavigationMatchesOwner(input.navigation, request.captured.owner)))
       ? input.navigation
       : null
   const settled = useRef<{ request: typeof request; reloadToken: number } | null>(null)
+  const navigationBlocked = Boolean(
+    navigationRevision &&
+    input.navigation?.owner &&
+    input.navigation.automationId === request?.selected.automation.id &&
+    (!request.captured.owner ||
+      !automationNavigationMatchesOwner(input.navigation, request.captured.owner))
+  )
 
   useEffect(() => {
+    if (navigationBlocked) {
+      return
+    }
     const { onSettled } = inputRef.current
     if (!request) {
       onSettled({
@@ -251,5 +277,5 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
       cancelled = true
       unsubscribe()
     }
-  }, [request, reloadToken, navigation])
+  }, [request, reloadToken, navigation, navigationBlocked])
 }

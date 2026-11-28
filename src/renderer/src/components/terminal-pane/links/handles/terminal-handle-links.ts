@@ -296,12 +296,26 @@ function getTerminalHandleFocusHint(showActions: boolean): string {
 
 export async function focusRuntimeTerminalHandle(
   handle: string,
-  runtimeEnvironmentId: string | null
+  runtimeEnvironmentId: string | null,
+  current?: () => boolean
 ): Promise<void> {
   const environmentId = runtimeEnvironmentId?.trim()
   const target = environmentId
     ? ({ kind: 'environment', environmentId } as const)
     : ({ kind: 'local' } as const)
   // Main owns term_* mapping; resolve through terminal.focus on click instead of mirroring hover state.
-  await callRuntimeRpc(target, 'terminal.focus', { terminal: handle, navigation: 'host' })
+  await callRuntimeRpc(
+    target,
+    'terminal.focus',
+    { terminal: handle, navigation: 'host' },
+    {
+      beforeSend: current
+        ? () => {
+            if (!current()) {
+              throw new Error('Terminal origin changed.')
+            }
+          }
+        : undefined
+    }
+  )
 }

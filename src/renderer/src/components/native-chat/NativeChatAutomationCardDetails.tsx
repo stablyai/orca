@@ -17,9 +17,10 @@ import type { AutomationRunsSlice } from '@/components/automations/details/autom
 import type { AutomationDetailsController } from '@/components/automations/details/automation-details-controller'
 import { automationOwnerForEnvironment } from '@/components/automations/hosts/automation-host-owner'
 import {
-  runAutomationNowForOwner,
-  updateAutomationForOwner
-} from '@/components/automations/hosts/automation-scoped-list-client'
+  runAutomationNowForTarget,
+  updateAutomationForTarget,
+  type AutomationHostTarget
+} from '@/components/automations/hosts/automation-host-client'
 import { AutomationRecentRunList } from '@/components/automations/runs/AutomationRecentRunList'
 import { useAppStore } from '@/store'
 import type { Automation } from '../../../../shared/automations/automation-definition'
@@ -64,10 +65,10 @@ function RecentRuns({
       </p>
     )
   }
-  if (runs.error && runs.value.length === 0) {
+  if ((runs.error || runs.capacityError) && runs.value.length === 0) {
     return (
       <p role="status" className="text-sm text-muted-foreground">
-        {runs.error.message}
+        {(runs.error ?? runs.capacityError)?.message}
       </p>
     )
   }
@@ -91,32 +92,40 @@ function RecentRuns({
 function ReadyDetails({
   automation,
   controller,
-  mutating,
+  target,
+  stale,
   onEditInChat
 }: {
   automation: Automation
   controller: AutomationDetailsController
-  mutating: boolean
+  target: AutomationHostTarget
+  stale: boolean
   onEditInChat: (() => void) | null
 }): React.JSX.Element {
   const t = useTranslate()
   const [running, setRunning] = useState(false)
+  const [saving, setSaving] = useState(false)
   const setEnabled = (enabled: boolean): void => {
-    void controller
-      .mutate(
-        (owner) => updateAutomationForOwner(owner, automation.id, { enabled }),
-        (next) => next
-      )
+    if (stale) {
+      return
+    }
+    setSaving(true)
+    void updateAutomationForTarget(automation, { enabled }, target)
+      .then((next) => controller.replaceDefinition(next))
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
+      .finally(() => setSaving(false))
   }
   const runNow = (): void => {
+    if (stale) {
+      return
+    }
     setRunning(true)
-    void controller
-      .act((owner) => runAutomationNowForOwner(owner, automation.id))
+    void runAutomationNowForTarget(automation, target)
       .then(() => {
         toast.message(
           t('auto.components.automations.AutomationsPage.a1bdb57008', 'Automation run queued.')
         )
+        controller.reload()
       })
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setRunning(false))
@@ -152,10 +161,16 @@ function ReadyDetails({
         </p>
       ) : null}
       <div className="mt-3 flex items-center gap-1.5">
-        <Button type="button" variant="outline" size="xs" disabled={running} onClick={runNow}>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          disabled={running || stale}
+          onClick={runNow}
+        >
           {t('components.native-chat.automationSaved.runNow', 'Run now')}
         </Button>
-        {onEditInChat ? (
+        {onEditInChat && !stale ? (
           <Button type="button" variant="outline" size="xs" onClick={onEditInChat}>
             {t('automations.botEvents.editInChat', 'Edit in chat')}
           </Button>
@@ -163,7 +178,7 @@ function ReadyDetails({
         <Switch
           className="ml-auto"
           checked={automation.enabled}
-          disabled={mutating}
+          disabled={saving || stale}
           onCheckedChange={setEnabled}
           aria-label={
             automation.enabled
@@ -232,27 +247,17 @@ export function NativeChatAutomationCardDetails({
         <ReadyDetails
           automation={definition.value}
           controller={controller}
-          mutating={snapshot.mutating}
-          onEditInChat={
-            onEditInChat &&
-            snapshot.continuity === 'same' &&
-            definition.value.bot?.botId === automation.bot?.botId
-              ? () => {
-                  if (
-                    controller.recheckOwner() === 'same' &&
-                    controller.getSnapshot().definition.value?.bot?.botId === automation.bot?.botId
-                  ) {
-                    onEditInChat?.()
-                  }
-                }
-              : null
+          stale={definition.stale || snapshot.continuity !== 'same'}
+          target={
+            environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId }
           }
+          onEditInChat={onEditInChat}
         />
       )}
       {snapshot.continuity === 'same' || snapshot.continuity === 'checking' ? (
         <div className="mt-3">
           <RecentRuns automation={definition.value ?? automation} runs={runs} />
-          {runs.error ? (
+          {runs.error || runs.capacityError ? (
             <Button variant="link" size="inlineText" onClick={() => void controller.refreshRuns()}>
               {t('bots.automationPanel.retry', 'Retry')}
             </Button>

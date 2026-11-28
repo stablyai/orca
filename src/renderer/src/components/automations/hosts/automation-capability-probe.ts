@@ -152,13 +152,14 @@ async function assertReceiverCapability(
   return status.runtimeId
 }
 
-export function assertOwnerFencingSupported(
+export async function assertOwnerFencingSupported(
   authority: AutomationAuthorityRef
-): Promise<string | undefined> {
-  return assertReceiverCapability(
+): Promise<void> {
+  await assertAuthorityCapability(
     authority,
     AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE
+    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
+    { cacheConfirmation: false }
   )
 }
 
@@ -169,6 +170,16 @@ export function assertAutomationHistorySupported(
     authority,
     AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY,
     'Update Orca on this computer to read automation history in the panel or Automations page.'
+  )
+}
+
+export function assertAutomationDefinitionSupported(
+  authority: AutomationAuthorityRef
+): Promise<string | undefined> {
+  return assertReceiverCapability(
+    authority,
+    AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE
   )
 }
 

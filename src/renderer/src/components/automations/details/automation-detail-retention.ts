@@ -50,7 +50,8 @@ export function releaseAutomationPayload(key: symbol): void {
 export function admitAutomationDetailSnapshot(
   key: symbol,
   previous: AutomationDetailsSnapshot,
-  next: AutomationDetailsSnapshot
+  next: AutomationDetailsSnapshot,
+  source?: 'newest' | 'older'
 ): AutomationDetailsSnapshot {
   const payload = (value: AutomationDetailsSnapshot) =>
     [value.definition.value, ...value.runs.value, value.selected?.run].filter(Boolean)
@@ -73,21 +74,19 @@ export function admitAutomationDetailSnapshot(
               stale: true
             }
           : next.definition,
-      acknowledgedRun:
-        next.runs !== previous.runs ? previous.acknowledgedRun : next.acknowledgedRun,
       runs:
         next.runs !== previous.runs
           ? {
               ...previous.runs,
               status: previous.runs.value.length ? 'ready' : 'error',
-              capacityError: error,
+              capacityError: source ? { ...error, source } : previous.runs.capacityError,
               loadingMore: false,
               capped: previous.runs.capped
             }
           : next.runs,
       selected:
         previous.selected?.runId === next.selected?.runId && previous.selected?.run
-          ? previous.selected
+          ? { ...previous.selected, status: 'error', error }
           : next.selected
             ? { ...next.selected, status: 'error', run: null, error }
             : null

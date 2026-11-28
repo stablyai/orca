@@ -80,21 +80,37 @@ function revealWorkspaceOfGoneTerminal(worker: OpenableWorker, target: RuntimeCl
 /** Opens the worker's chat tab, else the worker through its Dispatch, so a terminal Orca closed reopens;
  *  a terminal that is gone for good (its workspace removed, say) shows the conversation's log instead,
  *  and with no log to show, the worker's workspace. */
-export function openOrchestrationWorker(worker: OpenableWorker, target: RuntimeClientTarget): void {
+export function openOrchestrationWorker(
+  worker: OpenableWorker,
+  target: RuntimeClientTarget,
+  current?: () => boolean
+): void {
+  if (current?.() === false) {
+    return
+  }
   if (worker.chatSessionId && worker.worktreeId) {
     void activateAiVaultStructuredSession(
       { structuredSession: { workspaceId: worker.worktreeId, sessionId: worker.chatSessionId } },
       undefined,
-      target
+      target,
+      current
     )
     return
   }
   // The host finds the terminal gone at lookup (no pane for its handle), or focus finds it gone.
   const terminalGone = (): void =>
-    void openWorkerTranscript(worker.dispatchId, target, () =>
-      revealWorkspaceOfGoneTerminal(worker, target)
+    void openWorkerTranscript(
+      worker.dispatchId,
+      target,
+      () => {
+        if (current?.() !== false) {
+          revealWorkspaceOfGoneTerminal(worker, target)
+        }
+      },
+      current
     )
   void openOrchestrationDispatch(`dispatch:${worker.dispatchId}`, worker.title, target, {
+    current,
     open: { ...structuredSessionOpenFeedback, terminalGone },
     terminal: {
       gone: terminalGone,
@@ -107,8 +123,12 @@ export function openOrchestrationWorker(worker: OpenableWorker, target: RuntimeC
 export async function openWorkerTranscript(
   dispatchId: string,
   target: RuntimeClientTarget,
-  noLog: () => void = showAgentPaneUnavailable
+  noLog: () => void = showAgentPaneUnavailable,
+  current?: () => boolean
 ): Promise<void> {
+  if (current?.() === false) {
+    return
+  }
   // The host answers with its own paths, which only this computer's host shares with us.
   if (target.kind === 'local') {
     let result: OrchestrationWorkerTranscriptResult | null = null
@@ -120,6 +140,9 @@ export async function openWorkerTranscript(
       )
     } catch {
       // An older host has no transcript method; it falls through to noLog.
+    }
+    if (current?.() === false) {
+      return
     }
     const transcript = result?.transcript
     const log: Pick<AiVaultSession, 'agent' | 'filePath' | 'executionHostId'> | null =
@@ -136,5 +159,7 @@ export async function openWorkerTranscript(
       }
     }
   }
-  noLog()
+  if (current?.() !== false) {
+    noLog()
+  }
 }

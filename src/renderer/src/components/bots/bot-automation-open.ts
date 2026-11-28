@@ -75,7 +75,25 @@ function activityScrollTop(): number | null {
 }
 
 /** Opens an automation, or one of its runs: in its bot's panel when there is one, else the page. */
-export function openBotAutomation(open: BotAutomationOpen): void {
+export function openBotAutomation(open: BotAutomationOpen): void
+export function openBotAutomation(
+  hostId: ExecutionHostId,
+  automationId: string,
+  runId: string | null
+): void
+export function openBotAutomation(
+  open: BotAutomationOpen | ExecutionHostId,
+  automationId?: string,
+  runId: string | null = null
+): void {
+  if (typeof open === 'string') {
+    if (automationId) {
+      const state = useAppStore.getState()
+      state.setPendingAutomationRunNavigation({ hostId: open, automationId, runId })
+      state.openAutomationsPage()
+    }
+    return
+  }
   const continuity = open.owner ? evaluateAutomationOwner(open.owner) : null
   const target = automationOwnerForHostId(
     open.hostId ?? open.bot?.hostId ?? '',

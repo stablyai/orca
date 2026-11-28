@@ -2,11 +2,9 @@ import React, { useEffect, useId, useRef, useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { openBotHomeTab } from '@/lib/bot-catalog'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
 import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
-import { automationOwnerForHostId } from '../automations/hosts/automation-host-owner'
 import { useAutomationDetails } from '../automations/details/use-automation-details'
 import { useAutomationDetailKeys } from '../automations/details/use-automation-detail-keys'
 import { BotAutomationScreenBody } from './BotAutomationScreenBody'
@@ -63,7 +61,7 @@ export function BotAutomationPanel({
   /** Back to Activity; it restores focus and scroll. */
   onBack: () => void
 }): React.JSX.Element {
-  // Captured once: every read and action goes to the machine this was opened against.
+  // Reads stay with the computer this panel was opened against.
   const [owner] = useState(() => place.owner ?? null)
   const t = useTranslate()
   const backRef = useRef<HTMLButtonElement>(null)
@@ -132,22 +130,6 @@ function BotAutomationScreen({
   useEffect(() => {
     region.current?.focus({ preventScroll: true })
   }, [])
-  const canDraft = (): boolean => {
-    if (details.controller.recheckOwner() !== 'same') {
-      return false
-    }
-    const current = details.controller.getSnapshot()
-    const target = automationOwnerForHostId(bot.hostId, useAppStore.getState())
-    return Boolean(
-      current.definition.value?.bot?.botId === bot.id &&
-      target &&
-      JSON.stringify(target) === JSON.stringify(current.owner)
-    )
-  }
-  const askInChat = (sentence: string): Promise<boolean> =>
-    canDraft()
-      ? openBotHomeTab(bot, { draft: sentence, canContinue: canDraft }).catch(() => false)
-      : Promise.resolve(false)
   return (
     <div
       ref={region}
@@ -165,7 +147,6 @@ function BotAutomationScreen({
         snapshot={details.snapshot}
         controller={details.controller}
         titleId={titleId}
-        askInChat={askInChat}
         onRetired={onBack}
       />
     </div>

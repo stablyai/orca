@@ -4,7 +4,10 @@ import React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { botErrorMessage } from './bot-presentation'
-import { actOnBotAutomationRow } from '../automations/hosts/bot-automation-row-owner'
+import {
+  botAutomationOriginCurrent,
+  actOnBotAutomationRow
+} from '../automations/hosts/bot-automation-row-owner'
 import { automationOwnerForHostId } from '../automations/hosts/automation-host-owner'
 import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { Button } from '@/components/ui/button'
@@ -18,10 +21,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { AutomationRecentRunList } from '../automations/runs/AutomationRecentRunList'
 import { DetailSection } from '../automations/details/automation-detail-sections'
 import type { AutomationDetailsController } from '../automations/details/automation-details-controller'
-import {
-  acknowledgedAutomationRun,
-  type AutomationDetailsSnapshot
-} from '../automations/details/automation-details-model'
+import type { AutomationDetailsSnapshot } from '../automations/details/automation-details-model'
 import { openBotAutomation } from './bot-automation-open'
 import { openBotSession } from './bot-session-open'
 
@@ -33,6 +33,7 @@ export function botAutomationRunAction(
   run: AutomationRun,
   owner: AutomationOwnerRef
 ): { kind: 'chat' | 'terminal'; open: () => void } | null {
+  const current = botAutomationOriginCurrent(owner, bot)
   const guarded =
     (open: () => void): (() => void) =>
     () => {
@@ -52,7 +53,7 @@ export function botAutomationRunAction(
   if (run.sessionKind === 'chat' && run.chatSessionId) {
     return {
       kind: 'chat',
-      open: guarded(() => openBotSession(bot, run.chatSessionId ?? '', run.workspaceId))
+      open: guarded(() => openBotSession(bot, run.chatSessionId ?? '', run.workspaceId, current))
     }
   }
   if (run.terminalPaneKey && run.workspaceId) {
@@ -106,8 +107,7 @@ export function BotAutomationRuns({
 }): React.JSX.Element {
   const t = useTranslate()
   const { runs, selected } = snapshot
-  const receipt = acknowledgedAutomationRun(snapshot, automation.id)
-  const shownRuns = receipt ? [receipt, ...runs.value] : runs.value
+  const shownRuns = runs.value
   const pinnedRun =
     selected?.run && !runs.value.some((run) => run.id === selected.runId) ? selected.run : null
   const toPage = (runId: string | null): void =>
@@ -154,14 +154,14 @@ export function BotAutomationRuns({
           <p role="status" className="px-2 text-xs text-muted-foreground">
             {t('auto.components.automations.AutomationRunsDashboard.loading', 'Loading runs…')}
           </p>
-        ) : runs.status === 'error' && !pinnedRun && !receipt ? (
+        ) : runs.status === 'error' && !pinnedRun && !runs.capacityError ? (
           <p className="flex flex-wrap items-center gap-2 px-2 text-xs text-muted-foreground">
             {t('bots.automationPanel.runsFailed', "Couldn't read its runs.")}
             <button type="button" className={LINK} onClick={() => controller.reload()}>
               {t('bots.automationPanel.retry', 'Retry')}
             </button>
           </p>
-        ) : shownRuns.length === 0 && !pinnedRun ? (
+        ) : shownRuns.length === 0 && !pinnedRun && !runs.capacityError ? (
           <p className="px-2 text-xs text-muted-foreground">
             {t('components.native-chat.automationSaved.noRuns', 'No runs yet')}
           </p>
@@ -193,7 +193,7 @@ export function BotAutomationRuns({
             )}
           />
         )}
-        {runs.error && (runs.status !== 'error' || pinnedRun || receipt) ? (
+        {runs.error && (runs.status !== 'error' || pinnedRun) ? (
           <p className="px-2 text-2xs text-muted-foreground">
             {runs.status === 'error'
               ? t('bots.automationPanel.runsFailed', "Couldn't read its runs.")
@@ -213,7 +213,18 @@ export function BotAutomationRuns({
         ) : null}
         {runs.capacityError ? (
           <p role="status" className="px-2 text-2xs text-muted-foreground">
-            {runs.capacityError.message}
+            {runs.capacityError.message}{' '}
+            <button
+              type="button"
+              className={LINK}
+              onClick={() =>
+                runs.capacityError?.source === 'older'
+                  ? controller.loadMore()
+                  : void controller.refreshRuns()
+              }
+            >
+              {t('bots.automationPanel.retry', 'Retry')}
+            </button>
           </p>
         ) : null}
         {runs.capped ? (

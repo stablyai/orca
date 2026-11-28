@@ -1,8 +1,4 @@
-import { automationRunAttempts } from '../automations/details/automation-run-attempts'
-import { useAutomationRunAttempt } from '../automations/details/use-automation-run-attempt'
-import React, { useState } from 'react'
-import { BotAutomationRunAgainDialog } from './BotAutomationRunAgainDialog'
-import { toast } from 'sonner'
+import React from 'react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { openBotAutomation } from './bot-automation-open'
 import { useTranslate } from '@/i18n/use-translate'
@@ -16,10 +12,7 @@ import {
   getToneForAutomationRunStatus,
   indexLatestAutomationRuns
 } from '../../../../shared/automation-last-run'
-import {
-  AutomationDetailHeader,
-  type AutomationControlState
-} from '../automations/details/AutomationDetailHeader'
+import { AutomationDetailHeader } from '../automations/details/AutomationDetailHeader'
 import {
   AutomationDetailNotices,
   automationDetailNotices
@@ -28,12 +21,7 @@ import { BotAutomationInstructions } from './BotAutomationInstructions'
 import { automationWontFire } from '../automations/details/automation-wont-fire'
 import type { AutomationDetailsController } from '../automations/details/automation-details-controller'
 import type { AutomationDetailsSnapshot } from '../automations/details/automation-details-model'
-import {
-  runAutomationNowForOwner,
-  updateAutomationForOwner
-} from '../automations/hosts/automation-scoped-list-client'
 import type { Automation } from '../../../../shared/automations/automation-definition'
-import { botErrorMessage } from './bot-presentation'
 import { upcomingAt } from './bot-upcoming-copy'
 import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
 import { useBotHostLabel } from './use-bot-host-label'
@@ -52,7 +40,6 @@ type BodyProps = {
   snapshot: AutomationDetailsSnapshot
   controller: AutomationDetailsController
   titleId: string
-  askInChat: (sentence: string) => Promise<boolean>
   onRetired: () => void
 }
 
@@ -79,9 +66,6 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
   const offline = useBotHostOffline(bot.hostId)
   const hostLabel = useBotHostLabel(bot.hostId)
   const hostName = hostLabel ?? t('bots.host.thisComputer', 'this computer')
-  const runAttempt = useAutomationRunAttempt(controller, snapshot)
-  const [announcement, setAnnouncement] = useState('')
-  const [confirmingRun, setConfirmingRun] = useState(false)
   const automation = snapshot.definition.value
   const signedOut = useOrcaCloudSignedOut(bot.hostId)
   const webhooks = useBotWebhooks(bot.hostId)
@@ -94,16 +78,9 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
     ? indexLatestAutomationRuns(snapshot.runs.value).get(automation.id)
     : undefined
   const running = Boolean(
-    (latestRun && getToneForAutomationRunStatus(latestRun.status) === 'running') ||
-    (snapshot.acknowledgedRun &&
-      getToneForAutomationRunStatus(snapshot.acknowledgedRun.status) === 'running')
+    latestRun && getToneForAutomationRunStatus(latestRun.status) === 'running'
   )
-  const runNow =
-    !runAttempt || runAttempt.state === 'acknowledged' ? null : { state: runAttempt.state }
-  const runningAction =
-    latestRun && (!snapshot.acknowledgedRun || latestRun.id === snapshot.acknowledgedRun.id)
-      ? botAutomationRunAction(bot, latestRun, owner)
-      : null
+  const runningAction = latestRun ? botAutomationRunAction(bot, latestRun, owner) : null
   const notices = useBotAutomationNotices({
     bot,
     hostName,
@@ -112,7 +89,6 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
     controller,
     offline,
     oldHost: unsupported,
-    runNow,
     running,
     runningAction: runningAction
       ? {
@@ -124,49 +100,8 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
         }
       : null,
     wontFire,
-    onRetired: props.onRetired,
-    onCheckAgain: () => {
-      setAnnouncement('')
-      void controller.refreshRuns().then(() => {
-        setAnnouncement(t('bots.automationPanel.stillUnconfirmed', "Still couldn't confirm"))
-      })
-    },
-    onDismissRunNow: () => automationRunAttempts.dismiss(owner, controller.automationId)
+    onRetired: props.onRetired
   })
-  const blocked: AutomationControlState | null = offline
-    ? { unavailable: true, describedBy: notices.ids.offline }
-    : snapshot.continuity !== 'same'
-      ? { unavailable: true, describedBy: notices.ids.checking }
-      : null
-  const foreign = Boolean(automation?.bot && automation.bot.botId !== bot.id)
-
-  const fail = (error: unknown): void => {
-    toast.error(botErrorMessage(error))
-  }
-  const toggle = (current: Automation): void => {
-    void controller
-      .mutate(
-        (o) => updateAutomationForOwner(o, current.id, { enabled: !current.enabled }),
-        (next) => next
-      )
-      .catch(fail)
-  }
-  const startRun = (current: Automation): void => {
-    setAnnouncement('')
-    if (controller.recheckOwner() !== 'same' || current.bot?.botId !== bot.id) {
-      return
-    }
-    void automationRunAttempts
-      .start(owner, current.id, () =>
-        controller.startRun((o) => runAutomationNowForOwner(o, current.id))
-      )
-      .then(() => {
-        setAnnouncement(t('bots.automationPanel.runStarted', 'Run started'))
-      })
-      .catch((error: unknown) => {
-        fail(error)
-      })
-  }
   const history =
     snapshot.continuity === 'retired' || snapshot.continuity === 'unpaired' ? null : (
       <BotAutomationRuns
@@ -191,44 +126,13 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
     )
   }
 
-  const hostActions: AutomationControlState | null =
-    blocked ?? (foreign ? { unavailable: true, describedBy: notices.ids.foreign } : null)
   const sectionProps: SectionProps = { automation, owner }
   return (
     <>
-      <p role="status" aria-live="polite" className="sr-only">
-        {announcement}
-      </p>
       <AutomationDetailHeader
         automation={automation}
         titleId={props.titleId}
         subtitle={statusLine(automation, now, t)}
-        onRunNow={(current) =>
-          runNow?.state === 'dismissed' ? setConfirmingRun(true) : startRun(current)
-        }
-        runNowLabel={
-          running
-            ? t('bots.automationPanel.running', 'Running…')
-            : runNow?.state === 'dismissed'
-              ? t('bots.automationPanel.runAgain', 'Run again…')
-              : undefined
-        }
-        onToggle={toggle}
-        runNowState={
-          hostActions ??
-          (runNow?.state === 'starting'
-            ? { pending: true }
-            : running
-              ? { unavailable: true, describedBy: notices.ids.running }
-              : runNow?.state === 'unconfirmed'
-                ? { unavailable: true, describedBy: notices.ids.unconfirmed }
-                : unsupported
-                  ? { unavailable: true, describedBy: notices.ids.oldHost }
-                  : snapshot.mutating
-                    ? { pending: true }
-                    : undefined)
-        }
-        toggleState={hostActions ?? (snapshot.mutating ? { pending: true } : undefined)}
         menuItems={
           <DropdownMenuItem
             onSelect={() =>
@@ -263,24 +167,8 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
       {history}
       <BotAutomationWhenSection {...sectionProps} />
       <BotAutomationResultsSection {...sectionProps} />
-      <BotAutomationInstructions
-        automation={automation}
-        botName={bot.name}
-        askInChat={
-          !foreign && !blocked && automation.bot?.botId === bot.id ? props.askInChat : null
-        }
-      />
+      <BotAutomationInstructions automation={automation} />
       <BotAutomationSetup automation={automation} hostName={hostName} botName={bot.name} />
-      <BotAutomationRunAgainDialog
-        open={confirmingRun}
-        onClose={() => setConfirmingRun(false)}
-        onConfirm={() => {
-          setConfirmingRun(false)
-          if (!running && !hostActions && !unsupported && !snapshot.mutating) {
-            startRun(automation)
-          }
-        }}
-      />
     </>
   )
 }

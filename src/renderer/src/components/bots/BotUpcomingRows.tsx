@@ -1,3 +1,4 @@
+import { botTarget } from '@/lib/bot-hosts'
 // The Automations section's rows: Look around, Tidy memory, automations and waits, one line each. The
 // leading icon is the state (failed, can't run, running, paused), details sit in the hover card, and
 // Pause/Resume, Run now and the row's other commands show on hover or focus. Folded, only trouble stays.
@@ -22,14 +23,11 @@ import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-ro
 import type { UpNextState } from '../../../../shared/bots/bot-look-around'
 import { botTidyUp, TIDY_UP_HOURS } from '../../../../shared/bots/bot-tidy-up'
 import {
-  deleteAutomationForOwner,
-  runAutomationNowForOwner,
-  updateAutomationForOwner
-} from '../automations/hosts/automation-scoped-list-client'
-import {
-  botAutomationRowOwner,
-  actOnBotAutomationRow
-} from '../automations/hosts/bot-automation-row-owner'
+  deleteAutomationForTarget,
+  runAutomationNowForTarget,
+  updateAutomationForTarget
+} from '../automations/hosts/automation-host-client'
+import { botAutomationRowOwner } from '../automations/hosts/bot-automation-row-owner'
 import type { BotAutomationCardRow } from './bot-automation-card'
 import {
   automationEnabled,
@@ -188,18 +186,14 @@ function AutomationRow({
     const asked = owner
     const from = automation.updatedAt
     setSaving(true)
-    void actOnBotAutomationRow(rowOwner, (captured) =>
-      updateAutomationForOwner(captured, automation.id, { enabled: next })
-    )
+    void updateAutomationForTarget(automation, { enabled: next }, botTarget(bot))
       .then((updated) => setSaved(asked ? { enabled: updated.enabled, from, owner: asked } : null))
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setSaving(false))
   }
   const runNow = (): void => {
     setStarting(true)
-    void actOnBotAutomationRow(rowOwner, (captured) =>
-      runAutomationNowForOwner(captured, automation.id)
-    )
+    void runAutomationNowForTarget(automation, botTarget(bot))
       .then(() =>
         toast.message(
           t('auto.components.automations.AutomationsPage.a1bdb57008', 'Automation run queued.')
@@ -305,16 +299,13 @@ function WaitRow({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { automation } = row
-  const owner = botAutomationRowOwner(automation, bot)
   const [cancelling, setCancelling] = useState(false)
   if (folded) {
     return null
   }
   const cancel = (): void => {
     setCancelling(true)
-    void actOnBotAutomationRow(owner, (captured) =>
-      deleteAutomationForOwner(captured, automation.id)
-    )
+    void deleteAutomationForTarget(automation, botTarget(bot))
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setCancelling(false))
   }

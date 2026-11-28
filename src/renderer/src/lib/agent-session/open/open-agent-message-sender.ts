@@ -179,8 +179,16 @@ export async function openOrchestrationDispatch(
   address: string,
   label: string,
   host: RuntimeClientTarget,
-  feedback?: { open?: StructuredSessionOpenFeedback; terminal?: TerminalFocusFeedback }
+  feedback?: {
+    open?: StructuredSessionOpenFeedback
+    terminal?: TerminalFocusFeedback
+    current?: () => boolean
+  }
 ): Promise<void> {
+  const current = feedback?.current
+  if (current?.() === false) {
+    return
+  }
   const terminal = feedback?.terminal ?? {
     lookupFailure: (failure: LookupFailure) => showLookupFailure(failure, label, feedback?.open)
   }
@@ -194,14 +202,21 @@ export async function openOrchestrationDispatch(
       },
       {
         target: host,
+        current,
         feedback: feedback?.open,
         retry: () => openOrchestrationDispatch(address, label, host, feedback)
       }
     )
+    if (current?.() === false) {
+      return
+    }
     if (result.kind === 'terminal') {
-      await focusTerminal(result.handle, terminalEnvironmentId(host, result), terminal)
+      await focusTerminal(result.handle, terminalEnvironmentId(host, result), terminal, current)
     }
   } catch (error) {
+    if (current?.() === false) {
+      return
+    }
     showLookupFailure(
       isRuntimeCompatBlockError(error) ? 'update' : 'unreachable',
       label,

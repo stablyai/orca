@@ -1,4 +1,5 @@
 import { useTranscriptBot } from '@/components/bots/bot-transcript-bot'
+import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
@@ -60,7 +61,7 @@ export function NativeChatAutomationSendAgain({
 }): React.JSX.Element | null {
   const { say } = wording
   const owner = useNativeChatVisualOwner()
-  const bot = useTranscriptBot(owner)
+  const bot = useBotForWorkspace(owner?.worktreeId ?? null)
   const [sending, setSending] = useState<'idle' | 'busy' | 'sent'>(
     resend === 'sent' ? 'sent' : 'idle'
   )

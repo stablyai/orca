@@ -132,6 +132,7 @@ export function structuredSessionOpenOutcome(
 }
 
 type DesktopInteractionOptions = {
+  current?: () => boolean
   target?: RuntimeClientTarget
   deps?: StructuredSessionOpenAdapterDeps
   locate?: StructuredSessionOpenDeps['locate']
@@ -165,14 +166,43 @@ export async function openDesktopStructuredSessionInteraction(
     throw error
   }
   const key =
-    source.kind === 'history' && !options.deps?.signal
+    source.kind === 'history' && !options.deps?.signal && !options.current
       ? `${executionHostIdForStructuredTarget(owner)}\0${source.structuredSession.workspaceId}\0${source.structuredSession.sessionId}`
       : undefined
   const pending = key === undefined ? undefined : activationsInFlight.get(key)
   if (pending) {
     return pending
   }
-  const deps = options.deps ?? defaultDeps
+  const base = options.deps ?? defaultDeps
+  const current = () => options.current?.() !== false && base.current?.() !== false
+  const beforeSend = () => {
+    throwIfSignalAborted(base.signal)
+    if (!current()) {
+      throw new Error('Chat origin changed.')
+    }
+  }
+  const deps = options.current
+    ? {
+        ...base,
+        current,
+        refresh: async (target: StructuredSessionOpenTarget, owner: RuntimeClientTarget) => {
+          beforeSend()
+          await (options.deps
+            ? base.refresh(target, owner)
+            : refreshStructuredSessionTabs(target.worktreeId, owner, beforeSend))
+        },
+        reveal: (target: {
+          worktreeId: string
+          sessionId: string
+          target?: RuntimeClientTarget
+        }) => {
+          beforeSend()
+          return options.deps
+            ? base.reveal(target)
+            : revealStructuredSession({ ...target, beforeSend })
+        }
+      }
+    : base
   let initialized = true
   const execute = async (): Promise<StructuredSessionOpenResult> => {
     initialized = options.initialize?.() !== false
@@ -231,13 +261,14 @@ async function executeDesktopStructuredSession(
     async (address: string, messageIds: readonly string[]) => {
       try {
         return await withStructuredSessionRestoreTimeout(
-          callStructuredSessionParty(
-            owner,
-            method,
-            address,
-            messageIds,
-            deps.signal ? { beforeSend: () => throwIfSignalAborted(deps.signal) } : undefined
-          ),
+          callStructuredSessionParty(owner, method, address, messageIds, {
+            beforeSend: () => {
+              throwIfSignalAborted(deps.signal)
+              if (deps.current?.() === false) {
+                throw new Error('Chat origin changed.')
+              }
+            }
+          }),
           { signal: deps.signal }
         )
       } catch (error) {
@@ -253,7 +284,7 @@ async function executeDesktopStructuredSession(
       deps
         .tabs(target, owner)
         .some((row) => row.id === tab.id && row.sessionId === target.sessionId) &&
-      deps.activate({ ...target, target: owner }),
+      deps.activate({ ...target, target: owner, current: deps.current }),
     refresh: (target) => deps.refresh(target, owner),
     reveal: async (target) => {
       const outcome = await deps.reveal({ ...target, target: owner })

@@ -3,7 +3,10 @@
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
-import { AutomationHostScopeUnsupportedError } from './automation-capability-probe'
+import {
+  AutomationHostScopeUnsupportedError,
+  assertAutomationDefinitionSupported
+} from './automation-capability-probe'
 import {
   callAuthority,
   ownerPrecondition,
@@ -15,13 +18,15 @@ export async function showAutomationForOwner(
   owner: AutomationOwnerRef,
   id: string
 ): Promise<Automation> {
+  const runtimeId = await assertAutomationDefinitionSupported(owner.authority)
   const result = await callAuthority<{ automation: Automation }>(
     owner.authority,
     'automation.show',
     {
       id,
       expectedOwner: ownerPrecondition(owner)
-    }
+    },
+    runtimeId
   )
   return result.automation
 }

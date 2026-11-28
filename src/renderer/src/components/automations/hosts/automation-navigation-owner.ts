@@ -4,8 +4,26 @@ import { useAppStore } from '@/store'
 import type { PendingAutomationRunNavigation } from '@/store/slices/ui/ui-slice-contract-core'
 import { automationOwnerForHostId, evaluateAutomationOwner } from './automation-host-owner'
 
+type NavigationOrigin = { owner?: PendingAutomationRunNavigation['owner']; hostId?: string | null }
+
+export function automationNavigationMatchesOwner(
+  navigation: NavigationOrigin,
+  owner: NonNullable<NavigationOrigin['owner']>
+): boolean {
+  if (!navigation.owner || automationNavigationContinuity(navigation) !== 'same') {
+    return false
+  }
+  const incoming = evaluateAutomationOwner(navigation.owner)
+  const selected = evaluateAutomationOwner(owner)
+  return (
+    (incoming.status === 'same' || incoming.status === 'continued') &&
+    (selected.status === 'same' || selected.status === 'continued') &&
+    JSON.stringify(incoming.owner) === JSON.stringify(selected.owner)
+  )
+}
+
 export function automationNavigationContinuity(
-  navigation: PendingAutomationRunNavigation
+  navigation: NavigationOrigin
 ): 'same' | 'checking' | 'retired' | 'unpaired' {
   if (!navigation.owner) {
     return 'same'
@@ -38,9 +56,7 @@ export function admitAutomationNavigation(navigation: PendingAutomationRunNaviga
   return false
 }
 
-export function useAutomationNavigationRevision(
-  navigation: PendingAutomationRunNavigation | null
-): string {
+export function useAutomationNavigationRevision(navigation: NavigationOrigin | null): string {
   return useSyncExternalStore(onRuntimeEnvironmentRevisionsPublished, () =>
     navigation?.owner ? JSON.stringify(evaluateAutomationOwner(navigation.owner)) : ''
   )

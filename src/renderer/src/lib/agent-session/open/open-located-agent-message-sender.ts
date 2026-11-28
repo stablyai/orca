@@ -148,14 +148,21 @@ async function openUnheldTerminal(
 export async function focusTerminal(
   handle: string,
   environmentId: string | null,
-  feedback: { gone?: () => void; lookupFailure: (failure: LookupFailure) => void }
+  feedback: { gone?: () => void; lookupFailure: (failure: LookupFailure) => void },
+  current?: () => boolean
 ): Promise<void> {
+  if (current?.() === false) {
+    return
+  }
   if (focusRendererTerminalHandle(handle, environmentId)) {
     return
   }
   try {
-    await focusRuntimeTerminalHandle(handle, environmentId)
+    await focusRuntimeTerminalHandle(handle, environmentId, current)
   } catch (error) {
+    if (current?.() === false) {
+      return
+    }
     if (provesTerminalGone(error)) {
       const gone = feedback.gone ?? showAgentPaneUnavailable
       gone()

@@ -1,3 +1,4 @@
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { targetBotChatLatest } from '@/lib/agent-session/open/bot-link-item-target'
@@ -119,8 +120,25 @@ export function startAndOpenBotChat(
 
 /** Opening a chat without a tab reveals it, which marks its thread seen; activating its open tab here
  *  doesn't, so this says so. An older host has no such method and keeps the thread new. */
-async function markSeen(bot: BotRef, sessionIds: string[]): Promise<void> {
+async function markSeen(bot: BotRef, sessionIds: string[], current?: () => boolean): Promise<void> {
   if (sessionIds.length > 0) {
+    if (current) {
+      if (current()) {
+        await callRuntimeRpc(
+          botTarget(bot),
+          'bots.chats.seen',
+          { sessionIds },
+          {
+            beforeSend: () => {
+              if (!current()) {
+                throw new Error('Chat origin changed.')
+              }
+            }
+          }
+        ).catch(() => undefined)
+      }
+      return
+    }
     await callBotRpc(bot, 'bots.chats.seen', { sessionIds }).catch(() => undefined)
   }
 }
@@ -142,15 +160,39 @@ function shownChatTab(bot: BotHome, sessionId: string): { id: string } | null {
 
 /** Opens one of the bot's chats as a focused tab; a thread's or a run's gets its tab here. The chat
  *  already on screen goes to its newest output, its composer focused with the usual glow. */
-export function openBotSession(bot: BotHome & BotRef, sessionId: string): void {
-  const shown = shownChatTab(bot, sessionId)
+export function openBotSession(
+  bot: BotHome & BotRef,
+  sessionId: string,
+  workspaceId?: string | null,
+  current?: () => boolean
+): void {
+  if (current?.() === false) {
+    return
+  }
+  const shown =
+    !workspaceId || workspaceId === folderWorkspaceKey(bot.folderWorkspaceId)
+      ? shownChatTab(bot, sessionId)
+      : null
   if (shown) {
     cancelPendingBotThreadOpen()
     targetBotChatLatest(sessionId)
     requestNativeChatComposerFocus(shown.id, { revealDraft: true })
     return
   }
-  void openBotChatTab(bot, sessionId).then((opened) =>
-    opened ? markSeen(bot, [sessionId]) : undefined
+  const opening = current
+    ? activateAiVaultStructuredSession(
+        {
+          structuredSession: {
+            sessionId,
+            workspaceId: workspaceId || folderWorkspaceKey(bot.folderWorkspaceId)
+          }
+        },
+        undefined,
+        botTarget(bot),
+        current
+      )
+    : openBotChatTab(bot, sessionId)
+  void opening.then((opened) =>
+    opened && current?.() !== false ? markSeen(bot, [sessionId], current) : undefined
   )
 }

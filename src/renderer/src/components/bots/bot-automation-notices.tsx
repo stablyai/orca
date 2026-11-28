@@ -7,18 +7,11 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { AutomationDetailNotice } from '../automations/details/automation-detail-sections'
 import type { AutomationDetailsController } from '../automations/details/automation-details-controller'
 import type { AutomationDetailsSnapshot } from '../automations/details/automation-details-model'
-import { manageConnectors } from './AddConnectorDialog'
-
-/** A Run now press: starting, or sent with no answer, so it may or may not have started. */
-export type RunNowAttempt = {
-  state: 'starting' | 'unconfirmed' | 'dismissed'
-} | null
 
 type NoticeIds = {
   offline: string
   checking: string
   oldHost: string
-  unconfirmed: string
   foreign: string
   running: string
 }
@@ -39,13 +32,10 @@ export function useBotAutomationNotices({
   controller,
   offline,
   oldHost,
-  runNow,
   running,
   runningAction,
   wontFire,
-  onRetired,
-  onCheckAgain,
-  onDismissRunNow
+  onRetired
 }: {
   bot: Bot
   hostName: string
@@ -55,13 +45,10 @@ export function useBotAutomationNotices({
   offline: boolean
   /** The host is too old: to read or act on this automation, or only to edit its settings here. */
   oldHost: boolean
-  runNow: RunNowAttempt
   running: boolean
   runningAction: { label: string; onOpen: () => void } | null
   wontFire: { bot: Bot; label: string; needsConnector: boolean } | null
   onRetired: () => void
-  onCheckAgain: () => void
-  onDismissRunNow: () => void
 }): { list: AutomationDetailNotice[]; ids: NoticeIds } {
   const t = useTranslate()
   const base = useId()
@@ -70,7 +57,6 @@ export function useBotAutomationNotices({
     offline: `${base}-offline`,
     checking: `${base}-checking`,
     oldHost: `${base}-oldhost`,
-    unconfirmed: `${base}-unconfirmed`,
     foreign: `${base}-foreign`
   }
   const list: AutomationDetailNotice[] = []
@@ -151,31 +137,6 @@ export function useBotAutomationNotices({
       )
     })
   }
-  if (runNow?.state === 'unconfirmed') {
-    list.push({
-      key: 'unconfirmed',
-      priority: true,
-      id: ids.unconfirmed,
-      tone: 'amber',
-      content: (
-        <>
-          <span className="min-w-0">
-            {t('bots.automationPanel.unconfirmed', "Couldn't confirm the run started")}
-          </span>
-          <span className="flex min-w-0 flex-wrap gap-1.5">
-            <Action
-              label={t('bots.automationPanel.checkAgain', 'Check again')}
-              onPress={onCheckAgain}
-            />
-            <Action
-              label={t('bots.automationPanel.dismiss', 'Dismiss')}
-              onPress={onDismissRunNow}
-            />
-          </span>
-        </>
-      )
-    })
-  }
   if (automation?.bot && automation.bot.botId !== bot.id) {
     list.push({
       key: 'foreign',
@@ -188,17 +149,7 @@ export function useBotAutomationNotices({
     list.push({
       key: 'wont-fire',
       tone: 'amber',
-      content: (
-        <>
-          <span className="min-w-0">{wontFire.label}</span>
-          {wontFire.needsConnector ? (
-            <Action
-              label={t('automations.openConnectors', 'Open connectors')}
-              onPress={() => manageConnectors(wontFire.bot)}
-            />
-          ) : null}
-        </>
-      )
+      content: <span className="min-w-0">{wontFire.label}</span>
     })
   }
   // A read problem the host's own notices don't already explain.

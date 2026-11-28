@@ -17,6 +17,7 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import {
   botAutomationRowOwner,
+  botAutomationOriginCurrent,
   actOnBotAutomationRow
 } from '../automations/hosts/bot-automation-row-owner'
 import { openBotAutomation } from './bot-automation-open'
@@ -151,7 +152,8 @@ export function botChatTreeWorkerOpen(
               chatSessionId: null,
               host: worker.host
             },
-            botTarget(bot)
+            botTarget(bot),
+            botAutomationOriginCurrent(botAutomationRowOwner(worker), bot)
           )
         },
         bot

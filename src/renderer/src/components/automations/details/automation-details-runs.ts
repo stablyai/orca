@@ -1,8 +1,8 @@
+import { isFinalAutomationRunStatus } from '../../../../../shared/automations/history/automation-run'
 import type {
   AutomationRun,
   AutomationRunsPage
 } from '../../../../../shared/automations/history/automation-run'
-import { isFinalAutomationRunStatus } from '../../../../../shared/automations/history/automation-run'
 import { releaseAutomationPayload } from './automation-detail-retention'
 import { AutomationDetailsSelection } from './automation-details-selection'
 import {
@@ -21,38 +21,34 @@ export type SliceRead = { inFlight: boolean; queued: boolean }
 export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
   private moreRead = 0
   private moreFlight = false
-  private acknowledgedRead = 0
+  private publication = 0
+  private readonly exactPublications = new Map<string, number>()
   private readonly runWaiters = new Set<(runs: AutomationRun[]) => void>()
   private readonly runsRead: SliceRead = { inFlight: false, queued: false }
 
-  protected publishRuns(runs: AutomationRunsSlice, authoritative: AutomationRun[]): boolean {
-    const ack = this.snapshot.acknowledgedRun
-    const seen = ack && authoritative.find((run) => run.id === ack.id)
-    const retained = seen ?? (ack && this.snapshot.runs.value.find((run) => run.id === ack.id))
-    let value = runs.value
-    if (retained) {
-      value = newestFirst([...value.filter((run) => run.id !== retained.id), retained])
-      if (value.length > AUTOMATION_DETAILS_MAX_RUNS) {
-        value = newestFirst([
-          ...value
-            .filter((run) => run.id !== retained.id)
-            .slice(0, AUTOMATION_DETAILS_MAX_RUNS - 1),
-          retained
-        ])
+  protected publishRuns(runs: AutomationRunsSlice, source: 'newest' | 'older'): boolean {
+    return this.update(
+      {
+        runs: {
+          ...runs,
+          capacityError: runs.capacityError?.source === source ? null : runs.capacityError
+        }
+      },
+      source
+    )
+  }
+
+  private preserveExact(runs: AutomationRun[], started: number): AutomationRun[] {
+    return runs.map((run) => {
+      if ((this.exactPublications.get(run.id) ?? 0) <= started) {
+        return run
       }
-    }
-    const admitted = this.update({
-      runs: { ...runs, value, capacityError: null },
-      acknowledgedRun: seen && isFinalAutomationRunStatus(seen.status) ? null : ack,
-      selected:
-        seen && this.snapshot.selected?.runId === seen.id
-          ? { ...this.snapshot.selected, status: 'in-window', run: seen }
-          : this.snapshot.selected
+      return (
+        this.snapshot.runs.value.find((current) => current.id === run.id) ??
+        (this.snapshot.selected?.runId === run.id ? this.snapshot.selected.run : null) ??
+        run
+      )
     })
-    if (admitted && seen) {
-      this.acknowledgedRead += 1
-    }
-    return admitted
   }
 
   protected readRuns(): void {
@@ -64,17 +60,19 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
     this.exactVersion += 1
     const ownerEpoch = this.ownerEpoch
     const runsEpoch = this.runsEpoch
+    const started = this.publication
     void this.deps
       .listRunsPage(this.snapshot.owner, this.automationId, { limit: this.recentLimit })
       .then(
-        (page) => this.settleRuns(ownerEpoch, runsEpoch, { page }),
-        (error: unknown) => this.settleRuns(ownerEpoch, runsEpoch, { error })
+        (page) => this.settleRuns(ownerEpoch, runsEpoch, started, { page }),
+        (error: unknown) => this.settleRuns(ownerEpoch, runsEpoch, started, { error })
       )
   }
 
   private settleRuns(
     ownerEpoch: number,
     runsEpoch: number,
+    started: number,
     result: { page: AutomationRunsPage } | { error: unknown }
   ): void {
     this.runsRead.inFlight = false
@@ -88,25 +86,24 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
     ) {
       const previous = this.snapshot.runs
       if ('page' in result) {
-        const ack = this.snapshot.acknowledgedRun
         const next = reconcileAutomationRuns(
-          result.page,
+          { ...result.page, runs: this.preserveExact(result.page.runs, started) },
           previous,
           this.recentLimit,
-          previous.paged ?? false,
-          new Set(ack ? [ack.id] : [])
+          previous.paged ?? false
         )
-        const admitted = this.publishRuns(next, result.page.runs)
+        const admitted = this.publishRuns(
+          { ...next, capacityError: previous.capacityError },
+          'newest'
+        )
         if (admitted && this.snapshot.runs.nextCursor !== previous.nextCursor) {
           this.moreRead += 1
         }
-        if (
-          this.snapshot.acknowledgedRun &&
-          !result.page.runs.some((run) => run.id === this.snapshot.acknowledgedRun?.id)
-        ) {
-          this.readAcknowledged()
+        if (admitted) {
+          this.settleSelectedFromRuns()
+        } else {
+          this.readSelected()
         }
-        this.settleSelectedFromRuns()
       } else {
         const hasValue = previous.value.length > 0
         this.update({
@@ -117,7 +114,7 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
             stale: hasValue
           }
         })
-        this.settleSelectedFromRuns()
+        this.readSelected()
       }
     }
     if (this.runsRead.queued) {
@@ -132,40 +129,29 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
   }
 
   protected override acceptSelectedRun(run: AutomationRun): void {
-    if (this.snapshot.acknowledgedRun?.id === run.id) {
-      this.publishExactRun(run)
-    }
-  }
-
-  private publishExactRun(run: AutomationRun): boolean {
-    const value = newestFirst([
-      run,
-      ...this.snapshot.runs.value.filter((old) => old.id !== run.id)
-    ]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
-    return this.publishRuns({ ...this.snapshot.runs, value }, [run])
-  }
-
-  private readAcknowledged(): void {
-    const ack = this.snapshot.acknowledgedRun
-    if (!ack) {
+    const prior = this.snapshot.selected?.run
+    if (
+      prior &&
+      isFinalAutomationRunStatus(prior.status) &&
+      !isFinalAutomationRunStatus(run.status)
+    ) {
       return
     }
-    const ownerEpoch = this.ownerEpoch
-    const read = ++this.acknowledgedRead
-    void this.exactRuns.request(this.snapshot.owner, ack.id, this.exactVersion).then((result) => {
-      if (
-        this.disposed ||
-        ownerEpoch !== this.ownerEpoch ||
-        read !== this.acknowledgedRead ||
-        this.recheckOwner() !== 'same' ||
-        this.snapshot.acknowledgedRun?.id !== ack.id
-      ) {
-        return
-      }
-      if (result.kind === 'run') {
-        this.publishExactRun(result.run)
-      }
+    const runs = this.snapshot.runs
+    const admitted = this.update({
+      selected: { runId: run.id, status: 'ready', run },
+      runs: runs.value.some((row) => row.id === run.id)
+        ? { ...runs, value: runs.value.map((row) => (row.id === run.id ? run : row)) }
+        : runs
     })
+    if (admitted) {
+      this.exactPublications.set(run.id, ++this.publication)
+      for (const id of this.exactPublications.keys()) {
+        if (id !== run.id && !runs.value.some((row) => row.id === id)) {
+          this.exactPublications.delete(id)
+        }
+      }
+    }
   }
 
   refreshRuns(): Promise<AutomationRun[]> {
@@ -180,7 +166,7 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
 
   protected releaseRuns(): void {
     this.moreRead += 1
-    this.acknowledgedRead += 1
+    this.exactPublications.clear()
     this.exactVersion += 1
     this.runWaiters.forEach((resolve) => resolve([]))
     this.runWaiters.clear()
@@ -189,8 +175,7 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
       ...this.snapshot,
       definition: DEFINITION_LOADING,
       runs: RUNS_LOADING,
-      selected: null,
-      acknowledgedRun: null
+      selected: null
     }
   }
 
@@ -204,6 +189,7 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
     const ownerEpoch = this.ownerEpoch
     const read = ++this.moreRead
     const cursor = runs.nextCursor
+    const started = this.publication
     void this.deps
       .listRunsPage(this.snapshot.owner, this.automationId, {
         limit: AUTOMATION_DETAILS_MORE_RUNS,
@@ -221,9 +207,14 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
           }
           const current = this.snapshot.runs
           const value = newestFirst([
-            ...new Map([...current.value, ...page.runs].map((run) => [run.id, run])).values()
+            ...new Map(
+              [...current.value, ...this.preserveExact(page.runs, started)].map((run) => [
+                run.id,
+                run
+              ])
+            ).values()
           ]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
-          this.publishRuns(
+          const admitted = this.publishRuns(
             {
               ...current,
               value,
@@ -236,9 +227,11 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
               loadingMore: false,
               capped: value.length >= AUTOMATION_DETAILS_MAX_RUNS
             },
-            page.runs
+            'older'
           )
-          this.settleSelectedFromRuns()
+          if (admitted) {
+            this.settleSelectedFromRuns()
+          }
         },
         (error: unknown) => {
           this.moreFlight = false

@@ -9,12 +9,7 @@ import type { AutomationRunRead } from '../hosts/automation-owner-reads'
 import type { AutomationOwnerContinuity } from '../hosts/automation-host-owner'
 import { makeAutomation, makeRun } from '../automations-page-fixtures'
 import { AutomationDetailsController } from './automation-details-controller'
-import {
-  AutomationMutationBusyError,
-  AutomationOwnerChangedError,
-  automationActionOutcomeUnknown,
-  type AutomationDetailsDeps
-} from './automation-details-model'
+import type { AutomationDetailsDeps } from './automation-details-model'
 
 const OWNER: AutomationOwnerRef = {
   authority: { kind: 'runtime', environmentId: 'env-1', pairingRevision: 1 },
@@ -83,21 +78,6 @@ function harness(overrides: Partial<AutomationDetailsDeps> = {}, runId: string |
 }
 
 describe('AutomationDetailsController reads', () => {
-  it('keeps an acknowledged run across a pre-start reply and failed follow-up read', async () => {
-    const h = harness()
-    h.controller.start()
-    h.shows[0].resolve(automation())
-    await h.controller.startRun(async () => ({ ...run('acknowledged', 20), status: 'dispatched' }))
-    h.pages[0].resolve({ runs: [run('before-start', 10)], nextCursor: null })
-    await flush()
-    h.pages[1].reject(new Error('offline'))
-    await flush()
-    expect(h.controller.getSnapshot().runs).toMatchObject({ status: 'ready', stale: true })
-    expect(h.controller.getSnapshot().runs.value.map(({ id, status }) => ({ id, status }))).toEqual(
-      [{ id: 'acknowledged', status: 'dispatched' }]
-    )
-  })
-
   it('preserves paged boundary rows when new runs shift the first page and removes covered deletions', async () => {
     const h = harness()
     h.controller.start()
@@ -178,33 +158,6 @@ describe('AutomationDetailsController reads', () => {
     ])
   })
 
-  it('keeps the running acknowledgement when its full reply exceeds retained payload admission', async () => {
-    const h = harness()
-    await h.controller.startRun(async () => ({
-      ...run('oversized-ack', 20),
-      status: 'dispatched',
-      outputSnapshot: {
-        format: 'plain_text',
-        content: 'x'.repeat(20 * 1024 * 1024),
-        capturedAt: 1,
-        truncated: false
-      }
-    }))
-    expect(h.controller.getSnapshot().acknowledgedRun).toEqual({
-      id: 'oversized-ack',
-      status: 'dispatched',
-      title: 'oversized-ack',
-      createdAt: 20,
-      scheduledFor: 10
-    })
-    expect(h.controller.getSnapshot().runs.value).toEqual([])
-    h.pages[0].resolve({
-      runs: [{ ...run('oversized-ack', 20), status: 'completed' }],
-      nextCursor: null
-    })
-    await flush()
-    expect(h.controller.getSnapshot().acknowledgedRun).toBeNull()
-  })
   it('keeps the definition when the runs read fails, and the runs when the definition fails', async () => {
     const h = harness()
     h.controller.start()
@@ -245,117 +198,6 @@ describe('AutomationDetailsController reads', () => {
     await flush()
     const ids = h.controller.getSnapshot().runs.value.map((r) => r.id)
     expect(ids).toEqual(['r29', 'r28', 'r27', 'r26', 'r25'])
-  })
-})
-
-describe('AutomationDetailsController mutation fence', () => {
-  it('never shows a read issued before a successful pause', async () => {
-    const h = harness()
-    h.controller.start()
-    h.shows[0].resolve(automation({ enabled: true }))
-    await flush()
-    // A change event re-reads; that read is still on the wire when the pause lands.
-    h.controller.reload()
-    const pause = h.controller.mutate(
-      async () => automation({ enabled: false, updatedAt: 1 }),
-      (next) => next
-    )
-    await pause
-    expect(h.controller.getSnapshot().definition.value?.enabled).toBe(false)
-    // The old read answers "enabled" with the same timestamp: dropped, no clock compared.
-    h.shows[1].resolve(automation({ enabled: true, updatedAt: 1 }))
-    await flush()
-    expect(h.controller.getSnapshot().definition.value?.enabled).toBe(false)
-    // The reconcile read after the mutation is accepted, so later external changes converge.
-    h.shows[2].resolve(automation({ enabled: true, updatedAt: 2 }))
-    await flush()
-    expect(h.controller.getSnapshot().definition.value?.enabled).toBe(true)
-  })
-
-  it('runs one definition change at a time', async () => {
-    const h = harness()
-    h.controller.start()
-    const slow = deferred<Automation>()
-    const first = h.controller.mutate(
-      () => slow.promise,
-      (next) => next
-    )
-    await expect(
-      h.controller.mutate(
-        async () => automation(),
-        (next) => next
-      )
-    ).rejects.toBeInstanceOf(AutomationMutationBusyError)
-    slow.resolve(automation())
-    await first
-  })
-
-  it('does not restore a retired definition when an in-flight save finishes', async () => {
-    const h = harness()
-    h.controller.start()
-    h.shows[0].resolve(automation())
-    await flush()
-    const saved = deferred<Automation>()
-    const saving = h.controller.mutate(
-      () => saved.promise,
-      (next) => next
-    )
-    const rejected = expect(saving).rejects.toBeInstanceOf(AutomationOwnerChangedError)
-    h.setContinuity({ status: 'retired' })
-    h.controller.recheckOwner()
-    saved.resolve(automation({ name: 'Old computer' }))
-    await rejected
-    expect(h.controller.getSnapshot()).toMatchObject({
-      continuity: 'retired',
-      definition: { value: null }
-    })
-  })
-
-  it('refuses before sending when the pairing now names another machine', async () => {
-    const h = harness()
-    h.controller.start()
-    h.shows[0].resolve(automation())
-    await flush()
-    h.setContinuity({ status: 'retired' })
-    const change = vi.fn(async () => automation())
-    await expect(h.controller.mutate(change, (next) => next)).rejects.toBeInstanceOf(
-      AutomationOwnerChangedError
-    )
-    expect(change).not.toHaveBeenCalled()
-    // What was read from the old machine is dropped.
-    expect(h.controller.getSnapshot().definition.value).toBeNull()
-    expect(h.controller.getSnapshot().continuity).toBe('retired')
-  })
-
-  it('re-keys to a same-machine re-pair and keeps the data', async () => {
-    const h = harness()
-    h.controller.start()
-    h.shows[0].resolve(automation())
-    await flush()
-    const rekeyed: AutomationOwnerRef = {
-      ...OWNER,
-      authority: { kind: 'runtime', environmentId: 'env-1', pairingRevision: 2 }
-    }
-    h.setContinuity({ status: 'continued', owner: rekeyed })
-    const change = vi.fn(async (owner: AutomationOwnerRef) => {
-      expect(owner).toEqual(rekeyed)
-      return automation()
-    })
-    await h.controller.mutate(change, (next) => next)
-    expect(change).toHaveBeenCalled()
-  })
-
-  it('freezes actions while a re-pair is still being checked, and resumes when it resolves', async () => {
-    const h = harness()
-    h.controller.start()
-    h.setContinuity({ status: 'checking' })
-    expect(h.controller.recheckOwner()).toBe('checking')
-    await expect(h.controller.act(async () => 1)).rejects.toBeInstanceOf(
-      AutomationOwnerChangedError
-    )
-    h.setContinuity({ status: 'same', owner: OWNER })
-    expect(h.controller.recheckOwner()).toBe('same')
-    await expect(h.controller.act(async () => 1)).resolves.toBe(1)
   })
 })
 
@@ -429,33 +271,6 @@ describe('AutomationDetailsController selected run', () => {
 })
 
 describe('AutomationDetailsController paging', () => {
-  it('does not use an acknowledgement as proof that a refreshed page reaches retained history', async () => {
-    const h = harness()
-    h.controller.start()
-    h.pages[0].resolve({
-      runs: [100, 99, 98, 97, 96].map((id) => run(String(id), id)),
-      nextCursor: 'after-96'
-    })
-    await flush()
-    h.controller.loadMore()
-    h.pages[1].resolve({ runs: [run('95', 95)], nextCursor: 'after-95' })
-    await flush()
-    await h.controller.startRun(async () => ({ ...run('200', 200), status: 'dispatched' }))
-    h.pages[2].resolve({
-      runs: [200, 199, 198, 197, 196].map((id) => run(String(id), id)),
-      nextCursor: 'after-196'
-    })
-    await flush()
-    expect(h.controller.getSnapshot().runs.value.map((run) => run.id)).toEqual([
-      '200',
-      '199',
-      '198',
-      '197',
-      '196'
-    ])
-    expect(h.controller.getSnapshot().runs.nextCursor).toBe('after-196')
-  })
-
   it('settles an oversized exact lookup instead of retaining its completed loading state', async () => {
     const h = harness(
       {
@@ -570,54 +385,6 @@ describe('AutomationDetailsController paging', () => {
     expect(h.controller.getSnapshot().runs.nextCursor).toBe('after-11')
   })
 
-  it('settles an acknowledged run from an older page without duplicating it', async () => {
-    const exact = deferred<AutomationRunRead>()
-    const h = harness({ readRun: () => exact.promise })
-    await h.controller.startRun(async () => ({ ...run('ack', 6), status: 'dispatched' }))
-    h.pages[0].resolve({
-      runs: [11, 10, 9, 8, 7].map((id) => run(String(id), id)),
-      nextCursor: 'after-7'
-    })
-    await flush()
-    h.controller.loadMore()
-    h.pages[1].resolve({ runs: [{ ...run('ack', 6), status: 'completed' }], nextCursor: null })
-    await flush()
-    expect(h.controller.getSnapshot().acknowledgedRun).toBeNull()
-    expect(h.controller.getSnapshot().runs.value.map((run) => [run.id, run.status])).toEqual([
-      ['11', 'completed'],
-      ['10', 'completed'],
-      ['9', 'completed'],
-      ['8', 'completed'],
-      ['7', 'completed'],
-      ['ack', 'completed']
-    ])
-  })
-
-  it('invalidates reads across disposal and releases a settled mutation before restarting', async () => {
-    const h = harness()
-    h.controller.start()
-    const change = deferred<Automation>()
-    const saving = h.controller.mutate(
-      () => change.promise,
-      (next) => next
-    )
-    h.controller.dispose()
-    change.resolve(automation({ enabled: false }))
-    await saving
-    h.controller.start()
-    h.shows[0].resolve(automation({ name: 'obsolete' }))
-    h.pages[0].resolve({ runs: [run('obsolete', 1)], nextCursor: null })
-    await flush()
-    expect(h.controller.getSnapshot().definition.value).toBeNull()
-    expect(h.controller.getSnapshot().runs.value).toEqual([])
-    await expect(
-      h.controller.mutate(
-        async () => automation(),
-        (next) => next
-      )
-    ).resolves.toMatchObject({ id: 'a1' })
-  })
-
   it('drops an older page that arrives after its owner is retired', async () => {
     const h = harness()
     h.controller.start()
@@ -653,22 +420,5 @@ describe('AutomationDetailsController paging', () => {
     const runs = h.controller.getSnapshot().runs
     expect(runs.capped).toBe(true)
     expect(runs.value).toHaveLength(100)
-  })
-})
-
-describe('automationActionOutcomeUnknown', () => {
-  it('treats a refusal before sending as definite and a lost reply as unknown', () => {
-    expect(automationActionOutcomeUnknown(new AutomationOwnerChangedError('retired'))).toBe(false)
-    const hostError = Object.assign(new Error('Automation not found'), {
-      name: 'RuntimeRpcCallError',
-      code: 'not_found'
-    })
-    expect(automationActionOutcomeUnknown(hostError)).toBe(false)
-    const timeout = Object.assign(new Error('timed out'), {
-      name: 'RuntimeRpcCallError',
-      code: 'request_timeout'
-    })
-    expect(automationActionOutcomeUnknown(timeout)).toBe(true)
-    expect(automationActionOutcomeUnknown(new Error('socket closed'))).toBe(true)
   })
 })

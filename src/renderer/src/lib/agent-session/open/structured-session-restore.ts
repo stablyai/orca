@@ -122,8 +122,10 @@ type AgentSessionRevealReply =
 
 export async function refreshStructuredSessionTabs(
   worktreeId: string,
-  host: RuntimeClientTarget
+  host: RuntimeClientTarget,
+  beforeSend?: () => void
 ): Promise<void> {
+  beforeSend?.()
   if (host.kind === 'local') {
     await withStructuredSessionRestoreTimeout(refreshLocalStructuredSessionWorktreeTabs(worktreeId))
     return
@@ -134,7 +136,7 @@ export async function refreshStructuredSessionTabs(
       host,
       'session.tabs.list',
       { worktree: toRuntimeWorktreeSelector(worktreeId) },
-      { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
+      { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS, beforeSend }
     )
   )
 }

@@ -77,14 +77,15 @@ export async function activateAiVaultStructuredSession(
   session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
   /** `retry`: what Retry repeats, so a caller with a prerequisite step repeats it too. */
   options?: { deps?: StructuredSessionActivationDeps; retry: () => Promise<unknown> },
-  target?: RuntimeClientTarget
+  target?: RuntimeClientTarget,
+  current?: () => boolean
 ): Promise<boolean> {
-  if (!session.structuredSession) {
+  if (current?.() === false || !session.structuredSession) {
     return false
   }
   // A group member's session reopens the room it talks in, not the member's own chat.
   const room = botGroupRoomOfRow(readBotGroups(), session)
-  if (room) {
+  if (room && !current) {
     if (!options?.deps?.signal) {
       cancelPendingBotThreadOpen()
     }
@@ -95,14 +96,18 @@ export async function activateAiVaultStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
     {
       target,
+      current,
       deps: options?.deps,
-      retry: options?.retry ?? (() => activateAiVaultStructuredSession(session, undefined, target))
+      retry:
+        options?.retry ??
+        (() => activateAiVaultStructuredSession(session, undefined, target, current))
     }
   )
   return result.kind === 'opened'
 }
 
 type DesktopStructuredSessionOpenOptions = {
+  current?: () => boolean
   target?: RuntimeClientTarget
   deps?: StructuredSessionActivationDeps
   locate?: StructuredSessionOpenDeps['locate']
@@ -124,6 +129,7 @@ export function openDesktopStructuredSession(
   return openDesktopStructuredSessionInteraction(source, {
     target,
     deps,
+    current: options.current,
     locate,
     present: (result, owner) =>
       presentDesktopStructuredSession(

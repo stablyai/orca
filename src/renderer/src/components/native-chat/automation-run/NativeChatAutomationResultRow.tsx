@@ -1,3 +1,4 @@
+import type { Bot } from '../../../../../shared/bot-types'
 import { useTranscriptBot } from '@/components/bots/bot-transcript-bot'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useTranslation } from 'react-i18next'
@@ -24,9 +25,7 @@ import { NativeChatAutomationRowFrame, ROW_NOTE } from './NativeChatAutomationRo
 const NO_RULES = { dtstart: Number.MAX_SAFE_INTEGER, rrule: '' }
 
 /** Its automation's mark while the bot still has it; else what the note recorded. */
-function useResultMark(note: AutomationResultNote): AutomationRowMark {
-  const owner = useNativeChatVisualOwner()
-  const bot = useTranscriptBot(owner)
+function useResultMark(note: AutomationResultNote, bot: Bot | null): AutomationRowMark {
   const row = useBotActivity(bot).automations.find(
     (entry) => entry.automation.id === note.automationId
   )
@@ -56,7 +55,7 @@ export function NativeChatAutomationResultRow({
   const status = finished ? say('finished') : say('couldNotFinish')
   return (
     <NativeChatAutomationRowFrame
-      mark={useResultMark(note)}
+      mark={useResultMark(note, bot)}
       lead={label}
       name={note.automationName}
       status={status}

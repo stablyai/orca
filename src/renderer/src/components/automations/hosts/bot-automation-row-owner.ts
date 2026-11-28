@@ -63,6 +63,23 @@ export function botAutomationRowOwner(
   return record[origin] ?? null
 }
 
+export function botAutomationOriginCurrent(
+  owner: AutomationOwnerRef | null,
+  bot?: BotRef
+): () => boolean {
+  return () => {
+    if (!owner) {
+      return false
+    }
+    const proof = evaluateAutomationOwner(owner)
+    if (proof.status !== 'same' && proof.status !== 'continued') {
+      return false
+    }
+    const target = bot ? automationOwnerForHostId(bot.hostId, useAppStore.getState()) : proof.owner
+    return JSON.stringify(target) === JSON.stringify(proof.owner)
+  }
+}
+
 export async function actOnBotAutomationRow<T>(
   owner: AutomationOwnerRef | null,
   action: (owner: AutomationOwnerRef) => Promise<T>,

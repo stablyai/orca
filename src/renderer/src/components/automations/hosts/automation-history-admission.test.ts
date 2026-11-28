@@ -4,6 +4,7 @@ import {
   listAutomationRunsPageForOwner,
   readFullAutomationRun
 } from './automation-scoped-list-client'
+import { showAutomationForOwner } from './automation-owner-reads'
 
 vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: async () => null
@@ -80,71 +81,44 @@ it('binds the admitted history read to the probed receiver even when the pairing
   expect(historyAcquired).toBe(false)
 })
 
-it.each(['toggle', 'run', 'cancel'] as const)(
-  'fences a held %s to its probed receiver, and permits the same-runtime control',
-  async (action) => {
-    const { updateAutomationForOwner, runAutomationNowForOwner, deleteAutomationForOwner } =
-      await import('./automation-scoped-list-client')
-    for (const replace of [true, false]) {
-      let receiver = 'origin'
-      let release!: () => void
-      let entered!: () => void
-      const held = new Promise<void>((resolve) => {
-        release = resolve
-      })
-      const ready = new Promise<void>((resolve) => {
-        entered = resolve
-      })
-      const mutations: string[] = []
-      vi.stubGlobal('window', {
-        api: {
-          runtimeEnvironments: {
-            call: async (request: { method: string; expectedEnvironmentRuntimeId?: string }) => {
-              if (request.method === 'status.get') {
-                const response = createCompatibleRuntimeStatusResponse(receiver)
-                entered()
-                await held
-                return {
-                  ...response,
-                  result: { ...response.result, capabilities: ['automation.owner-fencing.v1'] }
+it.each(['old', 'replacement', 'same'] as const)(
+  'admits a definition only from the receiver proving owner fencing (%s)',
+  async (scenario) => {
+    let receiver = 'origin'
+    let acquired = 0
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: async (request: { method: string; expectedEnvironmentRuntimeId?: string }) => {
+            if (request.method === 'status.get') {
+              const response = createCompatibleRuntimeStatusResponse(receiver)
+              if (scenario === 'replacement') {
+                receiver = 'successor'
+              }
+              return {
+                ...response,
+                result: {
+                  ...response.result,
+                  capabilities: scenario === 'old' ? [] : ['automation.owner-fencing.v1']
                 }
               }
-              if (request.expectedEnvironmentRuntimeId !== receiver) {
-                throw new Error('Receiver changed before send')
-              }
-              mutations.push(request.method)
-              return {
-                ok: true,
-                result: { automation: { id: 'a1', enabled: false }, run: { id: 'r1' } }
-              }
             }
+            if (request.expectedEnvironmentRuntimeId !== receiver) {
+              throw new Error('Receiver changed before send')
+            }
+            acquired++
+            return { ok: true, result: { automation: { id: 'a1', name: 'Proven definition' } } }
           }
         }
-      })
-      const sent =
-        action === 'toggle'
-          ? updateAutomationForOwner(owner, 'a1', { enabled: false })
-          : action === 'run'
-            ? runAutomationNowForOwner(owner, 'a1')
-            : deleteAutomationForOwner(owner, 'a1')
-      await ready
-      if (replace) {
-        receiver = 'replacement'
       }
-      release()
-      if (replace) {
-        await expect(sent).rejects.toThrow('Receiver changed before send')
-        expect(mutations).toEqual([])
-      } else {
-        await sent
-        expect(mutations).toEqual([
-          action === 'toggle'
-            ? 'automation.update'
-            : action === 'run'
-              ? 'automation.runNow'
-              : 'automation.delete'
-        ])
-      }
+    })
+    const read = showAutomationForOwner(owner, 'a1')
+    if (scenario === 'same') {
+      await expect(read).resolves.toMatchObject({ id: 'a1', name: 'Proven definition' })
+      expect(acquired).toBe(1)
+    } else {
+      await expect(read).rejects.toThrow(scenario === 'old' ? 'Update' : 'Receiver changed')
+      expect(acquired).toBe(0)
     }
   }
 )

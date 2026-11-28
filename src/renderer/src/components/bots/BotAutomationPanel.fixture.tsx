@@ -1,5 +1,4 @@
 import { setBotHostListing, publishBots } from '@/lib/bot-catalog-snapshot'
-import { useAppStore } from '@/store'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import {
   BotPanelFrame,
@@ -71,11 +70,8 @@ type Scenario =
   | 'failed'
   | 'running'
   | 'runningTerminal'
-  | 'unconfirmed'
-  | 'unconfirmedSsh'
   | 'offline'
   | 'update'
-  | 'homeFails'
   | 'deleted'
 
 function setup(
@@ -91,11 +87,7 @@ function setup(
       setBotHostListing({ hosts: [{ hostId: 'local', state: 'offline' }], updateNeeded: [] })
     }
     const shownDigest =
-      scenario === 'unconfirmedSsh'
-        ? { ...digest, on: [], executionTargetType: 'ssh' }
-        : scenario !== 'default' && scenario !== 'failed'
-          ? { ...digest, on: [] }
-          : digest
+      scenario !== 'default' && scenario !== 'failed' ? { ...digest, on: [] } : digest
     const runtime = window.api.runtime
     const fallback = runtime.call
     Reflect.set(window.api, 'runtime', {
@@ -112,9 +104,6 @@ function setup(
         if (request.method === 'bots.items.owner.opened') {
           return { ok: true, result: {} }
         }
-        if (request.method === 'bots.chat.open') {
-          return { ok: true, result: { sessionId: 'chat-cos' } }
-        }
         if (request.method === 'automation.show') {
           if (scenario === 'deleted') {
             return { ok: false, error: { code: 'runtime_error', message: 'Automation not found.' } }
@@ -125,15 +114,6 @@ function setup(
               automation: shownDigest
             }
           }
-        }
-        if (request.method === 'automation.update') {
-          return {
-            ok: false,
-            error: { code: 'runtime_error', message: 'Could not save changes. Try again.' }
-          }
-        }
-        if (request.method === 'automation.runNow') {
-          throw new Error('socket closed')
         }
         if (request.method === 'automation.runs') {
           return params.runId
@@ -231,22 +211,11 @@ function scenarioFixture(scenario: Scenario, width: number) {
         [...frame.querySelectorAll<HTMLButtonElement>('button')].find(
           (node) => node.textContent?.trim() === text
         )
-      if (scenario === 'unconfirmed' || scenario === 'unconfirmedSsh') {
-        button('Run now')?.click()
-      }
-      if (scenario === 'homeFails') {
-        useAppStore.setState({
-          fetchFolderWorkspaces: async () => {
-            throw new Error('Home unavailable')
-          }
-        })
-        button('Edit in chat')?.click()
-      }
       if (scenario === 'failed') {
         button('+1 more')?.click()
       }
       await settle()
-      if (scenario !== 'homeFails') {
+      {
         const scroller = frame.querySelector<HTMLElement>('[data-bot-automation-screen]')
         if (scroller) {
           scroller.scrollTop = 0
@@ -261,15 +230,10 @@ export const failed280 = scenarioFixture('failed', 280)
 export const running220 = scenarioFixture('running', 220)
 export const running280 = scenarioFixture('running', 280)
 export const runningTerminal280 = scenarioFixture('runningTerminal', 280)
-export const unconfirmed220 = scenarioFixture('unconfirmed', 220)
-export const unconfirmed280 = scenarioFixture('unconfirmed', 280)
-export const unconfirmedSsh280 = scenarioFixture('unconfirmedSsh', 280)
 export const offline220 = scenarioFixture('offline', 220)
 export const offline280 = scenarioFixture('offline', 280)
 export const update220 = scenarioFixture('update', 220)
 export const update280 = scenarioFixture('update', 280)
-export const homeFails220 = scenarioFixture('homeFails', 220)
-export const homeFails280 = scenarioFixture('homeFails', 280)
 export const deleted220 = scenarioFixture('deleted', 220)
 export const deleted280 = scenarioFixture('deleted', 280)
 

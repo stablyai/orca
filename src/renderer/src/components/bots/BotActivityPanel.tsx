@@ -60,7 +60,8 @@ function focusGearAfterClose(panel: HTMLElement | null): void {
  *  members' items, or the focused chat's workers. */
 export default function BotActivityPanel(): React.JSX.Element | null {
   const workspaceId = useAppStore((s) => s.activeWorktreeId)
-  const bot = useBotForWorkspace(workspaceId)
+  const hostId = useAppStore((s) => s.activeWorkspaceExecutionHostId ?? 'local')
+  const bot = useBotForWorkspace(workspaceId, hostId)
   const group = useBotGroupForWorkspace(bot ? null : workspaceId)
   if (group) {
     return <BotGroupItemsPanel key={group.id} group={group} />
@@ -68,7 +69,7 @@ export default function BotActivityPanel(): React.JSX.Element | null {
   if (!bot) {
     return <ChatWorkersActivity />
   }
-  return <BotActivityOrSettings key={bot.id} bot={bot} />
+  return <BotActivityOrSettings key={botRefKey(bot)} bot={bot} />
 }
 
 function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
@@ -265,7 +266,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           now={clock}
         />
         {activity.upNext ? (
-          <BotUpNextSection key={bot.id} bot={bot} upNext={activity.upNext} />
+          <BotUpNextSection key={botRefKey(bot)} bot={bot} upNext={activity.upNext} />
         ) : null}
       </fieldset>
     </div>

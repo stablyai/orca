@@ -1,3 +1,4 @@
+import { isFinalAutomationRunStatus } from '../../../../../shared/automations/history/automation-run'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type { AutomationRunRead } from '../hosts/automation-owner-reads'
@@ -41,8 +42,7 @@ export abstract class AutomationDetailsSelection {
       definition: DEFINITION_LOADING,
       runs: RUNS_LOADING,
       selected: runId ? { runId, status: 'loading', run: null } : null,
-      expandedRunId: runId,
-      mutating: false
+      expandedRunId: runId
     }
   }
 
@@ -53,12 +53,20 @@ export abstract class AutomationDetailsSelection {
     return () => this.listeners.delete(listener)
   }
 
-  protected update(patch: Partial<AutomationDetailsSnapshot>): boolean {
+  protected update(
+    patch: Partial<AutomationDetailsSnapshot>,
+    source?: 'newest' | 'older'
+  ): boolean {
     if (this.disposed) {
       return false
     }
     const candidate = { ...this.snapshot, ...patch }
-    this.snapshot = admitAutomationDetailSnapshot(this.retentionKey, this.snapshot, candidate)
+    this.snapshot = admitAutomationDetailSnapshot(
+      this.retentionKey,
+      this.snapshot,
+      candidate,
+      source
+    )
     this.listeners.forEach((listener) => listener())
     return this.snapshot === candidate
   }
@@ -118,7 +126,7 @@ export abstract class AutomationDetailsSelection {
     if (!selected.run) {
       this.update({ selected: { ...selected, status: 'loading', run: null } })
     }
-    const read = ++this.selectedRead
+    const read = this.selectedRead
     void this.exactRuns.request(this.snapshot.owner, selected.runId, this.exactVersion).then(
       (result) => this.settleSelected(read, selected.runId, result),
       (error: unknown) => this.settleSelected(read, selected.runId, { kind: 'error', error })
@@ -137,13 +145,15 @@ export abstract class AutomationDetailsSelection {
     switch (result.kind) {
       case 'run':
         this.acceptSelectedRun(result.run)
-        if (read !== this.selectedRead || this.snapshot.selected?.runId !== runId) {
-          return
-        }
-        this.update({ selected: { runId, status: 'ready', run: result.run } })
         return
       case 'run-missing':
       case 'unsupported':
+        if (
+          this.snapshot.selected?.run &&
+          isFinalAutomationRunStatus(this.snapshot.selected.run.status)
+        ) {
+          return
+        }
         this.update({ selected: { runId, status: result.kind, run: null } })
         return
       case 'error':

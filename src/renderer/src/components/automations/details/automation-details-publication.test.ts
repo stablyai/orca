@@ -127,81 +127,6 @@ it('stages coverage and pagination with admission across two controllers sharing
   ])
 })
 
-it.each(['page', 'exact'] as const)(
-  'keeps acknowledgement provenance when a terminal %s is refused, then admits its repeat',
-  async (source) => {
-    const resident = setup()
-    resident.pages[0].resolve({ runs: [large('resident', 10 * 1024 * 1024)], nextCursor: null })
-    await flush()
-    const h = setup()
-    h.pages[0].resolve(page(['10'], 'after-10'))
-    await flush()
-    h.controller.acknowledgeRun(run('ack', 20, 'dispatched'))
-    h.controller.reload()
-    const terminal = {
-      ...large('ack', 3 * 1024 * 1024),
-      status: 'completed' as const,
-      scheduledFor: 20
-    }
-    if (source === 'page') {
-      h.pages[1].resolve({ runs: [terminal], nextCursor: 'after-ack' })
-    } else {
-      h.pages[1].resolve(page(['30'], 'after-30'))
-      await flush()
-      h.exact[0].resolve({ kind: 'run', run: terminal })
-    }
-    await flush()
-    expect(h.controller.getSnapshot().acknowledgedRun).toMatchObject({
-      id: 'ack',
-      status: 'dispatched'
-    })
-    expect(h.controller.getSnapshot().runs.value.find((run) => run.id === 'ack')?.status).toBe(
-      'dispatched'
-    )
-    resident.controller.dispose()
-    h.controller.reload()
-    h.pages[2].resolve(
-      source === 'page' ? { runs: [terminal], nextCursor: 'after-ack' } : page(['31'], 'after-31')
-    )
-    await flush()
-    if (source === 'exact') {
-      h.exact[1].resolve({ kind: 'run', run: terminal })
-      await flush()
-    }
-    expect(h.controller.getSnapshot().acknowledgedRun).toBeNull()
-    expect(h.controller.getSnapshot().runs.value.find((run) => run.id === 'ack')?.status).toBe(
-      'completed'
-    )
-  }
-)
-
-it('protects an ack through a nonterminal page and displacement until the isolated exact terminal lands', async () => {
-  const h = setup()
-  h.controller.acknowledgeRun(run('ack', 10, 'dispatched'))
-  h.pages[0].resolve({ runs: [run('ack', 10, 'dispatched')], nextCursor: null })
-  await flush()
-  h.controller.reload()
-  h.pages[1].resolve(page(['30', '29', '28', '27', '26'], 'after-26'))
-  await flush()
-  expect(h.exact).toHaveLength(1)
-  expect(h.controller.getSnapshot().runs.value.map((run) => run.id)).toEqual([
-    '30',
-    '29',
-    '28',
-    '27',
-    '26',
-    'ack'
-  ])
-  h.exact[0].resolve({ kind: 'run', run: run('ack', 10, 'dispatch_failed') })
-  await flush()
-  expect(h.controller.getSnapshot().acknowledgedRun).toBeNull()
-  expect(h.controller.getSnapshot().runs.value.at(-1)).toMatchObject({
-    id: 'ack',
-    status: 'dispatch_failed'
-  })
-  expect(h.listRunsPage).toHaveBeenCalledTimes(2)
-})
-
 it('refreshes the authority of a pinned running run independently of the first-page window', async () => {
   const h = setup('old')
   h.pages[0].resolve(page(['10'], null))
@@ -216,6 +141,74 @@ it('refreshes the authority of a pinned running run independently of the first-p
   h.exact[1].resolve({ kind: 'run', run: run('old', 1, 'completed') })
   await flush()
   expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
+})
+
+it.each(['error', 'run-missing'] as const)(
+  'retains the sole terminal exact answer when a queued follow-up returns %s',
+  async (outcome) => {
+    const h = setup('old')
+    h.pages[0].resolve(page(['10'], null))
+    await flush()
+    for (let index = 0; index < 20; index++) {
+      h.controller.retrySelected()
+    }
+    await flush()
+    expect(h.exact).toHaveLength(1)
+    h.exact[0].resolve({ kind: 'run', run: { ...run('old'), chatSessionId: 'terminal-chat' } })
+    await flush()
+    expect(h.exact).toHaveLength(2)
+    h.exact[1].resolve(
+      outcome === 'error' ? { kind: 'error', error: new Error('offline') } : { kind: 'run-missing' }
+    )
+    await flush()
+    expect(h.controller.getSnapshot().selected?.run).toMatchObject({
+      id: 'old',
+      status: 'completed',
+      chatSessionId: 'terminal-chat'
+    })
+  }
+)
+
+it('keeps an admitted exact terminal and link when a held older page supplies its old snapshot', async () => {
+  const h = setup('old')
+  h.pages[0].resolve(page(['10'], 'after-10'))
+  await flush()
+  h.controller.loadMore()
+  h.exact[0].resolve({ kind: 'run', run: { ...run('old'), chatSessionId: 'terminal-chat' } })
+  await flush()
+  h.pages[1].resolve({ runs: [run('old', 1, 'dispatched'), run('9', 9)], nextCursor: 'after-old' })
+  await flush()
+  const snapshot = h.controller.getSnapshot()
+  expect(snapshot.runs.value.filter((row) => row.id === 'old')).toHaveLength(1)
+  expect(snapshot.runs.value.find((row) => row.id === 'old')).toMatchObject({
+    status: 'completed',
+    chatSessionId: 'terminal-chat'
+  })
+  expect(snapshot.selected?.run?.chatSessionId).toBe('terminal-chat')
+  expect(snapshot.runs.coverageIds).toEqual(['10', 'old', '9'])
+  expect(snapshot.runs.nextCursor).toBe('after-old')
+})
+
+it('keeps a refused page remedy through an independent exact update until that acquisition is admitted', async () => {
+  const resident = setup()
+  resident.pages[0].resolve({ runs: [large('resident', 10 * 1024 * 1024)], nextCursor: null })
+  await flush()
+  const h = setup('old')
+  const refused = { runs: [large('10', 3 * 1024 * 1024)], nextCursor: 'after-10' }
+  h.pages[0].resolve(refused)
+  await flush()
+  expect(h.controller.getSnapshot().runs.capacityError?.source).toBe('newest')
+  h.exact[0].resolve({ kind: 'run', run: run('old') })
+  await flush()
+  expect(h.controller.getSnapshot().selected?.run?.id).toBe('old')
+  expect(h.controller.getSnapshot().runs.capacityError?.source).toBe('newest')
+  expect(h.controller.getSnapshot().runs.nextCursor).toBeNull()
+  resident.controller.dispose()
+  h.controller.reload()
+  h.pages[1].resolve(refused)
+  await flush()
+  expect(h.controller.getSnapshot().runs.capacityError).toBeNull()
+  expect(h.controller.getSnapshot().runs.nextCursor).toBe('after-10')
 })
 
 it.each([true, false])(
@@ -252,29 +245,6 @@ it.each([true, false])(
   }
 )
 
-it('coalesces selected and acknowledgement exact reads with at most one follow-up across repeated refreshes', async () => {
-  const h = setup('older')
-  h.controller.acknowledgeRun(run('ack', 1, 'dispatched'))
-  h.pages[0].resolve(page(['10'], null))
-  await flush()
-  expect(h.readRun).toHaveBeenCalledTimes(2)
-  for (let i = 1; i <= 4; i++) {
-    h.controller.reload()
-    h.pages[i].resolve(page([String(10 + i)], null))
-    await flush()
-  }
-  expect(h.readRun).toHaveBeenCalledTimes(2)
-  h.exact[0].resolve({ kind: 'run', run: run('ack', 1, 'completed') })
-  h.exact[1].resolve({ kind: 'run', run: run('older', 0, 'dispatched') })
-  await flush()
-  expect(h.readRun).toHaveBeenCalledTimes(4)
-  h.exact[2].resolve({ kind: 'run', run: run('ack', 1, 'completed') })
-  h.exact[3].resolve({ kind: 'run', run: run('older', 0, 'completed') })
-  await flush()
-  expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
-  expect(h.controller.getSnapshot().acknowledgedRun).toBeNull()
-})
-
 it.each([true, false])(
   'preserves an older failure when a newest success settles in either order (%s)',
   async (olderFirst) => {
@@ -300,65 +270,3 @@ it.each([true, false])(
     })
   }
 )
-
-it('coalesces repeated selected retries of the acknowledged identity into one exact follow-up', async () => {
-  const h = setup('ack')
-  h.controller.acknowledgeRun(run('ack', 1, 'dispatched'))
-  h.pages[0].resolve(page(['10'], null))
-  await flush()
-  for (let index = 0; index < 20; index++) {
-    h.controller.retrySelected()
-  }
-  await flush()
-  expect(h.readRun).toHaveBeenCalledTimes(1)
-  h.exact[0].resolve({ kind: 'run', run: run('ack', 1, 'dispatched') })
-  await flush()
-  expect(h.readRun).toHaveBeenCalledTimes(2)
-  h.exact[1].resolve({ kind: 'run', run: run('ack', 1, 'completed') })
-  await flush()
-  expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
-  expect(h.controller.getSnapshot().acknowledgedRun).toBeNull()
-  expect(h.controller.getSnapshot().runs.value.find((run) => run.id === 'ack')?.status).toBe(
-    'completed'
-  )
-})
-
-it('keeps a newer page session link when an older exact acknowledgement read settles later', async () => {
-  const h = setup()
-  h.controller.acknowledgeRun(run('ack', 1, 'dispatched'))
-  h.pages[0].resolve(page([], null))
-  await flush()
-  expect(h.exact).toHaveLength(1)
-  h.controller.reload()
-  h.pages[1].resolve({
-    runs: [{ ...run('ack', 1, 'dispatched'), sessionKind: 'chat', chatSessionId: 'new-session' }],
-    nextCursor: null
-  })
-  await flush()
-  h.exact[0].resolve({ kind: 'run', run: run('ack', 1, 'dispatched') })
-  await flush()
-  expect(h.controller.getSnapshot().runs.value.find((run) => run.id === 'ack')?.chatSessionId).toBe(
-    'new-session'
-  )
-})
-
-it('retains the selected acknowledgement outcome through a later displacement and held authority refresh', async () => {
-  const h = setup('ack')
-  h.controller.acknowledgeRun(run('ack', 1, 'dispatched'))
-  h.pages[0].resolve({ runs: [run('ack', 1, 'dispatched')], nextCursor: null })
-  await flush()
-  h.controller.reload()
-  h.pages[1].resolve(page(['10'], null))
-  await flush()
-  h.exact[0].resolve({ kind: 'run', run: run('ack', 1, 'completed') })
-  await flush()
-  expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
-  h.controller.reload()
-  h.pages[2].resolve(page(['11'], null))
-  await flush()
-  expect(h.exact).toHaveLength(2)
-  expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
-  h.exact[1].resolve({ kind: 'error', error: new Error('offline') })
-  await flush()
-  expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
-})

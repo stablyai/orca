@@ -1,3 +1,4 @@
+import { botTarget } from '@/lib/bot-hosts'
 import { useTranscriptBot } from '@/components/bots/bot-transcript-bot'
 import { useMemo, useState } from 'react'
 import { useNow } from '@/lib/window-activity/use-now'
@@ -6,8 +7,7 @@ import { useBotActivity, useBotActivityRead } from '@/components/bots/use-bot-ac
 import { botErrorMessage } from '@/components/bots/bot-presentation'
 import { botAutomationWhen } from '@/components/bots/bot-automation-when'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
-import { deleteAutomationForOwner } from '@/components/automations/hosts/automation-scoped-list-client'
-import { actOnBotAutomationRow } from '@/components/automations/hosts/bot-automation-row-owner'
+import { deleteAutomationForTarget } from '@/components/automations/hosts/automation-host-client'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { AutomationOnce, WaitEnding } from '../../../../../shared/automation-once'
 import type { BotAutomationFacts } from '../../../../../shared/bots/bot-automation-rows'
@@ -63,9 +63,7 @@ function WaitActions({
           disabled={busy}
           onClick={() => {
             setBusy(true)
-            void actOnBotAutomationRow(owner, (captured) =>
-              deleteAutomationForOwner(captured, automationId)
-            )
+            void deleteAutomationForTarget({ id: automationId, runContext: null }, botTarget(bot))
               .catch((error: unknown) => toast.error(botErrorMessage(error)))
               .finally(() => setBusy(false))
           }}

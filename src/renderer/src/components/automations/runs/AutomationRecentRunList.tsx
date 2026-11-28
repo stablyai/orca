@@ -156,27 +156,19 @@ export function AutomationRecentRunList({
   const expandable = expandedRunId !== undefined
   return (
     <ul aria-label={ariaLabel} className="flex min-w-0 flex-col gap-0.5">
-      {pinned ? (
-        <RunRow
-          key={`pinned:${pinned.run.id}`}
-          run={pinned.run}
-          now={now}
-          pinnedLabel={pinned.label}
-          expanded={expandable ? expandedRunId === pinned.run.id : undefined}
-          actions={renderActions?.(pinned.run)}
-          onPress={onPress}
-        />
-      ) : null}
-      {runs.map((run) => (
-        <RunRow
-          key={run.id}
-          run={run}
-          now={now}
-          expanded={expandable ? expandedRunId === run.id : undefined}
-          actions={renderActions?.(run)}
-          onPress={onPress}
-        />
-      ))}
+      {(pinned ? [pinned.run, ...runs.filter((run) => run.id !== pinned.run.id)] : runs).map(
+        (run) => (
+          <RunRow
+            key={run.id}
+            run={run}
+            now={now}
+            pinnedLabel={pinned?.run.id === run.id ? pinned.label : undefined}
+            expanded={expandable ? expandedRunId === run.id : undefined}
+            actions={renderActions?.(run)}
+            onPress={onPress}
+          />
+        )
+      )}
     </ul>
   )
 }
