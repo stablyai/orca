@@ -34,11 +34,13 @@ export async function fetchActiveClaudeRateLimits(
     authProvenance: options?.authPreparation?.provenance ?? 'system'
   }
   // System Default without login may be an API-key/non-Claude user, not a signed-out account.
+  // A plan beside blanked tokens is a subscription login Claude Code signed out, not an API key.
   if (
     !credentials.token &&
     !credentials.unavailable &&
     !credentials.hasRefreshableCredentials &&
-    metadata.authProvenance === 'system'
+    metadata.authProvenance === 'system' &&
+    credentials.planType === undefined
   ) {
     return makeClaudeUsageResult('unavailable', 'No subscription plan — API key billing', {
       ...metadata,
