@@ -45,9 +45,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   private state: 'open' | 'closing' | 'ended' = 'open'
   /** Quit handed its part to the daemon: it dispatches nothing more and stops nothing. */
   handedOff = false
-  /** A kept run's close couldn't list which of its helpers still run here. */
-  helpersUnread = false
-  /** A kept run's close couldn't read some thread's turn. */
+  /** A kept run's close couldn't list its loaded threads or read some thread's turn. */
   readsFailed = false
   readonly unregister: () => void
   private closing: Promise<boolean> | null = null

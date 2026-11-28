@@ -163,8 +163,11 @@ export async function* loadCodexHistory(
       input.check()
       await onReadTurn(turn)
     }
+    // Only the turns discovery chose: a page's saved, finished turns are already in the journal.
     for (const turn of page.turns.toReversed()) {
-      yield turn
+      if (descriptor.selected.has(turnId(turn))) {
+        yield turn
+      }
     }
   }
 }

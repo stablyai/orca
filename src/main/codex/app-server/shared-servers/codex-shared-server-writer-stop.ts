@@ -36,14 +36,15 @@ export async function seedRunningCodexTurns(
   return settled.every((read) => read.status === 'fulfilled')
 }
 
-/** A kept run's threads that may still run here: those the server lists as loaded (marked live, so
- *  cleanup reaches them), or, when the listing fails, every one of them for this attempt only. */
-async function keptRunThreads(reads: Reads, lease: CodexSharedServerLease): Promise<string[]> {
+/** A kept run's threads that may still run here: those the server lists as loaded, marked live so
+ *  cleanup reaches them. Null when the listing fails: a quiet helper can't be told apart then. */
+async function keptRunThreads(
+  reads: Reads,
+  lease: CodexSharedServerLease
+): Promise<string[] | null> {
   const loaded = await listCodexLoadedThreads(reads).catch(() => null)
-  // Unlisted, a quiet helper's terminals can't be told apart: its workload stays unproven.
-  lease.helpersUnread = loaded === null
   if (!loaded) {
-    return [...lease.threads]
+    return null
   }
   for (const threadId of lease.threads) {
     if (loaded.has(threadId)) {
@@ -66,15 +67,11 @@ export async function stopCodexLeaseWriter(
   const options = { timeoutMs: requestTimeoutMs }
   // A kept run's helpers came back through history, not live frames: those still loaded here may
   // run (a quiet one sends nothing), so they're stopped like live ones.
+  const kept = lease.restored ? await keptRunThreads(reads, lease) : []
+  // Unlisted, the close stays unproven: the chat keeps routing its threads and the server runs on.
   const seeded =
-    !lease.restored ||
-    (await seedRunningCodexTurns(
-      reads,
-      await keptRunThreads(reads, lease),
-      turns,
-      requestTimeoutMs
-    ))
-  // A read that failed may fail again: a retry waits for something that could change that.
+    kept !== null && (await seedRunningCodexTurns(reads, kept, turns, requestTimeoutMs))
+  // A read that failed may fail again: a retry waits for a change, or a slow timer.
   lease.readsFailed = !seeded
   // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
   await turns.waitUntil(

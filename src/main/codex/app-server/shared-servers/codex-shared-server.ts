@@ -72,7 +72,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     return this.physicalConnection?.relay ? this.keep : undefined
   }
 
-  ended = (): void => this.onEnded(this)
+  /** A chat left: a close waiting on a change re-checks. */
+  ended = (): void => (this.turns.changed(), this.onEnded(this))
 
   get pid(): number | undefined {
     return this.physicalConnection?.pid
@@ -119,7 +120,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
           lease.pendingOpens.size === 0 &&
           !this.turns.anyStartPending(threads()) &&
           !this.hasRunningTurn(threads())),
-      null
+      // A failed read may pass once the server recovers, which nothing announces: retry in 30 s.
+      lease.readsFailed ? 30_000 : null
     )
   }
 
@@ -170,7 +172,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         this.releases.delete(lease)
       } else {
         this.leases.delete(lease)
-        if (lease.sessionId !== null && result.writerStopped) {
+        if (lease.sessionId !== null && result.writerStopped && result.workloadGone) {
           this.keep.endedChats.add(lease.sessionId)
         }
         this.turns.changed()
@@ -242,7 +244,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       owned.filter((threadId) => !this.router.isClaimed(threadId)),
       RELEASE_REQUEST_TIMEOUT_MS
     )
-    const workloadGone = abandonedGone && commandsGone && unsubscribed && !lease.helpersUnread
+    const workloadGone = abandonedGone && commandsGone && unsubscribed
     if (!workloadGone && !this.hasExited) {
       await this.stopIfAlone(lease)
     }
