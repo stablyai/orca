@@ -71,9 +71,11 @@ function googleActionReplay(
   return false
 }
 
+/** `told`: this request told the bot; a saved answer it didn't tell is reported as not sent. */
 async function saveCardAnswer(
   runtime: OrcaRuntimeService,
-  { botId, selection, googleAction }: PendingBotOfferAnswer
+  { botId, selection, googleAction }: PendingBotOfferAnswer,
+  told = false
 ): Promise<BotOfferTold> {
   const { cardId } = selection
   const bot = await runtime.bots.update(botId, (current) => {
@@ -91,7 +93,7 @@ async function saveCardAnswer(
     }
     return { offerAnswerConfirmation: { cardId, answers: offerAnswers } }
   })
-  return { sent: true, answer: bot.offerAnswers?.find((entry) => entry.cardId === cardId) }
+  return { sent: told, answer: bot.offerAnswers?.find((entry) => entry.cardId === cardId) }
 }
 
 function confirmCardAnswer(
@@ -123,7 +125,7 @@ function confirmCardAnswer(
       const now = Date.now()
       const admissionCutoff = googleReplayCutoff(current, now)
       if (googleActionReplay(googleActionId, current, now, admissionCutoff)) {
-        return { sent: true, answer: current }
+        return { sent: false, answer: current }
       }
       googleAction = { id: googleActionId, admissionCutoff }
     } else if (current?.sent || ('dismissed' in selection && current?.dismissed)) {
@@ -157,7 +159,7 @@ function confirmCardAnswer(
     }
     pending.set(key, write)
     operations.delete(key)
-    const confirmed = await saveCardAnswer(runtime, write)
+    const confirmed = await saveCardAnswer(runtime, write, told?.sent === true)
     pending.delete(key)
     return confirmed
   })

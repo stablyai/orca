@@ -306,6 +306,20 @@ describe('host-confirmed offer answers', () => {
     expect(sends).toHaveLength(1)
   })
 
+  it("never confirms an older client's Google claim on the same account as heard", async () => {
+    const now = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    await bots.update('b1', {
+      offerAnswer: { cardId: 'google', sent: { chosen: ['a@example.com'] }, claim: true }
+    })
+    vi.spyOn(Date, 'now').mockReturnValue(now + LEGACY_OFFER_CLAIM_SEND_MS)
+    const signedIn = await googleAccount('a', 'same-account')
+    expect(signedIn).toMatchObject({ sent: false, answer: { sent: { chosen: ['a@example.com'] } } })
+    // A replay of that action is no proof either.
+    await expect(googleAccount('a', 'same-account')).resolves.toMatchObject({ sent: false })
+    expect(sends).toEqual([])
+  })
+
   it('returns the recorded import after a lost confirmation without queuing a second turn', async () => {
     const lostReply = importItems(['1', '2']).then(() => {
       throw new Error('The connection closed before the reply.')
@@ -424,6 +438,7 @@ describe('host-confirmed offer answers', () => {
     await googleAccount('a', 'first')
     clock.mockReturnValue(now + GOOGLE_OFFER_REPLAY_WINDOW_MS)
     await expect(googleAccount('a', 'first')).resolves.toMatchObject({
+      sent: false,
       answer: { sent: { chosen: ['a@example.com'] } }
     })
 
