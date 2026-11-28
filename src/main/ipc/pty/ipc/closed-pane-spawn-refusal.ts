@@ -1,6 +1,7 @@
 import { isClosedPaneFenced } from '../../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
 import type { Store } from '../../../persistence/loading-store/store'
 import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import { TERMINAL_PANE_CLOSED } from '../../../../shared/workspace-layout/closed-pane-spawn-refusal'
 
 /** Refuse closed/reclaimed panes before spawning; a later binding refusal cannot undo a startup command. */
 export function refuseClosedPaneSpawn(
@@ -19,6 +20,6 @@ export function refuseClosedPaneSpawn(
     )
   )
   if (!held) {
-    throw new Error('terminal_pane_closed')
+    throw new Error(TERMINAL_PANE_CLOSED)
   }
 }
