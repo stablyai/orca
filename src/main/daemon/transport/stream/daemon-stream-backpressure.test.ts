@@ -113,7 +113,7 @@ describe('DaemonStreamBackpressure', () => {
       () => false
     )
     backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
-    producer.release({ resume: true })
+    producer.release({ resume: true, detached: true })
     expect(subprocess.resume).toHaveBeenCalledTimes(1)
 
     backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
@@ -130,6 +130,18 @@ describe('DaemonStreamBackpressure', () => {
 
     stall()?.('timeout')
     expect(backpressure.isStallReleased('tui')).toBe(true)
+  })
+
+  it("closing one connection drops only that connection's delivery credit", async () => {
+    const { backpressure, paused, stall } = recordingBackpressure()
+    backpressure.setQueued('kept', new Map([['tui', 200 * 1024]]))
+    backpressure.write('kept', 'tui', completingSocket(), 'x')
+    await new Promise((resolve) => process.nextTick(resolve))
+    backpressure.clear('other')
+
+    stall()?.('timeout')
+    expect(paused.get('tui')).toBe(false)
+    expect(backpressure.isStallReleased('tui')).toBe(false)
   })
 
   it("forgets a disconnected client's deliveries", async () => {

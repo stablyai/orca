@@ -165,10 +165,10 @@ export class TerminalHost {
     sessionId: string,
     source?: 'stream',
     onStreamStall?: (reason: StreamStallReason) => void
-  ): boolean {
+  ): boolean | 'exited' {
     const session = this.sessions.get(sessionId)
     if (!session || !session.isAlive) {
-      return false
+      return 'exited'
     }
     return session.pauseProducer(source, onStreamStall)
   }

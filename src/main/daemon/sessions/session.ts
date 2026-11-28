@@ -2,7 +2,7 @@ import { createSessionInitialOutput } from './session-initial-output'
 import { isValidPtySize } from '../protocol/daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
 import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
-import { SessionProducerPause, type StreamStallReason } from './session-producer-pause'
+import { SessionProducerPause, type StreamStallHandler } from './session-producer-pause'
 import { SessionFocusReport } from './session-focus-report'
 import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
@@ -166,10 +166,10 @@ export class Session extends SessionProcessInspection {
   }
 
   /** Apply PTY backpressure with separate lost-resume and stream-stall protection. */
-  pauseProducer(source?: 'stream', onStreamStall?: (reason: StreamStallReason) => void): boolean {
-    const live = this._state !== 'exited' && !this._disposed
+  pauseProducer(source?: 'stream', onStreamStall?: StreamStallHandler): boolean | 'exited' {
     const canPause = this.hasAttachedClients && !this.isTerminating
-    return live && this.producerPause.pause(source, canPause, onStreamStall)
+    const exited = this._state === 'exited' || this._disposed
+    return exited ? 'exited' : this.producerPause.pause(source, canPause, onStreamStall)
   }
 
   resumeProducer(source?: 'stream'): void {
@@ -202,14 +202,14 @@ export class Session extends SessionProcessInspection {
     this.output.detachClient(token)
     // With no viewer left to resume the producer, release its pause eagerly.
     if (!this.output.hasAttachedClients) {
-      this.producerPause.release({ resume: true })
+      this.producerPause.release({ resume: true, detached: true })
       this.reportFocusLost()
     }
   }
 
   detachAllClients(): void {
     this.output.clearClients()
-    this.producerPause.release({ resume: true })
+    this.producerPause.release({ resume: true, detached: true })
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {

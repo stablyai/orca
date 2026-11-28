@@ -5,7 +5,7 @@ export type DaemonStreamDataBatcherOptions = {
     sessionId: string,
     paused: boolean,
     onStallTimeout?: (reason: 'input' | 'timeout' | 'released') => void
-  ) => boolean | void
+  ) => boolean | 'exited' | void
   isSessionAttachedToClient?: (clientId: string, sessionId: string) => boolean
   isSessionDroppable?: (sessionId: string) => boolean
   /** Preserve terminal queries in dropped output: the hidden program may be waiting for their replies. */

@@ -5,8 +5,9 @@ import {
 } from '../../../shared/terminal/input/terminal-untyped-input'
 
 /** 'input': typed input waited 2 s behind the pause; 'timeout': the 60 s no-progress deadline passed;
- *  'released': detach or teardown dropped the pause, so the owner must pause afresh. */
+ *  'released': a detach dropped the pause, so the owner pauses afresh after a reattach. */
 export type StreamStallReason = 'input' | 'timeout' | 'released'
+export type StreamStallHandler = (reason: StreamStallReason) => void
 
 // A dropped resume notification must not wedge a shell; a still-flooded client can pause it again.
 export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
@@ -93,12 +94,13 @@ export class SessionProducerPause {
     }
   }
 
-  release(opts: { resume: boolean }): void {
+  /** `detached` tells the stream owner its pause is gone; exit and teardown don't, since that owner hears of exit itself. */
+  release(opts: { resume: boolean; detached?: boolean }): void {
     if (this.failsafeTimer) {
       clearTimeout(this.failsafeTimer)
       this.failsafeTimer = null
     }
-    const onStreamStall = this.streamBackpressured ? this.onStreamStall : null
+    const onStreamStall = opts.detached && this.streamBackpressured ? this.onStreamStall : null
     this.clearStreamStallWatchdog()
     if (!this.paused && !this.streamBackpressured) {
       return
