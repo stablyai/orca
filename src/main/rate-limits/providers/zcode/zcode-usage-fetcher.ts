@@ -154,7 +154,7 @@ export async function fetchZcodeRateLimits(
   if (plan && !saved) {
     return failed('The saved GLM Coding Plan API key is unusable', 'parse', '')
   }
-  const cli = saved ? null : readZcodeUsageCredentials(options)
+  const cli = saved ? null : await readZcodeUsageCredentials(options)
   if (cli?.status === 'error') {
     return failed('Could not read the selected ZCode CLI Coding Plan credential', 'parse', '')
   }
@@ -167,9 +167,9 @@ export async function fetchZcodeRateLimits(
   const credentialStorePath = zcodeCredentialStorePath(options)
   const resetLookupEnabled = !saved && !(options.configPath && !options.credentialHost)
   const resetAccountId = resetLookupEnabled
-    ? readZcodeResetAccountId(credentialStorePath, options.credentialHost)
+    ? await readZcodeResetAccountId(credentialStorePath, options.credentialHost)
     : null
-  if (!saved && !sameZcodeUsageCredential(options, credentials.authProvenance)) {
+  if (!saved && !(await sameZcodeUsageCredential(options, credentials.authProvenance))) {
     return unavailable('ZCode Coding Plan account changed during refresh')
   }
   // The reset-credit inventory rides beside the quota (presence-only): an endpoint or credential
@@ -184,8 +184,9 @@ export async function fetchZcodeRateLimits(
       }).catch(() => null)
   if (
     resetLookupEnabled &&
-    (!sameZcodeUsageCredential(options, credentials.authProvenance) ||
-      readZcodeResetAccountId(credentialStorePath, options.credentialHost) !== resetAccountId)
+    (!(await sameZcodeUsageCredential(options, credentials.authProvenance)) ||
+      (await readZcodeResetAccountId(credentialStorePath, options.credentialHost)) !==
+        resetAccountId)
   ) {
     return unavailable('ZCode Coding Plan account changed during refresh')
   }
@@ -196,11 +197,11 @@ export async function fetchZcodeRateLimits(
   }
 }
 
-function sameZcodeUsageCredential(
+async function sameZcodeUsageCredential(
   options: ZcodeUsageCredentialOptions,
   authProvenance: string
-): boolean {
-  const current = readZcodeUsageCredentials(options)
+): Promise<boolean> {
+  const current = await readZcodeUsageCredentials(options)
   return current.status === 'ok' && current.credentials.authProvenance === authProvenance
 }
 

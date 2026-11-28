@@ -3,15 +3,17 @@ import { homedir, platform, userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
-import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import { readSupportedZcodeV2Selection } from './zcode-v2-personal-overlay'
 
 const MAX_V2_FILE_BYTES = 4 * 1024 * 1024
-function readV2File(path: string): string {
-  return readNodeFileSyncWithinLimit(path, MAX_V2_FILE_BYTES, {
-    regularFileOnly: true
-  }).buffer.toString('utf8')
+async function readV2File(path: string): Promise<string> {
+  return (
+    await readNodeFileWithinLimit(path, MAX_V2_FILE_BYTES, {
+      regularFileOnly: true
+    })
+  ).buffer.toString('utf8')
 }
 
 const credentialSchema = lazyZodSchema(() => z.record(z.string(), z.string()))
@@ -127,9 +129,9 @@ function readOAuthPlanCredential(
   }
 }
 
-export function readZcodeV2PlanCredential(
+export async function readZcodeV2PlanCredential(
   host = localZcodeCredentialHost()
-): ZcodeV2PlanCredential {
+): Promise<ZcodeV2PlanCredential> {
   const base = resolveZcodeDataBaseDir(host)
   const configPath =
     (host.env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE?.trim()
@@ -137,7 +139,7 @@ export function readZcodeV2PlanCredential(
       : '') || join(base, '.zcode', 'v2', 'provider_config.json')
   let rawConfig: string
   try {
-    rawConfig = readV2File(configPath)
+    rawConfig = await readV2File(configPath)
   } catch (error) {
     return {
       status:
@@ -155,7 +157,7 @@ export function readZcodeV2PlanCredential(
   }
   let rawCredentials: string
   try {
-    rawCredentials = readV2File(join(base, '.zcode', 'v2', 'credentials.json'))
+    rawCredentials = await readV2File(join(base, '.zcode', 'v2', 'credentials.json'))
   } catch (error) {
     return {
       status:

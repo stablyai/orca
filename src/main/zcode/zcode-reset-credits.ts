@@ -7,7 +7,8 @@
 
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
+import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import {
@@ -30,21 +31,25 @@ export type ZcodeResetCredits = {
 }
 const REQUEST_TIMEOUT_MS = 15_000
 
-const resetEnvelopeSchema = z.object({
-  code: z.number(),
-  data: z.unknown().optional()
-})
+const resetEnvelopeSchema = lazyZodSchema(() =>
+  z.object({
+    code: z.number(),
+    data: z.unknown().optional()
+  })
+)
 
-const resetStatusDataSchema = z.object({
-  available_five_hour_resets: z
-    .array(z.looseObject({ expire_at: z.number().finite().positive() }))
-    .default([]),
-  available_week_resets: z
-    .array(z.looseObject({ expire_at: z.number().finite().positive() }))
-    .default([])
-})
+const resetStatusDataSchema = lazyZodSchema(() =>
+  z.object({
+    available_five_hour_resets: z
+      .array(z.looseObject({ expire_at: z.number().finite().positive() }))
+      .default([]),
+    available_week_resets: z
+      .array(z.looseObject({ expire_at: z.number().finite().positive() }))
+      .default([])
+  })
+)
 
-const resetAccountSchema = z.looseObject({ id: z.string().trim().min(1) })
+const resetAccountSchema = lazyZodSchema(() => z.looseObject({ id: z.string().trim().min(1) }))
 
 function resetTimestamp(value: number): number {
   return value < 10_000_000_000 ? value * 1000 : value
@@ -63,16 +68,18 @@ export type ZcodeResetCredentialFacts = {
 
 /** Reads the reset auth material from the v2 credential store: the zcode business JWT plus the
  *  active family's MaaS JWT. Null when the store is absent or either JWT is missing. */
-export function readZcodeResetCredentialFacts(
+export async function readZcodeResetCredentialFacts(
   credentialStorePath: string,
   host: ZcodeCredentialHost = localZcodeCredentialHost()
-): ZcodeResetCredentialFacts | null {
+): Promise<ZcodeResetCredentialFacts | null> {
   let parsed: unknown
   try {
     parsed = JSON.parse(
-      readNodeFileSyncWithinLimit(credentialStorePath, MAX_CREDENTIAL_STORE_BYTES, {
-        regularFileOnly: true
-      }).buffer.toString('utf8')
+      (
+        await readNodeFileWithinLimit(credentialStorePath, MAX_CREDENTIAL_STORE_BYTES, {
+          regularFileOnly: true
+        })
+      ).buffer.toString('utf8')
     )
   } catch {
     return null
@@ -125,11 +132,11 @@ export function readZcodeResetCredentialFacts(
   }
 }
 
-export function readZcodeResetAccountId(
+export async function readZcodeResetAccountId(
   credentialStorePath: string,
   host?: ZcodeCredentialHost
-): string | null {
-  return readZcodeResetCredentialFacts(credentialStorePath, host)?.accountId ?? null
+): Promise<string | null> {
+  return (await readZcodeResetCredentialFacts(credentialStorePath, host))?.accountId ?? null
 }
 
 function resetHeaders(facts: ZcodeResetCredentialFacts): Record<string, string> {
@@ -169,7 +176,7 @@ export async function fetchZcodeResetCredits(options: {
   accountId?: string
   signal?: AbortSignal
 }): Promise<ZcodeResetCredits | null> {
-  const facts = readZcodeResetCredentialFacts(options.credentialStorePath, options.host)
+  const facts = await readZcodeResetCredentialFacts(options.credentialStorePath, options.host)
   if (!facts || (options.accountId && options.accountId !== facts.accountId)) {
     return null
   }

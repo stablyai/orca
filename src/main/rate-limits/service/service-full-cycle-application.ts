@@ -203,7 +203,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
-    const zcode = isZcodeUsageCredentialCurrent(settledZcode)
+    const zcode = (await isZcodeUsageCredentialCurrent(settledZcode))
       ? settledZcode
       : {
           ...settledZcode,

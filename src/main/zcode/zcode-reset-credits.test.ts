@@ -40,11 +40,11 @@ const install = (respond: () => Response): void => {
   globalThis.fetch = () => Promise.resolve(respond())
 }
 
-afterEach(() => {
+afterEach(async () => {
   globalThis.fetch = fetchImpl
 })
 
-describe('zcode reset credits', () => {
+describe('zcode reset credits', async () => {
   it('maps the five-hour inventory and reads JWTs from the store', async () => {
     const path = store(accountTokens())
     install(() => json(okStatus))
@@ -91,12 +91,12 @@ describe('zcode reset credits', () => {
     expect(await fetchZcodeResetCredits({ credentialStorePath: path })).toBeNull()
   })
 
-  it('keeps the account identity stable across JWT refreshes', () => {
-    const first = readZcodeResetCredentialFacts(store(accountTokens()))
-    const refreshed = readZcodeResetCredentialFacts(
+  it('keeps the account identity stable across JWT refreshes', async () => {
+    const first = await readZcodeResetCredentialFacts(store(accountTokens()))
+    const refreshed = await readZcodeResetCredentialFacts(
       store(accountTokens({ zcodejwttoken: 'jwt-2', 'oauth:bigmodel:access_token': 'maas-2' }))
     )
-    const switched = readZcodeResetCredentialFacts(
+    const switched = await readZcodeResetCredentialFacts(
       store(
         accountTokens({
           'oauth:bigmodel:user_info': JSON.stringify({ id: 'account-2', username: 'user' })
@@ -111,9 +111,9 @@ describe('zcode reset credits', () => {
   it('does not fetch inventory for another expected CLI account', async () => {
     const path = store(accountTokens())
     let called = false
-    globalThis.fetch = () => {
+    globalThis.fetch = async () => {
       called = true
-      return Promise.resolve(json(okStatus))
+      return json(okStatus)
     }
 
     await expect(
@@ -126,9 +126,9 @@ describe('zcode reset credits', () => {
     const path = store(accountTokens())
     writeFileSync(path, ' '.repeat(4 * 1024 * 1024 + 1))
     let called = false
-    globalThis.fetch = () => {
+    globalThis.fetch = async () => {
       called = true
-      return Promise.resolve(json(okStatus))
+      return json(okStatus)
     }
 
     await expect(fetchZcodeResetCredits({ credentialStorePath: path })).resolves.toBeNull()
@@ -150,7 +150,7 @@ describe('zcode reset credits', () => {
         ])
       )
     )
-    expect(readZcodeResetCredentialFacts(path, host)).toMatchObject({
+    expect(await readZcodeResetCredentialFacts(path, host)).toMatchObject({
       origin: 'https://open.bigmodel.cn',
       zcodeJwt: 'jwt-1',
       codingPlanJwt: 'maas-1'

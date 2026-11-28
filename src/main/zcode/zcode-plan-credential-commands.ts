@@ -22,7 +22,7 @@ export async function getZcodePlanCredentialsStatus(): Promise<ZcodePlanCredenti
   const apiKeyConfigured = await hasZcodePlanApiKey()
   return {
     apiKeyConfigured,
-    zcodeCliConfigured: hasZcodeCliPlanCredentials(),
+    zcodeCliConfigured: await hasZcodeCliPlanCredentials(),
     apiKeyProtection: await getZcodePlanApiKeyProtection(),
     apiKeyUnreadable: apiKeyConfigured ? await apiKeyUnreadable() : undefined
   }
