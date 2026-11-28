@@ -7,10 +7,7 @@ import type {
 } from '../../consent/plugin-confirmation-subject'
 import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-actions'
 import type { PluginHostCallScope } from './plugin-host-call-scope'
-import type {
-  PluginAgentStatusRow,
-  PluginWorkspaceTerminal
-} from './plugin-workspace-projection'
+import type { PluginAgentStatusRow, PluginWorkspaceTerminal } from './plugin-workspace-projection'
 import type { PluginPanelBridgeServices } from './plugin-host-panel-method-bindings'
 import type { PluginStatusBarServices } from './plugin-host-status-bar-method-bindings'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'

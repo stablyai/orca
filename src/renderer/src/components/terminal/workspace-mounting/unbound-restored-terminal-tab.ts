@@ -10,7 +10,7 @@ export type UnboundRestoredTabState = Pick<
 /**
  * A saved tab with no PTY anywhere and nothing queued to start. Mounting it hidden would only start a
  * fresh shell or a fresh agent nobody asked for; with many such tabs one worktree activation can
- * exhaust the host's process limit (#39166). These wait until shown, or for the capped idle admission.
+ * exhaust the host's process limit (#39166). These wait until shown.
  */
 export function isUnboundRestoredTerminalTab(
   tab: Pick<

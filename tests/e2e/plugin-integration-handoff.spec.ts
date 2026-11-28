@@ -5,7 +5,10 @@ import { expect } from '@stablyai/playwright-test'
 import { test } from './desktop/electron-fixtures/orca-app'
 import { enableDevPlugins } from './helpers/plugin-smoke'
 import { writeIntegrationHandoffFixture } from './desktop/electron-fixtures/plugin-integration-handoff-fixture'
-import { configureGoldenStubAgent, getGoldenStubAgentLaunchEnv } from './golden-journeys/golden-stub-agent'
+import {
+  configureGoldenStubAgent,
+  getGoldenStubAgentLaunchEnv
+} from './golden-journeys/golden-stub-agent'
 import { getTerminalContent } from './terminal/layout/terminal-pane-identity'
 
 test.use({

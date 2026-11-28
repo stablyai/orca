@@ -35,7 +35,11 @@ export async function launchAutomationChatAgent(
   try {
     return await enrichAutomationRunTarget(runtime, await launchChat(runtime, request))
   } catch (error) {
-    if (error instanceof AutomationRunLaunchError) {
+    // A disabled agent refuses before anything starts, so its own words say what to change.
+    if (
+      error instanceof AutomationRunLaunchError ||
+      (error instanceof Error && 'code' in error && error.code === 'agent_unconfigured')
+    ) {
       throw error
     }
     console.error('[automations] chat launch failed:', error)

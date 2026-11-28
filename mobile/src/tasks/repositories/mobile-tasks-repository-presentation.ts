@@ -7,11 +7,11 @@ import {
   getHostContextLabel,
   type HostContextLabelSources
 } from '../../../../src/shared/worktree/row-display/host-context-labels'
-import { colors } from '../../theme/mobile-theme'
 import { taskTime } from '../item-detail/mobile-tasks-item-mapping'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import type { RepoSummary } from '../mobile-tasks-provider-detail-types'
 import type { TaskSort } from '../mobile-tasks-view-state-types'
+import type { MobilePalette } from '../../theme/mobile-theme'
 
 export function repositoryCount(count: number): string {
   return `${count} ${count === 1 ? 'repository' : 'repositories'}`
@@ -58,7 +58,8 @@ export function setupSourceLabel(source: string | null | undefined): string {
 
 export function taskRepositoryMeta(
   item: TaskItem,
-  reposById: Map<string, RepoSummary>
+  reposById: Map<string, RepoSummary>,
+  colors: MobilePalette
 ): { key: string; label: string; color: string } {
   if (item.provider === 'github' || item.provider === 'gitlab') {
     const repo = reposById.get(item.source.repoId)
@@ -93,7 +94,8 @@ export function taskRepositoryMeta(
 export function sortMobileTaskItems(
   items: readonly TaskItem[],
   sort: TaskSort,
-  reposById: Map<string, RepoSummary>
+  reposById: Map<string, RepoSummary>,
+  colors: MobilePalette
 ): TaskItem[] {
   if (items.length < 2) {
     return [...items]
@@ -104,7 +106,7 @@ export function sortMobileTaskItems(
     .map((item) => ({
       item,
       updatedAt: taskTime(item.updatedAt),
-      repositoryLabel: byRepository ? taskRepositoryMeta(item, reposById).label : ''
+      repositoryLabel: byRepository ? taskRepositoryMeta(item, reposById, colors).label : ''
     }))
     .sort(
       (a, b) =>

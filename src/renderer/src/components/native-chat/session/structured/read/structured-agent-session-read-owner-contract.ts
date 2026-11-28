@@ -47,4 +47,12 @@ export type StructuredAgentSessionAdmission = {
 export type StructuredAgentSessionReadEffects = {
   getState: () => AppState
   subscribeRetryNow: (retry: () => void) => () => void
+  /** This reader draws reply and reasoning text, so the host may send it live text while shown. */
+  showsReplyText?: boolean
+}
+
+/** Whether any active reader of a chat draws its reply text, and when that changes. */
+export type StructuredAgentSessionReplyTextInterest = {
+  shown: () => boolean
+  subscribe: (changed: () => void) => () => void
 }

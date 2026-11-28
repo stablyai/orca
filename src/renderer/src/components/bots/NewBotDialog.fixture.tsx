@@ -1,9 +1,11 @@
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
 import { templateProposal, type BotProposal } from '../../../../shared/bots/bot-proposal'
 import type { BotShareReview } from '../../../../shared/bots/bot-share-received'
 import { NewBotDialog } from './NewBotDialog'
+import { refreshAvatarCapability } from './avatar-generation-capability-store'
 import {
   LONG_FIXTURE_COMPUTER,
   NewBotFixtureStage,
@@ -58,6 +60,20 @@ export const longPurpose = defineFixture({
   interact: typed(
     'Watch app startup time on macOS, Windows and Linux, compare each new PR against main, and tell me in #perf when cold start gets more than 5% slower. Post a short summary there every Friday.'
   )
+})
+
+// Over the limit, as a value set past the box's maxLength arrives: Create shows Too long and sends nothing.
+export const tooLongPurpose = defineFixture({
+  ...newBotFixture(480),
+  interact: async () => {
+    await typeInto('input[autocomplete="off"]', 'Pulse')()
+    await typeInto(
+      'textarea',
+      'Watch app startup time and catch regressions on every platform. '.repeat(17)
+    )()
+    document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+    await new Promise(requestAnimationFrame)
+  }
 })
 
 export const proposal = defineFixture({
@@ -165,8 +181,49 @@ export const longest480 = defineFixture({
   ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
   interact: LONGEST
 })
-export const picker340 = defineFixture({ ...newBotFixture(340), interact: openPicker })
-export const picker480 = defineFixture({ ...newBotFixture(480), interact: openPicker })
+const pictureReview = (width: 340 | 480) => ({
+  width: width + 32,
+  setup: () => {
+    seedNewBotFixture('Demo computer')()
+    const avatarGeneration: typeof window.api.avatarGeneration = {
+      ...window.api.avatarGeneration,
+      capability: async () => ({ agents: [{ agent: 'codex', status: 'ready' }] })
+    }
+    Reflect.set(window.api, 'avatarGeneration', avatarGeneration)
+    refreshAvatarCapability()
+  },
+  render: () => (
+    <NewBotFixtureStage
+      width={width}
+      proposal={{ name: 'Pebble', purpose: 'Sort invented notes for the demo.', mascot: 'B1' }}
+    />
+  )
+})
+
+export const picker340 = defineFixture({ ...pictureReview(340), interact: openPicker })
+export const picker480 = defineFixture({ ...pictureReview(480), interact: openPicker })
+
+const reopenDraft = async (): Promise<void> => {
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  await typeInto('textarea[aria-label="Picture description"]', 'a tiny violet robot gardener')()
+  const popover = document.querySelector<HTMLElement>('[data-slot="popover-content"]')
+  popover?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+}
+
+export const pictureDraft340 = defineFixture({
+  ...pictureReview(340),
+  interact: reopenDraft
+})
+export const pictureDraft480 = defineFixture({
+  ...pictureReview(480),
+  interact: reopenDraft
+})
 export const computerMenu340 = defineFixture({
   ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu
@@ -266,3 +323,106 @@ const fromLink = (width: 340 | 480) => ({
 // The link flow's New bot: the same dialog, prefilled from the link, beside longest340/480.
 export const link340 = defineFixture(fromLink(340))
 export const link480 = defineFixture(fromLink(480))
+
+const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const openAgentMenu = async (): Promise<void> => {
+  document
+    .querySelector<HTMLElement>('[role="dialog"] [data-agent-launch-picker-trigger]')
+    ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  await settle(400)
+}
+const closeMenu = async (): Promise<void> => {
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  )
+  await settle(300)
+}
+// Claude on Opus, so Chat default is not the setup.
+const pickOpus = async (): Promise<void> => {
+  await FILLED()
+  await openAgentMenu()
+  const label = [...document.querySelectorAll<HTMLElement>('[role="menu"] *')].find(
+    (node) => node.childElementCount === 0 && node.textContent?.trim() === 'Opus'
+  )
+  label?.closest<HTMLElement>('[role="option"]')?.click()
+  await settle(300)
+  await closeMenu()
+}
+const chatDefaultRow = () =>
+  document.querySelector<HTMLElement>('[role="menu"] [role="menuitemcheckbox"]')
+const inLanguage = async (language?: 'de' | 'es' | 'ru'): Promise<void> => {
+  if (language) {
+    await i18n.changeLanguage(await loadRendererUiLanguage(language))
+    await settle(200)
+  }
+}
+// The same dialog, framed wide and tall enough to show the whole open menu.
+const menuFixture = (width: 340 | 480) => ({
+  ...newBotFixture(width),
+  width: width + 32 + 340,
+  render: () => <NewBotFixtureStage width={width} height={1000} />
+})
+// The menu over a picked model: Chat default first, unchecked.
+const chatDefaultMenu = (width: 340 | 480, language?: 'de' | 'es' | 'ru') =>
+  defineFixture({
+    ...menuFixture(width),
+    interact: async () => {
+      await inLanguage(language)
+      await pickOpus()
+      await openAgentMenu()
+      if (chatDefaultRow()?.getAttribute('aria-checked') !== 'false') {
+        throw new Error('Chat default must lead the menu, unchecked while a model is picked')
+      }
+    }
+  })
+// After picking Chat default: the field reads it, muted, on one line, and focus stays on the field.
+const chatDefaultPicked = (width: 340 | 480, language?: 'de' | 'es' | 'ru') =>
+  defineFixture({
+    ...newBotFixture(width),
+    interact: async () => {
+      await inLanguage(language)
+      await pickOpus()
+      await openAgentMenu()
+      chatDefaultRow()?.click()
+      await settle(400)
+      const trigger = document.querySelector<HTMLElement>(
+        '[role="dialog"] [data-agent-launch-picker-trigger]'
+      )
+      const label = trigger?.querySelector<HTMLElement>('span.truncate')
+      if (!trigger || !label || !label.classList.contains('text-muted-foreground')) {
+        throw new Error('The Agent field must read Chat default, muted')
+      }
+      if (label.scrollWidth > label.clientWidth + 1) {
+        throw new Error(
+          `Chat default must fit the field: ${label.scrollWidth}/${label.clientWidth}px`
+        )
+      }
+      if (label.scrollHeight > label.clientHeight + 1 || document.activeElement !== trigger) {
+        throw new Error('Chat default must stay on one line with focus on the Agent field')
+      }
+    }
+  })
+// Reopened on Chat default: its row is checked.
+const chatDefaultChecked = (width: 340 | 480) =>
+  defineFixture({
+    ...menuFixture(width),
+    interact: async () => {
+      await FILLED()
+      await openAgentMenu()
+      if (chatDefaultRow()?.getAttribute('aria-checked') !== 'true') {
+        throw new Error('With nothing chosen, Chat default must be checked')
+      }
+    }
+  })
+export const chatDefaultMenu340 = chatDefaultMenu(340)
+export const chatDefaultMenu480 = chatDefaultMenu(480)
+export const chatDefaultPicked340 = chatDefaultPicked(340)
+export const chatDefaultPicked480 = chatDefaultPicked(480)
+export const chatDefaultChecked340 = chatDefaultChecked(340)
+export const chatDefaultChecked480 = chatDefaultChecked(480)
+export const chatDefaultMenuDe340 = chatDefaultMenu(340, 'de')
+export const chatDefaultMenuEs340 = chatDefaultMenu(340, 'es')
+export const chatDefaultMenuRu340 = chatDefaultMenu(340, 'ru')
+export const chatDefaultPickedDe340 = chatDefaultPicked(340, 'de')
+export const chatDefaultPickedEs340 = chatDefaultPicked(340, 'es')
+export const chatDefaultPickedRu340 = chatDefaultPicked(340, 'ru')

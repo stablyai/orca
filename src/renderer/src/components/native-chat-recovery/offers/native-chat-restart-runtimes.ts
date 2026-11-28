@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -7,6 +8,7 @@ import {
   type NativeChatRestartStore
 } from './native-chat-restart-runtime-store'
 import { localNativeChatRestartStore } from './native-chat-resume-on-restart-store'
+import { isResumeRunSessionStarting } from '../runs/native-chat-resume-run'
 
 const stores = new Map<string, NativeChatRestartStore>()
 const listeners = new Set<() => void>()
@@ -33,10 +35,21 @@ export function useNativeChatTargetRestartResuming(target: RuntimeClientTarget) 
   )
 }
 
+/** Whether this chat is still queued or starting in its host's resume run, as the status bar's
+ *  "Resuming agents" counts it. */
+export function nativeChatRestartStillStarting(
+  target: RuntimeClientTarget,
+  sessionId: string
+): boolean {
+  const store =
+    target.kind === 'local' ? localNativeChatRestartStore : stores.get(target.environmentId)
+  return isResumeRunSessionStarting(store?.getNativeChatRestartRun() ?? null, sessionId)
+}
+
 export function useNativeChatRestartRuntimes() {
   const environments = useAppStore((state) => state.runtimeEnvironments)
   const statuses = useRuntimeStatusByEnvironmentId()
-  useSyncExternalStore(
+  const storeRevision = useSyncExternalStore(
     subscribe,
     () => revision,
     () => revision
@@ -65,8 +78,10 @@ export function useNativeChatRestartRuntimes() {
       listeners.forEach((listener) => listener())
     }
   }, [environments, statuses])
-  return environments.flatMap((environment) => {
-    const store = stores.get(environment.id)
-    return store ? [{ environment, store }] : []
-  })
+  return recomputeOn([storeRevision], () =>
+    environments.flatMap((environment) => {
+      const store = stores.get(environment.id)
+      return store ? [{ environment, store }] : []
+    })
+  )
 }

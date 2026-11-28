@@ -63,16 +63,22 @@ export function validatePluginFile(
   ]
 }
 
-/** Advice that never blocks a listing: deprecated fields that still work. */
+/** Advice that never blocks a listing: deprecated fields that still work, and panel icons
+ *  shown as `puzzle`. */
 export function pluginManifestWarnings(
   raw: unknown,
   options: PluginManifestParseOptions = {}
 ): string[] {
   const parsed = parsePluginManifest(raw, options)
-  if (!parsed.ok || parsed.manifest.manifestVersion !== 2 || !parsed.manifest.publisher) {
+  if (!parsed.ok) {
     return []
   }
+  const warnings = parsed.warnings ?? []
+  if (parsed.manifest.manifestVersion !== 2 || !parsed.manifest.publisher) {
+    return warnings
+  }
   return [
+    ...warnings,
     `publisher is deprecated and ignored: Orca derives it from the repository owner, like a Go module path. Remove it once engines.orca is at least >=${PLUGIN_DERIVED_PUBLISHER_SINCE}; until then it must equal the repository owner`
   ]
 }

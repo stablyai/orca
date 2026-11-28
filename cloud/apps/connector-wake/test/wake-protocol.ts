@@ -5,6 +5,7 @@ import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { exportJWK, generateKeyPair } from 'jose'
 import {
+  CONNECTOR_SHARES_CHANGED_FRAME,
   CONNECTOR_WAKE_CLOSE_CODE,
   CONNECTOR_WAKE_FRAME,
   CONNECTOR_WAKE_KEEPALIVE_ACK_FRAME,
@@ -79,6 +80,11 @@ async function main(): Promise<void> {
       const never = newHost()
       const mixed = await adminWake(origin, [host.hostId, never.hostId, host.hostId], ADMIN)
       record('W2 duplicate ids wake once; never-connected host counts no_socket', JSON.stringify(mixed.json) === JSON.stringify({ delivered: 1, noSocket: 1, error: 0 }), JSON.stringify(mixed.json))
+      const framesBefore = first.state.frames.length
+      const shares = await adminWake(origin, [host.hostId], ADMIN, { kind: 'shares_changed' })
+      await waitFor(() => first.state.frames.slice(framesBefore).some((f) => f !== CONNECTOR_WAKE_KEEPALIVE_ACK_FRAME), 3000)
+      const sharesFrames = first.state.frames.slice(framesBefore).filter((f) => f !== CONNECTOR_WAKE_KEEPALIVE_ACK_FRAME)
+      record('W3 kind shares_changed: 200 {delivered:1}, socket gets exactly {"type":"shares_changed"}', shares.status === 200 && JSON.stringify(shares.json) === JSON.stringify({ delivered: 1, noSocket: 0, error: 0 }) && JSON.stringify(sharesFrames) === JSON.stringify([CONNECTOR_SHARES_CHANGED_FRAME]), `${shares.status} ${JSON.stringify(shares.json)} ${JSON.stringify(sharesFrames)}`)
     }
 
     // Admin auth: bound to key, body, op, purpose and audience; _NEXT verifies; bad bodies 400.
@@ -100,6 +106,8 @@ async function main(): Promise<void> {
       record('P3 canary id, empty list, 501 hosts: 400', canary.status === 400 && empty.status === 400 && tooMany.status === 400, `${canary.status}/${empty.status}/${tooMany.status}`)
       const big = await fetch(`${origin}/__admin/wake`, { method: 'POST', headers: { authorization: 'Bearer x', 'content-type': 'application/json' }, body: 'x'.repeat(300 * 1024) })
       record('P4 body over 256 KB: 401 before parsing', big.status === 401, String(big.status))
+      const unknownKind = await adminWake(origin, ids, ADMIN, { kind: 'reload' })
+      record('P5 unknown kind: 400', unknownKind.status === 400, String(unknownKind.status))
     }
 
     // Replaced: the newer socket wins, the older closes 4409 and does not redial.

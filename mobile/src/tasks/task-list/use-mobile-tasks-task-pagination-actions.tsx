@@ -13,7 +13,7 @@ import {
   PER_REPO_FETCH_LIMIT,
   getTaskPagePerRepoLimit
 } from '../../../../src/shared/work-items/work-item-pagination'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import { buildPartialRepositoryNotice } from '../repositories/mobile-tasks-repository-presentation'
 import { linearAccountConnect } from './mobile-task-list-operations'
@@ -40,7 +40,6 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     clientRef,
     connState,
     fetchGitHubItemsPage,
-    githubCurrentPage,
     githubPages,
     githubPaginationLoading,
     githubCountedTotalPages,
@@ -55,9 +54,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     revalidating,
     selectedHostedRepos,
     setError,
-    setGithubCurrentPage,
     setGithubCountedTotalPages,
-    setGithubLoadingTargetPage,
     setGithubPages,
     setGithubPaginationLoading,
     setItems,
@@ -156,29 +153,15 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     (provenPageLimit === null || githubPages.length < provenPageLimit) &&
     hasRepoWithFullPage(githubPages.at(-1) ?? [], githubPerRepoLimit)
   // Pages kept or left from another filter stand in while a list loads; paging from them would mix old and new rows.
+  // A page that came back empty or failed is the end for this read, whatever the count said; Refresh starts a new read.
+  const [stoppedAt, setStoppedAt] = useState<{ generation: number; page: number } | null>(null)
+  const nextPageStopped =
+    stoppedAt?.generation === loadGenerationRef.current && stoppedAt.page <= githubPages.length
   const githubCanShowPagination =
     !revalidating &&
     !loading &&
+    !nextPageStopped &&
     (githubTotalPages > 1 || (githubPages.length > 0 && githubCanLoadUncountedNextPage))
-  const githubPagePickerPages = useMemo(() => {
-    const visible = new Set<number>()
-    const availablePages = Math.min(
-      githubTotalPages + (githubCanLoadUncountedNextPage ? 1 : 0),
-      githubPages.length + (githubCanLoadUncountedNextPage ? 1 : 0)
-    )
-    for (let index = 0; index < availablePages; index += 1) {
-      visible.add(index)
-    }
-    for (
-      let index = Math.max(0, githubCurrentPage - 2);
-      index <= Math.min(availablePages - 1, githubCurrentPage + 2);
-      index += 1
-    ) {
-      visible.add(index)
-    }
-    return [...visible].sort((a, b) => a - b)
-  }, [githubCanLoadUncountedNextPage, githubCurrentPage, githubTotalPages])
-
   const handleGitHubPageChange = useCallback(
     async (targetPage: number): Promise<void> => {
       if (
@@ -192,12 +175,8 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       ) {
         return
       }
-      if (targetPage > githubPages.length) {
-        return
-      }
-      if (targetPage < githubPages.length) {
-        setGithubCurrentPage(targetPage)
-        setItems(githubPages[targetPage] ?? [])
+      // Pages only append: the list shows every page read so far and asks for the next at its end.
+      if (targetPage !== githubPages.length) {
         return
       }
       // Any list reload supersedes this page; its rows must not enter the new selection/query/provider.
@@ -206,13 +185,13 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         loadGenerationRef.current === generation && clientRef.current === client
       setError('')
       setGithubPaginationLoading(true)
-      setGithubLoadingTargetPage(targetPage)
       try {
         const page = await fetchGitHubItemsPage(client, selectedHostedRepos, targetPage, isCurrent)
         if (!isCurrent()) {
           return
         }
         if (page.items.length === 0) {
+          setStoppedAt({ generation, page: targetPage })
           const emptyPage = {
             target: targetPage,
             failedCount: page.failedCount,
@@ -243,11 +222,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
               )
             )
           } else {
-            setError(
-              translate('tasks.pagination.noMoreResults', 'No more results on page {{page}}.', {
-                page: targetPage + 1
-              })
-            )
+            // Scrolling past the last page is the end of the list, not a failure.
             setGithubCountedTotalPages((previous) => applyEmptyPageClamp(previous, emptyPage))
           }
           return
@@ -255,16 +230,29 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         if (page.failedCount > 0) {
           setError(buildPartialRepositoryNotice(page.failedCount, selectedHostedRepos.length))
         }
+        // Pages stay as read so a full page still asks for the next; only the rows drop repeats.
         setGithubPages([...githubPages, page.items])
-        setGithubCurrentPage(targetPage)
-        setItems(page.items)
+        // Shown rows carry edits made since their page loaded, so they win over the stored pages.
+        setItems((current) => {
+          const seen = new Set(current.map((item) => item.key))
+          return [
+            ...current,
+            ...page.items.filter((item) => {
+              if (seen.has(item.key)) {
+                return false
+              }
+              seen.add(item.key)
+              return true
+            })
+          ]
+        })
       } catch (err) {
         if (isCurrent()) {
+          setStoppedAt({ generation, page: targetPage })
           setError(err instanceof Error ? err.message : 'Failed to load more GitHub tasks')
         }
       } finally {
         setGithubPaginationLoading(false)
-        setGithubLoadingTargetPage(null)
       }
     },
     [
@@ -287,7 +275,6 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     githubTotalPages,
     githubCanLoadUncountedNextPage,
     githubCanShowPagination,
-    githubPagePickerPages,
     handleGitHubPageChange
   })
 }

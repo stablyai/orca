@@ -8,7 +8,6 @@ import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   AI_VAULT_AGENTS,
   aiVaultAgentLabel,
@@ -94,7 +93,6 @@ function AgentHistoryFilterSheet({
   onAgentsChange,
   onSortChange
 }: FilterProps & { visible: boolean; onClose: () => void }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   // Only agents with history here: desktop's full list is two dozen rows, most of them empty.
   const listedAgents = useMemo(() => {

@@ -1,4 +1,4 @@
-import { translate } from '../../../i18n/mobile-i18n'
+import type { Translate } from '../../../i18n/mobile-i18n'
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import { supportsHostedReviewCreation } from '../../../../../src/shared/source-control/hosted-review/hosted-review-creation-providers'
 import { resolveCreateReviewIntentEligibility } from '../../../../../src/shared/source-control/decisions/source-control-create-review-intent'
@@ -41,10 +41,13 @@ export type BuildMobileCreatePrActionArgs = {
 
 const BUSY_ACTIONS = new Set(['create-pr', 'push-create-pr'])
 
-function hiddenAction(onPress: () => void): Omit<MobileCreatePrAction, 'reviewLabel'> {
+function hiddenAction(
+  onPress: () => void,
+  t: Translate
+): Omit<MobileCreatePrAction, 'reviewLabel'> {
   return {
     visible: false,
-    label: translate('sourceControl.createPrAction.createPullRequest', 'Create Pull Request'),
+    label: t('sourceControl.createPrAction.createPullRequest', 'Create Pull Request'),
     disabled: true,
     loading: false,
     pushFirst: false,
@@ -53,36 +56,37 @@ function hiddenAction(onPress: () => void): Omit<MobileCreatePrAction, 'reviewLa
 }
 
 export function buildMobileCreatePrAction(
-  args: BuildMobileCreatePrActionArgs
+  args: BuildMobileCreatePrActionArgs,
+  t: Translate
 ): MobileCreatePrAction {
   const eligibility =
     args.eligibilityState.kind === 'ready' || args.eligibilityState.kind === 'loading'
       ? args.eligibilityState.eligibility
       : null
   return {
-    ...buildCreatePrActionState(args),
-    reviewLabel: hostedReviewCopy(eligibility?.provider).reviewLabel
+    ...buildCreatePrActionState(args, t),
+    reviewLabel: hostedReviewCopy(eligibility?.provider, t).reviewLabel
   }
 }
 
-function buildCreatePrActionState({
-  branch,
-  eligibilityState,
-  busyAction,
-  prepareInputs,
-  onCreatePr
-}: BuildMobileCreatePrActionArgs): Omit<MobileCreatePrAction, 'reviewLabel'> {
+function buildCreatePrActionState(
+  {
+    branch,
+    eligibilityState,
+    busyAction,
+    prepareInputs,
+    onCreatePr
+  }: BuildMobileCreatePrActionArgs,
+  t: Translate
+): Omit<MobileCreatePrAction, 'reviewLabel'> {
   const noop = () => {}
   if (!branch || eligibilityState.kind === 'idle') {
-    return hiddenAction(noop)
+    return hiddenAction(noop, t)
   }
   if (eligibilityState.kind === 'error') {
     return {
       visible: true,
-      label: translate(
-        'sourceControl.createPrAction.statusUnavailable',
-        'Review status unavailable'
-      ),
+      label: t('sourceControl.createPrAction.statusUnavailable', 'Review status unavailable'),
       disabled: true,
       loading: false,
       pushFirst: false,
@@ -93,7 +97,7 @@ function buildCreatePrActionState({
   if (!eligibility) {
     return {
       visible: true,
-      label: translate('sourceControl.createPrAction.checkingStatus', 'Checking review status…'),
+      label: t('sourceControl.createPrAction.checkingStatus', 'Checking review status…'),
       disabled: true,
       loading: true,
       pushFirst: false,
@@ -104,7 +108,7 @@ function buildCreatePrActionState({
   if (!supportsHostedReviewCreation(eligibility.provider)) {
     return {
       visible: true,
-      label: translate(
+      label: t(
         'sourceControl.createPrAction.providerUnavailable',
         'Review creation unavailable for this provider'
       ),
@@ -114,8 +118,8 @@ function buildCreatePrActionState({
       onPress: noop
     }
   }
-  const copy = hostedReviewCopy(eligibility.provider)
-  const label = translate('sourceControl.createPrAction.createReview', 'Create {{titleLabel}}', {
+  const copy = hostedReviewCopy(eligibility.provider, t)
+  const label = t('sourceControl.createPrAction.createReview', 'Create {{titleLabel}}', {
     titleLabel: copy.titleLabel
   })
   // Busy workflows no-op; disable the action rather than expose an inert button.
@@ -145,21 +149,22 @@ function buildCreatePrActionState({
   }
 
   const hint =
-    getMobilePrCreateBlockMessage({
-      provider: eligibility.provider,
-      base: eligibility.defaultBaseRef || 'main',
-      title: eligibility.title || branch,
-      body: eligibility.body || '',
-      canCreate: false,
-      blockedReason: eligibility.blockedReason,
-      nextAction: eligibility.nextAction,
-      reviewLookupOutcome: eligibility.reviewLookupOutcome
-    }) ??
-    translate(
-      'sourceControl.prCreate.notReady',
-      'This branch is not ready for a {{reviewLabel}} yet.',
-      { reviewLabel: copy.reviewLabel }
-    )
+    getMobilePrCreateBlockMessage(
+      {
+        provider: eligibility.provider,
+        base: eligibility.defaultBaseRef || 'main',
+        title: eligibility.title || branch,
+        body: eligibility.body || '',
+        canCreate: false,
+        blockedReason: eligibility.blockedReason,
+        nextAction: eligibility.nextAction,
+        reviewLookupOutcome: eligibility.reviewLookupOutcome
+      },
+      t
+    ) ??
+    t('sourceControl.prCreate.notReady', 'This branch is not ready for a {{reviewLabel}} yet.', {
+      reviewLabel: copy.reviewLabel
+    })
 
   return {
     visible: true,

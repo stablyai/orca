@@ -1,5 +1,6 @@
 import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createJournalReducerState, type JournalReducerState } from '../projection/journal-reducer'
 import { JournalDerivedTurnScope } from '../projection/journal-derived-turn-scope'
@@ -61,8 +62,8 @@ export function durableQueuePauseMarks(
 }
 
 const f = outcomeFormat1StoredScalars.shape
-const admittedPauseMarks = z.custom<JournalReducerState['queuePauseMarks']>()
-const admittedHistoryOrigin = z.custom<JournalReducerState['historyOrigin']>()
+const admittedPauseMarks = lazyZodSchema(() => z.custom<JournalReducerState['queuePauseMarks']>())
+const admittedHistoryOrigin = lazyZodSchema(() => z.custom<JournalReducerState['historyOrigin']>())
 
 function applyScalar(state: JournalReducerState, key: string, value: unknown): void {
   switch (key) {

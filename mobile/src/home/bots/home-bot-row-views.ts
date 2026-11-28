@@ -2,10 +2,7 @@
 import type { BotGroup } from '../../../../src/shared/bots/bot-group-schema'
 import { botGroupStatusOf } from '../../../../src/shared/bots/bot-group-status'
 import { foldBotStatus, type BotRowStatus } from '../../../../src/shared/bots/bot-row-status'
-import {
-  botGroupMemberBots,
-  botGroupRowLine
-} from '../../../../src/shared/bots/bot-sidebar-entries'
+import { botGroupMemberBots } from '../../../../src/shared/bots/bot-sidebar-entries'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -22,7 +19,9 @@ import {
   mobileBotRowLineText,
   mobileBotRowNeedsYou
 } from '../../bots/mobile-bot-row-line'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { botsOfflineWord } from '../../bots/host-bot-listing'
+import { groupLine, waitsLine } from './home-bot-row-words'
 import {
   agentDotState,
   agentRowTimeAt,
@@ -38,6 +37,8 @@ import { resolveWorktreeHostId } from '../../worktree/row-presentation/worktree-
 export type HomeRowBase = {
   /** Unique across computers, and the same whichever computer relays a server's bot. */
   key: string
+  /** Where it runs (`placeKey`): rows that share one are on the same computer. */
+  placeKey: string
   /** `hostBotsKey` of the paired computer and the computer it runs on: the route this read took. */
   computerKey: string
   pairedHostId: string
@@ -64,6 +65,8 @@ export type HomeBotRow =
       dot: BotRowStatus | null
       /** What `preview` says, which a usage-limit stop takes the place of while it is quiet. */
       line: BotRowLine | null
+      /** `preview` lists what waits on the owner. */
+      asking: boolean
     })
   | (HomeRowBase & {
       kind: 'group'
@@ -133,10 +136,8 @@ export function placeKey(computer: BotComputerAnswer): string {
 
 export type Place = Pick<
   HomeRowBase,
-  'computerKey' | 'pairedHostId' | 'executionHost' | 'hostLabel'
-> & {
-  placeKey: string
-}
+  'placeKey' | 'computerKey' | 'pairedHostId' | 'executionHost' | 'hostLabel'
+>
 
 export function botRow(
   place: Place,
@@ -145,7 +146,8 @@ export function botRow(
   agents: readonly HomeAgentEntry[],
   now: number,
   /** Its workers and the people asking for access, as its computer's Bots list reads them. */
-  asks: { workers?: BotWorkspaceLiveCounts; access: readonly ConnectorAccessRequest[] }
+  asks: { workers?: BotWorkspaceLiveCounts; access: readonly ConnectorAccessRequest[] },
+  t: Translate
 ): HomeBotRow {
   const access = asks.access.filter((request) => request.botId === bot.id).length
   const facts = {
@@ -159,11 +161,15 @@ export function botRow(
     }
   }
   const rows = agents.map((entry) => entry.agent)
-  const line = mobileBotRowLine(facts, rows, now)
+  const line = mobileBotRowLine(facts, rows, now, t)
   const lineAt = line?.kind === 'activity' ? line.at : null
+  const needsYou = mobileBotRowNeedsYou(facts.line, rows, now)
+  // One question says itself; a count of several, or one the line can't name, says what makes it up.
+  const asking = line?.kind !== 'paused' && (needsYou > 1 || line?.kind === 'needYouElsewhere')
   return {
     kind: 'bot',
     key: `${place.placeKey}\nbot:${bot.id}`,
+    placeKey: place.placeKey,
     computerKey: place.computerKey,
     pairedHostId: place.pairedHostId,
     executionHost: place.executionHost,
@@ -172,10 +178,23 @@ export function botRow(
     bot,
     dot: botDot(agents, bot.paused, now),
     line,
-    preview: line ? mobileBotRowLineText(line, now) : '',
-    age: lineAt === null ? null : formatTimeAgo(lineAt, now),
+    asking,
+    preview: asking
+      ? waitsLine(
+          {
+            asks: needsYou - (asks.workers?.permission ?? 0) - facts.line.itemsNeedingYou,
+            access,
+            workers: asks.workers?.permission ?? 0,
+            items: answer.needsYou[bot.id] ?? 0
+          },
+          t
+        )
+      : line
+        ? mobileBotRowLineText(line, now, t)
+        : '',
+    age: lineAt === null ? null : formatTimeAgo(lineAt, now, t),
     unread: agents.some((entry) => listedAgentVerdict(entry.agent)?.unread === true),
-    needsYou: mobileBotRowNeedsYou(facts.line, rows, now),
+    needsYou,
     activityAt: Math.max(lineAt ?? 0, ...rows.map(agentRowTimeAt))
   }
 }
@@ -186,17 +205,19 @@ export function groupRow(
   bots: readonly PhoneBot[],
   agentOf: (paneKey: string) => RuntimeWorktreeAgentRow | undefined,
   unread: boolean,
-  now: number
+  now: number,
+  t: Translate
 ): HomeBotRow {
   const faces = botGroupMemberBots(group, bots).map((bot) => ({
     id: bot.id,
     name: bot.name,
     avatar: mobileBotAvatarSource(bot)
   }))
-  const line = botGroupRowLine(group, faces, translate('bots.groups.you', 'You'))
+  const line = groupLine(group, faces.length + (group.remoteMembers?.length ?? 0), t)
   return {
     kind: 'group',
     key: `${place.placeKey}\ngroup:${group.id}`,
+    placeKey: place.placeKey,
     computerKey: place.computerKey,
     pairedHostId: place.pairedHostId,
     executionHost: place.executionHost,
@@ -206,7 +227,7 @@ export function groupRow(
     faces,
     dot: botGroupStatusOf(group, agentOf),
     preview: line.text,
-    age: line.at === null ? null : formatTimeAgo(line.at, now),
+    age: line.at === null ? null : formatTimeAgo(line.at, now, t),
     unread,
     needsYou: 0,
     activityAt: line.at ?? 0
@@ -221,20 +242,23 @@ export function keptRows(
   mode: 'pending' | 'offline',
   groups: readonly BotGroup[],
   lastActivity: Readonly<Record<string, number>>,
-  now: number
+  now: number,
+  t: Translate
 ): HomeBotRow[] {
   const offline = mode === 'offline'
   const kept = (key: string, title: string) => {
     const at = lastActivity[key] ?? 0
     return {
       key,
+      placeKey: place.placeKey,
       computerKey: place.computerKey,
       pairedHostId: place.pairedHostId,
       executionHost: place.executionHost,
       hostLabel: place.hostLabel,
       title,
-      preview: '',
-      age: offline && at > 0 ? formatTimeAgo(at, now) : null,
+      // Nothing names the computer on the row, so the line says why it's dimmed.
+      preview: offline ? botsOfflineWord(t) : '',
+      age: offline && at > 0 ? formatTimeAgo(at, now, t) : null,
       unread: false,
       needsYou: 0,
       activityAt: at,
@@ -248,7 +272,8 @@ export function keptRows(
       kind: 'bot',
       bot,
       dot: null,
-      line: null
+      line: null,
+      asking: false
     })),
     ...groups.map((group): HomeBotRow => ({
       ...kept(`${place.placeKey}\ngroup:${group.id}`, group.name),

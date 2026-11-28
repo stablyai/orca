@@ -35,7 +35,7 @@ import {
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { searchRepos } from '@/lib/workspace/catalog/repo-search'
-import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
+import { useWorkspaceOptionsFilterBadge } from './use-workspace-options-filter-badge'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
@@ -304,6 +304,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                         <RepoBadgeLabel
                           name={r.displayName}
                           color={r.badgeColor}
+                          repo={r}
                           className="max-w-full"
                         />
                         {r.connectionId && (

@@ -8,7 +8,6 @@
 1 src/renderer/src/components/bots/bot-tool-sign-in-state.ts
 1 src/renderer/src/components/bots/composio/composio-client.ts
 1 src/renderer/src/components/bots/google/google-connect-client.ts
-1 src/renderer/src/components/browser-pane/assemble-chrome/browser-page-toolbar.tsx
 1 src/renderer/src/components/browser-pane/assemble-chrome/browser-page-viewport-overlays.tsx
 1 src/renderer/src/components/browser-pane/assemble-chrome/context-menu/browser-page-context-menu-items.tsx
 1 src/renderer/src/components/browser-pane/navigate/client-hosted-browser-load-failure.tsx
@@ -22,8 +21,6 @@
 1 src/renderer/src/components/native-chat/media/images/NativeChatMarkdownImage.tsx
 1 src/renderer/src/components/onboarding/ThemeLookCarousel.tsx
 1 src/renderer/src/components/onboarding/landing/Landing.tsx
-1 src/renderer/src/components/right-sidebar/ports/ssh-forwarded-ports-section.tsx
-1 src/renderer/src/components/right-sidebar/ports/ssh-ports-panel.tsx
 1 src/renderer/src/components/settings/accounts/codex/CodexLoginLinkNotice.tsx
 1 src/renderer/src/components/settings/accounts/sign-in/HostAccountSignInPrompt.tsx
 1 src/renderer/src/components/settings/general/GeneralSupportSection.tsx

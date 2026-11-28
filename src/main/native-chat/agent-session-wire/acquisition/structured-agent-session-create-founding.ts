@@ -7,7 +7,7 @@ import {
 
 import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
 
-import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
+import { readForkHydration } from './agent-session-fork-founding'
 
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
@@ -165,7 +165,7 @@ export async function foundConversation(
     }
   }
   if (!replayed) {
-    await prepareForkFounding(params)
+    await params.fork?.revalidate()
   }
   const existing = context.sessions.get(sessionId)
   const opened = existing

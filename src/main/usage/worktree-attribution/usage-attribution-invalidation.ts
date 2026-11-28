@@ -1,16 +1,19 @@
 import { realpath } from 'node:fs/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
 import { normalizeComparablePath, normalizeFsPath } from './usage-path-comparison'
 import { canonicalWorktreePath } from '../../git/worktrees/catalog/worktree-path-comparison'
 
-const worktreeRowSchema = z.object({
-  repoId: z.string(),
-  worktreeId: z.string(),
-  path: z.string(),
-  displayName: z.string()
-})
-const fingerprintSchema = z.array(z.string())
+const worktreeRowSchema = lazyZodSchema(() =>
+  z.object({
+    repoId: z.string(),
+    worktreeId: z.string(),
+    path: z.string(),
+    displayName: z.string()
+  })
+)
+const fingerprintSchema = lazyZodSchema(() => z.array(z.string()))
 
 function parseFingerprintRows(
   fingerprint: string | null

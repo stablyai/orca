@@ -14,6 +14,8 @@ import type { ExternalConversationHost } from '../external-conversations/externa
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { placeLaunchTarget } from './connector-places'
 import type { ConnectorMachine } from './connector-machine'
+import { withoutAutomations } from './connector-thread-mute'
+import type { Delivery } from '../external-conversations/external-conversation-types'
 import type { TurnAutomations } from './connector-turn-automations'
 
 export type DispatchedDelivery = {
@@ -23,6 +25,8 @@ export type DispatchedDelivery = {
   done: Promise<ConnectorDeliveryResult>
   /** Admitted through the reply outbox: `received` follows its admission. */
   viaOutbox?: true
+  /** Held by a thread's mute: whether it went on carrying its batch's later sends, once decided. */
+  carriedLater?: Promise<boolean>
 }
 
 /** A thrown seam call (e.g. a conversation that no longer exists) is a refusal, not a lost delivery. */
@@ -89,7 +93,7 @@ export async function recordedDeliveryResult(
 
 export type DispatchMachine = Pick<
   ConnectorMachine,
-  'runTrigger' | 'webhookNotice' | 'turnAutomations' | 'prEvent'
+  'runTrigger' | 'webhookNotice' | 'turnAutomations' | 'prEvent' | 'threadMute'
 >
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
 export type SendDelivery = Extract<ConnectorDelivery, { kind: 'send' }>
@@ -125,7 +129,9 @@ export function dispatchDelivery(
   msLeft: (expiresAt: number) => number,
   later: readonly SendDelivery[] = [],
   // The account whose reply outbox admits a start or send; null for the legacy way.
-  outboxAccount: string | null = null
+  outboxAccount: string | null = null,
+  // A later send of a batch a thread's mute holds: whether an earlier one carried it.
+  carriedBefore?: Promise<boolean>
 ): DispatchedDelivery | null {
   const parsed = ConnectorDelivery.safeParse(raw)
   if (!parsed.success) {
@@ -185,6 +191,53 @@ export function dispatchDelivery(
       return { outcome: 'accepted' }
     })
     return { deliveryId, received: false, done }
+  }
+  // A send this machine already took replays its receipt, never decided again: one the thread's
+  // mute held replays as it was, with no turn and so no automations run in one.
+  const heldByMute =
+    delivery.kind === 'send'
+      ? seam.receipts.heldByMute(delivery.conversation, deliveryId, [delivery.text])
+      : null
+  if (heldByMute) {
+    const done = settle(async () => withoutAutomations(delivery, await heldByMute))
+    return { deliveryId, received: false, done }
+  }
+  if (delivery.kind === 'send' && !seam.receipts.known(delivery.conversation, deliveryId)) {
+    // Before the seam: a muted thread's reply never reaches the agent. Done alone, so its batch's
+    // later sends go on their own.
+    const record = (handled: () => Promise<Delivery>) =>
+      seam.receipts.run(
+        delivery.conversation,
+        deliveryId,
+        'connector.mute',
+        [delivery.text],
+        handled
+      )
+    const muted = machine.threadMute?.(delivery, record, carriedBefore)
+    if (muted) {
+      // Held until decided; one that then goes on carries its batch's later sends, as it would have.
+      const alone = { ...machine, threadMute: undefined }
+      let carried = (_carries: boolean): void => {}
+      const carriedLater = new Promise<boolean>((resolve) => (carried = resolve))
+      const done = settle(async (): Promise<ConnectorDeliveryResult> => {
+        try {
+          const result = await muted.decided
+          // Carried in an earlier send's turn, whose outcome its batch reports for it.
+          if (result === 'carried') {
+            return { outcome: 'accepted' }
+          }
+          if (result !== 'send') {
+            return withoutAutomations(delivery, result)
+          }
+          const sent = dispatchDelivery(seam, host, alone, delivery, msLeft, later, outboxAccount)
+          carried(sent?.received === true)
+          return sent ? await sent.done : { outcome: 'unsupported' }
+        } finally {
+          carried(false)
+        }
+      })
+      return { deliveryId, received: false, done, carriedLater }
+    }
   }
   // Every other kind belongs to a thread.
   const key = delivery.conversation

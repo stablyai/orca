@@ -20,6 +20,7 @@ import {
   captureNativeChatGallery,
   type NativeChatGalleryEntry
 } from './native-chat-image-gallery-capture'
+import { joinSentences } from '../../../../../../../shared/text/sentence-joining'
 import { NativeChatImageGalleryDialog } from './NativeChatImageGalleryDialog'
 
 const FENCE_ACCESS = chatImageAccess()
@@ -71,7 +72,7 @@ function stepAnnouncement(
       : position === count
         ? t('components.native-chat.imageGallery.lastImage', 'Last image.')
         : ''
-  return end ? `${step} ${end}` : step
+  return joinSentences([step, end])
 }
 
 /** A subagent view over this list makes it inert without changing the tab's visibility. */
@@ -162,7 +163,11 @@ export function NativeChatImageGallery({
   })
 
   // Liveness reads only the list's own message ids, never producer records, so it is current here.
-  const live = session?.entries.map((entry) => loadedMessageIds.has(entry.messageId)) ?? []
+  const entries = session?.entries
+  const live = useMemo(
+    () => entries?.map((entry) => loadedMessageIds.has(entry.messageId)) ?? [],
+    [entries, loadedMessageIds]
+  )
   const previous = session && session.index > 0 ? live.lastIndexOf(true, session.index - 1) : -1
   const next = session ? live.indexOf(true, session.index + 1) : -1
 

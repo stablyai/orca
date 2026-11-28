@@ -19,7 +19,7 @@ function pickLabel(descriptor: SessionOptionDescriptor | undefined): string | nu
   if (descriptor.category === 'model') {
     return nativeChatModelPillLabel(descriptor, say)
   }
-  const value = mobileSessionOptionSummaryValue(descriptor)
+  const value = mobileSessionOptionSummaryValue(descriptor, translate)
   return descriptor.kind.type === 'boolean'
     ? `${nativeChatSessionOptionLabel(descriptor, say)} ${value}`
     : value

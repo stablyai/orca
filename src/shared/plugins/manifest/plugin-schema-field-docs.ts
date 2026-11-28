@@ -27,6 +27,8 @@ export const PLUGIN_UNRELEASED_SINCE = 'unreleased'
 export const PLUGIN_SETTINGS_PANEL_SINCE = PLUGIN_UNRELEASED_SINCE
 /** First release that plays an app theme's `background.videoPath`. */
 export const PLUGIN_THEME_VIDEO_BACKGROUND_SINCE = '1.4.254'
+/** First release that draws a panel `icon` given as inline SVG path data. */
+export const PLUGIN_PANEL_PATH_ICON_SINCE = '1.4.274'
 
 type PluginFieldDoc = {
   description: string

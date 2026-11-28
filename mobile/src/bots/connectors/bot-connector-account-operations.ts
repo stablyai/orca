@@ -1,4 +1,5 @@
-// Linking Linear and GitHub, their default bot, and Google for a bot and on its host: all on the phone's bot allowlist.
+// Linking Linear and GitHub, their default bot, and Google for a bot and on its host (its sign-in too): all on the
+// phone's bot allowlist.
 // The trip's own answers are BotSlackResult, as the host's other connector calls are.
 import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
@@ -22,7 +23,10 @@ function operation<
     | 'google.client.import'
     | 'google.client.export'
     | 'google.default.set'
-    | 'google.disconnect',
+    | 'google.disconnect'
+    | 'google.signIn.start'
+    | 'google.signIn.wait'
+    | 'google.signIn.cancel',
   Value extends z.ZodType
 >(method: Method, read: Value) {
   return bindDeferredRpcOperation(
@@ -87,3 +91,15 @@ export const googleClientExport = operation(
 )
 export const googleDefaultSet = operation('google.default.set', z.unknown())
 export const googleDisconnect = operation('google.disconnect', z.unknown())
+
+/** A Google sign-in on the host: `prompt` once it has Google's page; it ends signedIn, failed or cancelled. */
+const GoogleSignInStatus = z.looseObject({
+  flowId: z.string(),
+  revision: z.number(),
+  phase: z.string(),
+  prompt: z.looseObject({ authorizeUrl: z.string() }).optional(),
+  error: z.string().optional()
+})
+export const googleSignInStart = operation('google.signIn.start', GoogleSignInStatus)
+export const googleSignInWait = operation('google.signIn.wait', GoogleSignInStatus)
+export const googleSignInCancel = operation('google.signIn.cancel', z.unknown())

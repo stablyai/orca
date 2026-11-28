@@ -4,6 +4,7 @@ import type {
   BrowserExtensionContextMenuItem
 } from '../../../../shared/browser/extensions/browser-extension-context-menu-types'
 import { sameId } from './browser-extension-context-menu-model'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { matchesExtensionMatchPattern } from '../permissions/browser-extension-match-pattern'
 import type { StoredContextMenuItem } from '../profile-storage/browser-extension-profile-state-store'
 
@@ -35,6 +36,23 @@ export type ContextMenuParamsLike = {
 
 /** Chromium: 'page' applies only when no link, selection, editable or media context does. */
 export function contextMenuTargetFromParams(
+  params: ContextMenuParamsLike,
+  pageUrl: string,
+  inSubframe: boolean
+): ContextMenuTarget {
+  return redactContextMenuTarget(contextMenuTargetForChecks(params, pageUrl, inSubframe))
+}
+
+export function redactContextMenuTarget(target: ContextMenuTarget): ContextMenuTarget {
+  return {
+    ...target,
+    pageUrl: redactKagiSessionToken(target.pageUrl),
+    ...(target.frameUrl ? { frameUrl: redactKagiSessionToken(target.frameUrl) } : {})
+  }
+}
+
+// Raw document URLs are transient inputs to extension eligibility checks only.
+export function contextMenuTargetForChecks(
   params: ContextMenuParamsLike,
   pageUrl: string,
   inSubframe: boolean
@@ -189,8 +207,8 @@ export function buildContextMenuOnClickData(args: {
       : {}),
     ...(target.linkUrl ? { linkUrl: target.linkUrl } : {}),
     ...(target.srcUrl ? { srcUrl: target.srcUrl } : {}),
-    pageUrl: target.pageUrl,
-    ...(target.frameUrl ? { frameUrl: target.frameUrl } : {}),
+    pageUrl: redactKagiSessionToken(target.pageUrl),
+    ...(target.frameUrl ? { frameUrl: redactKagiSessionToken(target.frameUrl) } : {}),
     frameId: args.frameId,
     ...(target.selectionText ? { selectionText: target.selectionText } : {}),
     editable: args.editable,

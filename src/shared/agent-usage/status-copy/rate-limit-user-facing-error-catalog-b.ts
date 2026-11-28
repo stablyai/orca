@@ -68,23 +68,6 @@ export const KNOWN_RATE_LIMIT_ERRORS_B: RateLimitKnownError[] = [
     fallback: 'CLI exited before status was available'
   },
   {
-    test: /^Quota fetch failed \((\d+)\)$/i,
-    key: 'auto.lib.rateLimits.errors.quotaFetchFailed',
-    fallback: 'Quota fetch failed ({{status}})',
-    vars: (m) => ({ status: m[1] ?? '' })
-  },
-  {
-    test: /^Failed to load Gemini project ID \(HTTP (\d+)\)$/i,
-    key: 'auto.lib.rateLimits.errors.geminiProjectIdLoadFailed',
-    fallback: 'Failed to load Gemini project ID (HTTP {{status}})',
-    vars: (m) => ({ status: m[1] ?? '' })
-  },
-  {
-    test: 'Gemini project ID not found in API response',
-    key: 'auto.lib.rateLimits.errors.geminiProjectIdMissingInResponse',
-    fallback: 'Gemini project ID not found in API response'
-  },
-  {
     test: /^MiniMax usage fetch failed \((\d+)\)$/i,
     key: 'auto.lib.rateLimits.errors.minimaxUsageFetchFailed',
     fallback: 'MiniMax usage fetch failed ({{status}})',

@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import { Ellipsis, X } from 'lucide-react'
 import {
   DropdownMenu,
@@ -10,6 +10,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { useNativeChatQuickCommandsMenu } from '../../native-chat/pane/actions/use-native-chat-quick-commands-menu'
+import { focusStripActionsReturnTarget } from './strip-actions-return-focus'
+import { isGroupFocusedInStore } from './is-group-focused-in-store'
 
 type TabGroupPaneActionsMenuProps = {
   isFocused: boolean
@@ -36,9 +38,20 @@ export function TabGroupPaneActionsMenu({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [offerQuickCommands, setOfferQuickCommands] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const quickCommands = useNativeChatQuickCommandsMenu(
     offerQuickCommands ? { worktreeId, groupId } : undefined,
-    () => setOpen(false)
+    () => setOpen(false),
+    (event) => {
+      // The menu row that opened the editor is gone, so Radix would drop focus on body.
+      event.preventDefault()
+      requestAnimationFrame(() =>
+        focusStripActionsReturnTarget({
+          trigger: triggerRef.current,
+          stillOwned: () => isGroupFocusedInStore(worktreeId, groupId)
+        })
+      )
+    }
   )
   const handleOpenChange = (next: boolean): void => {
     // Why: the menu renders in a portal, so check the strip's container-query result when it opens.
@@ -59,7 +72,9 @@ export function TabGroupPaneActionsMenu({
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <button
+                ref={triggerRef}
                 type="button"
+                data-pane-actions-menu-trigger=""
                 aria-label={t('auto.components.tab.group.TabGroupPanel.9acaf92093', 'Pane Actions')}
                 onClick={(event) => {
                   event.stopPropagation()

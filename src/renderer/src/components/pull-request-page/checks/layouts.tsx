@@ -1,7 +1,7 @@
 import type { ProviderCheckSummary } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { PRCheckEmptyDetails } from '@/components/github/pr-check-empty-details'
+import { PRChecksTabLoading } from '@/components/github/pr-check-tab-loading'
 import React from 'react'
-import { LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
@@ -43,14 +43,7 @@ export function ChecksTabLayouts({
 }): React.JSX.Element {
   const t = useTranslate()
   if (loading && listLength === 0) {
-    return (
-      <>
-        {variant === 'compact' ? compactHeader : null}
-        <div className="flex items-center justify-center py-10">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-        </div>
-      </>
-    )
+    return <PRChecksTabLoading variant={variant} compactHeader={compactHeader} actions={actions} />
   }
   if (listLength === 0) {
     return (

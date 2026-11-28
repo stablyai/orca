@@ -15,7 +15,7 @@ import { resolveBrowserRoutePartitionBinding } from '../../routing/partitions/br
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { validateBrowserRouteProfile } from '../../routing/sessions/browser-route-profile-validation'
 import { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
-import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { getPairedRuntimeBrowserClientRouteIdentity } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import { browserClientPageCookieJar } from '../../client-pages/lifecycle/browser-client-page-cookie-jars'
 
 type ClientRouteCookieImportTarget = {

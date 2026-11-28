@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -81,21 +82,26 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalPaneKey: string | null = null
   let startupTerminalPtyId: string | null = null
   let sequencedStartup = startup
-  let wrappedSetupCommand: string | undefined
+  let wrappedSetup: WorktreeTerminalProvisioningArgs['wrappedSetup']
   if (startup && setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(setup, process.platform === 'win32' ? 'windows' : 'posix')
+    const completionToken = request.observeSetupCompletion ? randomUUID() : undefined
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
       startupCommand: startup.command,
       platform,
-      shell: setup.shell
+      shell: setup.shell,
+      ...(completionToken ? { completionToken } : {})
     })
     sequencedStartup = {
       ...startup,
       command: sequenced.startupCommand,
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
-    wrappedSetupCommand = sequenced.setupCommand
+    wrappedSetup = {
+      command: sequenced.setupCommand,
+      ...(completionToken ? { completionToken } : {})
+    }
     setup = { ...setup, envVars: { ...setup.envVars, ...sequenced.setupEnv } }
   }
 
@@ -167,7 +173,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
             { ...args, setup },
             startupTerminalHandle,
             startupPaneHeld,
-            wrappedSetupCommand
+            wrappedSetup
           ),
           ...ownerSurfacing(!provisionInBackground)
         })
@@ -176,7 +182,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         if (setup && !didSpawnSetup) {
           failedSetup = {
             ...setup,
-            ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
+            ...(didSpawnStartup && wrappedSetup ? { command: wrappedSetup.command } : {})
           }
         }
       }
@@ -192,12 +198,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     }
   } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {
     const provisioning = ports.provision({
-      ...provisionArgs(
-        { ...args, setup },
-        startupTerminalHandle,
-        startupPaneHeld,
-        wrappedSetupCommand
-      ),
+      ...provisionArgs({ ...args, setup }, startupTerminalHandle, startupPaneHeld, wrappedSetup),
       surfaceOwner: false
     })
     if (request.awaitTerminalProvisioning) {
@@ -228,7 +229,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     : setup
       ? {
           ...setup,
-          ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
+          ...(didSpawnStartup && wrappedSetup ? { command: wrappedSetup.command } : {})
         }
       : undefined
   return {
@@ -248,7 +249,7 @@ function provisionArgs(
   args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],
   primaryTerminalHandle: string | null,
   hasStartupTerminal: boolean,
-  wrappedSetupCommand?: string
+  wrappedSetup: WorktreeTerminalProvisioningArgs['wrappedSetup']
 ): WorktreeTerminalProvisioningArgs {
   return {
     worktreeSelector: `id:${args.worktree.id}`,
@@ -263,7 +264,7 @@ function provisionArgs(
     startupNeedsTerminal: args.startup !== undefined,
     setupCommandPlatform: setupPlatform(args.setup, 'posix'),
     observeSetupCompletion: args.request.observeSetupCompletion,
-    ...(wrappedSetupCommand ? { wrappedSetupCommand } : {})
+    ...(wrappedSetup ? { wrappedSetup } : {})
   }
 }
 

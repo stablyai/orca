@@ -122,7 +122,8 @@ export async function validatePluginTarget(
   errors.push(...(await contentErrors(root, manifest)), ...hostCalls.errors)
   const warnings = [
     ...strictPluginArtifactWarnings(manifest, manifestTextReader(root)),
-    ...hostCalls.warnings
+    ...hostCalls.warnings,
+    ...(parsed.warnings ?? [])
   ]
   return {
     path: root,

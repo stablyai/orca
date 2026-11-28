@@ -220,7 +220,11 @@ export function installedPluginControls(
             {t('auto.components.settings.PluginManagerRows.checkUpdate', 'Check for update')}
           </DropdownMenuItem>
         ) : null}
-        {plugin.source?.kind === 'marketplace' || removable || canUnload || plugin.bundled || requiredByTeam ? (
+        {plugin.source?.kind === 'marketplace' ||
+        removable ||
+        canUnload ||
+        plugin.bundled ||
+        requiredByTeam ? (
           <DropdownMenuSeparator />
         ) : null}
         {plugin.source?.kind === 'marketplace' ? (

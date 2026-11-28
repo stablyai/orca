@@ -20,6 +20,7 @@ export function useSettingsNavigationActions(
     | 'setHighlightedSettingsTarget'
     | 'generalSubPage'
     | 'setGeneralSubPage'
+    | 'setMcpServerSubPage'
     | 'activeSectionId'
     | 'setActiveSectionId'
     | 'setPendingNavRequestTick'
@@ -33,6 +34,7 @@ export function useSettingsNavigationActions(
     activeSectionId,
     setHighlightedSettingsTarget,
     setGeneralSubPage,
+    setMcpServerSubPage,
     setActiveSectionId,
     setPendingNavRequestTick,
     setSettingsSearchQuery,
@@ -69,6 +71,7 @@ export function useSettingsNavigationActions(
       cancelPendingSettingsTargetFocus({ pendingFocusTargetRef, pendingFocusWatchRef })
       setHighlightedSettingsTarget(null)
       setGeneralSubPage(null)
+      setMcpServerSubPage(null)
       closePluginIntegrationSettings()
       releaseNativeAccounts()
       setActiveSectionId(sectionId)
@@ -85,6 +88,7 @@ export function useSettingsNavigationActions(
       pendingFocusWatchRef,
       setActiveSectionId,
       setGeneralSubPage,
+      setMcpServerSubPage,
       setHighlightedSettingsTarget,
       setSettingsSearchQuery,
       settingsSearchQuery

@@ -1,5 +1,5 @@
-import React from 'react'
-import { LinearAgentSkillSetupPrompt } from '../../../skills/setup/LinearAgentSkillSetupPrompt'
+import React, { Suspense } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
 import { WorktreeCardLineAgents } from '../activity/worktree-card-line-agents'
@@ -16,6 +16,12 @@ import {
 import { WorktreeCardStatusLane } from '../surface/worktree-card-status-lane'
 import { WorktreeLineageToggle } from '../identity/WorktreeLineageToggle'
 import { cardElement } from './card-template-compiler'
+
+const LinearAgentSkillSetupPrompt = lazy(() =>
+  import('../../../skills/setup/LinearAgentSkillSetupPrompt').then((module) => ({
+    default: module.LinearAgentSkillSetupPrompt
+  }))
+)
 
 type Card = WorktreeCardController
 const part = cardElement<Card>
@@ -79,12 +85,14 @@ export const CARD_ACTIVITY_PARTS = {
     worktree.removalError ? <WorktreeCardDeleteFailed error={worktree.removalError} /> : null
   ),
   LinearSetupPrompt: part([], (_props, _children, { repo, settings }) => (
-    <LinearAgentSkillSetupPrompt
-      linked
-      remote={Boolean(repo?.connectionId || settings?.activeRuntimeEnvironmentId?.trim())}
-      surface="modal"
-      settings={settings}
-    />
+    <Suspense fallback={null}>
+      <LinearAgentSkillSetupPrompt
+        linked
+        remote={Boolean(repo?.connectionId || settings?.activeRuntimeEnvironmentId?.trim())}
+        surface="modal"
+        settings={settings}
+      />
+    </Suspense>
   )),
   ChildToggle: part([], (_props, _children, card) => (
     <WorktreeLineageToggle

@@ -18,7 +18,6 @@ import {
   sendOpenSetupGuide,
   sendOpenWorktreePalette
 } from './main-window-actions'
-import { ensureAutoUpdaterConfigured } from '../../updater/lifecycle/main-window-updater'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 
@@ -33,7 +32,6 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
     ...getAppMenuQuitHandlers(),
     onCheckForUpdates: (options) => {
-      ensureAutoUpdaterConfigured()
       runUserInitiatedUpdateCheck(options)
     },
     onBeforeReload: ({ ignoreCache, webContentsId }) => {

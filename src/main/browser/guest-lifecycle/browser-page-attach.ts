@@ -2,6 +2,9 @@ import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
+import { browserNavigationError } from './browser-navigation-error'
+import { createKagiPrivateNavigationQueue } from '../../../shared/browser/navigation/kagi-private-navigation-queue'
+import { redactKagiSessionToken } from '../../../shared/browser/navigation/browser-url'
 import {
   claims,
   pages,
@@ -10,6 +13,8 @@ import {
   type Page
 } from './browser-page-memory-state'
 import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
+import { recordBrowserPageFirstLoad } from './browser-page-first-load'
+export { claimBrowserPageFirstLoad } from './browser-page-first-load'
 
 type Attach = {
   pageId: string
@@ -21,6 +26,7 @@ type Attach = {
   requested?: boolean
 }
 const attachments = new Map<string, Attach>()
+const privateNavigations = createKagiPrivateNavigationQueue()
 export const guestLoads = new WeakMap<Electron.WebContents, Promise<void>>()
 let generation = 0
 const MARKER = 'data:text/html,orca-browser-attach-'
@@ -69,11 +75,15 @@ export function prepareBrowserPageAttach(
   const previous = page.token ? attachments.get(page.token) : undefined
   if (page.token) {
     attachments.delete(page.token)
+    privateNavigations.discard(page.token)
   }
   const token = randomUUID()
   page.token = token
-  const requested = previous !== undefined && !previous.admitted && previous.url !== url
-  attachments.set(token, { pageId, page, url, token, admitted: false, requested })
+  const safeUrl = redactKagiSessionToken(url)
+  const requested =
+    previous !== undefined && !previous.admitted && (previous.url !== safeUrl || url !== safeUrl)
+  privateNavigations.queue(token, url)
+  attachments.set(token, { pageId, page, url: safeUrl, token, admitted: false, requested })
   return MARKER + token
 }
 
@@ -125,6 +135,7 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   admittedAttach = null
   attachments.delete(attach.token)
   if (pages.get(attach.pageId) !== attach.page || attach.page.token !== attach.token) {
+    privateNavigations.discard(attach.token)
     guest.close({ waitForBeforeUnload: false })
     return false
   }
@@ -134,6 +145,8 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   attach.page.guest = guest
   renewHeldThrottle(attach.page)
   guest.once('destroyed', () => {
+    privateNavigations.discard(attach.token)
+    pendingLoads.delete(guest)
     getBrowserPageIdleDiscard().destroyed(attach.pageId, guest.id)
     if (attach.page.retired.delete(guest.id)) {
       attach.page.invalidation?.notify()
@@ -159,6 +172,7 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
   pendingLoads.delete(guest)
   const page = attach.page
   const snapshot = page.history
+  const navigationUrl = privateNavigations.take(attach.token, attach.url)
   if (snapshot) {
     let outcome: 'pending' | 'committed' | 'failed' = 'pending'
     const dispose = (): void => {
@@ -221,28 +235,36 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
     guest.navigationHistory.restore({ entries: snapshot!.entries, index: snapshot!.index })
   const firstLoad = (): Promise<void> => {
     if (!snapshot) {
-      return guest.loadURL(url ?? attach.url)
+      return guest.loadURL(url ?? navigationUrl)
     }
     if (!attach.requested) {
       return restore()
     }
     // The back list comes back, then the entered address loads after it, as a new navigation would.
     void restore().catch(() => {})
-    return guest.loadURL(attach.url)
+    return guest.loadURL(navigationUrl)
   }
-  const promise = waitForBrowserGuestLoad(guest, firstLoad).then(() => {
-    if (pages.get(attach.pageId) !== page || page.guest !== guest) {
-      throw new Error('Browser page replaced')
-    }
-    if (snapshot && page.history === snapshot) {
-      throw new BrowserError(
-        'browser_navigation_failed',
-        'The browser page could not be restored. Try reloading it.'
-      )
-    }
-  })
+  const promise = waitForBrowserGuestLoad(guest, firstLoad)
+    .catch((error: unknown) => {
+      throw browserNavigationError(error, url ?? navigationUrl)
+    })
+    .then(() => {
+      if (pages.get(attach.pageId) !== page || page.guest !== guest) {
+        throw new Error('Browser page replaced')
+      }
+      if (snapshot && page.history === snapshot) {
+        throw new BrowserError(
+          'browser_navigation_failed',
+          'The browser page could not be restored. Try reloading it.'
+        )
+      }
+    })
   page.restoring = promise
   guestLoads.set(guest, promise)
+  // A page attaches only after its profile's extensions had their wait, so a second load adds nothing.
+  if (!snapshot) {
+    recordBrowserPageFirstLoad(guest, url ?? navigationUrl, promise)
+  }
   void promise
     .catch(() => {})
     .finally(() => {
@@ -260,6 +282,14 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
 export function forgetBrowserPageAttach(page: Page): void {
   if (page.token) {
     attachments.delete(page.token)
+    privateNavigations.discard(page.token)
+  }
+  const pending = page.guest ? pendingLoads.get(page.guest) : undefined
+  if (pending) {
+    privateNavigations.discard(pending.token)
+    if (page.guest) {
+      pendingLoads.delete(page.guest)
+    }
   }
 }
 

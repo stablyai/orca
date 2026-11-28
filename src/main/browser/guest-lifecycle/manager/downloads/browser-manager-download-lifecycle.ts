@@ -21,6 +21,7 @@ function downloadRequestedEvent(
     totalBytes: download.totalBytes,
     mimeType: download.mimeType,
     savePath: download.savePath,
+    ...(download.claimLabel ? { claimLabel: download.claimLabel } : {}),
     status: 'downloading'
   }
 }
@@ -259,6 +260,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       status,
       savePath: download.savePath || null,
       ...(download.remoteDestination ? { remoteDestination: download.remoteDestination } : {}),
+      ...(download.claimLabel ? { claimLabel: download.claimLabel } : {}),
       error
     }
     download.terminalEvent = event

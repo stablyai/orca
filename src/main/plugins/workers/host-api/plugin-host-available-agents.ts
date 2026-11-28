@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -7,24 +8,30 @@ import { PluginHostCallError } from './plugin-host-call-scope'
 import type { PluginHostServices } from './plugin-host-method-bindings'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 
-const shownWorktree = z.object({
-  worktree: z.object({
-    id: z.string(),
-    hostId: z.string().optional(),
-    identity: z.object({ key: z.string(), executionHostId: z.string() }).optional()
-  })
-})
-const listedFolders = z.object({
-  folderWorkspaces: z.array(
-    z.object({
+const shownWorktree = lazyZodSchema(() =>
+  z.object({
+    worktree: z.object({
       id: z.string(),
-      executionHostId: z.string().nullable().optional()
+      hostId: z.string().optional(),
+      identity: z.object({ key: z.string(), executionHostId: z.string() }).optional()
     })
-  )
-})
-const launchSettings = z.object({
-  settings: z.object({ disabledTuiAgents: z.array(z.string()) })
-})
+  })
+)
+const listedFolders = lazyZodSchema(() =>
+  z.object({
+    folderWorkspaces: z.array(
+      z.object({
+        id: z.string(),
+        executionHostId: z.string().nullable().optional()
+      })
+    )
+  })
+)
+const launchSettings = lazyZodSchema(() =>
+  z.object({
+    settings: z.object({ disabledTuiAgents: z.array(z.string()) })
+  })
+)
 
 async function detectionTarget(call: PluginRuntimeRpc, workspaceId: string) {
   const scope = parseWorkspaceKey(workspaceId)

@@ -21,6 +21,7 @@ import {
 } from '../../../../src/shared/bot-types'
 import {
   GITHUB_BOT_MENTION,
+  ghSignedOut,
   gitHubLinkedAccounts,
   type ConnectorGitHubInstallation
 } from '../../../../src/shared/connector-bot-github-contract'
@@ -34,7 +35,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { openConnectorLink, GITHUB_LINK_HOSTS } from './connector-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
@@ -47,6 +47,8 @@ import {
 } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage } from './mobile-connector-account-copy'
 import type { PhoneGitHubView } from './use-phone-connector-account'
+import { MobileGhSignedOutLine } from './MobileGhSignedOutLine'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileBotGitHubPage(props: {
   client: RpcClient | null
@@ -67,6 +69,7 @@ export function MobileBotGitHubPage(props: {
   /** `signIn`: the setup opens on GitHub's sign-in with the account picker. */
   onSetUp: (signIn?: boolean) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, installation, github, hostName } = props
   const [menuOpen, setMenuOpen] = useState(false)
@@ -229,7 +232,8 @@ export function MobileBotGitHubPage(props: {
   // A cloud that links several logins lists them, and signs in again to add or refresh them.
   const signsIn = ready && state?.accounts !== undefined
   const menu = [
-    ...(state && ready
+    // The org's page has its own Add row.
+    ...(state && ready && !installation
       ? [
           {
             label: t('bots.connectors.addGitHubAccess', 'Add repositories or organizations'),
@@ -242,7 +246,7 @@ export function MobileBotGitHubPage(props: {
     ...(signsIn
       ? [
           {
-            label: t('bots.github.connection.addAccount', 'Add another GitHub account'),
+            label: t('bots.github.connection.addAnotherAccount', 'Add another account'),
             icon: Plus,
             disabled: !props.online,
             onPress: () => props.onSetUp(true)
@@ -299,6 +303,7 @@ export function MobileBotGitHubPage(props: {
           { mention: GITHUB_BOT_MENTION, handle: bot.folder }
         )}
       </SettingsNote>
+      {ghSignedOut(state) ? <MobileGhSignedOutLine host={hostName} /> : null}
       {github.view.status === 'failed' ? (
         <SettingsNote error>
           {connectorAccountErrorMessage('github', github.view.error, hostName, t)}
@@ -344,7 +349,8 @@ export function MobileBotGitHubPage(props: {
             />
           ))}
           <ListRow
-            leading={<ArrowUpRight size={18} color={colors.textPrimary} />}
+            leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+            accent
             title={t('bots.github.addMore', 'Add repositories or an organization')}
             accessibilityRole="link"
             disabled={!props.online}
@@ -373,7 +379,7 @@ export function MobileBotGitHubPage(props: {
         visible={menuOpen}
         anchorRef={menuAnchor}
         onClose={() => setMenuOpen(false)}
-        groups={[menu, accountMenu]}
+        groups={[[...menu, ...accountMenu]]}
       />
     </>
   )

@@ -1,5 +1,5 @@
 import type { AgentSessionAcquisition } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { openClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
+import { claudeChatConnectionOpener } from '../../relay/claude-kept-agent-connection'
 import { claudeLaunchPermissions } from '../permissions/claude-structured-inbound-control'
 import * as replay from '../turns/claude-replay-turn-resolution'
 import { claudeFrameSendFacts } from '../turns/claude-command-lifecycle'
@@ -12,11 +12,8 @@ import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from '../launch/claude-structured-spawn-options'
 import { observeClaudeFrameModels } from '../turns/claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from '../launch/claude-structured-session-options'
-import {
-  createClaudeSessionPublication,
-  reportClaudeOptions,
-  publishClaudeSessionAttempt
-} from '../startup/claude-structured-session-publication'
+import { reportClaudeOptions } from '../startup/claude-structured-session-publication'
+import * as publication from '../startup/claude-structured-session-publication'
 import type * as sessionState from '../claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
 import * as startupExit from '../startup/claude-structured-session-startup-exit'
@@ -50,7 +47,7 @@ export async function acquireClaudeSession({
   let liveSession: sessionState.ClaudeSession | null = null
   let firstRootInit: sessionState.ClaudeSession['firstRootInit']
   let observedLeafUuid: string | null = null,
-    expectedProviderSessionId: string | null = null
+    launched: { providerSessionId: string; resumesTranscript: boolean } | null = null
   // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
   let childEnded: Error | null = null
   const initProof = proof.createClaudeInitProof()
@@ -85,9 +82,8 @@ export async function acquireClaudeSession({
       return
     }
     const init = proof.readClaudeInit(message)
-    if (proof.readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
-      // Foreign init frames refuse startup; ordinary foreign frames are ignored.
-      if (init || (message.type === 'system' && message.subtype === 'init')) {
+    if (proof.readClaudeFrameString(message, 'session_id') !== launched?.providerSessionId) {
+      if (launched && proof.claudeForeignFrameRefusesStartup(message, launched)) {
         initProof.refuse()
       }
       return
@@ -184,14 +180,15 @@ export async function acquireClaudeSession({
       previous,
       attempt
     })
-    expectedProviderSessionId = launch.providerSessionId
+    launched = launch
     // Granted from this final launch before the connection can deliver a request.
     const permissions = claudeLaunchPermissions({ sessionId, prompts, emit }, launch)
     naming?.launch(launch)
     attempt.launch = launch
     observedLeafUuid = launch.resumeLeafUuid
+    const openChat = claudeChatConnectionOpener(sessionId, deps.openConnection, launch)
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
-      (deps.openConnection ?? openClaudeStreamJsonConnection)(
+      openChat(
         {
           pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
           prefixArgs: launch.prefixArgs,
@@ -252,7 +249,7 @@ export async function acquireClaudeSession({
         new Error(`claude stream-json for session ${sessionId} exited while being acquired`)
       )
     }
-    const { session, acquisition } = createClaudeSessionPublication({
+    const { session, acquisition } = publication.createClaudeSessionPublication({
       connection,
       launch,
       request: input,
@@ -276,12 +273,13 @@ export async function acquireClaudeSession({
     liveSession = session
     session.firstRootInit = firstRootInit
     session.orderedPermissionMode = permissions.orderedMode
+    session.liveFullAccess = permissions.liveFullAccess
     adoptClaudeStructuredSpawnOptions(session, {
       ...launch.savedOptions,
       sdkOptions: launch.options
     })
     acquisitions.deleteIfCurrent(sessionId, attempt)
-    await publishClaudeSessionAttempt({
+    await publication.publishClaudeSessionAttempt({
       sessionId,
       session,
       attempt,

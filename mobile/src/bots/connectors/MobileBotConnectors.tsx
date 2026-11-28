@@ -6,7 +6,6 @@ import { Plus } from 'lucide-react-native'
 import { botLinearWorkspaces, botSlackApps } from '../../../../src/shared/bot-types'
 import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'
-import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
@@ -14,13 +13,11 @@ import {
   rereadMobileComposio,
   useMobileComposio
 } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
-import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { SettingsSection } from '../../settings/settings-screen-frame'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useHostBotsEntry } from '../host-bot-store'
 import { memberRemoval } from '../bot-sheet-operations'
-import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
 import { useMobileBotWebhookSettings } from '../webhooks/MobileBotWebhooks'
@@ -58,8 +55,6 @@ type ConnectorsActions = {
 }
 
 type Page = ConnectorPage
-
-const ICON = 20
 
 /** The Settings row and, while open, the page that replaces Settings (or Webhooks, opened from it). */
 export function useMobileBotConnectorSettings(
@@ -104,7 +99,7 @@ function ConnectorsPage(
   props: ConnectorsContext &
     ConnectorsActions & { banner: ReactNode; webhooksRow: ReactNode; onBack: () => void }
 ) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, reads, hostKey } = props.routeBot
   const [page, setPage] = useState<Page>(props.initialPage ?? { kind: 'list' })
@@ -144,7 +139,7 @@ function ConnectorsPage(
   const google = usePhoneGoogleStatus(
     props.client,
     hostKey,
-    bot.google === true || page.kind === 'google' || page.kind === 'google-connect',
+    bot.google === true || page.kind.startsWith('google'),
     reads
   )
   const composio = useMobileComposio(props.client, hostKey, bot.id)
@@ -160,7 +155,6 @@ function ConnectorsPage(
         client={props.client}
         botId={bot.id}
         botName={bot.name}
-        avatar={mobileBotAvatarSource(bot)}
         teamId={page.teamId}
         inSlack={slackApps.length > 0}
         // The workspaces a later bot reuses: those other bots on this host are in.
@@ -267,41 +261,23 @@ function ConnectorsPage(
     online: props.online,
     setPage,
     save: props.online ? props.save : null,
-    t
+    t,
+    colors
   })
-  const openAdd = () => setPage({ kind: 'add' })
   return (
     <>
       <SheetHeader
         title={t('settings.bots.connectors', 'Connectors')}
         onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
-        trailingButtons={
-          <NavBarButton
-            icon={Plus}
-            accessibilityLabel={t('settings.bots.addConnector', 'Add a connector')}
-            onPress={openAdd}
-          />
-        }
       />
       {props.banner}
-      {rows.length > 0 ? (
-        <SettingsSection first separatorInset={LIST_LEADING_INSET}>
-          {rows}
-        </SettingsSection>
-      ) : (
-        <SettingsNote>
-          {t(
-            'bots.connectors.emptyNote',
-            'Let people reach {{name}} in Slack, GitHub and Linear, and let it work in your Google and other apps.',
-            { name: bot.name }
-          )}
-        </SettingsNote>
-      )}
-      <SettingsSection separatorInset={LIST_LEADING_INSET}>
+      <SettingsSection first separatorInset={LIST_LEADING_INSET}>
+        {rows}
         <ListRow
-          leading={<Plus size={ICON} color={colors.textPrimary} />}
+          key="add"
+          leading={<Plus size={18} color={colors.textMuted} />}
           title={t('settings.bots.addConnector', 'Add a connector')}
-          onPress={openAdd}
+          onPress={() => setPage({ kind: 'add' })}
         />
       </SettingsSection>
     </>

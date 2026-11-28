@@ -18,11 +18,10 @@ export const makeStore = (overrides?: { isUnread?: boolean }) => ({
     }
   ],
   addRepo: () => {},
-  updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) =>
-    ({
-      ...makeStore(overrides).getRepo(id),
-      ...updates
-    }) as never,
+  updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => ({
+    ...makeStore(overrides).getRepo(id),
+    ...updates
+  }),
   getAllWorktreeMeta: () => ({
     'repo-1::/tmp/worktree-a': {
       displayName: 'foo',
@@ -39,13 +38,12 @@ export const makeStore = (overrides?: { isUnread?: boolean }) => ({
   }),
   getWorktreeMeta: (worktreeId: string) =>
     worktreeId === 'repo-1::/tmp/worktree-a'
-      ? (makeStore(overrides).getAllWorktreeMeta()[worktreeId] as never)
+      ? makeStore(overrides).getAllWorktreeMeta()[worktreeId]
       : undefined,
-  setWorktreeMeta: (_target: HostWorktreeTarget, meta: Record<string, unknown>) =>
-    ({
-      ...makeStore(overrides).getAllWorktreeMeta()['repo-1::/tmp/worktree-a'],
-      ...meta
-    }) as never,
+  setWorktreeMeta: (_target: HostWorktreeTarget, meta: Record<string, unknown>) => ({
+    ...makeStore(overrides).getAllWorktreeMeta()['repo-1::/tmp/worktree-a'],
+    ...meta
+  }),
   removeWorktreeMeta: () => {},
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',

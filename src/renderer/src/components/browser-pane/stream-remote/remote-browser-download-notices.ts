@@ -26,18 +26,19 @@ export function showRemoteBrowserDownloadNotice(
     useAppStore.getState(),
     toRuntimeExecutionHostId(target.environmentId)
   )
+  // A claimed download's file is the feature's own, deleted once read: name the feature instead.
+  const savePath = download.claimLabel ?? download.savePath
   if (event.type === 'downloadRequested') {
     toast(
       translate('browser.serverPage.download.started', 'Downloading to {{path}} on {{host}}', {
-        path: event.download.savePath,
+        path: savePath,
         host
       }),
       { id }
     )
     return
   }
-  const { savePath } = event.download
-  if (event.copyId && savePath && event.download.status === 'completed') {
+  if (event.copyId && !download.claimLabel && savePath && download.status === 'completed') {
     offerRemoteBrowserDownloadCopy({
       toastId: id,
       target,

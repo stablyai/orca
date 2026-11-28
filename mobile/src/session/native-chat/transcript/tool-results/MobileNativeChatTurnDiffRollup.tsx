@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import {
   NATIVE_CHAT_TURN_DIFF_FILE_LIMIT,
@@ -9,10 +9,10 @@ import {
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { colors, pressedStyle, radii, spacing } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { toolType } from './mobile-native-chat-tool-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle, spacing } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { TOOL_ROW_HEIGHT, toolType } from './mobile-native-chat-tool-styles'
 import { nativeChatEditFileBaseName } from '../../../../../../src/shared/native-chat/tools/native-chat-edit-model'
 
 function FileRow({
@@ -22,6 +22,8 @@ function FileRow({
   file: NativeChatTurnDiffFile
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const [open, setOpen] = useMobileNativeChatDisclosure(
     `turn-diff:${file.edits[0]?.target.messageId}:${file.path}`,
     false
@@ -71,6 +73,7 @@ function FileRow({
   )
 }
 
+/** A turn's file changes as one quiet line, "Changed 3 files +12 −4 ›", which opens to the files. */
 export function MobileNativeChatTurnDiffRollup({
   diff,
   fontScale
@@ -78,72 +81,88 @@ export function MobileNativeChatTurnDiffRollup({
   diff: NativeChatTurnDiff
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
-  const [showAll, setShowAll] = useMobileNativeChatDisclosure(
-    `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
-    false
-  )
+  const turnKey = diff.files[0]?.edits[0]?.target.messageId
+  const [open, setOpen] = useMobileNativeChatDisclosure(`turn-diff-open:${turnKey}`, false)
+  const [showAll, setShowAll] = useMobileNativeChatDisclosure(`turn-diff-files:${turnKey}`, false)
   const files = showAll ? diff.files : diff.files.slice(0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT)
   const remaining = diff.files.length - files.length
   const type = toolType(fontScale)
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <Text style={[styles.label, type.meta]}>
-          {t('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
+    <View style={styles.rollup}>
+      <Pressable
+        style={({ pressed }) => [styles.summary, pressed && pressedStyle]}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(!open)}
+      >
+        <Text style={[styles.label, type.row]} numberOfLines={1}>
+          {t('components.native-chat.turnDiff.changed', 'Changed {{count}} files', {
             count: diff.files.length,
-            defaultValue_one: '{{count}} changed file'
+            defaultValue_one: 'Changed {{count}} file'
           })}
         </Text>
         <Text style={[styles.added, type.meta]}>+{diff.added}</Text>
-        <Text style={[styles.removed, type.meta]}>-{diff.removed}</Text>
+        <Text style={[styles.removed, type.meta]}>−{diff.removed}</Text>
         {diff.truncated ? (
-          <Text style={[styles.label, type.meta]}>
+          <Text style={[styles.label, type.meta]} numberOfLines={1}>
             {t('components.native-chat.turnDiff.partial', 'Partial diff')}
           </Text>
         ) : null}
-      </View>
-      {files.map((file) => (
-        <FileRow key={file.path} file={file} fontScale={fontScale} />
-      ))}
-      {remaining > 0 ? (
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.file, pressed && pressedStyle]}
-          onPress={() => setShowAll(true)}
-        >
-          <Text style={[styles.label, type.meta]}>
-            {t('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
-              count: remaining
-            })}
-          </Text>
-        </Pressable>
+        <View style={[styles.caret, open && styles.open]}>
+          <ChevronRight size={14 * fontScale} color={colors.textMuted} strokeWidth={2} />
+        </View>
+      </Pressable>
+      {open ? (
+        <>
+          {files.map((file) => (
+            <FileRow key={file.path} file={file} fontScale={fontScale} />
+          ))}
+          {remaining > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.file, pressed && pressedStyle]}
+              onPress={() => setShowAll(true)}
+            >
+              <Text style={[styles.label, type.meta]}>
+                {t('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
+                  count: remaining
+                })}
+              </Text>
+            </Pressable>
+          ) : null}
+        </>
       ) : null}
     </View>
   )
 }
 
-const styles = themedStyleSheet(() => ({
-  card: {
-    borderWidth: 1,
+const stylesSheet = themedStyleSheet((colors) => ({
+  rollup: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.surface,
-    padding: spacing.sm,
     marginBottom: spacing.md,
-    marginHorizontal: spacing.lg,
-    gap: spacing.xs
+    marginHorizontal: spacing.lg
   },
-  header: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
+  summary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: TOOL_ROW_HEIGHT
+  },
+  caret: { marginLeft: 'auto' },
   file: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.sm
+    minHeight: TOOL_ROW_HEIGHT
   },
   path: { maxWidth: '65%', flexShrink: 1, color: colors.textPrimary },
   directory: { flex: 1, color: colors.textMuted },
-  label: { color: colors.textMuted },
+  label: { flexShrink: 1, color: colors.textSecondary },
   added: { color: colors.gitDecorationAdded },
   removed: { color: colors.gitDecorationDeleted },
   open: { transform: [{ rotate: '90deg' }] }

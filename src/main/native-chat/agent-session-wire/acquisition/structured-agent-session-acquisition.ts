@@ -1,4 +1,5 @@
 import { recordStructuredChatAgentStart } from '../../../telemetry/structured-chat-dispatch'
+import { takeProviderRelayRunPlacement } from '../../../provider-relay/app-provider-relays'
 import { tuiAgentToAgentKind } from '../../../../shared/agent-status/identity/agent-kind'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isDeepStrictEqual } from 'node:util'
@@ -91,6 +92,7 @@ export async function acquireOwner(
           sessionId: record.sessionId,
           fence,
           process,
+          placement: takeProviderRelayRunPlacement(record.sessionId),
           now: input.now()
         })
       }
@@ -100,6 +102,7 @@ export async function acquireOwner(
         sessionId: record.sessionId,
         fence,
         process: acquired.process,
+        placement: takeProviderRelayRunPlacement(record.sessionId),
         now: input.now()
       })
     } else if (!sameOwnerProcess(record.lease.ownerProcess, acquired.process)) {
@@ -117,6 +120,7 @@ export async function acquireOwner(
       fence,
       ...(acquired.link ? { link: acquired.link } : {}),
       ...(acquired.accountHome ? { launchedAccountHome: acquired.accountHome } : {}),
+      ...(acquired.movedAccountHome ? { movedAccountHome: acquired.movedAccountHome } : {}),
       ...(acquired.accountRecipe
         ? {
             accountAcquisition: {

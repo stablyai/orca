@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react'
-import { isPluginPanelTabKey } from '../../../../../shared/plugins/manifest/plugin-manifest'
+import { isPluginPanelTabKey } from '../../../../../shared/plugins/frames/plugin-tab-key'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
 import { fillPluginPanelShell } from '../../plugins/frames/plugin-panel-design-token-css'
 import {

@@ -125,6 +125,7 @@ export function buildFullWorktreePurgeState(
   const {
     omitByWorktree,
     omitWorkspaceLineageByWorktree,
+    omitWorkspaceSessionKeyByWorktree,
     pruneRightSidebarTabByWorktree,
     omitByPaneKeyTabPrefix
   } = omitters
@@ -179,6 +180,9 @@ export function buildFullWorktreePurgeState(
     ),
     worktreeLineageById: omitByWorktree(s.worktreeLineageById),
     workspaceLineageByChildKey: omitWorkspaceLineageByWorktree(s.workspaceLineageByChildKey),
+    contestedPrimaryHostBySessionKey: omitWorkspaceSessionKeyByWorktree(
+      s.contestedPrimaryHostBySessionKey
+    ),
     deleteStateByWorktreeId: removeDeleteStatesForWorktreeIds(
       s.deleteStateByWorktreeId,
       worktreeIdSet
@@ -193,6 +197,9 @@ export function buildFullWorktreePurgeState(
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
     remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
     gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
+    gitRebaseIndexObservationByWorktree: omitByWorktree(
+      s.gitRebaseIndexObservationByWorktree ?? {}
+    ),
     gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
     gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
     gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),

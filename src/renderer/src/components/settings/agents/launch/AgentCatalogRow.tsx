@@ -126,12 +126,11 @@ export function AgentCatalogRow({
   const { rowRef, panelRef, permissionRef, openPermission, toggleOpen } =
     useAgentCatalogRowExpansion(cmdOpen, setCmdOpen)
   const panelId = useId()
-  const nameId = useId()
   return (
     <div
       ref={rowRef}
       data-agent-opens-as={opensAs ? '' : undefined}
-      className={cn('scroll-my-6 py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}
+      className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}
     >
       {/* Clicking the row's empty space expands it; its controls and the name button handle their own clicks. */}
       <div
@@ -161,7 +160,6 @@ export function AgentCatalogRow({
           {/* Badges overhang the name line so rows with one stay the same height; they truncate, never wrap. */}
           <div className="flex min-w-0 items-center gap-2 [&>*+*]:-my-1 [&>*+*]:min-w-0">
             <button
-              id={nameId}
               type="button"
               onClick={toggleOpen}
               aria-expanded={cmdOpen}
@@ -289,7 +287,7 @@ export function AgentCatalogRow({
           <AgentRowDetailsToggle
             open={cmdOpen}
             panelId={panelId}
-            nameId={nameId}
+            agentLabel={label}
             onToggle={toggleOpen}
           />
         </div>

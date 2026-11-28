@@ -3,7 +3,7 @@ import {
   isPluginHostMethodName,
   PLUGIN_HOST_API,
   PLUGIN_HOST_METHOD_NAMES,
-  type PluginHostMethodName,
+  type PluginHostMethodName
 } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   projectPluginWorkspaceAgents,
@@ -11,13 +11,9 @@ import {
   projectPluginWorkspaceContext
 } from './plugin-workspace-projection'
 import type { PluginDataArea } from '../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
-import {
-  PLUGIN_PANEL_BRIDGE_HANDLERS
-} from './plugin-host-panel-method-bindings'
+import { PLUGIN_PANEL_BRIDGE_HANDLERS } from './plugin-host-panel-method-bindings'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
-import {
-  PLUGIN_STATUS_BAR_HANDLERS
-} from './plugin-host-status-bar-method-bindings'
+import { PLUGIN_STATUS_BAR_HANDLERS } from './plugin-host-status-bar-method-bindings'
 import { PLUGIN_WORKSPACE_ACTION_HANDLERS } from './plugin-host-workspace-method-bindings'
 import { PLUGIN_TERMINAL_ACTION_HANDLERS } from './plugin-host-terminal-method-bindings'
 import { PLUGIN_WORKSPACE_CREATE_HANDLERS } from './plugin-host-workspace-create-bindings'

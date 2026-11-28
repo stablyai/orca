@@ -44,13 +44,18 @@ export function savedPictureDescription(owner: SavedPictureOwner): string | null
 }
 
 /** After `png` is saved as the owner's avatar: keeps its description, when it was generated. A picture
- *  put back (Undo) brings the description saved with its earlier avatar as `known`. */
+ *  put back (Undo) brings the description saved with its earlier avatar as `known`; a generated picture
+ *  saved later brings its own and `prefer: 'known'`, since this session's record of it may be gone. */
 export function keepSavedPictureDescription(
   owner: SavedPictureOwner,
   png: string,
-  known: string | null = null
+  known: string | null = null,
+  { prefer = 'made' }: { prefer?: 'made' | 'known' } = {}
 ): void {
-  const description = generatedPictureDescription(png) ?? known
+  const description =
+    prefer === 'known'
+      ? (known ?? generatedPictureDescription(png))
+      : (generatedPictureDescription(png) ?? known)
   const key = savedKey(owner)
   if (!description || !key) {
     return

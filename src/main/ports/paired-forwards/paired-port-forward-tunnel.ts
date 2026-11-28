@@ -4,6 +4,7 @@ import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../shared/remote-
 import { PairedRuntimeBrowserNetworkTransport } from '../../browser/network/execution-routes/paired-runtime-browser-network-transport'
 import type { BrowserNetworkTunnelClient } from '../../browser/network/tunnels/browser-network-tunnel-client'
 import type { BrowserNetworkTunnelDuplex } from '../../browser/network/tunnels/browser-network-tunnel-duplex'
+import { runtimeHostKeyFingerprint } from '../../ipc/runtime-environments/catalog/runtime-environment-host-key'
 import {
   BrowserNetworkTunnelOutboundMemoryBudgetRegistry,
   type BrowserNetworkTunnelOutboundMemoryLease
@@ -23,6 +24,8 @@ export class PairedPortForwardTunnel {
 
   constructor(
     readonly environmentId: string,
+    /** The server these forwards were made for; a re-pair to another machine is never dialed. */
+    readonly hostKeyFingerprint: string,
     private readonly resolveConnection: () => Promise<PairedRuntimeConnection>
   ) {}
 
@@ -88,6 +91,9 @@ export class PairedPortForwardTunnel {
     const connection = await this.resolveConnection()
     if (this.disposed || this.generation !== generation) {
       throw new Error('Port forward tunnel was reset during startup')
+    }
+    if (runtimeHostKeyFingerprint(connection.hostPublicKeyB64) !== this.hostKeyFingerprint) {
+      throw new Error('This server was paired with another machine since its ports were forwarded.')
     }
     this.outboundMemory ??= outboundMemoryBudgets.acquire(this.environmentId)
     if (!this.outboundMemory) {

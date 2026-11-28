@@ -77,6 +77,10 @@ function FixtureReadySignal({ interact }: { interact: ComponentFixture['interact
       const frame = document.getElementById(FRAME_ID)
       if (interact && frame) {
         await interact(frame)
+        // Why: a story replaced during interact must not paint or settle for its successor.
+        if (cancelled) {
+          return
+        }
         await waitForPaint()
       }
       await waitForAnimationsToSettle()

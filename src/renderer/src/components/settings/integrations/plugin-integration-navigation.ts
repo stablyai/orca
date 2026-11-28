@@ -43,3 +43,13 @@ export function closePluginIntegrationSettings(): void {
     navigation.show(null)
   }
 }
+
+/** A navigation target into the integrations pane ends the plugin's page, unless it is the plugin's own. */
+export function closePluginIntegrationSettingsForTarget(target: {
+  pane: string
+  sectionId?: string
+}): void {
+  if (target.pane === 'integrations' && target.sectionId !== PLUGIN_INTEGRATION_SETTINGS_TARGET) {
+    closePluginIntegrationSettings()
+  }
+}

@@ -8,7 +8,6 @@ import { formatWorkerTranscriptMessage } from '../../../../../shared/native-chat
 import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import { boundStructuredJournalTail } from '../../workers/archives/structured-worker-journal-archive'
 import { readStructuredLineageJournalPage } from '../../workers/archives/structured-worker-journal-page'
 import {
   holdStructuredWorker,
@@ -50,6 +49,8 @@ export async function readStructuredWorkerTerminal(args: {
     throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
   }
   // Redacts dispatch capabilities and clips oversized blocks under the archive path's byte bound.
+  const { boundStructuredJournalTail } =
+    await import('../../workers/archives/structured-worker-journal-archive')
   const bounded = boundStructuredJournalTail(page.items)
   const lines = bounded.messages.flatMap((message) =>
     formatWorkerTranscriptMessage(message).split('\n')

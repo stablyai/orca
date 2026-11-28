@@ -1,6 +1,6 @@
 import { getTaskPresetQuery } from './task-preset-query'
 import { hasExplicitTaskScope, parseTaskQuery } from './task-query'
-import type { TaskViewPresetId } from '../ui-chrome/ui-chrome-types'
+import type { TaskResumeState, TaskViewPresetId } from '../ui-chrome/ui-chrome-types'
 export type GitHubTaskKind = 'issues' | 'prs'
 
 export function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: string): boolean {
@@ -23,8 +23,31 @@ export function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: stri
 export function normalizeGitHubTaskPreset(
   preset: TaskViewPresetId | null | undefined
 ): TaskViewPresetId {
-  // Legacy mixed All defaults now open Issues; split tabs must not mix row kinds.
-  return !preset || preset === 'all' ? 'issues' : preset
+  // 'all' is the untouched settings default; with no chosen default the page lands on PRs.
+  return !preset || preset === 'all' ? 'prs' : preset
+}
+
+/** The saved last tab wins over the default setting. */
+export function resolveGitHubLandingPreset(
+  savedPreset: TaskViewPresetId | null | undefined,
+  defaultPreset: TaskViewPresetId | null | undefined
+): TaskViewPresetId {
+  if (savedPreset) {
+    // A saved legacy mixed view kept opening Issues.
+    return savedPreset === 'all' ? 'issues' : savedPreset
+  }
+  return normalizeGitHubTaskPreset(defaultPreset)
+}
+
+/** The query the GitHub Tasks list opens with; prefetchers must match it so the warm cache key hits. */
+export function getGitHubLandingQuery(
+  resume: Pick<TaskResumeState, 'githubItemsPreset' | 'githubItemsQuery'> | undefined,
+  defaultPreset: TaskViewPresetId | null | undefined
+): string {
+  if (resume?.githubItemsPreset === null) {
+    return (resume.githubItemsQuery ?? '').trim()
+  }
+  return getTaskPresetQuery(resolveGitHubLandingPreset(resume?.githubItemsPreset, defaultPreset))
 }
 
 export function getGitHubTaskKind(preset: TaskViewPresetId | null, query: string): GitHubTaskKind {

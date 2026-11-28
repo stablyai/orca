@@ -18,9 +18,12 @@ export type WorkerModelWaitNotice = {
   kind: 'retrying' | 'waiting'
   /** The turn or stretch the notice is about: a second notice of the same one is a no-op. */
   stretchKey: string
-  /** What the worker last showed: the retry's words, or its screen's status line. */
+  /** A chat worker's retry words, from its journal. A terminal worker sends none: its screen
+   *  can show anything. */
   lastSeen?: string
   waitedMs?: number
+  /** Claude's transcript shows no model request since its last tool returned, at this time. */
+  toolReturnedAt?: number
 }
 
 export const WORKER_MODEL_WAIT_MS = 10 * 60_000
@@ -51,7 +54,10 @@ export function reportWorkerModelWait(
     dispatchId,
     handle: notice.from,
     modelWait: notice.kind,
-    ...(notice.lastSeen ? { lastSeen: modelWaitLastSeenLine(notice.lastSeen) } : {})
+    ...(notice.lastSeen ? { lastSeen: modelWaitLastSeenLine(notice.lastSeen) } : {}),
+    ...(notice.toolReturnedAt !== undefined
+      ? { toolReturnedAt: new Date(notice.toolReturnedAt).toISOString() }
+      : {})
   }
   const notify = deps.notify
   try {
@@ -102,6 +108,10 @@ function describeModelWait(notice: WorkerModelWaitNotice, task: string): string 
     return `Worker ${notice.from} is retrying a model API error on task ${task}.${seen} It is still working; nothing was stopped.`
   }
   const minutes = Math.round((notice.waitedMs ?? WORKER_MODEL_WAIT_MS) / 60_000)
+  if (notice.toolReturnedAt !== undefined) {
+    const at = new Date(notice.toolReturnedAt).toISOString()
+    return `Worker ${notice.from} has made no progress on task ${task} for ${minutes} min. Its transcript records no model request since the tool returned at ${at}, so it looks stuck after a tool call.${seen} It is still running; nothing was stopped.`
+  }
   // Inferred from silence, so it names no cause.
   return `Worker ${notice.from} has made no progress on task ${task} for ${minutes} min. It may be waiting on a slow reply, stuck on a tool, or the machine may be busy.${seen} It is still running; nothing was stopped.`
 }

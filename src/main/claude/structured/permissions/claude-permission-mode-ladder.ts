@@ -2,6 +2,7 @@
 // me, and records what Claude accepted or refused for its process.
 
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import { claudePermissionPickHolds, recordClaudeBuildMode } from './claude-permission-picks'
 import type {
   ClaudeAutoUnsettled,
   ClaudeBypassRefusal,
@@ -71,6 +72,12 @@ function claudeRefusal(error: unknown): ClaudeRefusal | null {
     CLAUDE_AUTO_REFUSAL.test(error.message)
     ? { kind: 'auto-for-now', code }
     : null
+}
+
+/** Claude's refusal of bypass for this process, if the error is one. */
+export function claudeBypassRefusalOf(error: unknown): ClaudeBypassRefusal | null {
+  const refusal = claudeRefusal(error)
+  return refusal?.kind === 'bypass' ? refusal.reason : null
 }
 
 // Availability and the circuit breaker pass with time; asking sooner only repeats the refusal.
@@ -242,7 +249,8 @@ export async function setClaudeAllowedPermissionMode(
 export function observeClaudeRootInit(
   session:
     | (Parameters<typeof setClaudeAllowedPermissionMode>[0] &
-        Parameters<typeof claudeOwesFullAccessFallback>[0])
+        Parameters<typeof claudeOwesFullAccessFallback>[0] &
+        Pick<ClaudeSession, 'permissionPick' | 'appliedInputOptions'>)
     | null
     | undefined,
   firstRootInit: ClaudeSession['firstRootInit']
@@ -254,12 +262,9 @@ export function observeClaudeRootInit(
   if (!claudeBypassRefused(session) || !claudeOwesFullAccessFallback(session)) {
     return
   }
+  const holds = claudePermissionPickHolds(session)
   setClaudeAllowedPermissionMode(session, 'bypassPermissions').then(
-    (mode) => {
-      session.appliedInputOptions.set('buildPermissionMode', mode)
-    },
-    () => {
-      session.appliedInputOptions.delete('buildPermissionMode')
-    }
+    (mode) => recordClaudeBuildMode(session, holds, mode),
+    () => recordClaudeBuildMode(session, holds, null)
   )
 }

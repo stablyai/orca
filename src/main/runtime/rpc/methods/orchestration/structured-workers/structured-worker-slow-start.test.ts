@@ -37,7 +37,8 @@ function sendBrief(current: QueuedMessageTestRig) {
     dispatchId: 'ctx_slow',
     preamble: 'the brief',
     from: { kind: 'agent', senders: [], orchestration: null },
-    budgetMs: 50
+    // Long enough that a loaded runner registers the held start before the brief's wait ends.
+    budgetMs: 250
   })
 }
 
@@ -53,6 +54,8 @@ async function workerWithHeldStart(ceilingMs?: number): Promise<{
   rig = current
   await current.crashRestartHostFromDisk()
   setStructuredAgentSessionHost(current.host)
+  // The rig's first host already started an agent; count only the held start's acquire from here.
+  current.starts.mockClear()
   return { current, release: current.holdNextStart() }
 }
 
@@ -114,6 +117,8 @@ describe('a structured worker whose agent is slow to start', () => {
     pinnedNow = 0
     const { current, release } = await workerWithHeldStart(300)
     expect(await sendBrief(current)).toBe('starting')
+    // Pass the ceiling only once the acquire is held, so it fails a start that is acquiring.
+    await eventually(() => expect(current.starts).toHaveBeenCalled())
     pinnedNow = 300
     // The ceiling rejects the held brief; the worker must not keep claiming its agent is starting.
     await eventually(async () => {

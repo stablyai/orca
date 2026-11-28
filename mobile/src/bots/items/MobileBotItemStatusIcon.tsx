@@ -6,9 +6,9 @@ import Svg, { Circle, Path } from 'react-native-svg'
 import { CircleCheck, CircleSlash } from 'lucide-react-native'
 import type { BotItemStatus } from '../../../../src/shared/bots/bot-items'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
-import { colors, radii } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 export function MobileBotItemStatusIcon({
   status,
@@ -21,7 +21,8 @@ export function MobileBotItemStatusIcon({
   stale?: boolean
   size?: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const box = { width: size, height: size }
   switch (status) {
     case 'needs_you':
@@ -48,7 +49,7 @@ export function MobileBotItemStatusIcon({
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   dot: { borderRadius: radii.pill, flexShrink: 0 },
   need: { backgroundColor: colors.agentQuestion },
   needStale: { backgroundColor: colors.textMuted, opacity: 0.6 },

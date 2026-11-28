@@ -3,7 +3,7 @@ import type { Stats } from 'node:fs'
 import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { streamCodexSessionLedgerRecords } from '../rollouts/codex-session-ledger-stream'
+import { forEachCodexSessionLedgerRecord } from '../rollouts/codex-session-ledger-stream'
 import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
 
 export type CodexSessionBackfillAuditWriter = (record: Record<string, unknown>) => Promise<boolean>
@@ -64,25 +64,34 @@ export async function readCodexSessionBackfillAuditCoverage(
     diagnosticEventIds: new Set<string>(),
     hasRunSummary: false
   }
-  for await (const record of streamCodexSessionLedgerRecords(auditLogPath, {
-    throwOnReadFailure: true
-  })) {
-    coverage.hasRunSummary ||= record.action === 'run-summary'
-    if (
-      typeof record.action === 'string' &&
-      HEAL_AUDIT_ACTIONS.has(record.action) &&
-      typeof record.fileEventId === 'string'
-    ) {
-      coverage.fileEventIds.add(record.fileEventId)
+  await forEachCodexSessionLedgerRecord(
+    auditLogPath,
+    (record) => {
+      coverage.hasRunSummary ||= record.action === 'run-summary'
+      if (
+        typeof record.action === 'string' &&
+        HEAL_AUDIT_ACTIONS.has(record.action) &&
+        typeof record.fileEventId === 'string'
+      ) {
+        coverage.fileEventIds.add(record.fileEventId)
+      }
+      if (
+        typeof record.action === 'string' &&
+        DIAGNOSTIC_AUDIT_ACTIONS.has(record.action) &&
+        typeof record.diagnosticEventId === 'string'
+      ) {
+        coverage.diagnosticEventIds.add(record.diagnosticEventId)
+      }
+    },
+    {
+      throwOnReadFailure: true,
+      shouldParseLine: (raw) =>
+        raw.includes('\\u') ||
+        raw.includes('fileEventId') ||
+        raw.includes('diagnosticEventId') ||
+        raw.includes('run-summary')
     }
-    if (
-      typeof record.action === 'string' &&
-      DIAGNOSTIC_AUDIT_ACTIONS.has(record.action) &&
-      typeof record.diagnosticEventId === 'string'
-    ) {
-      coverage.diagnosticEventIds.add(record.diagnosticEventId)
-    }
-  }
+  )
   return coverage
 }
 

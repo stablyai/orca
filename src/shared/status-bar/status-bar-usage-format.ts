@@ -5,12 +5,10 @@ export type StatusBarUsageProvider = ProviderRateLimits['provider']
 const STATUS_BAR_USAGE_PROVIDERS: ReadonlySet<string> = new Set<StatusBarUsageProvider>([
   'claude',
   'codex',
-  'gemini',
   'opencode-go',
   'kimi',
   'minimax',
   'grok',
-  'antigravity',
   'cursor',
   'zcode',
   'muse'

@@ -1,6 +1,16 @@
 import { expect, it, vi } from 'vitest'
 
+// An empty workspace: no browser tab, group or layout yet, so the real selector picks a new tab.
 const state = vi.hoisted(() => ({
+  repos: [],
+  worktreesByRepo: {},
+  settings: null,
+  activeOrcaProfileId: null,
+  browserSessionProfilesByHostId: {},
+  groupsByWorktree: {},
+  layoutByWorktree: {},
+  activeGroupIdByWorktree: {},
+  unifiedTabsByWorktree: {},
   browserTabsByWorktree: {},
   browserPagesByWorkspace: {},
   createBrowserTab: (): never => {
@@ -11,10 +21,6 @@ vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => state, subscribe: () => () => {} }
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
-vi.mock('./browser-link-destination', async (load) => ({
-  ...(await load<object>()),
-  selectBrowserLinkDestination: () => ({ status: 'create', match: null })
-}))
 vi.mock('./browser-link-owner', () => ({ createBrowserLinkHostMatcher: () => () => true }))
 vi.mock('./browser-link-reveal', () => ({
   captureBrowserLinkReveal: () => ({ canReveal: () => true, dispose: () => {} })

@@ -11,7 +11,10 @@ const MASK = '••••••••'
 // A literal HTTP header, the same in every language.
 const BEARER_HEADER = 'Authorization: Bearer'
 
-/** One labelled line: a fixed label column, the value, then its actions at the end. */
+/**
+ * One labelled line: a fixed label column, the value, then its actions at the end. In a narrow
+ * connectors panel the label sits above the value, and actions without room beside it wrap below.
+ */
 export function WebhookField(props: {
   label: string
   children: React.ReactNode
@@ -20,19 +23,23 @@ export function WebhookField(props: {
   mono?: boolean
 }): React.JSX.Element {
   return (
-    <div className="flex min-h-7.5 items-center gap-2">
-      <span className="w-24 shrink-0 text-xs text-muted-foreground">{props.label}</span>
+    <div className="flex min-h-7.5 items-center gap-2 @max-xs/connectors-panel:flex-wrap @max-xs/connectors-panel:gap-y-0 @max-xs/connectors-panel:pt-1">
+      <span className="w-24 shrink-0 text-xs text-muted-foreground @max-xs/connectors-panel:w-full">
+        {props.label}
+      </span>
       {/* Literal values truncate on one line; words wrap, so a narrow card never cuts them off. */}
       <span
         className={cn(
-          'min-w-0 flex-1 text-xs text-foreground',
+          'min-w-0 flex-1 text-xs text-foreground @max-xs/connectors-panel:basis-24',
           props.mono ? 'truncate font-mono' : '[overflow-wrap:anywhere]'
         )}
       >
         {props.children}
       </span>
       {props.actions ? (
-        <span className="-mr-1.5 flex shrink-0 items-center gap-0.5">{props.actions}</span>
+        <span className="-mr-1.5 flex shrink-0 items-center gap-0.5 @max-xs/connectors-panel:ml-auto">
+          {props.actions}
+        </span>
       ) : null}
     </div>
   )
