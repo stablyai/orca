@@ -6,6 +6,12 @@ import {
 } from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
 
 export const START_FAILURE_PIECES = {
+  autoPermissionUnavailable: (values) =>
+    translate(
+      'components.native-chat.failureWords.autoPermissionUnavailable',
+      COPY.autoPermissionUnavailable,
+      values
+    ),
   botToolsNeedStatusHooks: (values) =>
     translate(
       'components.native-chat.failureWords.botToolsNeedStatusHooks',

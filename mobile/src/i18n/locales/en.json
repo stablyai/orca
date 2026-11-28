@@ -3008,6 +3008,7 @@
       "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
       "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
       "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+      "autoPermissionUnavailable": "{{agent}} doesn't offer Approve for me on this computer or account. Choose another permission, then retry your message.",
       "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
       "botToolsNeedStatusHooks": "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
       "botToolsGatewayOutdated": "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",

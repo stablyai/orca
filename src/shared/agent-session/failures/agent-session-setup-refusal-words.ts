@@ -15,6 +15,7 @@ export const SETUP_REFUSAL_SENTENCES = {
   claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
   claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
+  autoPermissionUnavailable: namingAgent('autoPermissionUnavailable'),
   fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
   botToolsNeedStatusHooks: namingAgent('botToolsNeedStatusHooks'),
   botToolsGatewayOutdated: namingAgent('botToolsGatewayOutdated'),

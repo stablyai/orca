@@ -76,7 +76,8 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   droid: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
   // Pi asks no approvals, so its chats run with every tool it has, as its terminal does.
   pi: null,
-  antigravity: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,
+  // AGY offers native Accept edits and Auto modes; full access is a launch flag.
+  antigravity: CLAUDE_CHAT_PERMISSION_MODES,
   hermes: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,
   // Auggie asks none unless its own tool permissions say so, as in its terminal.
   aug: null,

@@ -3,6 +3,27 @@ import type {
   AgentChatPermissionMode
 } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AcpLaunchSpec } from './acp-launch-contract'
+import type { SessionConfigOption } from '../generated/acp-protocol.generated'
+import { acpSelectChoices } from '../options/acp-select-choices'
+import { AgentSessionAcquisitionRefusal } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+
+/** Some AGY accounts and hosts omit Auto from their session's mode selector. */
+export function assertAntigravityAutoOffered(
+  options: readonly SessionConfigOption[],
+  configId: string,
+  requested: string
+): void {
+  const selector = options.find((option) => option.id === configId)
+  if (
+    selector?.type === 'select' &&
+    !acpSelectChoices(selector).some((item) => item.value === requested)
+  ) {
+    throw new AgentSessionAcquisitionRefusal(
+      `Antigravity did not offer ${requested}`,
+      'autoPermissionUnavailable'
+    )
+  }
+}
 
 /** The session modes a launch reports as Orca's: a full-access launch holds only that mode. */
 function acpLaunchPermissionModes(

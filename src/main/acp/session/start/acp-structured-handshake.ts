@@ -1,5 +1,6 @@
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import { retryAcpRequest } from '../../protocol/acp-request-retry'
+import { assertAntigravityAutoOffered } from '../../launch/acp-launch-permission-modes'
 import { observeAcpForkSupport } from '../../capabilities/acp-fork-support'
 import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
@@ -245,6 +246,9 @@ export async function initializeAcpStructuredSession(
       throw new Error(`${agentName} on this host cannot run in the ${wanted} permission mode`)
     }
     const configId = options.modeConfigId()
+    if (spec.agent === 'antigravity' && wanted === 'auto') {
+      assertAntigravityAutoOffered(options.configOptions, configId, requested)
+    }
     await connection.setConfigOption(configId, requested, undefined, ({ configOptions }) => {
       assertStarting()
       if (configOptions.find((option) => option.id === configId)?.currentValue !== requested) {
