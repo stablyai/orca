@@ -326,6 +326,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       notifications.notifyPageLocation(href)
     },
     claimBack: back.claim,
+    pressBack: () => back.dispatch() || notifications.notifyNavigateBack(),
     close,
     ...shellSessionListeners(shellSession),
     claimTerminalKeyRail: terminalKeys.claim,

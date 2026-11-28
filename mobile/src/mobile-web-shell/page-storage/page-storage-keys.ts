@@ -21,12 +21,14 @@ export const TERMINAL_SHORTCUT_STORAGE_KEYS = [
   'orca:custom-accessory-keys'
 ] as const
 
+// Terminal settings and the device-wide Duo chat width. A later storage frame copies these into a page that is already open.
 export const TERMINAL_SETTINGS_STORAGE_KEYS = [
   ...TERMINAL_SHORTCUT_STORAGE_KEYS,
   'orca:terminalTextScale',
   'orca:terminalFontStyle',
   'orca:terminalAutocompleteEnabled',
   'orca:terminalLinkOpenMode',
+  'orca:duoChatExpanded',
   /** Chat text size, font and spacing, so an open chat follows Settings too. */
   'orca:nativeChatText',
   /** Used or remaining on usage bars, so an open Accounts page follows Settings. */
@@ -48,6 +50,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:terminalLinkOpenMode',
   /** The split terminal's chosen direction. */
   'orca:terminalSplitLayout',
+  /** Whether every Duo chat runs across the status column. */
+  'orca:duoChatExpanded',
   /** Terminal font, line spacing and weight. */
   'orca:terminalFontStyle',
   /** Chat text size, font and spacing; a pinch in a chat saves here. */
@@ -65,6 +69,7 @@ export const PAGE_STORAGE_EXACT_KEYS = [
  */
 export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:terminalSplitLayout',
+  'orca:duoChatExpanded',
   'orca:terminalFontStyle',
   'orca:nativeChatText',
   'orca:newAgentSurface',
