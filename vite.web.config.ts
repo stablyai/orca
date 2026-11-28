@@ -1,4 +1,5 @@
 import { markdownParserAliases } from './config/build-plugins/markdown-parser-exports'
+import { monacoEditorEsmAlias, toAliasList } from './config/build-plugins/monaco-editor-esm-alias'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -28,15 +29,18 @@ export default defineConfig({
     ORCA_BUILD_COMMIT: JSON.stringify(resolveBuildSourceCommit())
   },
   resolve: {
-    alias: {
-      ...markdownParserAliases,
-      // Pin the browser-safe UMD entry so an unpatched package.json cannot bundle lib/addon-ligatures.mjs (which imports node:diagnostics_channel).
-      '@xterm/addon-ligatures': resolve(
-        'node_modules/@xterm/addon-ligatures/lib/addon-ligatures.js'
-      ),
-      '@renderer': resolve('src/renderer/src'),
-      '@': resolve('src/renderer/src')
-    }
+    alias: toAliasList(
+      {
+        ...markdownParserAliases,
+        // Pin the browser-safe UMD entry so an unpatched package.json cannot bundle lib/addon-ligatures.mjs (which imports node:diagnostics_channel).
+        '@xterm/addon-ligatures': resolve(
+          'node_modules/@xterm/addon-ligatures/lib/addon-ligatures.js'
+        ),
+        '@renderer': resolve('src/renderer/src'),
+        '@': resolve('src/renderer/src')
+      },
+      monacoEditorEsmAlias
+    )
   },
   build: {
     outDir: resolve('out/web'),
