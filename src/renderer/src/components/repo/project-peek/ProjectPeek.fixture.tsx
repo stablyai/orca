@@ -196,6 +196,10 @@ const clickTab =
       document.querySelectorAll<HTMLElement>('[data-slot="popover-content"] [role="tab"]')
     ).find((element) => element.textContent?.trim() === name)
     tab?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
+    // A real click moves focus without a ring; the synthetic one leaves it on the opening tab.
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
 

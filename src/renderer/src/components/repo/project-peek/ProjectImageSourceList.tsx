@@ -82,9 +82,17 @@ function SourceRow({
       )}
     >
       {thumb}
-      <span className={cn('min-w-0 flex-1 truncate', error && 'text-destructive')}>{label}</span>
-      {detail && !error ? (
-        <span className="max-w-[45%] truncate text-2xs text-muted-foreground">{detail}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {detail ? (
+        <span
+          className={cn(
+            'max-w-[45%] truncate text-2xs',
+            // On the active fill, muted text drops below 4.5:1 in dark mode.
+            error ? 'text-destructive' : active ? 'text-foreground/70' : 'text-muted-foreground'
+          )}
+        >
+          {detail}
+        </span>
       ) : null}
       {busy ? (
         <span className="inline-flex shrink-0 text-muted-foreground">
@@ -191,7 +199,8 @@ export function ProjectImageSourceList({
           )
         }
         label={t('auto.components.repo.ProjectPeek.websiteIcon', 'Website icon')}
-        detail={activeDomain || undefined}
+        // The open field already shows the domain.
+        detail={websiteOpen ? undefined : activeDomain || undefined}
         active={source === 'favicon'}
         expanded={websiteOpen}
         onClick={() => {
@@ -209,14 +218,15 @@ export function ProjectImageSourceList({
             void fetchIcon()
           }}
         >
-          {/* Why a drawn field: the status icon and Fetch sit inside it, so the input is the embedded text run. */}
+          {/* Why a drawn field: the status icon and Fetch sit inside it, so the input is the embedded text run.
+              It bleeds like the rows, so its icon sits in the thumb column and its text in the label column. */}
           <div
             className={cn(
-              'flex h-[30px] items-center gap-2 rounded-lg border border-input bg-background/60 pr-1 pl-2 transition-[color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 dark:bg-input/30',
+              '-mx-2 flex h-[30px] w-[calc(100%+1rem)] items-center gap-2.5 rounded-md border border-input bg-background/60 px-[7px] transition-[color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 dark:bg-input/30',
               fieldError && 'border-destructive focus-within:border-destructive'
             )}
           >
-            <span className="inline-flex shrink-0 text-muted-foreground">
+            <span className="inline-flex size-[18px] shrink-0 items-center justify-center text-muted-foreground">
               {status === 'fetching' ? (
                 <LoadingSpinner className="size-3.5" />
               ) : (
@@ -260,7 +270,7 @@ export function ProjectImageSourceList({
             </Button>
           </div>
           {fieldError ? (
-            <p role="alert" className="mt-1.5 text-2xs text-destructive">
+            <p role="alert" className="mt-1.5 pl-7 text-2xs text-destructive">
               {fieldError}
             </p>
           ) : null}
@@ -275,13 +285,17 @@ export function ProjectImageSourceList({
           )
         }
         label={
+          source === 'upload'
+            ? t('auto.components.repo.ProjectPeek.uploadedImage', 'Image')
+            : t('auto.components.settings.RepositoryIconPicker.381b4844fd', 'Upload PNG')
+        }
+        detail={
           sizeError
             ? t('auto.components.repo.ProjectPeek.uploadTooLarge', 'Over 256 KB')
-            : source === 'upload'
-              ? t('auto.components.repo.ProjectPeek.uploadedImage', 'Image')
-              : t('auto.components.settings.RepositoryIconPicker.381b4844fd', 'Upload PNG')
+            : source === 'upload' && repoIcon?.type === 'image'
+              ? repoIcon.label
+              : undefined
         }
-        detail={source === 'upload' && repoIcon?.type === 'image' ? repoIcon.label : undefined}
         active={source === 'upload'}
         error={sizeError}
         onClick={() => {

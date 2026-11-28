@@ -73,20 +73,6 @@ function ExternalLinkLine({
   )
 }
 
-/** The repo name keeps up to 70% of the line; the namespace takes what is left. */
-function SlugText({ slug }: { slug: string }): React.JSX.Element {
-  const cut = slug.lastIndexOf('/')
-  return (
-    <span className="flex min-w-0">
-      {cut > 0 ? (
-        // Yields only once the repo name has taken its share, so short owners never truncate.
-        <span className="min-w-0 truncate">{slug.slice(0, cut)}</span>
-      ) : null}
-      <span className="max-w-[70%] shrink-0 truncate">{cut > 0 ? slug.slice(cut) : slug}</span>
-    </span>
-  )
-}
-
 function RemoteLines({
   repo,
   remote
@@ -108,7 +94,7 @@ function RemoteLines({
             value0: remote.slug
           })}
         >
-          <SlugText slug={remote.slug} />
+          {remote.slug}
         </ExternalLinkLine>
       ) : (
         <span className="text-muted-foreground">

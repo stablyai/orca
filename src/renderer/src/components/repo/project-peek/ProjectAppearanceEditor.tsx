@@ -132,7 +132,8 @@ export function ProjectAppearanceEditor({
         <TabsContent value="icon" className="mt-1">
           <GlyphPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
         </TabsContent>
-        <TabsContent value="image" className="mt-1">
+        {/* Extra room under the Color row, so the swatches don't read as part of the source list. */}
+        <TabsContent value="image" className={repo.repoIcon?.type === 'image' ? 'mt-1' : 'mt-3'}>
           <ProjectImageSourceList
             // A fresh list on Reset or Undo drops any fetch still loading and its error.
             key={`${repo.id}:${appearanceEpoch}`}
