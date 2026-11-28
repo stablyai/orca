@@ -34,7 +34,12 @@ export function patchSlicedSession(
   const workspaces = [
     ...new Set([...Object.keys(from.tabsByWorktree ?? {}), ...Object.keys(to.tabsByWorktree ?? {})])
   ]
-  const patched = patchStoredSession(stored, from, to, undefined, workspaces)
+  const patched = withoutHiddenCopies(
+    patchStoredSession(stored, from, to, undefined, workspaces),
+    from,
+    to,
+    workspaces
+  )
   // The whole save drops an emptied map only once no workspace holds an entry.
   const dropped = emptied.filter((field) => {
     const map: unknown = patched[field as keyof WorkspaceSessionState]
@@ -47,6 +52,36 @@ export function patchSlicedSession(
   dropped.forEach((field) => delete trimmed[field])
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the patched session minus empty maps.
   return trimmed as unknown as WorkspaceSessionState
+}
+
+const rowIds = (session: WorkspaceSessionState): Set<string> =>
+  new Set(Object.values(session.tabsByWorktree ?? {}).flatMap((rows) => rows.map((row) => row.id)))
+
+/** Window-owned builds rewrote the partition, which also dropped copies of a removed row the Loader had hidden in other workspaces; a kept copy would bring the row back on the next load. */
+function withoutHiddenCopies(
+  patched: WorkspaceSessionState,
+  before: WorkspaceSessionState,
+  after: WorkspaceSessionState,
+  workspaces: readonly string[]
+): WorkspaceSessionState {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return patched
+  }
+  const kept = rowIds(after)
+  const removed = [...rowIds(before)].filter((id) => !kept.has(id))
+  if (removed.length === 0) {
+    return patched
+  }
+  let tabsByWorktree = patched.tabsByWorktree
+  for (const key of workspaces) {
+    const rows = tabsByWorktree[key] ?? []
+    const visible = new Set((before.tabsByWorktree?.[key] ?? []).map((row) => row.id))
+    const left = rows.filter((row) => visible.has(row.id) || !removed.includes(row.id))
+    if (left.length !== rows.length) {
+      tabsByWorktree = { ...tabsByWorktree, [key]: left }
+    }
+  }
+  return tabsByWorktree === patched.tabsByWorktree ? patched : { ...patched, tabsByWorktree }
 }
 
 /** A sliced load patches what changed; a whole load in window-owned builds still rewrites the partition. */

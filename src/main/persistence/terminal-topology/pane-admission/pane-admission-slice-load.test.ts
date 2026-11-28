@@ -127,6 +127,10 @@ function fleet(): WorkspaceSessionState {
   addTerminal(session, key(22), 't22', [leaf(22), leaf(122)])
   addTerminal(session, key(23), 't23', [leaf(23)])
   session.tabsByWorktree[key(23)]!.push(session.tabsByWorktree[key(22)]![0]!)
+  // A one-pane row listed under two workspaces: withdrawing it must not leave the hidden copy to return.
+  addTerminal(session, key(24), 't24', [leaf(24)])
+  addTerminal(session, key(25), 't25', [leaf(25)])
+  session.tabsByWorktree[key(25)]!.push(session.tabsByWorktree[key(24)]![0]!)
   // The withdrawn pane holds the slice's only incarnation; another workspace's must survive.
   session.terminalPtyIncarnationsByPaneKey = {
     [`t22:${leaf(122)}`]: 'incarnation-22',
@@ -187,6 +191,16 @@ const CASES: [string, (session: WorkspaceSessionState) => Run][] = [
         direction: 'vertical',
         newLeafId: leaf(501)
       } as TerminalPaneAdmission)
+  ],
+  [
+    'the withdrawn last pane of a row another workspace also lists',
+    (s) => () =>
+      withdrawPaneFromSession(LOCAL_EXECUTION_HOST_ID, s, {
+        type: 'closePane',
+        workspace: key(24),
+        tabId: 't24',
+        leafId: leaf(24)
+      })
   ],
   [
     'a withdrawn pane',
