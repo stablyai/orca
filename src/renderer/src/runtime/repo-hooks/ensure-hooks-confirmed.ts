@@ -1,4 +1,5 @@
 import { findHookRepo, hookRepoOwnerHostId } from './hook-owner-resolution'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { projectGroupHookTrustKey } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
@@ -124,6 +125,33 @@ export async function readAndConfirmRuntimeIssueCommand(
     }
   }
   return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled, context)
+}
+
+export function ensureWorktreeArchiveApproved(
+  getState: () => AppState,
+  repoId: string,
+  worktreeId: string,
+  hostId?: ExecutionHostId,
+  runtimeEnvironmentId?: string | null
+): Promise<{ decision: 'run' | 'skip'; approvedArchiveHash?: string }> {
+  const owner = findHookRepo(getState(), repoId, hostId)
+  if (runtimeEnvironmentId || !owner || isFolderRepo(owner)) {
+    return ensureHooksApproved(getState, repoId, 'archive', hostId, runtimeEnvironmentId)
+  }
+  return enqueueTrustPrompt(async () => {
+    const result = await window.api.hooks.check({ repoId, hostId, archiveWorktreeId: worktreeId })
+    if (result.status === 'error' || result.archiveApprovalHash === undefined) {
+      throw new Error('Archive inspection could not verify this checkout. Nothing was deleted.')
+    }
+    const approval = await confirmScriptContent(
+      getState(),
+      repoId,
+      'archive',
+      result.hooks?.scripts.archive ?? '',
+      hostId
+    )
+    return { decision: approval.decision, approvedArchiveHash: result.archiveApprovalHash }
+  })
 }
 
 export async function ensureHooksConfirmed(

@@ -215,8 +215,14 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
   return { recipes, diagnostics }
 }
 
-export function parseOrcaYaml(content: string): OrcaHooks | null {
+export function parseOrcaYaml(
+  content: string,
+  options: { rejectInvalidDocument?: boolean } = {}
+): OrcaHooks | null {
   if (!isOrcaYamlTextWithinLimit(content)) {
+    if (options.rejectInvalidDocument) {
+      throw new Error('orca.yaml exceeds the content limit')
+    }
     return null
   }
 
@@ -230,10 +236,16 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
       uniqueKeys: true
     })
     if (document.errors.length > 0 || !isOrcaYamlConversionWithinLimit(document)) {
+      if (options.rejectInvalidDocument) {
+        throw new Error('Invalid or oversized orca.yaml document')
+      }
       return null
     }
     root = document.toJS({ maxAliasCount: MAX_ORCA_YAML_ALIAS_COUNT })
   } catch {
+    if (options.rejectInvalidDocument) {
+      throw new Error('Cannot parse orca.yaml safely')
+    }
     return null
   }
 
