@@ -1,9 +1,14 @@
 import type { PermissionMode, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { claudeBypassRefused } from './claude-full-access-refusal'
+import {
+  claudeAllowedPermissionMode,
+  claudeBypassRefused,
+  type ClaudeBypassFacts
+} from './claude-full-access-refusal'
 import {
   ClaudePermissionModeUnsettled,
+  recordClaudeBuildPermissionMode,
   setClaudeAllowedPermissionMode
 } from './claude-permission-mode-ladder'
 import { claudePermissionPickHolds } from './claude-permission-picks'
@@ -31,8 +36,11 @@ export function claudePlanApprovalMode(
  *  fallback rather than an earlier one that was only for now. */
 export function claudeBuildPermissionMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'appliedInputOptions'> &
-    Partial<Pick<ClaudeSession, 'bypassDisabled'>>
+    ClaudeBypassFacts
 ): PermissionMode {
+  if (session.launchIntent?.permissionMode === 'auto') {
+    return claudeAllowedPermissionMode(session, 'auto')
+  }
   if (claudeBypassRefused(session)) {
     return claudePlanApprovalMode(session)
   }
@@ -67,17 +75,7 @@ function logPlanExitFailure(error: unknown): void {
  *  before the allow and never awaited, so its failure cannot hold or reject the approval.
  *  Full access reads the mode in wire order: its presentation report can lag behind the plan. */
 export function leaveClaudePlanModeOnApproval(
-  session: Pick<
-    ClaudeSession,
-    | 'launchIntent'
-    | 'firstRootInit'
-    | 'reportedOptions'
-    | 'orderedPermissionMode'
-    | 'permissionPick'
-  > &
-    Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'bypassDisabled' | 'autoDisabled'>> & {
-      connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
-    },
+  session: ClaudeSession,
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
   reply: PermissionResult,
   /** Written first, ahead of the allow: a kept agent's Full access picked in Plan is asked of Claude. */
@@ -91,16 +89,25 @@ export function leaveClaudePlanModeOnApproval(
   }
   const leave = (): Promise<void> => {
     const holds = claudePermissionPickHolds(session)
-    return setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session)).then(
+    const write = setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session))
+    const request = session.permissionModeRequests
+    return write.then(
       (restored) => {
-        session.appliedInputOptions?.set('interactionMode', 'default')
         // A kept agent's pick made while this was in flight was only recorded (the chat still
         // looked in Plan), so it goes out now rather than leaving the older mode running.
         if (!holds()) {
           return leave()
         }
-        session.appliedInputOptions?.set('buildPermissionMode', restored)
+        if (restored !== undefined && session.permissionModeRequests === request) {
+          session.appliedInputOptions.set('interactionMode', 'default')
+          recordClaudeBuildPermissionMode(session, restored)
+        }
         return undefined
+      },
+      (error: unknown) => {
+        if (session.permissionModeRequests === request) {
+          throw error
+        }
       }
     )
   }
@@ -112,8 +119,8 @@ export function leaveClaudePlanModeOnApproval(
         // Claude accepted a step out of Plan before a later one went unanswered: the chat has
         // left Plan, and its fallback is owed again.
         if (error instanceof ClaudePermissionModeUnsettled) {
-          session.appliedInputOptions?.set('interactionMode', 'default')
-          session.appliedInputOptions?.delete('buildPermissionMode')
+          session.appliedInputOptions.set('interactionMode', 'default')
+          session.appliedInputOptions.delete('buildPermissionMode')
         }
         logPlanExitFailure(error)
       })

@@ -6,6 +6,7 @@ import { openJournalDomainDatabase } from './database/journal-domain-database'
 import { runJournalTransaction } from './database/journal-database'
 import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
 import { JOURNAL_ENDED_TURN_COUNTS_SCHEMA } from './database/journal-ended-turn-counts'
+import { ensureJournalClaudeRefusalIndexes } from './database/journal-claude-refusal-indexes'
 import {
   journalItemIndexedColumns,
   writeJournalDomainItemRow,
@@ -48,6 +49,7 @@ it('a save that changes any one column leaves the row and every index exact', ()
   // The writer worker adds these after open, before its first save.
   db.exec(JOURNAL_ASYNC_QUESTION_INDEXES)
   runJournalTransaction(db, (writer) => writer.exec(JOURNAL_ENDED_TURN_COUNTS_SCHEMA))
+  ensureJournalClaudeRefusalIndexes(db)
   const columns = db
     .prepare(`SELECT name, type FROM pragma_table_info('journal_items')`)
     .all()

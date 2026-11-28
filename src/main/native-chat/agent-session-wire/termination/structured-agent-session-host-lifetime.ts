@@ -31,6 +31,7 @@ import {
   providerRelayHandedOffAtQuit
 } from '../../../provider-relay/app-provider-relays'
 import { quitKeepsStructuredAgent } from './structured-agent-session-quit-keeps-agent'
+import * as cut from '../host/structured-agent-session-permission-revocation'
 
 import {
   recordStopEvent,
@@ -75,13 +76,21 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
   if (!session || !child) {
     return
   }
+  const { adapter } = context.deps
   const cause = 'recorded' in ending ? ending.recorded : ending.cause
   const onlyIf = 'onlyIf' in ending ? ending.onlyIf : undefined
   if (onlyIf && child.close) {
     return
   }
   if (!child.close) {
-    const endsWork = await stopEndsWork(context, sessionId, session, ending)
+    // The child's end is decided here (a conditional one once its predicate holds): its queued
+    // permission writes go no further.
+    const release = onlyIf ? undefined : cut.cutChildPermissionWrites(adapter, sessionId, session)
+    // An end that fails before the child begins closing leaves the live child its writes.
+    const endsWork = await stopEndsWork(context, sessionId, session, ending).catch((error) => {
+      release?.()
+      throw error
+    })
     if (
       onlyIf &&
       (session.child !== child || context.runtimeState.hasPendingIngress(sessionId) || !onlyIf())
@@ -99,6 +108,9 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
       ...('failure' in ending && ending.failure ? { failure: ending.failure } : {}),
       recorded,
       requestedAt: session.journal.cursor()
+    }
+    if (onlyIf) {
+      cut.cutChildPermissionWrites(adapter, sessionId, session)
     }
   } else if (child.close.cause === cause) {
     // Repeated same-cause closes include newer queued work and rebind what shutdown cuts.
@@ -298,6 +310,8 @@ async function detachKeptAgentUnderSerialize(
   if (!handedOff && !(await detachProviderRelayForQuit(sessionId, open))) {
     return false
   }
+  // Handed to the daemon: this app writes no more permission modes to it.
+  cut.cutChildPermissionWrites(context.deps.adapter, sessionId, session)
   // The agent goes on: what the adapter would still write here (its own teardown settling the turn,
   // lines read past the last ack) is dropped, and the unacked lines replay at the next launch.
   const sink = context.runtimeState.currentEventSink(sessionId)

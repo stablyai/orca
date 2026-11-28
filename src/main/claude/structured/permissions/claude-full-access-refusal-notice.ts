@@ -1,6 +1,3 @@
-// The warning a Full access chat gets, as a new row, when Claude runs it in another mode.
-
-import { randomUUID } from 'node:crypto'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../shared/agent-session/journal/agent-session-turn-notice'
@@ -10,15 +7,35 @@ import { readClaudeReportedPermissionMode } from '../startup/claude-structured-i
 import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudeJournalTranslatorDeps } from '../journal/claude-journal-translator-contract'
 import {
+  claudeAutoFallbackReason,
   claudeBypassRefused,
   claudeFullAccessRefusalReason,
+  claudeInPlan,
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
+import { claudeChildPermissionCut } from './claude-permission-dispatch-authority'
+import {
+  CLAUDE_REFUSAL_NOTICE_PREFIX,
+  CLAUDE_REFUSAL_NOTICE_TIMED
+} from '../../../../shared/agent-session/journal/claude-refusal-notice-family'
 
-type ClaudeNoticeFacts = ClaudeBypassFacts &
-  Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'>>
+export type ClaudeNoticeState = Pick<
+  ClaudeSession,
+  'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'
+>
+
+type ClaudeNoticeFacts = Parameters<typeof claudeInPlan>[0] & Pick<ClaudeSession, 'startupSettings'>
 
 export type ClaudeFullAccessRefusalNotice = { id: string; body: AgentJournalStatusItem }
+
+export { CLAUDE_REFUSAL_NOTICE_PREFIX, CLAUDE_REFUSAL_NOTICE_TIMED }
+export const EARLIER_PROCESS_WARNING = 'earlier-process'
+export const CLAUDE_AUTO_RESTORED_NOTICE_ID = 'restored:auto'
+export const CLAUDE_FULL_ACCESS_RESTORED_NOTICE_ID = 'restored:bypassPermissions'
+const PENDING_FULL_ACCESS_UNCONFIRMED = 'pending-full-access-unconfirmed'
+/** Both reads of the saved rows failed: in memory only, never a row id or a permission fact. */
+export const CLAUDE_PERMISSION_HISTORY_UNREAD = 'history-unread'
+type ClaudeFullAccessFallback = 'unconfirmed'
 
 /** The chat's permission mode for the fallback Claude accepted. */
 function claudeFallbackChoice(applied: string): string {
@@ -31,27 +48,7 @@ function claudeFallbackChoice(applied: string): string {
   )
 }
 
-/** Which warning the chat is due, if any: one per mode Claude runs it in and per reason, so a
- *  change of either says so while repeats of the same one do not. Waits for a first fallback
- *  attempt, Plan exit included, so it names a mode Claude accepted. */
-function claudeFullAccessRefusalNoticeId(session: ClaudeNoticeFacts): string | null {
-  const applied = session.appliedInputOptions?.get('buildPermissionMode')
-  if (!claudeBypassRefused(session) || applied === undefined || applied === 'bypassPermissions') {
-    return null
-  }
-  const choice = claudeFallbackChoice(applied)
-  const auto =
-    choice !== 'ask'
-      ? ''
-      : session.autoDisabled === true
-        ? ':auto-off'
-        : session.autoUnsettled !== undefined
-          ? ':auto-for-now'
-          : ''
-  return `${claudeFullAccessRefusalReason(session)}:${choice}${auto}`
-}
-
-function claudeFullAccessRefusalText(session: ClaudeNoticeFacts, choice: string): string {
+function claudeFullAccessRefusalText(session: ClaudeBypassFacts, choice: string): string {
   const running = isAgentChatPermissionMode(choice)
     ? agentChatPermissionModeCopy('claude', choice).label
     : 'its own permission settings'
@@ -77,37 +74,162 @@ function claudeFullAccessRefusalText(session: ClaudeNoticeFacts, choice: string)
   return `${bypass}${auto}, so Claude uses ${running} instead.`
 }
 
-function claudeFullAccessRefusalRow(
-  session: ClaudeNoticeFacts,
-  applied: string
+function claudePermissionNoticeRow(
+  tone: 'warning' | 'notice',
+  text: string
 ): AgentJournalStatusItem {
   return {
     kind: 'status',
-    tone: 'warning',
+    tone,
     presentation: AGENT_SESSION_TURN_NOTICE_PRESENTATION,
-    text: claudeFullAccessRefusalText(session, claudeFallbackChoice(applied))
+    text
   }
 }
 
-/** The warning this chat is due when it differs from the last one this process wrote. Every
- *  warning is a new row at the bottom, never a revision of an earlier one, so the newest row
- *  always names the mode Claude runs now; a new process repeats it there. */
-export function claimClaudeFullAccessRefusalNotice(
-  session: ClaudeNoticeFacts &
-    Pick<ClaudeSession, 'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'>
-): ClaudeFullAccessRefusalNotice | null {
-  const id = claudeFullAccessRefusalNoticeId(session)
-  const applied = session.appliedInputOptions?.get('buildPermissionMode')
-  const previous = session.fullAccessRefusalNoticeId
-  if (id === null || applied === undefined || id === previous) {
+function claudeAutoRefusalNotice(session: ClaudeNoticeFacts): ClaudeFullAccessRefusalNotice | null {
+  const applied = session.appliedInputOptions.get('buildPermissionMode')
+  const reason = claudeAutoFallbackReason(session)
+  if (
+    reason === null ||
+    claudeInPlan(session) ||
+    (reason === 'started-outside' && session.autoDisabled === undefined && session.startupSettings)
+  ) {
     return null
   }
-  session.fullAccessRefusalNoticeId = id
-  const notices = (session.fullAccessRefusalNotices ??= { process: randomUUID(), count: 0 })
-  notices.count += 1
+  const reported = session.reportedOptions.reportedPermissionMode
+  const settingsAsk =
+    reason === 'settings' &&
+    applied === undefined &&
+    (reported === 'ask' ||
+      (reported === undefined &&
+        session.permissionModeRequests === undefined &&
+        session.firstRootInit?.permissionMode === 'default'))
+  if (applied !== 'default' && !settingsAsk) {
+    return null
+  }
+  const refusal =
+    reason === 'settings'
+      ? "Claude's settings turn off Approve for me (disableAutoMode)"
+      : reason === 'for-now'
+        ? "Approve for me isn't available right now"
+        : "Claude didn't start this chat in Approve for me"
   return {
-    id: `${notices.process}:${notices.count}:${id}`,
-    body: claudeFullAccessRefusalRow(session, applied)
+    id: `auto-${reason}:ask`,
+    body: claudePermissionNoticeRow(
+      'warning',
+      `${refusal}, so Claude uses Ask for approval instead.`
+    )
+  }
+}
+
+function claimClaudePermissionRestored(
+  session: ClaudeNoticeFacts & ClaudeNoticeState
+): ClaudeFullAccessRefusalNotice | null {
+  const intent = session.launchIntent?.permissionMode
+  const restoredAtStartup =
+    (session.permissionModeRequests ?? 0) === 0 &&
+    session.actualFirstRootInit?.permissionMode === intent &&
+    !claudeInPlan(session)
+  if (
+    (intent !== 'auto' && intent !== 'bypassPermissions') ||
+    session.fullAccessRefusalNoticeId !== EARLIER_PROCESS_WARNING ||
+    session.appliedInputOptions.get('interactionMode') === 'plan' ||
+    (!restoredAtStartup && session.acknowledgedBuildPermissionMode !== intent) ||
+    claudeBypassRefused(session) ||
+    claudeAutoFallbackReason(session) !== null
+  ) {
+    return null
+  }
+  const choice = intent === 'auto' ? 'auto' : 'full-access'
+  return claimClaudePermissionNotice(session, {
+    id: intent === 'auto' ? CLAUDE_AUTO_RESTORED_NOTICE_ID : CLAUDE_FULL_ACCESS_RESTORED_NOTICE_ID,
+    body: claudePermissionNoticeRow(
+      'notice',
+      `Claude uses ${agentChatPermissionModeCopy('claude', choice).label} again.`
+    )
+  })
+}
+
+export function claimClaudeFullAccessRefusalNotice(
+  session: ClaudeSession,
+  fallback?: ClaudeFullAccessFallback
+): ClaudeFullAccessRefusalNotice | null {
+  // A settings reply or late frame after the child's cut speaks for no live child.
+  if (claudeChildPermissionCut(session)) {
+    return null
+  }
+  if (!session.initialization.startup.opened() || !session.fullAccessRefusalNotices) {
+    if (fallback === 'unconfirmed' && session.fullAccessRefusalNotices) {
+      session.fullAccessRefusalNoticeId = PENDING_FULL_ACCESS_UNCONFIRMED
+    }
+    return null
+  }
+  const restored = claimClaudePermissionRestored(session)
+  if (restored) {
+    return restored
+  }
+  if (session.launchIntent?.permissionMode === 'auto') {
+    const notice = claudeAutoRefusalNotice(session)
+    // A reply after the deadline can explain the same Ask fallback already shown.
+    if (
+      notice?.id === 'auto-settings:ask' &&
+      session.fullAccessRefusalNoticeId === 'auto-started-outside:ask'
+    ) {
+      return null
+    }
+    return notice && claimClaudePermissionNotice(session, notice)
+  }
+  const applied = session.appliedInputOptions.get('buildPermissionMode')
+  if (
+    fallback === 'unconfirmed' ||
+    (applied === undefined && session.fullAccessRefusalNoticeId === PENDING_FULL_ACCESS_UNCONFIRMED)
+  ) {
+    return claimClaudePermissionNotice(session, {
+      id: 'running:unconfirmed',
+      body: claudePermissionNoticeRow(
+        'warning',
+        "Full access is off, and Claude hasn't confirmed which approval mode it uses."
+      )
+    })
+  }
+  if (!claudeBypassRefused(session) || applied === undefined || applied === 'bypassPermissions') {
+    return null
+  }
+  const choice = claudeFallbackChoice(applied)
+  const auto =
+    choice !== 'ask'
+      ? ''
+      : session.autoDisabled === true
+        ? ':auto-off'
+        : session.autoUnsettled !== undefined
+          ? ':auto-for-now'
+          : ''
+  const id = `${claudeFullAccessRefusalReason(session)}:${choice}${auto}`
+  if (id === session.fullAccessRefusalNoticeId) {
+    return null
+  }
+  return claimClaudePermissionNotice(session, {
+    id,
+    body: claudePermissionNoticeRow('warning', claudeFullAccessRefusalText(session, choice))
+  })
+}
+
+function claimClaudePermissionNotice(
+  session: ClaudeNoticeState,
+  notice: ClaudeFullAccessRefusalNotice
+): ClaudeFullAccessRefusalNotice | null {
+  const notices = session.fullAccessRefusalNotices
+  if (!notices || notice.id === session.fullAccessRefusalNoticeId) {
+    return null
+  }
+  session.fullAccessRefusalNoticeId = notice.id
+  notices.count += 1
+  const time = Math.max(Date.now(), (notices.after ?? 0) + 1)
+  notices.after = time
+  const timed = `${CLAUDE_REFUSAL_NOTICE_TIMED}${time.toString(36).padStart(10, '0')}`
+  return {
+    id: `${timed}:${notices.process}:${notices.count}:${notice.id}`,
+    body: notice.body
   }
 }
 
@@ -122,9 +244,25 @@ export function journalClaudeFullAccessRefusal(
     return
   }
   deps.sink.appendItem(
-    { provider: 'orca', clientMessageId: `full-access-refused:claude:${notice.id}` },
+    { provider: 'orca', clientMessageId: `${CLAUDE_REFUSAL_NOTICE_PREFIX}${notice.id}` },
     notice.body,
     { turnScope: turnScope() }
   )
   deps.sink.publish()
+}
+
+export function journalClaudeSessionPermissionNotice(
+  session: ClaudeSession,
+  turnScope: AgentJournalTurnScope = session.translator?.currentTurnScope() ?? { kind: 'thread' },
+  fallback?: ClaudeFullAccessFallback
+): void {
+  if (session.events && session.delivery.ready) {
+    journalClaudeFullAccessRefusal(
+      {
+        sink: session.events,
+        fullAccessRefusalNotice: () => claimClaudeFullAccessRefusalNotice(session, fallback)
+      },
+      () => turnScope
+    )
+  }
 }

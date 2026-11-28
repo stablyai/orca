@@ -1,5 +1,6 @@
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
+import { cutChildPermissionWrites } from '../host/structured-agent-session-permission-revocation'
 import { closeStructuredAgentSessionHandovers } from '../delivery/structured-agent-session-handing-over'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionConversations } from '../host/structured-agent-session-conversations'
@@ -57,16 +58,18 @@ export function cutClosingStructuredAgentSession(
   host: StructuredAgentSessionConversationLifetimeHost,
   sessionId: string,
   admit?: () => boolean
-): void {
+): () => void {
   if (admit && !admit()) {
     throw new Error('The user kept this chat open.')
   }
-  const journal = host.sessions.get(sessionId)?.journal
-  if (journal) {
-    closeStructuredAgentSessionHandovers(journal)
-  }
+  const session = host.sessions.get(sessionId)
   const { deps, runtimeState } = host.context()
+  const release = cutChildPermissionWrites(deps.adapter, sessionId, session)
+  if (session?.journal) {
+    closeStructuredAgentSessionHandovers(session.journal)
+  }
   if (deps.store.selectWritableRecord(sessionId).kind !== 'unreadable') {
     runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
   }
+  return release
 }

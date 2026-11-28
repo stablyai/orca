@@ -18,6 +18,7 @@ import type { ClaudeLiveFullAccess } from './permissions/claude-structured-inbou
 import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from './journal/claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
+import type { ClaudeSessionPermissionFacts } from './permissions/claude-session-permission-facts'
 import { ClaudeJournalBoundDelivery } from './journal/claude-journal-bound-delivery'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
@@ -40,11 +41,6 @@ export type ClaudeBypassRefusal = 'settings' | 'restricted' | 'not-launched'
 /** Why a Full access chat runs another mode, for its warning. */
 export type ClaudeFullAccessRefusalReason = ClaudeBypassRefusal | 'started-outside'
 
-/** `retryAt` for refusals that pass with time; `model` / `fastMode` hold the choice Claude refused under. */
-export type ClaudeAutoUnsettled =
-  | { kind: 'time'; retryAt: number }
-  | { kind: 'model'; model: string | undefined }
-  | { kind: 'fast-mode'; fastMode: string | undefined }
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
 export type ClaudeLateDispatchOutcome =
@@ -122,7 +118,7 @@ export type ClaudeDispatchWaiter = {
   replayContentKey: string
 }
 
-export type ClaudeSession = {
+export type ClaudeSession = ClaudeSessionPermissionFacts & {
   historyCatchUp?: AbortController
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
@@ -146,6 +142,7 @@ export type ClaudeSession = {
     effort?: string
     fastMode?: boolean
     reportedPermissionMode?: string | null
+    permissionModeReportSequence?: number
   }
   /** CLI-resolved env/settings for the next request; lower priority than held options and turn reports. */
   appliedOptions?: { model?: string; effort?: string; ultracode?: boolean }
@@ -169,27 +166,6 @@ export type ClaudeSession = {
   keptModeOwed?: string
   /** The number of the chat's latest live pick (`claude-permission-picks`); none before one. */
   permissionPick?: number
-  firstRootInit?: { permissionMode: string | null }
-  /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
-  bypassDisabled?: boolean
-  /** Claude accepted a bypass switch in this process, which overrules a start outside it. */
-  bypassAccepted?: boolean
-  /** Why Claude refused a bypass switch, where one told; a settings read or start says settings. */
-  bypassRefusal?: ClaudeBypassRefusal
-  /** The Full access refusal warning this process last wrote; a change gets a new row. */
-  fullAccessRefusalNoticeId?: string
-  /** This process's warning rows: a random id and a count, so each is a new row at the bottom. */
-  fullAccessRefusalNotices?: { process: string; count: number }
-  /** Counts permission mode requests, so a fallback written after Claude answers never lands
-   *  over a newer request. */
-  permissionModeRequests?: number
-  /** The startup `get_settings` read; settles once its facts are recorded, never rejects. */
-  startupSettings?: Promise<void>
-  /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */
-  autoDisabled?: boolean
-  /** Claude last refused auto for a reason that can pass (availability, model, Fast mode), or
-   *  left the switch unanswered; says when asking again can get a different answer. */
-  autoUnsettled?: ClaudeAutoUnsettled
   /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */
   orderedPermissionMode?: (() => string | null | undefined) | null
   /** This process's auto-approval, told each live pick. */

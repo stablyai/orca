@@ -10,6 +10,9 @@ import { readClaudeStructuredSessionSettings } from '../launch/claude-structured
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
+import { journalClaudeSessionPermissionNotice } from '../permissions/claude-full-access-refusal-notice'
+import { readClaudeEarlierRefusalNotice } from '../permissions/claude-permission-notice-history'
+import { startClaudeStartupFallback } from '../permissions/claude-permission-startup'
 import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import { applyKeptClaudeModeOwed, noteKeptClaudeReattach } from '../../relay/claude-kept-permission'
 import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
@@ -107,6 +110,15 @@ async function openStartingClaudeSession(
   const history = session.initialization.history
   const leafUuid = history.leafUuid
   const events = session.events
+  // Taken before the saved-row read: a mode request made meanwhile decides instead of the fallback.
+  const modeRequest = session.permissionModeRequests
+  await waitForPromiseWithSignal(
+    startup.race(
+      readClaudeEarlierRefusalNotice(session, events?.journalHistory?.()?.reads, current),
+      request.signal
+    ),
+    request.signal
+  )
   const origin = usableJournalHistoryOrigin(
     (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
   )
@@ -193,7 +205,10 @@ async function openStartingClaudeSession(
     history.covered = fromFirstPrompt ? history.covered : caughtUp
     current()
   }
+  current()
   startup.open()
+  journalClaudeSessionPermissionNotice(session, { kind: 'thread' })
+  startClaudeStartupFallback(session, modeRequest)
   // A pick saved since this agent's launch reaches it at ready; until then nothing but Full access
   // auto-approves, ahead of the waiting requests the release hands on.
   const picked = request.permissionMode?.()

@@ -13,6 +13,7 @@ import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
 import { readJournalStoredItem } from './journal-stored-output-rows'
 import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
+import { readJournalClaudeRefusalHead } from './database/journal-claude-refusal-indexes'
 
 export type JournalDomainEntityRead = Extract<
   JournalSqlPointRead['operation'],
@@ -21,6 +22,7 @@ export type JournalDomainEntityRead = Extract<
       | 'metadata'
       | 'provider-turn-in-namespace'
       | 'saved-item-ids'
+      | 'newest-item-id'
       | 'item'
       | 'item-detail'
       | 'submission'
@@ -111,6 +113,8 @@ export function readJournalDomainEntity(
           .all(JSON.stringify(operation.itemIds), ...prefix)
           .map((row) => String(row.item_id))
       }
+    case 'newest-item-id':
+      return { kind: operation.kind, ...readJournalClaudeRefusalHead(db, prefix, operation) }
     case 'metadata': {
       const head = db
         .prepare(`SELECT last_sequence,retained_sequence,highest_fence,

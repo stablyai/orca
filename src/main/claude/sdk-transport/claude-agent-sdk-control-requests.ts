@@ -8,6 +8,11 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
+import {
+  claudeQueryAsyncCanceller,
+  claudeQuerySessionRenamer,
+  claudeQuerySettingsReader
+} from './claude-agent-sdk-query-extensions'
 
 export class ClaudeControlRequestError extends Error {
   constructor(
@@ -53,38 +58,8 @@ export function isClaudeQueryClosed(error: unknown): boolean {
   return error instanceof Error && error.message === QUERY_CLOSED_MESSAGE
 }
 
-// The SDK implements getSettings but omits it from Query's declaration.
-type ClaudeQuerySettingsReader = { getSettings?: () => Promise<unknown> }
-
-export function claudeQuerySettingsReader(
-  query: ClaudeControlQuery
-): (() => Promise<unknown>) | null {
-  const reader = (query as unknown as ClaudeQuerySettingsReader).getSettings
-  return typeof reader === 'function' ? reader.bind(query) : null
-}
-
-// cancelAsyncMessage exists at runtime but is absent from Query's declaration.
-type ClaudeQueryAsyncCanceller = { cancelAsyncMessage?: (uuid: string) => Promise<unknown> }
-
-export function claudeQueryAsyncCanceller(
-  query: ClaudeControlQuery
-): ((uuid: string) => Promise<unknown>) | null {
-  const cancel = (query as unknown as ClaudeQueryAsyncCanceller).cancelAsyncMessage
-  return typeof cancel === 'function' ? cancel.bind(query) : null
-}
-
-// renameSession sends `rename_session` with source 'host' (the CLI's user rename) but is absent
-// from Query's declaration.
-export function claudeQuerySessionRenamer(
-  query: ClaudeControlQuery
-): ((title: string, sessionId: string) => unknown) | null {
-  const rename = 'renameSession' in query ? query.renameSession : null
-  return typeof rename === 'function'
-    ? (title, sessionId): unknown => rename.call(query, title, sessionId)
-    : null
-}
-
-export type ClaudeControlOptions = { timeoutMs?: number }
+/** `admits` is asked as the SDK call runs; false withholds the request. */
+export type ClaudeControlOptions = { timeoutMs?: number; admits?: () => boolean }
 
 // Orca owns the deadline; null disables it. Query closure remains a transport failure.
 export function runClaudeControl<T>(
@@ -236,6 +211,20 @@ export type ClaudeControlSurface = {
   setPromptSuggestionsPaused?: (paused: boolean, options?: ClaudeControlOptions) => Promise<void>
 }
 
+/** Checked inside the queued SDK call, behind any write ahead of it: a request whose owner was
+ *  revoked meanwhile never reaches Claude. */
+export const setClaudePermissionMode =
+  (query: Pick<ClaudeControlQuery, 'setPermissionMode'>) =>
+  (mode: PermissionMode, options?: ClaudeControlOptions): Promise<void> =>
+    runClaudeControl(
+      'set_permission_mode',
+      () =>
+        options?.admits?.() === false
+          ? Promise.reject(new ClaudeControlRequestError('set_permission_mode', 'withheld'))
+          : query.setPermissionMode(mode),
+      options?.timeoutMs
+    ).then(() => {})
+
 type InterruptingQuery = {
   interrupt: (options?: {
     cancelQueued?: boolean
@@ -264,12 +253,7 @@ export function createClaudeControlSurface(query: ClaudeControlQuery): ClaudeCon
     },
     setModel: (model, options) =>
       runClaudeControl('set_model', () => query.setModel(model), options?.timeoutMs).then(() => {}),
-    setPermissionMode: (mode, options) =>
-      runClaudeControl(
-        'set_permission_mode',
-        () => query.setPermissionMode(mode),
-        options?.timeoutMs
-      ).then(() => {}),
+    setPermissionMode: setClaudePermissionMode(query),
     applyFlagSettings: (settings, options) =>
       runClaudeControl(
         'apply_flag_settings',

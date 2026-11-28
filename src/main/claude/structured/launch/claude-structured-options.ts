@@ -36,7 +36,7 @@ export function claudeModelTransitionRestart(
   return (input) => {
     const session = sessions.get(input.sessionId)
     const model = input.executionOptions?.model
-    const opened = session?.firstRootInit?.permissionMode
+    const opened = session?.startupPermissionMode
     const requested = session?.launchIntent?.permissionMode
     // A kept agent takes a model pick live (set_model); it is never replaced for one.
     return Boolean(

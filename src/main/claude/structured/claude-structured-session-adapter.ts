@@ -47,6 +47,7 @@ import { copyClaudeConversation } from '../transcripts/claude-conversation-copy'
 import { ClaudeConversationNaming } from '../conversation-naming/claude-conversation-naming'
 import { syncClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
 import * as keptPermission from '../relay/claude-kept-permission'
+import { revokeClaudePermissionDispatch } from './permissions/claude-permission-dispatch-authority'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, ClaudeSession>()
@@ -254,11 +255,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     this.endings.retire(input.sessionId)
     return this.afterClose(input.sessionId, () => this.releaseProviderSession(input))
   }
-  acknowledgeSessionRelease = (sessionId: string): void => {
-    this.settledExitErrors.delete(sessionId)
-  }
+  acknowledgeSessionRelease = (sessionId: string) => void this.settledExitErrors.delete(sessionId)
   startupEnding = (sessionId: string, generation: string) => this.endings.get(sessionId, generation)
   retireStartup = (id: string, generation: string) => this.endings.retire(id, generation)
+  setPermissionDispatchRevoked = revokeClaudePermissionDispatch(this.sessions)
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined ||
     this.sessions.has(sessionId) ||

@@ -48,6 +48,7 @@ import {
   recordStructuredAgentSessionStartFailure
 } from '../startup/structured-agent-session-start-failure-row'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
+import { releasingCuts } from '../host/structured-agent-session-permission-revocation'
 
 export function createStructuredAgentSessionConversationLifetime(
   host: StructuredAgentSessionConversationLifetimeHost
@@ -131,51 +132,54 @@ export function createStructuredAgentSessionConversationLifetime(
     if (!admit && matches() && deps().store.getRecord(sessionId)) {
       starts.cut(sessions.get(sessionId)?.journal)
     }
-    const closed = serialize(sessionId, async () => {
-      if (!matches()) {
-        return null
-      }
-      await (admit && admitClosingStructuredAgentSession(host, sessionId, admit))
-      readRefusals.forget(sessionId)
-      const record = deps().store.getConversation(sessionId)
-      if (!record) {
-        return null
-      }
-      const fence = record.currentFence
-      const admittedSends = deps().store.admittedSendCount(sessionId)
-      if (deps().store.getRecord(sessionId)) {
-        starts.abort()
-      }
-      const session = sessions.get(sessionId)
-      const child = session?.child
-      const owned = deps().adapter.hasOwnedAcquisition?.(sessionId) === true
-      const stopped = await holdStopClose(
-        sessionId,
-        () =>
-          stopWorkspaceSleepChat({
-            deps: deps(),
-            sessions,
-            stopAgent,
-            sessionId,
-            fence,
-            child,
-            owned,
-            now: () => host.context().now()
-          }),
-        (error) =>
-          deps().logger.warn('closing a stopped workspace chat handle failed', {
-            scope: 'workspace-chat-close',
-            sessionId,
-            error
-          })
-      )
-      // Return the post-release fence for checks against a later restart.
-      return {
-        fence: deps().store.getConversation(sessionId)?.currentFence ?? fence,
-        stopped,
-        admittedSends
-      }
-    })
+    // A cut end that fails, or never begins its stop, leaves the live child its permission writes.
+    const closed = serialize(sessionId, () =>
+      releasingCuts(undefined, async (own) => {
+        if (!matches()) {
+          return null
+        }
+        own(admit && (await admitClosingStructuredAgentSession(host, sessionId, admit)))
+        readRefusals.forget(sessionId)
+        const record = deps().store.getConversation(sessionId)
+        if (!record) {
+          return null
+        }
+        const fence = record.currentFence
+        const admittedSends = deps().store.admittedSendCount(sessionId)
+        if (deps().store.getRecord(sessionId)) {
+          starts.abort()
+        }
+        const session = sessions.get(sessionId)
+        const child = session?.child
+        const owned = deps().adapter.hasOwnedAcquisition?.(sessionId) === true
+        const stopped = await holdStopClose(
+          sessionId,
+          () =>
+            stopWorkspaceSleepChat({
+              deps: deps(),
+              sessions,
+              stopAgent,
+              sessionId,
+              fence,
+              child,
+              owned,
+              now: () => host.context().now()
+            }),
+          (error) =>
+            deps().logger.warn('closing a stopped workspace chat handle failed', {
+              scope: 'workspace-chat-close',
+              sessionId,
+              error
+            })
+        )
+        // Return the post-release fence for checks against a later restart.
+        return {
+          fence: deps().store.getConversation(sessionId)?.currentFence ?? fence,
+          stopped,
+          admittedSends
+        }
+      })
+    )
     return starts.settle({ deps: deps(), sessions, sessionId }, await closed)
   }
 
@@ -308,19 +312,17 @@ export function createStructuredAgentSessionConversationLifetime(
       cause: StructuredAgentSessionCloseCause,
       admit?: (work: StructuredAgentSessionCloseWork) => boolean
     ) => {
-      if (!admit) {
-        cutClosingStructuredAgentSession(host, sessionId)
-      }
-      return serialize(sessionId, async () => {
-        if (admit) {
-          await admitClosingStructuredAgentSession(host, sessionId, admit)
-        }
-        readRefusals.forget(sessionId)
-        if (deps().store.selectWritableRecord(sessionId).kind !== 'unreadable') {
-          host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
-        }
-        await holdStopClose(sessionId, () => stopClosedChat(host.context(), sessionId, cause))
-      })
+      const release = admit ? undefined : cutClosingStructuredAgentSession(host, sessionId)
+      return serialize(sessionId, () =>
+        releasingCuts(release, async (own) => {
+          own(admit && (await admitClosingStructuredAgentSession(host, sessionId, admit)))
+          readRefusals.forget(sessionId)
+          if (deps().store.selectWritableRecord(sessionId).kind !== 'unreadable') {
+            host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
+          }
+          await holdStopClose(sessionId, () => stopClosedChat(host.context(), sessionId, cause))
+        })
+      )
     }
   }
 }

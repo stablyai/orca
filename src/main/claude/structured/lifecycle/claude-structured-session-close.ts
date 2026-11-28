@@ -86,6 +86,7 @@ export async function resolveClaudeAcquisitionError(input: {
 }
 
 export function settleClaudeExitedSession(session: ClaudeSession): void {
+  session.permissionDispatchRevoked = true
   session.delivery.dispose()
   retireClaudeDispatchWaiters(session)
   session.historyCatchUp?.abort()
@@ -115,6 +116,8 @@ async function finalizeClaudePublishedSession(
   input: CloseClaudePublishedSessionInput,
   session: ClaudeSession
 ): Promise<boolean> {
+  // Close, replacement and teardown: nothing still queued writes to the child being let go.
+  session.permissionDispatchRevoked = true
   session.historyCatchUp?.abort()
   session.delivery.dispose()
   settleClaudeTurnEndWaiters(session)

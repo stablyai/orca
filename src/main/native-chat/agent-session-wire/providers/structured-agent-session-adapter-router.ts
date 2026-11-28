@@ -184,6 +184,10 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   retireStartup = (sessionId: string, acquisitionGeneration: string): void =>
     this.adapters().forEach((adapter) => adapter.retireStartup?.(sessionId, acquisitionGeneration))
 
+  // By exact child, like retireStartup: a revoked child's route may already be gone.
+  setPermissionDispatchRevoked: NonNullable<Adapter['setPermissionDispatchRevoked']> = (...cut) =>
+    this.adapters().forEach((each) => each.setPermissionDispatchRevoked?.(...cut))
+
   awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number) =>
     this.liveOwnerOrNull(sessionId)?.awaitStoppedRequestEnd?.(sessionId, stoppedAt)
 
