@@ -32,6 +32,13 @@ export const AntigravityChatSignInFlowParams = lazyZodSchema(() =>
   })
 )
 
+/** Ends one `accounts.antigravityLoginSubscribe` stream on a shared connection, by its request id. */
+export const AntigravityLoginUnsubscribeParams = lazyZodSchema(() =>
+  z.strictObject({
+    subscriptionId: z.string().min(1).max(256)
+  })
+)
+
 export const AntigravityChatSignInCompleteParams = lazyZodSchema(() =>
   z.strictObject({
     flowId: z.string().min(1).max(64),

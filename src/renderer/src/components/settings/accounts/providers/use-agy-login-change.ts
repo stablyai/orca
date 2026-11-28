@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { agyLoginRevisions } from '@/runtime/provider-accounts/sign-in/agy-login-revision-store'
@@ -26,14 +26,10 @@ function documentShown(): boolean {
   )
 }
 
-/** Whether the window is shown, calling `shown` each time it is shown again. macOS can leave the
- *  document reporting hidden after display sleep; input then proves it shown. */
-function useWindowShown(follow: boolean, shown: () => void): boolean {
+/** Whether the window is shown. macOS can leave the document reporting hidden after display
+ *  sleep; input then proves it shown. */
+function useWindowShown(follow: boolean): boolean {
   const [visible, setVisible] = useState(documentShown)
-  const latestShown = useRef(shown)
-  useEffect(() => {
-    latestShown.current = shown
-  })
   useEffect(() => {
     if (!follow) {
       return
@@ -44,9 +40,6 @@ function useWindowShown(follow: boolean, shown: () => void): boolean {
       if (now !== before) {
         before = now
         setVisible(now)
-        if (now) {
-          latestShown.current()
-        }
       }
     }
     document.addEventListener('visibilitychange', update)
@@ -103,8 +96,9 @@ export function useAgyLoginChange(
   reread: () => void,
   loginChanged: () => void
 ): boolean {
-  // The host stops watching while nothing follows, so showing the window again reads once.
-  const visible = useWindowShown(follow, reread)
+  // Showing the window again opens a new stream, whose first answer reads once, since the host
+  // stops watching while nothing follows.
+  const visible = useWindowShown(follow)
   useOnLaterChange(useAgyLoginRevision(owner, follow, visible), reread)
   useOnLaterChange(loginKey(state), loginChanged)
   return visible

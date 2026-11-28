@@ -86,6 +86,9 @@ export function getCleanupRequest(
         : subscription.params
     return { method: 'session.tabs.unsubscribe', params }
   }
+  if (subscription.method === 'accounts.antigravityLoginSubscribe') {
+    return cleanupBySubscriptionId('accounts.antigravityLoginUnsubscribe', subscription.requestId)
+  }
   if (subscription.method === 'orchestration.workerApprovalsSubscribe') {
     return cleanupBySubscriptionId(
       'orchestration.workerApprovalsUnsubscribe',
