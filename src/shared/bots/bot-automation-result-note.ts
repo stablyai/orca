@@ -11,7 +11,7 @@ export const AUTOMATION_RESULT_NOTE_PRESENTATION = 'automation-result'
 export type AutomationResultNote = {
   automationId: string
   automationName: string
-  /** Names the bot in the note's read caption. */
+  /** Older clients name the bot with it in the row's read line; this build doesn't show that line. */
   botName: string
   runId: string
   /** The run's own conversation. */

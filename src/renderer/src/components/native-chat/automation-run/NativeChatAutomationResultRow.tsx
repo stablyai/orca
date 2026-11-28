@@ -36,7 +36,7 @@ function useResultMark(note: AutomationResultNote): AutomationRowMark {
   return note.trigger === 'schedule' ? 'schedule' : 'event'
 }
 
-/** An automation run's result in its bot's Chat, as its row; opens into the result. */
+/** An automation run's result in its bot's Chat, as its row; opens into the result and Open run. */
 export function NativeChatAutomationResultRow({
   note
 }: {
