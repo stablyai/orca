@@ -45,7 +45,7 @@ function MediaDownload({ media, client, title }: Props) {
           sink = createMobileMediaSink(relativePath, mimeType)
           const uri = await downloadMobileFileMedia(
             client,
-            { worktreeId, relativePath, mimeType },
+            { worktreeId, relativePath },
             sink,
             controller.signal,
             (bytes, total) => setState({ bytes, total })

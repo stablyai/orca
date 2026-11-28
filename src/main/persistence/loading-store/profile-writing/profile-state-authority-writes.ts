@@ -23,14 +23,16 @@ export function serializeSelectiveProfileStateDomains(
   const payloads = new Map<string, string>()
   // Read values in order so preceding getters/toJSON hooks can affect later domains.
   for (const domain of Object.keys(state)) {
-    const fragment = serializeSelectiveProfileStateDomainFragment(domain, state[domain])
-    if (fragment !== '{}') {
-      payloads.set(domain, extractProfileStateDomainPayload(domain, fragment))
+    const payload = serializeSelectiveProfileStateDomainPayload(domain, state[domain])
+    if (payload !== undefined) {
+      payloads.set(domain, payload)
     }
   }
-  return [...dirtyDomains].map((domain) => {
-    return { domain, payload: payloads.get(domain) ?? null }
-  })
+  const replacements: ProfileStateDomainReplacement[] = []
+  for (const domain of dirtyDomains) {
+    replacements.push({ domain, payload: payloads.get(domain) ?? null })
+  }
+  return replacements
 }
 
 export function serializeCompleteProfileStateDomains(
@@ -41,7 +43,11 @@ export function serializeCompleteProfileStateDomains(
   const domains: ProfileStateDomainReplacement[] = []
   const hash = createHash('sha1').update(degradedPrefix)
   const substituter = createTextSecretSentinelSubstituter(substitutions)
-  for (const [domain, value] of Object.entries(state)) {
+  for (const domain in state) {
+    if (!Object.hasOwn(state, domain)) {
+      continue
+    }
+    const value = state[domain]
     if (!hasCustomToJsonOrProxy(value)) {
       const rawPayload = JSON.stringify(value)
       if (rawPayload === undefined) {
@@ -75,16 +81,36 @@ export function serializeCompleteProfileStateDomains(
   }
 }
 
-function serializeSelectiveProfileStateDomainFragment(domain: string, value: unknown): string {
+function serializeSelectiveProfileStateDomainPayload(
+  domain: string,
+  value: unknown
+): string | undefined {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value)
+  }
   let needsNormalization = false
-  const fragment = serializeProfileStateDomainFragment(domain, value, (_key, entry) => {
+  const replacer = (_key: string, entry: unknown): unknown => {
     if (entry !== null && typeof entry === 'object') {
       needsNormalization ||= types.isProxy(entry) || isRawJson?.(entry) === true
     }
     return entry
-  })
-  // Preserve UTF-8/parse/stringify normalization for raw JSON and proxy key ordering.
-  return needsNormalization ? JSON.stringify(JSON.parse(fragment.toWellFormed())) : fragment
+  }
+  if (!hasCustomToJsonOrProxy(value)) {
+    const payload = JSON.stringify(value, replacer)
+    if (payload === undefined) {
+      return undefined
+    }
+    // Preserve UTF-8/parse/stringify normalization for raw JSON and proxy key ordering.
+    return needsNormalization ? JSON.stringify(JSON.parse(payload.toWellFormed())) : payload
+  }
+  const fragment = serializeProfileStateDomainFragment(domain, value, replacer)
+  if (fragment === '{}') {
+    return undefined
+  }
+  const normalized = needsNormalization
+    ? JSON.stringify(JSON.parse(fragment.toWellFormed()))
+    : fragment
+  return extractProfileStateDomainPayload(domain, normalized)
 }
 
 function serializeProfileStateDomainFragment(

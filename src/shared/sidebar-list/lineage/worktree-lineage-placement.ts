@@ -1,3 +1,64 @@
+export type LineagePlacementRows<Row> = {
+  pinned: Row[]
+  natural: readonly Row[]
+  displayRootByIdentity: ReadonlyMap<string, Row>
+}
+
+export function getLineagePlacementRows<Row>(args: {
+  rows: readonly Row[]
+  childrenByParentIdentity: ReadonlyMap<string, readonly Row[]>
+  identityOf: (row: Row) => string
+  isPinned: (row: Row) => boolean
+  duplicatePinned: boolean
+}): LineagePlacementRows<Row> {
+  const { rows, childrenByParentIdentity, identityOf } = args
+  let pinnedRoots: Row[] | undefined
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i]
+    if (args.isPinned(row)) {
+      ;(pinnedRoots ??= []).push(row)
+    }
+  }
+  if (!pinnedRoots) {
+    return {
+      pinned: [],
+      natural: rows,
+      displayRootByIdentity: getVisibleLineageAncestorRoots(
+        rows,
+        childrenByParentIdentity,
+        identityOf
+      )
+    }
+  }
+  const pinnedPlacement = getVisibleLineagePlacement(
+    rows,
+    pinnedRoots,
+    childrenByParentIdentity,
+    identityOf,
+    true
+  )
+  const pinned: Row[] = []
+  const natural: Row[] | null = args.duplicatePinned ? null : []
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i]
+    if (pinnedPlacement.has(identityOf(row))) {
+      pinned.push(row)
+    } else if (natural) {
+      natural.push(row)
+    }
+  }
+  const naturalRows = natural ?? rows
+  return {
+    pinned,
+    natural: naturalRows,
+    displayRootByIdentity: getVisibleLineageAncestorRoots(
+      naturalRows,
+      childrenByParentIdentity,
+      identityOf
+    )
+  }
+}
+
 export function getVisibleLineagePlacement<Row>(
   visibleRows: readonly Row[],
   roots: readonly Row[],
@@ -9,18 +70,40 @@ export function getVisibleLineagePlacement<Row>(
   if (roots.length === 0 || visibleRows.length === 0) {
     return placement
   }
-  const visible = new Set<string>()
-  for (const row of visibleRows) {
-    visible.add(identityOf(row))
+  let anyRootHasChildren = false
+  if (childrenByParentIdentity.size > 0) {
+    for (let i = 0; i < roots.length; i += 1) {
+      const rootChildren = childrenByParentIdentity.get(identityOf(roots[i]))
+      if (rootChildren && rootChildren.length > 0) {
+        anyRootHasChildren = true
+        break
+      }
+    }
   }
-  if (childrenByParentIdentity.size === 0) {
-    for (const root of roots) {
+  if (!anyRootHasChildren) {
+    const wanted = new Map<string, Row>()
+    for (let i = 0; i < roots.length; i += 1) {
+      const root = roots[i]
       const identity = identityOf(root)
-      if (visible.has(identity) && !placement.has(identity)) {
+      if (!wanted.has(identity)) {
+        wanted.set(identity, root)
+      }
+    }
+    for (let i = 0; i < visibleRows.length; i += 1) {
+      const identity = identityOf(visibleRows[i])
+      const root = wanted.get(identity)
+      if (root !== undefined && !placement.has(identity)) {
         placement.set(identity, root)
+        if (placement.size === wanted.size) {
+          break
+        }
       }
     }
     return placement
+  }
+  const visible = new Set<string>()
+  for (let i = 0; i < visibleRows.length; i += 1) {
+    visible.add(identityOf(visibleRows[i]))
   }
   const seen = new Set<string>()
   const pending: Row[] = []
@@ -79,22 +162,24 @@ export function getVisibleLineageAncestorRoots<Row>(
   if (childrenByParentIdentity.size === 0 || visibleRows.length === 0) {
     return EMPTY_DISPLAY_ROOTS
   }
-  const visible = new Set<string>()
   const childrenOfVisibleParents = new Set<string>()
   const visibleParents: Row[] = []
-  for (const row of visibleRows) {
-    const identity = identityOf(row)
-    visible.add(identity)
-    const children = childrenByParentIdentity.get(identity)
+  for (let i = 0; i < visibleRows.length; i += 1) {
+    const row = visibleRows[i]
+    const children = childrenByParentIdentity.get(identityOf(row))
     if (children && children.length > 0) {
       visibleParents.push(row)
-      for (const child of children) {
-        childrenOfVisibleParents.add(identityOf(child))
+      for (let j = 0; j < children.length; j += 1) {
+        childrenOfVisibleParents.add(identityOf(children[j]))
       }
     }
   }
   if (childrenOfVisibleParents.size === 0) {
     return EMPTY_DISPLAY_ROOTS
+  }
+  const visible = new Set<string>()
+  for (let i = 0; i < visibleRows.length; i += 1) {
+    visible.add(identityOf(visibleRows[i]))
   }
   const placement = new Map<string, Row>()
   const seen = new Set<string>()

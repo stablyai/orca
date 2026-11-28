@@ -29,14 +29,23 @@ import {
   claudeRowHasUnlistedLiveWork
 } from './lifecycle/claude-pane-hold-evidence'
 import { buildClaudeStatusPayload } from './lifecycle/claude-status-build'
-import { claudeWaitRequest, settleClaudeToolBatch } from './lifecycle/claude-tool-request-wait'
+import {
+  claudeStateBeforeWait,
+  claudeWaitRequest,
+  settleClaudeToolBatch
+} from './lifecycle/claude-tool-request-wait'
 import { trackClaudeTaskNotificationDelivery } from './background-tasks/claude-task-notification-delivery'
 import { recordClaudeTeammateSpawn } from './lifecycle/claude-teammate-spawn'
 import { settleLateClaudePromptSubmit } from './lifecycle/claude-late-prompt-submit'
 import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT } from './lifecycle/claude-prompt-turn-order'
 import { claudeHeldTurnEnd } from './lifecycle/claude-held-turn-end'
 import { normalizeClaudeSessionStart } from './lifecycle/claude-session-start-event'
-import { isClaudeToolEvent, restatePluginToolCall } from './lifecycle/claude-tool-events'
+import {
+  isClaudePluginToolCall,
+  isClaudeToolEvent,
+  reportedClaudeStateName,
+  restatePluginToolCall
+} from './lifecycle/claude-tool-events'
 
 const CLAUDE_HOOK_AGENT_ID_PREFIX = 'hook-agent-'
 
@@ -108,9 +117,16 @@ export function normalizeClaudeEvent(
     isAskUserQuestionTool(eventToolName)
   const isAskUserQuestion = eventName === 'PreToolUse' && isAskUserQuestionWait
   // Why: plugins can call tools after Stop (#43998); the event stays accepted for tool hooks but does not change status.
-  const restated = restatePluginToolCall(state, eventName, paneKey, hookPayload, isAskUserQuestion)
+  const restated = restatePluginToolCall(
+    state,
+    eventName,
+    promptText,
+    paneKey,
+    hookPayload,
+    isAskUserQuestion
+  )
   if (restated) {
-    return restated
+    return restated.payload
   }
   // Manual PostCompact ends at idle without Stop; auto compaction stays in-turn, and PreCompact alone can be aborted (STA-2915).
   const isManualCompactCompletion = eventName === 'PostCompact' && hookPayload.trigger === 'manual'
@@ -132,17 +148,12 @@ export function normalizeClaudeEvent(
   if (eventName === 'PostToolBatch') {
     return settleClaudeToolBatch(state, eventName, promptText, paneKey, hookPayload, eventAgentId)
   }
-  const reportedStateName =
-    eventName === 'UserPromptSubmit' ||
-    eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
-    (eventName === 'PreToolUse' && !isAskUserQuestion)
-      ? 'working'
-      : eventName === 'PermissionRequest' || eventName === 'Elicitation' || isAskUserQuestion
-        ? 'waiting'
-        : isTurnBoundary || isManualCompactCompletion
-          ? 'done'
-          : null
+  const reportedStateName = reportedClaudeStateName(
+    eventName,
+    isAskUserQuestion,
+    isTurnBoundary,
+    isManualCompactCompletion
+  )
 
   if (!reportedStateName) {
     return null
@@ -237,27 +248,13 @@ export function normalizeClaudeEvent(
       )
     }
   }
-  // Preserve the original lead stash through multiple child waits.
-  const stateBeforeWait =
-    // Without a lead record there is no turn to resume; an answered dialog must not invent work.
-    eventName === 'Elicitation' && !previousLead
-      ? { state: 'done' as const, stateStartedAt: Date.now() }
-      : isWaitingInducing && (eventAgentId || eventName === 'Elicitation') && previousLead
-        ? previousLead.state === 'waiting'
-          ? previousLead.stateBeforeWait
-          : {
-              state: previousLead.state,
-              // Child waits must retain the lead's verdict and clock.
-              ...(previousLead.outcome ? { outcome: previousLead.outcome } : {}),
-              ...(previousLead.failure ? { failure: previousLead.failure } : {}),
-              stateStartedAt: previousLead.stateStartedAt,
-              ...(previousLead.taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
-              // Keep the displaced lead end time so later child drain belongs to the same turn.
-              ...(previousLead.turnCompletedAt !== undefined
-                ? { turnCompletedAt: previousLead.turnCompletedAt }
-                : {})
-            }
-        : undefined
+  const stateBeforeWait = claudeStateBeforeWait(
+    eventName,
+    isWaitingInducing,
+    eventAgentId,
+    isClaudePluginToolCall(hookPayload),
+    previousLead
+  )
 
   if (isManualCompactCompletion) {
     // Manual compact invalidates snapshot-only child liveness; confirmed children/shells/crons still hold the pane (STA-2915).

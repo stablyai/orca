@@ -4,7 +4,10 @@ import {
 } from '../../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorkspaceMetadataCursor } from '../../../../../../shared/worktree/metadata/workspace-metadata-set'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import {
+  getReadonlyWorkspaceAttachments,
+  hasWorkspaceAttachments
+} from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceReferenceIdentity } from '../../../../../../shared/workspace-attachments/workspace-reference-identity'
 import {
   getRuntimeEnvironmentRevision,
@@ -157,24 +160,42 @@ function keepPublishedLinkTitles<T extends Worktree>(
   incoming: T[],
   current: readonly Worktree[]
 ): T[] {
-  const currentById = new Map(current.map((row) => [row.id, row]))
-  return incoming.map((row) => {
+  if (incoming.length === 0 || current.length === 0) {
+    return incoming
+  }
+  const currentById = new Map<string, Worktree>()
+  for (let i = 0; i < current.length; i += 1) {
+    const row = current[i]
+    currentById.set(row.id, row)
+  }
+  let result: T[] | null = null
+  for (let i = 0; i < incoming.length; i += 1) {
+    const row = incoming[i]
     const previous = currentById.get(row.id)
-    if (!previous) {
-      return row
+    if (!previous || !hasWorkspaceAttachments(previous)) {
+      if (result) {
+        result.push(row)
+      }
+      continue
     }
-    const titles = new Map<string, string>()
-    for (const item of getWorkspaceAttachments(previous)) {
+    let titles: Map<string, string> | undefined
+    const previousAttachments = getReadonlyWorkspaceAttachments(previous)
+    for (let j = 0; j < previousAttachments.length; j += 1) {
+      const item = previousAttachments[j]
       const title = item.title?.trim()
       if (item.provider === 'github' && item.type === 'issue' && title) {
-        titles.set(getWorkspaceReferenceIdentity(item), title)
+        ;(titles ??= new Map<string, string>()).set(getWorkspaceReferenceIdentity(item), title)
       }
     }
-    if (titles.size === 0) {
-      return row
+    if (!titles) {
+      if (result) {
+        result.push(row)
+      }
+      continue
     }
     let kept = false
-    const linkedItems = getWorkspaceAttachments(row).map((item) => {
+    const rowAttachments = getReadonlyWorkspaceAttachments(row)
+    const linkedItems = rowAttachments.map((item) => {
       const title = item.title?.trim() ? undefined : titles.get(getWorkspaceReferenceIdentity(item))
       if (!title) {
         return item
@@ -182,8 +203,16 @@ function keepPublishedLinkTitles<T extends Worktree>(
       kept = true
       return { ...item, title }
     })
-    return kept ? { ...row, linkedItems } : row
-  })
+    if (kept) {
+      if (!result) {
+        result = incoming.slice(0, i)
+      }
+      result.push({ ...row, linkedItems })
+    } else if (result) {
+      result.push(row)
+    }
+  }
+  return result ?? incoming
 }
 
 function currentRows(state: AppState, repoId: string, hostId: ExecutionHostId): Worktree[] {

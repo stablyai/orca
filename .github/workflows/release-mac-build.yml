@@ -177,6 +177,18 @@ jobs:
           run-id: ${{ inputs.release_run_id }}
           github-token: ${{ github.token }}
 
+      - name: Cache macOS native helpers
+        id: macos-native-helpers
+        uses: actions/cache@v5
+        with:
+          path: |
+            native/computer-use-macos/.build/release
+            native/keyboard-layout-macos/.build/release
+            native/notification-status-macos/.build/release
+            native/process-footprint-macos/.build/release
+            native/socket-owner-macos/.build/release
+          key: macos-native-helpers-v2-${{ hashFiles('native/*-macos/**', 'config/scripts/native-build/macos/**', 'config/scripts/native-build/posix/build-provider-exec.mjs', 'resources/build/entitlements.computer-use.mac.plist', 'resources/build/icon.icns') }}
+
       - name: Build app
         run: |
           if [ -n "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" ]; then
@@ -193,38 +205,54 @@ jobs:
           # Why: Vite's web build crossed Node's default old-space ceiling on
           # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
           NODE_OPTIONS: --max-old-space-size=4096
+          ORCA_REUSE_MACOS_NATIVE_HELPERS: ${{ steps.macos-native-helpers.outputs.cache-hit == 'true' && '1' || '' }}
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ inputs.javascript_source_sha }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
-      # Overlap checkout/install/build with parent release-cut's orcad-template; wait here before packaging.
-      - name: Wait for the qualified orcad template from the release run
-        if: >-
-          !inputs.qualification_only &&
-          hashFiles('config/scripts/orcad-distribution/template/packaged-orcad-template.cjs', 'config/scripts/packaged-orcad-template.cjs') != ''
+      # Overlap checkout/install/build with parent release-cut's preflight and orcad-template; gate here before packaging.
+      - name: Wait for parent release preflight and orcad template
+        if: ${{ !inputs.qualification_only }}
         uses: actions/github-script@v8
         env:
           PARENT_RUN_ID: ${{ inputs.release_run_id }}
+          NEED_TEMPLATE: ${{ hashFiles('config/scripts/orcad-distribution/template/packaged-orcad-template.cjs', 'config/scripts/packaged-orcad-template.cjs') != '' }}
         with:
           script: |
             const runId = Number(process.env.PARENT_RUN_ID)
+            const needTemplate = process.env.NEED_TEMPLATE === 'true'
             const deadline = Date.now() + 30 * 60_000
+            const badConclusions = ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure']
             while (Date.now() < deadline) {
               const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
                 ...context.repo, run_id: runId, filter: 'latest', per_page: 100
               })
-              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
-              const failed = lanes.find(job => job.status === 'completed' &&
-                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
-              if (failed) throw new Error(`Parent template qualification failed: ${failed.name} (${failed.conclusion})`)
-              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                ...context.repo, run_id: runId, per_page: 100
-              })
-              if (artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)) return
+              const preflight = jobs.find(job => job.name === 'release-preflight')
+              if (preflight && preflight.status === 'completed' && preflight.conclusion !== 'success') {
+                throw new Error(`Parent release-preflight failed (${preflight.conclusion})`)
+              }
+              const gateFail = jobs.find(job =>
+                (job.name.startsWith('golden e2e ') || job.name.startsWith('skill sharing release gate ')) &&
+                job.status === 'completed' && badConclusions.includes(job.conclusion)
+              )
+              if (gateFail) throw new Error(`Parent release gate failed: ${gateFail.name} (${gateFail.conclusion})`)
+              const preflightReady = Boolean(preflight && preflight.status === 'completed' && preflight.conclusion === 'success')
+
+              let templateReady = !needTemplate
+              if (needTemplate) {
+                const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+                const failed = lanes.find(job => job.status === 'completed' && badConclusions.includes(job.conclusion))
+                if (failed) throw new Error(`Parent template qualification failed: ${failed.name} (${failed.conclusion})`)
+                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                  ...context.repo, run_id: runId, per_page: 100
+                })
+                templateReady = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
+              }
+              if (preflightReady && templateReady) return
               await new Promise(resolve => setTimeout(resolve, 15_000))
             }
-            throw new Error('Timed out waiting for parent orcad-template artifact.')
+            throw new Error('Timed out waiting for parent release-preflight and orcad-template.')
 
       # Design D2: the parent release-cut run merged it from every node-server lane at this tag.
       - name: Download the orcad deployment template from the release run
@@ -313,5 +341,6 @@ jobs:
             dist/*.zip
             dist/*.blockmap
             dist/*.yml
+          compression-level: 0
           if-no-files-found: error
           retention-days: 7

@@ -2921,6 +2921,8 @@
         "removed": "Removed"
       },
       "notices": {
+        "accountNotMoved": "Couldn't move this chat to {{to}}: {{reason}}",
+        "accountSwitch": "Finishing this turn on {{from}}. Your next message uses {{to}}.",
         "compaction": "Context compacted",
         "contextCleared": "Context cleared",
         "continuedOutside": "Continued outside this chat.",

@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
@@ -25,24 +26,29 @@ import { antigravityUsesFileStoreAsync } from '../../../../antigravity/native-fi
 const CHAT_BACKEND_WAIT_MS = 1_500
 const LAUNCH_HOME_WAIT_MS = 1_000
 
+/** The agy new chats on this host would run, found where launches look; bare when absent. */
+async function hostAgyInput(runtime: OrcaRuntimeService) {
+  const settings = runtime.requireStore().getSettings()
+  const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
+  // Someone is looking (a chat or Settings), so agy may be started once to answer.
+  return acpHostBackendInput(ANTIGRAVITY_LAUNCH_SPEC, env, getProfileUserDataPath(), settings, {
+    startsProgram: true
+  })
+}
+
 /** Where new chats on this host run, and agy's own sign-in for those on its home. */
-async function hostChatRoute(runtime: OrcaRuntimeService) {
+async function hostChatRoute(
+  runtime: OrcaRuntimeService,
+  input?: Awaited<ReturnType<typeof hostAgyInput>>
+) {
   const settings = runtime.requireStore().getSettings()
   const orcaHome = !savedChatAuthIsPersonal(settings.antigravityChatAuth)
   // Enterprise runs on Orca's home but with agy's login, so its sign-in is read too.
   if (orcaHome && !savedChatAuthUsesAgyLogin(settings.antigravityChatAuth)) {
     return { agy: false as const, orcaHome }
   }
-  const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
-  // Someone is looking (a chat or Settings), so agy may be started once to answer.
-  const input = await acpHostBackendInput(
-    ANTIGRAVITY_LAUNCH_SPEC,
-    env,
-    getProfileUserDataPath(),
-    settings,
-    { startsProgram: true }
-  )
-  return { agy: input ? await antigravityAgySignIn(input) : ('unknown' as const), orcaHome }
+  const agy = input === undefined ? await hostAgyInput(runtime) : input
+  return { agy: agy ? await antigravityAgySignIn(agy) : ('unknown' as const), orcaHome }
 }
 
 /** Asks agy's sign-in for Google-account chats without waiting, so every surface that subscribes
@@ -84,19 +90,30 @@ export async function withAntigravityChatBackend(
   if (target.runtime !== 'host') {
     return state
   }
+  // Found as a launch finds it (PATH, then Google's install folders), on the host, not in WSL.
+  const input = await withTimeout(
+    hostAgyInput(runtime).catch(() => null),
+    CHAT_BACKEND_WAIT_MS,
+    null
+  )
+  const installed = input ? { agyInstalled: isAbsolute(input.command) } : {}
   // A cold agy check takes seconds; the rows don't wait for it, and a later refresh shows it.
   const route = await withTimeout(
-    hostChatRoute(runtime).catch(() => ({ agy: 'unknown' as const, orcaHome: false })),
+    hostChatRoute(runtime, input ?? undefined).catch(() => ({
+      agy: 'unknown' as const,
+      orcaHome: false
+    })),
     CHAT_BACKEND_WAIT_MS,
     null
   )
   if (route === null) {
-    return state
+    return { ...state, ...installed }
   }
   const agy = route.orcaHome ? false : route.agy
   const version = agy === 'signedIn' ? readyAntigravityHostAcpVersion() : null
   return {
     ...state,
+    ...installed,
     chatUsesAgy: agy === 'signedIn',
     chatAgySignedOut: agy === 'signedOut',
     ...(route.orcaHome ? { chatKeyOnAgy: true } : {}),

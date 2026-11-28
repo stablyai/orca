@@ -9,6 +9,7 @@ import {
 } from './worktree-git-common-polling'
 import { createSingleFlight } from './single-flight-promise'
 import { isOnNetworkVolume } from './worktree-git-common-network-volume'
+import type { RepoActivitySubscription } from './worktree-activity-signal'
 
 // The native watcher is primary: reconcile its silent losses every five minutes and on window focus, not every 30 s.
 const NARROW_WATCH_RECONCILIATION_TICKS = 150
@@ -29,13 +30,15 @@ type GitCommonWatchReconciliationOptions = {
   onRootReplacement: () => void
   onEvents: (events: WorktreeBasePollEvent[]) => void
   /** Agent turns and shell commands finishing in a repo this common dir serves trigger the throttled check. */
-  subscribeRepoActivity?: (listener: (repoId: string) => void) => () => void
-  ownsRepo?: (repoId: string) => boolean
+  subscribeRepoActivity?: (listener: () => void) => RepoActivitySubscription
+  getRepoIds?: () => Iterable<string>
 }
 
 type GitCommonWatchReconciliation = {
   ensureStarted: () => Promise<void>
   notifyWindowBecameVisible: () => void
+  /** Re-reads repo membership so activity routing follows a watcher sync. */
+  syncRepoIds: () => void
   unsubscribe: () => Promise<void>
 }
 
@@ -48,18 +51,14 @@ export function createGitCommonWatchReconciliation({
   onRootReplacement,
   onEvents,
   subscribeRepoActivity,
-  ownsRepo
+  getRepoIds
 }: GitCommonWatchReconciliationOptions): GitCommonWatchReconciliation {
   const worktreesDir = join(commonDirPath, 'worktrees')
   let subscription: GitCommonPollingSubscription | null = null
   let unsubscribeTriggers: (() => void) | undefined
-  const handleFocus = (): void => {
+  let repoActivity: RepoActivitySubscription | undefined
+  const poke = (): void => {
     subscription?.poke()
-  }
-  const handleRepoActivity = (repoId: string): void => {
-    if (ownsRepo?.(repoId)) {
-      subscription?.poke()
-    }
   }
   const starting = createSingleFlight()
   let onNetworkVolume: Promise<boolean> | null = null
@@ -147,11 +146,14 @@ export function createGitCommonWatchReconciliation({
           subscription = reconciliation
           // Registered per subscription: a polling-fallback cycle restarts this object after unsubscribe.
           if (!unsubscribeTriggers) {
-            const unsubscribeFocus = visibility.onWindowFocused?.(handleFocus)
-            const unsubscribeActivity = subscribeRepoActivity?.(handleRepoActivity)
+            const unsubscribeFocus = visibility.onWindowFocused?.(poke)
+            const activity = subscribeRepoActivity?.(poke)
+            activity?.setRepoIds(getRepoIds?.() ?? [])
+            repoActivity = activity
             unsubscribeTriggers = () => {
               unsubscribeFocus?.()
-              unsubscribeActivity?.()
+              activity?.unsubscribe()
+              repoActivity = undefined
             }
           }
         }
@@ -161,6 +163,9 @@ export function createGitCommonWatchReconciliation({
       for (const listener of visibilityListeners) {
         listener()
       }
+    },
+    syncRepoIds: () => {
+      repoActivity?.setRepoIds(getRepoIds?.() ?? [])
     },
     unsubscribe: async () => {
       unsubscribeTriggers?.()

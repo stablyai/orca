@@ -19,6 +19,7 @@ export type CodexStructuredSessionTeardownDeps = {
   onEvent?: (event: CodexStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
   forgetNotificationRetries: (sessionId: string) => void
+  forgetMcpSignIn?: (sessionId: string) => void
 }
 
 export class CodexStructuredSessionTeardown {
@@ -124,6 +125,7 @@ export class CodexStructuredSessionTeardown {
   private settled(sessionId: string, closed: boolean): boolean {
     if (closed) {
       this.deps.forgetNotificationRetries(sessionId)
+      this.deps.forgetMcpSignIn?.(sessionId)
     }
     return closed
   }

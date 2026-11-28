@@ -10,7 +10,11 @@ export class AcpLaunchGate {
   private readonly retained = new Set<ProviderAcquisitionConnection>()
   private readonly refusal: string
 
-  constructor(private readonly label: string) {
+  constructor(
+    private readonly label: string,
+    /** Sees every process started here, as it starts. */
+    private readonly onRetain?: (connection: ProviderAcquisitionConnection) => void
+  ) {
     this.refusal = `${label}'s setup is changing on this host. Try again after it finishes.`
   }
 
@@ -35,6 +39,7 @@ export class AcpLaunchGate {
 
   /** Retain spawned children even after acquisition finishes, before their chats are loaded. */
   retain(connection: ProviderAcquisitionConnection): void {
+    this.onRetain?.(connection)
     this.retained.add(connection)
     connection.onExit(() => this.retained.delete(connection))
   }

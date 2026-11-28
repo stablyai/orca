@@ -158,7 +158,9 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
     plan: () => ({ runnable: false, command: 'devin update' })
   },
   // `codebuddy update` follows how it was installed (npm, Homebrew or its native installer).
-  codebuddy: { latest: () => npm('@tencent-ai/codebuddy-code'), plan: selfUpdate('update') }
+  codebuddy: { latest: () => npm('@tencent-ai/codebuddy-code'), plan: selfUpdate('update') },
+  // `agy update` installs the build Google's manifest names, as its own background updater does.
+  antigravity: { latest: () => ({ kind: 'agy' }), plan: selfUpdate('update') }
 }
 
 export function agentCliUpdateDefinition(agent: AgentCliUpdateAgent): AgentCliUpdateDefinition {

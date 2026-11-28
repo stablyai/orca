@@ -3,83 +3,23 @@
 import type { ConversationEvent, ConversationEventsDeps } from './external-conversation-events'
 import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import {
-  sessionWorkerIsRunning,
-  sessionWorkerIsWorking,
-  type OrchestrationSessionWorker
-} from '../../shared/orchestration-session-workers'
-import type { ConversationBots } from './external-conversation-bots'
+import type { ConversationWorkerAnswer } from './external-conversation-worker-activities'
 import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane, type ConversationPane } from './external-conversation-types'
+import {
+  installedConversationWorkersWatcher,
+  type ConversationWorkerActivity,
+  type ConversationWorkersRead,
+  type ConversationWorkersWatcher,
+  type ConversationWorkerView
+} from './external-conversation-worker-view'
 
-/** What the chat's workers are doing, by the execution host's verdict; `idle` when every open one
- *  waits (on its coordinator or an answer), `none` when none is open. */
-export type ConversationWorkerActivity = 'working' | 'unverifiable' | 'idle' | 'none'
-
-export type ConversationWorkersHost = {
-  /** The workers each of these chats started that may still run, as its orchestration records and
-   *  their hosts tell them; one read for them all. */
-  read: (
-    sessionIds: readonly string[]
-  ) => Promise<
-    ReadonlyMap<
-      string,
-      readonly Pick<OrchestrationSessionWorker, 'state' | 'activity' | 'pendingQuestion'>[]
-    >
-  >
-}
-
-/** A conversation's activity as one read found it; `unread` where that read failed. */
-export type ConversationWorkerAnswer = ConversationWorkerActivity | 'unread'
-
-/** Each conversation's activity, by session id, in one read; a paused or removed bot's workers no
- *  longer hold its conversation, whether or not the others' read succeeds. Null where none can be read. */
-export async function conversationWorkerActivities(
-  host: { workers?: ConversationWorkersHost; bots?: ConversationBots },
-  links: readonly ExternalConversationLink[]
-): Promise<ReadonlyMap<string, ConversationWorkerAnswer> | null> {
-  if (!host.workers) {
-    return null
-  }
-  const refused = new Set(
-    links.flatMap((link) =>
-      link.bot && host.bots?.refusal(link.bot.botId) ? [link.sessionId] : []
-    )
-  )
-  const read = links.flatMap((link) => (refused.has(link.sessionId) ? [] : [link.sessionId]))
-  let workers: Awaited<ReturnType<ConversationWorkersHost['read']>> | null = new Map()
-  if (read.length > 0) {
-    try {
-      workers = await host.workers.read([...new Set(read)])
-    } catch (error) {
-      console.warn('[connector] could not read conversations’ workers', error)
-      workers = null
-    }
-  }
-  return new Map(
-    links.map((link): [string, ConversationWorkerAnswer] => [
-      link.sessionId,
-      refused.has(link.sessionId)
-        ? 'none'
-        : workers
-          ? workerActivityOf(workers.get(link.sessionId) ?? [])
-          : 'unread'
-    ])
-  )
-}
-
-function workerActivityOf(
-  workers: readonly Pick<OrchestrationSessionWorker, 'state' | 'activity' | 'pendingQuestion'>[]
-): ConversationWorkerActivity {
-  const running = workers.filter(sessionWorkerIsRunning)
-  return running.some(sessionWorkerIsWorking)
-    ? 'working'
-    : running.some((worker) => worker.state === 'unverifiable')
-      ? 'unverifiable'
-      : running.length > 0
-        ? 'idle'
-        : 'none'
-}
+export type { ConversationWorkerActivity, ConversationWorkersRead, ConversationWorkerView }
+export {
+  conversationWorkerActivities,
+  type ConversationWorkerAnswer,
+  type ConversationWorkersHost
+} from './external-conversation-worker-activities'
 
 // While some run, how often their end is looked for.
 export const CONVERSATION_WORKERS_POLL_MS = 10_000
@@ -91,11 +31,14 @@ export const CONVERSATION_WORKERS_MAX_UNVERIFIABLE_MS = 15 * 60 * 1000
 type Tracked = {
   pane: ConversationPane
   running: boolean
+  activity: ConversationWorkerActivity
+  helpersRunning: boolean
   // An idle worker is read on: it resumes without a turn of this conversation's.
   open: boolean
   // The bot's last turn end, or the first read when none was seen; bounds a running state.
   since: number
   unverifiableSince: number | null
+  lastTurnId: number | null
 }
 
 export type ConversationWorkersDeps = Pick<ConversationEventsDeps, 'setTimer' | 'now'> & {
@@ -106,17 +49,17 @@ export type ConversationWorkersDeps = Pick<ConversationEventsDeps, 'setTimer' | 
   ) => Promise<ReadonlyMap<string, ConversationWorkerAnswer> | null>
   linkedFor: (paneKey: string) => LinkedConversation | null
   emit: (event: ConversationEvent) => void
+  /** The installed watcher when absent. */
+  workersWatcher?: ConversationWorkersWatcher
 }
 
-/**
- * Why a chat's workers are read: its turn ended (which restarts the running bound), a watch began
- * (whose first read is told even when none runs, since an earlier process may have told otherwise),
- * or a poll while some run.
- */
-export type ConversationWorkersRead = 'turn-ended' | 'watch' | 'poll'
-
 /** A pane's checks waiting for the next read; each resolves once a read begun after it applies. */
-type PendingCheck = { reasons: Set<ConversationWorkersRead>; settled: (() => void)[] }
+type PendingCheck = {
+  reasons: Set<ConversationWorkersRead>
+  settled: (() => void)[]
+  // The ended turn a `turn-ended` check is for; undefined when none named one.
+  turnId?: number | null
+}
 
 /**
  * Tells a `workers` event whenever a chat conversation's running state changes. Checks wait for one
@@ -136,6 +79,18 @@ export class ConversationWorkers {
 
   constructor(private readonly deps: ConversationWorkersDeps) {}
 
+  // A watcher that throws never stops this read's other panes from applying.
+  private tell(call: (watcher: ConversationWorkersWatcher) => void): void {
+    const watcher = this.deps.workersWatcher ?? installedConversationWorkersWatcher()
+    try {
+      if (watcher) {
+        call(watcher)
+      }
+    } catch (error) {
+      console.warn('[connector] a workers watcher threw', error)
+    }
+  }
+
   /** Undefined before its first read. */
   runningOf(paneKey: string): boolean | undefined {
     return this.tracked.get(paneKey)?.running
@@ -152,7 +107,19 @@ export class ConversationWorkers {
     return this.known.has(paneKey)
   }
 
-  check(paneKey: string, reason: ConversationWorkersRead): Promise<void> {
+  /** Undefined before its first read. */
+  viewOf(paneKey: string): ConversationWorkerView | undefined {
+    const tracked = this.tracked.get(paneKey)
+    return tracked && viewOf(tracked)
+  }
+
+  /** A pane's turn just ended; its `turn-ended` check follows once its answer is read. */
+  turnEnding(paneKey: string): void {
+    this.tell((watcher) => watcher.turnEnding?.(paneKey))
+  }
+
+  /** `turnId`: the ended turn a `turn-ended` check is for. */
+  check(paneKey: string, reason: ConversationWorkersRead, turnId?: number | null): Promise<void> {
     if (!this.deps.linkedFor(paneKey)) {
       this.forget(paneKey)
       return Promise.resolve()
@@ -162,6 +129,9 @@ export class ConversationWorkers {
       const entry = this.pending.get(paneKey) ?? { reasons: new Set(), settled: [] }
       entry.reasons.add(reason)
       entry.settled.push(resolve)
+      if (reason === 'turn-ended' && turnId !== undefined) {
+        entry.turnId = turnId
+      }
       this.pending.set(paneKey, entry)
       if (!this.reading) {
         this.reading = true
@@ -221,14 +191,23 @@ export class ConversationWorkers {
           newer.reasons.add(reason)
         }
         newer.settled.push(...entry.settled)
+        if (newer.turnId === undefined && entry.turnId !== undefined) {
+          newer.turnId = entry.turnId
+        }
       } else {
         const answer =
           activities === undefined
             ? 'unread'
             : (activities?.get(conversation.link.sessionId) ?? null)
-        const activity = answer === 'unread' ? this.unreadActivity(paneKey) : answer
-        if (activity !== null) {
-          this.apply(paneKey, conversation, activity, entry.reasons)
+        const read =
+          answer === 'unread'
+            ? {
+                activity: this.unreadActivity(paneKey),
+                helpersRunning: this.tracked.get(paneKey)?.helpersRunning ?? false
+              }
+            : answer
+        if (read !== null) {
+          this.apply(paneKey, conversation, read, entry)
         }
         settle(entry)
       }
@@ -245,8 +224,8 @@ export class ConversationWorkers {
   private apply(
     paneKey: string,
     linked: LinkedConversation,
-    activity: ConversationWorkerActivity,
-    reasons: ReadonlySet<ConversationWorkersRead>
+    { activity, helpersRunning }: Exclude<ConversationWorkerAnswer, 'unread'>,
+    { reasons, turnId }: PendingCheck
   ): void {
     const now = this.deps.now()
     const prior = this.tracked.get(paneKey)
@@ -259,11 +238,22 @@ export class ConversationWorkers {
         now - unverifiableSince < CONVERSATION_WORKERS_MAX_UNVERIFIABLE_MS)
     const running = open && activity !== 'idle'
     const pane = conversationPane(linked.link, linked.workspace.worktreeId)
-    this.tracked.set(paneKey, { pane, running, open, since, unverifiableSince })
+    const tracked: Tracked = {
+      pane,
+      running,
+      activity,
+      helpersRunning,
+      open,
+      since,
+      unverifiableSince,
+      lastTurnId: turnId !== undefined ? turnId : (prior?.lastTurnId ?? null)
+    }
+    this.tracked.set(paneKey, tracked)
     const told = prior ? prior.running : reasons.has('watch') ? undefined : false
     if (running !== told) {
       this.deps.emit({ kind: 'workers', ...pane, running })
     }
+    this.tell((watcher) => watcher.applied(paneKey, viewOf(tracked), reasons))
   }
 
   // An unlinked conversation's workers no longer hold it.
@@ -272,6 +262,9 @@ export class ConversationWorkers {
     this.tracked.delete(paneKey)
     if (tracked?.running) {
       this.deps.emit({ kind: 'workers', ...tracked.pane, running: false })
+    }
+    if (tracked) {
+      this.tell((watcher) => watcher.forgotten(paneKey))
     }
   }
 
@@ -283,6 +276,7 @@ export class ConversationWorkers {
         void this.check(paneKey, 'watch')
       }
     }
+    this.tell((watcher) => watcher.watched())
   }
 
   clear(): void {
@@ -295,6 +289,7 @@ export class ConversationWorkers {
       settle(entry)
     }
     this.pending.clear()
+    this.tell((watcher) => watcher.cleared())
   }
 
   // Only conversations with open workers are polled; one without is read again at its next turn end.
@@ -313,6 +308,11 @@ export class ConversationWorkers {
   private openPanes(): string[] {
     return [...this.tracked].flatMap(([paneKey, tracked]) => (tracked.open ? [paneKey] : []))
   }
+}
+
+function viewOf(tracked: Tracked): ConversationWorkerView {
+  const { activity, open, helpersRunning, since, unverifiableSince, lastTurnId } = tracked
+  return { activity, open, helpersRunning, since, unverifiableSince, lastTurnId }
 }
 
 function settle(entry: PendingCheck): void {

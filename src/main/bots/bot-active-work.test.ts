@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { makeTestBotItem } from '../../shared/bots/bot-item.test-fixture'
 import type { BotItemLinkView } from '../../shared/bots/bot-items'
 import { botActiveWorkSection, botIdleItemsNote } from './bot-active-work'
 import { botNeedsYouInChatNote } from './bot-unanswered-question-note'
+import { createBotIdleItemChatRouter } from './bot-idle-item-chat'
+import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 
 const worker = (state: 'working' | 'unknown' | 'completed'): BotItemLinkView => ({
   kind: 'dispatch',
@@ -33,31 +40,119 @@ describe('an In progress item nothing runs for', () => {
     expect(section.text).not.toContain('nothing is running')
   })
 
-  it('is noted once per chat, again only when that item changes, whatever else changes', () => {
+  it('prompts the live owner or Home once while work stays visible across chats', () => {
     const memo = new Map<string, Map<number, string>>()
-    const say = (sessionId: string, idle: readonly { number: number; key: string }[]) => {
-      const note = botIdleItemsNote(memo, sessionId, idle)
-      note?.given()
-      return note?.text ?? null
+    const owner = { id: 'rail-chat', kind: 'thread', title: 'Rail redesign' } as const
+    const item = makeTestBotItem(7, { chat: owner })
+    const next = 'rail-after-clear'
+    const bot = { id: 'designer', folderWorkspaceId: 'designer', chatSessionId: 'home-chat' }
+    const record = (sessionId: string) => {
+      const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+      return {
+        ...base,
+        location: { ...base.location, workspaceId: folderWorkspaceKey(bot.folderWorkspaceId) }
+      }
     }
-    const idle7 = { number: 7, key: 'e10' }
-    expect(say('chat', [idle7])).toContain('Item 7 is In progress')
-    expect(say('chat', [idle7])).toBeNull()
-    const other = botActiveWorkSection([makeTestBotItem(7), makeTestBotItem(8)], [])
-    expect(other.idle).toEqual([
-      { number: 7, key: 'e10' },
-      { number: 8, key: 'e10' }
+    const records = new Map([
+      [
+        owner.id,
+        agentSessionConversationView({
+          ...record(owner.id),
+          conversationCommand: {
+            command: 'clear',
+            phase: 'committed',
+            state: 'completed',
+            callerKey: owner.id,
+            operationId: 'clear-rail',
+            replacementSessionId: next
+          }
+        })
+      ],
+      [
+        next,
+        agentSessionConversationView({
+          ...record(next),
+          location: { ...record(next).location, wslDistro: 'Ubuntu' }
+        })
+      ],
+      [bot.chatSessionId, agentSessionConversationView(record(bot.chatSessionId))]
     ])
-    expect(say('chat', other.idle!)).toMatch(/^\[Orca: Item 8 /)
-    expect(say('chat', [{ number: 7, key: 'e11' }])).toContain('Item 7')
-    expect(say('other-chat', [idle7])).toContain('Item 7')
+    const revision = {}
+    const retired = new Set<string>()
+    const unavailable = new Set<string>()
+    const background = new Set<string>()
+    const read = {
+      getRecord: (id: string) => records.get(id) ?? null,
+      isSessionUnreadable: (id: string) => unavailable.has(id),
+      isSessionTabRetired: (id: string) => retired.has(id),
+      isSessionInBackground: (id: string) => background.has(id),
+      lineageRevision: () => revision,
+      listRecords: () => {
+        throw new Error('idle notes must not enumerate chat records')
+      }
+    }
+    const route = createBotIdleItemChatRouter()
+    const say = (sessionId: string, items: readonly (typeof item)[] = [item]) => {
+      const work = botActiveWorkSection(items, [])
+      const idle = work.idle ?? []
+      const note = botIdleItemsNote(memo, sessionId, idle, route(bot, read, sessionId, idle))
+      note?.given()
+      return { context: work.text, action: note?.text ?? null }
+    }
+    expect(say('pr-review-chat')).toMatchObject({
+      context: expect.stringContaining('#7 in progress'),
+      action: null
+    })
+    expect(say(bot.chatSessionId).action).toBeNull()
+    expect(say(owner.id).action).toBeNull()
+    expect(say(next).action).toContain('Item 7 is In progress')
+    const revised = [{ ...item, lastEventId: 'e11' }]
+    retired.add(next)
+    background.add(next)
+    expect(say(bot.chatSessionId, revised).action).toBeNull()
+    background.delete(next)
+    expect(say('pr-review-chat', revised).action).toBeNull()
+    expect(say(bot.chatSessionId, revised).action).toContain('Item 7 is In progress')
+    expect(say(bot.chatSessionId, revised).action).toBeNull()
+    expect(say(next, revised).action).toContain('Item 7 is In progress')
+    retired.delete(next)
+    expect(say(next, [{ ...item, lastEventId: 'e12' }]).action).toContain('Item 7 is In progress')
+    expect(say(next, [{ ...item, status: 'done', lastEventId: 'e13' }]).action).toBeNull()
+
+    const missingId = 'deleted-chat'
+    const gone: (typeof item)[] = [
+      { ...item, chat: { ...owner, id: missingId, gone: true }, lastEventId: 'e14' }
+    ]
+    unavailable.add(missingId)
+    expect(say(bot.chatSessionId, gone).action).toBeNull()
+    unavailable.delete(missingId)
+    records.set(missingId, agentSessionConversationView(record(missingId)))
+    expect(say(bot.chatSessionId, gone).action).toBeNull()
+    expect(say(missingId, gone).action).toContain('Item 7 is In progress')
+
+    records.delete(missingId)
+    expect(say('pr-review-chat', gone).action).toBeNull()
+    expect(say(bot.chatSessionId, gone).action).toContain('Item 7 is In progress')
+    const moved = record(next)
+    records.set(
+      next,
+      agentSessionConversationView({
+        ...moved,
+        location: { ...moved.location, workspaceId: folderWorkspaceKey('another-folder') }
+      })
+    )
+    retired.add(next)
+    expect(say(bot.chatSessionId, [{ ...item, lastEventId: 'e15' }]).action).toBeNull()
+    records.delete(next)
+    expect(say(bot.chatSessionId, [{ ...item, lastEventId: 'e16' }]).action).toBeNull()
   })
 
   it('is said again when the turn that had it never delivered it', () => {
     const memo = new Map<string, Map<number, string>>()
-    const idle7 = [{ number: 7, key: 'e10' }]
-    expect(botIdleItemsNote(memo, 'chat', idle7)?.text).toContain('Item 7')
-    expect(botIdleItemsNote(memo, 'chat', idle7)?.text).toContain('Item 7')
+    const idle7 = [{ number: 7, key: 'e10', chatId: 'chat' }]
+    const sessionForChat = (id: string) => id
+    expect(botIdleItemsNote(memo, 'chat', idle7, sessionForChat)?.text).toContain('Item 7')
+    expect(botIdleItemsNote(memo, 'chat', idle7, sessionForChat)?.text).toContain('Item 7')
   })
 })
 

@@ -7,7 +7,25 @@ Orca launches Google's **Antigravity CLI**, whose command is `agy`. Installing t
 
 ## Check the CLI first
 
-Install the CLI with [Google's current instructions](https://antigravity.google/docs/cli-overview), then open a new terminal so it picks up any updated `PATH`.
+Orca doesn't install `agy` for you. Install it with [Google's installer](https://antigravity.google/docs/getting-started?tab=cli), then open a new terminal so it picks up any updated `PATH`.
+
+On macOS or Linux (installs to `~/.local/bin/agy`):
+
+```sh
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+```
+
+On Windows, in PowerShell (installs to `%LOCALAPPDATA%\agy\bin`):
+
+```powershell
+irm https://antigravity.google/cli/install.ps1 | iex
+```
+
+An Antigravity chat on a host without `agy` offers **Install**, which runs the same command in a terminal there, then **Check again**.
+
+## Keep it up to date
+
+Orca turns off `agy`'s background updater for the chats and terminals it starts, so `agy` never replaces itself in the middle of a chat. When a newer `agy` is out, or yours is older than chats need, Orca offers **Update**: in the chat, in **Settings → Agents**, and in **Settings → Accounts → Antigravity**. It runs `agy update`. You can also run `agy update` yourself.
 
 On Windows (PowerShell):
 

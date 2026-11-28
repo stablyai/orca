@@ -40,27 +40,37 @@ export type SshWorktreeMetaCandidate = {
 
 export type SshWorktreeMetaIndex = Map<string, SshWorktreeMetaCandidate[]>
 
+function addSshWorktreeMetaEntry(
+  index: SshWorktreeMetaIndex,
+  worktreeId: string,
+  meta: WorktreeMeta
+): void {
+  let parsed: { repoId: string; worktreePath: string }
+  try {
+    parsed = parseWorktreeId(worktreeId)
+  } catch (err) {
+    warnOnce(
+      loggedMalformedWorktreeMetaKeys,
+      worktreeId,
+      `[worktrees] ignoring malformed persisted worktree metadata key "${worktreeId}"`,
+      err
+    )
+    return
+  }
+  let candidates = index.get(parsed.repoId)
+  if (!candidates) {
+    candidates = []
+    index.set(parsed.repoId, candidates)
+  }
+  candidates.push({ id: worktreeId, path: parsed.worktreePath, meta })
+}
+
 export function createSshWorktreeMetaIndex(
   entries: [string, WorktreeMeta][]
 ): SshWorktreeMetaIndex {
   const index: SshWorktreeMetaIndex = new Map()
-  for (const [worktreeId, meta] of entries) {
-    let parsed: { repoId: string; worktreePath: string }
-    try {
-      parsed = parseWorktreeId(worktreeId)
-    } catch (err) {
-      warnOnce(
-        loggedMalformedWorktreeMetaKeys,
-        worktreeId,
-        `[worktrees] ignoring malformed persisted worktree metadata key "${worktreeId}"`,
-        err
-      )
-      continue
-    }
-
-    const candidates = index.get(parsed.repoId) ?? []
-    candidates.push({ id: worktreeId, path: parsed.worktreePath, meta })
-    index.set(parsed.repoId, candidates)
+  for (let i = 0; i < entries.length; i += 1) {
+    addSshWorktreeMetaEntry(index, entries[i][0], entries[i][1])
   }
   return index
 }
@@ -89,13 +99,13 @@ export function createSshWorktreeMetaIndexForRepo(
   allMeta: Record<string, WorktreeMeta>,
   repoId: string
 ): SshWorktreeMetaIndex {
-  const entries: [string, WorktreeMeta][] = []
+  const index: SshWorktreeMetaIndex = new Map()
   for (const worktreeId in allMeta) {
     if (Object.hasOwn(allMeta, worktreeId) && getRepoIdFromWorktreeId(worktreeId) === repoId) {
-      entries.push([worktreeId, allMeta[worktreeId]])
+      addSshWorktreeMetaEntry(index, worktreeId, allMeta[worktreeId])
     }
   }
-  return createSshWorktreeMetaIndex(entries)
+  return index
 }
 
 export function synthesizeSshGitWorktree(
@@ -185,8 +195,12 @@ export function buildDetectedGitWorktrees(
     ),
     (worktreeId) => readOwnedMeta(worktreeId) !== undefined
   )
+  const visibilityPaths: string[] = [repo.path]
+  for (let i = 0; i < liveWorktrees.length; i += 1) {
+    visibilityPaths.push(liveWorktrees[i].path)
+  }
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
-    [repo.path, ...liveWorktrees.map((worktree) => worktree.path)],
+    visibilityPaths,
     resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
     resolveConfiguredWorktreeBasePaths(repo)
   )

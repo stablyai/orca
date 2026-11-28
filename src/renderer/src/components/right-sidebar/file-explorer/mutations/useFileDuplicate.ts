@@ -6,6 +6,7 @@ import { copyRuntimePath } from '@/runtime/files/mutations/runtime-file-mutation
 import { runtimePathExists } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { captureFileExplorerOperationGuard } from '../navigation/file-explorer-operation-owner'
 import { translate } from '@/i18n/i18n'
+import { copyNameCandidate } from '../../../../../../shared/file-import/import-copy-name'
 
 /** Strip Electron invoke error wrappers before showing the underlying message. */
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
@@ -34,9 +35,6 @@ export function useFileDuplicate({
       }
       const dir = dirname(node.path)
       const name = basename(node.path)
-      const dotIndex = name.lastIndexOf('.')
-      const stem = dotIndex > 0 ? name.slice(0, dotIndex) : name
-      const ext = dotIndex > 0 ? name.slice(dotIndex) : ''
 
       const run = async (): Promise<void> => {
         let operationGuard
@@ -65,11 +63,11 @@ export function useFileDuplicate({
           expectedSshConnectionGeneration: operationGuard.route.expectedSshConnectionGeneration
         }
         // Find an available copy name; the exclusive copy below handles concurrent creation races.
-        let candidate = joinPath(dir, `${stem} copy${ext}`)
-        let n = 2
+        let n = 1
+        let candidate = joinPath(dir, copyNameCandidate(name, n))
         while (await runtimePathExists(context, candidate)) {
-          candidate = joinPath(dir, `${stem} copy ${n}${ext}`)
           n += 1
+          candidate = joinPath(dir, copyNameCandidate(name, n))
         }
 
         // Another process can claim the name after pathExists; retry exclusive-copy EEXIST failures with a bounded new-name search.
@@ -85,8 +83,8 @@ export function useFileDuplicate({
               err instanceof Error &&
               (err.message.includes('EEXIST') || err.message.includes('already exists'))
             if (isEexist && retries < MAX_RETRIES) {
-              candidate = joinPath(dir, `${stem} copy ${n}${ext}`)
               n += 1
+              candidate = joinPath(dir, copyNameCandidate(name, n))
               retries += 1
               continue
             }

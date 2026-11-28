@@ -4,6 +4,7 @@ import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupDelete } from './bot-group-operations'
+import { botFailureMessage } from './bot-failure-message'
 import { closeMobileNativeChatTabDraft } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { mobileBotGroupDraftKey } from './use-mobile-bot-group-draft'
 
@@ -43,8 +44,9 @@ export function MobileBotGroupDeleteConfirm({
         if (!group) {
           return
         }
+        // Never queue a destructive delete while offline to fire unexpectedly on reconnect.
         void groupDelete
-          .request(client, { groupId: group.id })
+          .request(client, { groupId: group.id }, { failWhenDisconnected: true })
           .then((reply) => {
             groupDelete.interpret(reply)
             for (const room of [group.id, ...(group.threads ?? []).map((thread) => thread.id)]) {
@@ -52,7 +54,7 @@ export function MobileBotGroupDeleteConfirm({
             }
             onDeleted()
           })
-          .catch((error: unknown) => onError(String(error)))
+          .catch((error: unknown) => onError(botFailureMessage(error) ?? String(error)))
       }}
     />
   )

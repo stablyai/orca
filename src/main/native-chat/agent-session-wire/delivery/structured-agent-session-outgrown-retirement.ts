@@ -70,6 +70,7 @@ export function createStructuredAgentSessionOutgrownRetirement(input: {
         const record = deps.store.getRecord(sessionId)
         return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
       },
+      launchAccountKey: () => deps.adapter.launchAccountKey?.(sessionId) ?? null,
       launchToolsChanged: async () => {
         const kept = await deps.adapter.keptLaunchOutgrown?.(
           sessionId,

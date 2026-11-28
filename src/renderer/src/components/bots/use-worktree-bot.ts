@@ -1,6 +1,6 @@
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useBots } from '@/lib/bot-catalog'
-import { isHome } from '../../../../shared/bots/bot-homes'
+import { isBotHome } from '../../../../shared/bots/bot-homes'
 import type { AppState } from '@/store/types'
 import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -31,10 +31,12 @@ export function botOfFolders(
   folders: readonly FolderWorkspace[],
   bots: readonly Bot[]
 ): Bot | null {
-  for (const folder of folders) {
-    const bot = bots.find((entry) => isHome(folder, [entry]))
-    if (bot) {
-      return bot
+  for (let i = 0; i < folders.length; i += 1) {
+    const folder = folders[i]
+    for (let j = 0; j < bots.length; j += 1) {
+      if (isBotHome(folder, bots[j])) {
+        return bots[j]
+      }
     }
   }
   return null
@@ -88,8 +90,17 @@ function selectFolderAncestorsByIdentity(
     }
     const parent = parents.get(identity)
     const folder = parent === undefined ? undefined : folderByIdentity.get(parent)
-    const ancestors =
-      parent === undefined ? NO_FOLDERS : [...(folder ? [folder] : []), ...ancestorsOf(parent)]
+    let ancestors: readonly FolderWorkspace[]
+    if (parent === undefined) {
+      ancestors = NO_FOLDERS
+    } else {
+      const parentAncestors = ancestorsOf(parent)
+      ancestors = folder
+        ? parentAncestors.length === 0
+          ? [folder]
+          : [folder, ...parentAncestors]
+        : parentAncestors
+    }
     result.set(identity, ancestors)
     return ancestors
   }

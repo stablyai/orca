@@ -16001,14 +16001,18 @@
           "resetDone": "アイコンと色をリセットしました",
           "undo": "元に戻す",
           "styleLetters": "文字",
-          "stylePicture": "画像",
-          "resetAppearance": "アイコンと色をリセット",
+          "styleImage": "画像",
           "faviconPlaceholder": "ファビコンを取得するウェブサイト",
           "lettersInput": "2 文字まで",
           "lettersPlaceholder": "1〜2 文字",
           "useLetters": "「{{value0}}」を使用",
-          "usingGitHubAvatar": "GitHub のアバターを使用中",
-          "openSettings": "設定を開く"
+          "openSettings": "設定を開く",
+          "noIconFound": "アイコンが見つかりません",
+          "githubAvatar": "GitHub アバター",
+          "websiteIcon": "Web サイトのアイコン",
+          "fetchIcon": "取得",
+          "uploadTooLarge": "256 KB を超えています",
+          "options": "オプション"
         }
       },
       "pet": {
@@ -18975,7 +18979,7 @@
           "runStatusDispatchFailed": "失敗"
         },
         "runContent": {
-          "noOutput": "出力内容はありません。"
+          "noOutput": "出力はありません。"
         },
         "runViewState": {
           "viewRun": "実行を表示",
@@ -22030,10 +22034,7 @@
         "refused": "Google がこのチャットの認証情報を拒否しました。",
         "usageLimit": "このサインインは使用量の上限に達しました。",
         "signInGoogle": "Google でサインイン",
-        "yourAgy": "お使いの agy",
         "yourAgyVersion": "お使いの agy · v{{version}}",
-        "orcasAgy": "Orca の agy",
-        "orcasAgyVersion": "Orca の agy · v{{version}}",
         "runsOn": "実行元: {{program}}",
         "keepsOwnLogin": "このチャットは agy 独自の Google ログインを使い続けます。新規チャットでは {{method}} を使用します。",
         "apiKeyEnvironment": "環境から取得",
@@ -25160,7 +25161,6 @@
       "noEmailNotSaved": "agy からメールアドレスが返されませんでした · 未保存",
       "saveShort": "保存",
       "active": "アクティブ",
-      "runtime": "ランタイム",
       "chatTitle": "Antigravity チャット",
       "terminalTitle": "ターミナルの agy",
       "terminalDescription": "agy 自身に保存されたアカウントを使用します。切り替えは新規 agy セッションに適用されます。",
@@ -28615,10 +28615,10 @@
         "replyTo": "{{name}} に返信…"
       },
       "empty": {
-        "allClear": "対応が必要なものはありません",
+        "allClear": "対応が必要な項目はありません",
         "body": "{{bot}} があなたのために何かを引き受けると、ここに表示されます。ボットが何をしているか、あなたに何をしてほしいかがわかります。",
         "filtered": "一致する項目はありません。",
-        "needsYou": "対応が必要なものはありません。",
+        "needsYou": "対応が必要な項目はありません。",
         "title": "項目はまだありません",
         "short": "項目はまだありません。{{bot}} が何かを引き受けると、ここに表示されます。"
       },

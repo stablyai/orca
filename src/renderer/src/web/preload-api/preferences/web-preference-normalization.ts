@@ -30,6 +30,7 @@ import { normalizeTerminalCursorStyleDefault } from '../../../../../shared/termi
 import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../../shared/i18n/ui-language'
 import { migratePortugueseUiLanguageOnLoad } from '../../../../../shared/i18n/portuguese-ui-language-migration'
+import { normalizeNewTabMenuLayout } from '../../../../../shared/new-tab-menu/new-tab-menu-layout'
 
 /** A browser-saved settings blob with each load-time migration applied. */
 export function migrateStoredWebSettings(
@@ -164,6 +165,14 @@ export function mergeSettings(
       Object.hasOwn(updates, 'nativeChatAppearance')
         ? updates.nativeChatAppearance
         : base.nativeChatAppearance
+    ),
+    newTabMenuLayout: normalizeNewTabMenuLayout(
+      Object.hasOwn(updates, 'newTabMenuLayout') ? updates.newTabMenuLayout : base.newTabMenuLayout
+    ),
+    floatingTerminalNewTabMenuLayout: normalizeNewTabMenuLayout(
+      Object.hasOwn(updates, 'floatingTerminalNewTabMenuLayout')
+        ? updates.floatingTerminalNewTabMenuLayout
+        : base.floatingTerminalNewTabMenuLayout
     ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }

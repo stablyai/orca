@@ -16775,14 +16775,18 @@
           "resetDone": "Icône et couleur réinitialisées",
           "undo": "Annuler",
           "styleLetters": "Lettres",
-          "stylePicture": "Image",
-          "resetAppearance": "Réinitialiser l'icône et la couleur",
+          "styleImage": "Image",
           "faviconPlaceholder": "Site web pour le favicon",
           "lettersInput": "Jusqu'à 2 lettres",
           "lettersPlaceholder": "1–2 lettres",
           "useLetters": "Utiliser « {{value0}} »",
-          "usingGitHubAvatar": "Utilise l'avatar GitHub",
-          "openSettings": "Ouvrir les paramètres"
+          "openSettings": "Ouvrir les paramètres",
+          "noIconFound": "Aucune icône trouvée",
+          "githubAvatar": "Avatar GitHub",
+          "websiteIcon": "Icône du site web",
+          "fetchIcon": "Récupérer",
+          "uploadTooLarge": "Plus de 256 Ko",
+          "options": "Options"
         }
       },
       "pet": {
@@ -19799,7 +19803,7 @@
           "runStatusDispatchFailed": "Échec"
         },
         "runContent": {
-          "noOutput": "Aucun contenu de sortie disponible."
+          "noOutput": "Aucune sortie."
         },
         "runViewState": {
           "viewRun": "Voir l’exécution",
@@ -22819,10 +22823,7 @@
         "refused": "Google a refusé les identifiants de ce chat.",
         "usageLimit": "Cette connexion a atteint sa limite d’utilisation.",
         "signInGoogle": "Se connecter avec Google",
-        "yourAgy": "Votre agy",
         "yourAgyVersion": "Votre agy · v{{version}}",
-        "orcasAgy": "L’agy d’Orca",
-        "orcasAgyVersion": "L’agy d’Orca · v{{version}}",
         "runsOn": "Exécuté avec : {{program}}",
         "keepsOwnLogin": "Ce chat conserve la connexion Google propre à agy. Les nouveaux chats se connectent via {{method}}.",
         "apiKeyEnvironment": "Depuis votre environnement",
@@ -25925,7 +25926,6 @@
       "noEmailNotSaved": "agy n’a pas indiqué d’adresse e-mail · non enregistrée",
       "saveShort": "Enregistrer",
       "active": "Actif",
-      "runtime": "Environnement d'exécution",
       "chatTitle": "Antigravity Chat",
       "terminalTitle": "agy dans le terminal",
       "terminalDescription": "Utilise les comptes enregistrés propres à agy. Le changement s'applique aux nouvelles sessions agy.",
@@ -29956,7 +29956,7 @@
       "newThreadTab": "Nouveau fil",
       "items": {
         "orNames": "{{names}} ou {{last}}",
-        "emptyBotsNeedsYou": "Rien de la part de {{names}} ne requiert votre action",
+        "emptyBotsNeedsYou": "Rien de {{names}} à traiter",
         "emptyBots": "Aucun élément de {{names}}",
         "emptyTitle": "Aucun élément de ce groupe pour l’instant",
         "filterNamed": "Filtrer les éléments, filtre actif : {{filter}}",

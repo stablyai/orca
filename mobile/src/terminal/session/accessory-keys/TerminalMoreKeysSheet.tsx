@@ -13,7 +13,6 @@ import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
 import type { TerminalAccessoryKey } from '../../key-input/terminal-accessory-keys'
-import '../../key-input/terminal-accessory-keys'
 import {
   TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS as TERMINAL_SHORTCUT_SPECIAL_KEYS,
   terminalAccessoryKeyAccessibilityLabel,

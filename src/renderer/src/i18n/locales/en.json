@@ -800,7 +800,12 @@
         "customCommandDescription": "Command line shared by recipes that select Custom command. Use {prompt} to pass the input as an argument; otherwise it is piped to stdin.",
         "saveFailed": "Could not save chat name settings.",
         "searchAgent": "agent",
-        "searchTemplate": "command template"
+        "searchTemplate": "command template",
+        "antigravity": "Generate chat titles with Antigravity",
+        "antigravityEnterprise": "Sends each chat’s first message to Antigravity to name it, which uses your Gemini Enterprise quota.",
+        "antigravityApiKey": "Sends each chat’s first message to Antigravity to name it, billed to your Gemini API key.",
+        "antigravityAgentPlatform": "Sends each chat’s first message to Antigravity to name it, billed to your Google Cloud project.",
+        "antigravityGoogle": "Sends each chat’s first message to Antigravity to name it, which uses your Antigravity quota on your Google account."
       },
       "providers": {
         "title": "Providers",
@@ -5795,7 +5800,8 @@
             "startChat": "Start a chat with {{value0}}",
             "cliTag": "(CLI)",
             "agentsLoading": "Loading agents",
-            "chatNotOnWindows": "No chat on Windows yet"
+            "chatNotOnWindows": "No chat on Windows yet",
+            "chatUpdateRequired": "Update CLI for chat"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -16947,14 +16953,18 @@
           "resetDone": "Icon and color reset",
           "undo": "Undo",
           "styleLetters": "Letters",
-          "stylePicture": "Picture",
-          "resetAppearance": "Reset icon & color",
+          "styleImage": "Image",
           "faviconPlaceholder": "Website for favicon",
           "lettersInput": "Up to 2 letters",
           "lettersPlaceholder": "1–2 letters",
           "useLetters": "Use “{{value0}}”",
-          "usingGitHubAvatar": "Using the GitHub avatar",
-          "openSettings": "Open Settings"
+          "openSettings": "Open Settings",
+          "noIconFound": "No icon found",
+          "githubAvatar": "GitHub avatar",
+          "websiteIcon": "Website icon",
+          "fetchIcon": "Fetch",
+          "uploadTooLarge": "Over 256 KB",
+          "options": "Options"
         }
       },
       "pet": {
@@ -21610,6 +21620,8 @@
         "autoReviewApproveFailed": "Couldn't record your approval. Try again.",
         "autoReviewApproveHint": "{{agent}} may retry this exact action once. Its review still checks the retry.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
+        "accountSwitch": "Finishing this turn on {{from}}. Your next message uses {{to}}.",
+        "accountNotMoved": "Couldn't move this chat to {{to}}: {{reason}}",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
         "forkedFrom": "Forked from",
         "forkedFromUnknown": "Forked from another chat"
@@ -23106,10 +23118,7 @@
         "refused": "Google refused this chat's credentials.",
         "usageLimit": "This sign-in reached its usage limit.",
         "signInGoogle": "Sign in with Google",
-        "yourAgy": "Your agy",
         "yourAgyVersion": "Your agy · v{{version}}",
-        "orcasAgy": "Orca's agy",
-        "orcasAgyVersion": "Orca's agy · v{{version}}",
         "runsOn": "Runs on: {{program}}",
         "keepsOwnLogin": "This chat keeps agy's own Google login. New chats use {{method}}.",
         "apiKeyEnvironment": "From your environment",
@@ -24250,7 +24259,9 @@
           "updateFailed": "Couldn't update notifications on {{host}}.",
           "unsupported": "Update Orca on {{host}} to change its notifications here.",
           "enabledDescription": "Alerts {{host}} sends for its agents and terminals, including pushes to your phones.",
-          "sectionDescription": "Alerts {{host}} sends for its agents and terminals."
+          "sectionDescription": "Alerts {{host}} sends for its agents and terminals.",
+          "loadFailed": "Couldn't load notifications from {{host}}.",
+          "retry": "Try again"
         }
       },
       "orcaAccount": {
@@ -25675,6 +25686,9 @@
         "accounts": "accounts"
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
+      "switched": "Switched to {{account}}",
+      "switchedDescription": "New chats use it now. Chats running a turn switch at their next message.",
+      "switchFailedToast": "Antigravity account update failed.",
       "authMethod": "Sign in with",
       "personal": "Google account",
       "enterprise": "Gemini Enterprise",
@@ -25715,7 +25729,6 @@
       "noEmailNotSaved": "agy didn't report an email · not saved",
       "saveShort": "Save",
       "active": "Active",
-      "runtime": "Runtime",
       "chatTitle": "Antigravity Chat",
       "terminalTitle": "agy in the terminal",
       "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
@@ -25737,7 +25750,11 @@
       "loginNow": "agy's login right now",
       "signedInUnread": "agy is signed in",
       "unreadDetail": "Show the account to see which one. macOS may ask you to allow keychain access.",
-      "showAccount": "Show account"
+      "showAccount": "Show account",
+      "agyCli": "agy CLI",
+      "agyUpdateAvailable": "v{{installed}} · v{{latest}} available",
+      "agyNotInstalled": "Not installed on this host.",
+      "agyInstallLink": "Install it with Google's installer"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -31411,6 +31428,7 @@
     "qwenCodeProduct": "Qwen Code",
     "devinProduct": "Devin CLI",
     "codebuddyProduct": "CodeBuddy Code",
+    "antigravityProduct": "Antigravity CLI",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",

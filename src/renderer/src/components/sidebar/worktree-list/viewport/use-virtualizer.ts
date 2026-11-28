@@ -114,6 +114,11 @@ export function useWorktreeListVirtualizer(args: {
       }
       const row = index === null ? undefined : renderRows[index]
       if (row?.type === 'item' || row?.type === 'folder-workspace') {
+        const box = entry?.borderBoxSize?.[0]
+        // Why: Math.round in TanStack's default measureElement rounds fractional card heights down, overlapping rows.
+        if (box) {
+          return Math.ceil(box.blockSize)
+        }
         return measureVirtualElementSize(element, entry, instance)
       }
       // Why: TanStack returns the cached slot size for entry-less measures, so the gap must be added to the DOM box or it compounds on every remeasure.

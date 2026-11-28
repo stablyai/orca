@@ -56,6 +56,38 @@ export function workspaceAttachmentReferenceLabel(
   return formats[item.type](item.number)
 }
 
+export const EMPTY_WORKSPACE_ATTACHMENTS: readonly WorkspaceAttachment[] = Object.freeze([])
+
+export function hasWorkspaceAttachments(
+  meta: WorkspaceAttachmentMetadata | null | undefined
+): boolean {
+  if (!meta) {
+    return false
+  }
+  if (Array.isArray(meta.linkedItems) && meta.linkedItems.length > 0) {
+    return true
+  }
+  if (meta.linkedWorkItem) {
+    return true
+  }
+  for (let i = 0; i < WORKSPACE_ATTACHMENT_NUMBER_SLOTS.length; i += 1) {
+    const number = meta[WORKSPACE_ATTACHMENT_NUMBER_SLOTS[i][0]]
+    if (typeof number === 'number' && Number.isSafeInteger(number) && number > 0) {
+      return true
+    }
+  }
+  return Boolean(meta.linkedLinearIssue?.trim())
+}
+
+export function getReadonlyWorkspaceAttachments(
+  meta: WorkspaceAttachmentMetadata | null | undefined
+): readonly WorkspaceAttachment[] {
+  if (!hasWorkspaceAttachments(meta)) {
+    return EMPTY_WORKSPACE_ATTACHMENTS
+  }
+  return getWorkspaceAttachments(meta)
+}
+
 export function getWorkspaceAttachments(
   meta: WorkspaceAttachmentMetadata | null | undefined
 ): WorkspaceAttachment[] {

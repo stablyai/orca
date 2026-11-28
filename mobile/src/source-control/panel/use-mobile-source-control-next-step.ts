@@ -3,7 +3,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { presentPrMerge } from '../review/pull-request/actions/pr-actions-state'
 import { useMobilePrActions } from '../review/pull-request/actions/use-mobile-pr-actions'
-import '../review/pull-request/actions/pr-actions-engine'
 import type { PrActionBusyKey } from '../review/pull-request/actions/pr-actions-engine'
 import { prActionSlices, type PrSlice } from '../review/pull-request/mobile-pr-queries'
 import {

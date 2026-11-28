@@ -114,6 +114,8 @@ export type WorkerTurnStopReportDeps = {
   coordinatorApprovals?: () => boolean
   /** A chat whose turn ended while its own background tasks run: its background waits own that rest. */
   chatWaitsOnBackground?: (sessionId: string) => boolean
+  /** A person stopped this chat's background work at or after `since`. */
+  backgroundStopRequestedSince?: (sessionId: string, since: number) => boolean
 }
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {

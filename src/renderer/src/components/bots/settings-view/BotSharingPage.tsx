@@ -23,7 +23,7 @@ export function BotSharingGroup({
   open: (page: BotSettingsPage) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const { read } = useBotShareLink(bot.id, undefined, useOrcaCloudSignedOut())
+  const { read } = useBotShareLink(bot, undefined, useOrcaCloudSignedOut())
   const link = read.kind === 'read' ? read.link : undefined
   const value =
     link === null
@@ -45,7 +45,7 @@ export function BotSharingGroup({
 }
 
 export function BotSharingPage({ bot }: { bot: Bot }): React.JSX.Element {
-  const linkState = useBotShareLink(bot.id, undefined, useOrcaCloudSignedOut())
+  const linkState = useBotShareLink(bot, undefined, useOrcaCloudSignedOut())
   const { read, reread } = linkState
   const [sharing, setSharing] = useState(false)
   return (

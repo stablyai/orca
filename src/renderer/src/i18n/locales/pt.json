@@ -16769,7 +16769,7 @@
           "runStatusDispatchFailed": "Falhou"
         },
         "runContent": {
-          "noOutput": "Nenhum conteúdo de saída disponível."
+          "noOutput": "Sem saída."
         },
         "runViewState": {
           "viewRun": "Ver execução",
@@ -20883,14 +20883,18 @@
           "resetDone": "Ícone e cor redefinidos",
           "undo": "Desfazer",
           "styleLetters": "Letras",
-          "stylePicture": "Imagem",
-          "resetAppearance": "Redefinir ícone e cor",
+          "styleImage": "Imagem",
           "faviconPlaceholder": "Site para o favicon",
           "lettersInput": "Até 2 letras",
           "lettersPlaceholder": "1–2 letras",
           "useLetters": "Usar “{{value0}}”",
-          "usingGitHubAvatar": "Usando o avatar do GitHub",
-          "openSettings": "Abrir Configurações"
+          "openSettings": "Abrir Configurações",
+          "noIconFound": "Nenhum ícone encontrado",
+          "githubAvatar": "Avatar do GitHub",
+          "websiteIcon": "Ícone do site",
+          "fetchIcon": "Buscar",
+          "uploadTooLarge": "Mais de 256 KB",
+          "options": "Opções"
         }
       },
       "jira": {
@@ -23992,10 +23996,7 @@
         "refused": "O Google recusou as credenciais deste chat.",
         "usageLimit": "Este login atingiu o limite de uso.",
         "signInGoogle": "Entrar com o Google",
-        "yourAgy": "Seu agy",
         "yourAgyVersion": "Seu agy · v{{version}}",
-        "orcasAgy": "agy do Orca",
-        "orcasAgyVersion": "agy do Orca · v{{version}}",
         "runsOn": "Executa em: {{program}}",
         "keepsOwnLogin": "Este chat mantém o login do Google do próprio agy. Os novos chats usam {{method}}.",
         "apiKeyEnvironment": "Do seu ambiente",
@@ -26117,7 +26118,6 @@
       "noEmailNotSaved": "agy não informou um e-mail · não salvo",
       "saveShort": "Salvar",
       "active": "Ativo",
-      "runtime": "Runtime",
       "chatTitle": "Chat do Antigravity",
       "terminalTitle": "agy no terminal",
       "terminalDescription": "Usa as contas salvas do próprio agy. A troca vale para novas sessões do agy.",
