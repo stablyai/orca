@@ -106,12 +106,13 @@ export async function acquireFolderContextSlot(cwd: string, path: string): Promi
 
 /** Takes Orca's text back out of `cwd`'s `path`: deletes a file Orca wrote for `agentName`, or
  *  removes only Orca's block from a file the user wrote. A symlink, or a file that cannot be
- *  read as UTF-8, stays. */
+ *  read as UTF-8, stays. Resolves false when Orca's block is still in the file afterwards (every
+ *  pass saw a save land), so a leftover is reported instead of passing silently. */
 export async function removeFolderContextFile(
   cwd: string,
   path: string,
   agentName: string
-): Promise<void> {
+): Promise<boolean> {
   const target = join(await realpath(cwd).catch(() => cwd), path)
   await replaceWhileUnchanged(
     target,
@@ -121,6 +122,16 @@ export async function removeFolderContextFile(
     },
     (existing) => (existing === null ? undefined : withoutOrcaText(existing, agentName))
   )
+  const info = await lstat(target).catch(() => null)
+  // Absent, or not a regular file Orca could have written, leaves nothing of ours behind.
+  if (!info || !info.isFile()) {
+    return true
+  }
+  const current = await readUtf8(target).catch(() => undefined)
+  if (current === undefined) {
+    return true
+  }
+  return !current.startsWith(header(agentName)) && !orcaBlockRange(current)
 }
 
 /** Orca's own file goes whole (null). From a file the user wrote only Orca's block goes, with the

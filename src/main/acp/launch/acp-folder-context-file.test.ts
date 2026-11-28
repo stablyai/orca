@@ -155,6 +155,31 @@ it("takes Orca's text back out of a context file and keeps the user's", async ()
   expect(await readFile(join(dir, 'GEMINI.md'), 'utf8')).toBe('My own rules.\n')
 })
 
+it('reports Orca text verifiably gone after removal', async () => {
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  await expect(removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')).resolves.toBe(true)
+
+  await writeFile(join(dir, 'GEMINI.md'), 'My own rules.\n')
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  await expect(removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')).resolves.toBe(true)
+  expect(await readFile(join(dir, 'GEMINI.md'), 'utf8')).toBe('My own rules.\n')
+})
+
+it('reports false when a save lands on every pass so Orca block stays', async () => {
+  const path = join(dir, 'GEMINI.md')
+  await writeFile(path, 'My own rules.\n')
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  const withBlock = await readFile(path, 'utf8')
+  let saves = 0
+  const arm = () => {
+    saveAfterNextRead = () => writeFile(path, `${withBlock}# save ${++saves}\n`).then(arm)
+  }
+  arm()
+  await expect(removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')).resolves.toBe(false)
+  expect(await readFile(path, 'utf8')).toContain('bot preamble')
+  saveAfterNextRead = null
+})
+
 it("leaves every byte around Orca's block as the user wrote it", async () => {
   const path = join(dir, 'GEMINI.md')
   const user = '# Rules\r\n\n```\n    indented code\n```\n  \n'

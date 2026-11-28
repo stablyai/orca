@@ -3,7 +3,7 @@ import { encodePowerShellCommand } from '../../../shell/launch/powershell-comman
 import { agentSessionInstallCommand } from './agent-session-setup-commands'
 
 const VIBE_WINDOWS_INSTALL =
-  "irm https://astral.sh/uv/install.ps1 | iex; & '$env:USERPROFILE/.local/bin/uv.exe' tool install --python 3.12 mistral-vibe"
+  'irm https://astral.sh/uv/install.ps1 | iex; & "$env:USERPROFILE/.local/bin/uv.exe" tool install --python 3.12 mistral-vibe'
 
 describe('agentSessionInstallCommand', () => {
   it('wraps a windowsInstallScript URL with irm | iex on win32', () => {
