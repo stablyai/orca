@@ -30,16 +30,49 @@ const TICK_OUTER = RADIUS + STROKE / 2
 // The ring's inner chord at the reset label's lower edge (8pt below centre), ~30pt.
 const RESET_LABEL_ROOM = 2 * Math.sqrt((RADIUS - STROKE / 2) ** 2 - 8 ** 2)
 
+/** The ring and its labels at `diameter`, scaled from the Duo's; null keeps the Duo's styles as they are. */
+function scaledRing(diameter: number | undefined) {
+  if (diameter === undefined || diameter === SIZE) {
+    return null
+  }
+  const k = diameter / SIZE
+  const stroke = STROKE * k
+  const radius = (diameter - stroke) / 2
+  return {
+    k,
+    size: diameter,
+    stroke,
+    center: diameter / 2,
+    radius,
+    glyph: Math.round(GLYPH_SIZE * k),
+    tickInner: radius - stroke / 2 - k,
+    tickOuter: radius + stroke / 2,
+    ring: { width: diameter, height: diameter },
+    inside: { marginTop: -6 * k },
+    labelRow: { left: -6 * k, right: -6 * k, top: diameter - stroke / 2 - 6 * k },
+    percent: { fontSize: 10 * k, lineHeight: 12 * k },
+    window: { fontSize: 8 * k, lineHeight: 9 * k }
+  }
+}
+
 /** One provider's most relevant window as an arc gauge, drawn like the Duo's Wi-Fi and battery ring. */
 export function RailUsageRing({
   usage,
   now,
-  onPress
+  onPress,
+  diameter
 }: {
   usage: AgentUsage
   now: number
   onPress: () => void
+  /** Smaller when the stack must shrink so every ring fits above the jump arrows. */
+  diameter?: number
 }): React.JSX.Element | null {
+  const scaled = scaledRing(diameter)
+  const size = scaled?.size ?? SIZE
+  const stroke = scaled?.stroke ?? STROKE
+  const center = scaled?.center ?? CENTER
+  const radius = scaled?.radius ?? RADIUS
   const colors = useMobileColors()
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
@@ -63,12 +96,14 @@ export function RailUsageRing({
   }
   const resetsIn = usageResetLabel(entry.window, now)
   const label =
-    fullLabelWidth !== null && fullLabelWidth <= RESET_LABEL_ROOM
+    fullLabelWidth !== null && fullLabelWidth <= RESET_LABEL_ROOM * (scaled?.k ?? 1)
       ? resetsIn
       : usageResetLabel(entry.window, now, 'compact')
   const tick = marker === null ? null : marker / 100
-  const tickInner = tick === null ? null : railRingPoint(CENTER, TICK_INNER, tick)
-  const tickOuter = tick === null ? null : railRingPoint(CENTER, TICK_OUTER, tick)
+  const tickInner =
+    tick === null ? null : railRingPoint(center, scaled?.tickInner ?? TICK_INNER, tick)
+  const tickOuter =
+    tick === null ? null : railRingPoint(center, scaled?.tickOuter ?? TICK_OUTER, tick)
   return (
     <Pressable
       accessibilityRole="button"
@@ -87,22 +122,22 @@ export function RailUsageRing({
       }
       hitSlop={{ left: 8, right: 8, top: 8, bottom: 8 }}
       onPress={onPress}
-      style={({ pressed }) => [styles.ring, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.ring, scaled?.ring, pressed && styles.pressed]}
       testID={`rail-usage-ring-${usage.provider}`}
     >
-      <Svg width={SIZE} height={SIZE} style={styles.arc}>
+      <Svg width={size} height={size} style={styles.arc}>
         <Path
-          d={railRingArc(CENTER, RADIUS, 0, 1)}
+          d={railRingArc(center, radius, 0, 1)}
           stroke={colors.translucentFill}
-          strokeWidth={STROKE}
+          strokeWidth={stroke}
           strokeLinecap="round"
           fill="none"
         />
         {readout.shown > 0 ? (
           <Path
-            d={railRingArc(CENTER, RADIUS, 0, readout.shown / 100)}
+            d={railRingArc(center, radius, 0, readout.shown / 100)}
             stroke={fill}
-            strokeWidth={STROKE}
+            strokeWidth={stroke}
             strokeLinecap="round"
             fill="none"
           />
@@ -119,23 +154,23 @@ export function RailUsageRing({
           />
         ) : null}
       </Svg>
-      <View style={styles.inside} pointerEvents="none">
-        <UsageProviderGlyph provider={usage.provider} size={GLYPH_SIZE} />
-        <Text style={styles.window} numberOfLines={1} allowFontScaling={false}>
+      <View style={[styles.inside, scaled?.inside]} pointerEvents="none">
+        <UsageProviderGlyph provider={usage.provider} size={scaled?.glyph ?? GLYPH_SIZE} />
+        <Text style={[styles.window, scaled?.window]} numberOfLines={1} allowFontScaling={false}>
           {label}
         </Text>
       </View>
       <View style={styles.measure} pointerEvents="none" aria-hidden>
         <Text
-          style={styles.window}
+          style={[styles.window, scaled?.window]}
           allowFontScaling={false}
           onLayout={(event) => setFullLabelWidth(event.nativeEvent.layout.width)}
         >
           {resetsIn}
         </Text>
       </View>
-      <View style={[styles.labelRow, styles.percentRow]} pointerEvents="none">
-        <Text style={styles.percent} numberOfLines={1} allowFontScaling={false}>
+      <View style={[styles.labelRow, styles.percentRow, scaled?.labelRow]} pointerEvents="none">
+        <Text style={[styles.percent, scaled?.percent]} numberOfLines={1} allowFontScaling={false}>
           {readout.shown}
         </Text>
       </View>

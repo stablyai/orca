@@ -65,4 +65,28 @@ describe('railRingStackFit', () => {
     expect(laid[4].labelBottom + fit.paddingBottom - base.overhang).toBeLessThanOrEqual(274)
     expect(laid[1].top - laid[0].labelBottom).toBeGreaterThanOrEqual(base.minGap)
   })
+
+  it('shrinks rings and labels together before cutting any, and keeps full size when they fit', () => {
+    const minRing = base.ring * 0.75
+    const natural = railRingStackFit({ ...base, count: 5, room: 400, minRing })
+    expect(natural.diameter).toBeUndefined()
+    expect(natural.height).toBeNull()
+
+    // Full size needs 276pt once gaps are tight. 275pt scales to 40pt and still fits all five.
+    const scaled = railRingStackFit({ ...base, count: 5, room: 275, minRing })
+    expect(scaled.diameter).toBe(40)
+    expect(scaled.height).toBeNull()
+    const diameter = scaled.diameter ?? 0
+    const overhang = base.overhang * (diameter / base.ring)
+    const clear = scaled.gap - overhang
+    expect(clear).toBeGreaterThanOrEqual(base.minGap)
+    const used =
+      scaled.paddingTop + 5 * (diameter + overhang) + 4 * clear + (scaled.paddingBottom - overhang)
+    expect(used).toBeLessThanOrEqual(275)
+
+    // Below the 75% floor the stack still scrolls whole rings instead of shrinking further.
+    const cut = railRingStackFit({ ...base, count: 5, room: 200, minRing })
+    expect(cut.diameter).toBeUndefined()
+    expect(cut.height).toBe(179)
+  })
 })
