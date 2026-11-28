@@ -111,3 +111,30 @@ it('leaves a prompt queued behind a running turn to the queue, and still finds i
   expect(await rig.drafts()).toEqual([expect.objectContaining({ messageId, state: 'waiting' })])
   expect(await sendsOf(rig)).toEqual([])
 })
+
+/** Restarts again, as Orca does after the person acted on the kept prompt. */
+async function restartAgain(chat: QueuedMessageTestRig): Promise<void> {
+  await chat.crashRestartHostFromDisk()
+  setStructuredAgentSessionHost(chat.host)
+}
+
+it('never resends a kept prompt the person Stopped after recovery sent it', async () => {
+  const chat = await quitBeforeTheAgentGotIt()
+  chat.holdNextStart()
+  await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
+  expect(await chat.stop()).toMatchObject({ ok: true })
+  await restartAgain(chat)
+  await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
+  expect(await sendsOf(chat)).toHaveLength(1)
+})
+
+it('never sends a kept prompt its agent refused', async () => {
+  const chat = await quitBeforeTheAgentGotIt()
+  chat.holdNextStart()
+  await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
+  await chat.settleRejected(await chat.handoffId(messageId), 'refused')
+  expect(await chat.drafts()).toEqual([expect.objectContaining({ messageId, state: 'returned' })])
+  await restartAgain(chat)
+  await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
+  expect(await sendsOf(chat)).toHaveLength(1)
+})

@@ -12,6 +12,8 @@ import {
   automationRunOperationId
 } from '../launch/automation-run-operation'
 import type { AutomationRunReceipt } from '../launch/automation-run-receipt'
+import { structuredQueuePauses } from '../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-pause'
+import { queuePauseHolding } from '../../native-chat/agent-session-journal/queued-messages/queued-message-pause'
 
 /** The chat holding a self-sent run's prompt when Orca quit before saving that chat, found by the
  *  prompt's run-derived id; null when none holds it (the run can't be confirmed, as for any run). */
@@ -28,8 +30,9 @@ export async function selfSentRunReceipt(
     : null
 }
 
-/** Sends a self-sent run's prompt that its chat kept unsent when Orca restarted. Sending consumes the
- *  kept card, and a consumed card is never sent again. */
+/** Sends a self-sent run's prompt that its chat kept unsent when Orca restarted, unless someone
+ *  acted on it since (Stop, close, a hold or a refusal). Sending consumes the kept card, and a
+ *  consumed card is never sent again. */
 export async function sendRunPromptKeptAtRestart(
   runtime: OrcaRuntimeService,
   run: Pick<AutomationRun, 'id' | 'createdAt' | 'chatSessionId'>,
@@ -45,11 +48,20 @@ export async function sendRunPromptKeptAtRestart(
   }
   const messageId = automationRunOperationId(run, 'run-message')
   const { journal } = opened
-  const [submission, card] = await Promise.all([
+  const [submission, card, pauses, sends] = await Promise.all([
     journal.reads.submission(messageId),
-    journal.queuedMessages.get(messageId)
+    journal.queuedMessages.get(messageId),
+    structuredQueuePauses(journal),
+    journal.reads.input({ kind: 'linked-to', messageId })
   ])
-  if (submission?.rejection?.kind !== 'hostRestarted' || card?.state !== 'waiting') {
+  // Kept by a restart and nothing since: its last send was cut by a restart (not Stopped, closed or
+  // refused), and only the restart's pause holds it, as the queue itself would read it.
+  const lastSend = sends.submissions.at(-1) ?? submission
+  if (
+    !card ||
+    lastSend?.rejection?.kind !== 'hostRestarted' ||
+    queuePauseHolding(pauses, card)?.reason !== 'restarted'
+  ) {
     return
   }
   // A teardown that began during the reads never starts the agent's turn.
