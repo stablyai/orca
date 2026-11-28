@@ -73,6 +73,8 @@ export function updateIpynbCellKind(
   const cell = ensureCell(root, index)
   cell.cell_type = kind
   if (kind === 'code') {
+    // Attachments belong only to Markdown/raw cells in nbformat.
+    delete cell.attachments
     cell.outputs = Array.isArray(cell.outputs) ? cell.outputs : []
     cell.execution_count = typeof cell.execution_count === 'number' ? cell.execution_count : null
     cell.metadata = isRecord(cell.metadata) ? cell.metadata : {}
