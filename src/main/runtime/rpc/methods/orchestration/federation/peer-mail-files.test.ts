@@ -1,5 +1,6 @@
 // `send --on <server> --to bot:<name> --file`, through the real send and delivery on both Orcas;
 // only the attachment transfer between them is stubbed.
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,6 +29,12 @@ import type { OrchestrationEnvironmentTransport } from '../../../../orchestratio
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcContext } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
+import { applyJournalWriterEffect } from '../../../../../native-chat/agent-session-journal/journal-writer-effects'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { agentSessionAttachmentUploadIdOfPath } from '../../../../../../shared/agent-session/agent-session-attachments'
 import { runtimeBotChats } from '../../../../../bots/bot-chat-session'
 import type { Bot } from '../../../../../../shared/bot-types'
 
@@ -65,6 +72,17 @@ describe('files sent with mail to a bot on a paired server', () => {
   let duringClaim: (() => void) | undefined
   let chatClosed: boolean
   let docs: Bot
+  let bState: string
+  let journal: ReturnType<typeof openTestJournalHostDatabase>
+  /** The upload's claims on B, by chat; none means the sweep treats it as unused. */
+  const claimsOn = (path: string): string[] =>
+    (
+      journal.db
+        .prepare('SELECT session_id FROM agent_session_attachment_claims WHERE upload_id = ?')
+        .all(agentSessionAttachmentUploadIdOfPath(path) ?? '') as { session_id: string }[]
+    ).map(({ session_id }) => session_id)
+  /** The upload (1-based) whose commit stores the file and then loses its answer. */
+  let lostCommit: number | null
 
   function openSide(name: string, machine: string, transport?: OrchestrationEnvironmentTransport) {
     const db = new OrchestrationDb(join(dir, `${name}.db`))
@@ -83,6 +101,8 @@ describe('files sent with mail to a bot on a paired server', () => {
 
   /** The transfer itself, stubbed: bytes land in B's real store, as its upload methods put them. */
   const uploads = new Map<string, { name: string; chunks: Buffer[] }>()
+  /** Where B stored each upload it committed, in order. */
+  const committed: string[] = []
   async function transfer(method: string, params: Record<string, unknown>): Promise<unknown> {
     if (method === 'agentSessionAttachment.uploadStart') {
       const uploadId = `upload_${uploads.size + 1}`
@@ -90,12 +110,16 @@ describe('files sent with mail to a bot on a paired server', () => {
       return { uploadId }
     }
     const upload = uploads.get(String(params.uploadId))!
+    if (method === 'agentSessionAttachment.uploadAbort') {
+      return {}
+    }
     if (method === 'agentSessionAttachment.uploadAppend') {
       upload.chunks.push(Buffer.from(String(params.contentBase64), 'base64'))
       return { receivedBytes: Buffer.concat(upload.chunks).byteLength }
     }
     const bytes = Buffer.concat(upload.chunks)
     const path = await bStore.storeFile(upload.name, bytes)
+    committed.push(path)
     return { path, name: upload.name, byteLength: bytes.byteLength }
   }
 
@@ -127,6 +151,11 @@ describe('files sent with mail to a bot on a paired server', () => {
       }
       if (method === 'agentSessionAttachment.uploadStart' && uploads.size + 1 === failingUpload) {
         return { id: method, ok: false, error: { code: 'upload_failed', message: 'Disk full' } }
+      }
+      if (method === 'agentSessionAttachment.uploadCommit' && uploads.size === lostCommit) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every upload call carries an object of params.
+        await transfer(method, params as Record<string, unknown>)
+        return { id: method, ok: false, error: { code: 'runtime_timeout', message: 'Timed out' } }
       }
       if (method.startsWith('agentSessionAttachment.')) {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every upload call carries an object of params.
@@ -228,24 +257,41 @@ describe('files sent with mail to a bot on a paired server', () => {
     calls = []
     claimedFor = []
     failingUpload = null
+    lostCommit = null
     duringClaim = undefined
     chatClosed = false
     uploads.clear()
+    committed.length = 0
     b = openSide('b', 'Build Box')
     a = openSide('a', "Jinwoo's Mac", transport)
-    bStore = new AgentSessionAttachmentStore(agentSessionAttachmentStoreRoot(join(dir, 'b')), {
+    bState = join(dir, 'b')
+    bStore = new AgentSessionAttachmentStore(agentSessionAttachmentStoreRoot(bState), {
       hasSession: () => true
     })
-    setAgentSessionAttachmentStore(bStore, async (sessionId) => {
-      claimedFor.push(sessionId)
-      duringClaim?.()
-    })
+    // B's real claims: the journal's own claim and release, as the host installs them.
+    journal = openTestJournalHostDatabase(bState)
+    setAgentSessionAttachmentStore(
+      bStore,
+      async (sessionId, body) => {
+        claimedFor.push(sessionId)
+        const claim = { sessionId, body, required: true, now: Date.now() }
+        const claimed = applyJournalWriterEffect(journal.db, bState, { kind: 'claim', claim })
+        duringClaim?.()
+        return claimed && typeof claimed === 'object' && 'inserted' in claimed
+          ? claimed.inserted
+          : undefined
+      },
+      async (sessionId, uploadIds) => {
+        applyJournalWriterEffect(journal.db, bState, { kind: 'release', sessionId, uploadIds })
+      }
+    )
     file = join(dir, 'notes.txt')
     writeFileSync(file, 'the notes')
     bots()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestJournalHostDatabase(bState)
     setStructuredAgentSessionHost(null)
     setAgentSessionAttachmentStore(null)
     a.runtime.stopOrchestrationFederationRelay()
@@ -270,6 +316,7 @@ describe('files sent with mail to a bot on a paired server', () => {
     expect(stored).toContain(bStore.rootDir)
     expect(stored).toContain('notes.txt')
     expect(claimedFor).toEqual([B_SESSION])
+    expect(claimsOn(committed[0]!)).toEqual([B_SESSION])
   })
 
   it('attaches them into the --chat the mail names, not the Home Chat', async () => {
@@ -395,11 +442,14 @@ describe('files sent with mail to a bot on a paired server', () => {
       send({ to: 'bot:Docs', chat: `chat:${B_OTHER}`, files: [file] })
     ).rejects.toMatchObject({
       message: expect.stringMatching(
-        /^Docs's chat moved on to a new session while uploading\. The message wasn't sent\. A file already copied to devB .* clears unused uploads later\. Send it again\.$/
+        /^Docs's chat moved on to a new session while uploading\. The message wasn't sent\. A file already copied to devB for it is attached to nothing there; Orca on devB clears unused uploads later\. Send it again\.$/
       ),
       data: { effectsApplied: true, unattachedUploads: 1 }
     })
     expect(b.db.getInbox(10)).toEqual([])
+    // The claim it took was given back, so the sweep treats the file as unused.
+    expect(claimedFor).toEqual([B_OTHER])
+    expect(claimsOn(committed[0]!)).toEqual([])
   })
 
   it('refuses a file that cannot be read before uploading any', async () => {
@@ -437,5 +487,62 @@ describe('files sent with mail to a bot on a paired server', () => {
       data: { unattachedUploads: 1 }
     })
     expect(b.db.getInbox(10)).toEqual([])
+  })
+  it('says a file may have been copied when its commit answer is lost', async () => {
+    lostCommit = 1
+
+    const error = await send({ to: 'bot:Docs', files: [file] }).catch((thrown: unknown) => thrown)
+
+    expect(error).toMatchObject({
+      message:
+        "Timed out. The message wasn't sent. A file may have been copied to devB for it; if so, it is attached to nothing there, and Orca on devB clears unused uploads later.",
+      data: { unattachedUploads: 0, maybeUploadedOneMore: true }
+    })
+    expect((error as { data: { effectsApplied?: unknown } }).data.effectsApplied).toBeUndefined()
+    expect(committed).toHaveLength(1)
+    expect(b.db.getInbox(10)).toEqual([])
+  })
+
+  it('counts the files it knows were copied, and the one that may have been', async () => {
+    lostCommit = 2
+    const second = join(dir, 'more.txt')
+    writeFileSync(second, 'more notes')
+
+    await expect(send({ to: 'bot:Docs', files: [file, second] })).rejects.toMatchObject({
+      message:
+        "Timed out. The message wasn't sent. A file already copied to devB for it, and maybe one more, are attached to nothing there; Orca on devB clears unused uploads later.",
+      data: { effectsApplied: true, unattachedUploads: 1, maybeUploadedOneMore: true }
+    })
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses a pipe without waiting for a writer, uploading nothing',
+    async () => {
+      const pipe = join(dir, 'pipe')
+      execFileSync('mkfifo', [pipe])
+
+      await expect(send({ to: 'bot:Docs', files: [pipe] })).rejects.toMatchObject({
+        message: "pipe can't be read. Nothing was sent.",
+        data: { effectsApplied: false }
+      })
+      expect(methods()).not.toContain('agentSessionAttachment.uploadStart')
+    }
+  )
+
+  it('says which files reached the server when a step before delivery fails', async () => {
+    const prepare = a.db.db.prepare.bind(a.db.db)
+    vi.spyOn(a.db.db, 'prepare').mockImplementation((sql: string) => {
+      if (/INSERT[^]*peer_questions_out/i.test(sql)) {
+        throw new Error('disk I/O error')
+      }
+      return prepare(sql)
+    })
+
+    await expect(send({ to: 'bot:Docs', files: [file] })).rejects.toMatchObject({
+      message:
+        "disk I/O error. The message wasn't sent. A file already copied to devB for it is attached to nothing there; Orca on devB clears unused uploads later.",
+      data: { effectsApplied: true, unattachedUploads: 1 }
+    })
+    expect(methods()).not.toContain('orchestration.peerMailDeliver')
   })
 })

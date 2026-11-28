@@ -4,21 +4,35 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session/jour
 import type { AgentSessionAttachmentStore } from './agent-session-attachment-store'
 
 /** Requires every store upload `body` references and claims it for `sessionId`, through the journal
- *  writer that owns claims and sweeps; throws `AgentSessionAttachmentExpiredError` for a gone one. */
+ *  writer that owns claims and sweeps; throws `AgentSessionAttachmentExpiredError` for a gone one.
+ *  Resolves to the uploads this call newly claimed for that chat, when the claimer reports them. */
 export type AgentSessionAttachmentClaimer = (
   sessionId: string,
   body: AgentJournalMessageItem
+) => Promise<void | readonly string[]>
+
+/** Drops the claims `sessionId` holds on these uploads, so the sweep treats them as unclaimed again. */
+export type AgentSessionAttachmentReleaser = (
+  sessionId: string,
+  uploadIds: readonly string[]
 ) => Promise<void>
 
 let installedStore: AgentSessionAttachmentStore | null = null
 let installedClaimer: AgentSessionAttachmentClaimer | null = null
+let installedReleaser: AgentSessionAttachmentReleaser | null = null
 
 export function setAgentSessionAttachmentStore(
   store: AgentSessionAttachmentStore | null,
-  claimer: AgentSessionAttachmentClaimer | null = null
+  claimer: AgentSessionAttachmentClaimer | null = null,
+  releaser: AgentSessionAttachmentReleaser | null = null
 ): void {
   installedStore = store
   installedClaimer = store ? claimer : null
+  installedReleaser = store ? releaser : null
+}
+
+export function getAgentSessionAttachmentReleaser(): AgentSessionAttachmentReleaser | null {
+  return installedReleaser
 }
 
 export function getAgentSessionAttachmentStore(): AgentSessionAttachmentStore | null {

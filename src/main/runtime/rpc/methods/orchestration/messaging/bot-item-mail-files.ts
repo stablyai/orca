@@ -95,9 +95,9 @@ function notSent(error: unknown): unknown {
     : error
 }
 
-async function notSentOnRefusal(claim: Promise<void>): Promise<void> {
+async function notSentOnRefusal<T>(claim: Promise<T>): Promise<T> {
   try {
-    await claim
+    return await claim
   } catch (error) {
     throw notSent(error)
   }

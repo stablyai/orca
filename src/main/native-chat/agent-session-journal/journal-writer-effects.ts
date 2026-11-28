@@ -57,6 +57,8 @@ export type JournalWriterEffect =
       row?: JournalReceiptRowBinding
     }
   | { kind: 'claim'; claim: Omit<AgentSessionAttachmentClaim, 'stateDirectory'> }
+  /** Drops the claims one chat took for these uploads: a send that claimed them, then was refused. */
+  | { kind: 'release'; sessionId: string; uploadIds: readonly string[] }
   | { kind: 'queue-delete'; sessionId: string; messageIds: readonly string[] }
   | {
       kind: 'sweep'
@@ -114,6 +116,15 @@ export function applyJournalWriterEffect(
     }
     case 'claim':
       return claimAgentSessionAttachmentsInTransaction(db, { ...effect.claim, stateDirectory })
+    case 'release': {
+      const release = db.prepare(
+        'DELETE FROM agent_session_attachment_claims WHERE upload_id=? AND session_id=?'
+      )
+      for (const uploadId of effect.uploadIds) {
+        release.run(uploadId, effect.sessionId)
+      }
+      return null
+    }
     case 'queue-delete': {
       const remove = db.prepare('DELETE FROM queued_messages WHERE session_id=? AND message_id=?')
       for (const messageId of effect.messageIds) {

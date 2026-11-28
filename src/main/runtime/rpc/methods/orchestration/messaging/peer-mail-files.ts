@@ -2,12 +2,10 @@
 // store first, with the upload calls a desktop uses to paste into a server's chat; the mail then names
 // the stored paths, and that Orca admits them into the chat the mail lands in: the item's with
 // `--item`, else the `--chat` it names or the bot's Home Chat. Mail that can't carry them sends nothing.
-import { open, type FileHandle } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../../../../shared/schema/lazy-zod-schema'
 import {
-  AGENT_SESSION_ATTACHMENT_MAX_BYTES,
   sanitizeAgentSessionAttachmentName,
   AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
   AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
@@ -21,6 +19,8 @@ import { uploadBufferWith } from '../../../../../ipc/agent-attachments/agent-ses
 import type { PeerMailServer } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { closeAll, openAll, readSized } from './peer-mail-file-reads'
+import { peerMailStoredNothing, withUnattachedUploads } from './peer-mail-unattached'
 
 const CALL_TIMEOUT_MS = 30_000
 const MB = 1024 * 1024
@@ -107,7 +107,7 @@ export async function uploadPeerMailFiles(
   }
   // Every file is opened and sized before the first upload, so one that can't be read sends nothing,
   // and each upload reads the file it sized.
-  const opened = await openAll(files)
+  const opened = await openAll(files, refused)
   try {
     const sizes = opened.map(({ size }) => size)
     const imageBytes = sizes.reduce((sum, size, index) => (isImage[index] ? sum + size : sum), 0)
@@ -129,97 +129,31 @@ export async function uploadPeerMailFiles(
       )
     const target = await uploadTarget(call, server, params.item, bot)
     const stored: string[] = []
+    // A commit whose answer never came back may have stored its file all the same.
+    let maybeOneMore = false
+    const upload = (method: string, params: unknown) =>
+      method === 'agentSessionAttachment.uploadCommit'
+        ? call(method, params).catch((error: unknown) => {
+            maybeOneMore = !peerMailStoredNothing(error)
+            throw error
+          })
+        : call(method, params)
     try {
       for (const [index, path] of files.entries()) {
-        const buffer = await opened[index]!.handle.readFile()
-        if (buffer.byteLength !== sizes[index]) {
+        const buffer = await readSized(opened[index]!)
+        if (!buffer) {
           throw refused(`${basename(path)} changed while it was sent.`)
         }
-        const { path: storedPath } = await uploadBufferWith(call, target, basename(path), buffer)
+        const { path: storedPath } = await uploadBufferWith(upload, target, basename(path), buffer)
         stored.push(storedPath)
       }
     } catch (error) {
-      throw withUnattachedUploads(error, server, stored.length)
+      throw withUnattachedUploads(error, server, { copied: stored.length, maybeOneMore })
     }
     return stored
   } finally {
-    await Promise.all(opened.map(({ handle }) => handle.close().catch(() => {})))
+    await closeAll(opened)
   }
-}
-
-/** Each file opened for reading, with its size; refused, with nothing left open, when one can't be. */
-async function openAll(files: string[]): Promise<{ handle: FileHandle; size: number }[]> {
-  const opened: { handle: FileHandle; size: number }[] = []
-  try {
-    for (const path of files) {
-      const handle = await open(path, 'r').catch(() => null)
-      const info = await handle?.stat().catch(() => null)
-      if (handle) {
-        opened.push({ handle, size: info?.size ?? 0 })
-      }
-      if (!info?.isFile()) {
-        throw refused(`${basename(path)} can't be read.`)
-      }
-      if (info.size > AGENT_SESSION_ATTACHMENT_MAX_BYTES) {
-        throw refused(`${basename(path)} is over ${AGENT_SESSION_ATTACHMENT_MAX_BYTES / MB} MB.`)
-      }
-    }
-    return opened
-  } catch (error) {
-    await Promise.all(opened.map(({ handle }) => handle.close().catch(() => {})))
-    throw error
-  }
-}
-
-// The server may yet have stored mail that ends in one of these: its answer never came back.
-const MAYBE_DELIVERED = new Set([
-  'runtime_timeout',
-  'remote_runtime_unavailable',
-  'delivery_in_progress',
-  'operation_unknown',
-  'outcome_unknown'
-])
-
-/** The server answered that it refused the mail, so none of it is stored there. */
-export function peerMailStoredNothing(error: unknown): boolean {
-  if (!(error instanceof OrchestrationError) || MAYBE_DELIVERED.has(error.code)) {
-    return false
-  }
-  const data: unknown = error.data
-  return (
-    typeof data !== 'object' ||
-    data === null ||
-    !('effectsApplied' in data) ||
-    data.effectsApplied === false
-  )
-}
-
-/** A send that certainly stored no mail, after files reached the server, says so: the message wasn't
- *  sent, and those files wait there, attached to nothing, until that Orca clears its unused uploads. */
-export function withUnattachedUploads(
-  error: unknown,
-  server: Pick<PeerMailServer, 'name'>,
-  count: number
-): unknown {
-  if (count === 0) {
-    return error
-  }
-  const files = count === 1 ? 'A file' : `${count} files`
-  const note = `${files} already copied to ${server.name} for it ${count === 1 ? 'is' : 'are'} attached to nothing there; Orca on ${server.name} clears unused uploads later.`
-  const known = error instanceof OrchestrationError
-  // The cause, then what happened, then what to do: a retry hint moves to the end.
-  const text = error instanceof Error ? error.message : String(error)
-  const again = / ?Send it again\.$/.test(text) ? ' Send it again.' : ''
-  const reason = text
-    .replace(/ ?Send it again\.$/, '')
-    .replace(/ ?(Nothing was sent|No message was sent|Nothing was delivered)\.$/, '')
-    .replace(/([^.])$/, '$1.')
-  const data = known && typeof error.data === 'object' && error.data !== null ? error.data : {}
-  return new OrchestrationError(
-    known ? error.code : 'peer_mail_not_sent',
-    `${reason} The message wasn't sent. ${note}${again}`,
-    { ...data, effectsApplied: true, unattachedUploads: count }
-  )
 }
 
 /** Uploads with an item belong to the item's chat there, which the item names; other bot mail's go

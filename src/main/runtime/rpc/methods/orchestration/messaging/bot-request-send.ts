@@ -37,7 +37,7 @@ import {
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import type { SendBotRequestArgs, SendParamsInput } from './bot-request-send-args'
-import { claimMailFilesFor } from './bot-mail-files-claim'
+import { admitWithClaimedFiles, claimMailFilesFor } from './bot-mail-files-claim'
 import { botRequestChain, botRequestSendKey } from './bot-request-chain'
 import { answersRequest, askedInConversation, botRequestSender } from './bot-request-record'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
@@ -277,8 +277,16 @@ async function admitBotRequestMail(
     }
     return { sent: true, receipt: sent.receipt }
   }
-  const claimFiles = (chatId: string | null, home = false) =>
-    claimMailFilesFor(runtime, target, chatId, args.claimFiles, home)
+  /** Claims the mail's files for `chatId` last, just before it is stored there by `store`. */
+  const withFiles = async (
+    chatId: string | null,
+    store: (current?: () => void) => { sent: boolean; receipt: unknown },
+    home = false
+  ) =>
+    admitWithClaimedFiles(
+      await claimMailFilesFor(runtime, target, chatId, args.claimFiles, home),
+      store
+    )
   /** `--chat new`: the request opens a chat the bot starts for it, shown in its tab bar. */
   const inNewChat = () => {
     // Held before the chat is made, so a competing send makes none.
@@ -292,25 +300,28 @@ async function admitBotRequestMail(
     })
   }
   if (groupScope) {
-    const filesCurrent = await claimFiles(groupScope.target.sessionId)
-    return admit(sessionAddress(groupScope.target.sessionId), false, undefined, filesCurrent)
-      .receipt
+    const address = sessionAddress(groupScope.target.sessionId)
+    return withFiles(groupScope.target.sessionId, (current) =>
+      admit(address, false, undefined, current)
+    )
   }
   // Whoever the sending turn acts for, the request lands where it was addressed; its record says who asked.
   if (receiving.newChat) {
-    return args.claimFiles ? claimFiles(null) : inNewChat()
+    return args.claimFiles ? withFiles(null, () => ({ sent: false, receipt: null })) : inNewChat()
   }
   // A chat whose last turn failed queues it like its owner's own follow-ups; the sender is told.
   if (receiving.via === 'address') {
     const home = receiving.chat !== null && receiving.chat === target.chatSessionId
-    const filesCurrent = await claimFiles(receiving.chat)
     const held = await failureHeldChat(runtime, receiving.chat, home)
-    return admit(args.to, false, held, filesCurrent).receipt
+    return withFiles(receiving.chat, (current) => admit(args.to, false, held, current))
   }
   // Held through the store, so a new Chat can't retire this one between choosing it and mailing it.
   return runtimeBotChats(runtime).withChat(target.id, async (sessionId) => {
-    const filesCurrent = await claimFiles(sessionId, true)
     const held = await failureHeldChat(runtime, sessionId, true)
-    return admit(sessionAddress(sessionId), false, held, filesCurrent).receipt
+    return withFiles(
+      sessionId,
+      (current) => admit(sessionAddress(sessionId), false, held, current),
+      true
+    )
   })
 }

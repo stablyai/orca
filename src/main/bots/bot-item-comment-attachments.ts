@@ -47,8 +47,9 @@ export type BotItemCommentAttached = {
   images: BotItemCommentImage[]
   /** The uploads claimed for the item's chat, when the comment names any. */
   claimed?: AdmittedCommentClaim
-  /** With `chat: 'later'` and uploads named: claims them for the session the mail lands in. */
-  claimFor?: (sessionId: string) => Promise<void>
+  /** With `chat: 'later'` and uploads named: claims them for the session the mail lands in, and
+   *  resolves to the uploads it newly claimed (undefined when the claimer doesn't say). */
+  claimFor?: (sessionId: string) => Promise<readonly string[] | undefined>
 }
 
 /** The comment's text and images, named and sized on this host, once each upload it names is claimed
@@ -100,11 +101,20 @@ export async function admitBotItemCommentAttachments(
   }
   if (deps.chat === 'later') {
     const { claim } = deps
-    return {
-      text,
-      images,
-      claimFor: (sessionId) => claimBotItemCommentAttachments(claim, sessionId, body)
+    // What this claim newly took, so a send refused after it can give back exactly that.
+    const claimFor = async (sessionId: string): Promise<readonly string[] | undefined> => {
+      let inserted: readonly string[] | undefined
+      const recording: AgentSessionAttachmentClaimer | null =
+        claim &&
+        (async (id, claimed) => {
+          const result = await claim(id, claimed)
+          inserted = result ?? undefined
+          return result
+        })
+      await claimBotItemCommentAttachments(recording, sessionId, body)
+      return inserted
     }
+    return { text, images, claimFor }
   }
   const chat = await deps.chat()
   if (!chat) {

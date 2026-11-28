@@ -42,14 +42,27 @@ export function installAgentSessionAttachments(deps: {
   const attachments = new AgentSessionAttachmentStore(root, {
     hasSession: (sessionId) => deps.store.getRecord(sessionId) !== null
   })
-  setAgentSessionAttachmentStore(attachments, async (sessionId, body) => {
+  const writable = (doing: string) => {
     if (deps.journalDatabase.readOnly || deps.journalDatabase.isClosed) {
-      throw new Error('Chat attachments cannot be claimed on this host now')
+      throw new Error(`Chat attachments cannot be ${doing} on this host now`)
     }
-    await deps.journalDatabase.effects([
-      { kind: 'claim', claim: { sessionId, body, required: true, now: Date.now() } }
-    ])
-  })
+  }
+  setAgentSessionAttachmentStore(
+    attachments,
+    async (sessionId, body) => {
+      writable('claimed')
+      const [claimed] = await deps.journalDatabase.effects([
+        { kind: 'claim', claim: { sessionId, body, required: true, now: Date.now() } }
+      ])
+      return claimed && typeof claimed === 'object' && 'inserted' in claimed
+        ? claimed.inserted
+        : undefined
+    },
+    async (sessionId, uploadIds) => {
+      writable('released')
+      await deps.journalDatabase.effects([{ kind: 'release', sessionId, uploadIds }])
+    }
+  )
   const retainedUploadIds = deps.retainedUploadIds
   sweeper = startAgentSessionAttachmentSweeps(
     attachments,

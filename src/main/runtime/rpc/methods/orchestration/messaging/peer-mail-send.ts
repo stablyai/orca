@@ -22,10 +22,9 @@ import type { SendRecipientWarning } from './recipient-routing'
 import {
   assertPeerMailFilesAddress,
   assertPeerMailServerTakesFiles,
-  peerMailStoredNothing,
-  uploadPeerMailFiles,
-  withUnattachedUploads
+  uploadPeerMailFiles
 } from './peer-mail-files'
+import { peerMailStoredNothing, withUnattachedUploads } from './peer-mail-unattached'
 import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import {
   forgetPeerQuestionOut,
@@ -88,19 +87,22 @@ export async function sendPeerMail(args: {
   const attachments = await uploadPeerMailFiles(runtime, server, params)
   const warnings: SendRecipientWarning[] = []
   const db = runtime.getOrchestrationDb()
-  if (type === 'question') {
-    // Kept until its answer or notice comes back, so an unpair can tell the asker none will;
-    // recorded first, so an answer pulled before delivery returns still settles it.
-    recordPeerQuestionOut(db, {
-      messageId: id,
-      conversationId: conversation.conversation_id,
-      environmentId: server.environmentId,
-      peerFingerprint: conversation.peer_fingerprint,
-      asker: caller.address,
-      threadId: params.threadId
-    })
-  }
+  // Until the server is asked, nothing was delivered, whatever fails.
+  let delivering = false
   try {
+    if (type === 'question') {
+      // Kept until its answer or notice comes back, so an unpair can tell the asker none will;
+      // recorded first, so an answer pulled before delivery returns still settles it.
+      recordPeerQuestionOut(db, {
+        messageId: id,
+        conversationId: conversation.conversation_id,
+        environmentId: server.environmentId,
+        peerFingerprint: conversation.peer_fingerprint,
+        asker: caller.address,
+        threadId: params.threadId
+      })
+    }
+    delivering = true
     const held = await deliverPeerMail(runtime, server, conversation, {
       id,
       to,
@@ -122,8 +124,8 @@ export async function sendPeerMail(args: {
       forgetPeerQuestionOut(db, id)
     }
     // A refusal names the files it left there; a timeout may yet have delivered them with the mail.
-    throw peerMailStoredNothing(error)
-      ? withUnattachedUploads(error, server, attachments?.length ?? 0)
+    throw !delivering || peerMailStoredNothing(error)
+      ? withUnattachedUploads(error, server, { copied: attachments?.length ?? 0 })
       : error
   }
   return recordReceiptBeforeNudge(
