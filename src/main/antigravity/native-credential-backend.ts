@@ -36,14 +36,14 @@ const CONFLICT =
   'The native Antigravity credential changed during selection; refresh before retrying.'
 
 function hostKeyring(): {
-  read: (options?: { quick?: boolean }) => Promise<AntigravityNativeCredential | null>
+  read: () => Promise<AntigravityNativeCredential | null>
   write: (contents: string) => Promise<void>
   /** Only where reading the secret can raise a dialog: the Linux keyring refuses when locked. */
   revision?: () => Promise<AntigravityKeychainRevision | null>
 } {
   if (process.platform === 'darwin') {
     return {
-      read: (options) => readAntigravityMacOSCredential(undefined, options),
+      read: () => readAntigravityMacOSCredential(),
       write: writeAntigravityMacOSCredential,
       revision: readAntigravityMacOSCredentialRevision
     }
@@ -80,13 +80,13 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
       )
     }
   }
-  async function read(options?: { quick?: boolean }) {
+  async function read() {
     await refuseMarker()
-    return (await keyring.read(options)) ?? (await file.read())
+    return (await keyring.read()) ?? (await file.read())
   }
   const { revision } = keyring
   return {
-    read: (options) => read(options),
+    read,
     ...(revision
       ? {
           async readWithoutPrompt() {

@@ -3,7 +3,7 @@ import {
   parseAntigravityNativeCredential,
   type AntigravityNativeCredential
 } from './native-credential-codec'
-import type { AntigravityKeychainRevision } from './native-macos-credentials'
+import { keychainAccessIsBrief, type AntigravityKeychainRevision } from './native-macos-credentials'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -20,7 +20,7 @@ export type AntigravityQuietRead =
 export type AntigravityLoginView = Omit<VerifiedAntigravityLogin, 'fingerprint'>
 
 type LoginBackend = {
-  read(options?: { quick?: boolean }): Promise<AntigravityNativeCredential | null>
+  read(): Promise<AntigravityNativeCredential | null>
   readWithoutPrompt?(): Promise<AntigravityQuietRead>
 }
 
@@ -52,6 +52,8 @@ export class AntigravityLoginReader {
   private lastRead: { fingerprint: string; current: AntigravityNativeCredential } | null = null
   // Why the latest read under a fingerprint failed, so launches don't raise the dialog again.
   private refused: { fingerprint: string; error: unknown } | null = null
+  /** A brief access (a chat start's) failed; a read that may wait on the dialog clears it. */
+  briefAccessFailed = false
 
   constructor(
     private readonly backend: LoginBackend,
@@ -64,10 +66,7 @@ export class AntigravityLoginReader {
 
   /** `quiet`: what the caller already read without a prompt. `fingerprint`: the keychain item's,
    *  when it held still across the read, so the login read is the one it names. */
-  async read(
-    quiet?: AntigravityQuietRead,
-    quick = false
-  ): Promise<{
+  async read(quiet?: AntigravityQuietRead): Promise<{
     current: AntigravityNativeCredential | null
     fingerprint: string | null
   }> {
@@ -77,7 +76,8 @@ export class AntigravityLoginReader {
     if (before && 'credential' in before) {
       return { current: before.credential, fingerprint: null }
     }
-    const wait = before && !quick ? before.stableFrom - Date.now() : 0
+    const brief = keychainAccessIsBrief()
+    const wait = before && !brief ? before.stableFrom - Date.now() : 0
     if (wait > 0 && wait <= 1000) {
       // A write later in the item's last second would keep its fingerprint, so only a read begun
       // after that second can vouch for the login it finds.
@@ -89,15 +89,16 @@ export class AntigravityLoginReader {
     }
     let current: AntigravityNativeCredential | null
     try {
-      current = await this.backend.read(quick ? { quick } : undefined)
+      current = await this.backend.read()
     } catch (error) {
       // A brief read gave up early, so a launch that can wait for the dialog may still ask.
-      if (!quick) {
+      if (!brief) {
         this.refused = before ? { fingerprint: before.fingerprint, error } : null
       }
       throw error
     }
     this.refused = null
+    this.briefAccessFailed &&= brief
     const after = before ? await quietRead() : undefined
     return {
       current,

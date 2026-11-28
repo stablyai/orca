@@ -12,6 +12,7 @@ import { AntigravityAccountService } from './native-account-service'
 import type { AntigravityCredentialIdentity } from './native-credential-codec'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { createAntigravityWindowsCredentialBackend } from './native-windows-credentials'
+import { keychainAccessIsBrief } from './native-macos-credentials'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
 import { createFakeWindowsSecurity } from '../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
@@ -361,9 +362,13 @@ describe('protected Antigravity account snapshots', () => {
     // A chat's brief read that fails stops chats asking; a launch's refused read isn't asked again
     // under the same revision.
     h.setNative(refreshedWithoutIdToken(3))
-    vi.mocked(h.backend.read).mockRejectedValueOnce(new Error('no answer'))
+    let brief = false
+    vi.mocked(h.backend.read).mockImplementationOnce(async () => {
+      brief = keychainAccessIsBrief()
+      throw new Error('no answer')
+    })
     await expect(restarted.prepareForLaunch({ mayPrompt: false })).rejects.toThrow('no answer')
-    expect(h.backend.read).toHaveBeenLastCalledWith({ quick: true })
+    expect(brief).toBe(true)
     vi.mocked(h.backend.read).mockRejectedValueOnce(new Error('denied'))
     await expect(restarted.prepareForLaunch()).rejects.toThrow('denied')
     await expect(restarted.prepareForLaunch()).rejects.toThrow('denied')

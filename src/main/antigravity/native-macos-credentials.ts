@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash } from 'node:crypto'
 import { runProcess } from '@orca/process-host'
 import {
@@ -16,6 +17,21 @@ function requireMacOS(): void {
 
 // Attribute reads raise no dialog, so they answer quickly or not at all.
 const ATTRIBUTE_READ_WAIT_MS = 3000
+
+const briefAccess = new AsyncLocalStorage<true>()
+
+/** Runs `operation` with every keychain read and write in it giving up after a few seconds rather
+ *  than wait for an answer to a keychain dialog: for work nobody asked for, like a chat start. */
+export function withBriefKeychainAccess<T>(operation: () => Promise<T>): Promise<T> {
+  return briefAccess.run(true, operation)
+}
+
+export function keychainAccessIsBrief(): boolean {
+  return briefAccess.getStore() === true
+}
+
+const secretWaitMs = () =>
+  keychainAccessIsBrief() ? ATTRIBUTE_READ_WAIT_MS : ANTIGRAVITY_KEYCHAIN_PROMPT_WAIT_MS
 
 async function runSecurity(args: string[], timeoutMs: number, input?: string) {
   try {
@@ -115,10 +131,8 @@ export async function hasAntigravityMacOSCredential(target = nativeTarget): Prom
   return (await readAntigravityMacOSCredentialRevision(target)) !== null
 }
 
-/** `quick`: give up after a few seconds rather than wait for an answer to the keychain's dialog. */
 export async function readAntigravityMacOSCredential(
-  target = nativeTarget,
-  { quick = false }: { quick?: boolean } = {}
+  target = nativeTarget
 ): Promise<AntigravityNativeCredential | null> {
   requireMacOS()
   const result = await runSecurity(
@@ -131,7 +145,7 @@ export async function readAntigravityMacOSCredential(
       '-w',
       ...(target.keychainPath ? [target.keychainPath] : [])
     ],
-    quick ? ATTRIBUTE_READ_WAIT_MS : ANTIGRAVITY_KEYCHAIN_PROMPT_WAIT_MS
+    secretWaitMs()
   )
   if (!result.timedOut && !result.signal && !result.outputTruncated) {
     if (result.code === ITEM_NOT_FOUND) {
@@ -161,7 +175,7 @@ export async function writeAntigravityMacOSCredential(
   if (Buffer.byteLength(input) > 4096) {
     throw new Error('Antigravity credentials exceed the macOS credential command limit.')
   }
-  const result = await runSecurity(['-i'], ANTIGRAVITY_KEYCHAIN_PROMPT_WAIT_MS, input)
+  const result = await runSecurity(['-i'], secretWaitMs(), input)
   if (result.code !== 0 || result.timedOut || result.signal || result.outputTruncated) {
     throw new Error('The Antigravity macOS credential store could not be updated.')
   }

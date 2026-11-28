@@ -17,11 +17,11 @@ import {
   antigravityLoginMatches,
   type AntigravityQuietRead
 } from './native-account-login-view'
+import { withBriefKeychainAccess } from './native-macos-credentials'
 
 export type AntigravityCredentialBackend = {
   parse?(contents: string): AntigravityNativeCredential
-  /** `quick`: give up rather than wait on a keychain dialog. */
-  read(options?: { quick?: boolean }): Promise<AntigravityNativeCredential | null>
+  read(): Promise<AntigravityNativeCredential | null>
   write(contents: string, expected: string | null): Promise<void>
   /** Only where `read` can raise a keychain dialog (macOS): what Orca can learn without one. */
   readWithoutPrompt?(): Promise<AntigravityQuietRead>
@@ -36,8 +36,6 @@ export class AntigravityAccountService {
   private mutation: Promise<unknown> = Promise.resolve()
   // Queued or running operations that may wait on a keychain dialog.
   private prompting = 0
-  // A chat start's brief read of a keychain login failed, so chats stop asking until Orca restarts.
-  private chatReadFailed = false
   private readonly logins: AntigravityLoginReader
   private readonly rewrittenLogins = new AntigravityRewrittenLoginIdentity(
     () => this.lookupIdentity
@@ -172,22 +170,17 @@ export class AntigravityAccountService {
     if (await this.logins.settlesLaunch(early, false)) {
       return
     }
-    if (early && 'fingerprint' in early && (this.chatReadFailed || this.prompting > 0)) {
+    if (early && 'fingerprint' in early && (this.logins.briefAccessFailed || this.prompting > 0)) {
       throw new Error(
         "Checking agy's login for the selected account could ask for keychain access, so it was left as it is."
       )
     }
-    return this.serialize(async () => {
+    const restore = async () => {
       const quiet = await this.backend.readWithoutPrompt?.()
       if (await this.logins.settlesLaunch(quiet, true)) {
         return
       }
-      const { vault, current } = await this.reconcile(undefined, quiet, !mayPrompt).catch(
-        (error: unknown) => {
-          this.chatReadFailed ||= !mayPrompt
-          throw error
-        }
-      )
+      const { vault, current } = await this.reconcile(undefined, quiet)
       const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
       if (!vault.selectedAccountId || (selected && current && this.matches(selected, current))) {
         return
@@ -209,7 +202,14 @@ export class AntigravityAccountService {
       if ((await this.store.read()).selectedAccountId !== selected.id) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
       }
-    }, mayPrompt)
+    }
+    // A chat's keychain reads and writes give up early; one that fails stops the next chats asking.
+    const chatRestore = () =>
+      withBriefKeychainAccess(restore).catch((error: unknown) => {
+        this.logins.briefAccessFailed = true
+        throw error
+      })
+    return this.serialize(mayPrompt ? restore : chatRestore, mayPrompt)
   }
 
   private async switchNative(
@@ -237,9 +237,9 @@ export class AntigravityAccountService {
     return antigravityLoginMatches(account, current, this.backend.parse)
   }
 
-  /** `quiet`: what the caller already read without a prompt. `quick`: don't wait on a dialog. */
-  private async reconcile(selectedId?: string, quiet?: AntigravityQuietRead, quick = false) {
-    const native = await this.logins.read(quiet, quick)
+  /** `quiet`: what the caller already read without a prompt, so it isn't read twice. */
+  private async reconcile(selectedId?: string, quiet?: AntigravityQuietRead) {
+    const native = await this.logins.read(quiet)
     const current = await this.rewrittenLogins.identify(
       native.current,
       (await this.store.read()).accounts,
