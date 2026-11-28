@@ -53,8 +53,9 @@ export function hasUsageData(provider: ProviderUsageWindows): boolean {
 /** The usage windows a provider shows, in order; session and weekly stay as null placeholders. */
 export function getUsageWindowSections(p: ProviderUsageWindows): UsageWindowSection[] {
   // Antigravity's pools are independent, so none is a rollup of another and none is dropped.
-  if (p.provider === 'antigravity') {
-    return (p.buckets ?? []).map((bucket) => ({
+  // Without pools (the status bar's view of it) it reads as plain session and weekly windows.
+  if (p.provider === 'antigravity' && p.buckets) {
+    return p.buckets.map((bucket) => ({
       kind: 'bucket' as const,
       name: bucket.name,
       window: bucket
