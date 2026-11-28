@@ -166,13 +166,17 @@ export default function IpynbViewer({
   const canRun = notebook.language === 'python' && executionHost === 'local'
   return (
     <div
+      data-ipynb-viewport
       ref={setRootRef}
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
       style={{ fontSize }}
       onKeyDownCapture={handleNotebookKeyDownCapture}
       onBlur={flushOnFocusLeave}
     >
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
+      <div
+        data-ipynb-header
+        className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur"
+      >
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
         <span>
           {t('auto.components.editor.IpynbViewer.cellCount', '{{count}} cells', {
