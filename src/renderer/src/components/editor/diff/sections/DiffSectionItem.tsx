@@ -40,6 +40,7 @@ export function DiffSectionItem({
   openSection,
   openSectionTitle,
   onOpenPreview,
+  previewTarget,
   renderHeaderTrailingContent,
   imageUploadAddress,
   onAddLineComment,
@@ -291,6 +292,7 @@ export function DiffSectionItem({
   useEffect(() => {
     loadSection(index)
   }, [index, loadSection])
+  const sectionPreviewTarget = previewTarget?.(section) ?? null
 
   return (
     <div ref={setSectionRootNode} className="border-b border-border">
@@ -306,11 +308,9 @@ export function DiffSectionItem({
           openSection(index)
         }}
         openSectionTitle={openSectionTitle}
-        onOpenPreview={
-          onOpenPreview
-            ? () => {
-                onOpenPreview(section, index)
-              }
+        preview={
+          onOpenPreview && sectionPreviewTarget
+            ? { target: sectionPreviewTarget, onOpen: () => onOpenPreview(section, index) }
             : undefined
         }
         trailingContent={renderHeaderTrailingContent?.(section, index)}

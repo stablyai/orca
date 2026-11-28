@@ -97,7 +97,7 @@ export function useNativeChatSurface({
   const appearance = useNativeChatStoreAppearanceStyle()
   useNativeChatFontSize(conversationShown && active, rootRef)
   const find = useNativeChatFind(active, rootRef, composerRef, transcriptRef)
-  const { onLinkClick, linkActionRequest, requestLinkActions, closeLinkActions } =
+  const { onLinkClick, openFile, linkActionRequest, requestLinkActions, closeLinkActions } =
     useNativeChatLinkActions(fileLinkContext, rootRef, { sessionId, isVisible })
   const rootInput = useNativeChatRootInputRouting({
     tabId,
@@ -157,7 +157,7 @@ export function useNativeChatSurface({
     appearance,
     find,
     onLinkClick,
-
+    openFile,
     requestLinkActions,
     linkActionRequest,
     closeLinkActions,

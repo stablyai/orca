@@ -17153,7 +17153,6 @@
           "resolveConflictGuidance": "重新打开前，请先在 Git 中解决冲突，或恢复其中一方的内容"
         },
         "EditorPanelHeader": {
-          "fb8331694e": "打开侧面预览",
           "4157f3cbf3": "打开 Markdown 预览",
           "269ce4842b": "复制相对路径",
           "7c08a1f990": "复制路径",

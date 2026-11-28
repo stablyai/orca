@@ -18085,7 +18085,6 @@
           "resolveConflictGuidance": "Yeniden açmadan önce çakışmayı Git'te çözün veya bir tarafı geri yükleyin."
         },
         "EditorPanelHeader": {
-          "fb8331694e": "Önizlemeyi Yana Aç",
           "4157f3cbf3": "Markdown Önizlemesini Aç",
           "269ce4842b": "Göreli Yolu Kopyala",
           "7c08a1f990": "Yolu Kopyala",

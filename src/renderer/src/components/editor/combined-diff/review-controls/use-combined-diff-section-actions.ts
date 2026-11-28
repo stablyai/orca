@@ -6,10 +6,11 @@ import { useAppStore } from '@/store'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
 import { openFilePreviewToSide } from '@/lib/browser/documents/file-preview'
+import { openMarkdownPreviewToSide } from '@/lib/files/open/markdown-preview-to-side'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import { canOpenDiffSectionPreviewToSide } from '../../diff/sections/diff-section-preview'
+import { diffSectionPreviewTarget } from '../../diff/sections/diff-section-preview'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { DiffSectionItemProps } from '../../diff/sections/diff-section-item-props'
 
@@ -125,30 +126,40 @@ export function useCombinedDiffSectionActions({
     ]
   )
 
-  // Match single-file HTML diffs by previewing the on-disk working file beside this combined view.
+  // Preview the on-disk working file beside this combined view: HTML as a page, Markdown rendered.
   const openSectionPreview = useCallback(
     (section: DiffSection) => {
-      if (
-        !canOpenDiffSectionPreviewToSide({
-          path: section.path,
-          status: section.status,
-          isCommitSurface: isCommitMode,
-          canOpenWorkspaceFileBrowser: canOpenWorkspaceFileBrowserForPath(
-            joinPath(file.filePath, section.path)
-          )
-        })
-      ) {
+      const filePath = joinPath(file.filePath, section.path)
+      const target = diffSectionPreviewTarget({
+        path: section.path,
+        status: section.status,
+        isCommitSurface: isCommitMode,
+        canOpenWorkspaceFileBrowser: canOpenWorkspaceFileBrowserForPath(filePath)
+      })
+      if (!target) {
         return
       }
       // Use this tab’s split group; the workspace active group may belong to another pane.
       const state = useAppStore.getState()
       const placement = editorViewPlacement(state, file, viewStateScopeId)
+      const sourceGroupId = placement.targetGroupId ?? activeGroupId ?? null
+      if (target === 'markdown-preview') {
+        openMarkdownPreviewToSide({
+          filePath,
+          relativePath: section.path,
+          worktreeId: file.worktreeId,
+          runtimeEnvironmentId: file.runtimeEnvironmentId,
+          placementWorkspaceId: placement.placementWorkspaceId,
+          sourceGroupId
+        })
+        return
+      }
       openFilePreviewToSide({
         language: detectLanguage(section.path),
-        filePath: joinPath(file.filePath, section.path),
+        filePath,
         worktreeId: file.worktreeId,
         placementWorkspaceId: placement.placementWorkspaceId,
-        sourceGroupId: placement.targetGroupId ?? activeGroupId ?? null
+        sourceGroupId
       })
     },
     [activeGroupId, viewStateScopeId, file, canOpenWorkspaceFileBrowserForPath, isCommitMode]

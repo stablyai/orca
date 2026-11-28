@@ -28,9 +28,12 @@ import type { BotGroupSession } from './BotGroupSessionReader'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
 import { BotGroupTranscriptOwner, type useBotGroupFileContexts } from './BotGroupTranscriptOwner'
-import { useNativeChatFileLinkClick } from '../native-chat/links/actions/use-native-chat-file-link-click'
+import {
+  useNativeChatExplicitFileOpener,
+  useNativeChatFileLinkClick
+} from '../native-chat/links/actions/use-native-chat-file-link-click'
 import { useRecheckNativeChatFileLinksWhenSettled } from '../native-chat/links/actions/use-native-chat-file-link-existence'
-import { NativeChatLinkClickContext } from '../native-chat/links/actions/native-chat-link-click-context'
+import { NativeChatLinkProviders } from '../native-chat/links/actions/NativeChatLinkProviders'
 import { NativeChatBotAnswerContext } from '../native-chat/messages/rows/native-chat-bot-answer-context'
 import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { routeNativeChatHref } from '../../../../shared/native-chat/file-access/native-chat-href-routing'
@@ -197,6 +200,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     roomLinks.request,
     roomLinks.rootRef
   )
+  const openFile = useNativeChatExplicitFileOpener(files?.fileLinkContext ?? null)
   // A member's file paths resolve in its own folder; web links open from the room's tab.
   const onLinkClick = useCallback<CommentMarkdownLinkClickHandler>(
     (event, href) =>
@@ -242,7 +246,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       isVisible={isVisible}
     >
       {/* File links open on the member's host; room links go to the room. */}
-      <NativeChatLinkClickContext value={onLinkClick}>
+      <NativeChatLinkProviders links={{ onLinkClick, openFile }}>
         <section
           data-group-turn={turn.operationId}
           data-group-bot={turn.botId}
@@ -294,7 +298,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
             <NativeChatTranscriptRowStack slots={rows} context={context} />
           </NativeChatBotAnswerContext>
         </section>
-      </NativeChatLinkClickContext>
+      </NativeChatLinkProviders>
     </BotGroupTranscriptOwner>
   )
 })

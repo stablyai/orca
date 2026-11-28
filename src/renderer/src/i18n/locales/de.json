@@ -18085,7 +18085,6 @@
           "resolveConflictGuidance": "Vor dem erneuten Öffnen den Konflikt in Git lösen oder eine Seite wiederherstellen."
         },
         "EditorPanelHeader": {
-          "fb8331694e": "Vorschau seitlich öffnen",
           "4157f3cbf3": "Markdown-Vorschau öffnen",
           "269ce4842b": "Relativen Pfad kopieren",
           "7c08a1f990": "Pfad kopieren",

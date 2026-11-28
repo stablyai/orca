@@ -17310,7 +17310,6 @@
           "resolveConflictGuidance": "다시 열기 전에 Git에서 충돌을 해결하거나 한쪽 내용을 복원하세요."
         },
         "EditorPanelHeader": {
-          "fb8331694e": "측면으로 미리보기 열기",
           "4157f3cbf3": "Markdown 미리보기 열기",
           "269ce4842b": "상대 경로 복사",
           "7c08a1f990": "경로 복사",

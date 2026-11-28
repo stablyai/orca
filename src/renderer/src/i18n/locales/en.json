@@ -18088,7 +18088,9 @@
           "593f2193f6": "This draft crossed the safe display limit, but it can still be saved."
         },
         "DiffSectionHeader": {
-          "8915726e93": "Copy path"
+          "8915726e93": "Copy path",
+          "expandSection": "Expand {{name}}",
+          "collapseSection": "Collapse {{name}}"
         },
         "EditorContent": {
           "56dba34e1a": "(edit in source mode)",
@@ -18109,7 +18111,6 @@
           "resolveConflictGuidance": "Resolve the conflict in Git or restore one side before reopening it."
         },
         "EditorPanelHeader": {
-          "fb8331694e": "Open Preview to the Side",
           "4157f3cbf3": "Open Markdown Preview",
           "269ce4842b": "Copy Relative Path",
           "7c08a1f990": "Copy Path",
@@ -21570,7 +21571,9 @@
         "changedFiles_other": "{{count}} changed files",
         "showMoreFiles": "Show {{count}} more",
         "hide": "Hide",
-        "hidden": "Orca won't show turn diffs anymore"
+        "hidden": "Orca won't show turn diffs anymore",
+        "showDiff": "Show diff: {{path}}",
+        "deleted": "Deleted"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",
@@ -21871,7 +21874,8 @@
         "runBrowser_one": "Used the browser {{count}} time",
         "runPlan_one": "Updated the plan {{count}} time",
         "runLiveBrowser_one": "Using the browser {{count}} time",
-        "runLivePlan_one": "Updating the plan {{count}} time"
+        "runLivePlan_one": "Updating the plan {{count}} time",
+        "openCurrentFile": "{{action}} (current version)"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",
@@ -22258,7 +22262,8 @@
         "notFound": "File not found: {{value0}}",
         "unverifiable": "Couldn't check {{value0}}: {{value1}}",
         "unresolved": "Couldn't resolve {{value0}} in this workspace",
-        "folderUnavailable": "This computer can't open the folder {{value0}}"
+        "folderUnavailable": "This computer can't open the folder {{value0}}",
+        "orcaBrowserFailed": "Couldn't open {{value0}} in the Orca Browser"
       },
       "contextUsage": {
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
@@ -22887,6 +22892,9 @@
         "openAgain": "Open again",
         "finished": "Sign-in finished",
         "finishedWith": "Sign-in finished · {{message}}"
+      },
+      "attachment": {
+        "preview": "Preview attachment"
       },
       "offerCard": {
         "notNow": "Not now",
@@ -31361,6 +31369,12 @@
     "suggestionUse": "Use",
     "browseOnline": "Browse",
     "browseOnlineLabel": "Browse community translations on orca.dev (opens in your browser)"
+  },
+  "files": {
+    "changedFile": {
+      "openInOrcaBrowserToSide": "Open in Orca Browser to the Side",
+      "openMarkdownPreviewToSide": "Open Markdown Preview to the Side"
+    }
   },
   "agentCliUpdate": {
     "updating": "Updating…",

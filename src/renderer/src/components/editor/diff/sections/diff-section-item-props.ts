@@ -1,3 +1,4 @@
+import type { ChangedFileOpenTarget } from '@/lib/files/open/changed-file-view'
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import type { WorkspaceResource } from '@/lib/workspace/ownership/workspace-copy-owner'
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from 'react'
@@ -22,6 +23,8 @@ export type DiffSectionItemProps = {
   openSection: (index: number) => void
   openSectionTitle: string
   onOpenPreview?: (section: DiffSection, index: number) => void
+  /** Where onOpenPreview puts this section's file; null hides the preview action. */
+  previewTarget?: (section: DiffSection) => ChangedFileOpenTarget | null
   renderHeaderTrailingContent?: (section: DiffSection, index: number) => ReactNode
   imageUploadAddress?: GitHubImageIntake['address']
   onAddLineComment?: (

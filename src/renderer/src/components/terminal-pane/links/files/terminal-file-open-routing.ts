@@ -34,38 +34,13 @@ import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-o
 import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/links/link-open-request'
 import { openTerminalHtmlFileInBrowser } from './terminal-file-link-browser-open'
 import { refuseOpenInGroupRequest } from './terminal-file-open-in-group-toast'
-import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
+import { isExplicitEditorScopeKept, openLinkedFile } from './terminal-file-link-editor-open'
 import { resolveLinkedFileEditorTarget } from '../../host-files/terminal-file-editor-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
-import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
-import type { FileOpenFailure } from './terminal-file-open-failure'
 import { openDetectedFolder } from './terminal-folder-open'
-
-type TerminalFileOpenDeps = {
-  worktreeId: string
-  worktreePath: string
-  runtimeEnvironmentId?: string | null
-  wslDistro?: string | null
-  /** Shift+modifier: the OS default app, or the other link-routing browser for a local HTML file. */
-  openWithSystemDefault?: boolean
-  /** Routes like openWithSystemDefault, but only saves a copy of the file or folder; never opens it. */
-  downloadOnly?: boolean
-  /** Where a local HTML file opens, chosen from its popover; otherwise link routing decides. */
-  browserDestination?: HttpLinkDestination
-  /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
-  terminalHandle?: string | null
-  hostFileOnly?: boolean
-  /** Reports a path that could not be verified before opening; skipped once a later open supersedes it. */
-  onOpenFailure?: (failure: FileOpenFailure) => void
-  /** The tab that owns the link; editor opens place themselves relative to its group. */
-  sourceTabId?: string | null
-  /** "Open in new tab": pins the source tab's group at activation, or refuses. */
-  openInSourceGroup?: boolean
-  /** Opt-in menu request; the legacy flag remains editor-only. */
-  openInSourceGroupSurface?: 'internal' | 'browser'
-}
+import type { TerminalFileOpenDeps } from './terminal-file-open-deps'
 
 export function openDetectedFilePath(
   filePath: string,
@@ -93,7 +68,14 @@ export function openDetectedFilePath(
   )
   const refuseExplicitNonEditorRoute = (): boolean =>
     refuseOpenInGroupRequest(mappedFilePath, explicitGroupRequest, isCurrentRequest)
+  const explicitBrowser = deps.explicitDestination === 'orca-browser'
+  const explicitEditor = deps.explicitDestination === 'editor'
   const linkContext = deps.sourceTabId ? { linkIntent, isCurrentRequest } : undefined
+  const reportBrowserOpenFailure = (): void => {
+    if (isCurrentRequest()) {
+      deps.onBrowserOpenFailure?.()
+    }
+  }
   if (explicitGroupRequest && !linkIntent) {
     refuseExplicitNonEditorRoute()
     return
@@ -201,9 +183,12 @@ export function openDetectedFilePath(
       !clientLocal &&
       hostGrant === null &&
       !explicitGroupRequest &&
+      !explicitEditor &&
       isHtmlFilePath(mappedFilePath)
-        ? (deps.browserDestination ??
-          httpLinkDirectClickDestination(localHtmlFileDestinations(), openWithSystemDefault))
+        ? explicitBrowser
+          ? 'orca'
+          : (deps.browserDestination ??
+            httpLinkDirectClickDestination(localHtmlFileDestinations(), openWithSystemDefault))
         : null
     const opensWithSystemDefault = pageDestination
       ? pageDestination === 'system'
@@ -248,7 +233,8 @@ export function openDetectedFilePath(
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
     // Why: a read-only grant comes from a host that re-grants only to the printing terminal, so preview reads would fail.
-    if (isHtmlFilePath(mappedFilePath) && !hostGrant?.readOnly) {
+    // An explicit editor open skips the page route, so an HTML file really opens as source.
+    if (!explicitEditor && isHtmlFilePath(mappedFilePath) && !hostGrant?.readOnly) {
       if (deps.openInSourceGroup) {
         refuseExplicitNonEditorRoute()
         return
@@ -262,11 +248,20 @@ export function openDetectedFilePath(
           canOpenWithSystemDefault,
           ...(linkContext && !clientLocal ? { fileExecutionHostId } : {}),
           linkContext,
-          ...(explicitGroupRequest ? { refuseOpenInSourceGroup: refuseExplicitNonEditorRoute } : {})
+          ...(explicitGroupRequest
+            ? { refuseOpenInSourceGroup: refuseExplicitNonEditorRoute }
+            : {}),
+          ...(explicitBrowser ? { onBrowserOpenFailure: reportBrowserOpenFailure } : {})
         })
       ) {
         return
       }
+    }
+
+    if (explicitBrowser) {
+      // The action promised the Orca Browser; opening the editor instead would hide that it failed.
+      reportBrowserOpenFailure()
+      return
     }
 
     if (deps.openInSourceGroupSurface === 'browser') {
@@ -306,7 +301,7 @@ export function openDetectedFilePath(
       })
     }
 
-    const opened = openLinkedFileInEditor(
+    const opened = openLinkedFile(
       {
         filePath: mappedFilePath,
         relativePath,
@@ -324,7 +319,8 @@ export function openDetectedFilePath(
       },
       linkIntent,
       { line, column },
-      isCurrentRequest
+      isCurrentRequest,
+      deps.explicitDestination === 'markdown-preview'
     )
     if (!opened) {
       refuseExplicitNonEditorRoute()

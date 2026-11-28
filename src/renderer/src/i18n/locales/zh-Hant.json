@@ -17885,7 +17885,6 @@
           "resolveConflictGuidance": "重新開啟前，請先在 Git 中解決衝突，或還原其中一方的內容。"
         },
         "EditorPanelHeader": {
-          "fb8331694e": "在側邊開啟預覽",
           "4157f3cbf3": "開啟 Markdown 預覽",
           "269ce4842b": "複製相對路徑",
           "7c08a1f990": "複製路徑",

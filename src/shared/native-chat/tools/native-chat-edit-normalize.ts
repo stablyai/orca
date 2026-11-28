@@ -161,7 +161,8 @@ function codexChangeFiles(changes: unknown[]): NativeChatEditFile[] {
     const change = record(entry)
     const path = text(change?.path)
     const diff = text(change?.diff)
-    if (!change || !path || !diff) {
+    // An empty add or delete is still a change (an empty file); only a missing diff is not.
+    if (!change || !path || diff === null) {
       return []
     }
     const kind = record(change.kind)
@@ -181,7 +182,7 @@ function codexChangeFiles(changes: unknown[]): NativeChatEditFile[] {
         })
       ]
     }
-    const parsed = editLinesFromUnifiedPatch(splitMoveMarker(diff).body)
+    const parsed = diff ? editLinesFromUnifiedPatch(splitMoveMarker(diff).body) : null
     if (!parsed) {
       return []
     }
