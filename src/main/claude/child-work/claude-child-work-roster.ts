@@ -1,4 +1,10 @@
-import { record, taskAliasId, taskId } from '../background-tasks/claude-background-task-frames'
+import {
+  record,
+  taskAliasId,
+  taskId,
+  taskText
+} from '../background-tasks/claude-background-task-frames'
+import { claudeWorkflowProgressText } from './claude-workflow-progress'
 import type { DecodedClaudeTask } from './claude-child-work-evidence'
 
 /** The roster entries a background-tasks frame starts or refreshes: a subagent's task, or one already
@@ -84,10 +90,27 @@ export function claudeForegroundCommandSurvivors(
 }
 
 /** Any later frame for a task is evidence of its state, so an unverified survivor stops being one. */
-export function claudeTaskSeenAgain(task: DecodedClaudeTask): DecodedClaudeTask {
+export function claudeTaskSeenAgain(
+  task: DecodedClaudeTask,
+  progress: Record<string, unknown>
+): DecodedClaudeTask {
   const seen = { ...task }
   delete seen.uncertain
+  if (task.phased || claudeWorkflowProgressText(progress.workflow_progress) !== undefined) {
+    const summary = taskText(progress.summary) ?? task.phased?.summary
+    seen.phased = summary === undefined ? {} : { summary }
+  }
   return seen
+}
+
+/** The message an ending reports: its own, else for a workflow showing a phase line its last summary
+ *  or its description, so the phase line never stands as a failure's reason. */
+export function claudeEndedMessage(
+  task: DecodedClaudeTask | undefined,
+  reported: string | undefined
+): { lastMessage?: string } {
+  const message = reported || (task?.phased ? (task.phased.summary ?? task.description) : undefined)
+  return message ? { lastMessage: message } : {}
 }
 
 /** The marks a refreshed task keeps: waiting on agents, and that its own call has returned, the latter
@@ -96,8 +119,9 @@ export function claudeCarriedMarks(
   existing: DecodedClaudeTask | undefined,
   toolUseId: string | undefined,
   awaitsAgents = false
-): Pick<DecodedClaudeTask, 'awaitsAgents' | 'answered'> {
+): Pick<DecodedClaudeTask, 'awaitsAgents' | 'answered' | 'phased'> {
   return {
+    ...(existing?.phased ? { phased: existing.phased } : {}),
     ...(awaitsAgents || existing?.awaitsAgents ? { awaitsAgents: true as const } : {}),
     ...(existing?.answered && existing.toolUseId === toolUseId ? { answered: true as const } : {})
   }
