@@ -1,5 +1,7 @@
 /** How a column of usage rings fits a band of the rail. */
 export type RailRingStackFit = {
+  /** Smaller rings when tightening gaps alone cannot fit the complete stack. */
+  diameter?: number
   /** Top padding above the first ring. Tightens with the gaps when `tightenTop` is set. */
   paddingTop: number
   /** Clear space from a label's bottom (or the Items button) to the next ring's top. */
@@ -17,8 +19,9 @@ export type RailRingStackFit = {
 /**
  * A ring's full height runs to the bottom of the percent label under it, and every gap is measured
  * from there to the next ring's arc, so no label ever touches the next ring. Keeps the natural
- * spacing when every ring fits. Otherwise it tightens the gaps, then shows as many whole rings as
- * fit and cuts in the gap below the last one's label: only the next ring's top edge shows, under a fade.
+ * spacing when every ring fits. Otherwise it tightens the gaps, then scales rings down to `minRing`.
+ * A leading control keeps its own height. If they still do not fit, it cuts below a whole ring's label
+ * with the next ring's edge under a fade.
  */
 export function railRingStackFit(args: {
   count: number
@@ -39,6 +42,8 @@ export function railRingStackFit(args: {
   tightenTop?: boolean
   /** Height of a control above the rings, such as the Items button. It takes one of the clear gaps. */
   leadingHeight?: number
+  /** Smallest readable ring; omit to keep the ring's size when the stack must scroll. */
+  minRing?: number
 }): RailRingStackFit {
   const {
     count,
@@ -51,7 +56,8 @@ export function railRingStackFit(args: {
     paddingBottom,
     peek,
     tightenTop = false,
-    leadingHeight = 0
+    leadingHeight = 0,
+    minRing = ring
   } = args
   const item = ring + overhang
   const hasLeading = leadingHeight > 0
@@ -86,6 +92,22 @@ export function railRingStackFit(args: {
     return layout(tightenTop ? Math.min(paddingTop, clear) : paddingTop, clear, tightBottom, null)
   }
   const effectiveTop = tightenTop ? Math.min(paddingTop, minGap) : paddingTop
+  // Scale the ring and its label together. The leading control stays full size.
+  const diameter = Math.floor(
+    (room - effectiveTop - leadingHeight - gapCount * minGap - tightBottom) /
+      (count * (1 + overhang / ring))
+  )
+  if (diameter >= minRing && diameter < ring) {
+    return {
+      ...railRingStackFit({
+        ...args,
+        ring: diameter,
+        overhang: overhang * (diameter / ring),
+        minRing: diameter
+      }),
+      diameter
+    }
+  }
   const pitch = item + minGap
   // The leading control stays put; only the rings below it scroll, and their end gap stays tight.
   const scrollPaddingTop = hasLeading ? 0 : effectiveTop

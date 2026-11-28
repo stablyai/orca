@@ -65,7 +65,7 @@ export function RailUsageRing({
   usage: AgentUsage
   now: number
   onPress: () => void
-  /** Larger than the Duo's status-glyph ring where the rail has room, as on a tablet. */
+  /** Larger on a tablet rail, smaller when the Duo stack shrinks to fit above the jump arrows. */
   diameter?: number
 }): React.JSX.Element | null {
   const scaled = scaledRing(diameter)
