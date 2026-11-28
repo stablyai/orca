@@ -12,6 +12,7 @@
     },
     "hostSignIn": {
       "errors": {
+        "noPrompt": "The server's login command didn't show a sign-in link within a minute. Update Orca on the server, then try again.",
         "ownerSilent": "The device that started this sign-in stopped answering.",
         "superseded": "An account change on this host stopped the sign-in. Start it again."
       }
@@ -87,16 +88,14 @@
         "activitySubagentCount_other": "{{count}} subagents running"
       },
       "NativeChatResumeToast": {
-        "partial_one": "Resumed {{resumed}} of {{total}} agents. {{count}} needs you.",
-        "partial_other": "Resumed {{resumed}} of {{total}} agents. {{count}} need you.",
-        "resumedOn_one": "Resumed {{count}} agent on {{machine}}.",
-        "resumedOn_other": "Resumed {{count}} agents on {{machine}}.",
-        "resumedRestart_one": "Resumed {{count}} agent after the restart.",
-        "resumedRestart_other": "Resumed {{count}} agents after the restart.",
-        "resumedUpdate_one": "Resumed {{count}} agent after the update.",
-        "resumedUpdate_other": "Resumed {{count}} agents after the update.",
-        "resumingOn_one": "Resuming {{count}} agent on {{machine}}…",
-        "resumingOn_other": "Resuming {{count}} agents on {{machine}}…",
+        "failedSome_one": "Couldn’t resume {{count}} of {{total}}",
+        "failedSome_other": "Couldn’t resume {{count}} of {{total}}",
+        "needYou_one": "{{count}} needs you",
+        "needYou_other": "{{count}} need you",
+        "resumedCount_one": "Resumed {{count}}",
+        "resumedCount_other": "Resumed {{count}}",
+        "resumedMany_one": "Resumed {{count}} agent",
+        "resumedMany_other": "Resumed {{count}} agents",
         "resuming_one": "Resuming {{count}} agent…",
         "resuming_other": "Resuming {{count}} agents…",
         "stoppedOn_one": "{{count}} agent stopped on {{machine}}.",
@@ -159,6 +158,22 @@
           "cleared_other": "Cleared {{count}} completed agents"
         }
       },
+      "artifacts": {
+        "ArtifactListSelectionBar": {
+          "selected_one": "{{count}} selected",
+          "selected_other": "{{count}} selected"
+        },
+        "ArtifactListTableHeader": {
+          "name": "Name",
+          "size": "Size"
+        },
+        "ArtifactsPage": {
+          "deleteBatchStopped_one": "Could not delete “{{name}}”. {{count}} more was not deleted.",
+          "deleteBatchStopped_other": "Could not delete “{{name}}”. {{count}} more were not deleted.",
+          "deleteManyDescription_one": "{{count}} artifact will no longer be available at its public link.",
+          "deleteManyDescription_other": "{{count}} artifacts will no longer be available at their public links."
+        }
+      },
       "automations": {
         "AutomationDetail": {
           "graceHours_one": "{{count}} hour",
@@ -169,6 +184,7 @@
           "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} runs reported"
         },
         "AutomationRunsDashboard": {
+          "filters": "Filters",
           "historyUnavailable_one": "Run history is unavailable for {{count}} automation. Counts include available history only.",
           "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only.",
           "local": "Local",
@@ -271,12 +287,6 @@
           "changedFilesVs_other": "{{count}} changed files vs {{baseRef}}",
           "changedFiles_one": "{{count}} changed file",
           "changedFiles_other": "{{count}} changed files",
-          "clearNotesConfirm_one": "Clear {{count}} note from this worktree?",
-          "clearNotesConfirm_other": "Clear {{count}} notes from this worktree?",
-          "moreNotesInSourceControl_one": "{{count}} more note in Source Control",
-          "moreNotesInSourceControl_other": "{{count}} more notes in Source Control",
-          "showAiNotes_one": "Show {{count}} AI note",
-          "showAiNotes_other": "Show {{count}} AI notes",
           "skippedConflictsExcluded": "{{count}} unresolved conflicts were excluded from this diff view.",
           "skippedConflictsExcluded_one": "{{count}} unresolved conflict was excluded from this diff view.",
           "skippedConflictsExcluded_other": "{{count}} unresolved conflicts were excluded from this diff view."
@@ -460,8 +470,6 @@
             "discardFailed_other": "Failed to discard {{count}} files",
             "noteCount_one": "{{count}} note",
             "noteCount_other": "{{count}} notes",
-            "rebaseConflictCount_one": "{{count}} conflict",
-            "rebaseConflictCount_other": "{{count}} conflicts",
             "scopeCommitCount_one": "{{count}} commit",
             "scopeCommitCount_other": "{{count}} commits",
             "scopeFileCount_one": "{{count}} file",
@@ -482,8 +490,6 @@
                 "pendingChecks_other": "{{count}} checks pending",
                 "pendingCount_one": "{{count}} pending",
                 "pendingCount_other": "{{count}} pending",
-                "sendQueuedCommentsToAi_one": "Send {{count}} queued comment to AI",
-                "sendQueuedCommentsToAi_other": "Send {{count}} queued comments to AI",
                 "unresolvedChecks_one": "{{count}} check unresolved",
                 "unresolvedChecks_other": "{{count}} checks unresolved",
                 "unresolvedCount_one": "{{count}} unresolved",
@@ -697,6 +703,15 @@
         "PluginAuthor": {
           "shownPluginCount_one": "{{count}} matching plugin shown, including this one",
           "shownPluginCount_other": "{{count}} matching plugins shown, including this one"
+        },
+        "PluginConsentDialog": {
+          "capability": {
+            "appearanceWrite": "Publish and select desktop application, editor and terminal colors",
+            "automationRead": "Read your automations: their names, prompts, agents, projects, workspaces and schedules",
+            "automationWrite": "Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)",
+            "historyRead": "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself",
+            "workspaceCreate": "Create workspaces (new Git branches and worktrees) in your projects, local and SSH; a project's setup script runs as its settings say"
+          }
         },
         "PluginDevelopmentSection": {
           "title": "Development"
@@ -3132,8 +3147,12 @@
         "changedFiles_other": "{{count}} changed files"
       },
       "workerDock": {
+        "backgroundCommandCount_one": "{{count}} background command",
+        "backgroundCommandCount_other": "{{count}} background commands",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
+        "commandCount_one": "{{count}} command",
+        "commandCount_other": "{{count}} commands",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
         "workerCount_one": "{{count}} worker",
@@ -3220,6 +3239,20 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
+      }
+    },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_one": "Clear {{count}} note from this page?",
+        "clearPageNotes_other": "Clear {{count}} notes from this page?",
+        "sendCommentsToAgent_one": "Send {{count}} comment to an agent",
+        "sendCommentsToAgent_other": "Send {{count}} comments to an agent",
+        "sendComments_one": "Send {{count}} comment",
+        "sendComments_other": "Send {{count}} comments",
+        "sendNotesToAgent_one": "Send {{count}} note to an agent",
+        "sendNotesToAgent_other": "Send {{count}} notes to an agent",
+        "sendNotes_one": "Send {{count}} note",
+        "sendNotes_other": "Send {{count}} notes"
       }
     },
     "onboarding": {
@@ -3539,7 +3572,8 @@
       "repairSaveFailed": "Orca verified the server but could not save the new pairing. Check local settings storage and try again.",
       "selfPairingCode": "This pairing code is for this Orca itself. Generate the code on the other computer instead.",
       "sshAccessChangePending": "This server's SSH access change didn't finish. Retry or cancel it under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
-      "sshAccessLinked": "Unlink this server's SSH access under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it."
+      "sshAccessLinked": "Unlink this server's SSH access under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
+      "wslHostDeployment": "Orca runs this server in a WSL distro for you; its pairing cannot be replaced or removed here. Remove the WSL host in Orca, or run `orca environment forget --environment <name> --yes` to remove it without contacting its distro."
     }
   },
   "runtimeRpc": {
@@ -3816,6 +3850,7 @@
         "restartGaveUp_one": "Could not restart the Orca server in {{distro}} after {{count}} attempt",
         "restartGaveUp_other": "Could not restart the Orca server in {{distro}} after {{count}} attempts",
         "runningListUnavailable": "Windows didn’t report whether the distro is running.",
+        "runsAsOtherUser": "Runs as {{user}}. To use {{defaultUser}}, remove the host and add it again.",
         "serviceUnconfirmed": "The WSL service did not confirm whether the distro runs."
       }
     }
@@ -3861,6 +3896,9 @@
         "agentCouldNotStart": "{{label}} could not be started. Check the agent command in Settings and try again.",
         "agentFailedToStart": "{{label}} failed to start. Check the agent command in Settings and try again.",
         "agentReportedError": "{{label}} reported an error.",
+        "antigravityInvalidEvents": "Antigravity returned invalid JSON events.",
+        "antigravityInvalidResult": "Antigravity returned an invalid result.",
+        "antigravityNoFinalResult": "Antigravity returned no final result.",
         "chatNameAgentUnsupported": "Choose a supported chat name agent for this action in Settings -> Chat -> Chat names. Supported agents: {{agents}}, or Custom command.",
         "chatNameCustomCommandEmpty": "Custom command is empty. Add one in Settings -> Chat -> Chat names.",
         "cliFailed": "{{label}} CLI command failed with code {{exitCode}}.",

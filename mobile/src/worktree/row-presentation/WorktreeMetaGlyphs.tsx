@@ -1,21 +1,22 @@
 import { CalendarClock, CircleDot, GitMerge, SquareTerminal, StickyNote } from 'lucide-react-native'
 import { Text, View } from 'react-native'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import type { MobilePalette } from '../../theme/mobile-theme'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import type { WorktreeMetaGlyphPresence } from './worktree-meta-glyph-presence'
 import { prStateToken } from '../../source-control/review/status/pr-state-token'
 import { statusColor } from '../../source-control/review/status/pr-sidebar-status-color'
 
 // Use shared prStateToken to match sidebar badge: merged purple, open green, closed red, draft/unknown muted.
-export function prStateColor(state: string): string {
-  return statusColor(prStateToken(state))
+export function prStateColor(state: string, colors: MobilePalette): string {
+  return statusColor(prStateToken(state), colors)
 }
 
 // Match desktop metadata order; mobile glyphs show presence, with full details reserved for sheet.
 export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPresence }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   if (!Object.values(presence).some(Boolean)) {
     return null
   }
@@ -32,7 +33,7 @@ export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPr
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   metaGlyphs: {
     flexDirection: 'row',
     alignItems: 'center',

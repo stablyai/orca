@@ -1,11 +1,12 @@
 // Where a bot's background work started, for a turn that later starts on its own (that work finished)
-// and so posts nothing by itself: the Slack thread whose delivery opened the starting turn, as that
-// turn's origin record (#486) also names it. Thread chats only; the bot's Chat answers many DMs.
+// and so posts nothing by itself: the Slack thread or DM whose delivery opened the starting turn, as
+// that turn's origin record (#486) also names it. Chats of their own only (a thread's, a DM's, a
+// thread's inside a DM), never the bot's Chat, which answers many conversations.
 import type { ReplyTarget } from '../external-conversations/external-conversation-types'
 import type { BotWakingPlace } from './bot-request-asker'
 import { slackPlaceOf } from '../../shared/connectors/slack-mirror-state'
 
-/** The thread, when the running turn was opened by its conversation's delivery and its origin record
+/** The thread or DM, when the running turn was opened by its conversation's delivery and its origin record
  *  names that same Slack channel; null for anything else. */
 export async function wakeReplyPlace(
   botId: string,
@@ -24,9 +25,9 @@ export async function wakeReplyPlace(
   ) {
     return null
   }
+  // A channel thread, a DM, or a thread inside a DM; a bare channel is none of them.
   const slack = slackPlaceOf(target.key.externalId)
-  // A thread inside a DM is DM territory, a later stage.
-  if (!slack?.threadTs || slack.channelId.startsWith('D')) {
+  if (!slack) {
     return null
   }
   const origin = await readOrigin()

@@ -27,7 +27,7 @@ import {
   getCommitPressureToneClass,
   getResourceMemoryMetricCopy
 } from './popover/resource-memory-metric-copy'
-import { formatMemory } from './popover/resource-usage-metrics'
+import { formatMemory, formatMemoryCompact } from './popover/resource-usage-metrics'
 import {
   readAgentPaneKeys,
   sharedAgentProcessUsage,
@@ -55,7 +55,8 @@ export function useResourceUsageDerivedModel({
   sessionsRereading,
   memorySnapshotError,
   snapshot,
-  spaceScanReady
+  spaceScanReady,
+  appMemoryBytes
 }: {
   open: boolean
   resourceSnapshot: MemorySnapshot | null
@@ -74,6 +75,7 @@ export function useResourceUsageDerivedModel({
   memorySnapshotError: string | null
   snapshot: MemorySnapshot | null
   spaceScanReady: boolean
+  appMemoryBytes: number | null
 }) {
   const t = useTranslate()
   const repoDisplayNameById = useMemo(() => {
@@ -233,17 +235,20 @@ export function useResourceUsageDerivedModel({
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
   // Why: sessions IPC can fail while snapshot IPC works; flag it so the empty session list isn't mistaken for healthy.
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
+  const appMemoryLabel = appMemoryBytes === null ? null : formatMemoryCompact(appMemoryBytes)
   const resourceManagerTooltipLines = getResourceManagerTooltipLines(
     {
       sessionCount: triggerSessionCount,
-      spaceScanReady
+      spaceScanReady,
+      appMemoryLabel
     },
     t
   )
   const resourceManagerAriaLabel = getResourceManagerAriaLabel(
     {
       sessionCount: triggerSessionCount,
-      spaceScanReady
+      spaceScanReady,
+      appMemoryLabel
     },
     t
   )
@@ -260,6 +265,7 @@ export function useResourceUsageDerivedModel({
     daemonUnreachable,
     sessionsOnlyError,
     resourceManagerTooltipLines,
-    resourceManagerAriaLabel
+    resourceManagerAriaLabel,
+    appMemoryLabel
   }
 }

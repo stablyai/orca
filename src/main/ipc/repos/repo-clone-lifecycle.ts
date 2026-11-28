@@ -100,9 +100,10 @@ function settleCloneAbortCleanup(metadata: ActiveCloneMetadata): void {
 export function registerRepoCloneHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
+  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata'],
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
 ): void {
-  ipcMain.handle('repos:cloneAbort', async () => {
+  ipc.handle('repos:cloneAbort', async () => {
     for (const controller of pendingLocalCloneControllers) {
       controller.abort()
     }
@@ -126,11 +127,11 @@ export function registerRepoCloneHandlers(
           getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
       )
 
-  ipcMain.handle('repos:checkCloneTarget', (_event, args: CloneTargetArgs) =>
+  ipc.handle('repos:checkCloneTarget', (_event, args: CloneTargetArgs) =>
     checkCloneTarget(args, findLocalSaved, LOCAL_EXECUTION_HOST_ID)
   )
 
-  ipcMain.handle('repos:clone', async (_event, args: CloneTargetArgs): Promise<Repo> => {
+  ipc.handle('repos:clone', async (_event, args: CloneTargetArgs): Promise<Repo> => {
     const clonePath = deriveValidatedClonePath(args)
     const clonePathKey = getClonePathComparisonKey(clonePath)
     let savedPathKeys: string[] = []

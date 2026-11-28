@@ -50,6 +50,9 @@ export function getMixedHostContextLabels(
   projectIndex: ProjectGroupingIndex | null,
   hostLabelById: ReadonlyMap<string, string> | undefined
 ): Map<string, string> | undefined {
+  if (group.repoIds.size <= 1) {
+    return undefined
+  }
   const labelsByRepoId = new Map<string, string>()
   // Host identity, not the rendered label, determines whether rows are ambiguous:
   // two hosts can intentionally share a user-facing label.
@@ -186,6 +189,31 @@ export function getMixedWorktreeHostContextLabels(
   hostLabelById: ReadonlyMap<string, string> | undefined,
   defaultHostId: ExecutionHostId
 ): Map<string, string> | undefined {
+  let firstHostId: ExecutionHostId | undefined
+  let isMixed = false
+  for (const worktree of worktrees) {
+    const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
+    if (firstHostId === undefined) {
+      firstHostId = hostId
+    } else if (hostId !== firstHostId) {
+      isMixed = true
+      break
+    }
+  }
+  if (!isMixed) {
+    for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
+      const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
+      if (firstHostId === undefined) {
+        firstHostId = hostId
+      } else if (hostId !== firstHostId) {
+        isMixed = true
+        break
+      }
+    }
+  }
+  if (!isMixed) {
+    return undefined
+  }
   const rows = [
     ...worktrees.map((worktree) => ({
       identity: getWorktreeHostIdentity(worktree),
@@ -203,96 +231,10 @@ export function getMixedWorktreeHostContextLabels(
   })
 }
 
-export function getHostWorktreeCounts(
-  worktrees: readonly Worktree[],
-  repoOf: RepoOfWorktree,
-  defaultHostId: ExecutionHostId
-): Map<ExecutionHostId, number> | undefined {
-  if (worktrees.length === 0) {
-    return undefined
-  }
-  // Reuse the ID dedupe walk; same-ID workspaces on two hosts count under each host (STA-4343).
-  const idsByHost = getHostWorktreeIds(worktrees, repoOf, defaultHostId)
-  if (!idsByHost) {
-    return undefined
-  }
-  const counts = new Map<ExecutionHostId, number>()
-  for (const [hostId, ids] of idsByHost) {
-    counts.set(hostId, ids.length)
-  }
-  return counts
-}
-
-export function getHostWorktreeIds(
-  worktrees: readonly Worktree[],
-  repoOf: RepoOfWorktree,
-  defaultHostId: ExecutionHostId
-): Map<ExecutionHostId, string[]> | undefined {
-  if (worktrees.length === 0) {
-    return undefined
-  }
-  const idsByHost = new Map<ExecutionHostId, string[]>()
-  const seenIdentities = new Set<string>()
-  for (const worktree of worktrees) {
-    const identity = getWorktreeHostIdentity(worktree)
-    if (seenIdentities.has(identity)) {
-      continue
-    }
-    seenIdentities.add(identity)
-    const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
-    const ids = idsByHost.get(hostId) ?? []
-    ids.push(worktree.id)
-    idsByHost.set(hostId, ids)
-  }
-  return idsByHost
-}
-
-/** Folder-only lanes still need host counts; undefined would render their headers globally (#15362). */
-export function getLaneHostWorktreeCounts(
-  worktrees: readonly Worktree[],
-  folderWorkspaces: readonly RenderableFolderWorkspace[],
-  repoOf: RepoOfWorktree,
-  defaultHostId: ExecutionHostId
-): Map<ExecutionHostId, number> | undefined {
-  return getLaneHostWorktreeScope(worktrees, folderWorkspaces, repoOf, defaultHostId)
-    .hostWorktreeCounts
-}
-
-/** Folder hosts need explicit empty worktree-ID arrays; missing keys trigger global-ID fallbacks into that host section. */
-export function getLaneHostWorktreeIds(
-  worktrees: readonly Worktree[],
-  folderWorkspaces: readonly RenderableFolderWorkspace[],
-  repoOf: RepoOfWorktree,
-  defaultHostId: ExecutionHostId
-): Map<ExecutionHostId, string[]> | undefined {
-  return getLaneHostWorktreeScope(worktrees, folderWorkspaces, repoOf, defaultHostId)
-    .hostWorktreeIds
-}
-
-/** Computes lane host counts and IDs in one worktree walk so callers avoid deduping twice per lane. */
-export function getLaneHostWorktreeScope(
-  worktrees: readonly Worktree[],
-  folderWorkspaces: readonly RenderableFolderWorkspace[],
-  repoOf: RepoOfWorktree,
-  defaultHostId: ExecutionHostId
-): {
-  hostWorktreeCounts: Map<ExecutionHostId, number> | undefined
-  hostWorktreeIds: Map<ExecutionHostId, string[]> | undefined
-} {
-  if (worktrees.length === 0 && folderWorkspaces.length === 0) {
-    return { hostWorktreeCounts: undefined, hostWorktreeIds: undefined }
-  }
-  const idsByHost = getHostWorktreeIds(worktrees, repoOf, defaultHostId) ?? new Map()
-  const counts = new Map<ExecutionHostId, number>()
-  for (const [hostId, ids] of idsByHost) {
-    counts.set(hostId, ids.length)
-  }
-  for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
-    const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
-    counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
-    if (!idsByHost.has(hostId)) {
-      idsByHost.set(hostId, [])
-    }
-  }
-  return { hostWorktreeCounts: counts, hostWorktreeIds: idsByHost }
-}
+export {
+  getHostWorktreeCounts,
+  getHostWorktreeIds,
+  getLaneHostWorktreeCounts,
+  getLaneHostWorktreeIds,
+  getLaneHostWorktreeScope
+} from './host-worktree-scope'

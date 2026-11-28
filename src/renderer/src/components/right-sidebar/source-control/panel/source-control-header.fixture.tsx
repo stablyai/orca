@@ -15,8 +15,6 @@ import type {
   PrimaryAction,
   PrimaryActionInputs
 } from '../review/source-control-primary-action-types'
-import { GitGraphOpenButton } from '../sync/git-graph-open-button'
-import type { BaseRebaseActions } from './base-rebase-control'
 import { SourceControlChangeScopeBar } from './change-scope-bar'
 import { ALL_CHANGES_SCOPE, type SourceControlChangeScope } from './change-scope'
 import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
@@ -32,7 +30,6 @@ type Scenario = {
   lines?: { added: number; removed: number } | null
   compare?: 'ready' | 'loading' | 'error'
   review?: 'create' | 'creating' | 'disabled' | 'open' | 'unlinked' | null
-  rebasePaused?: boolean
   filterExpanded?: boolean
   filterQuery?: string
   scope?: SourceControlChangeScope
@@ -93,22 +90,6 @@ function summaryFor(scenario: Scenario): GitBranchCompareSummary {
     return { ...base, status: 'error', errorMessage: 'Could not read origin/main' }
   }
   return { ...base, status: 'ready' }
-}
-
-const PAUSED_REBASE: BaseRebaseActions = {
-  state: {
-    kind: 'rebase_paused',
-    unresolvedCount: 2,
-    continueState: 'ready',
-    inspectFailureMessage: null
-  },
-  isAbortingRebase: false,
-  isContinuingRebase: false,
-  isRetryingRebaseInspect: false,
-  hasGitOwner: true,
-  onAbortRebase: () => {},
-  onContinueRebase: () => {},
-  onRetryRebaseInspect: () => {}
 }
 
 function Composer() {
@@ -257,7 +238,6 @@ function Panel(scenario: Scenario) {
         branchSummary={summary}
         compareBaseRef="origin/main"
         branchLineTotal={branchLineTotal}
-        rebase={scenario.rebasePaused ? PAUSED_REBASE : null}
         toolsInFileListHeader
       />
       <div className="pt-1">
@@ -267,9 +247,6 @@ function Panel(scenario: Scenario) {
             {...props}
             graphSupported={graphSupport.support === true}
             filter={filter}
-            graphControl={
-              <GitGraphOpenButton worktreeId="fixture-workspace" support={graphSupport} iconOnly />
-            }
             overflowMenu={
               <SourceControlHeaderOverflowMenu
                 panelActions={panelActions}
@@ -378,10 +355,6 @@ export const createPrDisabled = defineFixture({
 export const unlinkedPr = defineFixture({
   width: panelWidth(264),
   render: () => <Panel review="unlinked" />
-})
-export const rebasePaused = defineFixture({
-  width: panelWidth(264),
-  render: () => <Panel rebasePaused detached review={null} />
 })
 const filterOpen = variants({ filterExpanded: true, filterQuery: 'settings', behind: 45 })
 export const filterOpenMinimum = filterOpen.minimum

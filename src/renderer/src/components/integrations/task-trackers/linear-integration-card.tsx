@@ -6,7 +6,11 @@ import { LinearIcon } from '@/components/icons/LinearIcon'
 import { LinearApiKeyDialog } from '@/components/integrations/task-trackers/linear-api-key-dialog'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import {
+  getProviderRuntimeContextKey,
+  useProviderRuntimeSessionGeneration
+} from '@/runtime/hosts/observations/provider-runtime-context'
+import { recomputeOn } from '@/lib/recompute-on'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store/index'
 import {
@@ -41,7 +45,11 @@ export function LinearIntegrationCard(): React.JSX.Element {
     Record<string, VerificationResult>
   >({})
 
-  const contextMatches = linearStatusContextKey === getProviderRuntimeContextKey(settings)
+  const providerRuntimeSessionGeneration = useProviderRuntimeSessionGeneration()
+  const providerRuntimeContextKey = recomputeOn([providerRuntimeSessionGeneration], () =>
+    getProviderRuntimeContextKey(settings)
+  )
+  const contextMatches = linearStatusContextKey === providerRuntimeContextKey
   const checking = !contextMatches || !linearStatusChecked
   const connected = contextMatches && linearStatus.connected
   const workspaces = linearStatus.workspaces ?? []

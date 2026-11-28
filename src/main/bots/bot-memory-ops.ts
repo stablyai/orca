@@ -2,6 +2,7 @@
 // to them, which Orca checks one by one against that snapshot. A bad op is skipped, never the run.
 import { createHash } from 'node:crypto'
 import * as z from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   type BotMemoryFact,
   type BotMemoryLine,
@@ -55,25 +56,27 @@ export function memorySnapshotText(
 
 const KEEP_MARK = "  [keep: your owner's decision]"
 
-const OpSchema = z.discriminatedUnion('op', [
-  z.object({
-    op: z.literal('merge'),
-    lines: z.array(z.string()).min(2).max(8),
-    /** The named line that stays, word for word; the others go to the archive. */
-    keep: z.string()
-  }),
-  z.object({
-    op: z.literal('retire'),
-    line: z.string(),
-    reason: z.enum(['stale', 'done', 'wrong', 'not-a-lesson'])
-  }),
-  z.object({
-    op: z.literal('demote'),
-    lines: z.array(z.string()).optional(),
-    range: z.tuple([z.string(), z.string()]).optional(),
-    topic: z.string()
-  })
-])
+const OpSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('op', [
+    z.object({
+      op: z.literal('merge'),
+      lines: z.array(z.string()).min(2).max(8),
+      /** The named line that stays, word for word; the others go to the archive. */
+      keep: z.string()
+    }),
+    z.object({
+      op: z.literal('retire'),
+      line: z.string(),
+      reason: z.enum(['stale', 'done', 'wrong', 'not-a-lesson'])
+    }),
+    z.object({
+      op: z.literal('demote'),
+      lines: z.array(z.string()).optional(),
+      range: z.tuple([z.string(), z.string()]).optional(),
+      topic: z.string()
+    })
+  ])
+)
 type Op = z.infer<typeof OpSchema>
 
 /** Why an op on a line that reads as the owner deciding is skipped: a skip that isn't a failure. */

@@ -83,12 +83,12 @@ export const SSH_HOST_SERVER_FAILURE_VALUES = [
   'other'
 ] as const
 
-const hostFields = {
+const createHostFields = () => ({
   host_os: z.enum(['linux', 'darwin', 'win32', 'unknown']),
   host_arch: z.enum(['x64', 'arm64', 'unknown']),
   // unknown until this session probes; the decision itself never probes.
   host_libc: z.enum(['glibc', 'musl', 'none', 'unknown'])
-}
+})
 
 /** How the client reached a managed server; `none` when the host stayed on the relay. */
 export const SSH_HOST_SERVER_TRANSPORT_VALUES = [
@@ -116,7 +116,7 @@ export const sshHostServerDecidedSchema = lazyZodSchema(() =>
       refusal: z.enum(SSH_HOST_SERVER_REFUSAL_VALUES),
       // True when a recorded "orcad can't run here" sent the host to the relay without a try.
       recorded: z.boolean(),
-      ...hostFields,
+      ...createHostFields(),
       duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS)
     })
     .strict()
@@ -129,7 +129,7 @@ export const sshHostServerConversionSchema = lazyZodSchema(() =>
       failure: z.enum(['none', 'deferred', 'refused', 'error']),
       refusal: z.enum(SSH_HOST_SERVER_REFUSAL_VALUES),
       failure_code: z.enum(['none', ...SSH_HOST_SERVER_FAILURE_VALUES]),
-      ...hostFields,
+      ...createHostFields(),
       duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS)
     })
     .strict()
@@ -142,7 +142,7 @@ export const sshHostServerDeployFailedSchema = lazyZodSchema(() =>
       context: z.enum(['deploy', 'conversion']),
       failure: z.enum(['deferred', 'error']),
       failure_code: z.enum(SSH_HOST_SERVER_FAILURE_VALUES),
-      ...hostFields,
+      ...createHostFields(),
       duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS)
     })
     .strict()
@@ -153,7 +153,7 @@ export const sshHostServerMoveSchema = lazyZodSchema(() =>
   z
     .object({
       outcome: z.enum(SSH_HOST_SERVER_MOVE_OUTCOME_VALUES),
-      ...hostFields
+      ...createHostFields()
     })
     .strict()
 )
@@ -175,7 +175,7 @@ export const sshHostServerLegacyRelayBridgeSchema = lazyZodSchema(() =>
       phase: z.enum(['connected', 'terminal_exited', 'active']),
       // Bridged terminals when the host connected or was active; `none` on an exit row.
       terminals: z.enum(SSH_HOST_SERVER_LEGACY_RELAY_BRIDGE_TERMINAL_VALUES),
-      ...hostFields
+      ...createHostFields()
     })
     .strict()
 )

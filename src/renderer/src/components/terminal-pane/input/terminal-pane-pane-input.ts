@@ -64,6 +64,8 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     !isMac &&
     ((navigator.userAgent.includes('Linux') && !/Android|CrOS/.test(navigator.userAgent)) ||
       isOpenHarmonyDesktopUserAgent(navigator.userAgent))
+  // Android stays off the Linux policy (no fcitx candidate guards or native text forwarder) but shares its bare-229 commits.
+  const isAndroid = /Android/.test(navigator.userAgent)
   const isIosWeb = isCurrentPlatformIosWeb()
   const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
   const imeComposerPlaceholderMask = installTerminalImeComposerPlaceholderMask(pane.terminal)
@@ -112,7 +114,8 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
         imeCompositionTracker.isCandidateKeyGuardActive() || pendingCandidateReleaseGuardActive,
       pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
       isMac,
-      isLinux: usesLinuxImePolicy
+      isLinux: usesLinuxImePolicy,
+      isAndroid
     }
     if (claimedKittyUnidentifiedSpacePress && event.code === 'Space') {
       if (event.type === 'keyup') {

@@ -21,12 +21,17 @@ export type RuntimePortForwardsPreloadApi = {
   add: (args: RuntimePortForwardSpec) => Promise<PortForwardEntry>
   update: (args: RuntimePortForwardSpec & { id: string }) => Promise<PortForwardEntry>
   remove: (args: { id: string }) => Promise<boolean>
-  /** The server localhost port's forward, started on the same port number here when free. */
+  /** The server localhost port's forward, started on the same port number here when free.
+   *  `session`: one emulator attach whose own forward this is, never shared or saved; it closes
+   *  when the session ends or this window reloads. */
   ensure: (args: {
     environmentId: string
     remotePort: number
     label?: string
+    session?: string
   }) => Promise<{ entry: PortForwardEntry; created: boolean }>
+  /** Ends a session: its forwards close and a pending ensure for it opens nothing. */
+  endSession: (args: { session: string }) => Promise<void>
   /** Restored forwards that moved off a busy port here; each is returned to one caller, once. */
   takeRestoredMoves: () => Promise<RestoredPortForwardMove[]>
   onChanged: (callback: (event: RuntimeEnvironmentPortForwardsChanged) => void) => () => void
@@ -38,6 +43,7 @@ export const runtimePortForwardsApi: RuntimePortForwardsPreloadApi = {
   update: (args) => ipcRenderer.invoke('runtimeEnvironments:updatePortForward', args),
   remove: (args) => ipcRenderer.invoke('runtimeEnvironments:removePortForward', args),
   ensure: (args) => ipcRenderer.invoke('runtimeEnvironments:ensurePortForward', args),
+  endSession: (args) => ipcRenderer.invoke('runtimeEnvironments:endPortForwardSession', args),
   takeRestoredMoves: () => ipcRenderer.invoke('runtimeEnvironments:takeRestoredPortForwardMoves'),
   onChanged: (callback) => {
     const listener = (

@@ -1,6 +1,11 @@
 import { translate } from '@/i18n/i18n'
+import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
+import { RemoteServerUpdaterStatusError } from '../../../../../shared/remote-runtime/host-updates/remote-server-updater-polling'
 
 export function remoteServerUpdateErrorMessage(error: unknown): string {
+  if (error instanceof RemoteServerUpdaterStatusError) {
+    return updaterMessageText(error.status)
+  }
   const message = error instanceof Error ? error.message : String(error)
   switch (message) {
     case 'remote_update_manual_required':

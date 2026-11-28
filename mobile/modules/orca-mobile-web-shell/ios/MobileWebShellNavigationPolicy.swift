@@ -12,7 +12,7 @@ enum MobileWebShellNavigationVerdict: Equatable {
 
 /// Framework-free navigation policy, checked off-device and kept in sync with Kotlin.
 enum MobileWebShellNavigationPolicy {
-  /// Cap native-to-JS URL traffic; TypeScript’s readBridgeExternalLinkUrl owns scheme filtering and its smaller 2048-character limit.
+  /// Cap native-to-JS URL traffic, the tighter bound for cancelled navigations; TypeScript’s readBridgeExternalLinkUrl owns scheme filtering.
   static let maxCancelledNavigationUrlCharacters = 4096
 
   /// The URL a frame's srcdoc document loads under; it carries the embedder's CSP and the frame's sandbox.

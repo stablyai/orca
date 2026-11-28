@@ -49,9 +49,11 @@ export async function readDoc(
   args: { ref: string; offset?: number }
 ): Promise<DocsReadView> {
   const doc = await getDocument(api, args.ref)
-  const [rendered, comments] = await Promise.all([
+  const laterPage = (args.offset ?? 0) > 0
+  // Later pages show no comments, so one comment page is enough for their count.
+  const [rendered, { comments, more }] = await Promise.all([
     Promise.resolve(renderDocument(doc)),
-    openComments(api, doc.documentId)
+    openComments(api, doc.documentId, laterPage ? 1 : undefined)
   ])
   const page = pageOfText(rendered.text, args.offset)
   return {
@@ -60,7 +62,7 @@ export async function readDoc(
     title: doc.title,
     link: docLink(doc.documentId),
     text: page.text,
-    ...(page.nextOffset !== undefined || (args.offset ?? 0) > 0
+    ...(page.nextOffset !== undefined || laterPage
       ? {
           part: {
             from: Math.min(args.offset ?? 0, page.total),
@@ -72,8 +74,9 @@ export async function readDoc(
     ...(page.nextOffset !== undefined ? { nextOffset: page.nextOffset } : {}),
     suggestions: rendered.suggestions,
     // Later pages repeat no comments: the first page already showed what fits.
-    comments: (args.offset ?? 0) > 0 ? [] : commentsInBudget(comments),
-    openComments: comments.length
+    comments: laterPage ? [] : commentsInBudget(comments),
+    openComments: comments.length,
+    ...(more ? { moreComments: true } : {})
   }
 }
 

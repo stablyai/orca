@@ -61,6 +61,9 @@ export const WORKTREE_SET_METHOD = defineMethod({
       ...(params.diffCommentsBase !== undefined
         ? { diffCommentsBase: params.diffCommentsBase }
         : {}),
+      ...(params.deliveredDiffCommentSnapshots !== undefined
+        ? { deliveredDiffCommentSnapshots: params.deliveredDiffCommentSnapshots }
+        : {}),
       mobileDiffReview: params.mobileDiffReview,
       lineage:
         params.parentWorktree || params.crossStoreParent || params.noParent === true

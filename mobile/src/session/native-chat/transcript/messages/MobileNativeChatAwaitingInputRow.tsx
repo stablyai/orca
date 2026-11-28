@@ -3,15 +3,16 @@ import { MessageSquareMore } from 'lucide-react-native'
 import type { NativeChatAskRowSubject } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-row'
 import { nativeChatAskRowCopy } from './native-chat-ask-row-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatQuestionText } from '../message-content/MobileNativeChatQuestionText'
 import { MobileNativeChatEventName, MobileNativeChatEventRow } from './MobileNativeChatEventRow'
 
 /** The chat's ask mark, shared by its asked and answered lines. */
 export function MobileNativeChatAskMark(): React.JSX.Element {
+  const colors = useMobileColors()
   return <MessageSquareMore size={14} color={colors.textMuted} strokeWidth={2} />
 }
 
@@ -35,7 +36,6 @@ export function MobileNativeChatAwaitingInputRow({
   headline?: boolean
   disclosureKey?: string
 }): React.JSX.Element {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const copy = nativeChatAskRowCopy(
     t,
@@ -89,7 +89,7 @@ export function AskQuestions({
   questions: readonly string[]
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const type = scaledType(typography.metaSize, fontScale)
   return (
     <>
@@ -121,7 +121,7 @@ function keyedQuestions(questions: readonly string[]): { key: string; entry: str
   })
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   entry: { flexDirection: 'row', gap: spacing.xs },
   number: { color: colors.textMuted },
   entryText: { flex: 1 }

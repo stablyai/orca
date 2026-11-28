@@ -10,13 +10,10 @@ import type {
   AiVaultListArgs,
   AiVaultListResult
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { listAiVaultSessions } from '../../../ai-vault/listing/cached-session-list'
-import { deleteAiVaultSessionForRemoteClient } from '../../../ai-vault/deletion/host-session-delete'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
 } from '../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
-import { resolveLocalAiVaultSessionTitles } from '../../../ai-vault/session-titles/session-title-resolver'
 
 export class RuntimeAiVaultCommands {
   constructor(
@@ -25,20 +22,25 @@ export class RuntimeAiVaultCommands {
       | null
   ) {}
 
-  list(args?: AiVaultListArgs, signal?: AbortSignal): Promise<AiVaultListResult> {
+  async list(args?: AiVaultListArgs, signal?: AbortSignal): Promise<AiVaultListResult> {
+    const { listAiVaultSessions } = await import('../../../ai-vault/listing/cached-session-list')
     return listAiVaultSessions(args, { signal })
   }
 
-  resolveTitles(
+  async resolveTitles(
     requests: AiVaultSessionTitleRequest[],
     signal?: AbortSignal
   ): Promise<AiVaultSessionTitlesResult> {
+    const { resolveLocalAiVaultSessionTitles } =
+      await import('../../../ai-vault/session-titles/session-title-resolver')
     return resolveLocalAiVaultSessionTitles(requests, signal)
   }
 
-  delete(
+  async delete(
     args: Omit<AiVaultDeleteSessionArgs, 'executionHostId'>
   ): Promise<AiVaultDeleteSessionResult> {
+    const { deleteAiVaultSessionForRemoteClient } =
+      await import('../../../ai-vault/deletion/host-session-delete')
     return deleteAiVaultSessionForRemoteClient(args)
   }
 

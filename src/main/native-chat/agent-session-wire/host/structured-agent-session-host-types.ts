@@ -142,7 +142,10 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** Defaults to provider exit without details. */
     failure?: SubmissionRejectionFact
     duringStartup: boolean
+    /** A kept agent that had ended before its acquisition: queued sends never reached it. */
+    endedBeforeAcquire?: true
     startedFor?: string
+    observedAt?: number
     /** Order exit against acceptance; requested closes retain their original Stop boundary. */
     endedAt: AgentJournalCursor
   }
@@ -261,6 +264,8 @@ export type StructuredAgentSessionHostDeps = {
     changed: (sessionId: string) => Promise<boolean>
     /** No I/O: whether Orca itself changed or signed in to the tools since launch. */
     outdated: (sessionId: string) => boolean
+    /** The host-list servers the running chat got that Orca has since removed or changed. */
+    hostChanges?: (sessionId: string) => Promise<ReadonlyMap<string, 'removed' | 'changed'>>
   }
   conversationNaming?: StructuredAgentSessionConversationNaming
   /** What rides ahead of a person's words for this host; absent adds nothing. */
@@ -328,6 +333,8 @@ export type StructuredAgentSessionConversationLifetime = ReturnType<
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
+  /** The chat closed: a run it waited on stops being asked about for it. */
+  closed: (sessionId: string) => void
   open: (
     sessionId: string,
     options?: StructuredAgentSessionConversationOpenOptions

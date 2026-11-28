@@ -3,6 +3,7 @@ import {
   textGenerationFailureCodeFields
 } from '../../../../shared/text-generation/text-generation-failure-copy'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
@@ -31,10 +32,11 @@ import {
 } from './filesystem-source-control-ai-targets'
 
 export function registerFilesystemGitCommitGenerationHandlers(
-  context: FilesystemHandlerContext
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   const { store, commitMessageAgentEnv } = context
-  ipcMain.handle(
+  ipc.handle(
     'git:generateCommitMessage',
     async (
       _event,
@@ -127,7 +129,7 @@ export function registerFilesystemGitCommitGenerationHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:cancelGenerateCommitMessage',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {

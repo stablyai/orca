@@ -11,12 +11,13 @@ import {
 } from '../../../../../../src/shared/bots/bot-import-cards'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
 import { MobileBotCardActions, MobileBotCardFrame, MobileBotCardMeta } from './MobileBotCardFrame'
 import { useMobileBotOfferAnswer } from './use-mobile-bot-offer-answer'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 function groupTitle(t: Translate, group: BotImportPlanGroup, app: string): string {
   switch (group) {
@@ -42,6 +43,8 @@ export function MobileBotImportPlanCard({
   cardId: string
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const answer = useMobileBotOfferAnswer(plan.botId, cardId)
   const [unticked, setUnticked] = useState<ReadonlySet<number>>(new Set())
@@ -177,7 +180,7 @@ export function MobileBotImportPlanCard({
 
 const BOX = 16
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   group: { gap: spacing.xs },
   groupTitle: { color: colors.textSecondary, fontWeight: '600' },
   item: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 3 },

@@ -97,8 +97,11 @@ export function NativeChatMessageList({
   runtimeContext,
   botHome,
   turnBot,
-  structuredAttachments = false
+  structuredAttachments = false,
+  workerChip
 }: {
+  /** The worker chip, drawn at the transcript's end over it, above the docked task list. */
+  workerChip?: React.ReactNode
   turnBot?: BotChatIdentity | null
   ref?: Parameters<typeof useNativeChatMessageListHandle>[0]
   session: NativeChatLiveSession
@@ -172,11 +175,8 @@ export function NativeChatMessageList({
   // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
   const showOlderHistory = hasMore && session.readPhase === 'ready' && scope.pagesHistory
   // Ids never change with a reply's text, so the set holds while one streams.
-  const savedMessages = turnRows.structureMessages ?? messages
-  const loadedMessageIds = useMemo(
-    () => new Set(savedMessages.map(({ id }) => id)),
-    [savedMessages]
-  )
+  const saved = turnRows.structureMessages ?? messages
+  const loadedMessageIds = useMemo(() => new Set(saved.map(({ id }) => id)), [saved])
   const taskListPredecessors = useNativeChatTaskListPredecessors(messages)
   const { liveTurnKey } = turnRows
   const { messages: rows, turnKeys, structureMessages } = useNativeChatShownRows(turnRows)
@@ -418,6 +418,7 @@ export function NativeChatMessageList({
               </NativeChatTranscriptColumn>
             </div>
           </NativeChatTranscriptViewport>
+          {workerChip}
           <NativeChatDockedTaskList key={session.sessionId} messages={messages} />
         </div>
       </NativeChatPullRequestChangeContext.Provider>

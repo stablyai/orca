@@ -5,6 +5,7 @@ import {
   PLUGIN_CONTRIBUTION_POINTS,
   type PluginContributionPoint
 } from './plugin-contribution-points'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /** Ordered from least to most authority; each profile may carry everything below it. */
 export const PLUGIN_EXECUTION_PROFILES = [
@@ -14,7 +15,7 @@ export const PLUGIN_EXECUTION_PROFILES = [
   'trusted-worker'
 ] as const
 
-export const pluginExecutionProfileSchema = z.enum(PLUGIN_EXECUTION_PROFILES)
+export const pluginExecutionProfileSchema = lazyZodSchema(() => z.enum(PLUGIN_EXECUTION_PROFILES))
 export type PluginExecutionProfile = z.infer<typeof pluginExecutionProfileSchema>
 
 type ExecutionSubject = {

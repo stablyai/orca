@@ -19,6 +19,9 @@ import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { acpClientInfo } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
+import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
+import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 
 class AcpCopyAccountMismatchError extends Error {
   constructor() {
@@ -72,6 +75,10 @@ export async function copyAcpConversation(
       release = launch.release
       signal.throwIfAborted()
       deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
+      // The read skips the version check while the source chat's agent is kept, which can change
+      // under it; the copy runs its own agent, so it always checks.
+      await assertCopyCliVersion(deps.spec, launch, signal)
+      signal.throwIfAborted()
       await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
       signal.throwIfAborted()
       connection = acpReleaseWithChild(deps.connect, launch.release)(
@@ -118,7 +125,8 @@ export async function copyAcpConversation(
     } catch (error) {
       if (
         error instanceof AcpCopyAccountMismatchError ||
-        error instanceof OpenCodeCopyServerRouteError
+        error instanceof OpenCodeCopyServerRouteError ||
+        error instanceof AgentCliInstallationError
       ) {
         throw error
       }
@@ -202,5 +210,19 @@ async function assertCopyAccountSelected(
     if (!agentSessionAccountHomesEqual(home, selected)) {
       throw new AcpCopyAccountMismatchError()
     }
+  }
+}
+
+/** The copy runs its own agent: a downgraded CLI is named, not left to fail mid-copy. */
+async function assertCopyCliVersion(
+  spec: AcpStructuredSessionAdapterDeps['spec'],
+  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
+  signal: AbortSignal
+): Promise<void> {
+  const { command, prefixArgs, cwd, env } = launch
+  const checking = checkAcpLaunchVersion(spec, { command, prefixArgs, cwd, env }, false)
+  const version = await waitForPromiseWithSignal(checking, signal)
+  if (version.status === 'tooOld') {
+    throw AgentCliInstallationError.tooOld(spec.agent, version)
   }
 }

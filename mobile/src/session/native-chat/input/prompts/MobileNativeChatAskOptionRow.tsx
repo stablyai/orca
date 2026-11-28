@@ -1,10 +1,10 @@
 import { Pressable, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { MobileNativeChatOptionThumbnail } from '../session-options/MobileNativeChatOptionThumbnail'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
+import { radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { ASK_CHOICE_RADIUS } from './MobileNativeChatAsk.styles'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { nativeChatQuestionOptionLabel } from '../../../../../../src/shared/native-chat/input/questions/native-chat-question-option-label'
 
@@ -30,7 +30,8 @@ export function MobileNativeChatAskOptionRow({
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const hasPreview = Boolean(preview && onPreview)
   // Agents mark their pick inline ("Tabs (Recommended)"); the answer keeps the full label.
@@ -93,7 +94,7 @@ const CHOICE_GAP = 10
 const CHOICE_PADDING_X = spacing.md
 
 // Choices sit on the card unfilled, edged at 3:1 against it, so dark mode is no longer grey on grey.
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   option: {
     flexDirection: 'row',
     alignItems: 'center',

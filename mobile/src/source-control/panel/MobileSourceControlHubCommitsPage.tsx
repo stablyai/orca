@@ -30,7 +30,7 @@ export function MobileSourceControlHubCommitsPage({
   const t = useMobileTranslation()
   const { primaryActionArgs, status } = state
   const branchRemoteAction = useMemo(
-    () => buildMobileBranchRemoteAction({ ...primaryActionArgs, review }),
+    () => buildMobileBranchRemoteAction({ ...primaryActionArgs, review }, t),
     [primaryActionArgs, review, t]
   )
   // Pass primitives and a stable runner so commit-message keystrokes do not rerender the Commits list.

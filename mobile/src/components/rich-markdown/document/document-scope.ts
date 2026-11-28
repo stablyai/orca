@@ -25,12 +25,12 @@ export type RichMarkdownEditorState = {
   savedSelectionRange: Range | null
   /** `editor-selection`: whether the last blur was the document's own keyboard dismissal. */
   selectionDroppedOnBlur: boolean
-  /** `keyboard-inset`: the last covered height posted, to suppress repeats. */
-  lastInset: number
   /** `editor-listeners`: takes the four surface listeners off again, or null before them. */
   removeEditorListeners: (() => void) | null
-  /** `keyboard-inset`: takes the viewport's two listeners off again, or null before them. */
-  removeKeyboardInset: (() => void) | null
+  /** `editor-format-state`: the focus and caret styles last posted, to suppress repeats. */
+  lastFormatKey: string
+  /** `editor-format-state`: takes the focus and selection listeners off again, or null before them. */
+  removeFormatState: (() => void) | null
   /** `create-rich-markdown-editor-document`: whether the host has taken this document down. */
   stopped: boolean
   /** `editor-content`: this render's workspace image loads, by markdown path. */
@@ -51,9 +51,9 @@ function createRichMarkdownEditorState(): RichMarkdownEditorState {
     suppressInput: false,
     savedSelectionRange: null,
     selectionDroppedOnBlur: false,
-    lastInset: -1,
     removeEditorListeners: null,
-    removeKeyboardInset: null,
+    lastFormatKey: '',
+    removeFormatState: null,
     stopped: false,
     workspaceImageSources: new Map()
   }
@@ -70,7 +70,6 @@ export function createRichMarkdownEditorScope(
     root: host.root ?? null,
     loadImageSource: host.loadImageSource ?? noWorkspaceImage,
     postToHost: host.postToHost,
-    promptForUrl: host.promptForUrl,
-    keyboardInsetSource: host.keyboardInsetSource
+    promptForUrl: host.promptForUrl
   }
 }

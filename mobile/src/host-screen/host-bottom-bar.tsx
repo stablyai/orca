@@ -45,12 +45,16 @@ export function HostBottomBar({
         onPress: () => state.setShowWorkspaceOptions(true),
         badge: activeFilterCount
       }}
-      primary={{
-        icon: Plus,
-        accessibilityLabel: t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
-        onPress: actions.openNewWorktreeModal,
-        disabled: connState !== 'connected'
-      }}
+      // Hidden until it can work, rather than shown greyed.
+      primary={
+        connState === 'connected'
+          ? {
+              icon: Plus,
+              accessibilityLabel: t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
+              onPress: actions.openNewWorktreeModal
+            }
+          : undefined
+      }
       onCoveredHeightChange={onCoveredHeightChange}
     />
   )

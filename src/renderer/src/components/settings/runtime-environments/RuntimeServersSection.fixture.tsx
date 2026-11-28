@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { ServerListRow, ServerRowChip } from '../host-rows/ServerListRow'

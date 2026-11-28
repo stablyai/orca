@@ -119,6 +119,8 @@ export function captureNativeHang(options: {
   pid: number
   publish: (capture: NativeHangCapture) => void
   completeReport?: (report: string) => void
+  /** Preloaded runner: spawns sample synchronously, before any await or marker write. */
+  runProcess?: typeof runNativeProcess
 }): { stop: () => void; done: Promise<void> } {
   const abort = new AbortController()
   const baseline: NativeHangCapture = {
@@ -131,7 +133,6 @@ export function captureNativeHang(options: {
     timedOut: false,
     cleanup: 'pending'
   }
-  options.publish(baseline)
   let latest = baseline
   const publish = (capture: NativeHangCapture): void => {
     latest = capture
@@ -140,7 +141,7 @@ export function captureNativeHang(options: {
   const done = (async (): Promise<void> => {
     let runProcess: typeof runNativeProcess
     try {
-      runProcess = (await import('@orca/process-host')).runProcess
+      runProcess = options.runProcess ?? (await import('@orca/process-host')).runProcess
     } catch {
       publish({ ...baseline, state: 'failed', completedAt: Date.now(), cleanup: 'unverified' })
       return
@@ -194,5 +195,9 @@ export function captureNativeHang(options: {
       publish({ ...latest, cleanup: 'terminated' })
     }
   })()
+  // Published after the spawn above so a blocked marker write cannot delay sample.
+  if (latest === baseline) {
+    options.publish(baseline)
+  }
   return { stop: () => abort.abort(), done }
 }

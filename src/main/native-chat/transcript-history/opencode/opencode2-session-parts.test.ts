@@ -150,3 +150,59 @@ it('signals part changes so a streaming 2.4 reply refreshes', async () => {
     db.close()
   }
 })
+
+it('leaves a reply whose parts pass the 2 MB row cap out of Session History', async () => {
+  const path = await writeSession('2.4')
+  const db = new Database(path)
+  db.prepare('INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+    'msg_big',
+    SESSION,
+    'assistant',
+    5,
+    5,
+    5,
+    JSON.stringify({ content: [] })
+  )
+  db.prepare("INSERT INTO session_part VALUES ('msg_big', ?, 0, 'text', NULL, 5, 5, ?)").run(
+    SESSION,
+    JSON.stringify({ type: 'text', text: 'x'.repeat(3 * 1024 * 1024) })
+  )
+  db.close()
+  const { messages } = await captureOpenCode2SqliteSession({
+    dbPath: path,
+    sessionId: SESSION,
+    platform: 'darwin'
+  })
+  expect(messages.map(({ role, text }) => ({ role, text }))).toEqual([
+    { role: 'user', text: 'What is in notes.txt?' },
+    { role: 'assistant', text: 'Looking at the file.\nIt says hello world.' },
+    { role: 'tool', text: 'read: notes.txt' },
+    { role: 'tool', text: 'hello world' }
+  ])
+})
+
+it('leaves an inline 2.3 reply past the 2 MB row cap out of Session History', async () => {
+  const path = await writeSession('2.3')
+  const db = new Database(path)
+  db.prepare('INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+    'msg_big',
+    SESSION,
+    'assistant',
+    5,
+    5,
+    5,
+    JSON.stringify({ content: [{ type: 'text', text: 'x'.repeat(3 * 1024 * 1024) }] })
+  )
+  db.close()
+  const { messages } = await captureOpenCode2SqliteSession({
+    dbPath: path,
+    sessionId: SESSION,
+    platform: 'darwin'
+  })
+  expect(messages.map(({ role, text }) => ({ role, text }))).toEqual([
+    { role: 'user', text: 'What is in notes.txt?' },
+    { role: 'assistant', text: 'Looking at the file.\nIt says hello world.' },
+    { role: 'tool', text: 'read: notes.txt' },
+    { role: 'tool', text: 'hello world' }
+  ])
+})
