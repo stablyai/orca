@@ -3,6 +3,7 @@
 
 import type { AgentReadEntry } from '../../agent-conversations/agent-conversation-contracts'
 import { MAX_CONTEXT_CHARS } from '../requests/agent-session-context-budget'
+import { isBotCreatedKickoff } from '../../bot-created-kickoff'
 
 export type CrossVendorHistoryRow = { role: 'user' | 'assistant'; text: string }
 
@@ -31,7 +32,8 @@ export function crossVendorHistoryRows(
       continue
     }
     const text = entry.text.trim()
-    if (!text) {
+    // A new bot's kickoff is Orca's, shown as the bot's first screen, never as the person's words.
+    if (!text || (entry.role === 'user' && isBotCreatedKickoff(text))) {
       continue
     }
     rows.push({

@@ -1,9 +1,11 @@
 import { expect, it } from 'vitest'
 import { buildCrossVendorHandoffPrompt, crossVendorHistoryRows } from './cross-vendor-handoff'
 import { MAX_CONTEXT_CHARS } from '../requests/agent-session-context-budget'
+import { BOT_CREATED_KICKOFF } from '../../bot-created-kickoff'
 
 it('carries only spoken words, oldest first, and keeps the newest turns within budget', () => {
   const rows = crossVendorHistoryRows([
+    { kind: 'message', role: 'user', text: BOT_CREATED_KICKOFF },
     { kind: 'message', role: 'user', text: 'My cat is called Miso.' },
     { kind: 'tool', name: 'Bash' },
     { kind: 'message', role: 'system', text: 'compacted' },
