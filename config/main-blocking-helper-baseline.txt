@@ -402,7 +402,7 @@
 18 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
 4 src/main/daemon/health/daemon-health.ts
 3 src/main/daemon/health/daemon-liveness-report.ts
-5 src/main/daemon/history/restoration/history-reader.ts
+6 src/main/daemon/history/restoration/history-reader.ts # +1: openDirectorySync replaces its own opendirSync (sync-fs count dropped by 1); one-shot restore listing
 16 src/main/daemon/history/storage/history-manager.ts
 3 src/main/daemon/history/storage/terminal-history-file-reader.ts
 6 src/main/daemon/history/storage/terminal-history-metadata.ts
@@ -1528,6 +1528,7 @@
 2 src/shared/agent-hook-listener/providers/muse/muse-session-log.ts
 2 src/shared/agent-hook-listener/transcript-lines.ts
 2 src/shared/agent-hook-listener/transcript-reader.ts
+1 src/shared/agent-hook-listener/transport/agent-hook-endpoint-temp-cleanup.ts # openDirectorySync replaces its own opendirSync (sync-fs count dropped by 1); same bounded sweep per endpoint publication
 4 src/shared/agent-hook-listener/transport/agent-hook-spool.ts
 1 src/shared/agent-hook-listener/transport/endpoint-publication.ts
 1 src/shared/agent-launch/installation/local-agent-install-dir-detection.ts
