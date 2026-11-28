@@ -5,9 +5,11 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AntigravityAccountState } from '../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 
+/** `chats`: the host's own accounts, which its chats follow (a WSL distro's run none). */
 export function announceAntigravityAccountSwitch(
   state: AntigravityAccountState,
-  accountId: string
+  accountId: string,
+  chats = true
 ): void {
   const account = state.accounts.find((entry) => entry.id === accountId)
   toast.success(
@@ -17,12 +19,14 @@ export function announceAntigravityAccountSwitch(
         account?.subject ??
         translate('accounts.antigravity.saved', 'Saved Google account')
     }),
-    {
-      description: translate(
-        'accounts.antigravity.switchedDescription',
-        'New chats use it now. Chats running a turn switch at their next message.'
-      )
-    }
+    chats
+      ? {
+          description: translate(
+            'accounts.antigravity.switchedDescription',
+            'New chats use it now. Chats running a turn switch at their next message.'
+          )
+        }
+      : undefined
   )
 }
 

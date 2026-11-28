@@ -8,7 +8,8 @@ import type { AcpSessionModelDiscovery } from '../acp/discovery/acp-model-discov
 import {
   antigravityAgyOrcaHomeRevision,
   antigravityChatRunsOnAgyHome,
-  onAntigravityAgyOrcaHomeChanged
+  onAntigravityAgyOrcaHomeChanged,
+  savedChatAuthUsesAgyLogin
 } from './antigravity-chat-route'
 import { windowsLocalAppDataBinDirectories } from '../acp/launch/acp-windows-install-directories'
 import {
@@ -137,8 +138,14 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
   launchGate: ANTIGRAVITY_LAUNCH_GATE,
-  // Saved accounts swap agy's one login, which Orca's homes share too, so the home can't tell them apart.
-  launchAccount: AGY_HOST_SELECTION,
+  // Saved accounts swap agy's one login, which Orca's homes share too, so the home can't tell them
+  // apart; an Orca home on a key or gcloud runs on no saved account.
+  launchAccount: {
+    atLaunch: AGY_HOST_SELECTION.atLaunch,
+    current: AGY_HOST_SELECTION.current,
+    usedBy: (launch) =>
+      !launch.antigravityChatAuth || savedChatAuthUsesAgyLogin(launch.antigravityChatAuth)
+  },
   keepsEverySession: true
 } satisfies AcpLaunchSpec
 

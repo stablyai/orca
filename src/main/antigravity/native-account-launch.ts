@@ -17,6 +17,8 @@ export async function prepareAntigravityAccountForLaunch(args: {
   envToDelete?: readonly string[]
   /** False skips a restore that would read a login whose read could raise a keychain dialog. */
   mayPrompt?: boolean
+  /** Nobody is waiting on this launch: never read a login only a keychain dialog could name. */
+  quiet?: boolean
 }): Promise<void> {
   // Windows account selection applies the host default; the shell and agent own each launch.
   if (process.platform === 'win32') {
@@ -54,7 +56,8 @@ export async function prepareAntigravityAccountForLaunch(args: {
   await (
     await getAntigravityAccountService({ runtime: 'host' })
   ).prepareForLaunch({
-    mayPrompt: args.mayPrompt ?? true
+    mayPrompt: args.mayPrompt ?? true,
+    quiet: args.quiet === true
   })
 }
 
@@ -75,4 +78,12 @@ export async function restoreSelectedAntigravityAccount(
 }
 
 // The last agy Orca started on a previous account may have written its login back as it ran.
-AGY_HOST_SELECTION.onOldLoginsGone(() => void restoreSelectedAntigravityAccount({}))
+AGY_HOST_SELECTION.onOldLoginsGone(() => {
+  void prepareAntigravityAccountForLaunch({
+    launchAgent: 'antigravity',
+    mayPrompt: false,
+    quiet: true
+  }).catch((error: unknown) =>
+    console.warn("[antigravity] the selected account wasn't put back:", error)
+  )
+})

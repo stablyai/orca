@@ -31,12 +31,13 @@ export function getAntigravityAccountVaultPath(wslDistro?: string): string {
 function createService(
   backend: AntigravityCredentialBackend,
   vaultPath: string,
-  launchRestore?: AntigravityLaunchRestore
+  host?: { launchRestore?: AntigravityLaunchRestore }
 ) {
   const store = createEncryptedAntigravityAccountStore(vaultPath, backend.parse)
+  const launchRestore = host?.launchRestore
   return new AntigravityAccountService(
     // The host's chats launch on its selected account, so every read and write of it is noted.
-    launchRestore ? notingSelection(store) : store,
+    host ? notingSelection(store) : store,
     backend,
     undefined,
     undefined,
@@ -102,8 +103,8 @@ export async function getAntigravityAccountService(
     getAntigravityAccountVaultPath(),
     // Windows launches aren't gated (native-account-launch.ts), so nothing restores there.
     process.platform === 'win32'
-      ? undefined
-      : { signInHoldsLogin: antigravitySignInHoldsNativeLogin }
+      ? {}
+      : { launchRestore: { signInHoldsLogin: antigravitySignInHoldsNativeLogin } }
   )
   return service
 }
