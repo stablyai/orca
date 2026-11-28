@@ -14,6 +14,10 @@ import { selectKnownWorktreeById } from '../../workspaces/selection/known-worktr
 import { combinedUncommittedDiffId } from '../editor/git/open-combined-diff'
 import { editorOpenOwner } from '../editor/git/editor-open-owner'
 import { editorViewTab } from '../editor/tabs/editor-view-placement'
+import {
+  afterPendingEntityTabs,
+  hasPendingEntityTab
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { selectDiffCommentView } from '../diff-comments/diff-comment-owner'
 import {
   diffCommentSendKey,
@@ -134,21 +138,29 @@ export function createUiAgentActions(
       } else {
         get().openAllDiffs(worktreeId, worktree.path)
       }
-      const openedTab = editorViewTab(get(), changesId)
-      if (!openedTab) {
-        return false
-      }
-      const nonce = (get().diffNotesSendMenuOpenRequest?.nonce ?? 0) + 1
-      set({
-        diffNotesSendMenuOpenRequest: {
-          worktreeId,
-          fileId: changesId,
-          tabId: openedTab.id,
-          nonce,
-          issuedAt: Date.now()
+      const requestSendMenu = (): boolean => {
+        const openedTab = editorViewTab(get(), changesId)
+        if (!openedTab) {
+          return false
         }
-      })
-      return true
+        const nonce = (get().diffNotesSendMenuOpenRequest?.nonce ?? 0) + 1
+        set({
+          diffNotesSendMenuOpenRequest: {
+            worktreeId,
+            fileId: changesId,
+            tabId: openedTab.id,
+            nonce,
+            issuedAt: Date.now()
+          }
+        })
+        return true
+      }
+      // Switch on: main's frame draws the opened tab after this returns.
+      if (hasPendingEntityTab(worktreeId, changesId)) {
+        afterPendingEntityTabs(worktreeId, changesId, requestSendMenu)
+        return true
+      }
+      return requestSendMenu()
     },
     consumeDiffNotesSendMenuOpenRequest: (request) => {
       const state = get()
