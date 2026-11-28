@@ -220,6 +220,7 @@ export function MobileBotCreateOfferCard({
           {answer.dismissed ? null : (
             <MobileNativeChatNoticePill
               label={t('chat.botCards.offer.notNow', 'Not now')}
+              disabled={!answer.ready}
               onPress={() => {
                 setError(null)
                 answer.dismiss()

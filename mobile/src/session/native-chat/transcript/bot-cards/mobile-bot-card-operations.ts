@@ -1,5 +1,6 @@
 // The RPCs the chat's bot cards call, all on the phone's bot allowlist.
 import * as z from 'zod'
+import { BotOfferAnswerSchema } from '../../../../../../src/shared/bots/bot-offer-answers'
 import { WEBHOOK_ADAPTERS } from '../../../../../../src/shared/connector-webhook-contract'
 import { GoogleSetupRunSchema } from '../../../../../../src/shared/google/google-setup-run'
 import {
@@ -86,7 +87,10 @@ export const botOfferAnswerSend = bindDeferredRpcOperation(
     method: 'bots.offer.answer',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('bot-offer-answered', z.looseObject({ sent: z.boolean() }))
+    read: rpcResultVariant(
+      'bot-offer-answered',
+      z.looseObject({ sent: z.boolean(), answer: BotOfferAnswerSchema.optional() })
+    )
   })
 )
 

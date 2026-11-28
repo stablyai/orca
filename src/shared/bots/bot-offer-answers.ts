@@ -3,10 +3,23 @@ import { lazyZodSchema } from '../schema/lazy-zod-schema'
 // after a reload or on another device, and one card's answer never touches another's.
 import * as z from 'zod'
 
-export const BotOfferAnswerSchema = lazyZodSchema(() =>
+export const BotOfferCardIdSchema = lazyZodSchema(() => z.string().min(1).max(512))
+export const BotOfferActionIdSchema = lazyZodSchema(() =>
+  z.string().regex(/^\d{13}-[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/u)
+)
+
+export const GOOGLE_OFFER_REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000
+export const GOOGLE_OFFER_CLOCK_SKEW_MS = 10 * 60 * 1000
+export const MAX_GOOGLE_OFFER_ACTIONS = 64
+
+export function googleOfferActionTime(actionId: string): number {
+  return Number(actionId.slice(0, 13))
+}
+
+const BotOfferAnswerFields = lazyZodSchema(() =>
   z.object({
     /** The transcript row the card is drawn on. */
-    cardId: z.string().min(1).max(512),
+    cardId: BotOfferCardIdSchema,
     /** The owner pressed Dismiss. */
     dismissed: z.literal(true).optional(),
     /** The owner took the card's action, on these: workspace ids, or import item indices. */
@@ -14,7 +27,31 @@ export const BotOfferAnswerSchema = lazyZodSchema(() =>
   })
 )
 
+export const BotOfferAnswerSchema = lazyZodSchema(() =>
+  BotOfferAnswerFields.extend({
+    /** Accepted sign-ins, including older ones retried after the card moved to another account. */
+    googleActionIds: z
+      .array(BotOfferActionIdSchema)
+      .max(MAX_GOOGLE_OFFER_ACTIONS)
+      .optional()
+      .catch(undefined),
+    /** Retired action IDs stay expired if the host clock moves backward. */
+    googleReplayCutoff: z.number().int().nonnegative().optional()
+  })
+)
+
 export type BotOfferAnswer = z.infer<typeof BotOfferAnswerSchema>
+
+const BotOfferSelectionSchema = lazyZodSchema(() =>
+  z.union([
+    BotOfferAnswerFields.pick({ cardId: true }).extend({ dismissed: z.literal(true) }),
+    BotOfferAnswerFields.pick({ cardId: true }).extend({
+      sent: BotOfferAnswerFields.shape.sent.unwrap()
+    })
+  ])
+)
+
+export type BotOfferSelection = z.infer<typeof BotOfferSelectionSchema>
 
 /** `bots.offer.answer`: a press on an offer card, which the bot hears as a card answer queued behind its running turn. */
 export const BotOfferAnswerParams = lazyZodSchema(() =>
@@ -22,9 +59,23 @@ export const BotOfferAnswerParams = lazyZodSchema(() =>
     botId: z.string().min(1, 'Missing bot id'),
     /** The chat the card sits in; the bot's Chat when absent. */
     sessionId: z.string().min(1).optional(),
-    text: z.string().trim().min(1).max(100_000)
+    text: z.string().trim().min(1).max(100_000),
+    answer: BotOfferSelectionSchema.optional()
   })
 )
+
+/** `sent`: this request, or its replay, told the bot. Not sent with an `answer`: the card already had
+ *  that answer, which this request didn't tell. Not sent without one: the chat refused it. */
+export type BotOfferTold = { sent: boolean; answer?: BotOfferAnswer }
+
+export function botOfferToldOutcome(told: BotOfferTold): BotOfferAnswerOutcome {
+  return told.sent ? 'sent' : told.answer ? 'already_answered' : 'refused'
+}
+
+/** Replay the same request if its confirmation was lost, while the card is still busy. */
+export function confirmBotOfferAnswer(send: () => Promise<BotOfferTold>): Promise<BotOfferTold> {
+  return send().catch(() => send())
+}
 
 /** What Not now tells the bot, in the words its create-offer result promised. */
 export const BOT_OFFER_DISMISS_ANSWER = 'Dismiss'
@@ -35,7 +86,7 @@ type BotOfferAnswerField = (typeof BOT_OFFER_ANSWER_FIELDS)[number]
 /** `bots.update`'s `offerAnswer`: an answer, written only while its fields are unanswered when `claim` is set, or
  *  `release`, which takes a field back off after its send was refused. */
 export const BotOfferAnswerUpdateSchema = lazyZodSchema(() =>
-  BotOfferAnswerSchema.extend({
+  BotOfferAnswerFields.extend({
     claim: z.literal(true).optional(),
     release: z.enum(BOT_OFFER_ANSWER_FIELDS).optional()
   })

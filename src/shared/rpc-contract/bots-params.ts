@@ -134,6 +134,7 @@ export type BotUpdateParams = z.infer<typeof BotUpdate>
 export type BotHostUpdates = BotUpdateParams['updates'] &
   Pick<Bot, 'google' | 'googleAccounts' | 'hostMcpServers'> &
   Pick<Bot, 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen'> & {
+    offerAnswerConfirmation?: { cardId: string; answers: NonNullable<Bot['offerAnswers']> }
     /** Host-only: a wait of this bot's was cancelled. */
     cancelledWait?: BotCancelledWait
   }
@@ -180,6 +181,7 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     lookAround,
     tidyUp,
     offerAnswer,
+    offerAnswerConfirmation,
     cancelledWait,
     lookAtRevision,
     lookAtEpoch,
@@ -198,6 +200,9 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   }
   if (offerAnswer) {
     next.offerAnswers = withBotOfferAnswer(bot.offerAnswers, offerAnswer)
+  }
+  if (offerAnswerConfirmation) {
+    next.offerAnswers = offerAnswerConfirmation.answers
   }
   if (cancelledWait) {
     next.cancelledWaits = withBotCancelledWait(bot.cancelledWaits, cancelledWait)

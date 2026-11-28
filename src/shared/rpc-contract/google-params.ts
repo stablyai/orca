@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { BotOfferActionIdSchema, BotOfferCardIdSchema } from '../bots/bot-offer-answers'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { GOOGLE_CLIENT_FILE_MAX_BYTES } from '../google/google-client-config'
 import { GOOGLE_SERVICE_CHOICES } from '../google/google-scopes'
@@ -97,6 +98,7 @@ export const GoogleBotConnectedParams = lazyZodSchema(() =>
     botId: requiredString('Missing bot id'),
     account: Email,
     /** The chat the card sits in, which gets the answer; the bot's Chat when absent. */
-    sessionId: OptionalString
+    sessionId: OptionalString,
+    card: z.object({ cardId: BotOfferCardIdSchema, actionId: BotOfferActionIdSchema }).optional()
   })
 )
