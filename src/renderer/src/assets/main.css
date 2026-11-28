@@ -1882,7 +1882,9 @@ html.native-shell .app-layout {
   color: var(--muted-foreground);
   cursor: pointer;
   padding: 4px;
-  margin-right: 8px;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
