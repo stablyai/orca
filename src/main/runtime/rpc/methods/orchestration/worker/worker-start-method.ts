@@ -107,13 +107,7 @@ export async function startWorker(
   const withLink = <T>(started: T): T =>
     withOpenQuestion(reminder, withQuestionLink(questionLink, started))
   const { mode, chatLineage } = decideStartMode(runtime, db, params, orchestrationCaller, followUp)
-  const botLineage = startsInBotLineage(
-    runtime,
-    db,
-    params,
-    orchestrationCaller,
-    followUp?.of
-  )
+  const botLineage = startsInBotLineage(runtime, db, params, orchestrationCaller, followUp?.of)
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
     const receipt = await startFederatedWorker({

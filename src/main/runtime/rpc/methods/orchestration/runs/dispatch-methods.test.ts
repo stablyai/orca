@@ -14,24 +14,42 @@ describe('dispatchStartsChatWorkers', () => {
   it('stamps a dispatch sent directly from a bot home chat', () => {
     const runtime = {
       bots: { list: () => [{ folderWorkspaceId: 'bot-home' }] }
-    } as unknown as Parameters<typeof dispatchStartsChatWorkers>[0]
+    }
     const caller = {
       sessionId: 'session',
       workspaceId: 'folder:bot-home'
-    } as Parameters<typeof dispatchStartsChatWorkers>[3]
+    }
 
-    expect(dispatchStartsChatWorkers(runtime, db, undefined, caller)).toBe(true)
+    expect(
+      dispatchStartsChatWorkers(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this helper only reads bots.list for the direct caller path.
+        runtime as Parameters<typeof dispatchStartsChatWorkers>[0],
+        db,
+        undefined,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this direct caller path reads only session and workspace identity.
+        caller as Parameters<typeof dispatchStartsChatWorkers>[3]
+      )
+    ).toBe(true)
   })
 
   it('leaves a dispatch from an ordinary chat unchanged', () => {
     const runtime = {
       bots: { list: () => [{ folderWorkspaceId: 'bot-home' }] }
-    } as unknown as Parameters<typeof dispatchStartsChatWorkers>[0]
+    }
     const caller = {
       sessionId: 'session',
       workspaceId: 'folder:elsewhere'
-    } as Parameters<typeof dispatchStartsChatWorkers>[3]
+    }
 
-    expect(dispatchStartsChatWorkers(runtime, db, undefined, caller)).toBe(false)
+    expect(
+      dispatchStartsChatWorkers(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this helper only reads bots.list for the direct caller path.
+        runtime as Parameters<typeof dispatchStartsChatWorkers>[0],
+        db,
+        undefined,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this direct caller path reads only session and workspace identity.
+        caller as Parameters<typeof dispatchStartsChatWorkers>[3]
+      )
+    ).toBe(false)
   })
 })

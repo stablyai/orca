@@ -61,14 +61,19 @@ export function startsInBotLineage(
   if (
     earlier.some(
       (id) =>
-        (db.db.prepare('SELECT bot_lineage FROM remote_dispatches WHERE dispatch_id = ?').get(id) as
-          | { bot_lineage: 1 | null }
-          | undefined)?.bot_lineage === 1
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this query selects exactly the declared nullable integer column.
+        (
+          db.db
+            .prepare('SELECT bot_lineage FROM remote_dispatches WHERE dispatch_id = ?')
+            .get(id) as { bot_lineage: 1 | null } | undefined
+        )?.bot_lineage === 1
     )
   ) {
     return true
   }
-  const creatorId = db.resolveCreatorDispatchId(resolveDispatchCreator(runtime, params.from, caller))
+  const creatorId = db.resolveCreatorDispatchId(
+    resolveDispatchCreator(runtime, params.from, caller)
+  )
   return creatorId !== null && dispatchHasBotLineage(db, creatorId, isBotChat)
 }
 

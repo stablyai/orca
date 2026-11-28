@@ -122,6 +122,6 @@ export function createDispatchCreatorEvaluation(
         kind: 'admitted',
         value: local?.chat_lineage === 1
       }
-    },
+    }
   }
 }

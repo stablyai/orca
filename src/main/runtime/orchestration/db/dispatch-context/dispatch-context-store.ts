@@ -112,7 +112,7 @@ export function createDispatchContext(
     const row = this.db
       .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
       .get(id)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- The schema-pinned row was just inserted.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema-pinned row was just inserted.
     const dispatch = row as DispatchContextRow
     this.db.exec('RELEASE create_dispatch_context')
     this.hasAnyDispatchContextsCache = true

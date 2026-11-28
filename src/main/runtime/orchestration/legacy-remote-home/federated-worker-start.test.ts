@@ -10,15 +10,11 @@ import {
 describe('forwardedFederatedBotLineage', () => {
   it('sends a bot-home lineage stamp only to a peer that advertises support', () => {
     expect(
-      forwardedFederatedBotLineage(true, [
-        ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY
-      ])
+      forwardedFederatedBotLineage(true, [ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY])
     ).toEqual({ botLineage: true })
     expect(forwardedFederatedBotLineage(true, [])).toEqual({})
     expect(
-      forwardedFederatedBotLineage(false, [
-        ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY
-      ])
+      forwardedFederatedBotLineage(false, [ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY])
     ).toEqual({})
   })
 
@@ -29,9 +25,11 @@ describe('forwardedFederatedBotLineage', () => {
       const caller = { sessionId: 'session', workspaceId: 'folder:bot-home' }
       expect(
         federatedWorkerBotLineage(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test only reads bots.list from this runtime.
           runtime as Parameters<typeof federatedWorkerBotLineage>[0],
           db,
           {},
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tested lineage path reads only session and workspace identity.
           caller as Parameters<typeof federatedWorkerBotLineage>[3]
         )
       ).toBe(true)
