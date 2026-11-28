@@ -18,6 +18,7 @@ import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
 import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
+import { noteSentMailInChat } from './sent-mail-echo'
 import type { SendRecipientWarning } from './recipient-routing'
 import {
   workerReportRefusal,
@@ -114,6 +115,8 @@ export function sendPointToPointMessage(args: {
         to
       )
     })
+    // Bot-routed sends returned their receipt before this point, so only a chat's own mail notes here.
+    noteSentMailInChat(runtime, msg)
     if (isDispatchMutationMessageType(msg.type)) {
       const taskId = parseMessageTaskId(payload)
       const coordinatorMutation = msg.type === 'escalation' || msg.type === 'decision_gate'
