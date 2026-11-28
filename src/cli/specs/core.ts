@@ -208,8 +208,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     notes: [
-      'It changes the terminal the user is looking at; agents should run it only when the user asked to switch.',
-      "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
+      'It asks an Orca window to show the terminal, which may not be the screen the user is looking at; agents should run it only when the user asked to switch, not to take someone to a terminal from a chat.',
+      "With --environment, Orca asks the desktop app on this machine to show that server's terminal; a server has no window of its own."
     ],
     examples: ['orca terminal switch --terminal term_abc123']
   },

@@ -25,6 +25,19 @@ it.each([
     'requested',
     'Remote window only: sent a request to the Orca window on the paired computer to open scan. No screen changes on any other computer, phone, or Slack.'
   ],
+  // An empty or blank ORCA_ENVIRONMENT beside a pairing code names no computer.
+  [
+    'pairing-code',
+    '',
+    'requested',
+    'Remote window only: sent a request to the Orca window on the paired computer to open scan. No screen changes on any other computer, phone, or Slack.'
+  ],
+  [
+    'pairing-code',
+    '  ',
+    'none',
+    'No screen changed: no Orca window is open on the paired computer to show scan.'
+  ],
   [null, 'M4 Air', 'none', 'No screen changed: no Orca window is open on M4 Air to show scan.'],
   [
     null,
@@ -75,4 +88,10 @@ it('describes activation in help as a request to the host window, not an open', 
   expect(spec?.notes).toContain(
     'Prints whether the request reached an Orca window on the host, not that the window switched. No screen changes on any other computer, phone, or Slack.'
   )
+})
+
+it('does not invite terminal switch for taking someone to a terminal from a chat', () => {
+  const spec = findCommandSpec(COMMAND_SPECS, ['terminal', 'switch'])
+  expect(spec?.notes?.join(' ')).toContain('not to take someone to a terminal from a chat')
+  expect(spec?.notes?.join(' ')).not.toContain('switches to that server')
 })

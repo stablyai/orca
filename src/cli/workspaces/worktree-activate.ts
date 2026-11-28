@@ -12,8 +12,10 @@ type WorktreeActivateResult = {
 function formatWorktreeActivate(
   { worktreeId, hostWindow }: WorktreeActivateResult,
   remote: boolean,
-  name: string | null
+  environment: string | null
 ): string {
+  // An empty or blank ORCA_ENVIRONMENT names no computer.
+  const name = environment?.trim() || null
   const computer = remote ? (name ?? 'the paired computer') : 'this computer'
   if (hostWindow === 'none') {
     return `No screen changed: no Orca window is open on ${computer} to show ${worktreeId}.`

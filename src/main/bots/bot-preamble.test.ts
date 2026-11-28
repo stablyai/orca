@@ -7,7 +7,8 @@ it('tells a bot how to guide the owner without claiming to control their screen'
   expect(guidance).toContain('Tell them which computer and workspace to open')
   expect(guidance).toContain('give the agent or tab name')
   expect(guidance).toContain(
-    `Never claim you opened something on their screen, and do not use \`${BOT_ORCA_CLI} worktree activate\` or \`${BOT_ORCA_CLI} terminal focus\` for this:`
+    // terminal switch is the canonical name of terminal focus; both reach the same window fallback.
+    `Never claim you opened something on their screen, and do not use \`${BOT_ORCA_CLI} worktree activate\`, \`${BOT_ORCA_CLI} terminal switch\` or \`${BOT_ORCA_CLI} terminal focus\` for this:`
   )
   expect(guidance).toContain('which may not be the screen your owner is looking at.')
   expect(tools).not.toContain('ORCA ')
