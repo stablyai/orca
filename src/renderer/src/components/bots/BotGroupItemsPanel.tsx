@@ -21,6 +21,7 @@ import { BotItemsLoading } from './items/BotItemsLoading'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
 import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotItemBackFocus } from './items/use-bot-item-back-focus'
 import { useBotGroupItems } from './use-bot-group-items'
@@ -66,7 +67,13 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
     setReturnTo(null)
     walk.open(uid)
   }
+  // A click outranks a pending external link; `openItem` alone also takes queued asks.
+  const pickItem = (uid: string): void => {
+    cancelPendingBotThreadOpen()
+    openItem(uid)
+  }
   const back = (): void => {
+    cancelPendingBotThreadOpen()
     facePictures.retryFailed()
     const left = walk.close()
     const listed = BOT_ITEM_GROUP_IDS.flatMap((id) =>
@@ -232,7 +239,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
               staleDays={null}
               now={clock}
               focusUid={returnTo}
-              onOpen={(item) => openItem(item.uid)}
+              onOpen={(item) => pickItem(item.uid)}
               asks={{
                 needs: merged.needs,
                 stoppedForSignIn: merged.stoppedForSignIn,

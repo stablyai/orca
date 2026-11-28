@@ -2,12 +2,14 @@ import { ACCESS_REQUEST_TOKEN_PATTERN } from './connector-bot-access-contract'
 import type { ConnectorConnectSource } from './connectors/connector-cloud-contract'
 import { CONNECTOR_SOURCES, type ConnectorSource } from './connectors/external-conversation-link'
 
-/** `orca://bot/<botId>?conversation=<source>:<externalId>`, the "Open in Orca" link on bot thread posts; bare `orca://bot/<botId>` opens the bot's Home. */
+/** `orca://bot/<botId>?conversation=<source>:<externalId>`, the "Open in Orca" link on bot thread posts; bare `orca://bot/<botId>` opens the bot's Home, and `?botItem=<uid>` one of its items there. */
 export type BotDeepLink = {
   botId: string
   conversation?: { source: ConnectorSource; externalId: string }
   sessionId?: string
   itemId?: string
+  /** A bot item's uid, not its number: numbers repeat across computers. Not `itemId`, a transcript entry. */
+  botItemUid?: string
 }
 
 export type ConnectorLinkSource = ConnectorConnectSource
@@ -25,7 +27,7 @@ export type BotAccessRequestDeepLink = { token: string }
 export type BotDeepLinkOutcome =
   | { kind: 'chat'; workspaceId: string; sessionId: string; itemId?: string }
   // `conversation`: this computer has no chat for the link's thread, so it may be another computer's bot.
-  | { kind: 'home'; botId: string; conversation?: BotDeepLink['conversation'] }
+  | { kind: 'home'; botId: string; conversation?: BotDeepLink['conversation']; botItemUid?: string }
   | { kind: 'missing' }
   | ({ kind: 'connector-link' } & ConnectorLinkDeepLink)
   | ({ kind: 'access-request' } & BotAccessRequestDeepLink)
@@ -57,7 +59,14 @@ export function parseBotDeepLink(value: string): BotDeepLink | null {
   }
   const conversation = url.searchParams.get('conversation')
   if (conversation === null) {
-    return { botId }
+    const botItemUid = url.searchParams.get('botItem')
+    if (botItemUid === null) {
+      return { botId }
+    }
+    // Hosts read an all-digit item ref as a number.
+    return BOT_ID_PATTERN.test(botItemUid) && !/^\d+$/.test(botItemUid)
+      ? { botId, botItemUid }
+      : null
   }
   const separator = conversation.indexOf(':')
   const source = conversation.slice(0, separator)
@@ -81,7 +90,8 @@ export function parseBotDeepLink(value: string): BotDeepLink | null {
   }
 }
 
-export function formatBotDeepLink({ botId, conversation, sessionId, itemId }: BotDeepLink): string {
+export function formatBotDeepLink(link: BotDeepLink): string {
+  const { botId, conversation, sessionId, itemId, botItemUid } = link
   const url = new URL(`orca://bot/${botId}`)
   if (conversation) {
     url.searchParams.set('conversation', `${conversation.source}:${conversation.externalId}`)
@@ -91,6 +101,8 @@ export function formatBotDeepLink({ botId, conversation, sessionId, itemId }: Bo
         url.searchParams.set('item', itemId)
       }
     }
+  } else if (botItemUid) {
+    url.searchParams.set('botItem', botItemUid)
   }
   return url.toString()
 }

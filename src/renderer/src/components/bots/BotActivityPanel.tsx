@@ -40,6 +40,7 @@ import { useBotItemOpenRequest } from './items/bot-item-open'
 import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
 import { useBotItems } from './items/use-bot-items'
 import { useBotItemsSeenAtOpen } from './items/use-bot-items-seen-mark'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotItemBackFocus } from './items/use-bot-item-back-focus'
 import { useBotItemsShownList } from './items/use-bot-items-shown-list'
@@ -133,7 +134,13 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   }
   // A chat's item chip asks for an item: open it here when it is this bot's.
   useBotItemOpenRequest(bot, openItem)
+  // A click outranks a pending external link; `openItem` alone also takes queued asks.
+  const pickItem = (uid: string): void => {
+    cancelPendingBotThreadOpen()
+    openItem(uid)
+  }
   const back = (): void => {
+    cancelPendingBotThreadOpen()
     const left = walk.close()
     const listed = BOT_ITEM_GROUP_IDS.flatMap((id) => list.groups[id].map((item) => item.uid))
     setReturnTo(left ? botItemWalkReturnRow(left.walk, left.uid, listed) : null)
@@ -224,7 +231,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           onFilter={setFilter}
           now={clock}
           focusUid={returnTo}
-          onOpen={(item) => openItem(item.uid)}
+          onOpen={(item) => pickItem(item.uid)}
           botRead={items}
           asks={asks}
           offline={offline}

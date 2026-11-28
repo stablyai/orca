@@ -1,6 +1,7 @@
 // Opening an item from outside the panel (a chat's item chip): that bot's Items tab shows it. The ask
 // names its bot and is taken once, by that bot's panel, however often panels remount.
 import { useEffect, useSyncExternalStore } from 'react'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
 import { useAppStore } from '@/store'
 
@@ -14,6 +15,12 @@ function announce(): void {
 }
 
 export function openBotItem(bot: BotRef, uid: string): void {
+  cancelPendingBotThreadOpen()
+  requestBotItemOpen(bot, uid)
+}
+
+/** The same ask from a pending external link, which must not cancel itself. */
+export function requestBotItemOpen(bot: BotRef, uid: string): void {
   request = { bot: botRefKey(bot), uid }
   useAppStore.getState().setRightSidebarTab('bot-activity')
   useAppStore.getState().setRightSidebarOpen(true)

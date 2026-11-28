@@ -2,6 +2,7 @@
 // paged in yet reads the next page first; the current item stays up meanwhile, and a failed read keeps the
 // place for Retry.
 import { useEffect, useRef, useState } from 'react'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import {
   botItemWalkDrop,
   botItemWalkExtend,
@@ -83,6 +84,8 @@ export function useBotItemWalk(list: BotItemWalkList, botKey: string): BotItemWa
     if (!current?.walk || pending) {
       return
     }
+    // The user's own move outranks a pending external link. Not in `open`, which also takes queued asks.
+    cancelPendingBotThreadOpen()
     const first = botItemWalkStep(current.walk, current.uid, direction)
     if (!first) {
       return

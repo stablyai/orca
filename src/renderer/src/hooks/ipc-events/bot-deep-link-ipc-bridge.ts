@@ -26,7 +26,7 @@ function openBotLink(outcome: BotDeepLinkOutcome): void {
       botHostTarget(LOCAL_EXECUTION_HOST_ID)
     )
   } else if (outcome.kind === 'home') {
-    void openBotLinkHome(outcome.botId, outcome.conversation ?? null)
+    void openBotLinkHome(outcome.botId, outcome.conversation ?? null, outcome.botItemUid)
   } else if (outcome.kind === 'missing') {
     toast.info(translate('bots.deepLink.missing', "That conversation isn't open on this computer."))
   } else if (outcome.kind === 'bot-share') {
