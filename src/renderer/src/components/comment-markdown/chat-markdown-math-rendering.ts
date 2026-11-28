@@ -103,13 +103,7 @@ function rehypeChatMath(
                   )
                 }
               : {
-                  className: ['inline-block', 'max-w-full', 'overflow-x-auto', 'overflow-y-hidden'],
-                  tabIndex: 0,
-                  role: 'group',
-                  ariaLabel: translate(
-                    'nativeChat.math.scrollDisplayEquation',
-                    'Scroll display equation'
-                  )
+                  className: ['inline-block', 'max-w-full', 'overflow-x-auto', 'overflow-y-hidden']
                 })
         },
         children:
