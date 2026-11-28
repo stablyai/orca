@@ -25,9 +25,24 @@ const baselines = JSON.parse(
 ).switchOffP95Ms as Baselines
 
 test('new tab, split and tab switch stay within the switch-off p95 plus a frame', async ({
-  orcaPage: page
+  orcaPage: page,
+  electronApp
 }, testInfo) => {
   test.setTimeout(300_000)
+  // A hidden test window otherwise stops drawing frames, and every timing becomes a throttled tick.
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.setBackgroundThrottling(false)
+    }
+  })
+  const frameMs = await page.evaluate(async () => {
+    const t0 = performance.now()
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    }
+    return (performance.now() - t0) / 5
+  })
+  expect(frameMs, 'the window must draw frames for drawn timings').toBeLessThan(100)
   await waitForSessionReady(page)
   const worktreeId = await waitForActiveWorktree(page)
   await waitForActiveTerminalManager(page, 30_000)
