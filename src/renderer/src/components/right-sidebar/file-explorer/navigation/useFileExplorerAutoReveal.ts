@@ -75,12 +75,17 @@ export function useFileExplorerAutoReveal({
       return
     }
 
-    // Markdown previews own concrete files and sync selection; diff/conflict surfaces do not.
+    // Markdown previews and single-file Source Control diffs own a worktree file; combined, commit and conflict surfaces do not.
     const activeFile = openFiles.find((f) => f.id === activeFileId)
+    const isWorktreeFileDiff =
+      activeFile?.mode === 'diff' &&
+      (activeFile.diffSource === 'unstaged' ||
+        activeFile.diffSource === 'staged' ||
+        activeFile.diffSource === 'branch')
     if (
       !activeFile ||
       activeFile.worktreeId !== activeWorktreeId ||
-      (activeFile.mode !== 'edit' && activeFile.mode !== 'markdown-preview')
+      (activeFile.mode !== 'edit' && activeFile.mode !== 'markdown-preview' && !isWorktreeFileDiff)
     ) {
       return
     }
