@@ -398,6 +398,7 @@
 5 src/main/daemon/executable-host/macos/macos-retired-daemon-recovery.ts
 11 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
 2 src/main/daemon/executable-host/windows/daemon-host-file-hash-cache.ts
+2 src/main/daemon/executable-host/windows/daemon-host-manifest.ts # copyFilteredTreeSync replaces a filtered cpSync (sync-fs row raised with it); once per daemon-host staging; #51222 replaces it
 1 src/main/daemon/executable-host/windows/daemon-host-reclaim.ts
 18 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
 4 src/main/daemon/health/daemon-health.ts

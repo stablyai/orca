@@ -22,8 +22,10 @@ vi.mock('node:fs', async (original) => {
     }
   }
 })
+const realFs = vi.hoisted((): { opendir?: typeof FsPromises.opendir } => ({}))
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof FsPromises>()
+  realFs.opendir = fs.opendir
   return {
     ...fs,
     opendir: (...args: Parameters<typeof fs.opendir>) => {
@@ -63,8 +65,11 @@ afterEach(async () => {
 
 describe('openDirectory on Windows', () => {
   it('lists what opendir lists and rejects missing or non-folder paths', async () => {
-    const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
-    const expected = await listNames(await actual.opendir(root))
+    const realOpendir = realFs.opendir
+    if (!realOpendir) {
+      throw new Error('node:fs/promises mock did not load')
+    }
+    const expected = await listNames(await realOpendir(root))
     setPlatform('win32')
 
     expect(await listNames(await openDirectory(root))).toEqual(expected)

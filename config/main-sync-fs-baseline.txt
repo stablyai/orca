@@ -183,7 +183,7 @@
 2 src/main/daemon/executable-host/macos/macos-daemon-bundle.ts
 9 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
 2 src/main/daemon/executable-host/windows/daemon-host-file-hash-cache.ts
-3 src/main/daemon/executable-host/windows/daemon-host-manifest.ts
+7 src/main/daemon/executable-host/windows/daemon-host-manifest.ts # +4: Windows filtered staging copy walks with readdirSync/statSync/mkdirSync/copyFileSync instead of a filtered cpSync (same per-file sync work, which used opendirSync); once per daemon-host staging; #51222 replaces it
 2 src/main/daemon/executable-host/windows/daemon-host-reclaim.ts
 12 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
 4 src/main/daemon/health/daemon-health.ts
