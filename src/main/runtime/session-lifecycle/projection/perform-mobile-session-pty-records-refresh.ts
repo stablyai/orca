@@ -26,6 +26,7 @@ import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace/l
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
 import { recordShownTerminalUserOpen } from '../../terminal/lifecycle/run-terminal-client-use'
 import { resolveChatTabActivation } from '../../session-tabs/chat/agent-session-tab-identity'
+import { windowOwns } from '../../session-tabs/person/person-workspace-target'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
   protected abstract toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
@@ -184,6 +185,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
           leafId: tab.leafId
         }) &&
         (!targetsHost ||
+          !windowOwns(worktreeId) ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
       if (shouldMaterializePendingTerminal) {
@@ -264,7 +266,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       if (!automatic) {
         recordShownTerminalUserOpen(this, worktreeId, targetTab.id)
       }
-      if (targetsHost && !this.notifier?.focusTerminal) {
+      if (targetsHost && (!windowOwns(worktreeId) || !this.notifier?.focusTerminal)) {
         if (
           !targetTab.isActive &&
           this.shouldPersistHeadlessMobileSessionActivation(snapshot!, targetTab)

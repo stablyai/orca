@@ -71,6 +71,7 @@ import {
 } from './orchestration/federation/peer-mail/peer-mail-relay'
 import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
+import { windowOwns } from './session-tabs/person/person-workspace-target'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
 class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
@@ -233,7 +234,11 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
   publishAgentLaunchTab(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
   ): Promise<AgentLaunchTabPublished> | null {
-    if (!this.notifier?.publishAgentLaunchTab || !this.hasAuthoritativeWindow()) {
+    if (
+      !windowOwns(request.worktreeId) ||
+      !this.notifier?.publishAgentLaunchTab ||
+      !this.hasAuthoritativeWindow()
+    ) {
       return null
     }
     return this.notifier.publishAgentLaunchTab(request)

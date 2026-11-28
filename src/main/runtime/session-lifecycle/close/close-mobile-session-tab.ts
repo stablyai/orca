@@ -22,6 +22,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { closeMobileStructuredSessionPresentation } from '../../session-tabs/chat/structured-session-tab-presentation'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
+import { windowOwns } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithCloseMobileRowInMainLayout {
   abstract retireStructuredAgentSessionTabFromSnapshot(
@@ -300,7 +301,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       if (!committed) {
         return delegatedMobileSessionTabClose()
       }
-    } else if (!this.notifier?.closeSessionTab) {
+    } else if (!windowOwns(worktreeId) || !this.notifier?.closeSessionTab) {
       // Headless editors retire through the host-owned session.
       if (!retireHeadlessMobileSessionEditorTab(this, worktreeId, tab, options.force)) {
         throw new Error('runtime_unavailable')

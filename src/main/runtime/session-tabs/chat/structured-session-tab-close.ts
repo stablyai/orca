@@ -33,6 +33,7 @@ import {
 } from './structured-session-tab-presentation'
 import type { StructuredSessionTabPublicationInput as ChatPublication } from './structured-session-tab-publication'
 import type { StructuredSessionSurface } from '../../agent-session/lifecycle/structured-agent-session-close'
+import { windowOwns } from '../person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithStructuredSessionTabProjection {
   protected abstract isHeadlessOwnedMobileBrowserTab(
@@ -298,9 +299,10 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
         }))
       )
     }
-    const session = this.hasAuthoritativeWindow()
-      ? null
-      : this.getWorkspaceSessionForWorktree(worktreeId)
+    const session =
+      windowOwns(worktreeId) && this.hasAuthoritativeWindow()
+        ? null
+        : this.getWorkspaceSessionForWorktree(worktreeId)
     const next =
       session &&
       withChatTabChanges(

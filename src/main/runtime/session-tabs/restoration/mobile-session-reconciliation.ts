@@ -21,6 +21,7 @@ import { withAcceptedBrowserPageInventory } from '../inventory/mobile-session-in
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getMobileSessionSnapshotTabIdentityKeys } from '../../session-lifecycle/projection/mobile-session-tab-merge'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { windowOwns } from '../person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOrchestrationPointerPty {
   storeMobileSessionSnapshot(
@@ -31,7 +32,7 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
     snapshot = reconcileChatTabIdentities(snapshot, existing)
     // Only a windowless host places Home; an attached window's own placer already did, and main-owned layouts are not yet covered.
     const homeSessionId =
-      ORCA_LAYOUT_OWNER_IS_MAIN || this.hasAuthoritativeWindow()
+      ORCA_LAYOUT_OWNER_IS_MAIN || (windowOwns(worktreeId) && this.hasAuthoritativeWindow())
         ? null
         : botHomeSessionId(this.store, worktreeId)
     if (homeSessionId) {
@@ -275,7 +276,8 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       })
     }
     for (const [worktreeId, existing] of Array.from(this.mobileSessionTabsByWorktree)) {
-      if (!nextWorktrees.has(worktreeId)) {
+      // The window's graph names only its own workspaces; a teammate's is not its to drop.
+      if (!nextWorktrees.has(worktreeId) && windowOwns(worktreeId)) {
         const preserved = this.buildPreservedHeadlessMobileSessionSnapshot(existing)
         if (preserved) {
           // Equal publisher epoch and identical retained tab objects mean no content change; keep the entry to avoid no-op fanout.

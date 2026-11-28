@@ -2,6 +2,7 @@ import { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals } f
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import { tabListOfPty, windowOwns } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
@@ -77,6 +78,11 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
     const tabId = record.tabId.startsWith('pty:') ? undefined : record.tabId
     const ptyId = record.ptyId ?? undefined
     if (!tabId && !ptyId) {
+      return false
+    }
+    // A teammate's own terminal mounts in no window; subscribe keeps its headless snapshot.
+    const pty = ptyId ? this.ptysById.get(ptyId) : undefined
+    if (!windowOwns(pty ? tabListOfPty(pty) : record.worktreeId)) {
       return false
     }
     const windowId = this.getAvailableAuthoritativeWindowId()

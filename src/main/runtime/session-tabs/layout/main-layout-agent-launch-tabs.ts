@@ -10,6 +10,7 @@ import { parseExecutionHostId } from '../../../../shared/execution-host/executio
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
+import { windowOwns } from '../person/person-workspace-target'
 
 /** Where the tab landed against where the launch asked for it, as the window reports it. */
 function placementFallback(
@@ -100,7 +101,11 @@ export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRunti
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>,
     shownByMain: NonNullable<AgentLaunchTabPublishRequest['shownByMain']>
   ): void {
-    if (!this.notifier?.publishAgentLaunchTab || !this.hasAuthoritativeWindow()) {
+    if (
+      !windowOwns(request.worktreeId) ||
+      !this.notifier?.publishAgentLaunchTab ||
+      !this.hasAuthoritativeWindow()
+    ) {
       return
     }
     // Window display is advisory; launch never waits or fails on it.

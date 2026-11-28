@@ -14,6 +14,7 @@ import {
   type TerminalLeafMoveRequest,
   type TerminalLeafMoveResult
 } from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
+import { windowOwns } from '../person/person-workspace-target'
 
 /** Where the client dropped the new tab, in the host's group ids. */
 export type MovedPanePlacement = { targetGroupId: string; index?: number }
@@ -34,7 +35,7 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
-    if (this.hasAuthoritativeWindow()) {
+    if (windowOwns(worktreeId) && this.hasAuthoritativeWindow()) {
       // Switch point: the relay hands the move to a window that owns the layout. Where main owns
       // it, the window's move goes back through main and cannot keep the client's tab id.
       if (ORCA_LAYOUT_OWNER_IS_MAIN || !this.notifier?.movePaneToNewTab) {

@@ -12,6 +12,7 @@ import {
   tabOwnerOf
 } from '../../../bots/team-share/teammate-rules'
 import type { RpcCallerScope } from '../../rpc/callers/rpc-caller-scope'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 
 /** `home` is the workspace the caller named; `list` is the workspace whose tabs the call reads and writes. */
 export type TabListTarget = { home: string; list: string }
@@ -41,4 +42,16 @@ export function resolveTabListTarget(
     ...tabListTeammate(owner)
   })
   return { home: workspaceId, list }
+}
+
+/** The workspace whose tabs hold a terminal: its holder's own list, else the one it runs in. */
+export function tabListOfPty(pty: Pick<RuntimePtyWorktreeRecord, 'worktreeId' | 'holder'>): string {
+  const home = parseWorkspaceKey(pty.worktreeId)
+  if (!pty.holder || home?.type !== 'folder') {
+    return pty.worktreeId
+  }
+  return personWorkspaceKey({
+    folderWorkspaceId: home.folderWorkspaceId,
+    ...tabListTeammate(pty.holder)
+  })
 }
