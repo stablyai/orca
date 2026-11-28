@@ -16,6 +16,8 @@ import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
+# Git Bash inherits OEM codepage; select UTF-8 before profiles or TUIs write bytes.
+[[ -n "\${MSYSTEM:-}" && -z "\${WSL_DISTRO_NAME:-}" ]] && chcp.com 65001 >/dev/null 2>&1
 ${BASH_FEATURE_CHANNEL_BLOCK}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 # Consume feature selection before startup files can inherit it into children.
