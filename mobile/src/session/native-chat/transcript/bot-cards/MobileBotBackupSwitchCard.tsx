@@ -2,7 +2,8 @@ import { ArrowLeftRight, RotateCcw } from 'lucide-react-native'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { formatUsageLimitResetClock } from '../../../../../../src/shared/agent-session/failures/agent-session-usage-limit'
 import type { NativeChatBotCardValues } from '../../../../../../src/shared/native-chat/bot-cards/native-chat-bot-card-kind'
-import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../../../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../../../i18n/ui-intl-locale'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import {
   MobileNativeChatEventName,
@@ -24,13 +25,14 @@ export function MobileBotBackupSwitchCard({
   fontScale: number
 }): React.JSX.Element {
   const t = useMobileTranslation()
+  const locale = intlLocaleFor(useMobileUiLocale())
   const colors = useMobileColors()
   const targetLabel = modelDisplay(switched.toAgent, switched.toModel)
   const fromLabel = modelDisplay(switched.fromAgent, switched.fromModel)
   const toPrimary = switched.direction === 'to-primary'
   const reset =
     !toPrimary && switched.resetsAt !== undefined
-      ? formatUsageLimitResetClock(switched.resetsAt)
+      ? formatUsageLimitResetClock(switched.resetsAt, undefined, locale)
       : null
   const lead = toPrimary
     ? t('bots.backupSwitch.returnedLead', 'Returned to')

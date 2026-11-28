@@ -105,9 +105,15 @@ export const BOT_BACKUP_HANDLERS: Record<string, CommandHandler> = {
       ...(effort ? { options: { effort } } : {})
     }
     const next = addBotBackupModel(bot.backupModels, entry, botPrimaryTarget(bot))
+    if (!next || next.order.length <= (bot.backupModels?.order.length ?? 0)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Choose a different model or remove a backup to make room.'
+      )
+    }
     const result = await callBots(client, 'bots.update', {
       botId: bot.id,
-      updates: { backupModels: next ?? null }
+      updates: { backupModels: next }
     })
     printResult(result, json, () => `Added backup model: ${formatEntry(entry)}`)
   },

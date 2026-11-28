@@ -2,17 +2,13 @@
 import type { AgentJournalBotBackupModelSwitchItem } from '../../shared/agent-journal-orca-card-items'
 import type { BotAgent } from '../../shared/bot-types'
 import { isBotAgent } from '../../shared/bot-types'
-import type {
-  BotBackupModelEntry,
-  BotBackupStatusResult
-} from '../../shared/bots/bot-backup-models'
+import type { BotBackupStatusResult } from '../../shared/bots/bot-backup-models'
 import { agentSessionAccountHomePath } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { rateLimitSpentUntil } from '../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { usageLimitContinueMutation } from '../native-chat/agent-session-wire/recovery/structured-agent-session-usage-limit-continue-message'
-import { mintAgentSessionOperationId } from '../runtime/orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
 import { canonicalUsageLimitAccountHome } from '../runtime/agent-session/installation/usage-limit-account-usage'
 import { hostReadyBotAgents } from '../runtime/rpc/methods/bots-agent-choices'
 import { botOfSession } from './bot-session-tabs'
@@ -24,6 +20,7 @@ import { holdBotTurnWatch, notifyBotTurnWatchRebind } from './bot-run-turn-watch
 import { checkStartupBackupReturns, readBotBackupStatus } from './bot-backup-status-read'
 import { BotUsageLimitGate, type BotUsageLimitKey } from './bot-usage-limit-gate'
 import { BotUsageLimitFailover } from './bot-usage-limit-failover'
+import { applySameAgentOptionsOnHost } from './bot-backup-session-options'
 
 const AVAILABLE_AGENTS_CACHE_MS = 15_000
 
@@ -32,47 +29,6 @@ export type RuntimeBotBackupFailover = {
   readonly failover: BotUsageLimitFailover
   readonly readStatus: (botId: string) => Promise<BotBackupStatusResult>
   readonly dispose: () => void
-}
-
-async function applySameAgentOptionsOnHost(
-  sessionId: string,
-  target: BotBackupModelEntry
-): Promise<boolean> {
-  const host = getStructuredAgentSessionHost()
-  const record = host?.deps.store.getRecord(sessionId)
-  if (!host || !record) {
-    return false
-  }
-  const caller = { callerKey: 'trusted-local:bot-backup-failover' }
-  const writeOption = async (key: string, value: string): Promise<boolean> => {
-    const latest = host.deps.store.getRecord(sessionId)
-    if (!latest) {
-      return false
-    }
-    const res = await host.setOption(caller, {
-      envelope: {
-        sessionId,
-        clientOperationId: mintAgentSessionOperationId(Date.now()),
-        expectedRuntimeFence: latest.lease.runtimeFence,
-        payloadFingerprint: ''
-      },
-      key,
-      value
-    })
-    return res.ok
-  }
-  // A same-agent switch without an explicit model would leave the exhausted model in place.
-  if (!target.model || !(await writeOption('model', target.model))) {
-    return false
-  }
-  if (target.options) {
-    for (const [key, value] of Object.entries(target.options)) {
-      if (key !== 'model') {
-        await writeOption(key, value).catch(() => false)
-      }
-    }
-  }
-  return true
 }
 
 export function createRuntimeBotUsageLimitFailover(
@@ -97,7 +53,7 @@ export function createRuntimeBotUsageLimitFailover(
     const host = getStructuredAgentSessionHost()
     if (sessionId && host) {
       const record = host.deps.store.getRecord(sessionId)
-      if (record) {
+      if (record?.provider === agent) {
         const home =
           (await host.deps.launchAccountHome?.(record).catch(() => null)) ?? record.accountHome
         const path = agentSessionAccountHomePath(home)

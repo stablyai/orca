@@ -17,7 +17,8 @@ import {
 } from '../../../../shared/rpc-contract/bot-avatar-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
-import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
+import { botOnSetup } from '../../../../shared/bots/bot-agent-setup'
+import { runtimeBotChats, startBotSession } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { connectedClientRosters } from '../../orchestration/federation/client-asks/client-ask-listeners'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -307,7 +308,8 @@ export const BOT_METHODS = [
       if (!bot) {
         throw new Error('bot_not_found')
       }
-      const onAgent = botOnAgent(bot, params.agent)
+      const onAgent =
+        params.agent && params.agent !== bot.agent ? botOnSetup(bot, { agent: params.agent }) : bot
       // Like a blank page: an empty chat already open is the new chat, not one more.
       const empty = await openEmptyBotChat(runtimeBotChatTreeHost(runtime), onAgent).catch(
         (error: unknown) => {
@@ -317,7 +319,14 @@ export const BOT_METHODS = [
       )
       // The owner's own chat, as Home Chat is: recorded so a /clear never leaves it unattributed.
       const actsFor = { actsFor: [...OWNER_ACTS_FOR] }
-      return { sessionId: empty ?? (await startBotSession(runtime, onAgent, { actsFor })) }
+      return {
+        sessionId:
+          empty ??
+          (await startBotSession(runtime, onAgent, {
+            actsFor,
+            ...(params.agent ? { skipBackupResolve: true } : {})
+          }))
+      }
     }
   })
 ]

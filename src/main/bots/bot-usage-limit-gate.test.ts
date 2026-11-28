@@ -29,6 +29,22 @@ describe('BotUsageLimitGate', () => {
     vi.useRealTimers()
   })
 
+  it('keeps the remaining grace and clears a default alias only for its observed model', async () => {
+    const reset = Date.now() - 1_000
+    const gate = new BotUsageLimitGate({ readSpentUntil: () => reset })
+    expect(await gate.verifyReturnReady(CLAUDE_SONNET)).toBe(false)
+    await vi.advanceTimersByTimeAsync(14_000)
+    expect(gate.isLimited(CLAUDE_SONNET)).toBe(false)
+
+    const defaultKey = { ...CLAUDE_SONNET, model: '' }
+    gate.recordLimit({ ...defaultKey, observedModel: CLAUDE_SONNET.model })
+    gate.recordSuccess({ ...CLAUDE_SONNET, model: 'claude-haiku-4-5' })
+    expect(gate.isLimited(defaultKey)).toBe(true)
+    gate.recordSuccess(CLAUDE_SONNET)
+    expect(gate.isLimited(defaultKey)).toBe(false)
+    gate.dispose()
+  })
+
   it('isolates limits per (agent, accountHomeKey, model) and releases after reset + grace', async () => {
     const released: BotUsageLimitKey[] = []
     const gate = new BotUsageLimitGate({

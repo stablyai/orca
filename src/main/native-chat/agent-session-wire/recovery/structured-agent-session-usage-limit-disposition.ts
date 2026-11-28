@@ -28,6 +28,12 @@ export async function readUsageLimitCutDisposition(input: {
     return 'ended'
   }
   const cut = await input.readCut()
+  if (backup?.isSwitching(sessionId, turnItemId)) {
+    return 'pending'
+  }
+  if (backup?.isSuperseded(sessionId, turnItemId)) {
+    return 'ended'
+  }
   const record = host.store.getRecord(sessionId)
   const attempt = input.attempt()
   return usageLimitCutDisposition({

@@ -18,6 +18,7 @@ import type { AgentModelCatalogService } from '../native-chat/agent-model-catalo
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { BotUsageLimitGate } from './bot-usage-limit-gate'
 import type { BotUsageLimitFailover } from './bot-usage-limit-failover'
+import type { BotLaunchSelection } from './bot-backup-target-selection'
 import {
   peekRuntimeBotBackupFailover,
   runtimeBotBackupFailover,
@@ -99,6 +100,16 @@ export async function readBotBackupStatus(
   const bot = deps.runtime.bots.list().find((entry) => entry.id === botId)
   if (!bot) {
     throw new Error('bot_not_found')
+  }
+  const resolveAccountHomeKey = deps.resolveAccountHomeKey
+  const accounts = new Map<BotAgent, Promise<string>>()
+  deps = {
+    ...deps,
+    resolveAccountHomeKey: (agent) => {
+      const read = accounts.get(agent) ?? resolveAccountHomeKey(agent)
+      accounts.set(agent, read)
+      return read
+    }
   }
   const available = await deps.availableAgents()
   const primaryTarget = botPrimaryTarget(bot)
@@ -204,13 +215,15 @@ export function checkStartupBackupReturns(
     }
     const primaryModel = bot.launch?.model ?? bot.activeBackup.primaryModel ?? ''
     const resetsAt = bot.activeBackup.primaryResetsAt
-    void deps.resolveAccountHomeKey(bot.agent).then((accountHomeKey) => {
-      if (resetsAt !== undefined && resetsAt > Date.now()) {
-        deps.gate.recordLimit({ agent: bot.agent, accountHomeKey, model: primaryModel, resetsAt })
-      } else {
-        void deps.failover.returnToPrimary(bot.id).catch(() => {})
-      }
-    })
+    void deps
+      .resolveAccountHomeKey(bot.agent, bot.chatSessionId ?? undefined)
+      .then((accountHomeKey) => {
+        if (resetsAt !== undefined && resetsAt > Date.now()) {
+          deps.gate.recordLimit({ agent: bot.agent, accountHomeKey, model: primaryModel, resetsAt })
+        } else {
+          void deps.failover.returnToPrimary(bot.id).catch(() => {})
+        }
+      })
   }
 }
 
@@ -265,19 +278,26 @@ export function getRegisteredBotBackupFailoverHostHook(
 }
 
 /** Resolves the effective bot setup (primary or active/pre-routed backup) when starting a session. */
-export async function resolveLaunchBotForStart(
+export async function selectBotLaunch(
   runtime: OrcaRuntimeService,
   bot: Bot,
   skipBackupResolve?: true
-): Promise<Bot> {
+): Promise<{ launchBot: Bot; markActive?: () => Promise<void> }> {
   if (skipBackupResolve) {
-    return bot
+    return { launchBot: bot }
   }
-  const setup = await runtimeBotBackupFailover(runtime)
+  const setup: BotLaunchSelection = await runtimeBotBackupFailover(runtime)
     .failover.resolveLaunchSetup(bot)
     .catch(() => effectiveBotSetup(bot))
-  if (setup.agent === bot.agent && setup.launch === bot.launch) {
-    return bot
+  const { markActive } = setup
+  return {
+    launchBot:
+      setup.agent === bot.agent && setup.launch === bot.launch ? bot : botOnSetup(bot, setup),
+    markActive: markActive
+      ? () =>
+          markActive().catch((error: unknown) =>
+            console.warn('[bots] could not record the backup after starting its chat', error)
+          )
+      : undefined
   }
-  return botOnSetup(bot, { agent: setup.agent, ...(setup.launch ? { launch: setup.launch } : {}) })
 }

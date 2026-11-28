@@ -7,10 +7,8 @@ import {
   newChatPermissionMode
 } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
-import type { Bot, BotAgent } from '../../shared/bot-types'
-import { botOnSetup } from '../../shared/bots/bot-agent-setup'
-import { effectiveBotSetup } from '../../shared/bots/bot-backup-models'
-import { resolveLaunchBotForStart } from './bot-backup-status-read'
+import type { Bot } from '../../shared/bot-types'
+import { selectBotLaunch } from './bot-backup-status-read'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionCreateOptions } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-create-options'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -127,11 +125,12 @@ export function botChatSessions(deps: BotChatDependencies) {
     return sessionId
   }
 
-  /** The current Chat, or a new one when it is gone or runs another agent than the bot's active setup. */
+  /** A backup chosen for another conversation does not retire the current Home Chat. */
   const open = (host: BotChatHost, bot: Bot): Promise<string> | string => {
     const record = bot.chatSessionId ? host.deps.store.getConversation(bot.chatSessionId) : null
-    const expectedAgent = effectiveBotSetup(bot).agent
-    return record?.provider === expectedAgent ? record.sessionId : replace(host, bot)
+    return record && (record.provider === bot.agent || bot.activeBackup)
+      ? record.sessionId
+      : replace(host, bot)
   }
 
   const underLock = <T>(botId: string, work: (host: BotChatHost, bot: Bot) => Promise<T> | T) =>
@@ -276,7 +275,7 @@ export async function startBotSession(
     skipBackupResolve?: true
   } & Pick<StructuredAgentSessionCreateOptions, 'beforeFirstMessage' | 'beforeDelivery'> = {}
 ): Promise<string> {
-  const launchBot = await resolveLaunchBotForStart(runtime, bot, input.skipBackupResolve)
+  const { launchBot, markActive } = await selectBotLaunch(runtime, bot, input.skipBackupResolve)
   const sessionId = input.sessionId ?? randomUUID()
   if (input.actsFor) {
     runtime.getOrchestrationDb().recordBotConversationActsFor(sessionId, input.actsFor)
@@ -340,6 +339,7 @@ export async function startBotSession(
   if (!created.ok && (input.message || !(await host()).deps.store.getConversation(sessionId))) {
     throw new BotSessionRefusedError(launchBot.agent, created.refusal)
   }
+  await markActive?.()
   return sessionId
 }
 
@@ -349,12 +349,6 @@ export function closeBotSession(
   sessionId: string
 ): ReturnType<typeof closeStructuredAgentSessionChild> {
   return closeStructuredAgentSessionChild(sessionId, { runtime })
-}
-
-/** The bot as a chat on `agent` runs it: another agent starts on its own defaults, since the bot's
- *  launch belongs to its agent. */
-export function botOnAgent(bot: Bot, agent: BotAgent | undefined): Bot {
-  return agent && agent !== bot.agent ? botOnSetup(bot, { agent }) : bot
 }
 
 export function runtimeBotChats(runtime: OrcaRuntimeService) {

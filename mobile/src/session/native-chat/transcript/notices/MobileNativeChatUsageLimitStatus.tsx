@@ -116,14 +116,22 @@ export function MobileNativeChatUsageLimitStatus({
           ? t(
               'chat.usageLimit.backupsExhaustedReset',
               'Primary and backup models hit their usage limits · next reset at {{time}}.',
-              { time: formatUsageLimitResetClock(actions.backupResetsAt) }
+              { time: formatUsageLimitResetClock(actions.backupResetsAt, undefined, locale) }
             )
           : t(
               'chat.usageLimit.backupsExhausted',
               'Primary and backup models hit their usage limits.'
             )
         : null
-  if (!status && !switchAccount && !continueNow && !backupSwitch && !backupStatusLine) {
+  if (
+    !status &&
+    !switchAccount &&
+    !continueNow &&
+    !backupSwitch &&
+    !backupStatusLine &&
+    !actions?.backupSwitchFailed &&
+    !actions?.backupContinuationFailed
+  ) {
     return null
   }
   const meta = [styles.meta, scaledType(typography.metaSize, fontScale)]

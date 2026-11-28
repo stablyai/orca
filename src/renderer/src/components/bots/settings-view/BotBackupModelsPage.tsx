@@ -301,6 +301,7 @@ export function BotBackupModelsPage({
   update: Update
 }): React.JSX.Element {
   const controlsOff = useContext(SettingsControlsOffContext)
+  const t = useTranslate()
   const [status, setStatus] = useState<BotBackupStatusResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -355,8 +356,26 @@ export function BotBackupModelsPage({
 
   const handleReturnNow = (): void => {
     setReturning(true)
-    void callBotRpc<{ returned: boolean }>(bot, 'bots.backup.return', { botId: bot.id })
-      .then(() => refreshBotHost(bot.hostId))
+    void callBotRpc<{ returned: boolean; pending?: boolean }>(bot, 'bots.backup.return', {
+      botId: bot.id
+    })
+      .then(({ returned, pending }) => {
+        if (!returned) {
+          if (pending) {
+            toast.info(
+              t(
+                'settings.bots.backupModels.returnPending',
+                'Returns to the primary model after this turn finishes.'
+              )
+            )
+          } else {
+            toast.error(
+              t('settings.bots.backupModels.returnFailed', 'Couldn’t return to the primary model.')
+            )
+          }
+        }
+        return refreshBotHost(bot.hostId)
+      })
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setReturning(false))
   }

@@ -16,6 +16,8 @@ import { botAgentLabel } from './mobile-bot-sheet-copy'
 
 export function MobileBotBackupModelPicker(props: {
   options: readonly BotBackupCatalogOption[]
+  catalogState: 'ready' | 'loading' | 'unavailable'
+  onRetry: () => void
   excludedKeys: ReadonlySet<string>
   disabled: boolean
   banner: ReactNode
@@ -103,7 +105,20 @@ export function MobileBotBackupModelPicker(props: {
           editable={!props.disabled}
         />
       </View>
-      {grouped.length === 0 ? (
+      {props.catalogState === 'unavailable' ? (
+        <SettingsSection>
+          <ListRow
+            title={t('bots.settings.backupModelsCatalogRetry', 'Couldn’t load models. Try again')}
+            onPress={props.onRetry}
+            disabled={props.disabled}
+            accessibilityRole="button"
+          />
+        </SettingsSection>
+      ) : props.catalogState === 'loading' ? (
+        <SettingsNote>
+          {t('bots.settings.backupModelsCatalogLoading', 'Loading models…')}
+        </SettingsNote>
+      ) : grouped.length === 0 ? (
         <SettingsNote>
           {t('bots.settings.backupModelsNoOptions', 'No other models available on this computer.')}
         </SettingsNote>

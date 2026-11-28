@@ -13,6 +13,7 @@ import {
   type BotUsageLimitFailoverDeps
 } from './bot-usage-limit-failover-execution'
 import type { BotUsageLimitKey } from './bot-usage-limit-gate'
+import { isCurrentBotCut } from './bot-backup-target-selection'
 
 export type BotBackupActions = {
   deps: BotUsageLimitFailoverDeps
@@ -41,7 +42,7 @@ export async function switchBackupManually(
   if (bot?.id !== botId) {
     throw new Error('session_bot_mismatch')
   }
-  const cut = await deps.readSessionCut?.(sessionId)
+  const cut = await deps.readSessionCut(sessionId)
   if (!session.isIdle || cut?.turnItemId !== turnItemId || state.isHandled(sessionId, turnItemId)) {
     throw new Error('usage_limit_cut_changed')
   }
@@ -57,7 +58,9 @@ export async function switchBackupManually(
       session,
       cut,
       target,
-      now: now()
+      now: now(),
+      maySwitch: async () =>
+        (await isCurrentBotCut(deps, session, cut)) && deps.botOfSession(sessionId)?.id === botId
     })
     if (result.switched) {
       state.complete(sessionId, cut, result.newSessionId !== undefined)
@@ -83,15 +86,15 @@ export async function returnBackupToPrimary(
 ): Promise<boolean> {
   const bot = deps.listBots().find((entry) => entry.id === botId)
   if (!bot?.activeBackup) {
+    pendingForcedReturns.delete(botId)
     return false
   }
   const primaryModel = bot.launch?.model ?? bot.activeBackup.primaryModel
-  const accountHomeKey = await deps.resolveAccountHomeKey(bot.agent)
   if (
     !force &&
     !(await deps.gate.verifyReturnReady({
       agent: bot.agent,
-      accountHomeKey,
+      accountHomeKey: await deps.resolveAccountHomeKey(bot.agent, bot.chatSessionId ?? undefined),
       model: primaryModel ?? ''
     }))
   ) {
@@ -104,6 +107,7 @@ export async function returnBackupToPrimary(
     }
     return false
   }
+  pendingForcedReturns.delete(botId)
   if (
     home &&
     !(await returnHomeChatToPrimary(deps, withProgrammaticOptions, {
@@ -117,7 +121,6 @@ export async function returnBackupToPrimary(
   ) {
     return false
   }
-  pendingForcedReturns.delete(botId)
   const active = bot.activeBackup
   await deps.updateBot(botId, (latest) =>
     latest.activeBackup?.switchedAt === active.switchedAt &&
@@ -145,7 +148,8 @@ export async function reconsiderReleasedLimit(
     const primaryModel = bot.launch?.model ?? bot.activeBackup.primaryModel ?? ''
     if (
       primaryModel === released.model &&
-      (await deps.resolveAccountHomeKey(bot.agent)) === released.accountHomeKey
+      (await deps.resolveAccountHomeKey(bot.agent, bot.chatSessionId ?? undefined)) ===
+        released.accountHomeKey
     ) {
       await state.returnToPrimary(bot.id).catch(() => {})
     }
@@ -165,7 +169,7 @@ export async function reconsiderReleasedLimit(
       sameBotModelTarget(entry, released)
     )
     if (currentReleased || backupReleased) {
-      const cut = await deps.readSessionCut?.(sessionId)
+      const cut = await deps.readSessionCut(sessionId)
       if (cut?.turnItemId === cutState.turnItemId) {
         await state.reconsider(sessionId, cut)
       }

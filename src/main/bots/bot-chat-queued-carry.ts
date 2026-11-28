@@ -62,13 +62,18 @@ export async function carryQueuedMessages(
   if (!from || !host.deps.store.getConversation(from)) {
     return { complete: true, messages }
   }
+  let complete = true
   try {
     const source = (await host.conversation(from)).journal.queuedMessages
     const target = (await host.conversation(to)).journal.queuedMessages
     for (const { messageId } of (await source.list()).filter(carried)) {
       await host.serialize(from, async () => {
         const card = await source.get(messageId)
-        if (!carried(card) || (await source.editHeld(messageId))) {
+        if (!carried(card)) {
+          return
+        }
+        if (await source.editHeld(messageId)) {
+          complete = false
           return
         }
         if (card.body.connectorDelivery) {
@@ -98,5 +103,5 @@ export async function carryQueuedMessages(
     console.warn('[bots] could not move queued messages to the new Chat', error)
     return { complete: false, messages }
   }
-  return { complete: true, messages }
+  return { complete, messages }
 }

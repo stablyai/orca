@@ -1884,6 +1884,8 @@
         "activeDetailReset": "Running on {{backup}}. Returns to {{primary}} after {{time}}.",
         "activeDetail": "Running on {{backup}}. Returns to {{primary}} when its limit resets.",
         "returnNow": "Return now",
+        "returnPending": "Returns to the primary model after this turn finishes.",
+        "returnFailed": "Couldn’t return to the primary model.",
         "modeAutoFoot": "When {{primary}} hits its usage limit, {{name}} switches to the first available backup automatically.",
         "modeAskFoot": "When {{primary}} hits its usage limit, {{name}} pauses and asks in chat before switching.",
         "askBeforeSwitching": "Ask before switching",

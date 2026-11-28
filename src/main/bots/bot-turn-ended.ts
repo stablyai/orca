@@ -50,7 +50,7 @@ export function botTurnEnded(
       .catch(() => {})
   } else if (ended?.outcome === 'cancellation') {
     void runtimeBotBackupFailover(runtime)
-      .failover.onTurnCancelled(sessionId)
+      .failover.onTurnInterrupted(sessionId)
       .catch(() => {})
   } else if (ended?.outcome === 'failure') {
     const host = getStructuredAgentSessionHost()
@@ -59,9 +59,12 @@ export function botTurnEnded(
       void host
         .journalReads(sessionId)
         .then((reads) => reads.usageLimitCut())
-        .then(
-          (cut) => cut && runtimeBotBackupFailover(runtime).failover.onUsageLimitCut(sessionId, cut)
-        )
+        .then(async (cut) => {
+          const failover = runtimeBotBackupFailover(runtime).failover
+          if (!(await failover.onTurnInterrupted(sessionId)) && cut) {
+            await failover.onUsageLimitCut(sessionId, cut)
+          }
+        })
         .catch(() => {})
         .finally(releaseWatch)
     }

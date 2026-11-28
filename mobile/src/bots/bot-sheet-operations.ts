@@ -151,7 +151,10 @@ export const botBackupReturn = bindDeferredRpcOperation(
     method: 'bots.backup.return',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('bot-backup-returned', z.looseObject({ returned: z.boolean() }))
+    read: rpcResultVariant(
+      'bot-backup-returned',
+      z.looseObject({ returned: z.boolean(), pending: z.boolean().optional() })
+    )
   })
 )
 

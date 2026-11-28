@@ -30,11 +30,9 @@ export const BOT_BACKUP_RETURN_METHOD = defineMethod({
   params: BotBackupReturnParamsSchema,
   handler: async (params, context) => {
     ownerOnly(context, 'Only the owner can return a bot to its primary model.')
-    const returned = await runtimeBotBackupFailover(context.runtime).failover.returnToPrimary(
-      params.botId,
-      { force: true }
-    )
-    return { returned }
+    const { failover } = runtimeBotBackupFailover(context.runtime)
+    const returned = await failover.returnToPrimary(params.botId, { force: true })
+    return { returned, pending: !returned && failover.isReturnPending(params.botId) }
   }
 })
 

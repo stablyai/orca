@@ -35,18 +35,21 @@ export function useMobileBotBackupUsageLimit(input: {
     void (async () => {
       try {
         const listed = botsListRead.interpret(await botsListRead.request(client))
-        if (!current || !listed.accepted) {
+        if (!current) {
           return
         }
-        const matched = listed.value.bots.find(
-          (bot) =>
-            bot.chatSessionId === sessionId ||
-            (sourceIdentity !== undefined &&
-              sourceIdentity.endsWith(
-                `,${JSON.stringify(folderWorkspaceKey(bot.folderWorkspaceId))}]`
-              ))
-        )
+        const matched = listed.accepted
+          ? listed.value.bots.find(
+              (bot) =>
+                bot.chatSessionId === sessionId ||
+                (sourceIdentity !== undefined &&
+                  sourceIdentity.endsWith(
+                    `,${JSON.stringify(folderWorkspaceKey(bot.folderWorkspaceId))}]`
+                  ))
+            )
+          : undefined
         if (!matched) {
+          setBackupOffer(null)
           return
         }
         const status = botBackupStatusRead.interpret(
@@ -57,11 +60,13 @@ export function useMobileBotBackupUsageLimit(input: {
           )
         )
         const ready = status.entries.find((entry) => entry.state === 'ready')?.entry
-        if (current && ready) {
-          setBackupOffer({ turnItemId, botId: matched.id, target: ready })
+        if (current) {
+          setBackupOffer(ready ? { turnItemId, botId: matched.id, target: ready } : null)
         }
       } catch {
-        // Ignore when the host does not offer backup status.
+        if (current) {
+          setBackupOffer(null)
+        }
       }
     })()
     return () => {

@@ -32,6 +32,7 @@ export type BotCrossAgentHandoffInput = {
   returnReason?: 'limit-reset' | 'manual'
   resetsAt?: number
   now: number
+  maySwitch?: () => Promise<boolean>
 }
 
 export type BotCrossAgentHandoffSend = {
@@ -114,7 +115,7 @@ export function buildBotFailoverHandoffPrompt(input: {
 export async function executeCrossAgentBotHandoff(
   deps: BotCrossAgentHandoffDeps,
   input: BotCrossAgentHandoffInput
-): Promise<BotCrossAgentHandoffResult> {
+): Promise<BotCrossAgentHandoffResult | null> {
   const {
     bot,
     sourceSessionId,
@@ -139,6 +140,9 @@ export async function executeCrossAgentBotHandoff(
     direction,
     context
   })
+  if (input.maySwitch && !(await input.maySwitch())) {
+    return null
+  }
 
   const newSessionId = randomUUID()
   const switchId = randomUUID()

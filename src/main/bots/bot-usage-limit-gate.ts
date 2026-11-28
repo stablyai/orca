@@ -26,6 +26,7 @@ export type BotUsageLimitGateDeps = {
 
 type HeldLimit = {
   key: BotUsageLimitKey
+  observedModel?: string
   resetsAt: number | null
   timer: ReturnType<typeof setTimeout> | null
 }
@@ -43,7 +44,7 @@ export class BotUsageLimitGate {
     this.now = deps.now ?? Date.now
   }
 
-  recordLimit(input: BotUsageLimitKey & { resetsAt?: number }): void {
+  recordLimit(input: BotUsageLimitKey & { resetsAt?: number; observedModel?: string }): void {
     if (this.disposed) {
       return
     }
@@ -55,15 +56,12 @@ export class BotUsageLimitGate {
     if (existing?.timer) {
       clearTimeout(existing.timer)
     }
-    const nextResetsAt =
-      validReset !== null && validReset > now
-        ? Math.max(validReset, existing?.resetsAt ?? 0)
-        : existing?.resetsAt && existing.resetsAt > now
-          ? existing.resetsAt
-          : null
+    const latestReset = Math.max(validReset ?? 0, existing?.resetsAt ?? 0)
     const held: HeldLimit = {
       key: { agent: input.agent, accountHomeKey: input.accountHomeKey, model: input.model },
-      resetsAt: nextResetsAt,
+      observedModel: input.observedModel ?? existing?.observedModel,
+      resetsAt:
+        latestReset > 0 && latestReset + BOT_USAGE_LIMIT_RESET_GRACE_MS > now ? latestReset : null,
       timer: null
     }
     this.holds.set(id, held)
@@ -72,6 +70,14 @@ export class BotUsageLimitGate {
   }
 
   recordSuccess(key: BotUsageLimitKey): void {
+    this.release(key)
+    const defaultKey = { ...key, model: '' }
+    if (key.model && this.holds.get(serializeKey(defaultKey))?.observedModel === key.model) {
+      this.release(defaultKey)
+    }
+  }
+
+  private release(key: BotUsageLimitKey): void {
     const id = serializeKey(key)
     const held = this.holds.get(id)
     if (!held) {

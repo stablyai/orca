@@ -8,16 +8,17 @@ import {
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import type { HostUsageLimitCut } from '../native-chat/agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 import type { BotUsageLimitKey } from './bot-usage-limit-gate'
-import {
-  executeBotBackupSwitch,
-  pickReadyBotBackup,
-  resolveBotLaunchSetup,
-  type BotBackupSwitchResult,
-  type BotCutBackupState,
-  type BotFailoverSessionInfo,
-  type BotUsageLimitFailoverDeps
+import type {
+  BotBackupSwitchResult,
+  BotCutBackupState,
+  BotFailoverSessionInfo,
+  BotUsageLimitFailoverDeps
 } from './bot-usage-limit-failover-execution'
-import { BotHandoffRollbackError } from './bot-cross-agent-handoff'
+import {
+  resolveBotLaunchSetup,
+  selectAndSwitchBotBackup,
+  type BotLaunchSelection
+} from './bot-backup-target-selection'
 import {
   reconsiderReleasedLimit,
   returnBackupToPrimary,
@@ -72,7 +73,7 @@ export class BotUsageLimitFailover {
   }
 
   /** Resolves the setup a new bot session or automation run should launch with. */
-  async resolveLaunchSetup(bot: Bot): Promise<{ agent: BotAgent; launch?: Bot['launch'] }> {
+  async resolveLaunchSetup(bot: Bot): Promise<BotLaunchSelection> {
     return resolveBotLaunchSetup(this.deps, bot, this.now())
   }
 
@@ -127,11 +128,15 @@ export class BotUsageLimitFailover {
     )
   }
 
+  isReturnPending(botId: string): boolean {
+    return this.pendingForcedReturns.has(botId)
+  }
+
   /** Re-evaluates held sessions when a bot's backup config changes (e.g., automatic enabled). */
   async onBackupConfigChanged(botId: string): Promise<void> {
     const sessions = this.deps.listBotSessionIds?.(botId) ?? []
     for (const sessionId of sessions) {
-      const cut = await this.deps.readSessionCut?.(sessionId)
+      const cut = await this.deps.readSessionCut(sessionId)
       if (cut) {
         await this.onUsageLimitCut(sessionId, cut, true)
       }
@@ -176,11 +181,12 @@ export class BotUsageLimitFailover {
     }
   }
 
-  async onTurnCancelled(sessionId: string): Promise<void> {
+  async onTurnInterrupted(sessionId: string): Promise<boolean> {
     const bot = this.deps.botOfSession(sessionId)
     if (bot?.chatSessionId === sessionId && this.pendingForcedReturns.has(bot.id)) {
-      await this.returnToPrimary(bot.id, { force: true })
+      return this.returnToPrimary(bot.id, { force: true })
     }
+    return false
   }
 
   private async handleCutSerialized(
@@ -210,68 +216,42 @@ export class BotUsageLimitFailover {
       this.deps.gate.recordLimit({ ...key, resetsAt: cut.resetsAt })
       const setup = bot.activeBackup?.target ?? botPrimaryTarget(bot)
       if (key.model && setup.agent === key.agent && !setup.model) {
-        this.deps.gate.recordLimit({ ...key, model: '', resetsAt: cut.resetsAt })
+        this.deps.gate.recordLimit({
+          ...key,
+          model: '',
+          observedModel: key.model,
+          resetsAt: cut.resetsAt
+        })
       }
     } else if (!this.deps.gate.isLimited(key)) {
       this.clearCutState(sessionId)
       return
     }
 
-    const backups = bot.backupModels
-    if (!backups || backups.order.length === 0) {
-      this.clearCutState(sessionId)
-      return
-    }
-
-    const available = await this.deps.availableAgents()
-    const currentChoice = {
-      sessionId,
-      agent: session.provider,
-      ...(session.model ? { model: session.model } : {})
-    }
     const previous = this.attemptedByCut.get(sessionId)
     const attempted = previous?.turnItemId === cut.turnItemId ? previous.targets : new Set<string>()
-    attempted.add(botModelTargetKey(currentChoice))
+    attempted.add(botModelTargetKey(key))
     this.attemptedByCut.set(sessionId, { turnItemId: cut.turnItemId, targets: attempted })
-
-    const ready = await pickReadyBotBackup(this.deps, bot, currentChoice, available, attempted)
-    if (!backups.automatic) {
-      if (ready) {
-        this.setCutState(sessionId, { turnItemId: cut.turnItemId, backupState: 'ask-backup' })
-      } else {
-        await this.markBackupsExhausted(bot, sessionId, cut)
+    const result = await selectAndSwitchBotBackup(this.actions, {
+      botId,
+      session,
+      cut,
+      attempted,
+      wasHomeChat: bot.chatSessionId === sessionId,
+      onSwitching: () => {
+        this.switchingCuts.add(`${sessionId}:${cut.turnItemId}`)
+        this.setCutState(sessionId, { turnItemId: cut.turnItemId, backupState: 'switching' })
       }
-      return
+    })
+    if (result.state === 'switched') {
+      this.completeCut(sessionId, cut, result.superseded)
+    } else if (result.state === 'backups-exhausted') {
+      await this.markBackupsExhausted(result.bot, sessionId, cut)
+    } else if (result.state === 'ask-backup') {
+      this.setCutState(sessionId, { turnItemId: cut.turnItemId, backupState: 'ask-backup' })
+    } else {
+      this.clearCutState(sessionId)
     }
-
-    if (!ready) {
-      await this.markBackupsExhausted(bot, sessionId, cut)
-      return
-    }
-
-    this.setCutState(sessionId, { turnItemId: cut.turnItemId, backupState: 'switching' })
-    let candidate: typeof ready | undefined = ready
-    while (candidate) {
-      attempted.add(botModelTargetKey(candidate))
-      try {
-        const result = await executeBotBackupSwitch(
-          this.deps,
-          (sid, run) => this.withProgrammaticOptions(sid, run),
-          { bot, session, cut, target: candidate, now: this.now() }
-        )
-        if (result.switched) {
-          this.completeCut(sessionId, cut, result.newSessionId !== undefined)
-          return
-        }
-      } catch (error) {
-        if (error instanceof BotHandoffRollbackError) {
-          console.warn('[bots] could not restore routing after backup handoff', error)
-          break
-        }
-      }
-      candidate = await pickReadyBotBackup(this.deps, bot, currentChoice, available, attempted)
-    }
-    await this.markBackupsExhausted(bot, sessionId, cut)
   }
 
   private completeCut(sessionId: string, cut: HostUsageLimitCut, superseded: boolean): void {

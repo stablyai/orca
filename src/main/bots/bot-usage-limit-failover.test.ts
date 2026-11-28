@@ -18,6 +18,7 @@ import {
 } from '../runtime/rpc/methods/bots-backup-models'
 import { LOCAL_CLI_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
 import type { RpcContext } from '../runtime/rpc/core'
+import type { HostUsageLimitCut } from '../native-chat/agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 
 const NOW = 1_750_000_000_000
 
@@ -52,6 +53,8 @@ function createBot(overrides: Partial<Bot> = {}): Bot {
 }
 
 type Harness = {
+  observeCut: (id: string, cut: HostUsageLimitCut) => Promise<void>
+  editBot: (updates: BotHostUpdates) => void
   gate: BotUsageLimitGate
   failover: BotUsageLimitFailover
   getBot: () => Bot
@@ -78,6 +81,7 @@ function createHarness(
   overrides: Partial<BotUsageLimitFailoverDeps> = {}
 ): Harness {
   let bot = initialBot
+  const cuts = new Map<string, HostUsageLimitCut>()
   const sessions = new Map<string, BotFailoverSessionInfo>([
     [
       initialBot.chatSessionId ?? 'session-home',
@@ -116,11 +120,11 @@ function createHarness(
     applySameAgentOptions: async (sessionId, target) => {
       const current = sessions.get(sessionId)
       if (!current) {
-        return false
+        return null
       }
       sameAgentApplies.push({ sessionId, model: target.model })
       sessions.set(sessionId, { ...current, model: target.model })
-      return true
+      return { target, complete: true }
     },
     sendSameAgentContinuation: async (sessionId) => {
       sameAgentContinuations.push(sessionId)
@@ -131,7 +135,7 @@ function createHarness(
     },
     publishSessionStatus: () => {},
     listBotSessionIds: () => [...sessions.keys()],
-    readSessionCut: async () => ({ turnItemId: 'turn-ask', resetsAt: NOW + 600_000, chain: 1 }),
+    readSessionCut: async (id) => cuts.get(id) ?? null,
     crossAgentHandoff: {
       readContinuationContext: async () => ({
         status: 'current',
@@ -195,9 +199,17 @@ function createHarness(
     ...overrides
   }
 
+  const failover = new BotUsageLimitFailover(deps)
   return {
     gate,
-    failover: new BotUsageLimitFailover(deps),
+    failover,
+    observeCut: (id, cut) => {
+      cuts.set(id, cut)
+      return failover.onUsageLimitCut(id, cut)
+    },
+    editBot: (updates) => {
+      bot = applyBotUpdates(bot, updates)
+    },
     getBot: () => bot,
     sessions,
     switchCards,
@@ -217,7 +229,7 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     const h = createHarness(createBot())
     const resetsAt = NOW + 600_000
 
-    await h.failover.onUsageLimitCut('session-home', { turnItemId: 'turn-1', resetsAt, chain: 1 })
+    await h.observeCut('session-home', { turnItemId: 'turn-1', resetsAt, chain: 1 })
 
     expect(h.sameAgentApplies).toEqual([{ sessionId: 'session-home', model: 'claude-haiku-4-5' }])
     expect(h.sameAgentContinuations).toEqual(['session-home'])
@@ -297,7 +309,7 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     h.actsForBySession.set('session-slack', nonOwnerAuthority)
 
     // Cut 1 fails over in-place to Backup 1 (claude-haiku-4-5).
-    await h.failover.onUsageLimitCut('session-slack', {
+    await h.observeCut('session-slack', {
       turnItemId: 'turn-1',
       resetsAt: NOW + 600_000,
       chain: 1
@@ -305,7 +317,7 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     expect(h.getBot().activeBackup?.target.model).toBe('claude-haiku-4-5')
 
     // Cut 2 on Backup 1 cascades cross-agent to Backup 2 (codex / gpt-5-codex).
-    await h.failover.onUsageLimitCut('session-slack', {
+    await h.observeCut('session-slack', {
       turnItemId: 'turn-2',
       resetsAt: NOW + 900_000,
       chain: 2
@@ -346,7 +358,7 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     })
     const h = createHarness(bot)
 
-    await h.failover.onUsageLimitCut('session-home', {
+    await h.observeCut('session-home', {
       turnItemId: 'turn-ask',
       resetsAt: NOW + 600_000,
       chain: 1
@@ -397,12 +409,36 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     const resolved = await h.failover.resolveLaunchSetup(h.getBot())
     expect(resolved.agent).toBe('claude')
     expect(resolved.launch?.model).toBe('claude-haiku-4-5')
+    expect(h.getBot().activeBackup).toBeUndefined()
+    await resolved.markActive?.()
+    expect(h.getBot().activeBackup?.target.model).toBe('claude-haiku-4-5')
+    h.gate.dispose()
+  })
+
+  it('offers a backup instead of switching when the owner turns on asking during discovery', async () => {
+    const checking = Promise.withResolvers<void>()
+    const available = Promise.withResolvers<ReadonlySet<BotAgent>>()
+    const h = createHarness(createBot(), [], {
+      availableAgents: () => {
+        checking.resolve()
+        return available.promise
+      }
+    })
+    const observed = h.observeCut('session-home', { turnItemId: 'turn-1', chain: 1 })
+    await checking.promise
+    h.editBot({
+      backupModels: { automatic: false, order: [{ agent: 'codex', model: 'gpt-5-codex' }] }
+    })
+    available.resolve(new Set(['codex']))
+    await observed
+    expect(h.failover.readCutBackupState('session-home', 'turn-1')?.backupState).toBe('ask-backup')
+    expect(h.startedSessions).toEqual([])
     h.gate.dispose()
   })
 
   it('keeps the applied backup when its continuation is refused', async () => {
     const h = createHarness(createBot(), [], { sendSameAgentContinuation: async () => false })
-    await h.failover.onUsageLimitCut('session-home', {
+    await h.observeCut('session-home', {
       turnItemId: 'turn-1',
       resetsAt: NOW + 600_000,
       chain: 1
@@ -496,7 +532,7 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     ).rejects.toThrow('session_not_found')
 
     // Automatic cut skips model-less same-agent entry and switches to claude-haiku-4-5.
-    await h.failover.onUsageLimitCut('session-home', {
+    await h.observeCut('session-home', {
       turnItemId: 'turn-1',
       resetsAt: NOW + 600_000,
       chain: 1
@@ -504,13 +540,13 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
     expect(h.getBot().activeBackup?.target).toEqual({ agent: 'claude', model: 'claude-haiku-4-5' })
     expect(h.getBot().activeBackup?.primaryModel).toBe('claude-sonnet-4-5')
 
-    // Forced return while busy keeps activeBackup and defers until onTurnSucceeded.
+    // A forced return requested while busy survives an interrupted turn.
     h.sessions.set('session-home', { ...h.sessions.get('session-home')!, isIdle: false })
     expect(await h.failover.returnToPrimary('bot-1', { force: true })).toBe(false)
     expect(h.getBot().activeBackup).toBeDefined()
 
     h.sessions.set('session-home', { ...h.sessions.get('session-home')!, isIdle: true })
-    await h.failover.onTurnSucceeded('session-home')
+    await h.failover.onTurnInterrupted('session-home')
     expect(h.getBot().activeBackup).toBeUndefined()
     expect(h.sameAgentApplies.at(-1)).toEqual({
       sessionId: 'session-home',

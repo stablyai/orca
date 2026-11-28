@@ -87,16 +87,17 @@ export function MobileBotBackupModelsPage(props: {
   const [statusState, setStatusState] = useState<{
     botId: string
     client: RpcClient
-    data: BotBackupStatusResult
+    data: BotBackupStatusResult | null
   } | null>(null)
   const [picking, setPicking] = useState(false)
   const [returning, setReturning] = useState(false)
   const refreshGenRef = useRef(0)
 
-  const status =
+  const currentRead =
     statusState && statusState.botId === bot.id && statusState.client === client
-      ? statusState.data
+      ? statusState
       : null
+  const status = currentRead?.data ?? null
 
   useBackClaim(
     picking
@@ -120,7 +121,9 @@ export function MobileBotBackupModelsPage(props: {
         setStatusState({ botId: bot.id, client, data: next })
       }
     } catch {
-      // Keep the bot snapshot's backup list visible when status read fails.
+      if (gen === refreshGenRef.current) {
+        setStatusState({ botId: bot.id, client, data: null })
+      }
     }
   }, [bot.id, client, online])
 
@@ -171,9 +174,19 @@ export function MobileBotBackupModelsPage(props: {
     }
     setReturning(true)
     try {
-      botBackupReturn.interpret(
+      const { returned, pending } = botBackupReturn.interpret(
         await botBackupReturn.request(client, { botId: bot.id }, { failWhenDisconnected: true })
       )
+      if (!returned) {
+        props.showToast(
+          pending
+            ? t(
+                'bots.settings.backupModelsReturnPending',
+                'Returns to the primary model after this turn finishes.'
+              )
+            : t('bots.settings.backupModelsReturnFailed', 'Couldn’t return to the primary model.')
+        )
+      }
       await refreshStatus()
     } catch (error) {
       props.showToast(botSaveErrorMessage(error, props.hostName), 1800)
@@ -186,6 +199,11 @@ export function MobileBotBackupModelsPage(props: {
     return (
       <MobileBotBackupModelPicker
         options={status?.availableOptions ?? []}
+        catalogState={status ? 'ready' : currentRead || !online ? 'unavailable' : 'loading'}
+        onRetry={() => {
+          setStatusState(null)
+          void refreshStatus()
+        }}
         excludedKeys={excludedKeys}
         disabled={props.disabled}
         banner={props.banner}
@@ -314,7 +332,12 @@ export function MobileBotBackupModelsPage(props: {
             leading={<Plus size={16} color={colors.textPrimary} />}
             title={t('bots.settings.backupModelsAdd', 'Add backup model')}
             disabled={props.disabled}
-            onPress={() => setPicking(true)}
+            onPress={() => {
+              setPicking(true)
+              if (!status && online) {
+                void refreshStatus()
+              }
+            }}
             accessibilityRole="button"
           />
         ) : null}
