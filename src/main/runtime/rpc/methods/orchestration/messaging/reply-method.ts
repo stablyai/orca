@@ -4,6 +4,8 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
+import { isOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { answerSenderRelayReport } from '../../../../orchestration/mailbox/senders/answer-sender-relay-report'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
@@ -226,8 +228,9 @@ function refuseNewlyLegacyAttachedSender(
   terminalRecipient: TerminalAgentRecipient
 ): void {
   const from = original.from_handle
-  // Cheap first: only a sender with a live attachment needs its routing resolved again.
-  if (!legacyAttachmentRefusal(db, from, runtime.getLiveTerminalPaneKey(from))) {
+  // Cheap first for a terminal handle; a session address names its terminal only through the resolver.
+  const session = from.startsWith(ORCA_SESSION_ADDRESS_PREFIX) || isOrcaSessionId(from)
+  if (!session && !legacyAttachmentRefusal(db, from, runtime.getLiveTerminalPaneKey(from))) {
     return
   }
   const current = resolveBareOrchestrationRecipient({
