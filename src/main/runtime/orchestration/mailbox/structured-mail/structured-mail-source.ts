@@ -180,15 +180,15 @@ export function structuredMailMessage(input: {
           reportItem: input.reportItem
         }).text
       : formatted.text
-    const noted = withConversationNote(guided, from, input)
+    // The reply rule is dropped first, so a long mail keeps the line saying where its answer goes.
+    const noted = withConversationNotes(guided, from, input).find(
+      (blocks) => !structuredAgentSessionBlocksTooLarge(blocks)
+    )
     return {
       body: {
         kind: 'message',
         role: 'user',
-        blocks: [
-          ...(structuredAgentSessionBlocksTooLarge(noted) ? whole : noted),
-          ...botItemMailImageBlocks(input.message)
-        ],
+        blocks: [...(noted ?? whole), ...botItemMailImageBlocks(input.message)],
         from: {
           ...from,
           orchestration: {
@@ -217,9 +217,10 @@ export function structuredMailMessage(input: {
   }
 }
 
-/** In a chat bound to a conversation, mail says where the bot's answer lands: there for its own
- *  workers' reports and other bots' answers to its asks, else Orca. */
-function withConversationNote(
+/** Mail carries the agent-mail reply rule and, in a chat bound to a conversation, where the bot's
+ *  answer lands: there for its own workers' reports and other bots' answers to its asks, else Orca.
+ *  Returns the fullest note first, then one without the rule. */
+function withConversationNotes(
   text: string,
   from: ReturnType<typeof structuredMailSource>,
   {
@@ -229,15 +230,18 @@ function withConversationNote(
     cliCommand: OrchestrationCliCommand
     conversationPlace?: (from: AgentMessageSource) => ChatMailPlace | null
   }
-): { type: 'text'; text: string }[] {
+): { type: 'text'; text: string }[][] {
   const bound = conversationPlace?.(from)
   const place = !bound
     ? null
     : bound.answersThere
       ? `[Orca: your final message and \`${cliCommand} bot reply\` (with any files) go to ${bound.place}.]`
       : `[Orca: this mail did not come from ${bound.place}, so your final message stays in Orca.]`
-  const note = [`[${AGENT_MAIL_REPLY_RULE}]`, place].filter((line) => line !== null).join('\n')
-  return [{ type: 'text', text: `${text}\n\n${note}` }]
+  const rule = `[${AGENT_MAIL_REPLY_RULE}]`
+  return [
+    [{ type: 'text', text: `${text}\n\n${place ? `${rule}\n${place}` : rule}` }],
+    [{ type: 'text', text: place ? `${text}\n\n${place}` : text }]
+  ]
 }
 
 /** The worker this mail was recorded from when it was written. */
