@@ -9,9 +9,11 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { createNonSecureContextUuid } from '../../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { WorkerDockRowView } from './WorkerDockRow'
 import type { WorkerDockStopBlock } from './worker-dock-stop-check'
+import { useNativeChatViewGuard } from '../../../pane/ownership/native-chat-view-memory'
 
 /** A strip failure and the retry of the request that failed; no retry when none applies. */
 export type WorkerDockFailure = { message: string; retry?: () => void }
+const NO_PENDING: ReadonlySet<string> = new Set()
 const message = (value: unknown) => (value instanceof Error ? value.message : String(value))
 /** A failure no Retry can change, such as a Stop for a worker that has already settled. */
 class FinalWorkerDockError extends Error {}
@@ -25,7 +27,8 @@ export function useWorkerDockOwnerActions(
   stopBlock?: (row: WorkerDockRowView, party: string) => WorkerDockStopBlock
 ) {
   const t = useTranslate()
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
+  // Kept with the chat tab: a dock released mid-request returns with those rows still pending.
+  const [pending, setPending] = useNativeChatViewGuard('worker-dock-pending', NO_PENDING)
   const [failure, setFailure] = useState<WorkerDockFailure | null>(null)
   const acknowledge = useCallback(
     async (settlements: { dispatchId: string; settlement: string }[]) => {
@@ -42,22 +45,27 @@ export function useWorkerDockOwnerActions(
     },
     [party, target]
   )
-  const track = useCallback((ids: ReadonlySet<string>, request: () => Promise<unknown>) => {
-    const attempt = () => {
-      setFailure(null)
-      setPending((current) => new Set([...current, ...ids]))
-      void request()
-        .catch((value) =>
-          setFailure(
-            value instanceof FinalWorkerDockError
-              ? { message: message(value) }
-              : { message: message(value), retry: attempt }
+  const track = useCallback(
+    (ids: ReadonlySet<string>, request: () => Promise<unknown>) => {
+      const attempt = () => {
+        setFailure(null)
+        setPending((current) => new Set([...current, ...ids]))
+        void request()
+          .catch((value) =>
+            setFailure(
+              value instanceof FinalWorkerDockError
+                ? { message: message(value) }
+                : { message: message(value), retry: attempt }
+            )
           )
-        )
-        .finally(() => setPending((current) => new Set([...current].filter((id) => !ids.has(id)))))
-    }
-    attempt()
-  }, [])
+          .finally(() =>
+            setPending((current) => new Set([...current].filter((id) => !ids.has(id))))
+          )
+      }
+      attempt()
+    },
+    [setPending]
+  )
   const action = useCallback(
     (row: WorkerDockRowView, kind: 'stop' | 'clear') => {
       // Clear only acknowledges; a row with no settlement has nothing to clear and must not Stop.

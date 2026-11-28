@@ -24,6 +24,7 @@ import {
   joinStructuredAgentSessionStop,
   structuredAgentSessionStopIsJoinable
 } from '../../../../../../../shared/agent-session/requests/structured-agent-session-stop-join'
+import { useNativeChatViewRef } from '../../../pane/ownership/native-chat-view-memory'
 
 export type StructuredAgentSessionWriteOutcome<T> =
   | { kind: 'done'; value: T }
@@ -87,7 +88,11 @@ export function useStructuredAgentSessionMutate(args: {
   capturePresentation: CaptureStructuredAgentSessionPresentation
 } {
   const { agentName, enabled = true, sessionId, stateRef, target } = args
-  const inFlightStops = useRef(new Map<string, Promise<ExecutionResult<unknown>>>())
+  // Kept with the chat tab: a view released mid-Stop joins the Stop already sent rather than sending another.
+  const inFlightStops = useNativeChatViewRef(
+    'inflight-stops',
+    new Map<string, Promise<ExecutionResult<unknown>>>()
+  )
   const presentation = useRef<object | null>(null)
   const hostKey = structuredAgentSessionHostKey(target)
   useNativeChatPaneLifetimeEffect(
@@ -194,7 +199,7 @@ export function useStructuredAgentSessionMutate(args: {
       return outcome.kind === 'done' ? outcome.value : null
     }
     return { target, write: execute, mutate }
-  }, [capturePresentation, enabled, hostKey, send, sessionId, stateRef, target])
+  }, [capturePresentation, enabled, hostKey, inFlightStops, send, sessionId, stateRef, target])
 
   const write = useCallback(
     async <T>(...writeArgs: WriteArgs): Promise<StructuredAgentSessionWriteOutcome<T>> =>

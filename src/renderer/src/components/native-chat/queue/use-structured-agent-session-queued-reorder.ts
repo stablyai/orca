@@ -1,5 +1,9 @@
 import { runWithFinally } from '@/lib/run-with-finally'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback } from 'react'
+import {
+  KEPT_TRANSCRIPTS_PER_TAB,
+  useNativeChatViewGuard
+} from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentSessionQueuedMessageMoveResult } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -48,18 +52,18 @@ export function useStructuredAgentSessionQueuedReorder(
   capturePresentation: CaptureStructuredAgentSessionPresentation
 ): { cards: QueuedMessageCard[]; held: QueuedMessageCard[]; reorder?: QueuedMessageReorder } {
   const scope = `${structuredAgentSessionHostKey(transport.target)}:${transport.sessionId}`
-  const busy = useRef(false)
-  const [pending, setPending] = useState(false)
-  const [preview, setPreview] = useState<{
+  // Kept with the chat tab: a view released mid-move returns still guarded and still showing the move.
+  const [pending, setPending, busy] = useNativeChatViewGuard(`queued-reorder:${scope}`, false)
+  const [preview, setPreview] = useNativeChatViewGuard<{
     scope: string
     base: QueuedMessageCard[]
     cards: QueuedMessageCard[]
     heldBase: QueuedMessageCard[]
     held: QueuedMessageCard[]
-  } | null>(null)
+  } | null>(`queued-reorder-preview:${scope}`, null, KEPT_TRANSCRIPTS_PER_TAB)
   const move = useCallback(
     async (messageId: string, anchor: QueuedMessageMoveAnchor) => {
-      if (busy.current || !transport.reorderCapable) {
+      if (busy() || !transport.reorderCapable) {
         return
       }
       const moved = movedQueue(cards, messageId, anchor)
@@ -73,7 +77,6 @@ export function useStructuredAgentSessionQueuedReorder(
         heldBase: held,
         held: movedQueue(held, messageId, anchor) ?? held
       }
-      busy.current = true
       setPending(true)
       setPreview(optimistic)
       const isCurrent = capturePresentation()
@@ -101,13 +104,10 @@ export function useStructuredAgentSessionQueuedReorder(
             }
           }
         },
-        () => {
-          busy.current = false
-          setPending(false)
-        }
+        () => setPending(false)
       )
     },
-    [cards, held, capturePresentation, scope, transport]
+    [cards, held, capturePresentation, scope, transport, busy, setPending, setPreview]
   )
   // Any publication supersedes the preview, including another client's concurrent move.
   const previewing = preview?.scope === scope && preview.base === cards && preview.heldBase === held

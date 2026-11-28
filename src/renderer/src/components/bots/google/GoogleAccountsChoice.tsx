@@ -20,6 +20,7 @@ import { googleAccountChoiceSave, initialGoogleAccountChoice } from './google-ac
 import { refreshGoogle, useGoogleHost } from './google-connect-client'
 import { googleBotRead, setBotGoogle, type GoogleBotRead } from './set-bot-google'
 import { GoogleAccountPicker, type GoogleAccountPickerBot } from './GoogleAccountPicker'
+import { useNativeChatViewGuard } from '../../native-chat/pane/ownership/native-chat-view-memory'
 
 export type GoogleAccountChoiceBot = GoogleAccountPickerBot & Pick<Bot, 'google' | 'googleAccounts'>
 
@@ -50,7 +51,8 @@ export function useGoogleAccountChoice(
     basedOn: GoogleBotRead
     shown: string[]
   } | null>(null)
-  const [saving, setSaving] = useState(false)
+  // Kept with the chat tab: a card released mid-save returns still saving.
+  const [saving, setSaving] = useNativeChatViewGuard(`google-accounts-save:${bot.id}`, false)
   const initial =
     view.status === 'ready'
       ? initialGoogleAccountChoice(

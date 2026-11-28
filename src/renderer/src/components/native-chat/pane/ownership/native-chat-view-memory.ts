@@ -156,6 +156,34 @@ export function useNativeChatViewStateRef<T>(
   return [value, setValue, shown]
 }
 
+/**
+ * An in-flight guard (busy, pending, a preview) kept with the tab: a view released mid-request returns still
+ * guarded, and a request settling after release clears it. `read` is synchronous, for same-frame double clicks.
+ * Back at `initial`, the entry is deleted; per-item keys whose settled value stays pass `keepNewest`.
+ */
+export function useNativeChatViewGuard<T>(
+  key: string,
+  initial: T,
+  keepNewest?: number
+): [T, (action: SetStateAction<T>) => void, () => T] {
+  const tab = useContext(NativeChatViewTabContext)
+  const [value, setValue] = useNativeChatViewState(key, initial, keepNewest)
+  const local = useRef(initial)
+  const read = useCallback(
+    (): T => (tab ? (readNativeChatViewMemory<T>(tab, key) ?? initial) : local.current),
+    [tab, key, initial]
+  )
+  const set = useCallback(
+    (action: SetStateAction<T>) => {
+      const next = isUpdater(action) ? action(read()) : action
+      local.current = next
+      setValue(next)
+    },
+    [read, setValue]
+  )
+  return [value, set, read]
+}
+
 /** A mutable ref kept with the tab, so a guard a released view set still holds in the view that replaces it. */
 export function useNativeChatViewRef<T>(key: string, initial: T): { current: T } {
   const tab = useContext(NativeChatViewTabContext)

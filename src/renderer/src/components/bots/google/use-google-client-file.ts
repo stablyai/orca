@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { GOOGLE_CLIENT_FILE_MAX_BYTES } from '../../../../../shared/google/google-client-config'
+import { useNativeChatViewGuard } from '../../native-chat/pane/ownership/native-chat-view-memory'
 
 /** Drag handlers for an element that takes a dropped Google app file. */
 export type GoogleClientFileDropTarget = {
@@ -38,7 +39,8 @@ export function useGoogleClientFile(
 } {
   const t = useTranslate()
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  // Kept with the chat tab: a card released mid-import returns still importing.
+  const [busy, setBusy] = useNativeChatViewGuard('google-client-file', false)
   const [dragging, setDragging] = useState(false)
 
   const take = async (read: () => Promise<string | null>): Promise<void> => {

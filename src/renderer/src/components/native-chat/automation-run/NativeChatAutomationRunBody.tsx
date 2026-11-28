@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewGuard
+} from '../pane/ownership/native-chat-view-memory'
 import { ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/class-names'
@@ -61,8 +64,11 @@ export function NativeChatAutomationSendAgain({
   const { say } = wording
   const owner = useNativeChatVisualOwner()
   const bot = useBotForWorkspace(owner?.worktreeId ?? null)
-  const [sending, setSending] = useState<'idle' | 'busy' | 'sent'>(
-    resend === 'sent' ? 'sent' : 'idle'
+  // Kept with the chat tab: a row released mid-send returns still sending, or already sent.
+  const [sending, setSending] = useNativeChatViewGuard<'idle' | 'busy' | 'sent'>(
+    `automation-resend:${run.runId}`,
+    'idle',
+    KEPT_PROMPT_VIEWS
   )
   if (resend === 'none' || run.wait === undefined || !bot || !owner) {
     return null

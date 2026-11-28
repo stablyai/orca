@@ -4,8 +4,11 @@ import { structuredAgentSessionHostKey } from '../../../runtime/native-chat/host
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
 import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/questions/native-chat-ask-dismiss-key'
-import { useMemo } from 'react'
-import { useNativeChatViewState } from '../pane/ownership/native-chat-view-memory'
+import { useEffect, useMemo } from 'react'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewState
+} from '../pane/ownership/native-chat-view-memory'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -55,10 +58,12 @@ export function NativeChatStructuredAsyncQuestion({
   queuedCards?: readonly Pick<QueuedMessageCard, 'text'>[]
   submissions?: readonly AgentJournalSubmission[]
 }): React.JSX.Element | null {
-  // Kept with the chat tab: a chat released mid-send returns still holding its answer.
+  // Kept with the chat tab: a chat released mid-send returns still holding its answer. Each rewind starts a
+  // new scope, so only the newest few are kept, and a settled answer is dropped once its delivery shows.
   const [operation, setOperation] = useNativeChatViewState<PromptAnswerOperation | null>(
     `async-answer:${sourceScope}`,
-    null
+    null,
+    KEPT_PROMPT_VIEWS
   )
   const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
   const { prompt, dismiss, ownerKey, answerPending } = useNativeChatAsyncQuestions({
@@ -77,6 +82,12 @@ export function NativeChatStructuredAsyncQuestion({
     () => nativeChatAnswerOperationPending(operation, structure, submissions),
     [operation, structure, submissions]
   )
+  const settled = operation !== null && !operation.inFlight && !operationPending
+  useEffect(() => {
+    if (settled) {
+      setOperation(null)
+    }
+  }, [settled, setOperation])
   if (!prompt) {
     return null
   }

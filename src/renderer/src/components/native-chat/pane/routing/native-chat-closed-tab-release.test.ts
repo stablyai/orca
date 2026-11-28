@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
@@ -7,6 +7,7 @@ import {
   writeNativeChatViewMemory
 } from '../ownership/native-chat-view-memory'
 import { forgetChatLayer, reportChatLayerTabs } from './native-chat-closed-tab-release'
+import { retireRemovedNativeChatTabs } from '../../session/native-chat-removed-tab-retirement'
 
 const TAB = { tabId: 'tab-1', worktreeId: 'wt-1' }
 
@@ -71,4 +72,42 @@ it('a renamed workspace or a tab moved to another keeps its open chats, and rele
   forgetChatLayer('layer-1', 'wt-1')
   expect(readNativeChatViewMemory(renamed, 'kept')).toBeUndefined()
   expect(readNativeChatViewMemory(moved, 'kept')).toBeUndefined()
+})
+
+it('a closed chat tab is released by the close itself, and a tab the close moved elsewhere is kept', async () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: retirement reads a tab's id, kind, session and host.
+  const tab = (id: string, worktreeId: string): Tab =>
+    ({ id, worktreeId, contentType: 'agent-session', entityId: id }) as Tab
+  const closed = { tabId: 'tab-c', worktreeId: 'wt-c' }
+  const moved = { tabId: 'tab-m', worktreeId: 'wt-c' }
+  useAppStore.setState({
+    unifiedTabsByWorktree: { 'wt-c': [tab('tab-c', 'wt-c'), tab('tab-m', 'wt-c')] }
+  })
+  writeNativeChatViewMemory(closed, 'kept', 1)
+  writeNativeChatViewMemory(moved, 'kept', 1)
+  // As the store's close runs it: retirement inside the update, the store committed after.
+  retireRemovedNativeChatTabs([tab('tab-c', 'wt-c'), tab('tab-m', 'wt-c')], [])
+  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-c': [], 'wt-x': [tab('tab-m', 'wt-x')] } })
+  await Promise.resolve()
+  expect(readNativeChatViewMemory(closed, 'kept')).toBeUndefined()
+  expect(readNativeChatViewMemory(moved, 'kept')).toBe(1)
+  releaseNativeChatViewTabs(['tab-c'])
+})
+
+it('an unmount checks a bounded number of workspaces however many layers are shown', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
+  const tab = (id: string): Tab => ({ id }) as Tab
+  const shown = Array.from({ length: 1000 }, (_, index) => `wt-shown-${index}`)
+  useAppStore.setState({
+    unifiedTabsByWorktree: Object.fromEntries(shown.map((id) => [id, [tab(`${id}-tab`)]]))
+  })
+  shown.forEach((id) => reportChatLayerTabs(`layer-${id}`, id, new Set([`${id}-tab`])))
+  reportChatLayerTabs('layer-leaving', 'wt-leaving', new Set())
+  const has = vi.spyOn(Set.prototype, 'has')
+  const get = vi.spyOn(Map.prototype, 'get')
+  forgetChatLayer('layer-leaving', 'wt-leaving')
+  expect(has.mock.calls.length + get.mock.calls.length).toBeLessThan(100)
+  has.mockRestore()
+  get.mockRestore()
+  shown.forEach((id) => forgetChatLayer(`layer-${id}`, id))
 })

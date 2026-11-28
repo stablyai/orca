@@ -6,6 +6,7 @@ import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-
 import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import {
   NativeChatViewTabContext,
+  readNativeChatViewMemory,
   releaseNativeChatViewTabs
 } from '../pane/ownership/native-chat-view-memory'
 import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
@@ -47,10 +48,18 @@ afterEach(() => {
   releaseNativeChatViewTabs([TAB.tabId])
 })
 
+const answerButton = (view: ReturnType<typeof render>): HTMLButtonElement => {
+  const found = view.getByRole('button')
+  if (!(found instanceof HTMLButtonElement)) {
+    throw new Error('Answer is not a button')
+  }
+  return found
+}
+
 it('a chat released while its answer is sending returns without offering a second answer', () => {
   let settle = (): void => {}
   const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _files, options) => {
-    settle = () => options?.onSettled?.()
+    settle = () => options?.onSettled?.('recorded')
     return true
   })
   const view = () =>
@@ -69,8 +78,10 @@ it('a chat released while its answer is sending returns without offering a secon
   act(() => first.getByRole('button').click())
   first.unmount()
   const again = view()
-  expect(again.getByRole<HTMLButtonElement>('button').disabled).toBe(true)
+  expect(answerButton(again).disabled).toBe(true)
   act(() => settle())
-  expect(again.getByRole<HTMLButtonElement>('button').disabled).toBe(false)
+  expect(answerButton(again).disabled).toBe(false)
+  // Settled with nothing left to wait on: the kept answer is dropped, so rewinds don't pile them up.
+  expect(readNativeChatViewMemory(TAB, 'async-answer:scope')).toBeUndefined()
   expect(send).toHaveBeenCalledTimes(1)
 })
