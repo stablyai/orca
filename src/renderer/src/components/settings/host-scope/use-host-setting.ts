@@ -18,6 +18,7 @@ import {
 /** `unsupported`: an older host that neither reports nor accepts the setting. */
 export type HostSetting<V> =
   | { state: 'loading' }
+  | { state: 'error' }
   | { state: 'unsupported' }
   | { state: 'ready'; value: V }
 
@@ -55,6 +56,8 @@ export function useServerSettingValue<T>(args: {
   updateFailedMessage: string
 }): {
   setting: HostSetting<T>
+  /** Retries the settings read after a failure. */
+  retry: () => void
   /** `shown` displays at once, so a second edit builds on it (list rows derive the next value). */
   update: (updates: Record<string, unknown>, shown?: T) => Promise<void>
 } {
@@ -75,30 +78,56 @@ export function useServerSettingValue<T>(args: {
     [read]
   )
 
+  const loadSettings = useCallback(
+    (owner: string, loaded: number, mounted?: { current: boolean }): void => {
+      void readHostSettings(owner).then(
+        (result) => {
+          if (loaded === generation.current && mounted?.current !== false) {
+            settle(owner, result.settings)
+          }
+        },
+        (error: unknown) => {
+          console.error('Failed to load host settings:', error)
+          if (loaded === generation.current && mounted?.current !== false) {
+            setRemote((current) =>
+              current?.environmentId === owner && current.setting.state === 'ready'
+                ? current
+                : { environmentId: owner, setting: { state: 'error' } }
+            )
+          }
+        }
+      )
+    },
+    [settle]
+  )
+
   useEffect(() => {
     if (!environmentId) {
       return
     }
-    let current = true
+    const mounted = { current: true }
     const loaded = ++generation.current
-    void readHostSettings(environmentId).then(
-      (result) => {
-        if (current && loaded === generation.current) {
-          settle(environmentId, result.settings)
-        }
-      },
-      (error: unknown) => console.error('Failed to load host settings:', error)
-    )
+    loadSettings(environmentId, loaded, mounted)
     return () => {
-      current = false
+      mounted.current = false
     }
-  }, [environmentId, settle])
+  }, [environmentId, loadSettings])
+
+  const retry = useCallback(() => {
+    if (!environmentId) {
+      return
+    }
+    setRemote({ environmentId, setting: { state: 'loading' } })
+    const loaded = ++generation.current
+    loadSettings(environmentId, loaded)
+  }, [environmentId, loadSettings])
 
   return {
     setting:
       environmentId && remote?.environmentId === environmentId
         ? remote.setting
         : { state: 'loading' },
+    retry,
     update: async (updates, shown) => {
       if (!environmentId) {
         return
@@ -158,6 +187,7 @@ export function useHostSetting<K extends HostOwnedSettingKey>(args: {
   updateFailedMessage: string
 }): {
   setting: HostSetting<HostOwnedSettings[K]>
+  retry: () => void
   update: (value: HostOwnedSettings[K]) => Promise<void>
 } {
   const { owner, settingKey, localSettings, updateLocalSettings, updateFailedMessage } = args
@@ -171,6 +201,7 @@ export function useHostSetting<K extends HostOwnedSettingKey>(args: {
   if (!environmentId) {
     return {
       setting: { state: 'ready', value: resolveHostOwnedSetting(localSettings, settingKey) },
+      retry: () => {},
       update: async (value) => {
         try {
           await updateLocalSettings({ [settingKey]: value })
@@ -182,6 +213,7 @@ export function useHostSetting<K extends HostOwnedSettingKey>(args: {
   }
   return {
     setting: remote.setting,
+    retry: remote.retry,
     update: (value) => remote.update({ [settingKey]: value }, value)
   }
 }

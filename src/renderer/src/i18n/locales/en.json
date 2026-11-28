@@ -25694,6 +25694,8 @@
         "settingAsk": "Ask",
         "settingRestart": "Always restart",
         "settingKeep": "Never restart",
+        "settingReadFailed": "Couldn’t read this setting from {{host}}.",
+        "retry": "Retry",
         "restartingOne": "Restarting 1 Claude session on {{account}}",
         "restartingOther": "Restarting {{count}} Claude sessions on {{account}}",
         "uncheckedOne": "Couldn't check 1 terminal for Claude. If Claude is running there, it stays on {{previous}} until restarted.",
