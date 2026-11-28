@@ -75,8 +75,8 @@ it('a renamed workspace or a tab moved to another keeps its open chats, and rele
 })
 
 it('a closed chat tab is released by the close itself, and a tab the close moved elsewhere is kept', async () => {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: retirement reads a tab's id, kind, session and host.
   const tab = (id: string, worktreeId: string): Tab =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: retirement reads a tab's id, kind, session and host.
     ({ id, worktreeId, contentType: 'agent-session', entityId: id }) as Tab
   const closed = { tabId: 'tab-c', worktreeId: 'wt-c' }
   const moved = { tabId: 'tab-m', worktreeId: 'wt-c' }

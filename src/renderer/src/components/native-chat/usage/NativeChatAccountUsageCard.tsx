@@ -164,7 +164,7 @@ function ChatUsageReset({
   // redeeming, and a retry reuses the key, so a credit is never spent twice.
   const [busy, setBusy, readBusy] = useNativeChatViewGuard('usage-reset-credit', false)
   const [failed, setFailed] = useState(false)
-  const attempt = useNativeChatViewRef<{
+  const attemptRef = useNativeChatViewRef<{
     idempotencyKey: string
     expectedScope: NonNullable<UsageResult['reset']>['expectedScope']
   } | null>('usage-reset-credit-attempt', null)
@@ -178,8 +178,8 @@ function ChatUsageReset({
     if (readBusy() || !result.reset) {
       return
     }
-    if (attempt.current == null) {
-      attempt.current = {
+    if (attemptRef.current == null) {
+      attemptRef.current = {
         idempotencyKey: createBrowserUuid(),
         expectedScope: result.reset.expectedScope
       }
@@ -191,9 +191,9 @@ function ChatUsageReset({
       const reply = await callRuntimeRpc<{ outcome?: CodexRateLimitResetOutcome }>(
         target,
         'accounts.consumeCodexResetCredit',
-        attempt.current
+        attemptRef.current
       )
-      attempt.current = null
+      attemptRef.current = null
       // A changed offer carries no outcome: the refreshed card shows the current offer.
       onRefresh(reply?.outcome ? resetOutcomeNotice(reply.outcome) : null)
     } catch {
@@ -213,7 +213,7 @@ function ChatUsageReset({
         canRedeemReset={result.reset !== undefined}
         isRedeemingReset={busy}
         onReset={() => {
-          if (skipConfirm || attempt.current) {
+          if (skipConfirm || attemptRef.current) {
             void redeem()
           } else {
             setSkip(false)

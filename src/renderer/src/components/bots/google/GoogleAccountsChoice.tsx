@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 // Where the owner picks a bot's Google accounts: a step of Add to <bot> (or its own dialog when
 // Google is added from elsewhere), and a popover on the Google row's ⋯ to change them later.
 import React, { useState } from 'react'
@@ -88,32 +89,32 @@ export function useGoogleAccountChoice(
     const next = googleAccountChoiceSave(chosen)
     setSaving(true)
     // The askers the picker showed: the host keeps Google off if Who can ask changed meanwhile.
-    try {
-      return await setBotGoogle(
-        bot,
-        next.on,
-        next.on
-          ? {
-              accounts: next.accounts,
-              confirmedAskers: botAskerKeys(bot),
-              basedOn: picked?.basedOn ?? googleBotRead(listed),
-              shownAccounts: [...(picked?.shown ?? []), ...shownNow]
+    // A failed re-read still ends the save; the kept guard would otherwise outlast the view.
+    return await runWithFinally(
+      () =>
+        setBotGoogle(
+          bot,
+          next.on,
+          next.on
+            ? {
+                accounts: next.accounts,
+                confirmedAskers: botAskerKeys(bot),
+                basedOn: picked?.basedOn ?? googleBotRead(listed),
+                shownAccounts: [...(picked?.shown ?? []), ...shownNow]
+              }
+            : {}
+        ).then(
+          () => true,
+          async (error: unknown) => {
+            toast.error(botErrorMessage(error))
+            if (botFailureOf(error)?.code === 'googleAccountsChanged') {
+              await reload()
             }
-          : {}
-      ).then(
-        () => true,
-        async (error: unknown) => {
-          toast.error(botErrorMessage(error))
-          if (botFailureOf(error)?.code === 'googleAccountsChanged') {
-            await reload()
+            return false
           }
-          return false
-        }
-      )
-    } finally {
-      // A failed re-read still ends the save; the kept guard would otherwise outlast the view.
-      setSaving(false)
-    }
+        ),
+      () => setSaving(false)
+    )
   }
   return { chosen, setChosen, ready: view.status === 'ready', saving, save }
 }

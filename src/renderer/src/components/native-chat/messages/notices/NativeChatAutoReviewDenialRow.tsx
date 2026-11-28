@@ -41,24 +41,20 @@ export function NativeChatAutoReviewDenialRow({
       return
     }
     setPending(true)
-    try {
-      const result = await callRuntimeRpc<AgentSessionAutoReviewApprovalResult>(
-        owner.target,
-        'agentSession.approveAutoReviewDenial',
-        { sessionId: owner.sessionId, itemId }
+    // The answer is set before the guard clears, so the row never shows Approve again in between.
+    await callRuntimeRpc<AgentSessionAutoReviewApprovalResult>(
+      owner.target,
+      'agentSession.approveAutoReviewDenial',
+      { sessionId: owner.sessionId, itemId }
+    )
+      .then(
+        ({ status }) =>
+          setAnswer(
+            status === 'approved' ? 'approved' : status === 'unavailable' ? 'not-running' : 'failed'
+          ),
+        () => setAnswer('failed')
       )
-      setAnswer(
-        result.status === 'approved'
-          ? 'approved'
-          : result.status === 'unavailable'
-            ? 'not-running'
-            : 'failed'
-      )
-    } catch {
-      setAnswer('failed')
-    } finally {
-      setPending(false)
-    }
+      .finally(() => setPending(false))
   }
   return (
     <div className="flex flex-col gap-1">

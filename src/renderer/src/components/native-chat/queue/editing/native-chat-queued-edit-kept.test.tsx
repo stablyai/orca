@@ -20,8 +20,8 @@ const inTab = ({ children }: { children: ReactNode }) => (
   <NativeChatViewTabContext value={TAB}>{children}</NativeChatViewTabContext>
 )
 const setTabs = (ids: readonly string[]) =>
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
   useAppStore.setState({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
     unifiedTabsByWorktree: { [TAB.worktreeId]: ids.map((id) => ({ id }) as Tab) }
   })
 
@@ -40,8 +40,8 @@ it('a chat released mid-edit keeps the edit open for its next view, and the tab 
         useNativeChatQueuedEditLifetime({
           scope: 'scope',
           shownScope: undefined,
-          active: kept.active,
-          reopen: kept.reopen,
+          active: kept.activeRef,
+          reopen: kept.reopenRef,
           close,
           render: () => {}
         })
@@ -62,11 +62,11 @@ it('a chat released mid-edit keeps the edit open for its next view, and the tab 
     lease: { end: () => {} }
   } as unknown as NativeChatQueuedEditSession
   const first = view()
-  first.result.current.active.current = edit
+  first.result.current.activeRef.current = edit
   first.unmount()
   expect(close).not.toHaveBeenCalled()
   const again = view()
-  expect(again.result.current.active.current).toBe(edit)
+  expect(again.result.current.activeRef.current).toBe(edit)
   again.unmount()
   setTabs([])
   releaseNativeChatViewTabs([TAB.tabId])
@@ -82,8 +82,8 @@ it('an edit left in a released chat is handed back on reload, and kept when its 
         useNativeChatQueuedEditLifetime({
           scope: 'scope',
           shownScope: undefined,
-          active: kept.active,
-          reopen: kept.reopen,
+          active: kept.activeRef,
+          reopen: kept.reopenRef,
           close,
           render: () => {}
         })
@@ -108,7 +108,7 @@ it('an edit left in a released chat is handed back on reload, and kept when its 
     lease: { end: () => {} }
   } as unknown as NativeChatQueuedEditSession
   const first = mount(TAB)
-  first.result.current.active.current = edit
+  first.result.current.activeRef.current = edit
   // The tab moves to another workspace, as a rename does, and its old view unmounts.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
   useAppStore.setState({ unifiedTabsByWorktree: { 'wt-2': [{ id: TAB.tabId } as Tab] } })

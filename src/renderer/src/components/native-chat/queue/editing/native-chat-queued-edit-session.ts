@@ -100,17 +100,18 @@ export type NativeChatQueuedEditSession = NativeChatQueuedEditDraft & {
  * returns with the edit still open and its lease still held, as the open edit's own state would in a store.
  */
 export function useKeptNativeChatQueuedEdit() {
-  const active = useNativeChatViewRef<NativeChatQueuedEditSession | null>('queued-edit', null)
+  const activeRef = useNativeChatViewRef<NativeChatQueuedEditSession | null>('queued-edit', null)
   const [shown, setShown] = useNativeChatViewState<NativeChatQueuedEditSession | null>(
     'queued-edit-shown',
     null
   )
   /** Save answered `changed`: the editor reopens on the newer text once this pane shows it. */
-  const reopen = useNativeChatViewRef<{ scope: string; messageId: string; stale: string } | null>(
-    'queued-edit-reopen',
-    null
-  )
-  return { active, shown, setShown, reopen }
+  const reopenRef = useNativeChatViewRef<{
+    scope: string
+    messageId: string
+    stale: string
+  } | null>('queued-edit-reopen', null)
+  return { activeRef, shown, setShown, reopenRef }
 }
 
 // The tab-close hand-back of an edit whose view was released, by the kept edit ref it belongs to.
@@ -134,8 +135,8 @@ function windUpQueuedEdit(
 export function useNativeChatQueuedEditLifetime({
   scope,
   shownScope,
-  active,
-  reopen,
+  active: activeRef,
+  reopen: reopenRef,
   close,
   render
 }: {
@@ -152,35 +153,35 @@ export function useNativeChatQueuedEditLifetime({
   useNativeChatPaneLifetimeEffect(
     useCallback(() => {
       const handOff = (): void => {
-        const edit = active.current
+        const edit = activeRef.current
         if (edit && edit.scope !== scope) {
           return
         }
-        active.current = null
-        reopen.current = null
+        activeRef.current = null
+        reopenRef.current = null
         if (edit) {
           windUpQueuedEdit(edit, close)
         }
       }
       // A remount takes back an edit its released view left; one from another chat is handed back now.
-      keptQueuedEditRelease.get(active)?.()
-      keptQueuedEditRelease.delete(active)
-      const kept = active.current
+      keptQueuedEditRelease.get(activeRef)?.()
+      keptQueuedEditRelease.delete(activeRef)
+      const kept = activeRef.current
       if (kept && kept.scope !== scope) {
-        active.current = null
-        reopen.current = null
+        activeRef.current = null
+        reopenRef.current = null
         windUpQueuedEdit(kept, close)
       }
       window.addEventListener('pagehide', handOff)
       return () => {
         window.removeEventListener('pagehide', handOff)
-        if (viewTab && active.current) {
-          keptQueuedEditRelease.set(active, onNativeChatViewTabRelease(viewTab, handOff))
+        if (viewTab && activeRef.current) {
+          keptQueuedEditRelease.set(activeRef, onNativeChatViewTabRelease(viewTab, handOff))
         } else {
           handOff()
         }
       }
-    }, [scope, close, active, reopen, viewTab])
+    }, [scope, close, activeRef, reopenRef, viewTab])
   )
 
   useEffect(() => {
@@ -188,8 +189,8 @@ export function useNativeChatQueuedEditLifetime({
       return
     }
     const update = (): void => {
-      if (active.current) {
-        render(active.current)
+      if (activeRef.current) {
+        render(activeRef.current)
       }
     }
     const unsubscribe = subscribeToNativeChatComposerDraft(shownScope, update)
@@ -198,7 +199,7 @@ export function useNativeChatQueuedEditLifetime({
       unsubscribe()
       unpending()
     }
-  }, [shownScope, render, active])
+  }, [shownScope, render, activeRef])
 }
 
 export function changeNativeChatQueuedEditText(

@@ -284,20 +284,22 @@ export function useNativeChatViewGuard<T>(
   return [value, set, read]
 }
 
+/** A `{ current }` view of a guard; made outside render code, which can't compile accessors. */
+function guardAsRef<T>(read: () => T, set: (value: T) => void): { current: T } {
+  return {
+    get current(): T {
+      return read()
+    },
+    set current(value: T) {
+      set(value)
+    }
+  }
+}
+
 /** `useNativeChatViewGuard` as a mutable ref, for code that sets `.current`; back at `initial`, nothing is kept. */
 export function useNativeChatViewGuardRef<T>(key: string, initial: T): { current: T } {
   const [, set, read] = useNativeChatViewGuard(key, initial)
-  return useMemo(
-    () => ({
-      get current(): T {
-        return read()
-      },
-      set current(value: T) {
-        set(value)
-      }
-    }),
-    [read, set]
-  )
+  return useMemo(() => guardAsRef(read, set), [read, set])
 }
 
 /** A mutable ref kept with the tab, so a guard a released view set still holds in the view that replaces it. */

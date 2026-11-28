@@ -20,21 +20,21 @@ import type {
 import { holdStructuredAgentSessionSends } from '../delivery/structured-agent-session-pending-sends'
 
 type ClearHold = { sessionId: string; release: () => void }
-// The tab-close release of a hold whose view was released, by the kept hold ref it belongs to.
+// The tab-close release of a hold whose view was released, by the keptRef hold ref it belongs to.
 const keptClearHoldRelease = new WeakMap<object, () => void>()
 
 /** A hold outliving its view ends when the tab closes, the page goes, or a view of another session mounts. */
 function keepClearHoldPastView(
-  kept: { current: ClearHold | null },
+  keptRef: { current: ClearHold | null },
   hold: ClearHold,
   viewTab: NativeChatViewTab
 ): void {
-  keptClearHoldRelease.get(kept)?.()
+  keptClearHoldRelease.get(keptRef)?.()
   keptClearHoldRelease.set(
-    kept,
+    keptRef,
     onNativeChatViewTabRelease(viewTab, () => {
-      if (kept.current === hold) {
-        kept.current = null
+      if (keptRef.current === hold) {
+        keptRef.current = null
       }
       hold.release()
     })
@@ -43,7 +43,7 @@ function keepClearHoldPastView(
 
 /**
  * Holds sends during clear; an older host's replacement keeps the hold until the tab shows the new session. The
- * hold is kept with the chat tab, so a view released meanwhile returns still holding, and a clear that settles
+ * hold is keptRef with the chat tab, so a view released meanwhile returns still holding, and a clear that settles
  * after the release still keeps it.
  */
 export function useStructuredAgentSessionCommandWrite(
@@ -57,35 +57,35 @@ export function useStructuredAgentSessionCommandWrite(
   const viewTab = useContext(NativeChatViewTabContext)
   // Null once the view goes, so a reply that lands later knows no view of it is shown.
   const shown = useRef<string | null>(sessionId)
-  const kept = useNativeChatViewRef<ClearHold | null>('clear-hold', null)
+  const keptRef = useNativeChatViewRef<ClearHold | null>('clear-hold', null)
   // The session the tab's mounted view shows, if any: a reply landing after release keeps its hold only when no
   // view of another session holds the tab.
-  const shownInTab = useNativeChatViewRef<string | null>('clear-shown-session', null)
+  const shownInTabRef = useNativeChatViewRef<string | null>('clear-shown-session', null)
   useNativeChatPaneLifetimeEffect(
     useCallback(() => {
       shown.current = sessionId
-      shownInTab.current = sessionId
+      shownInTabRef.current = sessionId
       // A remount of the same session takes its hold back; a view of another session ends it.
-      keptClearHoldRelease.get(kept)?.()
-      keptClearHoldRelease.delete(kept)
-      if (kept.current && kept.current.sessionId !== sessionId) {
-        kept.current.release()
-        kept.current = null
+      keptClearHoldRelease.get(keptRef)?.()
+      keptClearHoldRelease.delete(keptRef)
+      if (keptRef.current && keptRef.current.sessionId !== sessionId) {
+        keptRef.current.release()
+        keptRef.current = null
       }
       return () => {
         shown.current = null
-        if (shownInTab.current === sessionId) {
-          shownInTab.current = null
+        if (shownInTabRef.current === sessionId) {
+          shownInTabRef.current = null
         }
-        const hold = kept.current
+        const hold = keptRef.current
         if (hold && viewTab) {
-          keepClearHoldPastView(kept, hold, viewTab)
+          keepClearHoldPastView(keptRef, hold, viewTab)
         } else if (hold) {
-          kept.current = null
+          keptRef.current = null
           hold.release()
         }
       }
-    }, [sessionId, kept, shownInTab, viewTab])
+    }, [sessionId, keptRef, shownInTabRef, viewTab])
   )
   return useCallback(
     async (command, delivery, instructions) => {
@@ -102,8 +102,8 @@ export function useStructuredAgentSessionCommandWrite(
       setTimeout(() => {
         release()
         // A spent hold leaves nothing for later unmounts to carry.
-        if (kept.current?.release === release) {
-          kept.current = null
+        if (keptRef.current?.release === release) {
+          keptRef.current = null
         }
       }, AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS)
       let movedOn = false
@@ -115,22 +115,23 @@ export function useStructuredAgentSessionCommandWrite(
         },
         () => {
           // Kept while this session's view is shown, or released with the tab still open; else it ends now.
-          const released = shown.current === null && viewTab !== null && shownInTab.current === null
+          const released =
+            shown.current === null && viewTab !== null && shownInTabRef.current === null
           if (!movedOn || (shown.current !== sessionId && !released)) {
             release()
             return
           }
-          if (kept.current?.sessionId === sessionId) {
-            kept.current.release()
+          if (keptRef.current?.sessionId === sessionId) {
+            keptRef.current.release()
           }
           const hold = { sessionId, release }
-          kept.current = hold
+          keptRef.current = hold
           if (released) {
-            keepClearHoldPastView(kept, hold, viewTab)
+            keepClearHoldPastView(keptRef, hold, viewTab)
           }
         }
       )
     },
-    [sessionId, write, kept, shownInTab, viewTab]
+    [sessionId, write, keptRef, shownInTabRef, viewTab]
   )
 }
