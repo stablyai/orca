@@ -5338,9 +5338,8 @@
             "84c3b15dca": "Agent の使用量制限",
             "d663430cf9": "使用状況の追跡を設定",
             "remoteLabel": "{{host}} の使用量はありません",
-            "remoteTitle": "{{host}} の使用量",
-            "remoteBody": "このワークスペースは {{host}} で実行されているため、バーにはそのホストの使用量が表示されます。そのホストで Agent にサインインするか、ローカルのワークスペースにフォーカスすると、このコンピュータの使用量が表示されます。",
-            "remoteOpenAccounts": "{{host}} のアカウントを開く"
+            "remoteNoUsageYet": "まだ使用量はありません。そのホストでサインインしてください。",
+            "remoteAccounts": "アカウント"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "アップデートに失敗しました。クリックして展開します。",

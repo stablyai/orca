@@ -5448,9 +5448,8 @@
             "84c3b15dca": "Límites de uso de agentes",
             "d663430cf9": "Configurar seguimiento de uso",
             "remoteLabel": "Sin uso en {{host}}",
-            "remoteTitle": "Uso en {{host}}",
-            "remoteBody": "Este espacio de trabajo se ejecuta en {{host}}, por lo que la barra muestra el uso de ese host. Inicia sesión en un agente allí o enfoca un espacio de trabajo local para ver el uso de este equipo.",
-            "remoteOpenAccounts": "Abrir cuentas de {{host}}"
+            "remoteNoUsageYet": "Aún no hay uso. Inicia sesión allí.",
+            "remoteAccounts": "Cuentas"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "La actualización falló. Haz clic para expandir.",

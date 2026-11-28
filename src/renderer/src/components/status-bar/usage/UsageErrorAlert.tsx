@@ -10,12 +10,12 @@ import {
 import { getTightestUsageSection } from './usage-headline-sections'
 import { getUsageRosterRowState } from './usage-roster-row-state'
 
-/** "<Provider>: <message>" for a chip that shows only the alert, else null. */
-export function getUsageErrorAlertLabel(p: ProviderRateLimits, t: Translate): string | null {
-  const alerted =
+/** "<Provider>: <message>" for a chip whose message lives only in the usage menu (alert or "--"), else null. */
+export function getUsageChipDescription(p: ProviderRateLimits, t: Translate): string | null {
+  const describe =
     p.status === 'unavailable' ||
     (p.status === 'error' && !isUsageWaitingForCli(p) && !getTightestUsageSection(p, t, 'all'))
-  if (!alerted) {
+  if (!describe) {
     return null
   }
   // Why the row's label: the menu row is where the message is read, so the description must match it.
@@ -25,7 +25,7 @@ export function getUsageErrorAlertLabel(p: ProviderRateLimits, t: Translate): st
 }
 
 /**
- * Muted alert that replaces a chip's error text; a click falls through to the usage menu, whose rows
+ * Muted alert that replaces a chip's error text (real failures only; other states show "--"); a click falls through to the usage menu, whose rows
  * carry the message, and that menu's button describes every alert for screen readers.
  */
 export function UsageErrorAlert({ label }: { label: string }): React.JSX.Element {

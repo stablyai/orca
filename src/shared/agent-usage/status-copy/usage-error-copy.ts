@@ -149,6 +149,25 @@ export function getProviderUsageStatusLabel(
   return t('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed')
 }
 
+// Why: Claude labels these "Usage unavailable", "Refreshing sign-in" or "Waiting for Claude session"; none needs the user.
+const CLAUDE_NOTICE_FAILURE_KINDS: ReadonlySet<string> = new Set([
+  'cli-unavailable',
+  'usage-unavailable',
+  'deferred-by-live-session',
+  'refreshable-credentials-without-token',
+  'delegated-refresh-required'
+])
+
+/** Not a failure (not set up, unavailable, no subscription, still resolving): the chip shows "--", not the alert. */
+export function isUsageStatusNotice(p: UsageStatusCopySource): boolean {
+  const kind = p.usageMetadata?.failureKind
+  return (
+    Boolean(p.usageMetadata?.ownerNotSetUp || p.usageMetadata?.unverifiableOwner) ||
+    kind === 'no-subscription' ||
+    (p.provider === 'claude' && kind !== undefined && CLAUDE_NOTICE_FAILURE_KINDS.has(kind))
+  )
+}
+
 export function getProviderUsageErrorMessage(
   p: UsageStatusCopySource,
   t: UsageCopyTranslate

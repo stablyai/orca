@@ -4846,9 +4846,8 @@
             "84c3b15dca": "Limites de uso do agente",
             "d663430cf9": "Configurar acompanhamento de uso",
             "remoteLabel": "Sem dados de uso em {{host}}",
-            "remoteTitle": "Uso em {{host}}",
-            "remoteBody": "Este espaço de trabalho é executado em {{host}}, então a barra mostra o uso desse host. Entre em um agente lá ou selecione um espaço de trabalho local para ver o uso deste computador.",
-            "remoteOpenAccounts": "Abrir contas de {{host}}"
+            "remoteNoUsageYet": "Ainda sem uso. Entre lá.",
+            "remoteAccounts": "Contas"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Atualizando skills",

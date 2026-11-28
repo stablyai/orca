@@ -19,9 +19,10 @@ import { formatCreditCount } from '../../../../../shared/agent-usage/display/cre
 import { ProviderIcon } from './provider-usage-panel'
 import { USAGE_WARNING_PERCENT } from './usage-health-tone'
 import { UsageBar } from './usage-meter'
-import { UsageErrorAlert, getUsageErrorAlertLabel } from './UsageErrorAlert'
+import { UsageErrorAlert, getUsageChipDescription } from './UsageErrorAlert'
 import {
   getProviderUsageStatusLabel,
+  isUsageStatusNotice,
   isUsageWaitingForCli
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
@@ -276,11 +277,28 @@ export function ProviderSegment({
     )
   }
 
-  const alertLabel = getUsageErrorAlertLabel(p, t)
-  if (alertLabel) {
+  if (p.status === 'unavailable') {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground/50">
+        <ProviderIcon provider={provider} /> --
+      </span>
+    )
+  }
+
+  const description = getUsageChipDescription(p, t)
+  if (description) {
+    // Why "--", not the alert: not set up, unavailable and similar states are not failures to fix.
+    if (isUsageStatusNotice(p)) {
+      return (
+        <span className="inline-flex items-center gap-1 text-muted-foreground">
+          <ProviderIcon provider={provider} />
+          --
+        </span>
+      )
+    }
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
-        <UsageErrorAlert label={alertLabel} />
+        <UsageErrorAlert label={description} />
         <ProviderIcon provider={provider} />
       </span>
     )
