@@ -75,6 +75,10 @@ export function commitAgentSessionFounding(
     agentSessionOperationKey(operationRow.callerKey, operationRow.operationId),
     operationRow
   )
-  setAgentSessionTabVisibility(state, request.sessionId, true, request.surfaceTabId, legacyIds)
+  if (request.hostTab === false) {
+    setAgentSessionTabVisibility(state, request.sessionId, false, undefined, legacyIds, true)
+  } else {
+    setAgentSessionTabVisibility(state, request.sessionId, true, request.surfaceTabId, legacyIds)
+  }
   return { record, disposition: 'created', operationRow }
 }

@@ -280,6 +280,9 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
       this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
       (await this.resolveWorkspaceSelector(worktreeSelector)).id
     const list = viewedTabListOf(worktreeId, person, this.store?.getBots?.() ?? [])
+    if (list === null) {
+      throw new Error('unknown_tab_list_person')
+    }
     return {
       list,
       frame: isTeammateTabList(list)

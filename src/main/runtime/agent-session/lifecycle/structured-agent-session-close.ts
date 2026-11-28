@@ -29,8 +29,8 @@ export type StructuredSessionSurfaceRuntime = Pick<
 
 export type StructuredSessionSurface = {
   tableId: string | null
-  /** Landed in a teammate's own list: the host's tab is not this write's. */
-  personList?: true
+  /** The teammate's own workspace it landed in: the host's tab is not this write's. */
+  personList?: string
   presentation?: ReturnType<
     StructuredSessionSurfaceRuntime['captureStructuredAgentSessionPresentation']
   >
@@ -224,8 +224,8 @@ async function retireClosedChatTabs(
   const closed = !runtime
     ? { hostList: true }
     : chatGone
-      ? runtime.closeChatTabs({ people: runtime.chatTabPeople(sessionId), sessionId })
-      : runtime.closeChatTabs({ people: [runtime.chatTabPerson(sessionId)], sessionId })
+      ? await runtime.closeChatTabs({ people: runtime.chatTabPeople(sessionId), sessionId })
+      : await runtime.closeChatTabs({ people: [runtime.chatTabPerson(sessionId)], sessionId })
   if (closed.hostList) {
     await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
   }

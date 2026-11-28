@@ -182,8 +182,16 @@ export async function commitStructuredAgentSessionCreate(args: {
    *  create the new chat's stamp (`chatTabPerson`). */
   personOf: (sessionId: string) => TabPerson
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  const { prepared } = args
-  const tab = prepared.tab
+  const tab = args.prepared.tab
+  // Whom the tab is for, read once: a teammate's own list founds the chat with no host tab row.
+  const createPerson = args.personOf(args.prepared.attachParams.envelope.sessionId)
+  const prepared =
+    tab && args.runtime.teammateChatList(createPerson, tab.workspaceId)
+      ? {
+          ...args.prepared,
+          attachParams: { ...args.prepared.attachParams, hostTab: false as const }
+        }
+      : args.prepared
   const tabPlace = {
     ...(args.capture ? { capture: args.capture } : {}),
     ...(args.placedByWindow ? { placedByWindow: true } : {}),
@@ -211,7 +219,7 @@ export async function commitStructuredAgentSessionCreate(args: {
                 return Promise.resolve()
               }
               return args.runtime.publishStructuredAgentSessionTab({
-                person: args.personOf(sessionId),
+                person: createPerson,
                 workspaceId: tab.workspaceId,
                 sessionId,
                 agent: tab.agent,
@@ -247,7 +255,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   }
   try {
     await args.runtime.publishStructuredAgentSessionTab({
-      person: args.personOf(result.value.sessionId),
+      person: createPerson,
       workspaceId: prepared.tab.workspaceId,
       sessionId: result.value.sessionId,
       agent: prepared.tab.agent,

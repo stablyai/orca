@@ -100,7 +100,7 @@ async function closeCreatedChat(
 ): Promise<void> {
   // A teammate's create landed in their own list: close it there; the host's tab is not this create's.
   if (surface?.personList) {
-    ctx.runtime.closeChatTabs({ people: [callerTabPerson(ctx.callerScope)], sessionId })
+    await ctx.runtime.closeChatTabs({ people: [callerTabPerson(ctx.callerScope)], sessionId })
     return
   }
   const host = getStructuredAgentSessionHost()
