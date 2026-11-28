@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { UsageCacheSnapshotWriter } from '../cache/usage-cache-snapshot-writer'
@@ -9,10 +10,12 @@ type HistoryStore = Pick<UsageWorktreeSource, 'getRepos' | 'getAllWorktreeMeta'>
   onWorktreeMetaWritten: (listener: (write: { worktreeId: string }) => void) => () => void
 }
 
-const historyFileSchema = z.object({
-  schemaVersion: z.literal(1),
-  worktrees: z.array(z.tuple([z.string(), z.string()]))
-})
+const historyFileSchema = lazyZodSchema(() =>
+  z.object({
+    schemaVersion: z.literal(1),
+    worktrees: z.array(z.tuple([z.string(), z.string()]))
+  })
+)
 
 /** Remembers every worktree Orca has had, so removing one keeps its sessions in the Orca usage scope. */
 export class UsageWorktreeHistory implements UsageWorktreeSource {
@@ -26,8 +29,11 @@ export class UsageWorktreeHistory implements UsageWorktreeSource {
     file: string
   ) {
     this.writer = new UsageCacheSnapshotWriter('[usage-worktree-history]', () => file)
-    for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
-      this.remember(worktreeId, meta.displayName)
+    const allMeta = store.getAllWorktreeMeta()
+    for (const worktreeId in allMeta) {
+      if (Object.hasOwn(allMeta, worktreeId)) {
+        this.remember(worktreeId, allMeta[worktreeId].displayName)
+      }
     }
     // Record on every metadata write: worktrees are often created and deleted between usage scans.
     // Read the live row, not the event: another host's write leaves the local row unchanged.
@@ -48,8 +54,11 @@ export class UsageWorktreeHistory implements UsageWorktreeSource {
           this.displayNames.set(worktreeId, displayName)
         }
       }
-      if ([...this.displayNames].some(([worktreeId, name]) => saved.get(worktreeId) !== name)) {
-        this.write()
+      for (const [worktreeId, name] of this.displayNames) {
+        if (saved.get(worktreeId) !== name) {
+          this.write()
+          break
+        }
       }
     })
   }

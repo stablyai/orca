@@ -21,7 +21,6 @@ import {
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 import {
   getAccountsCodexSearchEntries,
-  getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsAntigravitySearchEntries,
@@ -34,11 +33,10 @@ import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-acc
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { getCodexAccountAuthWarning } from './codex/codex-account-auth-warning'
+import { getCodexAccountAuthWarning } from '../../../../../shared/agent-accounts/codex/codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex/codex-config-sync-warning'
 import {
   getProviderAccountActiveIdForView,
-  providerAccountIsActiveInView,
   providerAccountMatchesView
 } from '../../provider-accounts/provider-account-visibility'
 import { GrokAccountsSection } from './providers/GrokAccountsSection'
@@ -60,9 +58,9 @@ import { getRuntimeSentenceLabel } from '../../../lib/provider-accounts/account-
 import { watchCodexConfigSyncStatus } from '../../../runtime/provider-accounts/codex-config-sync-observer'
 import { createAccountsPaneRunners } from './accounts-pane-account-actions'
 import { renderAccountsLocationSection } from './scope/accounts-pane-location-section'
+import { isSystemDefaultActive } from './scope/system-default-lanes'
 import { renderClaudeAccountsSection } from './claude/accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './codex/accounts-pane-codex-section'
-import { renderGeminiAccountsSection } from './providers/accounts-pane-gemini-section'
 import { renderOpenCodeAccountsSection } from './providers/accounts-pane-opencode-section'
 import { MiniMaxAccountsSection } from './usage/MiniMaxAccountsSection'
 import { useUsageHostSettings } from './usage/use-usage-host-settings'
@@ -192,17 +190,17 @@ export function AccountsPane({
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
   const activeCodexAccountId = getProviderAccountActiveIdForView(codexAccounts, accountRuntime)
-  // Unknown remote platforms hide WSL rows; check the full roster before marking System default active.
-  const ownerPlatformUnknown = isRemoteAccountScope && accountOwnerPlatform === null
-  const systemCodexActive = !(
-    ownerPlatformUnknown ? codexAccounts.accounts : visibleCodexAccounts
-  ).some((account) =>
-    providerAccountIsActiveInView(account, codexAccounts, accountRuntime, accountVisibilityOptions)
+  const systemCodexActive = isSystemDefaultActive(
+    codexAccounts,
+    visibleCodexAccounts,
+    accountRuntime,
+    accountVisibilityOptions
   )
-  const systemClaudeActive = !(
-    ownerPlatformUnknown ? claudeAccounts.accounts : visibleClaudeAccounts
-  ).some((account) =>
-    providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
+  const systemClaudeActive = isSystemDefaultActive(
+    claudeAccounts,
+    visibleClaudeAccounts,
+    accountRuntime,
+    accountVisibilityOptions
   )
   // System identity reflects the host’s ~/.codex; per-distro WSL uses generic copy.
   const systemCodexIdentity =
@@ -358,13 +356,8 @@ export function AccountsPane({
   }
   // A desktop reads Grok/Cursor from its own files; the web client gets its server's meter.
   const readsOwnerGrokCursor = !isRemoteAccountScope || isWebClientLocation()
+  const managedDataShown = !searchQuery || /opencode|devin|account/i.test(searchQuery)
   const visibleSections = [
-    !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
-      <div key={accountOwnerKey} className="space-y-8">
-        <ManagedDataAccountsSection provider="opencode" target={accountOwner} />
-        <ManagedDataAccountsSection provider="devin" target={accountOwner} />
-      </div>
-    ) : null,
     wslSupportedPlatform &&
     !isRemoteAccountScope &&
     !wslHostDistro &&
@@ -373,9 +366,6 @@ export function AccountsPane({
       : null,
     claudeSectionShown ? renderClaudeAccountsSection(model, t, intlLocale) : null,
     codexSectionShown ? renderCodexAccountsSection(model, t, intlLocale) : null,
-    matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries())
-      ? renderGeminiAccountsSection(model, t)
-      : null,
     matchesSettingsSearch(searchQuery, getAccountsAntigravitySearchEntries()) ? (
       <AntigravityAccountsSection
         key={`antigravity:${accountOwnerKey}:${accountRuntime.runtime}:${accountRuntime.wslDistro ?? ''}`}
@@ -385,9 +375,22 @@ export function AccountsPane({
         ownerPlatform={accountOwnerPlatform}
       />
     ) : null,
+    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
+      <GrokAccountsSection key="grok" />
+    ) : null,
+    managedDataShown ? (
+      <ManagedDataAccountsSection key={accountOwnerKey} provider="opencode" target={accountOwner} />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model, t)
       : null,
+    managedDataShown ? (
+      <ManagedDataAccountsSection
+        key={`devin:${accountOwnerKey}`}
+        provider="devin"
+        target={accountOwner}
+      />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries()) ? (
       <MiniMaxAccountsSection
         key={`minimax:${accountOwnerKey}`}
@@ -396,9 +399,6 @@ export function AccountsPane({
         miniMaxRateLimits={isRemoteAccountScope ? null : miniMaxRateLimits}
         recordFeatureInteraction={recordFeatureInteraction}
       />
-    ) : null,
-    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
-      <GrokAccountsSection key="grok" />
     ) : null,
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />

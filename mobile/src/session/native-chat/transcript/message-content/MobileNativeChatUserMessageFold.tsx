@@ -4,10 +4,9 @@ import {
   NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES,
   nativeChatUserMessageFolds
 } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-user-message-fold'
-import { styles as markdownStyles } from '../../../../components/markdown/mobile-markdown-styles'
-import { colors, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { stylesSheet } from '../../../../components/markdown/mobile-markdown-styles'
+import { spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
 import type { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -30,11 +29,12 @@ export function MobileNativeChatUserMessageFold({
   status?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const markdownStyles = useThemedStyles(stylesSheet)
+  const styles = useThemedStyles(stylesThemedSheet)
   const t = useMobileTranslation()
   const longText = useMemo(() => nativeChatUserMessageFolds(text), [text])
   const [height, setHeight] = useState<number | null>(null)
-  const { textScale, lineSpacing } = useNativeChatProseText(fontScale)
+  const { textScale, lineSpacing } = useNativeChatProseText(fontScale, true)
   const clip =
     NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES *
     markdownStyles.paragraph.lineHeight *
@@ -78,7 +78,7 @@ export function MobileNativeChatUserMessageFold({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesThemedSheet = themedStyleSheet((colors) => ({
   toggle: {
     alignSelf: 'flex-end',
     paddingTop: spacing.xs

@@ -1,8 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
 import { sessionWorktreeRecordSchema } from '../../../worktree/catalog/session-worktree-record-reply-schema'
-import '../../../terminal/host-operations/terminal-reply-schema'
-import '../../../terminal/quick-commands/mobile-quick-command-operations'
 
 // Preserve host refusal text for optimistic rollback; the reply's record carries the host's merged notes.
 export const sessionWorktreeNotesWrite = bindDeferredRpcOperation(

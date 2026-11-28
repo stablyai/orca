@@ -40,6 +40,11 @@ type PendingSignIn = {
   server: string
   redirectUri: string | null
   expiresAt: number
+  timer: ReturnType<typeof setTimeout>
+}
+
+export type CodexSessionMcpManager = NonNullable<StructuredAgentSessionAdapter['manageMcp']> & {
+  forget: (sessionId: string) => void
 }
 
 type CodexLogin = { authorizationUrl: string }
@@ -49,8 +54,23 @@ type CodexLogin = { authorizationUrl: string }
 export function manageCodexSessionMcp(
   sessions: Map<string, CodexSession>,
   readInvocation: () => CodexProviderInvocationDeps | undefined
-): NonNullable<StructuredAgentSessionAdapter['manageMcp']> {
+): CodexSessionMcpManager {
   const signIns = new Map<string, PendingSignIn>()
+  const clearSignIn = (sessionId: string): void => {
+    const existing = signIns.get(sessionId)
+    if (!existing) {
+      return
+    }
+    clearTimeout(existing.timer)
+    signIns.delete(sessionId)
+  }
+  const pruneExpiredSignIns = (now: number): void => {
+    for (const [sessionId, pending] of signIns) {
+      if (pending.expiresAt <= now) {
+        clearSignIn(sessionId)
+      }
+    }
+  }
   const invocationFor = (): CodexProviderInvocationDeps => {
     const invocation = readInvocation()
     if (!invocation) {
@@ -105,7 +125,10 @@ export function manageCodexSessionMcp(
     })
   }
 
-  return async (record, operation) => {
+  const manage: NonNullable<StructuredAgentSessionAdapter['manageMcp']> = async (
+    record,
+    operation
+  ) => {
     const live = liveSession(sessions, record.sessionId)
     if (operation.action === 'status') {
       return ok(await list(record, live))
@@ -117,32 +140,52 @@ export function manageCodexSessionMcp(
       case 'signIn': {
         // Codex's callback listener lives in the app-server, which only a running chat keeps up.
         if (!live) {
+          clearSignIn(record.sessionId)
           return { status: 'not-running' }
         }
         const login = await requestLogin(liveRequest(live), operation.server, live.threadId)
         const servers = await listLive(live)
-        signIns.set(record.sessionId, {
-          server: operation.server,
-          redirectUri: readRedirectUri(login.authorizationUrl),
-          expiresAt: Date.now() + SIGN_IN_WINDOW_SECONDS * 1000
-        })
         // The URL comes from the MCP server's OAuth metadata; clients open only web pages.
         const url = agentSessionMcpWebUrl(login.authorizationUrl)
-        return url
-          ? { status: 'ok', servers, signIn: { server: operation.server, url, finish: 'callback' } }
-          : ok(servers)
+        clearSignIn(record.sessionId)
+        if (!url) {
+          return ok(servers)
+        }
+        const ttlMs = SIGN_IN_WINDOW_SECONDS * 1000
+        const entry: PendingSignIn = {
+          server: operation.server,
+          redirectUri: readRedirectUri(login.authorizationUrl),
+          expiresAt: Date.now() + ttlMs,
+          timer: setTimeout(() => {
+            if (signIns.get(record.sessionId) === entry) {
+              signIns.delete(record.sessionId)
+            }
+          }, ttlMs)
+        }
+        entry.timer.unref?.()
+        signIns.set(record.sessionId, entry)
+        return {
+          status: 'ok',
+          servers,
+          signIn: { server: operation.server, url, finish: 'callback' }
+        }
       }
       case 'finishSignIn': {
+        const now = Date.now()
+        pruneExpiredSignIns(now)
+        if (!live) {
+          clearSignIn(record.sessionId)
+        }
         const pending = signIns.get(record.sessionId)
         const callback =
-          pending && pending.server === operation.server && pending.expiresAt > Date.now()
+          pending && pending.server === operation.server && pending.expiresAt > now
             ? matchingCodexMcpCallback(operation.callbackUrl, pending.redirectUri)
             : null
         if (!callback) {
           throw new Error(MISMATCH)
         }
         await deliverCodexMcpCallback(callback)
-        signIns.delete(record.sessionId)
+        clearSignIn(record.sessionId)
         return ok(await list(record, live))
       }
       case 'reconnect': {
@@ -161,6 +204,7 @@ export function manageCodexSessionMcp(
         return ok(await toggle(record, live, operation.server, operation.enabled))
     }
   }
+  return Object.assign(manage, { forget: clearSignIn })
 }
 
 const ok = (servers: AgentSessionMcpServer[]): AgentSessionMcpResult => ({ status: 'ok', servers })

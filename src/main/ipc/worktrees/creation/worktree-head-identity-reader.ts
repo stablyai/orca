@@ -2,6 +2,15 @@ import { readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../../../shared/worktree/types'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
+import {
+  createPackedRefsLookup,
+  decodeTrimmedUtf8Buffer,
+  emptyPackedRefsLookup,
+  isSafeRefName,
+  joinLeafPath as joinLeaf,
+  type PackedRefsLookup
+} from './packed-refs-parser'
 import {
   FULL_HEAD_IDENTITY_SCOPE,
   headIdentityEntryKey,
@@ -51,53 +60,32 @@ type Unreadable = typeof UNREADABLE
 
 async function readTrimmedFile(path: string): Promise<string | null | Unreadable> {
   try {
-    return (await readFile(path, 'utf8')).trim()
+    return decodeTrimmedUtf8Buffer(await readFile(path))
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : UNREADABLE
   }
 }
 
-async function readPackedRefs(commonDirPath: string): Promise<Map<string, string> | Unreadable> {
-  const refs = new Map<string, string>()
-  const content = await readTrimmedFile(join(commonDirPath, 'packed-refs'))
-  if (content === UNREADABLE) {
-    return UNREADABLE
+async function readPackedRefs(commonDirPath: string): Promise<PackedRefsLookup | Unreadable> {
+  try {
+    return createPackedRefsLookup(await readFile(joinLeaf(commonDirPath, 'packed-refs')))
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? emptyPackedRefsLookup() : UNREADABLE
   }
-  if (content === null) {
-    return refs
-  }
-  for (const line of content.split('\n')) {
-    if (!line || line.startsWith('#') || line.startsWith('^')) {
-      continue
-    }
-    const separator = line.indexOf(' ')
-    if (separator <= 0) {
-      continue
-    }
-    refs.set(line.slice(separator + 1).trim(), line.slice(0, separator))
-  }
-  return refs
-}
-
-// Repo-authored ref names must reject Windows separators/drive syntax before joining filesystem paths.
-function isSafeRefName(ref: string): boolean {
-  if (ref.length === 0 || ref.includes('\\') || ref.includes(':')) {
-    return false
-  }
-  return !ref.split('/').some((part) => part === '..' || part === '')
 }
 
 // Only SHA-1/SHA-256 object IDs may leave this reader, bounding malformed-repo output.
 const OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
+// Detach from large packed-refs buffers so cached OIDs do not pin megabytes in V8.
 function asObjectId(value: string | null | undefined): string | null {
-  return value != null && OBJECT_ID_PATTERN.test(value) ? value : null
+  return value != null && OBJECT_ID_PATTERN.test(value) ? ownRetainedString(value) : null
 }
 
 async function resolveRefToOid(
   commonDirPath: string,
   ref: string,
-  packedRefs: () => Promise<Map<string, string> | Unreadable>
+  packedRefs: () => Promise<PackedRefsLookup | Unreadable>
 ): Promise<string | null | Unreadable> {
   let current = ref
   for (let depth = 0; depth < MAX_SYMREF_DEPTH; depth++) {
@@ -125,7 +113,7 @@ async function readHeadIdentity(
   commonDirPath: string,
   headFilePath: string,
   worktreePath: string,
-  packedRefs: () => Promise<Map<string, string> | Unreadable>,
+  packedRefs: () => Promise<PackedRefsLookup | Unreadable>,
   resolved: ResolvedRefOids
 ): Promise<WorktreeHeadIdentity | null | Unreadable> {
   const head = await readTrimmedFile(headFilePath)
@@ -155,12 +143,13 @@ async function readHeadIdentity(
 
 async function readLinkedEntryIdentity(
   commonDirPath: string,
+  worktreesDir: string,
   entryName: string,
-  packedRefs: () => Promise<Map<string, string> | Unreadable>,
+  packedRefs: () => Promise<PackedRefsLookup | Unreadable>,
   resolved: ResolvedRefOids
 ): Promise<WorktreeHeadIdentity | null | Unreadable> {
-  const entryPath = join(commonDirPath, 'worktrees', entryName)
-  const gitdirContent = await readTrimmedFile(join(entryPath, 'gitdir'))
+  const entryPath = joinLeaf(worktreesDir, entryName)
+  const gitdirContent = await readTrimmedFile(joinLeaf(entryPath, 'gitdir'))
   if (gitdirContent === UNREADABLE) {
     return UNREADABLE
   }
@@ -172,7 +161,7 @@ async function readLinkedEntryIdentity(
   const gitdirAbsolute = isAbsolute(gitdirContent) ? gitdirContent : join(entryPath, gitdirContent)
   return readHeadIdentity(
     commonDirPath,
-    join(entryPath, 'HEAD'),
+    joinLeaf(entryPath, 'HEAD'),
     dirname(gitdirAbsolute),
     packedRefs,
     resolved
@@ -235,8 +224,8 @@ export async function readGitCommonHeadIdentities(
   cache: WorktreeHeadIdentityCache = createWorktreeHeadIdentityCache(),
   scope: WorktreeHeadIdentityScope = FULL_HEAD_IDENTITY_SCOPE
 ): Promise<GitCommonHeadIdentityRead> {
-  let packedRefsPromise: Promise<Map<string, string> | Unreadable> | null = null
-  const packedRefs = (): Promise<Map<string, string> | Unreadable> =>
+  let packedRefsPromise: Promise<PackedRefsLookup | Unreadable> | null = null
+  const packedRefs = (): Promise<PackedRefsLookup | Unreadable> =>
     (packedRefsPromise ??= readPackedRefs(commonDirPath))
   const resolved: ResolvedRefOids = new Map()
 
@@ -308,8 +297,9 @@ export async function readGitCommonHeadIdentities(
       scope.entryNames.has(entryKeys[index])
   )
   // Bound libuv fanout; publish in listing order rather than completion order.
+  const worktreesDir = joinLeaf(commonDirPath, 'worktrees')
   const reads = await mapWithConcurrency(staleNames, HEAD_IDENTITY_READ_CONCURRENCY, (name) =>
-    readLinkedEntryIdentity(commonDirPath, name, packedRefs, resolved)
+    readLinkedEntryIdentity(commonDirPath, worktreesDir, name, packedRefs, resolved)
   )
   const headlessEntryKeys = new Set<string>()
   staleNames.forEach((name, index) => {

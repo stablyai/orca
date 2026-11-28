@@ -35,6 +35,43 @@ const PACKAGE_BUILD_REDIRECTS = [
     to: fileURLToPath(new URL('../../../../mobile/web-entry/expo-router-page.ts', import.meta.url))
   },
   {
+    // expo-router always registers its /_sitemap developer index; only its not-found screen links there.
+    from: './views/Sitemap',
+    to: fileURLToPath(
+      new URL('../../../../mobile/web-entry/expo-router-sitemap.ts', import.meta.url)
+    ),
+    importer: /[\\/]expo-router[\\/]build[\\/][^\\/]+\.js$/
+  },
+  {
+    // Navigator.js only reads StackRouter from StackClient, which otherwise pulls native-stack, elements, and react-native-screens into boot.
+    from: '../layouts/StackClient',
+    to: 'expo-router/build/layouts/stack-router.js',
+    importer: /[\\/]expo-router[\\/]build[\\/]views[\\/]Navigator\.js$/
+  },
+  {
+    // Toast.js only reads BottomTabBarHeightContext from bottom-tabs, which otherwise pulls BottomTabBar and react-navigation/elements into boot.
+    from: '../react-navigation/bottom-tabs',
+    to: 'expo-router/build/react-navigation/bottom-tabs/utils/BottomTabBarHeightContext.js',
+    importer: /[\\/]expo-router[\\/]build[\\/]views[\\/]Toast\.js$/
+  },
+  {
+    // reanimated marks its root barrel side-effectful, keeping 40+ unused layout animations, CSS animations, and jestUtils.
+    from: 'react-native-reanimated',
+    to: fileURLToPath(new URL('../../../../mobile/web-entry/reanimated-page.mjs', import.meta.url))
+  },
+  {
+    // gesture-handler has no sideEffects field, keeping legacy touchables, components, handlers, and unused v3 hooks.
+    from: 'react-native-gesture-handler',
+    to: fileURLToPath(
+      new URL('../../../../mobile/web-entry/gesture-handler-page.mjs', import.meta.url)
+    )
+  },
+  {
+    // The page only renders SVG elements (no SvgXml/SvgUri/CSS parsing); elements.web.js drops xml.js, transformToRn.js, and SvgTouchableMixin.js.
+    from: 'react-native-svg',
+    to: 'react-native-svg/lib/module/elements.web.js'
+  },
+  {
     // These subpaths resolve to the CommonJS build, which keeps all of sha2 (sha512 too); the esm one shakes.
     from: '@noble/hashes/sha256',
     to: '@noble/hashes/esm/sha256.js'

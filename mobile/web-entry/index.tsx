@@ -5,8 +5,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { ExpoRoot } from 'expo-router'
 import {
   applyMobileColorScheme,
-  colors,
   getMobileColorScheme,
+  getMobilePalette,
   subscribeMobileColorScheme
 } from '../src/theme/mobile-theme'
 import type { BridgeRpcClient } from '../src/mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
@@ -21,10 +21,9 @@ import {
   storageReadResultSchema
 } from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import {
-  BRIDGE_DEFERRED_CODE_VERB,
-  BRIDGE_HOST_CATALOGS_GRANT
+  BRIDGE_HOST_CATALOGS_GRANT,
+  bridgeExternalLinkMaxChars
 } from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
-import { publishPageMermaidFetch } from '../src/components/mermaid/mermaid-page-engine'
 import {
   publishPageStorage,
   refreshPageTerminalSettings
@@ -145,6 +144,7 @@ if (!container) {
 const target = document.documentElement
 // Keep <html> transparent: overlay routes show the native screen through it, and the shell paints bgBase behind the rest.
 function paintDocumentScheme(): void {
+  const colors = getMobilePalette()
   target.style.setProperty('--muted-foreground', colors.textMuted)
   target.style.setProperty('--foreground', colors.textPrimary)
   target.style.colorScheme = getMobileColorScheme()
@@ -173,12 +173,6 @@ bootstrapShellPage({
     if (session.grants.native.includes(BRIDGE_HOST_CATALOGS_GRANT)) {
       startPageLocaleCatalogs({ client, store: deviceStore })
     }
-    // A shell that skipped the diagram engine fetches it from the desktop before the first diagram imports it.
-    if (session.grants.native.includes(BRIDGE_DEFERRED_CODE_VERB)) {
-      publishPageMermaidFetch(async () => {
-        await client.callNativeVerb(BRIDGE_DEFERRED_CODE_VERB, {})
-      })
-    }
     // Subscribe before the first catalog load so a switch during startup is not lost; the latest request wins.
     let uiLocaleActivation = activatePageUiLocale(session.uiLocale)
     client.onUiLocaleUpdate((locale) => {
@@ -199,7 +193,8 @@ bootstrapShellPage({
               return true
             }
           }
-        : (url) => client.notifyExternalLink(url)
+        : (url) => client.notifyExternalLink(url),
+      bridgeExternalLinkMaxChars((grant) => session.grants.native.includes(grant))
     )
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
     // Expose shell keyboard height to hooks and plain functions.

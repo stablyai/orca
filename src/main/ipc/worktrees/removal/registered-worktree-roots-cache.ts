@@ -1,5 +1,9 @@
 import { resolve } from 'node:path'
-import { findRegisteredWorktreeRoot } from './registered-worktree-root-match'
+import {
+  findRegisteredWorktreeRoot,
+  hasDirtyRegisteredOwner,
+  resolveRegisteredRootPath
+} from './registered-worktree-root-match'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RegisteredWorktreeRootStore as Store } from './registered-worktree-root-store'
 import {
@@ -83,7 +87,7 @@ function synchronizeOwners(store: RepoSource): Repo[] {
   if (changed) {
     refreshRegisteredWorktreeRoots()
   }
-  registeredWorktreeRootsDirty = [...registeredOwners.values()].some((owner) => owner.dirty)
+  registeredWorktreeRootsDirty = hasDirtyRegisteredOwner(registeredOwners.values())
   return repos
 }
 
@@ -140,7 +144,7 @@ export async function rebuildAuthorizedRootsCache(store: Store, onlyDirty = fals
     advanceOwner(entry.owner)
   }
   refreshRegisteredWorktreeRoots()
-  registeredWorktreeRootsDirty = [...registeredOwners.values()].some((owner) => owner.dirty)
+  registeredWorktreeRootsDirty = hasDirtyRegisteredOwner(registeredOwners.values())
 }
 
 /** Dirty one known owner without advancing the global token fence; untouched owners keep their in-flight tokens. */
@@ -164,12 +168,16 @@ export function registerWorktreeRootsForRepo(
   if (!owner) {
     return
   }
-  owner.listed = new Set(worktreeRoots.map((root) => resolve(root)))
+  const listed = new Set<string>()
+  for (let i = 0; i < worktreeRoots.length; i += 1) {
+    listed.add(resolveRegisteredRootPath(worktreeRoots[i]))
+  }
+  owner.listed = listed
   owner.listedWslDistro = listing.wslDistro
   owner.dirty = false
   advanceOwner(owner)
   refreshRegisteredWorktreeRoots()
-  registeredWorktreeRootsDirty = [...registeredOwners.values()].some((entry) => entry.dirty)
+  registeredWorktreeRootsDirty = hasDirtyRegisteredOwner(registeredOwners.values())
 }
 
 /** Preserve directly confirmed creates when an unavailable listing cannot name them. */
@@ -251,12 +259,16 @@ export async function resolveRegisteredWorktreePath(
 function refreshRegisteredWorktreeRoots(): void {
   registeredWorktreeRoots.clear()
   for (const owner of registeredOwners.values()) {
-    for (const roots of [owner.listed, owner.recovered, owner.aliases]) {
-      if (roots) {
-        for (const root of roots) {
-          registeredWorktreeRoots.add(root)
-        }
+    if (owner.listed) {
+      for (const root of owner.listed) {
+        registeredWorktreeRoots.add(root)
       }
+    }
+    for (const root of owner.recovered) {
+      registeredWorktreeRoots.add(root)
+    }
+    for (const root of owner.aliases) {
+      registeredWorktreeRoots.add(root)
     }
   }
 }

@@ -1,5 +1,5 @@
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useFileOwnerRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { useAppStore } from '@/store/index'
@@ -93,7 +93,6 @@ export default function RichMarkdownEditor({
   const onOpenDocLinkRef = useRef(onOpenDocLink)
   const handleLocalImagePickRef = useRef<() => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
-  const openAnnotationPopoverRef = useRef<(requireLiveSelection?: boolean) => boolean>(() => false)
   // Read the live instance because ProseMirror retains the first handleKeyDown closure, whose editor was null.
   const editorRef = useRef<Editor | null>(null)
   const cancelAutoFocusRef = useRef<(() => void) | null>(null)
@@ -103,6 +102,7 @@ export default function RichMarkdownEditor({
   const isApplyingProgrammaticUpdateRef = useRef(false)
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
+  const [rootElement, setRootElementState] = useState<HTMLDivElement | null>(null)
   const isEditingLinkRef = useRef(false)
   const typedEmptyOrderedListMarkerRef = useRef(false)
   const review = useRichMarkdownReviewController({
@@ -122,19 +122,13 @@ export default function RichMarkdownEditor({
     worktreeId,
     worktreeRoot
   })
+  const openAnnotationPopoverRef = useRef(review.openAnnotationPopover)
   const { tableOfContentsItems, navigateToTableOfContentsItem } = useRichMarkdownTableOfContents(
     showTableOfContents,
     content,
     scrollContainerRef
   )
 
-  // Refresh callbacks during render so ProseMirror handlers cannot observe a passive-effect delay.
-  onContentChangeRef.current = onContentChange
-  onDirtyStateHintRef.current = onDirtyStateHint
-  onSaveRef.current = onSave
-  onOpenDocLinkRef.current = onOpenDocLink
-  isEditingLinkRef.current = isEditingLink
-  openAnnotationPopoverRef.current = review.openAnnotationPopover
   const reconcileRoundTripRef = useRichMarkdownReconcileRoundTrip({
     htmlSuperscriptLinkContext,
     filePath,
@@ -224,6 +218,7 @@ export default function RichMarkdownEditor({
   const setRootElement = useCallback(
     (node: HTMLDivElement | null) => {
       bindRoot(node)
+      setRootElementState(node)
       if (node === null) {
         // Release root-owned transient resources on detach instead of waiting for passive cleanup.
         clearTransientReviewState()
@@ -290,8 +285,6 @@ export default function RichMarkdownEditor({
   })
 
   const handleLocalImagePick = useLocalImagePick(editor, filePath, worktreeId, runtimeEnvironmentId)
-  handleLocalImagePickRef.current = handleLocalImagePick
-
   const {
     handleLinkSave,
     handleLinkRemove,
@@ -323,19 +316,25 @@ export default function RichMarkdownEditor({
     })
   }, [handleLocalImagePick, toggleLinkFromToolbar])
 
-  const { openSearch, searchState, searchActions } = useRichMarkdownSearch({
-    editor,
-    rootRef,
-    scrollContainerRef
+  const search = useRichMarkdownSearch({ editor, rootRef, scrollContainerRef })
+  // Refresh callbacks before paint so ProseMirror handlers cannot observe a passive-effect delay.
+  useLayoutEffect(() => {
+    onContentChangeRef.current = onContentChange
+    onDirtyStateHintRef.current = onDirtyStateHint
+    onSaveRef.current = onSave
+    onOpenDocLinkRef.current = onOpenDocLink
+    isEditingLinkRef.current = isEditingLink
+    openAnnotationPopoverRef.current = review.openAnnotationPopover
+    handleLocalImagePickRef.current = handleLocalImagePick
+    openSearchRef.current = search.openSearch
   })
-  openSearchRef.current = openSearch
 
   return (
     <RichMarkdownEditorSurface
       commentOwner={commentOwner}
       editor={editor}
       editorFontZoomLevel={editorFontZoomLevel}
-      rootElement={rootRef.current}
+      rootElement={rootElement}
       rootRef={setRootElement}
       onFocusLeave={flushOnFocusLeave}
       scrollContainerRef={scrollContainerRef}
@@ -350,9 +349,8 @@ export default function RichMarkdownEditor({
       markdownReviewContent={markdownReviewContent}
       worktreeId={worktreeId}
       filePath={filePath}
-      markdownCommentsCount={review.markdownComments.length}
+      markdownComments={review.markdownComments}
       reviewRailOpen={review.reviewRailOpen}
-      reviewNotesCopied={review.reviewNotesCopied}
       unsentMarkdownReviewScope={review.unsentMarkdownReviewScope}
       linkBubble={linkBubble}
       isEditingLink={isEditingLink}
@@ -369,8 +367,8 @@ export default function RichMarkdownEditor({
       markdownSourceLineOffset={markdownSourceLineOffset}
       tableOfContentsItems={tableOfContentsItems}
       showTableOfContents={showTableOfContents}
-      searchState={searchState}
-      searchActions={searchActions}
+      searchState={search.searchState}
+      searchActions={search.searchActions}
       citationStatus={
         selectedCitationStatus
           ? formatSelectedHtmlSuperscriptLinkStatus(selectedCitationStatus, t)

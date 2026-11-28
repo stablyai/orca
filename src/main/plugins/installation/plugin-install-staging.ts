@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { cp, mkdir, realpath, rm } from 'node:fs/promises'
+import { mkdir, realpath, rm } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import {
   PLUGIN_MANIFEST_FILENAME,
@@ -22,13 +22,14 @@ import type {
   PluginLockEntry
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { validatePluginInstallTree } from '../artifacts/plugin-artifact-validation'
-import { renamePluginFileWithWindowsRetry } from './plugin-atomic-file-write'
+import { renameWithWindowsRetry } from '../../filesystem/windows-rename-retry'
 import { hashPluginTree } from '../artifacts/plugin-content-hash'
 import { publishPluginInstall } from './plugin-install-publication'
 import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
 import { pluginInstallTrustError } from './plugin-install-trust'
 import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
 import { readPluginLockfile } from './plugin-install-lockfile-store'
+import { copyPath } from '../../../shared/copy-path'
 
 export type PluginInstallResult =
   | {
@@ -206,7 +207,7 @@ export async function installStagedPluginTree(input: {
       // Rehash the copy before publication because the source may change during copying.
       // Why: verbatimSymlinks copies a linked root as a link (EPERM on Windows, symlinked install on POSIX).
       const stagingRoot = await realpath(input.stagingDir).catch(() => resolve(input.stagingDir))
-      await cp(stagingRoot, stagedVersionDir, {
+      await copyPath(stagingRoot, stagedVersionDir, {
         recursive: true,
         verbatimSymlinks: true,
         // Exclude source-control metadata before copying so repository size cannot bypass install limits.
@@ -236,7 +237,7 @@ export async function installStagedPluginTree(input: {
       if (!copiedArtifacts.ok) {
         return { ok: false, error: `copied artifact validation failed: ${copiedArtifacts.error}` }
       }
-      await renamePluginFileWithWindowsRetry(stagedVersionDir, versionDir)
+      await renameWithWindowsRetry(stagedVersionDir, versionDir)
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {

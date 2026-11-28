@@ -20,10 +20,14 @@ import {
 import { imageParamsSchema, imageResultSchema } from './bridge-image-verbs'
 import { BRIDGE_SPEECH_VERB, speechParamsSchema, speechResultSchema } from './bridge-speech-verbs'
 import { BRIDGE_STORE_VERB, storeParamsSchema, storeResultSchema } from './bridge-store-verb'
+import {
+  BRIDGE_DIRECT_PAIRINGS_VERB,
+  directPairingsParamsSchema,
+  directPairingsResultSchema
+} from './bridge-direct-pairings-verb'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../../page-storage/page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../../files/media/mobile-file-media'
 import { BRIDGE_MAX_EXTERNAL_LINK_CHARS } from '../protocol/bridge-caps'
-import { BRIDGE_DEFERRED_CODE_VERB } from '../protocol/bridge-frame-fields'
 
 // Fence native-prefixed requests on-device; desktop allowlist refusal alone would hide leaked forwarding and depend on desktop version.
 // Native replies use existing frames/in-flight caps without runtime _meta; adding a verb needs a table row and handler, never a new frame kind.
@@ -41,12 +45,13 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.stop',
   'native.storage.read',
   'native.pdf.view',
+  'native.file.share',
   'native.image.act',
   BRIDGE_SPEECH_VERB,
   BRIDGE_STORE_VERB,
   'native.a11y.announce',
   'native.link.open',
-  BRIDGE_DEFERRED_CODE_VERB
+  BRIDGE_DIRECT_PAIRINGS_VERB
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -98,6 +103,23 @@ export type BridgePdfOpenParams = Omit<
   'action'
 >
 
+// As native.pdf.view, for any file: the shell downloads it and opens the system share sheet. Cancel abandons a download the user walked away from.
+export const fileShareParamsSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('open'),
+    worktreeId: z.string().min(1),
+    relativePath: z.string().min(1),
+    executionHost: z.templateLiteral(['runtime:', z.string().min(1)]).optional()
+  }),
+  z.strictObject({ action: z.literal('cancel') })
+])
+export const fileShareResultSchema = z.strictObject({})
+
+export type BridgeFileShareParams = Omit<
+  Extract<z.infer<typeof fileShareParamsSchema>, { action: 'open' }>,
+  'action'
+>
+
 // The page has no announce call of its own (RNW's is a no-op); the shell speaks for it. Long text is a page bug, so it is refused.
 export const a11yAnnounceParamsSchema = z.strictObject({ message: z.string().min(1).max(500) })
 // announced:false when the shell leaves it to the page's live region (Android, where TalkBack reads it).
@@ -108,10 +130,6 @@ export const linkOpenParamsSchema = z.strictObject({
   url: z.string().min(1).max(BRIDGE_MAX_EXTERNAL_LINK_CHARS)
 })
 export const linkOpenResultSchema = z.strictObject({ opened: z.boolean() })
-
-// No params: the shell fetches exactly the deferred code its own verified manifest lists.
-export const deferredCodeParamsSchema = z.strictObject({})
-export const deferredCodeResultSchema = z.strictObject({})
 
 export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNativeVerbSpec>> = {
   'native.clipboard.write': {
@@ -159,6 +177,11 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     result: pdfViewResultSchema,
     desktop: true
   },
+  'native.file.share': {
+    params: fileShareParamsSchema,
+    result: fileShareResultSchema,
+    desktop: true
+  },
   'native.image.act': {
     params: imageParamsSchema,
     result: imageResultSchema
@@ -179,10 +202,9 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     params: linkOpenParamsSchema,
     result: linkOpenResultSchema
   },
-  // Not desktop-bound: its fetch is the shell's own bundle read, and code already on disk must answer while the connection handshakes.
-  [BRIDGE_DEFERRED_CODE_VERB]: {
-    params: deferredCodeParamsSchema,
-    result: deferredCodeResultSchema
+  [BRIDGE_DIRECT_PAIRINGS_VERB]: {
+    params: directPairingsParamsSchema,
+    result: directPairingsResultSchema
   }
 }
 

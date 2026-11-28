@@ -12,7 +12,6 @@ import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
 } from '../../../shared/github/repositories/repository-identity-key'
-import { shouldProbeGitRemote } from '../../git/remotes/remote-name-listing'
 
 import { isGitHubHostAuthenticated } from './github-enterprise-repository'
 import { githubHostExecOptions } from './github-repository-host'
@@ -49,14 +48,12 @@ export async function getIssueGitHubApiRepository(
       (value) => ({ status: 'fulfilled' as const, value }),
       (reason: unknown) => ({ status: 'rejected' as const, reason })
     )
-    const upstream = (await shouldProbeGitRemote(
+    const upstream = await getGitHubApiRepositoryForRemote(
       repoPath,
       'upstream',
       connectionId,
       localGitOptions
-    ))
-      ? await getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-      : null
+    )
     if (upstream) {
       return upstream
     }
@@ -86,18 +83,10 @@ export async function resolveGitHubApiRepositoryCandidates(
       (value) => ({ status: 'fulfilled' as const, value }),
       (reason: unknown) => ({ status: 'rejected' as const, reason })
     )
-    const probeUpstream = await shouldProbeGitRemote(
-      repoPath,
-      'upstream',
-      connectionId,
-      localGitOptions
-    )
     const [upstream, originResult] = await Promise.all([
-      probeUpstream
-        ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions, {
-            requireVerifiedSshProbe: true
-          })
-        : null,
+      getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions, {
+        requireVerifiedSshProbe: true
+      }),
       originPromise
     ])
     if (originResult.status === 'rejected') {

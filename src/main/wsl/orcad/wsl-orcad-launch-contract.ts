@@ -1,5 +1,6 @@
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
+  WslHostAddStage,
   WslHostDeferredUpdate,
   WslHostPastUncountedTerminals
 } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
@@ -17,12 +18,18 @@ export type WslOrcadLaunch =
       distro: string
       /** The Lxss registration GUID for the deployment record's `distroId`; null if unreadable. */
       distroId: string | null
+      /** The Linux account orcad runs as, which the host's record pins; null if unreadable. */
+      linuxUser: string | null
+      /** The distro's default account when it isn't `linuxUser`, for the host's "runs as" note. */
+      defaultLinuxUser: string | null
       /** The loopback port orcad bound inside the distro (another one when the preferred was taken). */
       port: number
       fullVersion: string
       pid: number | null
       readiness: ServeReadiness
       holder: 'adopted' | 'spawned' | 'unverifiable'
+      /** The pinned account's readable key differed from the paired one before launch. */
+      pairedKeyChanged?: true
       /** An orcad the record did not name (e.g. left by a failed Remove), now recorded. */
       adoptedInstance?: { version: string; pid: number }
       /** Set when `fullVersion` is the incumbent because the update must wait. */
@@ -51,4 +58,6 @@ export type WslOrcadDeployOptions = {
   /** A no-boot connect's running check (E9), re-read before any further wake. */
   requireRunning?: () => Promise<boolean>
   onInstallLockWait?: (wait: InstallLockWait | null) => void
+  /** Each step of the launch as it starts, for an Add's progress. */
+  onStage?: (stage: WslHostAddStage) => void
 }

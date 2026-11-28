@@ -101,8 +101,9 @@ async function launchOverTransport(
   const holder = options.holder ?? createWslDistroHolder({ userDataPath: userDataPath() })
   // Read GUID alongside deploy; failure leaves the record without one.
   const distroId = (options.readRegistryId ?? readWslDistroRegistryIdShared)(name).catch(() => null)
-  const first = await holdWslDistroWithContext(name, target, conn, holder, signal)
-  const { held, connectState } = first
+  options.onStage?.('starting-distro')
+  const first = await holdWslDistroWithContext(name, target, conn, holder, options)
+  const { connectState, launchIdentity } = first
   let context = first.context
   const hints = wslOrcadConnectStateHints(connectState, context.activationRecord)
   const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT, signal)
@@ -123,6 +124,7 @@ async function launchOverTransport(
   if (adoption.outcome === 'adopted') {
     context = { ...context, activationRecord: adoption.record }
   }
+  options.onStage?.('installing-server')
   const localOrcadDir = await materializeOrcadArtifact(context.serverTarget, {
     signal,
     trustVerificationRecord: true,
@@ -237,6 +239,7 @@ async function launchOverTransport(
     return { outcome: 'deferred', distro: name, ...deferredUpdate }
   }
   clearOrcadUpdateFailedThisLaunch(failureHost)
+  options.onStage?.('connecting')
   // A holder, not a let: control flow would not see the probe closure set it.
   const launch: { mode: WslOrcadLaunchMode } = { mode: 'unknown' }
   const probe = async () => {
@@ -310,7 +313,7 @@ async function launchOverTransport(
       fullVersion: serving.fullVersion,
       pid,
       readiness: serving.readiness,
-      holder: held.outcome,
+      ...launchIdentity,
       ...(adoption.outcome === 'adopted'
         ? { adoptedInstance: { version: adoption.version, pid: adoption.pid } }
         : {})

@@ -7,7 +7,7 @@ const AccountIdSchema = z.string().min(1)
 const RateLimitWindowSchema = z
   .object({
     usedPercent: z.number().finite().min(0).max(100),
-    // agy reports windows of unknown length as 0.
+    // A window of unknown length arrives as 0; rejecting it would fail the whole snapshot.
     windowMinutes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     resetsAt: TimestampSchema.nullable(),
     resetDescription: z.string().nullable()
@@ -114,7 +114,9 @@ const ClaudeAccountSummarySchema = z
     organizationName: z.string().nullable().optional(),
     createdAt: TimestampSchema.optional(),
     updatedAt: TimestampSchema.optional(),
-    lastAuthenticatedAt: TimestampSchema.optional()
+    lastAuthenticatedAt: TimestampSchema.optional(),
+    // Its folder holds no login yet: Accounts offers Sign in.
+    needsSignIn: z.literal(true).optional()
   })
   .passthrough()
 
@@ -155,8 +157,27 @@ const CodexAccountSummarySchema = z
     }
   })
 
+const ManagedDataAccountsStateSchema = z
+  .object({
+    accounts: z.array(
+      z
+        .object({
+          id: AccountIdSchema,
+          label: z.string().min(1),
+          integrations: z.array(z.string()),
+          createdAt: TimestampSchema
+        })
+        .passthrough()
+    ),
+    activeAccountId: AccountIdSchema.nullable()
+  })
+  .passthrough()
+
 export const AccountsSnapshotSchema = z
   .object({
+    // Older hosts omit managed OpenCode and Devin profiles.
+    opencode: ManagedDataAccountsStateSchema.optional(),
+    devin: ManagedDataAccountsStateSchema.optional(),
     claude: z
       .object({
         accounts: z.array(ClaudeAccountSummarySchema),
@@ -226,6 +247,7 @@ export type InactiveAccountUsage = z.infer<typeof InactiveAccountUsageSchema>
 export type RateLimitRuntimeTarget = z.infer<typeof RateLimitRuntimeTargetSchema>
 export type ClaudeAccountSummary = z.infer<typeof ClaudeAccountSummarySchema>
 export type CodexAccountSummary = z.infer<typeof CodexAccountSummarySchema>
+export type ManagedDataAccountsState = z.infer<typeof ManagedDataAccountsStateSchema>
 export type AccountsSnapshot = z.infer<typeof AccountsSnapshotSchema>
 
 export class AccountsSnapshotError extends Error {

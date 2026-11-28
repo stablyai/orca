@@ -5,31 +5,17 @@ import type {
   AntigravityChatAuthAlternative
 } from './antigravity-chat-auth-choices'
 
-/** Which program a chat runs and its version, so its models and account are no surprise. */
+/** The agy version a chat runs, so its models and account are no surprise; null until the host
+ *  reports one. */
 export function antigravityProgramLabel(
-  program: 'managed' | 'agy' | 'orcasAgy',
   version: string | null | undefined,
   t: Translate = translate
-): string {
-  if (program === 'orcasAgy') {
-    return version
-      ? t('components.native-chat.antigravityAuth.orcasAgyVersion', "Orca's agy · v{{version}}", {
-          version
-        })
-      : t('components.native-chat.antigravityAuth.orcasAgy', "Orca's agy")
-  }
-  if (program === 'agy') {
-    return version
-      ? t('components.native-chat.antigravityAuth.yourAgyVersion', 'Your agy · v{{version}}', {
-          version
-        })
-      : t('components.native-chat.antigravityAuth.yourAgy', 'Your agy')
-  }
+): string | null {
   return version
-    ? t('components.native-chat.antigravityAuth.orcaCopyVersion', "Orca's copy · v{{version}}", {
+    ? t('components.native-chat.antigravityAuth.yourAgyVersion', 'Your agy · v{{version}}', {
         version
       })
-    : t('components.native-chat.antigravityAuth.orcaCopy', "Orca's copy")
+    : null
 }
 
 export function antigravityAlternativeLabel(
@@ -40,9 +26,7 @@ export function antigravityAlternativeLabel(
     case 'gemini-api-key':
       return t('components.native-chat.antigravityAuth.useApiKey', 'Use your Gemini API key')
     case 'agent-platform':
-      return t('components.native-chat.antigravityAuth.useGcloud', 'Use gcloud ({{project}})', {
-        project: option.project
-      })
+      return t('components.native-chat.antigravityAuth.useGcloudLogin', 'Use your gcloud login')
     case 'oauth-personal':
       return t('components.native-chat.antigravityAuth.useGoogle', 'Use your Google sign-in')
   }
@@ -56,16 +40,12 @@ export function antigravityAlternativeHint(
   switch (option.method) {
     case 'gemini-api-key':
       return option.source === 'environment'
-        ? t(
-            'components.native-chat.antigravityAuth.apiKeyFromEnvironment',
-            'Found GEMINI_API_KEY in your environment'
-          )
+        ? t('components.native-chat.antigravityAuth.apiKeyEnvironment', 'From your environment')
         : t('components.native-chat.antigravityAuth.apiKeySaved', 'Saved in Orca')
     case 'agent-platform':
-      return t(
-        'components.native-chat.antigravityAuth.gcloudFound',
-        'Found your gcloud login (Application Default Credentials)'
-      )
+      return t('components.native-chat.antigravityAuth.gcloudProject', 'Project {{project}}', {
+        project: option.project
+      })
     case 'oauth-personal':
       return t(
         'components.native-chat.antigravityAuth.googleFound',
@@ -133,4 +113,25 @@ export function antigravityAuthFailureLead(
         'This sign-in reached its usage limit.'
       )
   }
+}
+
+/** The one line under the strip's title naming what else Orca found; null when nothing. */
+export function antigravityFoundLine(
+  alternatives: readonly AntigravityChatAuthAlternative[],
+  t: Translate = translate
+): string | null {
+  const key = alternatives.some((option) => option.method === 'gemini-api-key')
+  const gcloud = alternatives.some((option) => option.method === 'agent-platform')
+  if (key && gcloud) {
+    return t(
+      'components.native-chat.antigravityAuth.foundKeyAndGcloud',
+      'Your Gemini API key and gcloud login also work.'
+    )
+  }
+  if (key) {
+    return t('components.native-chat.antigravityAuth.foundKey', 'Your Gemini API key also works.')
+  }
+  return gcloud
+    ? t('components.native-chat.antigravityAuth.foundGcloud', 'Your gcloud login also works.')
+    : null
 }

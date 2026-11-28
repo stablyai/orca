@@ -47,6 +47,9 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     DROP TRIGGER IF EXISTS worker_dock_failure_result_UPDATE;
     DROP TRIGGER IF EXISTS worker_dock_confirmed_stop;
     DROP TRIGGER IF EXISTS worker_dock_dispatch_delete;
+    DROP TRIGGER IF EXISTS worker_dock_dispatch_cleanup;
+    -- A stopped worker's own state now says the stop was asked for; the table's triggers drop with it.
+    DROP TABLE IF EXISTS worker_dock_owner_stops;
     CREATE INDEX IF NOT EXISTS worker_dock_source_state ON worker_dock_facts(source, state);
     CREATE INDEX IF NOT EXISTS worker_dock_source_state_time ON worker_dock_facts(source, state, changed_at);
     CREATE INDEX IF NOT EXISTS worker_dock_eligible ON worker_dock_facts(source)
@@ -55,11 +58,6 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
       source TEXT NOT NULL, dispatch_id TEXT NOT NULL, settlement TEXT NOT NULL,
       PRIMARY KEY(source, dispatch_id, settlement)
     );
-    CREATE TABLE IF NOT EXISTS worker_dock_owner_stops (
-      request_id TEXT PRIMARY KEY, source TEXT NOT NULL, dispatch_id TEXT NOT NULL,
-      receipt TEXT, confirmed INTEGER NOT NULL DEFAULT 0, settlement TEXT
-    );
-    CREATE INDEX IF NOT EXISTS worker_dock_owner_stop_attempt ON worker_dock_owner_stops(dispatch_id, confirmed);
     CREATE TABLE IF NOT EXISTS worker_dock_revision (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL);
     INSERT OR IGNORE INTO worker_dock_revision VALUES(1, 0);
     CREATE TABLE IF NOT EXISTS worker_dock_provider_failures (
@@ -103,8 +101,7 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
   for (const table of [
     'worker_dock_facts',
     'worker_dock_acknowledgments',
-    'worker_dock_provider_failures',
-    'worker_dock_owner_stops'
+    'worker_dock_provider_failures'
   ]) {
     for (const event of ['INSERT', 'UPDATE', 'DELETE']) {
       this.db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_revision_${table}_${event}
@@ -112,10 +109,9 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     }
   }
   this.db
-    .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_dispatch_cleanup AFTER DELETE ON dispatch_contexts BEGIN
+    .exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_dispatch_removed AFTER DELETE ON dispatch_contexts BEGIN
     DELETE FROM worker_dock_facts WHERE dispatch_id = OLD.id;
     DELETE FROM worker_dock_acknowledgments WHERE dispatch_id = OLD.id;
-    DELETE FROM worker_dock_owner_stops WHERE dispatch_id = OLD.id;
   END;`)
   // The marker commits with the backfill, so an open that stopped mid-install backfills again.
   if (!this.db.prepare('SELECT 1 FROM worker_dock_backfill').get()) {

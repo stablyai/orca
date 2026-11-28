@@ -90,8 +90,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
       createBranch(worktreePath, name, startPoint, interactive),
     applyCommit: (worktreePath, operation, commitId) =>
       applyCommit(worktreePath, operation, commitId, interactive),
-    recoverSequencer: (worktreePath, operation, action) =>
-      recoverSequencer(worktreePath, operation, action, interactive),
+    recoverSequencer: (worktreePath, operation, action, request) =>
+      recoverSequencer(worktreePath, operation, action, interactive, request),
     completeMerge: (worktreePath) => completeMerge(worktreePath, interactive),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
     getDiff: (worktreePath, filePath, staged, compareAgainstHead, oldPath) =>
@@ -121,8 +121,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     bulkDiscardChanges: (worktreePath, filePaths) =>
       bulkDiscardChanges(worktreePath, filePaths, interactive),
     detectConflictOperation: (worktreePath) => detectConflictOperation(worktreePath, base),
-    abortMerge: (worktreePath) => abortMerge(worktreePath, interactive),
-    abortRebase: (worktreePath) => abortRebase(worktreePath, interactive),
+    abortMerge: (worktreePath, request) => abortMerge(worktreePath, interactive, request),
+    abortRebase: (worktreePath, request) => abortRebase(worktreePath, interactive, request),
     continueRebase: (worktreePath, action, request) =>
       continueRebase(worktreePath, action, { ...interactive, ...request }),
     readRebaseAutoStash: (worktreePath) => readRebaseAutoStash(worktreePath, base),

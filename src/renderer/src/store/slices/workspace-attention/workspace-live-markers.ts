@@ -1,8 +1,11 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { botGroupRoomSessions } from '@/lib/bot-group-room-sessions'
+import {
+  chatPaneAddressTabId,
+  chatPaneKey
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // Only markers owned by live tabs count; closed tabs and superseded sessions cannot light or hold workspace dots.
 
@@ -19,6 +22,11 @@ export type LiveMarkerSources = {
 
 /** A tab that can own markers: a terminal tab, or a structured chat with its current session. */
 export type MarkerTab = { id: string; sessionId: string | null }
+
+/** The tab part of the pane keys a marker tab owns: a chat's is its conversation address. */
+export function markerTabAddressId(tab: MarkerTab): string {
+  return tab.sessionId === null ? tab.id : chatPaneAddressTabId(tab.sessionId)
+}
 
 /** Pane keys are `${tabId}:${leafId}` and tab ids never contain ":". */
 export function paneKeyTabId(paneKey: string): string | null {
@@ -75,7 +83,11 @@ export function completionPaneKeysByTabId(
 }
 
 /** The tabs of a workspace that can own a marker. */
-export function workspaceMarkerTabs(sources: LiveMarkerSources, workspaceId: string): MarkerTab[] {
+export function workspaceMarkerTabs(
+  sources: LiveMarkerSources,
+  workspaceId: string,
+  includeRoomSessions = true
+): MarkerTab[] {
   const tabs: MarkerTab[] = (sources.tabsByWorktree?.[workspaceId] ?? []).map((tab) => ({
     id: tab.id,
     sessionId: null
@@ -83,7 +95,7 @@ export function workspaceMarkerTabs(sources: LiveMarkerSources, workspaceId: str
   for (const tab of sources.unifiedTabsByWorktree?.[workspaceId] ?? []) {
     if (tab.contentType === 'agent-session') {
       tabs.push({ id: tab.id, sessionId: tab.entityId ?? null })
-    } else if (tab.contentType === 'room' && tab.entityId) {
+    } else if (includeRoomSessions && tab.contentType === 'room' && tab.entityId) {
       // An open room owns its members' markers, so a hidden thread's reply holds the group's dot.
       tabs.push(...botGroupRoomSessions(tab.entityId))
     }
@@ -111,11 +123,7 @@ export function workspaceLiveMarkerTabIds(
         // Why the current session's key only: a tab rebound to a new session no longer owns the old one.
         (tab.sessionId === null
           ? completionTabIds.has(tab.id)
-          : Boolean(
-              sources.unreadAgentCompletionPanes[
-                structuredAgentSessionPaneKey(tab.id, tab.sessionId)
-              ]
-            ))
+          : Boolean(sources.unreadAgentCompletionPanes[chatPaneKey(tab.sessionId)]))
     )
     .map((tab) => tab.id)
 }

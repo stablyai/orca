@@ -1,3 +1,4 @@
+import { closeStructuredAgentSessionHandovers } from '../delivery/structured-agent-session-handing-over'
 import {
   agentSessionLeaseIsReleased,
   agentSessionLeasePossiblyWriting
@@ -115,13 +116,23 @@ export function workspaceSleepStartAborts(
   sessionId: string
 ) {
   const aborted: Promise<unknown>[] = []
+  const abort = (): void => {
+    const flight = runtimeState().startFlights.get(sessionId)
+    if (flight) {
+      aborted.push(flight.outcome)
+    }
+    runtimeState().acquireAborts.abort(sessionId, 'closed while starting')
+  }
   return {
-    abort: (): void => {
-      const flight = runtimeState().startFlights.get(sessionId)
-      if (flight) {
-        aborted.push(flight.outcome)
+    abort,
+    /** Before the lane: end handovers and starts, so the lane's stop is not queued behind them. */
+    cut: (
+      journal: Parameters<typeof closeStructuredAgentSessionHandovers>[0] | undefined
+    ): void => {
+      if (journal) {
+        closeStructuredAgentSessionHandovers(journal)
       }
-      runtimeState().acquireAborts.abort(sessionId, 'closed while starting')
+      abort()
     },
     settle: (
       input: Pick<Parameters<typeof stopWorkspaceSleepChat>[0], 'deps' | 'sessions' | 'sessionId'>,

@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const BROWSER_EXPECTED_URL_MISMATCH_CODE = 'browser_expected_url_mismatch'
 export const BROWSER_EXPECT_URL_UNSUPPORTED_CODE = 'browser_expect_url_unsupported'
@@ -6,13 +7,15 @@ export const BROWSER_EXPECT_URL_UNSUPPORTED_CODE = 'browser_expect_url_unsupport
 const MAX_URL_CHARS = 8192
 
 /** Carried in the error's data so a caller never has to parse its message. */
-export const BrowserExpectedUrlMismatch = z.object({
-  expectedUrl: z.string().max(MAX_URL_CHARS),
-  actualUrl: z.string().max(MAX_URL_CHARS),
-  browserPageId: z.string().min(1).max(256),
-  /** True once a step of the command may have reached the page. */
-  mayHaveStarted: z.boolean()
-})
+export const BrowserExpectedUrlMismatch = lazyZodSchema(() =>
+  z.object({
+    expectedUrl: z.string().max(MAX_URL_CHARS),
+    actualUrl: z.string().max(MAX_URL_CHARS),
+    browserPageId: z.string().min(1).max(256),
+    /** True once a step of the command may have reached the page. */
+    mayHaveStarted: z.boolean()
+  })
+)
 export type BrowserExpectedUrlMismatch = z.infer<typeof BrowserExpectedUrlMismatch>
 
 export function expectedUrlMismatchMessage(mismatch: BrowserExpectedUrlMismatch): string {

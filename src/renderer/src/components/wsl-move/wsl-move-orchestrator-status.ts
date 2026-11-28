@@ -75,8 +75,8 @@ export function followWslMoveOrchestratorStatus(): () => void {
     useWslMoveOrchestratorStatus.setState({ records: next })
   })
   void window.api.wslMove.listOrchestrator().then((list) => {
-    // A live update that arrived first is newer than this snapshot.
-    if (live && !loaded) {
+    // A live update that arrived first is newer; null means main's first publish is the snapshot.
+    if (live && !loaded && list) {
       loaded = true
       useWslMoveOrchestratorStatus.setState({ records: byDistro(list) })
     }

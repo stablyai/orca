@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
+import { HOST_ACCOUNT_SIGN_IN_FAILURE_COPY } from '../../shared/agent-accounts/host-account-sign-in-types'
 import {
-  HOST_ACCOUNT_SIGN_IN_FAILURE_COPY,
-  HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES,
-  type HostAccountSignInPhase
-} from '../../shared/agent-accounts/host-account-sign-in-types'
+  settled,
+  view,
+  type CallerOwnedSignInChannel,
+  type CallerOwnedSignInPolicy,
+  type CallerOwnedSignInStatus,
+  type SignInFlowStop,
+  type SignInProgress
+} from './caller-owned-sign-in-contract'
 
 // Keep long polls inside typical RPC deadlines.
 const WAIT_MS = 20_000
@@ -14,72 +19,20 @@ const OWNER_SILENCE_MS = 90_000
 const CANCEL_WAIT_MS = 10_000
 const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
 
-type SignInProgress<TProvider extends string, TPrompt> = {
-  flowId: string
-  provider: TProvider
-  revision: number
-  phase: HostAccountSignInPhase
-  prompt?: TPrompt
-  error?: string
-  /** Set when `error` is Orca's own fixed copy, so clients can localize it. */
-  errorCode?: string
-}
-
-/** One sign-in as the host reports it to the client that started it. */
-export type CallerOwnedSignInStatus<
-  TProvider extends string,
-  TPrompt,
-  TResult extends object
-> = SignInProgress<TProvider, TPrompt> & Partial<TResult>
-
-/** How a login running on the host reaches the person signing in elsewhere. */
-export type CallerOwnedSignInChannel<TPrompt, TCode> = {
-  signal: AbortSignal
-  /** Why `signal` aborted: the person cancelled, or the device that started it stopped answering. */
-  stopped: () => 'cancelled' | 'silent' | null
-  onPrompt: (prompt: TPrompt) => void
-  /** What the person sent back; rejects if the flow ends first. */
-  nextCode: () => Promise<TCode>
-}
-
-export type CallerOwnedSignInPolicy<
-  TProvider extends string,
-  TPrompt,
-  TCode = unknown,
-  TInput = undefined
-> = {
-  /** A reason this host cannot start this sign-in, or null. */
-  refuseStart?: (input: TInput | undefined) => string | null
-  /** Starts with different keys are different sign-ins, so a repeat start resumes only its own. */
-  startKey?: (input: TInput | undefined) => string | undefined
-  /** The host publishes this prompt to another device, so it is checked before it is shown. */
-  acceptsPrompt: (provider: TProvider, prompt: TPrompt) => boolean
-  acceptsCode: (prompt: TPrompt | undefined) => boolean
-  /** Checks what was sent against the prompt it answers and returns what the run gets; throwing
-   * refuses it without spending the flow's one answer. */
-  readCode?: (prompt: TPrompt | undefined, code: TCode) => TCode
-  /** Maps a raw login failure to what the client is told. */
-  describeFailure: (message: string) => { error: string; errorCode?: string }
-  busyMessage: string
-  /** Whether a start of `next` replaces the running flow instead of being refused (newest wins). */
-  supersedes?: (running: SignInProgress<TProvider, TPrompt>, next: TProvider) => boolean
-  /** How long the owner may go without asking before the flow ends (default OWNER_SILENCE_MS). A sign-in
-   *  finished on this host outlives a caller that slept meanwhile, up to its own deadline. */
-  ownerSilenceMs?: number
-}
-
 type Flow<TProvider extends string, TPrompt, TCode, TResult extends object> = {
   owner: string
   key: string | undefined
   status: SignInProgress<TProvider, TPrompt>
   result: Partial<TResult>
   ended: AbortController
-  stop: 'cancelled' | 'silent' | null
+  stop: SignInFlowStop | null
   done: Promise<void>
   code: PromiseWithResolvers<TCode>
   codeSent: boolean
   listeners: Set<() => void>
   silence: ReturnType<typeof setTimeout> | null
+  /** When its owner last asked about it. */
+  touchedAt: number
 }
 
 /** Serialize host-local sign-ins; only the initiating client may inspect/answer/cancel.
@@ -125,7 +78,15 @@ export class CallerOwnedSignInFlows<
         this.touch(current)
         return view(current)
       }
-      if (!current.stop && this.policy.supersedes?.(current.status, provider)) {
+      const takeOverAfter = this.policy.ownerTakesOverAfterMs
+      const abandonedByOwner =
+        current.owner === owner &&
+        takeOverAfter !== undefined &&
+        Date.now() - current.touchedAt >= takeOverAfter
+      if (
+        !current.stop &&
+        (abandonedByOwner || this.policy.supersedes?.(current.status, provider))
+      ) {
         // Its owner's next wait reads it cancelled; its run stops on the abort.
         current.stop = 'cancelled'
         this.end(current)
@@ -158,7 +119,8 @@ export class CallerOwnedSignInFlows<
       code,
       codeSent: false,
       listeners: new Set(),
-      silence: null
+      silence: null,
+      touchedAt: Date.now()
     }
     this.active = flow
     this.latest.set(owner, flow)
@@ -190,6 +152,16 @@ export class CallerOwnedSignInFlows<
       },
       nextCode: () => flow.code.promise
     }
+    const deadlineMs = this.policy.promptDeadlineMs
+    const promptDeadline =
+      deadlineMs === undefined
+        ? null
+        : setTimeout(() => {
+            if (flow.status.phase === 'starting' && !flow.stop) {
+              flow.stop = 'noPrompt'
+              this.end(flow)
+            }
+          }, deadlineMs)
     try {
       const result = await this.run(flow.status.provider, channel, input)
       if (!settled(flow)) {
@@ -207,10 +179,15 @@ export class CallerOwnedSignInFlows<
               prompt: undefined,
               ...(flow.stop === 'silent'
                 ? { error: HOST_ACCOUNT_SIGN_IN_FAILURE_COPY.ownerSilent, errorCode: 'ownerSilent' }
-                : this.policy.describeFailure(message))
+                : flow.stop === 'noPrompt'
+                  ? { error: HOST_ACCOUNT_SIGN_IN_FAILURE_COPY.noPrompt, errorCode: 'noPrompt' }
+                  : this.policy.describeFailure(message))
             }
       )
     } finally {
+      if (promptDeadline) {
+        clearTimeout(promptDeadline)
+      }
       this.end(flow)
       if (this.active === flow) {
         this.active = null
@@ -295,6 +272,7 @@ export class CallerOwnedSignInFlows<
     if (settled(flow) || flow.stop) {
       return
     }
+    flow.touchedAt = Date.now()
     if (flow.silence) {
       clearTimeout(flow.silence)
     }
@@ -327,15 +305,4 @@ export class CallerOwnedSignInFlows<
       listener()
     }
   }
-}
-
-function view<TProvider extends string, TPrompt, TResult extends object>(flow: {
-  status: SignInProgress<TProvider, TPrompt>
-  result: Partial<TResult>
-}): CallerOwnedSignInStatus<TProvider, TPrompt, TResult> {
-  return { ...flow.status, ...flow.result }
-}
-
-function settled(flow: { status: { phase: HostAccountSignInPhase } }): boolean {
-  return HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES.has(flow.status.phase)
 }

@@ -12,9 +12,9 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { isHostNotConnectedError } from '../../query/host-query-errors'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { MobileBotMemoryBody, MobileBotMemoryEditPage, type MemoryActions } from './MobileBotMemory'
 import { useBotHomeFile, useBotMemoryTopics, type BotHomeFileRead } from './use-bot-home-files'
@@ -79,7 +79,8 @@ function HomeFileBody(props: {
 export function MobileBotSoulPage(
   props: SoulAndMemoryPageProps & { onAskInChat: ((draft: string) => void) | null }
 ) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const soul = useBotHomeFile(props.client, props.bot.folderWorkspaceId, SOUL_FILE, props.reads)
   const onAskInChat = props.onAskInChat
@@ -148,7 +149,6 @@ export function MobileBotMemoryPage(
     onOpenFile: ((path: string) => void) | null
   }
 ) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const { client, bot } = props
   const memory = useBotHomeFile(client, bot.folderWorkspaceId, MEMORY_FILE, props.reads)
@@ -237,7 +237,7 @@ export function MobileBotMemoryPage(
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   document: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   empty: { fontSize: 15, color: colors.textSecondary }
 }))

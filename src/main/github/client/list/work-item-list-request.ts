@@ -2,7 +2,6 @@ import type { ClassifiedError } from '../../../../shared/errors/classified-error
 import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'
-import { shouldProbeGitRemote } from '../../../git/remotes/remote-name-listing'
 import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import {
@@ -149,16 +148,11 @@ export async function resolvePrWorkItemSource(
     connectionId,
     localGitOptions
   )
-  // Skip known-absent upstreams; unknown remote discovery remains fail-open.
-  const upstreamCandidatePromise = shouldProbeGitRemote(
+  const upstreamCandidatePromise = getGitHubApiRepositoryForRemote(
     repoPath,
     'upstream',
     connectionId,
     localGitOptions
-  ).then((shouldProbe) =>
-    shouldProbe
-      ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
-      : null
   )
   const [originCandidate, upstreamCandidate] = await Promise.all([
     originCandidatePromise,

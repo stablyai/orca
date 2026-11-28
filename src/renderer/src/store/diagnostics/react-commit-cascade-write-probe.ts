@@ -18,21 +18,26 @@ export function withReactCommitCascadeWriteProbe<TState>(
 ): StateCreator<TState, [], []> {
   return (set, get, api) => {
     const probe = (write: typeof set): typeof set => {
-      const wrapped = (...args: StoreSetArgs<TState>): void => {
+      const wrapped = (
+        partial: TState | Partial<TState> | ((state: TState) => TState | Partial<TState>),
+        replace?: boolean
+      ): void => {
         if (reactCommitCascadeWriteProbe.armed) {
           try {
-            noteReactCommitCascadeStoreWrite(wrapped, args[0])
+            noteReactCommitCascadeStoreWrite(wrapped, partial)
           } catch {
             // Never throw from diagnostics on the universal write path or the app write is lost.
           }
         }
-        if (args[1] === true) {
-          write(...args)
+        if (replace === true) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace=true overload requires a complete TState or updater returning TState.
+          write(partial as TState | ((state: TState) => TState), true)
         } else {
-          write(...args)
+          write(partial, false)
         }
       }
-      return wrapped
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: named parameters implement both Zustand setState overloads without rest-args allocation.
+      return wrapped as typeof set
     }
     // Why separately: an outer middleware may hand slices a different `set` than api.setState.
     api.setState = probe(api.setState)

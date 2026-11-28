@@ -24,18 +24,16 @@ export function SkillBackupPathLine({
   }
   return (
     <div className={cn('flex min-w-0 flex-col gap-0.5 text-xs text-muted-foreground', className)}>
-      <span>
-        {host.kind === 'remote'
-          ? t(
-              'auto.components.skills.SkillBackupPathLine.movedToOnHost',
-              'Old copy moved to {{host}}:',
-              { host: host.name }
-            )
-          : t('auto.components.skills.SkillBackupPathLine.movedTo', 'Old copy moved to:')}
-      </span>
-      <div className="flex min-w-0 items-start gap-1.5">
-        <span className="min-w-0 flex-1 select-text font-mono text-2xs leading-5 text-foreground [overflow-wrap:anywhere]">
-          {path}
+      {/* Why the action sits on the label line: beside the path it squeezes a long-locale path to a narrow column. */}
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-1.5">
+        <span className="min-w-0">
+          {host.kind === 'remote'
+            ? t(
+                'auto.components.skills.SkillBackupPathLine.movedToOnHost',
+                'Old copy moved to {{host}}:',
+                { host: host.name }
+              )
+            : t('auto.components.skills.SkillBackupPathLine.movedTo', 'Old copy moved to:')}
         </span>
         {host.kind === 'local' ? (
           <Button
@@ -61,6 +59,9 @@ export function SkillBackupPathLine({
           </Button>
         )}
       </div>
+      <span className="min-w-0 select-text font-mono text-2xs leading-5 text-foreground [overflow-wrap:anywhere]">
+        {path}
+      </span>
     </div>
   )
 }

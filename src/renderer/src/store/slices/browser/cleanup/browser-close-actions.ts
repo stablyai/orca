@@ -1,3 +1,4 @@
+import { discardKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type {
   BrowserSlice,
@@ -18,6 +19,10 @@ import { omitRecordKeys } from '../../worktrees/teardown/record-key-omission'
 import { landOnEmptiedWorktree } from '../../tabs/tabs-empty-workspace'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { forgetDesktopCreatedServerTab } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
+import {
+  forgetBrowserAgentPage,
+  forgetBrowserAgentWorktree
+} from '@/components/browser-pane/agent-cursor/browser-agent-activity-state'
 import {
   closeBrowserTabThroughLayoutOwner,
   withDrawnBrowserPages,
@@ -60,6 +65,9 @@ export function createBrowserCloseActions(
           }
 
           const closedPages = s.browserPagesByWorkspace[tabId] ?? []
+          for (const page of closedPages) {
+            discardKagiPrivateInitialNavigation(page.id)
+          }
           const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
           delete nextBrowserPagesByWorkspace[tabId]
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
@@ -280,9 +288,13 @@ export function createBrowserCloseActions(
       const hadBrowserTabs = workspaces.length > 0
       for (const workspace of workspaces) {
         const browserPagesByWorkspace = get().browserPagesByWorkspace
+        for (const page of browserPagesByWorkspace[workspace.id] ?? []) {
+          forgetBrowserAgentPage(page.id)
+        }
         get().closeBrowserTab(workspace.id, options)
         destroyWorkspaceWebviews(browserPagesByWorkspace, workspace.id)
       }
+      forgetBrowserAgentWorktree(worktreeId)
       set((s) => {
         const removedWorktreeIds = [worktreeId]
         const nextBrowserTabsByWorktree = omitRecordKeys(

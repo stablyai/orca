@@ -6,6 +6,11 @@ import type { AgentStatusEntry } from '../../../../../../shared/agent-status/con
 
 export type AgentStatusReplacement = readonly [string, AgentStatusEntry | null]
 
+const EMPTY_PENDING_MAP = new Map<string, AgentStatusEntry | null>()
+const EMPTY_CHANGES: AgentStatusChange[] = []
+const EMPTY_REFRESHES: readonly string[] = []
+const NOOP_COMMIT = (): void => {}
+
 /** Live read handle; capture() is the explicit historical-snapshot boundary. Records are immutable. */
 export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEntry> {
   readonly [Symbol.toStringTag] = 'AcceptedAgentStatuses'
@@ -15,7 +20,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
   private pending: Map<string, AgentStatusEntry | null> | null = null
   private operations: AgentStatusReplacement[] = []
   private moved = new Set<string>()
-  private refreshes: readonly string[] = []
+  private refreshes: readonly string[] = EMPTY_REFRESHES
   get refreshKeys(): readonly string[] {
     return this.refreshes
   }
@@ -98,6 +103,14 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
   }
 
   *keysForTab(tabId: string): IterableIterator<string> {
+    if (!this.pending || this.pending.size === 0) {
+      for (const key of this.projection.tabKeys(tabId)) {
+        if (this.rows.has(key)) {
+          yield key
+        }
+      }
+      return
+    }
     const yielded = new Set<string>()
     for (const key of this.projection.tabKeys(tabId)) {
       if (this.has(key)) {
@@ -105,8 +118,9 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
         yield key
       }
     }
-    for (const key of this.stagedKeys()) {
-      if (!yielded.has(key) && key.startsWith(`${tabId}:`) && this.has(key)) {
+    const prefix = `${tabId}:`
+    for (const key of this.pending.keys()) {
+      if (!yielded.has(key) && key.startsWith(prefix) && this.has(key)) {
         yield key
       }
     }
@@ -127,12 +141,15 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
   }
 
   stagedKeys(): IterableIterator<string> {
-    return (this.pending ?? new Map()).keys()
+    return (this.pending ?? EMPTY_PENDING_MAP).keys()
   }
 
   changes(): AgentStatusChange[] {
+    if (!this.pending || this.pending.size === 0) {
+      return EMPTY_CHANGES
+    }
     const changes: AgentStatusChange[] = []
-    for (const key of this.stagedKeys()) {
+    for (const key of this.pending.keys()) {
       const previous = this.rows.get(key),
         current = this.get(key)
       if (previous !== current || this.moved.has(key)) {
@@ -144,22 +161,34 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
 
   /** Materialize fallible facts before either owner or presentation is published. */
   prepare(): () => void {
-    const sessionFact = (entry: AgentStatusEntry | undefined) =>
-      entry?.providerSession?.id
-        ? [entry.agentType, entry.paneKey, entry.tabId, entry.worktreeId, entry.providerSession]
-        : undefined
-    const fact = (entry: AgentStatusEntry | undefined) =>
-      entry && isAiVaultTitleAgent(entry.agentType) ? sessionFact(entry) : undefined
+    if (
+      !this.pending &&
+      this.operations.length === 0 &&
+      this.moved.size === 0 &&
+      this.refreshes.length === 0
+    ) {
+      return NOOP_COMMIT
+    }
     const changes = this.changes()
-    // A moved key changes iteration order, which picks between equal-priority panes of one tab.
-    const changedBy = (read: typeof fact) =>
-      changes.some(
-        (change) =>
-          !equal(read(change.previous), read(change.current)) ||
-          (this.moved.has(change.paneKey) && read(change.current) !== undefined)
-      )
-    const titleRevision = this.titleRevision + Number(changedBy(fact))
-    const sessionRevision = this.sessionRevision + Number(changedBy(sessionFact))
+    let titleRevision = this.titleRevision
+    let sessionRevision = this.sessionRevision
+    if (changes.length > 0) {
+      const sessionFact = (entry: AgentStatusEntry | undefined) =>
+        entry?.providerSession?.id
+          ? [entry.agentType, entry.paneKey, entry.tabId, entry.worktreeId, entry.providerSession]
+          : undefined
+      const fact = (entry: AgentStatusEntry | undefined) =>
+        entry && isAiVaultTitleAgent(entry.agentType) ? sessionFact(entry) : undefined
+      // A moved key changes iteration order, which picks between equal-priority panes of one tab.
+      const changedBy = (read: typeof fact) =>
+        changes.some(
+          (change) =>
+            !equal(read(change.previous), read(change.current)) ||
+            (this.moved.has(change.paneKey) && read(change.current) !== undefined)
+        )
+      titleRevision += Number(changedBy(fact))
+      sessionRevision += Number(changedBy(sessionFact))
+    }
     return () => {
       this.titleRevision = titleRevision
       this.sessionRevision = sessionRevision
@@ -171,9 +200,13 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
         }
       }
       this.pending = null
-      this.operations = []
-      this.moved.clear()
-      this.refreshes = []
+      if (this.operations.length > 0) {
+        this.operations = []
+      }
+      if (this.moved.size > 0) {
+        this.moved.clear()
+      }
+      this.refreshes = EMPTY_REFRESHES
     }
   }
 

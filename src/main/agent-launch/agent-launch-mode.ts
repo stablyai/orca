@@ -3,7 +3,13 @@
 import { requestsCwdOutsideWorkspaceRoot } from '../../shared/shell/launch/terminal-startup-cwd'
 import type { AgentLaunchModeReceipt } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { RUNTIME_CAPABILITIES } from '../../shared/remote-runtime/protocol/protocol-version'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
+import {
+  readStructuredCreateSupport,
+  REGISTERED_STRUCTURED_AGENTS,
+  type AgentLaunchSupportPlace,
+  type CreateSupportRuntime,
+  type StructuredCreateSupportWithInstallation
+} from './agent-launch-support-place'
 import {
   nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
@@ -11,12 +17,8 @@ import {
   type StructuredNativeChatBlocker
 } from '../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type {
-  StructuredAgentCreateSupportReason,
-  StructuredAgentCreateSupportReply
-} from '../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
+import type { StructuredAgentCreateSupportReason } from '../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 import type { WorkspaceLaunchKind } from '../../shared/agent-launch/contracts/workspace-launch-kind'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
@@ -60,10 +62,6 @@ export type AgentLaunchModePlacement = {
   callerRendersStructured?: boolean
 }
 
-const REGISTERED_STRUCTURED_AGENTS: readonly string[] = STRUCTURED_AGENT_RUNTIME_METADATA.map(
-  ({ definition }) => definition.agent
-)
-
 const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeReason> = {
   'reused-terminal': 'reused_terminal',
   'agent-without-structured-session': 'agent_without_structured_session',
@@ -81,7 +79,8 @@ const HOST_SUPPORT_REASON: Record<StructuredAgentCreateSupportReason, AgentLaunc
     remote: 'remote_execution_host',
     wsl: 'wsl_execution_runtime',
     windows: 'chat_unavailable_on_windows',
-    'chat-program': 'chat_runtime_not_installed'
+    'chat-program': 'chat_runtime_not_installed',
+    'workspace-access': 'structured_unsupported_on_host'
   }
 
 /** Apply shared feasibility policy to facts available before resolving the workspace. */
@@ -173,16 +172,17 @@ export function decideAgentLaunchMode(args: {
 }
 
 /** Refuse explicit chat only before effects; a created workspace keeps its terminal fallback. */
+export type { AgentLaunchSupportPlace }
+
 export async function resolveAgentLaunchModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'> &
-    WslHostChatSettingsSource,
+  runtime: CreateSupportRuntime & WslHostChatSettingsSource,
   receipt: AgentLaunchModeReceipt,
-  worktreeId: string | undefined,
+  place: AgentLaunchSupportPlace | undefined,
   agent: TuiAgent | undefined,
   vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
   context?: AgentLaunchModeSettlement
 ): Promise<AgentLaunchModeReceipt> {
-  if (receipt.mode !== 'structured' || !worktreeId) {
+  if (receipt.mode !== 'structured' || !place) {
     return receipt
   }
   if (context && launchCwdRelation(context) !== 'root') {
@@ -197,7 +197,7 @@ export async function resolveAgentLaunchModeOnHost(
       launchCwdRelation(context) === 'custom'
     )
   }
-  const support = await readStructuredCreateSupport(runtime, worktreeId, agent)
+  const support = await readStructuredCreateSupport(runtime, place, agent)
   const settlement = context ? { ...context, agent } : undefined
   try {
     return downgradeAgentLaunchModeForHost(receipt, support, vocabulary, settlement)
@@ -206,28 +206,9 @@ export async function resolveAgentLaunchModeOnHost(
   }
 }
 
-/** Unknown host support must fall back to a terminal. */
-async function readStructuredCreateSupport(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
-  worktreeId: string,
-  agent: TuiAgent | undefined
-): Promise<StructuredAgentCreateSupportReply | null> {
-  if (!agent || !REGISTERED_STRUCTURED_AGENTS.includes(agent)) {
-    return { supported: false, reason: 'agent' }
-  }
-  try {
-    // These launches have no chat tab to offer the install, so they keep the agent's own CLI.
-    return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent, {
-      requireInstalledChatProgram: true
-    })
-  } catch {
-    return null
-  }
-}
-
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,
-  support: StructuredAgentCreateSupportReply | null,
+  support: StructuredCreateSupportWithInstallation | null,
   vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
   context?: AgentLaunchModeSettlement
 ): AgentLaunchModeReceipt {
@@ -237,6 +218,17 @@ export function downgradeAgentLaunchModeForHost(
   const preference = chatPreferenceOf(receipt)
   if (support === null) {
     return downgraded(BLOCKER_REASON['runtime-capability-unknown'], vocabulary, preference)
+  }
+  if (support.installation) {
+    const { agent, installedVersion, minimumVersion } = support.installation
+    return unavailableLaunchMode(
+      'agent_cli_too_old',
+      vocabulary,
+      preference,
+      context,
+      true,
+      `the installed ${formatAgentTypeLabel(agent)} CLI is ${installedVersion}, and chats need ${minimumVersion} or newer — update it`
+    )
   }
   return unavailableLaunchMode(
     support.reason ? HOST_SUPPORT_REASON[support.reason] : 'structured_unsupported_on_host',
@@ -287,15 +279,16 @@ function unavailableLaunchMode(
   vocabulary: AgentLaunchModeVocabulary,
   preference: ChatPreference,
   context?: AgentLaunchModeSettlement,
-  conclusive = true
+  conclusive = true,
+  detailOverride?: string
 ): AgentLaunchModeReceipt {
   if (preference === 'requested' && conclusive && context?.phase === 'before-effects') {
     throw new AgentLaunchSurfaceUnavailableError(
-      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
+      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${detailOverride ?? DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
       reason
     )
   }
-  return downgraded(reason, vocabulary, preference)
+  return downgraded(reason, vocabulary, preference, detailOverride)
 }
 
 export function warnStructuredLaunchDowngrade(

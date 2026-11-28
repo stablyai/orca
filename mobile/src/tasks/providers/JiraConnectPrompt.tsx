@@ -1,40 +1,53 @@
-import { colors } from '../../theme/mobile-theme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 type Props = {
   credentialError: string | null
   unavailableReason: string | null
   disabled: boolean
   onCheckAgain: () => void
+  /** Null when the host cannot take Jira credentials from a phone; setup then stays on desktop. */
+  onConnect: (() => void) | null
   bottomInset?: number
 }
 
-// Jira credentials are managed on the paired desktop.
 export function JiraConnectPrompt({
   credentialError,
   unavailableReason,
   disabled,
   onCheckAgain,
+  onConnect,
   bottomInset
 }: Props) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
+  const canConnect = onConnect !== null && !unavailableReason
+  const unreadable = credentialError
+    ? t(
+        'components.jiraConnectPrompt.credentialUnreadable',
+        'Jira is saved but unreadable: {{credentialError}}',
+        { credentialError }
+      )
+    : null
   return (
     <MobileStateView
       iconElement={<TaskProviderLogo provider="jira" size={24} color={colors.textMuted} />}
       title={
         unavailableReason
           ? t('components.jiraConnectPrompt.updateDesktop', 'Update Orca on this host')
-          : t('components.jiraConnectPrompt.connectOnDesktop', 'Connect Jira on your desktop')
+          : canConnect
+            ? t('components.jiraConnectPrompt.connectTitle', 'Connect your Jira account')
+            : t('components.jiraConnectPrompt.connectOnDesktop', 'Connect Jira on your desktop')
       }
       message={
         unavailableReason ??
-        (credentialError
+        unreadable ??
+        (canConnect
           ? t(
-              'components.jiraConnectPrompt.credentialUnreadable',
-              'Jira is saved but unreadable: {{credentialError}}',
-              { credentialError }
+              'components.jiraConnectPrompt.connectMessage',
+              'Browse and start work on your assigned Jira issues directly from Tasks.'
             )
           : t(
               'components.jiraConnectPrompt.connectHint',
@@ -44,10 +57,15 @@ export function JiraConnectPrompt({
       action={
         disabled
           ? null
-          : {
-              label: t('components.jiraConnectPrompt.checkAgain', 'Check again'),
-              onPress: onCheckAgain
-            }
+          : canConnect
+            ? {
+                label: t('components.jiraConnectPrompt.connect', 'Connect Jira'),
+                onPress: onConnect
+              }
+            : {
+                label: t('components.jiraConnectPrompt.checkAgain', 'Check again'),
+                onPress: onCheckAgain
+              }
       }
       bottomInset={bottomInset}
     />

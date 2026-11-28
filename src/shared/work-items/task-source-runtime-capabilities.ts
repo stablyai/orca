@@ -16,6 +16,8 @@ export const GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY =
   'github.account-expectation.v1' as const
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
   'linear.issue-attribute-filter.v1' as const
+/** Phones may call jira.connect; older hosts keep the "connect on your desktop" prompt. */
+export const JIRA_MOBILE_CONNECT_RUNTIME_CAPABILITY = 'jira.mobile-connect.v1' as const
 
 export const TASK_SOURCE_RUNTIME_CAPABILITIES = [
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
@@ -29,5 +31,6 @@ export const TASK_SOURCE_RUNTIME_CAPABILITIES = [
   JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY,
   ...JIRA_DETAIL_RUNTIME_CAPABILITIES,
   JIRA_SAVED_FILTER_RUNTIME_CAPABILITY,
-  JIRA_STATUS_FILTER_RUNTIME_CAPABILITY
+  JIRA_STATUS_FILTER_RUNTIME_CAPABILITY,
+  JIRA_MOBILE_CONNECT_RUNTIME_CAPABILITY
 ] as const

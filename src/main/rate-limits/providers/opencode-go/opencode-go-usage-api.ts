@@ -1,6 +1,8 @@
 import { ensureElectronProxyFromEnvironment } from '../../../network/proxy-settings'
 import { getMainHttpClient } from '../../../network/http-client'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
+import { delayUnlessAborted } from '../../../../shared/concurrency/abort-aware-delay'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   parseOpenCodeGoUsageApiPayload,
   type OpenCodeGoUsageWindows
@@ -11,6 +13,23 @@ import type { UsageRateLimitFailureKind } from '../../../../shared/agent-usage/r
 export const OPENCODE_GO_USAGE_API_URL = 'https://opencode.ai/zen/go/v1/usage'
 const API_TIMEOUT_MS = 15_000
 const MAX_ERROR_BODY_CHARS = 4_000
+const FETCH_ATTEMPTS = 3
+const FETCH_RETRY_DELAY_MS = 400
+// Only brief hiccups; persistent offline/DNS/cert/proxy failures would just delay the shared usage cycle.
+const TRANSIENT_NET_ERROR =
+  /^net::ERR_(CONNECTION_(RESET|CLOSED|ABORTED|TIMED_OUT)|NETWORK_CHANGED|ADDRESS_UNREACHABLE|EMPTY_RESPONSE|SSL_PROTOCOL_ERROR|HTTP2_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)$/
+const TRANSIENT_NODE_CODES = new Set([
+  'ECONNRESET',
+  'ECONNABORTED',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'ETIMEDOUT',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'EAI_AGAIN'
+])
+// A persistently blocked network would retry every poll and delay the shared usage cycle, so only an isolated blip gets retries.
+let previousRequestFailedInTransport = false
 
 /** Unauthorized/no-subscription are definitive key verdicts; failed means no usable answer. */
 export type OpenCodeGoUsageApiOutcome =
@@ -51,6 +70,44 @@ function classifyFailure(status: number, body: string): OpenCodeGoUsageApiOutcom
   return { kind: 'failed', message: `OpenCode Go usage request failed (${status})` }
 }
 
+// Electron net.fetch rejects with the net:: string as the message; Node fetch rejects with TypeError and the code on cause.
+function isTransientTransportFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const { cause } = error
+  const code = cause instanceof Error && 'code' in cause ? cause.code : undefined
+  return (
+    TRANSIENT_NET_ERROR.test(error.message) ||
+    (typeof code === 'string' && TRANSIENT_NODE_CODES.has(code))
+  )
+}
+
+async function fetchUsageResponse(
+  apiKey: string,
+  signal: AbortSignal,
+  maxAttempts: number
+): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await getMainHttpClient().fetch(OPENCODE_GO_USAGE_API_URL, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          Accept: 'application/json'
+        },
+        signal
+      })
+    } catch (error) {
+      if (signal.aborted || attempt >= maxAttempts || !isTransientTransportFailure(error)) {
+        throw error
+      }
+      await delayUnlessAborted(FETCH_RETRY_DELAY_MS, signal)
+      throwIfSignalAborted(signal)
+    }
+  }
+}
+
 /** Fetch via the default Electron session for app-wide proxy handling; the key stays in Authorization, never logs/results/telemetry. */
 export async function fetchOpenCodeGoUsageWithApiKey(
   apiKey: string,
@@ -62,15 +119,15 @@ export async function fetchOpenCodeGoUsageWithApiKey(
 
   let response: Response
   try {
-    response = await getMainHttpClient().fetch(OPENCODE_GO_USAGE_API_URL, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        Accept: 'application/json'
-      },
-      signal: abortSignalWithTimeout(signal, API_TIMEOUT_MS)
-    })
+    // Retries share one timeout so a stalled endpoint still fails within API_TIMEOUT_MS.
+    response = await fetchUsageResponse(
+      apiKey,
+      abortSignalWithTimeout(signal, API_TIMEOUT_MS),
+      previousRequestFailedInTransport ? 1 : FETCH_ATTEMPTS
+    )
+    previousRequestFailedInTransport = false
   } catch (error) {
+    previousRequestFailedInTransport = true
     // Exception messages may embed the authenticated request; return a fixed prefix.
     return {
       kind: 'failed',

@@ -40,10 +40,16 @@ export function requireStructuredAgentAudience(ctx: RpcContext, agent: string): 
   }
 }
 
-/** Only createSupport consults launch preference for legacy mode pickers, preserving their terminal-fallback refusal. */
-export function requireStructuredCreateSupportAdmission(ctx: RpcContext, agent?: string): void {
+/** Only createSupport consults launch preference for legacy mode pickers, preserving their terminal-fallback refusal.
+ *  A resume preflight already asks for a chat, so the host's launch default has no say in it. */
+export function requireStructuredCreateSupportAdmission(
+  ctx: RpcContext,
+  agent?: string,
+  explicitChat = false
+): void {
   requireStructuredAgentAudience(ctx, agent ?? '')
   if (
+    !explicitChat &&
     createSupportFollowsHostSetting(ctx) &&
     !isStructuredNativeChatDefaultFor(ctx.runtime, agent ?? '')
   ) {

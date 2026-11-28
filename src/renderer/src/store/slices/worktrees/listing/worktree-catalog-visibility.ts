@@ -11,17 +11,27 @@ export function worktreesDifferOnlyInSortOrder(
   if (!current || current.length !== next.length) {
     return false
   }
-  return current.every((row, index) => {
+  for (let index = 0; index < current.length; index++) {
+    const row = current[index]
     const incoming = next[index]
-    return (
-      row === incoming ||
-      (row.id === incoming.id &&
-        structuralValuesEqualIgnoringUndefined(
-          { ...row, sortOrder: 0 },
-          { ...incoming, sortOrder: 0 }
-        ))
-    )
-  })
+    if (row === incoming) {
+      continue
+    }
+    if (row.id !== incoming.id) {
+      return false
+    }
+    const equalIgnoringSortOrder =
+      row.sortOrder === incoming.sortOrder
+        ? structuralValuesEqualIgnoringUndefined(row, incoming)
+        : structuralValuesEqualIgnoringUndefined(
+            { ...row, sortOrder: 0 },
+            { ...incoming, sortOrder: 0 }
+          )
+    if (!equalIgnoringSortOrder) {
+      return false
+    }
+  }
+  return true
 }
 
 export function areDetectedWorktreeResultsEqual(

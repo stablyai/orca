@@ -3,7 +3,6 @@ import {
   defineRpcOperation
 } from '../../../../transport/rpc/rpc-operation'
 import type { RpcCompatibleReader } from '../../../../transport/rpc/rpc-operation-contract'
-import '../../../../../../src/shared/source-control/listing/source-control-group-order'
 import { settingsMember, settingsField } from '../../../../settings/mobile-settings-projection'
 
 const botOverridesReader: RpcCompatibleReader<unknown, 'bot-logins', string[]> = (raw) => {

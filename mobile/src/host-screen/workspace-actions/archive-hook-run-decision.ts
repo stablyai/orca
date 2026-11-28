@@ -1,5 +1,6 @@
 import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace-setup/orca-yaml-hook-types'
-import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/workspace-scope'
+import { projectGroupIdFromRepoId } from '../../../../src/shared/folder-workspaces/folder-workspace-worktree'
+import { projectGroupHookTrustKey } from '../../../../src/shared/workspace-setup/hooks/workspace-hook-owner'
 import type { OrcaHookTrustPrompt } from '../../components/hook-trust/OrcaHookTrustDrawer'
 import { newWorkspaceUiStateRead } from '../../new-workspace/creation/runtime/new-workspace-operations'
 import {
@@ -29,10 +30,11 @@ export async function decideArchiveHookRun(
   }
 ): Promise<ArchiveHookDecision> {
   const { repoId } = args.item
-  // A folder's Archive script belongs to its project group, which repo.hooks cannot read.
-  if (folderIdOfSelector(args.item.worktreeId) !== undefined) {
-    return { kind: 'skip' }
-  }
+  const groupId = projectGroupIdFromRepoId(repoId)
+  // Project-group hooks share desktop's host-scoped trust key so approvals match across clients.
+  const trustRepoId = groupId
+    ? projectGroupHookTrustKey({ id: groupId, executionHostId: args.item.hostId })
+    : repoId
   try {
     const hooks = worktreeArchiveHookTrustRead.interpret(
       await worktreeArchiveHookTrustRead.request(args.rowClient, { repo: `id:${repoId}` })
@@ -54,7 +56,7 @@ export async function decideArchiveHookRun(
     const trust = ui.value?.trustedOrcaHooks ?? {}
     if (
       archiveTrust.contentHash === args.approvedArchiveHash ||
-      isOrcaHookTrusted(trust, args.repos, repoId, 'archive', archiveTrust.contentHash)
+      isOrcaHookTrusted(trust, args.repos, trustRepoId, 'archive', archiveTrust.contentHash)
     ) {
       return { kind: 'run' }
     }
@@ -64,12 +66,12 @@ export async function decideArchiveHookRun(
       repos: args.repos,
       prompt: {
         kind: 'archive',
-        repoId,
+        repoId: trustRepoId,
         repoName: args.item.repo,
         scriptContent: archiveTrust.scriptContent,
         contentHash: archiveTrust.contentHash,
-        previouslyApproved: wasOrcaHookPreviouslyApproved(trust, repoId, 'archive'),
-        versionOnly: usesVersionedOrcaHookTrust(args.repos, repoId)
+        previouslyApproved: wasOrcaHookPreviouslyApproved(trust, trustRepoId, 'archive'),
+        versionOnly: usesVersionedOrcaHookTrust(args.repos, trustRepoId)
       }
     }
   } catch {

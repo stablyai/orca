@@ -8,11 +8,16 @@ import type { ClaudeAccountSnapshot } from './claude-account-switch-sessions'
 /** Asks the server to restart the sessions it left running under Ask; resolves with what it did. */
 export type RestartHostClaudeSessions = () => Promise<ClaudeHostRunningSessionsMove | undefined>
 
+export function dismissHostAskToast(toastId: string): void {
+  toast.dismiss(toastId)
+}
+
 export function announceHostMove(
   move: ClaudeHostRunningSessionsMove | undefined,
   before: ClaudeAccountSnapshot,
   after: ClaudeAccountSnapshot,
-  restart?: RestartHostClaudeSessions
+  restart?: RestartHostClaudeSessions,
+  toastId?: string
 ): 'show-confirmation' | 'handled' {
   if (move && move.restarting > 0) {
     announceRestart(
@@ -24,20 +29,25 @@ export function announceHostMove(
   }
   const previous = getClaudeAccountLabel(before.state, before.accountId)
   if (move?.canRestart && restart) {
-    askHostRestart(move.canRestart, previous, () => {
-      void restart().then(
-        (moved) => announceHostMove(moved, before, after),
-        (error: unknown) => {
-          console.error('[claude-account-switch] server restart failed:', error)
-          toast.error(
-            translate(
-              'auto.components.settings.AccountsPane.2743cdc0af',
-              'Claude account update failed.'
+    askHostRestart(
+      move.canRestart,
+      previous,
+      () => {
+        void restart().then(
+          (moved) => announceHostMove(moved, before, after),
+          (error: unknown) => {
+            console.error('[claude-account-switch] server restart failed:', error)
+            toast.error(
+              translate(
+                'auto.components.settings.AccountsPane.2743cdc0af',
+                'Claude account update failed.'
+              )
             )
-          )
-        }
-      )
-    })
+          }
+        )
+      },
+      toastId
+    )
     return 'handled'
   }
   if (move && move.notMoved > 0) {
@@ -47,7 +57,12 @@ export function announceHostMove(
 }
 
 /** Why a toast: the server left these running because the setting is Ask, and only here can it be answered. */
-function askHostRestart(count: number, previous: string, restart: () => void): void {
+function askHostRestart(
+  count: number,
+  previous: string,
+  restart: () => void,
+  toastId?: string
+): void {
   toast.warning(
     count === 1
       ? translate(
@@ -61,6 +76,7 @@ function askHostRestart(count: number, previous: string, restart: () => void): v
           { count, previous }
         ),
     {
+      ...(toastId ? { id: toastId } : {}),
       description: translate(
         'accounts.claude.switchSessions.hostAskDescription',
         'Restarting stops any work in progress.'

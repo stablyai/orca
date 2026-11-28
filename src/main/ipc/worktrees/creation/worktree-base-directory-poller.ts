@@ -1,6 +1,8 @@
 import {
   isMainWindowVisible,
-  onMainWindowBecameVisible
+  onMainWindowBecameVisible,
+  onMainWindowFocused,
+  onMainWindowHidden
 } from '../../../window/visibility/main-window-visibility'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -11,11 +13,19 @@ import { startGitCommonWatch } from '../git/worktree-git-common-watch'
 
 export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path: string }
 
-export type WorktreeBaseSubscription = { unsubscribe: () => Promise<void> }
+export type WorktreeBaseSubscription = {
+  unsubscribe: () => Promise<void>
+  /** Membership changed on watcher sync; owners that route by repo id re-read it. */
+  syncRepos?: () => void
+}
 
 export type WorktreePollerWindowVisibility = {
   isWindowVisible: () => boolean
   onWindowBecameVisible: (listener: () => void) => () => void
+  /** Main window focus; pollers that back up a watcher re-check when the user comes back. */
+  onWindowFocused?: (listener: () => void) => () => void
+  /** Main window hide/minimize; lets a slow poller tell how long the window was hidden. */
+  onWindowHidden?: (listener: () => void) => () => void
 }
 
 type WorktreePollerWindow = {
@@ -46,7 +56,9 @@ export function createWorktreePollerWindowVisibility(
       }
       return !hasBeenVisible
     },
-    onWindowBecameVisible: onMainWindowBecameVisible
+    onWindowBecameVisible: onMainWindowBecameVisible,
+    onWindowFocused: onMainWindowFocused,
+    onWindowHidden: onMainWindowHidden
   }
 }
 
@@ -91,7 +103,8 @@ export async function startWorktreeBaseDirectoryPoller(
       options.onFullScan,
       options.getGitStatusRefPaths,
       options.onWatchError,
-      options.onOverflow
+      options.onOverflow,
+      getRepos
     )
   }
   return startBasePoller(target, getRepos, onEvents, pollIntervalMs, visibility, options)

@@ -48,10 +48,16 @@ export type HostAccountSignInStatus = {
 // One English table for sign-in failures Orca names itself; the login's own errors stay uncoded.
 export const HOST_ACCOUNT_SIGN_IN_FAILURE_COPY = {
   ownerSilent: 'The device that started this sign-in stopped answering.',
-  superseded: 'An account change on this host stopped the sign-in. Start it again.'
+  superseded: 'An account change on this host stopped the sign-in. Start it again.',
+  noPrompt:
+    "The server's login command didn't show a sign-in link within a minute. Update Orca on the server, then try again."
 } as const
 
 export type HostAccountSignInFailureCode = keyof typeof HOST_ACCOUNT_SIGN_IN_FAILURE_COPY
+
+/** How long a host keeps a sign-in nobody asks about: as long as Claude's own login waits, since a phone on
+ *  the sign-in page is suspended and can't ask. Older hosts end it after 90 s. */
+export const HOST_ACCOUNT_SIGN_IN_OWNER_SILENCE_MS = 10 * 60_000
 
 export const HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES: ReadonlySet<HostAccountSignInPhase> = new Set([
   'signedIn',

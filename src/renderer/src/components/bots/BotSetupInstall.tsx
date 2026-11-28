@@ -2,17 +2,15 @@ import { useEffect, useRef } from 'react'
 import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { botRefKey, botTarget } from '@/lib/bot-hosts'
 import { useAntigravityChatSignIn } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
-import {
-  antigravityChatSignInPrompt,
-  antigravityOrcaRuntimeSignsIn
-} from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   nativeChatInstallSlotState,
   type NativeChatInstallSlotInstall
 } from '../native-chat/host-access/NativeChatInstallSlot'
-import type { NativeChatSignInStripState } from '../native-chat/host-access/NativeChatSignInStrip'
-import { useStructuredAgentSessionHostProgram } from '../native-chat/session/status/structured-agent-session-status-hooks'
+import {
+  useAntigravityChatSignInStrip,
+  type NativeChatSignInStripState
+} from '../native-chat/host-access/NativeChatSignInStrip'
 
 const CHANGING_PHASES: ReadonlySet<string> = new Set([
   'downloading',
@@ -24,41 +22,33 @@ const CHANGING_PHASES: ReadonlySet<string> = new Set([
 // Bots whose card offered a step; outlives the card, which unmounts when its tab is left mid-download.
 const offered = new Set<string>()
 
-/** What a bot whose setup failed still needs on its computer: its agent installed, then Orca's
- *  sign-in where the agent has one. `retry` runs once a step the card offered is done, so setup
- *  carries on without another click. */
+/** What a bot whose setup failed still needs on its computer: the agent Orca downloads for it, or
+ *  agy's sign-in for an Antigravity bot on a Google method. `retry` runs once a step the card
+ *  offered is done, so setup carries on without another click. */
 export function useBotSetupInstall(
   bot: Bot,
   shown: boolean,
   retry: () => void
 ): { install: NativeChatInstallSlotInstall | null; signIn: NativeChatSignInStripState | null } {
   const target = botTarget(bot)
-  const hostProgram = useStructuredAgentSessionHostProgram(bot.chatSessionId ?? '', target)
-  // A bot on the host program follows it too: Orca's copy of agy may be what it needs installed.
   const observation = useManagedRuntimeInstall(target, bot.agent, shown)
-  const slot = nativeChatInstallSlotState(observation, 'strip', hostProgram)
+  const slot = nativeChatInstallSlotState(observation, 'strip')
   const install = shown && slot.kind === 'install' ? slot : null
   const state =
     shown && observation.kind === 'active' && observation.snapshot.kind === 'known'
       ? observation.snapshot.state
       : null
-  const installed = state !== null && state.source !== null
-  // An update of Orca's copy hides the sign-in without settling it, so nothing is ready meanwhile.
+  // The user installs agy, so its sign-in is the one step an Antigravity bot's card offers; the
+  // host reports agy signed out only where agy is installed. Same rule as the chat's own strip.
+  const signsIn = bot.agent === 'antigravity'
+  const installed = signsIn || (state !== null && state.source !== null)
+  // An update isn't settled until it ends, so nothing is ready meanwhile.
   const changing = state?.operation ? CHANGING_PHASES.has(state.operation.phase) : false
-  // Same rule as the chat's own strip: only Orca's copy of Antigravity takes Orca's sign-in.
-  const signsIn =
-    bot.agent === 'antigravity' &&
-    !hostProgram &&
-    installed &&
-    observation.kind === 'active' &&
-    antigravityOrcaRuntimeSignsIn(observation)
-  const signInView = useAntigravityChatSignIn(signsIn ? target : null)
-  const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
-  const signIn =
-    prompt === null ? null : { prompt, view: signInView, agent: bot.agent, host: target }
-  const waiting = install !== null || prompt !== null
+  const signIn = useAntigravityChatSignInStrip(signsIn && shown ? target : null, bot.agent)
+  const signInStatus = useAntigravityChatSignIn(signsIn && shown ? target : null).status
+  const waiting = install !== null || signIn !== null
   // A sign-in the host has not reported yet could still be owed, so the retry waits for it.
-  const ready = installed && !changing && !waiting && (!signsIn || signInView.status === 'known')
+  const ready = installed && !changing && !waiting && (!signsIn || signInStatus === 'known')
   const latestRetry = useRef(retry)
   useEffect(() => {
     latestRetry.current = retry

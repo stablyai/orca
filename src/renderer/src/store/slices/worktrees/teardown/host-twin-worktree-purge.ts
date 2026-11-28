@@ -91,10 +91,8 @@ export function buildHostTwinPurgeState(
   const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
   const omitters = createWorktreePurgeOmitters(s, new Set(), doomed)
   const tabPrefixedSleeping = {
-    sleepingAgentSessionsByPaneKey: omitters.omitByPaneKeyTabPrefix(
-      s.sleepingAgentSessionsByPaneKey
-    ),
-    agentLaunchConfigByPaneKey: omitters.omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey)
+    sleepingAgentSessionsByPaneKey: omitters.omitByPaneKey(s.sleepingAgentSessionsByPaneKey),
+    agentLaunchConfigByPaneKey: omitters.omitByPaneKey(s.agentLaunchConfigByPaneKey)
   }
   // Why SSH only: a record whose tab is gone names its host just by connection; null is ambiguous.
   const sshRecordPaneKeys = Object.entries(s.sleepingAgentSessionsByPaneKey ?? {}).flatMap(
@@ -135,7 +133,6 @@ export function buildHostTwinPurgeState(
     ...buildWorktreePurgeSurfacePatch(
       s,
       omitters,
-      doomed.doomedTabIds,
       {
         ...tabPrefixedSleeping,
         ...omitSleepingAgentSessionsForWorktrees(tabPrefixedSleeping, new Set(), sshRecordPaneKeys)

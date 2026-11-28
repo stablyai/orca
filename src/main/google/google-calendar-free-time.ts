@@ -2,6 +2,7 @@
 // free/busy, between set hours on weekdays in this account's zone. A calendar Google won't show is
 // unknown, never free.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { CalendarSuggestView, FreeSlot } from '../../shared/google/google-write-types'
 import { GoogleToolError, parseGoogleJson, type GoogleApi } from './google-api-client'
 import { CALENDAR, pickCalendar } from './google-calendar-read'
@@ -16,16 +17,18 @@ const PER_DAY = 3
 // Picks within a day sit at least this far apart, so the choices differ.
 const SPREAD_MS = 90 * 60_000
 
-const Busy = z.object({ start: z.string(), end: z.string() })
-const FreeBusySchema = z.object({
-  calendars: z.record(
-    z.string(),
-    z.object({
-      busy: z.array(Busy).default([]),
-      errors: z.array(z.object({ reason: z.string().optional() })).optional()
-    })
-  )
-})
+const Busy = lazyZodSchema(() => z.object({ start: z.string(), end: z.string() }))
+const FreeBusySchema = lazyZodSchema(() =>
+  z.object({
+    calendars: z.record(
+      z.string(),
+      z.object({
+        busy: z.array(Busy).default([]),
+        errors: z.array(z.object({ reason: z.string().optional() })).optional()
+      })
+    )
+  })
+)
 
 const REASONS: Record<string, string> = {
   notFound: "Orca can't see their calendar",
@@ -34,7 +37,9 @@ const REASONS: Record<string, string> = {
 }
 
 function parseHours(value: string | undefined): { from: string; to: string } {
-  const match = /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/.exec(value?.trim() ?? '09:00-17:00')
+  const match = /^(\d{1,2}):([0-5]\d)\s*-\s*(\d{1,2}):([0-5]\d)$/.exec(
+    value?.trim() ?? '09:00-17:00'
+  )
   const pad = (hours: string | undefined, minutes: string | undefined) =>
     `${String(hours).padStart(2, '0')}:${minutes}`
   const from = match ? pad(match[1], match[2]) : ''

@@ -1,13 +1,12 @@
-import React from 'react'
-import { Check, Github, Smile } from 'lucide-react'
+import React, { Suspense } from 'react'
+import { Smile } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { cn } from '@/lib/class-names'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
-  githubAvatarIcon,
   MAX_REPO_MONOGRAM_CHARACTERS,
   sanitizeRepoMonogramText,
   type RepoIcon
@@ -19,8 +18,14 @@ import {
 } from '../../../../../shared/repository/appearance/repo-mark-appearance'
 import { getRepoLucideIconOptions, RepoIconGlyph } from '../repo-icon'
 import { useRepoMarkAppearance } from '../RepoMark'
-import type { ProjectRemoteDisplay } from './project-remote-display'
-import { ProjectIconSourcePanel } from './ProjectIconSourcePanel'
+
+const RepositoryIconEmojiPicker = lazyWithRetry(
+  () =>
+    import('../../settings/repository/identity/RepositoryIconEmojiPicker').then((module) => ({
+      default: module.RepositoryIconEmojiPicker
+    })),
+  { reloadKey: 'repo-icon-emoji-picker' }
+)
 
 // Package and Box draw the same cube at this size; keep Box only for projects already using it.
 const VISUALLY_DUPLICATE_ICONS = new Set(['Box'])
@@ -205,51 +210,10 @@ export function GlyphPanel({
         </IconTile>
       </div>
       {emojiOpen ? (
-        <ProjectIconSourcePanel source="emoji" selectedEmoji={emoji} onSetIcon={onSetIcon} />
+        <Suspense fallback={<div className="h-[280px] animate-pulse rounded-md bg-muted" />}>
+          <RepositoryIconEmojiPicker compact selectedEmoji={emoji} onSetIcon={onSetIcon} />
+        </Suspense>
       ) : null}
-    </div>
-  )
-}
-
-export function PicturePanel({
-  repo,
-  remote,
-  loadingGitHub,
-  onUseGitHubAvatar,
-  onSetIcon
-}: {
-  repo: Repo
-  remote: ProjectRemoteDisplay | null
-  loadingGitHub: boolean
-  onUseGitHubAvatar: () => void
-  onSetIcon: (repoIcon: RepoIcon | null) => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const usingGitHubAvatar = repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
-  const githubPreview =
-    remote?.owner && remote.name
-      ? githubAvatarIcon({ owner: remote.owner, repo: remote.name, host: remote.host ?? undefined })
-      : null
-  return (
-    <div className="space-y-2">
-      {githubPreview ? (
-        <Button
-          type="button"
-          variant={usingGitHubAvatar ? 'secondary' : 'outline'}
-          size="xs"
-          className="w-full justify-start"
-          aria-pressed={usingGitHubAvatar}
-          disabled={loadingGitHub}
-          onClick={usingGitHubAvatar ? undefined : onUseGitHubAvatar}
-        >
-          <RepoIconGlyph repoIcon={githubPreview} className="size-4" iconClassName="size-4" />
-          {usingGitHubAvatar
-            ? t('auto.components.repo.ProjectPeek.usingGitHubAvatar', 'Using the GitHub avatar')
-            : t('auto.components.settings.RepositoryIconPicker.cc76342291', 'Use GitHub avatar')}
-          {usingGitHubAvatar ? <Check className="ml-auto" /> : <Github className="ml-auto" />}
-        </Button>
-      ) : null}
-      <ProjectIconSourcePanel source="image" selectedEmoji="" onSetIcon={onSetIcon} />
     </div>
   )
 }

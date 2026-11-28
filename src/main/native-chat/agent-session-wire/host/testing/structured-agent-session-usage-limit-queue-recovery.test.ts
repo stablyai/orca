@@ -1,14 +1,10 @@
 import { afterEach, expect, it } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import {
-  agentJournalItemKey,
-  agentJournalSubmissionKey
-} from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import { usageLimitAccountSources } from '../../../../runtime/agent-session/installation/usage-limit-account-usage'
 import {
   HOST_TEST_NOW as NOW,
@@ -23,6 +19,7 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
+import { appendUsageLimitedTurn } from './structured-agent-session-usage-limited-turn.test-fixture'
 
 const RESET = NOW + 60_000
 let rig: QueuedMessageTestRig | undefined
@@ -39,9 +36,9 @@ function reading(usedPercent: number, updatedAt: number): ProviderRateLimits {
   }
 }
 
-/** A chat cut on account A at a reset `resetsAt` (none when null), then relaunched on account B. */
-async function relaunchedChat(resetsAt: number | null = RESET, autoContinue = true) {
+async function relaunchedChat(reset: number | null = RESET) {
   let clock = NOW
+  let enabled = true
   let homePath = join(tmpdir(), 'orca-usage-fixture', 'a')
   const nextHome = join(tmpdir(), 'orca-usage-fixture', 'b')
   const readingSource = { home: nextHome, provenance: 'fixture' }
@@ -68,9 +65,8 @@ async function relaunchedChat(resetsAt: number | null = RESET, autoContinue = tr
     now: () => clock,
     restartable: true,
     acquiredAccountHome: accountHome,
-    hostDeps: { launchAccountHome: async () => accountHome() },
     usageLimitAutoContinue: {
-      isEnabled: () => autoContinue,
+      isEnabled: () => enabled,
       isWorkspaceAsleep: () => false,
       subscribe: () => () => {},
       ...sources
@@ -78,6 +74,7 @@ async function relaunchedChat(resetsAt: number | null = RESET, autoContinue = tr
   })
   rig = current
   const { host, store } = current
+  host.deps.launchAccountHome = async () => accountHome()
   const fence = () => store.getRecord(SESSION)!.lease.runtimeFence
   const attach = (expectedFence: number) =>
     host.attach(QUEUED_RIG_CALLER, hostTestAttachParams(expectedFence))
@@ -89,35 +86,7 @@ async function relaunchedChat(resetsAt: number | null = RESET, autoContinue = tr
   await store.setSessionTabVisibility(SESSION, true)
   const journal = (await host.conversation(SESSION)).journal
   const cutFence = fence()
-  const turn = { provider: 'orca' as const, clientMessageId: 'usage-limited' }
-  const turnItemId = agentJournalItemKey(turn)
-  await journal.appendItem(
-    turn,
-    {
-      kind: 'turn',
-      turnId: 'usage-limited',
-      providerTurnId: 'usage-limited',
-      state: 'completed',
-      outcome: 'failure',
-      startedAt: NOW,
-      completedAt: NOW
-    },
-    { fence: cutFence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
-  await journal.appendItem(
-    { provider: 'orca', clientMessageId: 'limit' },
-    {
-      kind: 'status',
-      ...agentSessionFailureWords(
-        agentSessionFailureFact(
-          'usageLimitReached',
-          resetsAt === null ? {} : { usageLimit: { resetsAt } }
-        ),
-        { surface: 'row' }
-      )
-    },
-    { fence: cutFence, turnScope: { kind: 'turn', turnItemId } }
-  )
+  await appendUsageLimitedTurn(journal, { fence: cutFence, resetsAt: reset })
 
   const rest = () => {
     const { lifetime } = host.collaboratorsForTests()
@@ -139,7 +108,10 @@ async function relaunchedChat(resetsAt: number | null = RESET, autoContinue = tr
 
   homePath = nextHome
   await relaunch()
-  expect(await journal.reads.usageLimitCut()).toMatchObject({ fence: cutFence })
+  expect(await journal.reads.usageLimitCut()).toMatchObject({
+    fence: cutFence,
+    ...(reset === null ? {} : { resetsAt: reset })
+  })
 
   return {
     current,
@@ -149,14 +121,14 @@ async function relaunchedChat(resetsAt: number | null = RESET, autoContinue = tr
     relaunch,
     rest,
     requested,
+    setEnabled: (next: boolean) => {
+      enabled = next
+    },
     pass: async (offset: number, next: ProviderRateLimits | null) => {
       clock = NOW + offset
       limits = next
-      await current.host.usageLimitContinue.tick()
-      const pending = await (
-        await current.host.conversation(SESSION)
-      ).journal.reads.pendingSubmissions()
-      return pending.filter(({ origin }) => origin === 'host')
+      await host.usageLimitContinue.tick()
+      return (await journal.reads.pendingSubmissions()).filter(({ origin }) => origin === 'host')
     }
   }
 }
@@ -198,7 +170,7 @@ it('resumes on fresh quota after a relaunch and delivers the mail held behind th
 
 it('discards stale quota when the chat relaunches while its account is being resolved', async () => {
   const { host, pass, relaunch } = await relaunchedChat()
-  const stale = reading(0, NOW + 5_000)
+  const stale = reading(0, NOW - 1)
   expect(await pass(5_000, stale)).toEqual([])
   const resolve = host.deps.launchAccountHome!
   host.deps.launchAccountHome = async (...args) => {
@@ -280,63 +252,74 @@ it('refuses a continue when startup proves a new launch before the journal accep
   expect(await journal.reads.submission(attempted!)).toBeUndefined()
 }, 90_000)
 
-it('holds a retry when the account is exhausted and asks for a missing reading', async () => {
+it('holds a retry when the account is exhausted without waking an idle reading', async () => {
   const { pass, requested } = await relaunchedChat()
   expect(await pass(5_000, null)).toEqual([])
-  expect(requested).toContainEqual({ notWithinMs: 600_000 })
+  expect(requested).toEqual([])
   expect(await pass(20_000, reading(100, NOW + 20_000))).toEqual([])
   expect(await pass(45_000, reading(100, NOW + 45_000))).toEqual([])
 })
 
-it('continues a cut with no known reset once the relaunched account shows room', async () => {
-  const { pass } = await relaunchedChat(null)
-  expect(await pass(5_000, reading(100, NOW + 5_000))).toEqual([])
-  expect(await pass(20_000, reading(0, NOW + 20_000))).toEqual([])
-  expect(await pass(40_000, reading(0, NOW + 40_000))).toHaveLength(1)
+it('continues a known-reset relaunched cut after its normal reading wait', async () => {
+  const { pass, requested } = await relaunchedChat()
+  expect(await pass(75_000, null)).toEqual([])
+  expect(requested).toContainEqual({})
+  expect(await pass(195_000, null)).toHaveLength(1)
 })
 
-it('continues a cut with no known reset after Orca restarts while the relaunched chat waits', async () => {
-  const { current, pass } = await relaunchedChat(null)
-  expect(await pass(5_000, reading(100, NOW + 5_000))).toEqual([])
-  current.crashRestartHostProcess()
-  expect(await pass(20_000, reading(0, NOW + 20_000))).toEqual([])
-  expect(await pass(40_000, reading(0, NOW + 40_000))).toHaveLength(1)
-})
-
-it('never sends an unconfirmed continue again when its room goes and comes back', async () => {
-  const { host, pass } = await relaunchedChat(null)
-  expect(await pass(5_000, reading(0, NOW + 5_000))).toEqual([])
-  const send = host.send
-  let sends = 0
-  host.send = async () => {
-    sends += 1
-    throw new Error('lost before it could be confirmed')
-  }
-  expect(await pass(25_000, reading(0, NOW + 25_000))).toEqual([])
-  expect(sends).toBe(1)
-  host.send = send
-  expect(await pass(30_000, reading(100, NOW + 30_000))).toEqual([])
-  expect(await pass(40_000, reading(0, NOW + 40_000))).toEqual([])
-  expect(await pass(60_000, reading(0, NOW + 60_000))).toEqual([])
-})
-
-it('asks for no reading for a relaunched cut while auto-continue is off', async () => {
-  const { pass, requested } = await relaunchedChat(null, false)
+it('reads the switched account once and requires fresh room before a resetless relaunched cut continues', async () => {
+  const { current, host, pass, requested } = await relaunchedChat(null)
   expect(await pass(5_000, null)).toEqual([])
-  expect(await pass(20_000, null)).toEqual([])
-  expect(requested).toEqual([])
+  expect(requested).toEqual([{ notWithinMs: 600_000 }])
+  expect(await host.readUsageLimitContinue(SESSION)).toBeUndefined()
+  expect(
+    await pass(20_000, { ...reading(0, NOW + 20_000), status: 'error', error: 'offline' })
+  ).toEqual([])
+  expect(await pass(35_000, reading(0, NOW - 1))).toEqual([])
+  expect(await pass(50_000, { ...reading(0, NOW + 50_000), weekly: null })).toEqual([])
+  expect(requested).toEqual([{ notWithinMs: 600_000 }])
+  const sent = await pass(65_000, reading(0, NOW + 65_000))
+  expect(sent).toHaveLength(1)
+  await eventually(async () =>
+    expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
+  )
 })
 
-it('asks for no reading for a relaunched cut a person cancelled once its room is gone', async () => {
-  const { host, pass, requested } = await relaunchedChat(null)
-  expect(await pass(5_000, reading(0, NOW + 5_000))).toEqual([])
-  const shown = await host.readUsageLimitContinue(SESSION)
-  if (!shown) {
-    throw new Error('Expected the room to schedule the continue')
-  }
-  await host.usageLimitContinue.cancel({ sessionId: SESSION, ...shown })
-  const asked = requested.length
-  expect(await pass(20_000, null)).toEqual([])
-  expect(await pass(30_000, null)).toEqual([])
-  expect(requested).toHaveLength(asked)
+it('publishes no continue time for a resetless relaunched cut while auto-continue is off', async () => {
+  const { host, pass, setEnabled } = await relaunchedChat(null)
+  setEnabled(false)
+  expect(await pass(5_000, null)).toEqual([])
+  expect(await host.readUsageLimitContinue(SESSION)).toBeUndefined()
+})
+
+it('continues a resetless relaunched cut when fresh room arrives after a day held', async () => {
+  const { current, pass } = await relaunchedChat(null)
+  const roomAt = NOW + NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000
+  const sent = await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000, reading(0, roomAt))
+  expect(sent).toHaveLength(1)
+  await eventually(async () =>
+    expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
+  )
+})
+
+it('requests room for a resetless relaunch after its synthetic reset is overdue', async () => {
+  const { pass, requested } = await relaunchedChat(null)
+  await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000, null)
+  expect(requested).toEqual([{ notWithinMs: 600_000 }])
+})
+
+it('continues a resetless relaunched cut when room follows a day-old unknown spent window', async () => {
+  const { current, pass } = await relaunchedChat(null)
+  expect(
+    await pass(5_000, {
+      ...reading(100, NOW + 5_000),
+      weekly: { usedPercent: 100, windowMinutes: 10_080, resetsAt: null, resetDescription: null }
+    })
+  ).toEqual([])
+  const roomAt = NOW + NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 10_000
+  const sent = await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 10_000, reading(0, roomAt))
+  expect(sent).toHaveLength(1)
+  await eventually(async () =>
+    expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
+  )
 })

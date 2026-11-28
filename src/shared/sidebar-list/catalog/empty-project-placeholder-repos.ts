@@ -24,9 +24,10 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
 
   const listedFilterIds = withoutHiddenFilterRepoIds(args.filterRepoIds, args.hiddenProjects)
   const filterSet = listedFilterIds.length > 0 ? new Set(listedFilterIds) : null
-  const visibleRepoIds = new Set(args.visibleWorktrees.map((worktree) => worktree.repoId))
+  let visibleRepoIds: Set<string> | undefined
   const placeholderRepoIds = new Set<string>()
-  for (const repo of args.repos) {
+  for (let i = 0; i < args.repos.length; i += 1) {
+    const repo = args.repos[i]
     if (
       (filterSet && !filterSet.has(repo.id)) ||
       args.pendingVmRepoIds?.has(repo.id) ||
@@ -35,10 +36,21 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
       continue
     }
     const hasNoWorktrees = (args.worktreesByRepo[repo.id]?.length ?? 0) === 0
-    // Workspace filters must not change persisted Project Group membership (#8865).
-    const isFilteredProjectGroupMember = repo.projectGroupId != null && !visibleRepoIds.has(repo.id)
-    if (hasNoWorktrees || isFilteredProjectGroupMember) {
+    if (hasNoWorktrees) {
       placeholderRepoIds.add(repo.id)
+      continue
+    }
+    // Workspace filters must not change persisted Project Group membership (#8865).
+    if (repo.projectGroupId != null) {
+      if (!visibleRepoIds) {
+        visibleRepoIds = new Set<string>()
+        for (let j = 0; j < args.visibleWorktrees.length; j += 1) {
+          visibleRepoIds.add(args.visibleWorktrees[j].repoId)
+        }
+      }
+      if (!visibleRepoIds.has(repo.id)) {
+        placeholderRepoIds.add(repo.id)
+      }
     }
   }
   return placeholderRepoIds

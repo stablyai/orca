@@ -11,6 +11,12 @@ import {
 } from '../../clipboard/terminal-clipboard-event-paste'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../../shared/clipboard/clipboard-text'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
+import {
+  clipboardEventCarriesFiles,
+  consumeUnreadWindowsClipboardNativePaste,
+  requestNativePasteForUnreadWindowsClipboard
+} from './terminal-unread-clipboard-native-paste'
+import { clipboardEventCopiedFilePaths } from '@/components/native-chat/paste/native-chat-clipboard-payload'
 import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import {
   APP_MENU_SELECTION_ACTION_EVENT,
@@ -19,7 +25,10 @@ import {
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { copyTerminalSelection } from '../../clipboard/terminal-selection-copy'
 import { isInsideNativeChatCover } from '../../chat/native-chat-covered-pane'
-import { synchronizeTerminalKeyboardPane } from '../keyboard/terminal-keyboard-pane-resolution'
+import {
+  resolveTerminalKeyboardPane,
+  synchronizeTerminalKeyboardPane
+} from '../keyboard/terminal-keyboard-pane-resolution'
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import {
   formatClipboardImagePasteError,
@@ -142,18 +151,37 @@ export function registerTerminalPanePasteListeners({
     if (!manager) {
       return
     }
-    const pane = manager.getActivePane() ?? manager.getPanes()[0]
+    const pane = resolveTerminalKeyboardPane(manager, target)
     if (!pane) {
       return
     }
+    const isUnreadWindowsClipboardFallback = consumeUnreadWindowsClipboardNativePaste(pane)
+    // Reading clipboardData.files encodes bitmaps synchronously in Chromium; only read it on the armed Windows fallback.
+    const eventCopiedFilePaths = isUnreadWindowsClipboardFallback
+      ? clipboardEventCopiedFilePaths(event)
+      : []
+    const eventCarriedFiles = clipboardEventCarriesFiles(event)
     if (isClipboardEventPasteRequired()) {
       const eventText = getClipboardEventText(event)
-      pasteFromClipboard(pane, 'paste-event', (options) =>
-        assertClipboardTextWithinLimitWithYield(eventText, options)
-      )
+      pasteFromClipboard(pane, 'paste-event', {
+        // Web-only: browsers expose copied files only to the paste event itself.
+        readClipboardContent: async (options) => ({
+          text: await assertClipboardTextWithinLimitWithYield(eventText, options),
+          filePaths: [],
+          linkHtml: '',
+          hasImage: null
+        }),
+        eventCopiedFilePaths,
+        eventCarriedFiles,
+        isUnreadWindowsClipboardFallback
+      })
       return
     }
-    pasteFromClipboard(pane, 'paste-event')
+    pasteFromClipboard(pane, 'paste-event', {
+      eventCopiedFilePaths,
+      eventCarriedFiles,
+      isUnreadWindowsClipboardFallback
+    })
   }
 
   const onAppMenuPaste = (event: Event): void => {
@@ -187,7 +215,7 @@ export function registerTerminalPanePasteListeners({
       paneTransportsRef.current.get(pane.id)
     )
     void pasteTerminalClipboard({
-      readClipboardText: window.api.ui.readClipboardText,
+      readClipboardContent: window.api.ui.readClipboardPasteContent,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       copiedFiles: createPaneClipboardCopiedFiles(pane),
       connectionId,
@@ -199,7 +227,9 @@ export function registerTerminalPanePasteListeners({
       onTextPasteError: () =>
         setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
       onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
-    }).catch(() => setTerminalError('Paste failed.'))
+    })
+      .then((result) => requestNativePasteForUnreadWindowsClipboard(result, pane))
+      .catch(() => setTerminalError('Paste failed.'))
   }
 
   const onAppMenuSelectionAction = (event: Event): void => {

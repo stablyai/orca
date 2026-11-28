@@ -122,6 +122,9 @@ export class DaemonTerminalAdmission {
         env: payload.env,
         envToDelete: payload.envToDelete,
         command: payload.command,
+        ...(typeof payload.startupNotice === 'string'
+          ? { startupNotice: payload.startupNotice }
+          : {}),
         startupCommandDelivery: payload.startupCommandDelivery,
         ...(attachOnly ? { attachOnly: true } : {}),
         ...(isTuiAgent(payload.launchAgent) ? { launchAgent: payload.launchAgent } : {}),

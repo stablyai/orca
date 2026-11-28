@@ -12,6 +12,10 @@ vi.mock('node:os', async () => {
 })
 
 import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { wrapRuntimeHomeHookCommand } from '../agent-hooks/installation/commands/runtime-home-hook-command'
+import { wrapWindowsHookCommand } from '../agent-hooks/installation/commands/windows-hook-command'
 import { droidHookService } from './hook-service'
 import { localDiskSftp } from '../agent-hooks/installation/remote/local-disk-sftp.test-fixture'
 
@@ -214,5 +218,165 @@ describe('Droid managed hooks', () => {
     expect(existsSync(hooksPath)).toBe(false)
     expect(managedEvents(readJson(legacyPath))).toEqual(['Stop'])
     expect(managedEvents(effectiveHooks(legacyPath))).toEqual(EVENTS)
+  })
+
+  // STA-17696: installing and removing Orca hooks must preserve unrelated and composite user commands.
+  it.each(['hooks.json', 'hooks/hooks.json'] as const)(
+    'preserves composite and user-maintained commands referencing the Orca hook in %s',
+    async (relativeHooksFile) => {
+      const targetHooksPath = join(factoryDir, relativeHooksFile)
+      mkdirSync(join(factoryDir, 'hooks'), { recursive: true })
+      const scriptPath = join(home, '.orca', 'agent-hooks', 'droid-hook.sh')
+      const wrappedOrca = wrapPosixHookCommand(scriptPath)
+      const compositeHooks = [
+        {
+          hooks: [
+            { type: 'command', command: `my-pre-hook && ${scriptPath}` },
+            { type: 'command', command: `${wrappedOrca} && notify-send done` },
+            { type: 'command', command: `python3 wrapper.py ${scriptPath}` },
+            { type: 'command', command: 'python3', args: ['wrapper.py', scriptPath] },
+            { type: 'command', command: `${scriptPath}.custom` },
+            { type: 'command', command: 'say done' }
+          ]
+        }
+      ]
+      writeFileSync(settingsPath, JSON.stringify({ hooks: { Stop: compositeHooks } }))
+      writeFileSync(targetHooksPath, JSON.stringify({ Stop: compositeHooks }))
+
+      expect(droidHookService.install()).toMatchObject({ state: 'installed' })
+      expect(await droidHookService.installRemote(localDiskSftp(), home)).toMatchObject({
+        state: 'installed'
+      })
+      expect(droidHookService.remove()).toMatchObject({ state: 'not_installed' })
+      expect(readJson(targetHooksPath)).toEqual({ Stop: compositeHooks })
+      expect(readJson(settingsPath)).toEqual({ hooks: { Stop: compositeHooks } })
+    }
+  )
+
+  it('recognizes Orca-owned command forms while rejecting composite user commands', () => {
+    const matches = createManagedCommandMatcher('droid-hook.sh')
+    const posix = '/home/u/.orca/agent-hooks/droid-hook.sh'
+    const winCmd = 'C:\\Users\\Zoë & Co\\.orca\\agent-hooks\\droid-hook.cmd'
+
+    expect(matches(posix)).toBe(true)
+    expect(matches(`/bin/sh '${posix}'`)).toBe(true)
+    expect(matches(wrapPosixHookCommand(posix))).toBe(true)
+    expect(matches(wrapRuntimeHomeHookCommand('droid-hook'))).toBe(true)
+    expect(matches(wrapWindowsHookCommand(winCmd))).toBe(true)
+    expect(matches('C:/Users/u/.orca/agent-hooks/orca-agent-hook.exe droid')).toBe(true)
+
+    expect(matches(`my-hook && ${posix}`)).toBe(false)
+    expect(matches(`${wrapPosixHookCommand(posix)}; my-hook`)).toBe(false)
+    expect(matches(`tee /tmp/log | /bin/sh '${posix}'`)).toBe(false)
+    expect(matches(`${wrapWindowsHookCommand(winCmd)} && my-hook`)).toBe(false)
+    expect(matches('C:/Users/u/.orca/agent-hooks/orca-agent-hook.exe droid && my-hook')).toBe(false)
+    expect(matches(`${posix}.custom`)).toBe(false)
+    // A quoted `]` in the profile path must not hide Orca's own wrapper.
+    expect(matches(wrapPosixHookCommand('/home/Dev [QA]/.orca/agent-hooks/droid-hook.sh'))).toBe(
+      true
+    )
+    expect(matches(wrapPosixHookCommand('/home/Dev && QA/.orca/agent-hooks/droid-hook.sh'))).toBe(
+      true
+    )
+    expect(matches(`TAG='x\\'; my-hook # ' /bin/sh '${posix}'`)).toBe(false)
+    expect(
+      matches(
+        `if [ -f '${posix}' ]; then /bin/sh '${posix}'; else printf '%s\\n'\n'my-hook'; :; fi`
+      )
+    ).toBe(false)
+    // A user condition around the Orca script is the user's wrapper, not Orca's.
+    expect(matches(`if [ "$(date +%u)" -lt 6 ]; then /bin/sh '${posix}'; fi`)).toBe(false)
+    expect(matches(`sh\n${posix}`)).toBe(false)
+    const encoded = wrapWindowsHookCommand(winCmd).match(/-EncodedCommand\s+(\S+)/)![1]
+    expect(matches(`powershell.exe -NoProfile -EncodedCommand ${encoded}`)).toBe(true)
+    expect(matches(`team-powershell.exe -NoProfile -EncodedCommand ${encoded}`)).toBe(false)
+  })
+
+  // STA-17697: remote install must preserve simultaneous user edits to hooks.json and settings.json.
+  it('re-merges onto a simultaneous user edit to remote hooks.json instead of overwriting it', async () => {
+    writeFileSync(settingsPath, JSON.stringify({ hooks: { PreToolUse: USER_GUARD } }))
+    writeFileSync(hooksPath, JSON.stringify({ Stop: USER_STOP }))
+
+    let injected = false
+    const racingSftp = localDiskSftp({
+      onBeforeWrite: (path) => {
+        // Simulate a user saving a new hook in hooks.json right before Orca publishes its temp file.
+        if (!injected && path.startsWith(`${factoryDir}/.`)) {
+          injected = true
+          writeFileSync(
+            hooksPath,
+            JSON.stringify({
+              Stop: [...USER_STOP, { hooks: [{ type: 'command', command: 'say user-edit' }] }],
+              Notification: [{ hooks: [{ type: 'command', command: 'notify-user' }] }]
+            })
+          )
+        }
+      }
+    })
+
+    const status = await droidHookService.installRemote(racingSftp, home)
+
+    expect(status).toMatchObject({ state: 'installed' })
+    const savedHooks = readJson(hooksPath)
+    expect(JSON.stringify(savedHooks)).toContain('say user-edit')
+    expect(JSON.stringify(savedHooks)).toContain('notify-user')
+    expect(managedEvents(savedHooks)).toEqual(['Notification', 'Stop'])
+    expect(managedEvents(effectiveHooks())).toEqual(EVENTS)
+  })
+
+  it('preserves a user JSONC save that lands during remote install without overwriting it', async () => {
+    writeFileSync(settingsPath, JSON.stringify({ hooks: {} }))
+    writeFileSync(hooksPath, JSON.stringify({ Stop: USER_STOP }))
+    const userJsonc =
+      '{ // user comment\n  "Stop": [{ "hooks": [{ "type": "command", "command": "say keep" }] }]\n}\n'
+
+    let injected = false
+    const racingSftp = localDiskSftp({
+      onBeforeWrite: (path) => {
+        if (!injected && path.startsWith(`${factoryDir}/.`)) {
+          injected = true
+          writeFileSync(hooksPath, userJsonc)
+        }
+      }
+    })
+
+    const status = await droidHookService.installRemote(racingSftp, home)
+
+    expect(status).toMatchObject({
+      state: 'partial',
+      detail: `Managed hook missing for events: Stop; ${hooksPath} has comments; Orca cannot edit it`
+    })
+    expect(readFileSync(hooksPath, 'utf-8')).toBe(userJsonc)
+  })
+
+  it('fails cleanly without overwriting when remote hooks.json keeps changing on every attempt', async () => {
+    writeFileSync(settingsPath, JSON.stringify({ hooks: {} }))
+    writeFileSync(hooksPath, JSON.stringify({ Stop: USER_STOP }))
+
+    let revision = 0
+    const racingSftp = localDiskSftp({
+      onBeforeWrite: (path) => {
+        if (path.startsWith(`${factoryDir}/.`)) {
+          revision += 1
+          writeFileSync(
+            hooksPath,
+            JSON.stringify({
+              Stop: [{ hooks: [{ type: 'command', command: `user-rev-${revision}` }] }]
+            })
+          )
+        }
+      }
+    })
+
+    const status = await droidHookService.installRemote(racingSftp, home)
+
+    expect(status).toMatchObject({
+      state: 'error',
+      configPath: hooksPath,
+      detail: `${hooksPath} kept changing while Orca updated it`
+    })
+    expect(readJson(hooksPath)).toEqual({
+      Stop: [{ hooks: [{ type: 'command', command: `user-rev-${revision}` }] }]
+    })
   })
 })

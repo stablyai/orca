@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 const STATUS_RETRY_TIMEOUT_MS = 15_000
 
@@ -40,29 +41,34 @@ export function StatusRetryButton({
     retryControllerRef.current = controller
     const timeout = window.setTimeout(() => controller.abort(), STATUS_RETRY_TIMEOUT_MS)
     setIsRetrying(true)
-    try {
-      await onRetry(controller.signal)
-    } catch (error) {
-      if (!isMountedRef.current) {
-        return
+    await runWithFinally(
+      async () => {
+        try {
+          await onRetry(controller.signal)
+        } catch (error) {
+          if (!isMountedRef.current) {
+            return
+          }
+          // Report retry failures without leaving the warning unusable through an unhandled click rejection.
+          console.warn('[SourceControl] status retry failed', error)
+          toast.error(
+            t(
+              'auto.components.right.sidebar.SourceControl.97e7124eac',
+              'Could not refresh Source Control. Try again.'
+            )
+          )
+        }
+      },
+      () => {
+        window.clearTimeout(timeout)
+        if (retryControllerRef.current === controller) {
+          retryControllerRef.current = null
+        }
+        if (isMountedRef.current) {
+          setIsRetrying(false)
+        }
       }
-      // Report retry failures without leaving the warning unusable through an unhandled click rejection.
-      console.warn('[SourceControl] status retry failed', error)
-      toast.error(
-        t(
-          'auto.components.right.sidebar.SourceControl.97e7124eac',
-          'Could not refresh Source Control. Try again.'
-        )
-      )
-    } finally {
-      window.clearTimeout(timeout)
-      if (retryControllerRef.current === controller) {
-        retryControllerRef.current = null
-      }
-      if (isMountedRef.current) {
-        setIsRetrying(false)
-      }
-    }
+    )
   }
 
   return (

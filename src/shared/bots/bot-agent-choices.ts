@@ -1,11 +1,12 @@
 // Which agents a bot can run on a host, and whether each can start; the desktop's New bot and the
 // host's own answer to a phone read it the same way.
 import {
+  agentMenuRowReady,
   agentMenuRowSupportsChat,
   type ChatUnavailableReason,
   type NewTabAgentMenuRow
 } from '../agent-launch/picker/agent-launch-picker-rows'
-import { BOT_AGENTS, type Bot, type BotAgent } from '../bot-types'
+import { BOT_AGENTS, BOT_NEW_AGENT_PRIORITY, type Bot, type BotAgent } from '../bot-types'
 
 /** What these choices read of a host's agent menu; `detectedIds` is null when the check failed. */
 export type BotAgentMenuModel =
@@ -64,14 +65,45 @@ export function botNewChatAgents(
 }
 
 /** The agents a bot can be set to here: the installed ones, and `current` always; empty while the
- *  menu is still learning the host. */
-export function botAgentChoices(model: BotAgentMenuModel, current?: BotAgent): BotAgent[] {
+ *  menu is still learning the host. `installedOnly` drops chats that would install their agent first,
+ *  so a new bot's default (`newBotAgent`) is never an agent the host lacks. */
+export function botAgentChoices(
+  model: BotAgentMenuModel,
+  current?: BotAgent,
+  installedOnly = false
+): BotAgent[] {
   if (model.state === 'loading') {
     return current ? [current] : []
   }
   return BOT_AGENTS.filter(
     (agent) =>
       agent === current ||
-      model.rows.some((row) => row.agent === agent && agentMenuRowSupportsChat(row))
+      model.rows.some(
+        (row) =>
+          row.agent === agent &&
+          agentMenuRowSupportsChat(row) &&
+          (!installedOnly || agentMenuRowReady(row))
+      )
+  )
+}
+
+/** The host's default agent when a bot can start it there as it is now, not by installing it first:
+ *  the menu leads with chats the host runs now, so an install-first default doesn't beat a ready one. */
+export function readyBotDefaultAgent(
+  model: BotAgentMenuModel,
+  defaultAgent: string | null | undefined
+): BotAgent | undefined {
+  return botAgentChoices(model, undefined, true).find((agent) => agent === defaultAgent)
+}
+
+/** A new bot's agent from `choices`: the host's default agent when a bot can run it, else the
+ *  highest-priority choice. */
+export function newBotAgent(
+  choices: readonly BotAgent[],
+  defaultAgent: string | null | undefined
+): BotAgent | undefined {
+  return (
+    choices.find((agent) => agent === defaultAgent) ??
+    BOT_NEW_AGENT_PRIORITY.find((agent) => choices.includes(agent))
   )
 }

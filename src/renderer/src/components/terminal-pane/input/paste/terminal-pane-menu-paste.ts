@@ -21,6 +21,7 @@ import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-p
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { recordRecentTerminalImage } from '../recent-terminal-images'
+import { requestNativePasteForUnreadWindowsClipboard } from './terminal-unread-clipboard-native-paste'
 
 export type TerminalPaneMenuPasteContext = {
   managerRef: React.RefObject<PaneManager | null>
@@ -109,7 +110,7 @@ export const pasteTerminalPaneMenuClipboard = async (
     transport
   )
   const result = await pasteTerminalClipboard({
-    readClipboardText: window.api.ui.readClipboardText,
+    readClipboardContent: window.api.ui.readClipboardPasteContent,
     saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
     copiedFiles: createTerminalClipboardCopiedFiles({
       managerRef: context.managerRef,
@@ -146,6 +147,7 @@ export const pasteTerminalPaneMenuClipboard = async (
     }
   })
   if (result.status !== 'pasted') {
+    requestNativePasteForUnreadWindowsClipboard(result, pane)
     return
   }
   // Refocus after completed paste only; a rejected async target must not steal focus from a newer control.

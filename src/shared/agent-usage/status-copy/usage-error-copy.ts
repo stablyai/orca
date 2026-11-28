@@ -4,6 +4,11 @@ import { describeOwnerNotSetUp, getOwnerNotSetUpLabel } from './owner-not-set-up
 import { formatRateLimitUserFacingError } from './rate-limit-user-facing-error'
 import { isCodexUsageSignInRequired } from '../../agent-accounts/codex/codex-auth-errors'
 import type { UsageCopyTranslate } from './usage-copy-translate'
+import {
+  isClaudeUsageWaitingForClaude,
+  isCodexUsageWaitingForCodex,
+  isUsageWaitingForCli
+} from './usage-waiting-for-cli'
 
 /** The fields the copy reads; strings stay open so a phone can pass a newer host's kind, which gets the generic copy. */
 export type UsageStatusCopySource = {
@@ -63,10 +68,7 @@ function getDelegatedCliRefreshProvider(
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
-/** An idle login's access token lapsed, not the login: Claude refreshes it the next time it runs. */
-export function isClaudeUsageWaitingForClaude(p: UsageStatusCopySource): boolean {
-  return p.provider === 'claude' && p.usageMetadata?.failureKind === 'stale-token'
-}
+export { isClaudeUsageWaitingForClaude, isCodexUsageWaitingForCodex, isUsageWaitingForCli }
 
 export function getProviderUsageStatusLabel(
   p: UsageStatusCopySource,
@@ -85,6 +87,9 @@ export function getProviderUsageStatusLabel(
   }
   if (delegatedCliProvider === 'kimi') {
     return t('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
+  }
+  if (isCodexUsageWaitingForCodex(p)) {
+    return t('auto.components.status.bar.tooltip.codex.waiting.label', 'Updates when Codex runs')
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
@@ -144,6 +149,25 @@ export function getProviderUsageStatusLabel(
   return t('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed')
 }
 
+// Why: Claude labels these "Usage unavailable", "Refreshing sign-in" or "Waiting for Claude session"; none needs the user.
+const CLAUDE_NOTICE_FAILURE_KINDS: ReadonlySet<string> = new Set([
+  'cli-unavailable',
+  'usage-unavailable',
+  'deferred-by-live-session',
+  'refreshable-credentials-without-token',
+  'delegated-refresh-required'
+])
+
+/** Not a failure (not set up, unavailable, no subscription, still resolving): the chip shows "--", not the alert. */
+export function isUsageStatusNotice(p: UsageStatusCopySource): boolean {
+  const kind = p.usageMetadata?.failureKind
+  return (
+    Boolean(p.usageMetadata?.ownerNotSetUp || p.usageMetadata?.unverifiableOwner) ||
+    kind === 'no-subscription' ||
+    (p.provider === 'claude' && kind !== undefined && CLAUDE_NOTICE_FAILURE_KINDS.has(kind))
+  )
+}
+
 export function getProviderUsageErrorMessage(
   p: UsageStatusCopySource,
   t: UsageCopyTranslate
@@ -170,6 +194,12 @@ export function getProviderUsageErrorMessage(
     return t(
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  }
+  if (isCodexUsageWaitingForCodex(p)) {
+    return t(
+      'auto.components.status.bar.tooltip.codex.waiting.message',
+      'Codex usage updates the next time Codex runs.'
     )
   }
   if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {

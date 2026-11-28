@@ -118,6 +118,8 @@ export type PluginHostListEntry = {
    *  hosts. */
   hooks?: string[]
   hasWorker: boolean
+  /** The MCP servers its manifest adds, each with its URL or command line. Absent on older hosts. */
+  mcpServers?: { name: string; detail: string }[]
   vmRecipes?: {
     id: string
     name: string

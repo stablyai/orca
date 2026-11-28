@@ -1,13 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { sessionWorkerAgentState } from '../../../../../shared/orchestration-session-workers'
+import { sessionWorkerBackgroundWait } from '../../../rpc/methods/orchestration/worker/session-worker-background-wait'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
-import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { WorkerBackgroundWaits } from './worker-background-waits'
-import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
+import { WorkerBackgroundWaits } from './worker-background-waits'
+import { BACKGROUND_WAKE_SENDER } from '../../../../../shared/orchestration/mailbox/background-wake-sender'
+import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
+import {
+  chatPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const PANE = 'tab_worker:11111111-1111-4111-8111-111111111111'
 const HANDLE = 'term_worker'
@@ -45,8 +56,10 @@ function leadWorkingRow(at: number): AgentStatusIpcPayload {
 describe('a worker waiting on its own background task', () => {
   let db: OrchestrationDb
   let dispatchId: string
+  let runId: string
   let timers: Timer[]
   let row: AgentStatusIpcPayload | null
+  let stopRequestedSince: (sessionId: string, since: number) => boolean
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -57,6 +70,7 @@ describe('a worker waiting on its own background task', () => {
       coordinatorHandle: 'term_coordinator',
       coordinatorPaneKey: `tab_c:${PANE.split(':')[1]}`
     })
+    runId = run.id
     const task = db.createTask({ spec: 'run the soak', runId: run.id })
     dispatchId = db.createDispatchContext({
       taskId: task.id,
@@ -67,6 +81,7 @@ describe('a worker waiting on its own background task', () => {
     }).id
     timers = []
     row = null
+    stopRequestedSince = () => false
   })
 
   afterEach(() => {
@@ -80,6 +95,7 @@ describe('a worker waiting on its own background task', () => {
       getDb: () => db,
       isWaitingForMail: () => false,
       notify: () => {},
+      backgroundStopRequestedSince: (sessionId, since) => stopRequestedSince(sessionId, since),
       readHookRow: () => row,
       getHandle: () => HANDLE,
       getProcessIncarnation: () => incarnation,
@@ -105,29 +121,59 @@ describe('a worker waiting on its own background task', () => {
     }
   }
 
-  function notices(): string[] {
+  function escalations(): { subject: string; body: string }[] {
     return db.db
-      .prepare(`SELECT body FROM messages
-          WHERE subject = 'Worker is still waiting on its background task' ORDER BY rowid`)
-      .all()
-      .map((message) => String(message.body))
+      .prepare(
+        `SELECT subject, body FROM messages
+          WHERE to_handle = ? AND type = 'escalation' ORDER BY rowid`
+      )
+      .all(`run:${runId}`)
+      .map((message) => ({ subject: String(message.subject), body: String(message.body) }))
   }
 
-  it('is told once, at the bound, and never again for the same wait', () => {
+  it('records passive background-wait presence and view activity without waking the coordinator while the child task runs', () => {
     const orca = startOrca()
     row = heldRow(TURN_END)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 0 })
-    advanceTo(TURN_END + 19 * MINUTE)
-    expect(notices()).toEqual([])
 
-    advanceTo(TURN_END + 20 * MINUTE)
-    expect(notices()).toHaveLength(1)
-    expect(notices()[0]).toContain(
-      `Worker ${HANDLE} has been waiting on its background task \`./rig/soak.sh 3\` for 20 min`
+    const initialPresence = readWorkerPresence(db, dispatchId)
+    expect(initialPresence).toMatchObject({
+      presence: 'resting',
+      fence: `background:${TURN_END}`
+    })
+    expect(JSON.parse(initialPresence?.report ?? '{}')).toMatchObject({
+      reason: 'background-wait',
+      backgroundWait: { since: TURN_END, commands: ['./rig/soak.sh 3'], paneKey: PANE }
+    })
+
+    const projectedWait = sessionWorkerBackgroundWait(
+      {
+        stage: {
+          worker: 'ready',
+          dispatch: 'dispatched',
+          detail: 'running',
+          activity: 'working',
+          backgroundWait: { since: TURN_END, commands: ['./rig/soak.sh 3'] }
+        }
+      },
+      'working',
+      null,
+      new Map()
     )
+    expect(projectedWait).toEqual({
+      backgroundWait: { since: TURN_END, commands: ['./rig/soak.sh 3'] }
+    })
+    expect(
+      sessionWorkerAgentState({
+        activity: 'working',
+        ...projectedWait
+      })
+    ).toBe('done')
 
-    // The same wait seen again, live or after a restart that remints the process id, is the same fact.
-    orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 1 })
+    // Past 20 min and 120 min, and across a restart, a live child task never wakes the coordinator.
+    advanceTo(TURN_END + 20 * MINUTE)
+    expect(escalations()).toEqual([])
+
     const restarted = startOrca('incarnation_after_restart')
     restarted.observe({
       kind: 'seeded',
@@ -137,14 +183,20 @@ describe('a worker waiting on its own background task', () => {
       at: 2
     })
     restarted.arm(db, dispatchId)
-    // A prompt mid-wait, then the same wait again: one fact still.
+    reconsiderWorkerRest(db, dispatchId, {
+      getDb: () => db,
+      isWaitingForMail: () => false,
+      notify: () => {}
+    })
+    expect(escalations()).toEqual([])
+
+    // An interactive prompt mid-wait still escalates immediately, then returning to the wait stays quiet.
     row = {
       ...heldRow(TURN_END),
       state: 'waiting',
       workingMode: undefined,
-      mainAgent: { state: 'waiting', stateStartedAt: TURN_END + MINUTE }
+      mainAgent: { state: 'waiting', stateStartedAt: TURN_END + 21 * MINUTE }
     }
-    // The prompt's own edge records it first; the row moving to the prompt does not end it as working.
     observeWorker(
       db,
       { kind: 'local', dispatch: db.getDispatchContextById(dispatchId)! },
@@ -166,6 +218,8 @@ describe('a worker waiting on its own background task', () => {
       transition: null
     })
     expect(readWorkerPresence(db, dispatchId)?.presence).toBe('prompt')
+    expect(escalations().map((m) => m.subject)).toEqual(['Worker is waiting on a prompt'])
+
     row = heldRow(TURN_END)
     restarted.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 5 })
     advanceTo(TURN_END + 120 * MINUTE)
@@ -174,68 +228,55 @@ describe('a worker waiting on its own background task', () => {
       isWaitingForMail: () => false,
       notify: () => {}
     })
-    expect(notices()).toHaveLength(1)
+    expect(readWorkerPresence(db, dispatchId)).toMatchObject({
+      presence: 'resting',
+      fence: `background:${TURN_END}`
+    })
+    expect(escalations().map((m) => m.subject)).toEqual(['Worker is waiting on a prompt'])
   })
 
-  it('stays quiet when a turn starts before the bound', () => {
+  it('clears the recorded wait across a restart when the row already moved to a new turn', () => {
+    row = heldRow(TURN_END)
+    startOrca().observe({
+      kind: 'observed',
+      paneKey: PANE,
+      workspace: null,
+      phase: 'working',
+      at: 0
+    })
+    row = leadWorkingRow(TURN_END + 10 * MINUTE)
+    advanceTo(TURN_END + 90 * MINUTE)
+    startOrca('incarnation_after_restart').arm(db, dispatchId)
+    expect(readWorkerPresence(db, dispatchId)?.report).toBeNull()
+    expect(escalations()).toEqual([])
+  })
+
+  it('escalates immediately when the worker process exits during a background wait', () => {
     const orca = startOrca()
     row = heldRow(TURN_END)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 0 })
-    advanceTo(TURN_END + 15 * MINUTE)
-    row = leadWorkingRow(TURN_END + 15 * MINUTE)
-    orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 1 })
-    advanceTo(TURN_END + 90 * MINUTE)
-    expect(notices()).toEqual([])
+    expect(escalations()).toEqual([])
+
+    observeWorker(
+      db,
+      { kind: 'local', dispatch: db.getDispatchContextById(dispatchId)! },
+      {
+        presence: 'gone',
+        fence: 'exit:1',
+        legacyStopKey: 'exit:1',
+        gone: { from: HANDLE, reason: 'exited', cause: 'exit code 137', lastOutput: 'Killed' }
+      },
+      { getDb: () => db, isWaitingForMail: () => false, notify: () => {} }
+    )
+    expect(readWorkerPresence(db, dispatchId)?.presence).toBe('gone')
+    expect(escalations().map((m) => m.subject)).toEqual(['Worker exited without reporting'])
   })
 
-  it('stays quiet when the row shows a new turn that no edge reported', () => {
-    row = heldRow(TURN_END)
-    startOrca().observe({
-      kind: 'observed',
-      paneKey: PANE,
-      workspace: null,
-      phase: 'working',
-      at: 0
-    })
-    // Orca was down while a finished task woke the worker: the restored row is already a new turn.
-    timers = []
-    row = leadWorkingRow(TURN_END + 10 * MINUTE)
-    advanceTo(TURN_END + 90 * MINUTE)
-    // The restart pass decides undecided rests before the re-armed timer runs.
-    reconsiderWorkerRest(db, dispatchId, {
-      getDb: () => db,
-      isWaitingForMail: () => false,
-      notify: () => {},
-      backgroundWaitShown: () => false
-    })
-    startOrca().arm(db, dispatchId)
-    advanceTo(TURN_END + 91 * MINUTE)
-    expect(notices()).toEqual([])
-  })
-
-  it('still tells the coordinator when Orca restarts during the wait', () => {
-    row = heldRow(TURN_END)
-    startOrca().observe({
-      kind: 'observed',
-      paneKey: PANE,
-      workspace: null,
-      phase: 'working',
-      at: 0
-    })
-    advanceTo(TURN_END + 10 * MINUTE)
-    // The old process's timer died with it.
-    timers = []
-    startOrca().arm(db, dispatchId)
-    advanceTo(TURN_END + 20 * MINUTE)
-    expect(notices()).toHaveLength(1)
-  })
   it('reports a lead turn that failed under its background task once, across a restart', () => {
     const errors = () =>
-      db.db
-        .prepare(`SELECT body FROM messages
-            WHERE subject = 'Worker stopped on an error without reporting' ORDER BY rowid`)
-        .all()
-        .map((message) => String(message.body))
+      escalations()
+        .filter((m) => m.subject === 'Worker stopped on an error without reporting')
+        .map((m) => m.body)
     const orca = startOrca()
     row = heldRow(TURN_END)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 0 })
@@ -287,14 +328,115 @@ describe('a worker waiting on its own background task', () => {
       },
       reportDeps
     )
-    // The failure replaced the wait, so no background-wait notice follows it either.
     advanceTo(TURN_END + 120 * MINUTE)
     expect(errors()).toHaveLength(1)
-    expect(notices()).toEqual([])
+    expect(
+      escalations().filter((m) => m.subject === 'Worker is still waiting on its background task')
+    ).toEqual([])
 
     // The lead's next turn, still under the live task, is work again.
     row = leadWorkingRow(TURN_END + 121 * MINUTE)
     restarted.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 4 })
     expect(readWorkerPresence(db, dispatchId)?.presence).toBe('working')
+  })
+
+  describe('a chat worker whose background task ends while its chat is idle', () => {
+    const SESSION = '22222222-2222-4222-8222-222222222222'
+    const CHAT_PANE = chatPaneKey(SESSION)
+    let chatDispatch: string
+
+    beforeEach(() => {
+      if (!isOrcaSessionId(SESSION)) {
+        throw new Error('test session id must be an Orca session id')
+      }
+      chatDispatch = db.createDispatchContext({
+        taskId: db.createTask({ spec: 'watch CI', runId }).id,
+        assigneeHandle: formatOrcaSessionAddress(SESSION),
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER
+      }).id
+    })
+
+    function chatRow(
+      state: 'working' | 'done',
+      agentType: string,
+      outcome: 'success' | 'cancellation' = 'success'
+    ): AgentStatusIpcPayload {
+      return {
+        ...heldRow(TURN_END),
+        paneKey: CHAT_PANE,
+        tabId: structuredAgentSessionTabId(SESSION),
+        structuredHost: 'owned',
+        agentType,
+        backgroundCommands: ['gh pr checks 1 --watch'],
+        ...(state === 'done' ? { state: 'done', workingMode: undefined } : {}),
+        mainAgent: { state: 'done', outcome, stateStartedAt: TURN_END }
+      }
+    }
+
+    /** The wait is seen, then its tasks end with the chat idle on `ended`. */
+    function endWait(agentType: string, ended = chatRow('done', agentType)): void {
+      const orca = startOrca()
+      row = chatRow('working', agentType)
+      orca.observe({
+        kind: 'observed',
+        paneKey: CHAT_PANE,
+        workspace: null,
+        phase: 'working',
+        at: 0
+      })
+      row = ended
+      const workspace = { worktreeId: 'repo::/w', sshHostId: null }
+      orca.observe({
+        kind: 'moved',
+        paneKey: CHAT_PANE,
+        workspace,
+        from: 'working',
+        to: 'done',
+        at: 1,
+        transition: null
+      })
+      orca.observe({ kind: 'observed', paneKey: CHAT_PANE, workspace: null, phase: 'done', at: 2 })
+    }
+
+    const workerMail = () =>
+      db.db
+        .prepare('SELECT from_handle, body FROM messages WHERE to_handle = ? ORDER BY sequence')
+        .all(`dispatch:${chatDispatch}`)
+        .map((m) => ({ from: String(m.from_handle), body: String(m.body) }))
+
+    it('wakes a Codex worker once through its own Dispatch, naming the command', () => {
+      endWait('codex')
+      expect(workerMail()).toEqual([
+        { from: BACKGROUND_WAKE_SENDER, body: expect.stringContaining('gh pr checks 1 --watch') }
+      ])
+    })
+
+    it('leaves a Claude worker to wake itself', () => {
+      endWait('claude')
+      expect(workerMail()).toEqual([])
+    })
+
+    it('adds nothing when mail already waiting will wake the worker', () => {
+      db.insertMessage({
+        from: 'orca-bg-wake',
+        to: `dispatch:${chatDispatch}`,
+        subject: 'WAKE',
+        runId
+      })
+      endWait('codex')
+      expect(workerMail().map((m) => m.from)).toEqual(['orca-bg-wake'])
+    })
+
+    it('does not wake a worker whose background task a person stopped', () => {
+      stopRequestedSince = (sessionId, since) => sessionId === SESSION && since === TURN_END
+      endWait('codex')
+      expect(workerMail()).toEqual([])
+    })
+
+    it('does not wake a worker whose turn was stopped', () => {
+      endWait('codex', chatRow('done', 'codex', 'cancellation'))
+      expect(workerMail()).toEqual([])
+    })
   })
 })

@@ -1,6 +1,7 @@
 import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import {
   createWorktreeVisibilitySourceMatcher,
+  hasBuiltInWorktreeVisibilityCandidate,
   type WorktreeVisibilitySourceMatcher
 } from './visibility-sources'
 
@@ -35,6 +36,9 @@ export function isAgentScratchWorktreePath(
   worktreePath: string,
   configuredWorktreeBasePaths: readonly string[]
 ): boolean {
+  if (!hasBuiltInWorktreeVisibilityCandidate(normalizeRuntimePathForComparison(worktreePath))) {
+    return false
+  }
   return createAgentScratchWorktreePathMatcher(
     [repoPath],
     configuredWorktreeBasePaths
@@ -49,12 +53,38 @@ const AGENT_SCRATCH_REPO_ROOT_SEGMENTS: readonly (readonly string[])[] = [
   ...AGENT_SCRATCH_PATH_PREFIXES
 ]
 
+const AGENT_SCRATCH_REPO_ROOT_NEEDLES: readonly string[] = AGENT_SCRATCH_REPO_ROOT_SEGMENTS.map(
+  (marker) => marker.join('/')
+)
+
 export function isAgentScratchRepoRootPath(repoPath: string): boolean {
-  const segments = normalizeRuntimePathForComparison(repoPath).split('/')
-  for (const marker of AGENT_SCRATCH_REPO_ROOT_SEGMENTS) {
+  const normalized = normalizeRuntimePathForComparison(repoPath)
+  let hasCandidate = false
+  for (let i = 0; i < AGENT_SCRATCH_REPO_ROOT_NEEDLES.length; i += 1) {
+    if (normalized.includes(AGENT_SCRATCH_REPO_ROOT_NEEDLES[i])) {
+      hasCandidate = true
+      break
+    }
+  }
+  if (!hasCandidate) {
+    return false
+  }
+  const segments = normalized.split('/')
+  for (let m = 0; m < AGENT_SCRATCH_REPO_ROOT_SEGMENTS.length; m += 1) {
+    if (!normalized.includes(AGENT_SCRATCH_REPO_ROOT_NEEDLES[m])) {
+      continue
+    }
+    const marker = AGENT_SCRATCH_REPO_ROOT_SEGMENTS[m]
     // Repo scratch containers may occur anywhere above the root; worktree matches instead anchor to a registered checkout.
     for (let index = 0; index + marker.length <= segments.length; index += 1) {
-      if (marker.every((segment, offset) => segments[index + offset] === segment)) {
+      let matched = true
+      for (let offset = 0; offset < marker.length; offset += 1) {
+        if (segments[index + offset] !== marker[offset]) {
+          matched = false
+          break
+        }
+      }
+      if (matched) {
         return true
       }
     }

@@ -10,16 +10,19 @@ import {
 } from 'lucide-react-native'
 import { hasTerminalDirectionPadSpace } from '../../layout/side-rail-strip'
 import { useSideRailStrip, useSideRailDirectionPadAvailable } from '../../layout/side-rail'
-import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../../terminal/key-input/terminal-key-definitions'
+import {
+  TERMINAL_ACCESSORY_KEY_DEFINITIONS,
+  terminalAccessoryKeyAccessibilityLabel
+} from '../../terminal/key-input/terminal-key-definitions'
 import {
   createTerminalAccessoryRepeatController,
   TERMINAL_ACCESSORY_REPEAT_DELAY_MS,
   TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS
 } from '../../terminal/key-input/terminal-accessory-repeat'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { TerminalDirectionPad, type TerminalDirectionPadHandle } from './terminal-direction-pad'
 import type {
   BridgeTerminalToolbar,
@@ -93,7 +96,8 @@ export function TerminalKeyRail({
   toolbar?: BridgeTerminalToolbar
   inputOwner?: string | null
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [repeat] = useState(() => createTerminalAccessoryRepeatController<BridgeTerminalKeyId>())
   const padRef = useRef<TerminalDirectionPadHandle | null>(null)
@@ -209,7 +213,8 @@ export function TerminalKeyRail({
       ? {
           id,
           label: definition.label,
-          accessibilityLabel: definition.accessibilityLabel ?? sendKeyLabel(definition.label),
+          accessibilityLabel:
+            terminalAccessoryKeyAccessibilityLabel(definition, t) ?? sendKeyLabel(definition.label),
           repeatable: definition.repeatable,
           disabled: !canSend
         }
@@ -335,7 +340,7 @@ export function TerminalKeyRail({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   viewport: {
     flex: 1
   },

@@ -1,4 +1,4 @@
-import React, { useId } from 'react'
+import React, { Suspense, useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
@@ -6,10 +6,20 @@ import { SidebarHeaderActions } from './sidebar-header-actions'
 import { SidebarSectionHeader } from '../SidebarSectionHeader'
 import { PROJECTS_SECTION_GROUP_KEY } from '../../../../../shared/sidebar-list/sections/group-keys'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
+import { Popover, PopoverAnchor } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Sparkles, Bell } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
+
+const LazyAgentsSidebarIntroPopoverContent = lazyWithRetry(
+  () =>
+    import('./AgentsSidebarIntroPopoverContent').then((module) => ({
+      default: module.AgentsSidebarIntroPopoverContent
+    })),
+  { reloadKey: 'agents-sidebar-intro-popover-content' }
+)
 
 type SidebarHeaderProps = {
   activityBadgeTarget?: React.Ref<HTMLSpanElement>
@@ -44,6 +54,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const introDescriptionId = useId()
   // Existing users who opted into the former Experimental Agents view get one explanation.
   const introOpen = migratedFromExperimental && !agentsSidebarIntroShown
+  const hasOpenedIntro = useLatchedOpen(introOpen)
   const acknowledgeIntro = React.useCallback(() => {
     void updateSettings?.({ agentsSidebarIntroShown: true })
   }, [updateSettings])
@@ -131,39 +142,15 @@ const SidebarHeader = React.memo(function SidebarHeader({
                 {activityLabel}
               </TooltipContent>
             </Tooltip>
-            <PopoverContent
-              side="bottom"
-              align="center"
-              sideOffset={8}
-              className="w-72 rounded-xl border border-border bg-popover p-3.5 text-popover-foreground shadow-floating"
-              onOpenAutoFocus={(event) => event.preventDefault()}
-              aria-labelledby={introTitleId}
-              aria-describedby={introDescriptionId}
-            >
-              <PopoverArrow />
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                  <h3 id={introTitleId} className="text-sm font-semibold text-foreground">
-                    {t('agentsSidebarIntro.migrated.title', 'Agents are easier to find')}
-                  </h3>
-                </div>
-                <p
-                  id={introDescriptionId}
-                  className="text-xs leading-relaxed text-muted-foreground"
-                >
-                  {t(
-                    'agentsSidebarIntro.migrated.description',
-                    'Your Agents view is now a dedicated sidebar tab. Your activity and filters are preserved.'
-                  )}
-                </p>
-                <div className="flex justify-end pt-0.5">
-                  <Button size="sm" onClick={acknowledgeIntro}>
-                    {t('agentsSidebarIntro.migrated.dismiss', 'Got it')}
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
+            {hasOpenedIntro ? (
+              <Suspense fallback={null}>
+                <LazyAgentsSidebarIntroPopoverContent
+                  introTitleId={introTitleId}
+                  introDescriptionId={introDescriptionId}
+                  onAcknowledge={acknowledgeIntro}
+                />
+              </Suspense>
+            ) : null}
           </Popover>
           <SidebarHeaderActions
             onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange}

@@ -1,6 +1,5 @@
 import type { PickerOption } from '../../components/sheets/PickerModal'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
-import { colors } from '../../theme/mobile-theme'
 import {
   resolveJiraAutoName,
   resolveLinearAutoName,
@@ -25,138 +24,129 @@ import type {
 } from '../mobile-tasks-view-state-types'
 import type { ActionableTaskItem } from '../mobile-tasks-project-workspace-types'
 import type { LinearMobileIssue as LinearIssue } from '../providers/linear/linear-mobile-issue-read'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
+import type { MobilePalette } from '../../theme/mobile-theme'
 
-type TaskOptionCopy<T extends string> = Omit<PickerOption<T>, 'label' | 'subtitle'> & {
-  label: string | (() => string)
-  subtitle?: () => string
-}
-
-function localizedTaskOptions<T extends string>(options: TaskOptionCopy<T>[]): PickerOption<T>[] {
-  return options.map(({ label, subtitle, ...option }) => ({
-    ...option,
-    get label() {
-      return typeof label === 'string' ? label : label()
+export function taskProviderOptions(
+  t: Translate,
+  colors: MobilePalette
+): PickerOption<TaskProvider>[] {
+  return [
+    {
+      value: 'github',
+      label: 'GitHub',
+      subtitle: t('tasks.options.githubDescription', 'Issues and pull requests'),
+      renderIcon: (selected) => (
+        <TaskProviderLogo
+          provider="github"
+          size={16}
+          color={selected ? colors.textPrimary : colors.textSecondary}
+        />
+      )
     },
-    get subtitle() {
-      return subtitle?.()
+    {
+      value: 'gitlab',
+      label: 'GitLab',
+      subtitle: t('tasks.options.gitlabDescription', 'Issues and merge requests'),
+      renderIcon: (selected) => (
+        <TaskProviderLogo
+          provider="gitlab"
+          size={16}
+          color={selected ? colors.textPrimary : colors.textSecondary}
+        />
+      )
+    },
+    {
+      value: 'linear',
+      label: 'Linear',
+      subtitle: t('tasks.options.linearDescription', 'Assigned and team issues'),
+      renderIcon: (selected) => (
+        <TaskProviderLogo
+          provider="linear"
+          size={16}
+          color={selected ? colors.textPrimary : colors.textSecondary}
+        />
+      )
+    },
+    {
+      value: 'jira',
+      label: 'Jira',
+      subtitle: t('tasks.options.jiraDescription', 'Assigned and reported issues'),
+      renderIcon: (selected) => (
+        <TaskProviderLogo
+          provider="jira"
+          size={16}
+          color={selected ? colors.textPrimary : colors.textSecondary}
+        />
+      )
     }
-  }))
+  ]
 }
 
-export const PROVIDER_OPTIONS = localizedTaskOptions<TaskProvider>([
-  {
-    value: 'github',
-    label: 'GitHub',
-    subtitle: () => translate('tasks.options.githubDescription', 'Issues and pull requests'),
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="github"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  },
-  {
-    value: 'gitlab',
-    label: 'GitLab',
-    subtitle: () => translate('tasks.options.gitlabDescription', 'Issues and merge requests'),
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="gitlab"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  },
-  {
-    value: 'linear',
-    label: 'Linear',
-    subtitle: () => translate('tasks.options.linearDescription', 'Assigned and team issues'),
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="linear"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  },
-  {
-    value: 'jira',
-    label: 'Jira',
-    subtitle: () => translate('tasks.options.jiraDescription', 'Assigned and reported issues'),
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="jira"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
-  }
-])
+export function gitlabFilterOptions(t: Translate): PickerOption<GitLabFilter>[] {
+  return [
+    {
+      value: 'opened',
+      label: t('tasks.options.openState', 'Open'),
+      subtitle: t('tasks.options.gitlabOpenDescription', 'Open issues and merge requests')
+    },
+    {
+      value: 'merged',
+      label: t('tasks.options.mergedState', 'Merged'),
+      subtitle: t('tasks.options.gitlabMergedDescription', 'Merged merge requests')
+    },
+    {
+      value: 'closed',
+      label: t('tasks.options.closedState', 'Closed'),
+      subtitle: t('tasks.options.gitlabClosedDescription', 'Closed issues and merge requests')
+    },
+    {
+      value: 'all',
+      label: t('tasks.options.all', 'All'),
+      subtitle: t('tasks.options.gitlabAllDescription', 'Any GitLab state')
+    }
+  ]
+}
 
-export const GITLAB_FILTER_OPTIONS = localizedTaskOptions<GitLabFilter>([
-  {
-    value: 'opened',
-    label: () => translate('tasks.options.openState', 'Open'),
-    subtitle: () =>
-      translate('tasks.options.gitlabOpenDescription', 'Open issues and merge requests')
-  },
-  {
-    value: 'merged',
-    label: () => translate('tasks.options.mergedState', 'Merged'),
-    subtitle: () => translate('tasks.options.gitlabMergedDescription', 'Merged merge requests')
-  },
-  {
-    value: 'closed',
-    label: () => translate('tasks.options.closedState', 'Closed'),
-    subtitle: () =>
-      translate('tasks.options.gitlabClosedDescription', 'Closed issues and merge requests')
-  },
-  {
-    value: 'all',
-    label: () => translate('tasks.options.all', 'All'),
-    subtitle: () => translate('tasks.options.gitlabAllDescription', 'Any GitLab state')
-  }
-])
+export function linearFilterOptions(t: Translate): PickerOption<LinearFilter>[] {
+  return [
+    {
+      value: 'all',
+      label: t('tasks.options.all', 'All'),
+      subtitle: t('tasks.options.linearAllDescription', 'Open issues across connected workspaces')
+    },
+    {
+      value: 'assigned',
+      label: t('tasks.options.myIssues', 'My Issues'),
+      subtitle: t('tasks.options.linearAssignedDescription', 'Issues assigned to you')
+    },
+    {
+      value: 'created',
+      label: t('tasks.options.createdState', 'Created'),
+      subtitle: t('tasks.options.linearCreatedDescription', 'Issues created by you')
+    },
+    {
+      value: 'completed',
+      label: t('tasks.options.completedState', 'Completed'),
+      subtitle: t('tasks.options.linearCompletedDescription', 'Recently completed issues')
+    }
+  ]
+}
 
-export const LINEAR_FILTER_OPTIONS = localizedTaskOptions<LinearFilter>([
-  {
-    value: 'all',
-    label: () => translate('tasks.options.all', 'All'),
-    subtitle: () =>
-      translate('tasks.options.linearAllDescription', 'Open issues across connected workspaces')
-  },
-  {
-    value: 'assigned',
-    label: () => translate('tasks.options.myIssues', 'My Issues'),
-    subtitle: () => translate('tasks.options.linearAssignedDescription', 'Issues assigned to you')
-  },
-  {
-    value: 'created',
-    label: () => translate('tasks.options.createdState', 'Created'),
-    subtitle: () => translate('tasks.options.linearCreatedDescription', 'Issues created by you')
-  },
-  {
-    value: 'completed',
-    label: () => translate('tasks.options.completedState', 'Completed'),
-    subtitle: () =>
-      translate('tasks.options.linearCompletedDescription', 'Recently completed issues')
-  }
-])
-
-export const LINEAR_VIEW_OPTIONS = localizedTaskOptions<LinearViewMode>([
-  {
-    value: 'list',
-    label: () => translate('tasks.options.list', 'List'),
-    subtitle: () => translate('tasks.options.listDescription', 'Compact issue rows')
-  },
-  {
-    value: 'board',
-    label: () => translate('tasks.options.board', 'Board'),
-    subtitle: () => translate('tasks.options.boardDescription', 'Grouped columns')
-  }
-])
+export function linearViewOptions(t: Translate): PickerOption<LinearViewMode>[] {
+  return [
+    {
+      value: 'list',
+      label: t('tasks.options.list', 'List'),
+      subtitle: t('tasks.options.listDescription', 'Compact issue rows')
+    },
+    {
+      value: 'board',
+      label: t('tasks.options.board', 'Board'),
+      subtitle: t('tasks.options.boardDescription', 'Grouped columns')
+    }
+  ]
+}
 
 export function taskWorkspaceFallback(item: ActionableTaskItem): string {
   if (item.provider === 'github' || item.provider === 'gitlab') {
@@ -202,28 +192,34 @@ export const COMMENT_REACTION_EMOJI: Record<string, string> = {
   eyes: 'eyes'
 }
 
-export const LINEAR_GROUP_OPTIONS = localizedTaskOptions<LinearGroupBy>([
-  { value: 'none', label: () => translate('tasks.options.noGrouping', 'No grouping') },
-  { value: 'status', label: () => translate('tasks.options.status', 'Status') },
-  { value: 'assignee', label: () => translate('tasks.options.assignee', 'Assignee') },
-  { value: 'priority', label: () => translate('tasks.options.priority', 'Priority') },
-  { value: 'team', label: () => translate('tasks.options.team', 'Team') }
-])
+export function linearGroupOptions(t: Translate): PickerOption<LinearGroupBy>[] {
+  return [
+    { value: 'none', label: t('tasks.options.noGrouping', 'No grouping') },
+    { value: 'status', label: t('tasks.options.status', 'Status') },
+    { value: 'assignee', label: t('tasks.options.assignee', 'Assignee') },
+    { value: 'priority', label: t('tasks.options.priority', 'Priority') },
+    { value: 'team', label: t('tasks.options.team', 'Team') }
+  ]
+}
 
-export const LINEAR_ORDER_OPTIONS = localizedTaskOptions<LinearOrderBy>([
-  { value: 'priority', label: () => translate('tasks.options.priority', 'Priority') },
-  { value: 'updated', label: () => translate('tasks.options.updated', 'Updated') },
-  { value: 'identifier', label: () => translate('tasks.options.identifier', 'Identifier') }
-])
+export function linearOrderOptions(t: Translate): PickerOption<LinearOrderBy>[] {
+  return [
+    { value: 'priority', label: t('tasks.options.priority', 'Priority') },
+    { value: 'updated', label: t('tasks.options.updated', 'Updated') },
+    { value: 'identifier', label: t('tasks.options.identifier', 'Identifier') }
+  ]
+}
 
-export const LINEAR_DISPLAY_OPTIONS = localizedTaskOptions<LinearDisplayProperty>([
-  { value: 'state', label: () => translate('tasks.options.status', 'Status') },
-  { value: 'priority', label: () => translate('tasks.options.priority', 'Priority') },
-  { value: 'assignee', label: () => translate('tasks.options.assignee', 'Assignee') },
-  { value: 'team', label: () => translate('tasks.options.team', 'Team') },
-  { value: 'labels', label: () => translate('tasks.options.labels', 'Labels') },
-  { value: 'updated', label: () => translate('tasks.options.updated', 'Updated') }
-])
+export function linearDisplayOptions(t: Translate): PickerOption<LinearDisplayProperty>[] {
+  return [
+    { value: 'state', label: t('tasks.options.status', 'Status') },
+    { value: 'priority', label: t('tasks.options.priority', 'Priority') },
+    { value: 'assignee', label: t('tasks.options.assignee', 'Assignee') },
+    { value: 'team', label: t('tasks.options.team', 'Team') },
+    { value: 'labels', label: t('tasks.options.labels', 'Labels') },
+    { value: 'updated', label: t('tasks.options.updated', 'Updated') }
+  ]
+}
 
 export const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
   'state',
@@ -234,91 +230,96 @@ export const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
   'updated'
 ]
 
-export const GITHUB_KIND_OPTIONS = localizedTaskOptions<GitHubMode>([
-  {
-    value: 'issues',
-    label: () => translate('tasks.options.issues', 'Issues'),
-    subtitle: () => translate('tasks.options.githubIssuesDescription', 'GitHub issues')
-  },
-  {
-    value: 'prs',
-    label: () => translate('tasks.options.pullRequests', 'PRs'),
-    subtitle: () => translate('tasks.options.githubPullRequestsDescription', 'GitHub pull requests')
-  },
-  {
-    value: 'project',
-    label: () => translate('tasks.options.projects', 'Projects'),
-    subtitle: () => translate('tasks.options.githubProjectsDescription', 'GitHub Projects views')
-  }
-])
+export function githubKindOptions(t: Translate): PickerOption<GitHubMode>[] {
+  return [
+    {
+      value: 'issues',
+      label: t('tasks.options.issues', 'Issues'),
+      subtitle: t('tasks.options.githubIssuesDescription', 'GitHub issues')
+    },
+    {
+      value: 'prs',
+      label: t('tasks.options.pullRequestsKind', 'Pull requests'),
+      subtitle: t('tasks.options.githubPullRequestsDescription', 'GitHub pull requests')
+    },
+    {
+      value: 'project',
+      label: t('tasks.options.projects', 'Projects'),
+      subtitle: t('tasks.options.githubProjectsDescription', 'GitHub Projects views')
+    }
+  ]
+}
 
-export const ISSUE_PRESETS = localizedTaskOptions<GitHubPreset>([
-  {
-    value: 'issues',
-    label: () => translate('tasks.options.openState', 'Open'),
-    subtitle: () => translate('tasks.options.githubOpenIssuesDescription', 'Open GitHub issues')
-  },
-  {
-    value: 'my-issues',
-    label: () => translate('tasks.options.assignedToMe', 'Assigned to me'),
-    subtitle: () =>
-      translate('tasks.options.githubAssignedIssuesDescription', 'Open issues assigned to you')
-  }
-])
+export function issuePresetOptions(t: Translate): PickerOption<GitHubPreset>[] {
+  return [
+    {
+      value: 'issues',
+      label: t('tasks.options.openState', 'Open'),
+      subtitle: t('tasks.options.githubOpenIssuesDescription', 'Open GitHub issues')
+    },
+    {
+      value: 'my-issues',
+      label: t('tasks.options.assignedToMe', 'Assigned to me'),
+      subtitle: t('tasks.options.githubAssignedIssuesDescription', 'Open issues assigned to you')
+    }
+  ]
+}
 
-export const PR_PRESETS = localizedTaskOptions<GitHubPreset>([
-  {
-    value: 'prs',
-    label: () => translate('tasks.options.openState', 'Open'),
-    subtitle: () => translate('tasks.options.openPullRequestsDescription', 'Open pull requests')
-  },
-  {
-    value: 'my-prs',
-    label: () => translate('tasks.options.mine', 'Mine'),
-    subtitle: () =>
-      translate('tasks.options.myPullRequestsDescription', 'Pull requests authored by you')
-  },
-  {
-    value: 'review',
-    label: () => translate('tasks.options.needsReview', 'Needs review'),
-    subtitle: () =>
-      translate('tasks.options.reviewRequestsDescription', 'Review requests assigned to you')
-  }
-])
+export function prPresetOptions(t: Translate): PickerOption<GitHubPreset>[] {
+  return [
+    {
+      value: 'prs',
+      label: t('tasks.options.openState', 'Open'),
+      subtitle: t('tasks.options.openPullRequestsDescription', 'Open pull requests')
+    },
+    {
+      value: 'my-prs',
+      label: t('tasks.options.mine', 'Mine'),
+      subtitle: t('tasks.options.myPullRequestsDescription', 'Pull requests authored by you')
+    },
+    {
+      value: 'review',
+      label: t('tasks.options.needsReview', 'Needs review'),
+      subtitle: t('tasks.options.reviewRequestsDescription', 'Review requests assigned to you')
+    }
+  ]
+}
 
-export const GITLAB_VIEW_OPTIONS = localizedTaskOptions<GitLabView>([
-  {
-    value: 'project',
-    label: () => translate('tasks.options.projectMergeRequests', 'Project MRs'),
-    subtitle: () =>
-      translate(
+export function gitlabViewOptions(t: Translate): PickerOption<GitLabView>[] {
+  return [
+    {
+      value: 'project',
+      label: t('tasks.options.projectMergeRequests', 'Project MRs'),
+      subtitle: t(
         'tasks.options.projectMergeRequestsDescription',
         'Merge requests and issues by repository'
       )
-  },
-  {
-    value: 'todos',
-    label: () => translate('tasks.options.myTodos', 'My Todos'),
-    subtitle: () => translate('tasks.options.myTodosDescription', 'Pending GitLab todos')
-  }
-])
+    },
+    {
+      value: 'todos',
+      label: t('tasks.options.myTodos', 'My Todos'),
+      subtitle: t('tasks.options.myTodosDescription', 'Pending GitLab todos')
+    }
+  ]
+}
 
-export const SORT_OPTIONS = localizedTaskOptions<TaskSort>([
-  {
-    value: 'updated',
-    label: () => translate('tasks.options.updated', 'Updated'),
-    subtitle: () => translate('tasks.options.updatedSortDescription', 'Newest activity first')
-  },
-  {
-    value: 'repository',
-    label: () => translate('tasks.options.repository', 'Repository'),
-    subtitle: () =>
-      translate(
+export function sortOptions(t: Translate): PickerOption<TaskSort>[] {
+  return [
+    {
+      value: 'updated',
+      label: t('tasks.options.updated', 'Updated'),
+      subtitle: t('tasks.options.updatedSortDescription', 'Newest activity first')
+    },
+    {
+      value: 'repository',
+      label: t('tasks.options.repository', 'Repository'),
+      subtitle: t(
         'tasks.options.repositorySortDescription',
         'Group by repository, then newest activity'
       )
-  }
-])
+    }
+  ]
+}
 
 export type ProjectSortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
 
@@ -356,8 +357,6 @@ export const SHOW_MOBILE_DETAIL_LABEL_CHIPS = false
 export const SHOW_MOBILE_DETAIL_METADATA_EDITORS = false
 
 export const SHOW_MOBILE_DETAIL_REVIEW_PANELS = false
-
-export const SHOW_MOBILE_LINEAR_DETAIL_TOOLS = false
 
 export const SHOW_MOBILE_COMMENT_THREAD_TOOLS = false
 

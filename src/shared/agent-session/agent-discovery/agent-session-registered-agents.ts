@@ -1,10 +1,14 @@
 /** Advertised agentSession.agents lists registered agents/capabilities before sessions exist. Drop unreadable rows individually; unknown capability arms degrade to the least authority. */
 
 import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { AgentSessionCapabilities } from '../capabilities/agent-session-capabilities'
 import { isStructuredAgentId } from '../lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openEnum } from '../../validation/zod-salvage'
-import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY } from '../../agent-launch/installation/managed-runtime-install'
+import {
+  MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
+  managedRuntimeRetired
+} from '../../agent-launch/installation/managed-runtime-install'
 
 export const AGENT_SESSION_AGENTS_METHOD = 'agentSession.agents'
 
@@ -23,32 +27,34 @@ export type AgentSessionAgentsResult = {
 const MAX_REGISTERED_AGENTS = 128
 
 // An absent flag is a capability the host did not claim.
-const capabilityFlag = z.boolean().optional().default(false)
+const capabilityFlag = lazyZodSchema(() => z.boolean().optional().default(false))
 
-const registeredAgentSchema = z.object({
-  agent: z.string().refine(isStructuredAgentId),
-  capabilities: z.object({
-    rewind: capabilityFlag,
-    compact: capabilityFlag,
-    threadGoal: capabilityFlag,
-    // Optional, like fork: absent stays absent, and anything but true offers no MCP panel.
-    mcpServers: z.literal(true).optional().catch(undefined),
-    contextUsage: capabilityFlag,
-    imagePrompts: capabilityFlag,
-    // An unknown fork level reads as absent: the host never forks for this client.
-    fork: z.enum(['checkpoint', 'tip']).optional().catch(undefined),
-    // Holding a follow-up until the turn ends never interrupts one the client cannot reason about.
-    steering: openEnum(['inject', 'queue'] as const, 'queue')
-      .optional()
-      .default('queue'),
-    // `orca` claims only that Orca answers the agent's requests, never that it confines the agent.
-    approvalEnforcement: openEnum(['provider', 'orca'] as const, 'orca')
-      .optional()
-      .default('orca')
-  }),
-  // A false from a host reads as absent, so the row keeps the detection-based offer.
-  managedRuntime: z.literal(true).optional().catch(undefined)
-})
+const registeredAgentSchema = lazyZodSchema(() =>
+  z.object({
+    agent: z.string().refine(isStructuredAgentId),
+    capabilities: z.object({
+      rewind: capabilityFlag,
+      compact: capabilityFlag,
+      threadGoal: capabilityFlag,
+      // Optional, like fork: absent stays absent, and anything but true offers no MCP panel.
+      mcpServers: z.literal(true).optional().catch(undefined),
+      contextUsage: capabilityFlag,
+      imagePrompts: capabilityFlag,
+      // An unknown fork level reads as absent: the host never forks for this client.
+      fork: z.enum(['checkpoint', 'tip']).optional().catch(undefined),
+      // Holding a follow-up until the turn ends never interrupts one the client cannot reason about.
+      steering: openEnum(['inject', 'queue'] as const, 'queue')
+        .optional()
+        .default('queue'),
+      // `orca` claims only that Orca answers the agent's requests, never that it confines the agent.
+      approvalEnforcement: openEnum(['provider', 'orca'] as const, 'orca')
+        .optional()
+        .default('orca')
+    }),
+    // A false from a host reads as absent, so the row keeps the detection-based offer.
+    managedRuntime: z.literal(true).optional().catch(undefined)
+  })
+)
 
 /** The host's agents as this build reads them, or null when the reply is not an agent list. */
 export function decodeAgentSessionAgentsResult(
@@ -67,7 +73,8 @@ export function decodeAgentSessionAgentsResult(
     const parsed = registeredAgentSchema.safeParse(row)
     if (parsed.success && !seen.has(parsed.data.agent)) {
       seen.add(parsed.data.agent)
-      decoded.push(parsed.data)
+      const { managedRuntime, ...row } = parsed.data
+      decoded.push(managedRuntime && !managedRuntimeRetired(row.agent) ? parsed.data : row)
     }
   }
   return decoded

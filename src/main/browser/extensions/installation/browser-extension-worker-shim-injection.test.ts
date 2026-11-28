@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { withBrowserExtensionModuleShimImport } from './browser-extension-worker-shim-injection'
+import {
+  buildBrowserExtensionWorkerShimInjection,
+  withBrowserExtensionModuleShimImport
+} from './browser-extension-worker-shim-injection'
 
 const LOAD = 'import "/orca-extension-api.js";'
 
@@ -16,5 +19,24 @@ describe('module worker shim import', () => {
     expect(injected?.toString('utf8')).toBe(expected)
     // Store folders are prepared in place on every run.
     expect(withBrowserExtensionModuleShimImport(injected ?? Buffer.from(''))).toBeNull()
+  })
+})
+
+describe('background worker path', () => {
+  const manifestWithWorker = (path: string) => ({
+    manifest_version: 3,
+    background: { service_worker: path }
+  })
+
+  it('accepts a child folder whose name starts with two dots', () => {
+    expect(
+      buildBrowserExtensionWorkerShimInjection(manifestWithWorker('..bg/sw.js'))?.workerPath
+    ).toBe('..bg/sw.js')
+  })
+
+  it('refuses a worker outside the extension folder', () => {
+    expect(() => buildBrowserExtensionWorkerShimInjection(manifestWithWorker('../sw.js'))).toThrow(
+      'must be inside the extension folder'
+    )
   })
 })

@@ -4,6 +4,7 @@ import type {
   GitForkSyncResult
 } from '../../../../shared/git/remotes/git-fork-sync'
 import type {
+  GitAbortOperationRequest,
   ContinueRebaseAction,
   ContinueRebaseRequest,
   ContinueRebaseResult,
@@ -45,15 +46,21 @@ export class RuntimeGitSyncCommands {
     return { provider, pushTarget: materialized }
   }
 
-  async abortRuntimeGitMerge(worktreeSelector: string): Promise<{ ok: true }> {
+  async abortRuntimeGitMerge(
+    worktreeSelector: string,
+    request?: GitAbortOperationRequest
+  ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    await requireRuntimeGitProvider(target).abortMerge(target.worktree.path)
+    await requireRuntimeGitProvider(target).abortMerge(target.worktree.path, request)
     return { ok: true }
   }
 
-  async abortRuntimeGitRebase(worktreeSelector: string): Promise<{ ok: true }> {
+  async abortRuntimeGitRebase(
+    worktreeSelector: string,
+    request?: GitAbortOperationRequest
+  ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    await requireRuntimeGitProvider(target).abortRebase(target.worktree.path)
+    await requireRuntimeGitProvider(target).abortRebase(target.worktree.path, request)
     return { ok: true }
   }
 
@@ -189,12 +196,17 @@ export class RuntimeGitSyncCommands {
     return requireRuntimeGitProvider(target).applyCommit(target.worktree.path, operation, commitId)
   }
 
-  async sequencerAbortRuntimeGit(worktreeSelector: string, operation: GitCommitAction) {
+  async sequencerAbortRuntimeGit(
+    worktreeSelector: string,
+    operation: GitCommitAction,
+    request?: GitAbortOperationRequest
+  ) {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     await requireRuntimeGitProvider(target).recoverSequencer(
       target.worktree.path,
       operation,
-      'abort'
+      'abort',
+      request
     )
     return { ok: true }
   }

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
 import {
@@ -8,20 +8,10 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
-import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
-import {
-  getClonePathComparisonKey,
-  getSavedProjectPathKeys
-} from '../../git/repositories/cloning/repo-clone-path'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
-import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
-import { matchLinkedWorktreeMainCheckout } from '../../workspaces/catalog/linked-worktree-main-checkout'
-import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { runtimePathsEqual } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { runtimeRepoIsRegistrationCandidate } from '../workspaces/catalog/runtime-worktree-selection'
@@ -30,13 +20,8 @@ import {
   WslHostWindowsDriveRefusalError,
   type WslHostWindowsDriveRefusal
 } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
-import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
-import { getResolvedFolderWorkspacePathStatus } from '../../project-groups/folder-workspace-path-status'
 import { runAsWslUserAct, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
-import {
-  repoCreateFailure,
-  type RepoCreateFailure
-} from '../../../shared/repository/creation/repo-create-failure-copy'
+import type { RepoCreateFailure } from '../../../shared/repository/creation/repo-create-failure-copy'
 import { getDefaultCreateProjectParent } from './default-create-project-parent'
 
 type RuntimeRepositoryRegistrationDependencies = {
@@ -61,6 +46,11 @@ export class RuntimeRepositoryRegistrationController {
     }
     await refuseWslHostWindowsDrivePath(path)
     if (kind === 'folder') {
+      const [{ getResolvedFolderWorkspacePathStatus }, { describeWslUncAccessDenied }] =
+        await Promise.all([
+          import('../../project-groups/folder-workspace-path-status'),
+          import('../../wsl/filesystem/wsl-unc-access-denied')
+        ])
       await runAsWslUserAct(wslDistroForPath(path), async () => {
         // This controller serves this filesystem even when a paired client names it runtime:.
         const status = await getResolvedFolderWorkspacePathStatus(
@@ -83,10 +73,18 @@ export class RuntimeRepositoryRegistrationController {
     if (kind === 'git') {
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }
-    const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
+    const gitInfo =
+      kind === 'git'
+        ? await (
+            await import('../../git/repositories/discovery/repo-detection')
+          ).inspectGitRepoForRegistrationAsync(path)
+        : null
     if (gitInfo && !gitInfo.isRepo) {
+      const { describeWslUncAccessDenied } =
+        await import('../../wsl/filesystem/wsl-unc-access-denied')
       throw new Error(
-        (await describeWslUncAccessDenied(path, store.getSettings())) ??
+        gitInfo.ownershipError ??
+          (await describeWslUncAccessDenied(path, store.getSettings())) ??
           `Not a valid git repository: ${path}`
       )
     }
@@ -99,6 +97,10 @@ export class RuntimeRepositoryRegistrationController {
       sameHostRepos().find(
         (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
       )
+    const [{ findProjectAtSameRealPath }, { matchLinkedWorktreeMainCheckout }] = await Promise.all([
+      import('../../workspaces/catalog/project-realpath-identity'),
+      import('../../workspaces/catalog/linked-worktree-main-checkout')
+    ])
     const isMainCheckout = matchLinkedWorktreeMainCheckout(gitInfo)
     const existing =
       findAtPath() ??
@@ -108,6 +110,7 @@ export class RuntimeRepositoryRegistrationController {
       return this.reuseExisting(store, existing, executionHostId)
     }
     // This controller validated/read the path locally; runtime: is the paired-client address, not another machine.
+    const { detectRepoLocalMetadata } = await import('../../repository-icons/repo-icon-autodetect')
     const detected = await detectRepoLocalMetadata({
       repoPath,
       kind,
@@ -130,6 +133,8 @@ export class RuntimeRepositoryRegistrationController {
       ...(kind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
     }
     store.addRepo(repo)
+    const { prepareLocalWorktreeRootForRepo } =
+      await import('../../workspaces/creation/worktree-root-preparation')
     await prepareLocalWorktreeRootForRepo(store, repo)
     this.invalidate(repo.id)
     return store.getRepo(repo.id) ?? repo
@@ -161,6 +166,8 @@ export class RuntimeRepositoryRegistrationController {
     { repo: Repo } | (RepoCreateFailure & { windowsDriveRefusal?: WslHostWindowsDriveRefusal })
   > {
     const store = this.requireStore()
+    const { repoCreateFailure } =
+      await import('../../../shared/repository/creation/repo-create-failure-copy')
     const trimmedName = name.trim()
     const trimmedParentPath = parentPath.trim()
     const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'
@@ -184,6 +191,8 @@ export class RuntimeRepositoryRegistrationController {
         ? { error: error.message, windowsDriveRefusal: error.data }
         : { error: error instanceof Error ? error.message : String(error) }
     }
+    const { ensureCloneDestination, getClonePathComparisonKey, getSavedProjectPathKeys } =
+      await import('../../git/repositories/cloning/repo-clone-path')
     const targetPath = join(trimmedParentPath, trimmedName)
     let targetPathKeys = await getSavedProjectPathKeys(targetPath)
     // Qualify by host: identical SSH paths name another machine's directory.
@@ -202,7 +211,7 @@ export class RuntimeRepositoryRegistrationController {
 
     let createdDir = false
     try {
-      await mkdir(trimmedParentPath, { recursive: true })
+      await ensureCloneDestination(trimmedParentPath)
       const existingStat = await stat(targetPath).catch((error: unknown) => {
         if (isENOENT(error)) {
           return null
@@ -226,7 +235,8 @@ export class RuntimeRepositoryRegistrationController {
     }
 
     if (repoKind === 'git') {
-      const failure = await this.initializeGitRepo(targetPath, createdDir)
+      const { initializeCreatedGitRepo } = await import('./repository-git-init')
+      const failure = await initializeCreatedGitRepo(targetPath, createdDir)
       if (failure) {
         return failure
       }
@@ -239,8 +249,16 @@ export class RuntimeRepositoryRegistrationController {
     // Register Git's checkout path so the new project stays its own selected checkout.
     const repoPath =
       repoKind === 'git'
-        ? (await inspectGitRepoForRegistrationAsync(targetPath)).rootPath
+        ? (
+            await (
+              await import('../../git/repositories/discovery/repo-detection')
+            ).inspectGitRepoForRegistrationAsync(targetPath)
+          ).rootPath
         : targetPath
+    const [{ detectRepoLocalMetadata }, { prepareLocalWorktreeRootForRepo }] = await Promise.all([
+      import('../../repository-icons/repo-icon-autodetect'),
+      import('../../workspaces/creation/worktree-root-preparation')
+    ])
     const detected = await detectRepoLocalMetadata({
       repoPath,
       kind: repoKind,
@@ -261,40 +279,6 @@ export class RuntimeRepositoryRegistrationController {
     invalidateAuthorizedRootsCache()
     this.invalidate(repo.id)
     return { repo: store.getRepo(repo.id) ?? repo }
-  }
-
-  private async initializeGitRepo(
-    targetPath: string,
-    createdDir: boolean
-  ): Promise<RepoCreateFailure | null> {
-    let step: 'init' | 'commit' = 'init'
-    try {
-      // Host Git on purpose: the new repo has no project yet, even inside one.
-      await gitExecFileAsync(['init'], { cwd: targetPath, hostGit: true })
-      step = 'commit'
-      await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
-        cwd: targetPath,
-        // Host Git on purpose: the new repo has no project yet, even inside one.
-        hostGit: true
-      })
-      return null
-    } catch (error) {
-      if (createdDir) {
-        await rm(targetPath, { recursive: true, force: true }).catch(() => {})
-      } else if (step === 'commit') {
-        await rm(join(targetPath, '.git'), {
-          recursive: true,
-          force: true
-        }).catch(() => {})
-      }
-      const message = error instanceof Error ? error.message : String(error)
-      if (step === 'commit' && /Please tell me who you are|user\.name|user\.email/i.test(message)) {
-        return repoCreateFailure('gitIdentityMissing')
-      }
-      return repoCreateFailure(step === 'init' ? 'gitInitFailed' : 'initialCommitFailed', {
-        detail: message
-      })
-    }
   }
 
   /** Read on this host so a paired client suggests this host's Workspace Directory, not its own. */

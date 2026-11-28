@@ -1,4 +1,4 @@
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 
 export type SourceControlHubTab = 'changes' | 'pr'
 
@@ -7,13 +7,10 @@ export type SourceControlHubRouteTab = SourceControlHubTab | 'history'
 
 export const SOURCE_CONTROL_HUB_TABS: readonly SourceControlHubTab[] = ['changes', 'pr'] as const
 
-export const SOURCE_CONTROL_HUB_TAB_LABELS: Record<SourceControlHubTab, string> = {
-  get changes() {
-    return translate('sourceControl.hubTab.changes', 'Changes')
-  },
-  get pr() {
-    return translate('sourceControl.hubTab.pullRequest', 'Pull request')
-  }
+export function sourceControlHubTabLabel(tab: SourceControlHubTab, t: Translate): string {
+  return tab === 'pr'
+    ? t('sourceControl.hubTab.pullRequest', 'Pull request')
+    : t('sourceControl.hubTab.changes', 'Changes')
 }
 
 export function parseSourceControlHubTab(

@@ -1,8 +1,10 @@
 import { existsSync } from 'node:fs'
+import { basename } from 'node:path'
 import type { backup, BackupOptions, DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { hasNodeSqliteReaderApi } from './node-sqlite-reader-api'
 import { NodeSqliteStatement } from './node-sqlite-statement'
 import type { SqliteStatement } from './sqlite-statement'
+import { enterSyncCall, exitSyncCall } from '../diagnostics/main-sync-calls'
 
 type SqlitePath = ConstructorParameters<typeof DatabaseSync>[0]
 
@@ -71,8 +73,13 @@ export function isSqliteAvailable(): boolean {
 class SyncDatabase {
   private readonly db: DatabaseSync
   private readonly statementCache = new Map<string, SqliteStatement>()
+  private lastPreparedSql: string | undefined
+  private lastPreparedStmt: SqliteStatement | undefined
+  /** Names this database in main-thread stall reports. */
+  private readonly label: string
 
   constructor(path: SqlitePath, options: SyncDatabaseOptions = {}) {
+    this.label = basename(String(path))
     if (options.fileMustExist && path !== ':memory:' && !existsSync(path)) {
       throw new Error(`SQLite database does not exist: ${String(path)}`)
     }
@@ -87,8 +94,15 @@ class SyncDatabase {
     // Invalidate before DDL so partially applied batches cannot retain stale statements.
     if (SCHEMA_CHANGING_SQL.test(sql)) {
       this.statementCache.clear()
+      this.lastPreparedSql = undefined
+      this.lastPreparedStmt = undefined
     }
-    this.db.exec(sql)
+    const call = enterSyncCall()
+    try {
+      this.db.exec(sql)
+    } finally {
+      exitSyncCall(call, this.label, sql)
+    }
   }
 
   function(name: string, callback: Parameters<DatabaseSync['function']>[1]): void {
@@ -96,13 +110,18 @@ class SyncDatabase {
   }
 
   prepare(sql: string): SqliteStatement {
+    if (sql === this.lastPreparedSql && this.lastPreparedStmt !== undefined) {
+      return this.lastPreparedStmt
+    }
     const cached = this.statementCache.get(sql)
     if (cached) {
       this.statementCache.delete(sql)
       this.statementCache.set(sql, cached)
+      this.lastPreparedSql = sql
+      this.lastPreparedStmt = cached
       return cached
     }
-    const statement = new NodeSqliteStatement(() => this.db.prepare(sql))
+    const statement = new NodeSqliteStatement(() => this.db.prepare(sql), this.label, sql)
     if (isStatementCacheable(sql)) {
       if (this.statementCache.size >= STATEMENT_CACHE_LIMIT) {
         const oldest = this.statementCache.keys().next().value
@@ -111,6 +130,8 @@ class SyncDatabase {
         }
       }
       this.statementCache.set(sql, statement)
+      this.lastPreparedSql = sql
+      this.lastPreparedStmt = statement
     }
     return statement
   }
@@ -148,6 +169,8 @@ class SyncDatabase {
 
   close(): void {
     this.statementCache.clear()
+    this.lastPreparedSql = undefined
+    this.lastPreparedStmt = undefined
     this.db.close()
   }
 }

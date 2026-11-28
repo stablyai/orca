@@ -4,6 +4,7 @@ import type {
   JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
+  JournalConnectorReplyRetryRows,
   JournalConnectorReplyRow
 } from '../../../../shared/agent-session/journal/journal-connector-reply'
 import type { JournalSqlDatabase } from '../database/journal-sql-database'
@@ -89,6 +90,14 @@ export class JournalSqlConnectorReplies {
     failure?: ConnectorFailure
   ): Promise<boolean> {
     return await this.maintain({ kind: 'connector-replies-recut', claimMessageId, cut, failure })
+  }
+
+  /** An empty turn's rows, held for its one retry to claim; whether any changed. */
+  async holdForRetry(rows: JournalConnectorReplyRetryRows): Promise<boolean> {
+    return await this.maintain(
+      { kind: 'connector-replies-retry-hold', rows },
+      rows.keys.length + rows.claims.length
+    )
   }
 
   /** The claiming message never became the continuation: its rows are their cut's again. */

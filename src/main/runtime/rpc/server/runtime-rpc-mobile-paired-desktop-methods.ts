@@ -15,12 +15,14 @@ export const PAIRED_DESKTOP_METHODS = [
   'notifications.unregisterPush',
   'notifications.unsubscribe',
   'pairing.getEndpoints',
+  'pairing.getDirectEndpoints',
   'pairing.provisionRelay',
   'pairing.registerDeviceKey',
   'pairing.exchangeTicket',
   // The configured servers the desktop shows, and their workspace lists as it last fetched them.
   'mobileRelay.hosts.list',
   'mobileRelay.hosts.worktrees',
+  'mobileRelay.hosts.unwatchRows',
   // The sidebar's Project grouping inputs, as the desktop window last published them.
   'mobileRelay.projectSections',
   'speech.dictation.cancel',
@@ -43,12 +45,19 @@ export const PAIRED_DESKTOP_METHODS = [
   'ui.set',
   // The desktop's accounts pane and project pickers target its active runtime, not a workspace's host.
   'accounts.consumeCodexResetCredit',
+  // Adds or re-authenticates a Claude/Codex account on the Mac whose accounts.list the phone shows.
+  'accounts.hostSignInCancel',
+  'accounts.hostSignInStart',
+  'accounts.hostSignInSubmitCode',
+  'accounts.hostSignInWait',
   'accounts.list',
   'accounts.renameClaude',
   'accounts.renameCodex',
   'accounts.selectClaude',
   'accounts.selectCodex',
   'accounts.selectCodexForTarget',
+  // OpenCode and Devin profiles, listed in the same accounts.list snapshot.
+  'accounts.selectData',
   'accounts.subscribe',
   'accounts.unsubscribe',
   'github.project.addIssueCommentBySlug',

@@ -12,7 +12,7 @@ vi.mock('../../hashing/sha256', async (load) => {
   }
 })
 
-const { structuredAgentSessionPaneKey } = await import('./structured-agent-session-projection')
+const { chatPaneKey } = await import('./structured-agent-session-projection')
 
 // Perf contract: a 2,604-chat pass missed every time against a 2,048-entry FIFO, so each
 // orchestration rebuild re-hashed every live session. A repeat pass over 26,000 chats hashes nothing.
@@ -20,11 +20,11 @@ it('does not re-hash live sessions on a repeat pass at N and 10N chats', () => {
   for (const chatCount of [2_604, 26_040]) {
     const sessions = Array.from({ length: chatCount }, (_, index) => `s-${chatCount}-${index}`)
     for (const sessionId of sessions) {
-      structuredAgentSessionPaneKey(`tab-${sessionId}`, sessionId)
+      chatPaneKey(sessionId)
     }
     const before = hashing.calls
     for (const sessionId of sessions) {
-      structuredAgentSessionPaneKey(`tab-${sessionId}`, sessionId)
+      chatPaneKey(sessionId)
     }
     expect(hashing.calls - before).toBe(0)
   }

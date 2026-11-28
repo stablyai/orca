@@ -1,6 +1,6 @@
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useBots } from '@/lib/bot-catalog'
-import { isHome } from '../../../../shared/bots/bot-homes'
+import { isBotHome } from '../../../../shared/bots/bot-homes'
 import type { AppState } from '@/store/types'
 import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -31,10 +31,12 @@ export function botOfFolders(
   folders: readonly FolderWorkspace[],
   bots: readonly Bot[]
 ): Bot | null {
-  for (const folder of folders) {
-    const bot = bots.find((entry) => isHome(folder, [entry]))
-    if (bot) {
-      return bot
+  for (let i = 0; i < folders.length; i += 1) {
+    const folder = folders[i]
+    for (let j = 0; j < bots.length; j += 1) {
+      if (isBotHome(folder, bots[j])) {
+        return bots[j]
+      }
     }
   }
   return null
@@ -52,8 +54,11 @@ export function selectFolderAncestors(
   )
 }
 
+const EMPTY_FOLDER_ANCESTORS: ReadonlyMap<string, readonly FolderWorkspace[]> = new Map()
+
 let lastFolderAncestors: {
-  inputs: readonly unknown[]
+  parents: ReturnType<typeof selectSidebarLineageParentIdentities>
+  folders: readonly FolderWorkspace[] | undefined
   result: ReadonlyMap<string, readonly FolderWorkspace[]>
 } | null = null
 
@@ -63,17 +68,19 @@ function selectFolderAncestorsByIdentity(
   statuses: RuntimeStatuses
 ): ReadonlyMap<string, readonly FolderWorkspace[]> {
   const parents = selectSidebarLineageParentIdentities(state, statuses)
-  const inputs = [parents, selectFolderWorkspaces(state)]
+  const folders = selectFolderWorkspaces(state)
   const previous = lastFolderAncestors
-  if (previous && inputs.every((input, index) => input === previous.inputs[index])) {
+  if (previous && previous.parents === parents && previous.folders === folders) {
     return previous.result
   }
-  const folderByIdentity = new Map(
-    (selectFolderWorkspaces(state) ?? []).map((folder) => [
-      getFolderWorkspaceHostIdentity(folder),
-      folder
-    ])
-  )
+  if (!parents || parents.size === 0 || !folders || folders.length === 0) {
+    lastFolderAncestors = { parents, folders, result: EMPTY_FOLDER_ANCESTORS }
+    return EMPTY_FOLDER_ANCESTORS
+  }
+  const folderByIdentity = new Map<string, FolderWorkspace>()
+  for (const folder of folders) {
+    folderByIdentity.set(getFolderWorkspaceHostIdentity(folder), folder)
+  }
   const result = new Map<string, readonly FolderWorkspace[]>()
   // The sidebar's parents carry no loops, so each chain ends.
   const ancestorsOf = (identity: string): readonly FolderWorkspace[] => {
@@ -81,16 +88,25 @@ function selectFolderAncestorsByIdentity(
     if (known) {
       return known
     }
-    const parent = parents?.get(identity)
+    const parent = parents.get(identity)
     const folder = parent === undefined ? undefined : folderByIdentity.get(parent)
-    const ancestors =
-      parent === undefined ? NO_FOLDERS : [...(folder ? [folder] : []), ...ancestorsOf(parent)]
+    let ancestors: readonly FolderWorkspace[]
+    if (parent === undefined) {
+      ancestors = NO_FOLDERS
+    } else {
+      const parentAncestors = ancestorsOf(parent)
+      ancestors = folder
+        ? parentAncestors.length === 0
+          ? [folder]
+          : [folder, ...parentAncestors]
+        : parentAncestors
+    }
     result.set(identity, ancestors)
     return ancestors
   }
-  for (const identity of parents?.keys() ?? []) {
+  for (const identity of parents.keys()) {
     ancestorsOf(identity)
   }
-  lastFolderAncestors = { inputs, result }
+  lastFolderAncestors = { parents, folders, result }
   return result
 }

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { useAppStore } from '../../../store/index'
-import { useTabAgentMenuLaunch } from '../../agent/launch-menu/AgentMenuItems'
+import { useTabAgentMenuLaunch } from '../../agent/launch-menu/use-tab-agent-menu-launch'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { useNewTabAgentMenuRows } from '../../agent/launch-menu/use-new-tab-agent-menu-rows'
 import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
@@ -78,7 +78,7 @@ export function useTabBarCreateMenuController({
     worktreeId,
     newTabMenuOpen && showAgentLaunchItems,
     agentDetectionTarget,
-    { wakeOnOpen: true }
+    { wakeOnOpen: true, observationGroup: { worktreeId, groupId: resolvedGroupId } }
   )
   const [selectedPickerAgent, selectPickerAgent] = useState<AgentPickerEntry['agent']>()
   // Why: subscribed inside the open menu only; catalog reads landing here would re-render the tab bar.

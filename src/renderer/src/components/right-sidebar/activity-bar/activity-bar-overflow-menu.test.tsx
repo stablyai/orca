@@ -17,7 +17,7 @@ afterEach(() => {
   useAppStore.setState({ activityBarOrder: [], activityBarHidden: [] })
 })
 
-it('hides and restores an overflowed panel through its context menu', () => {
+it('hides and restores an overflowed panel through its context menu', async () => {
   render(
     <TopActivityOverflowMenu
       items={[items[1]]}
@@ -33,7 +33,7 @@ it('hides and restores an overflowed panel through its context menu', () => {
     pointerType: 'mouse',
     ctrlKey: false
   })
-  fireEvent.contextMenu(screen.getByRole('menuitem', { name: 'Plugin' }), {
+  fireEvent.contextMenu(await screen.findByRole('menuitem', { name: 'Plugin' }), {
     clientX: 40,
     clientY: 20
   })
@@ -47,7 +47,7 @@ it('hides and restores an overflowed panel through its context menu', () => {
   expect(useAppStore.getState().activityBarHidden).toEqual([])
 })
 
-it('moves past hidden tabs and resets the arrangement', () => {
+it('moves past hidden tabs and resets the arrangement', async () => {
   const tabs: ActivityBarItem[] = [
     items[0],
     items[1],
@@ -72,7 +72,7 @@ it('moves past hidden tabs and resets the arrangement', () => {
     pointerType: 'mouse',
     ctrlKey: false
   })
-  fireEvent.contextMenu(screen.getByRole('menuitem', { name: 'Checks' }))
+  fireEvent.contextMenu(await screen.findByRole('menuitem', { name: 'Checks' }))
   fireEvent.click(screen.getByRole('menuitem', { name: 'Move left' }))
   expect(useAppStore.getState().activityBarOrder).toEqual([
     'checks',
@@ -85,7 +85,28 @@ it('moves past hidden tabs and resets the arrangement', () => {
   expect(useAppStore.getState().activityBarHidden).toEqual([])
 })
 
-it('opens the neighbouring panel when hiding the active panel', () => {
+it('names the checks status on its overflowed row', async () => {
+  const checks: ActivityBarItem = { id: 'checks', title: 'Checks', icon: () => null, shortcut: '' }
+  render(
+    <TopActivityOverflowMenu
+      items={[checks]}
+      arrangementItems={[items[0], checks]}
+      activeTab="explorer"
+      onSelect={vi.fn()}
+      checksStatus="failure"
+      activityBarPosition="top"
+      onChangeActivityBarPosition={vi.fn()}
+    />
+  )
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'More sidebar tabs — Error' }), {
+    button: 0,
+    pointerType: 'mouse',
+    ctrlKey: false
+  })
+  expect(await screen.findByRole('menuitem', { name: 'Checks — Error' })).toBeTruthy()
+})
+
+it('opens the neighbouring panel when hiding the active panel', async () => {
   useAppStore.setState({
     rightSidebarEffectiveTab: 'plugin:test:panel',
     rightSidebarTab: 'plugin:test:panel'
@@ -105,12 +126,12 @@ it('opens the neighbouring panel when hiding the active panel', () => {
     pointerType: 'mouse',
     ctrlKey: false
   })
-  fireEvent.contextMenu(screen.getByRole('menuitem', { name: 'Plugin' }))
+  fireEvent.contextMenu(await screen.findByRole('menuitem', { name: 'Plugin' }))
   fireEvent.click(screen.getByRole('menuitem', { name: 'Hide' }))
   expect(useAppStore.getState().rightSidebarTab).toBe('explorer')
 })
 
-it.each(['ContextMenu', 'F10'])('opens the overflow context menu with %s', (key) => {
+it.each(['ContextMenu', 'F10'])('opens the overflow context menu with %s', async (key) => {
   render(
     <TopActivityOverflowMenu
       items={[items[1]]}
@@ -126,7 +147,7 @@ it.each(['ContextMenu', 'F10'])('opens the overflow context menu with %s', (key)
     pointerType: 'mouse',
     ctrlKey: false
   })
-  const item = screen.getByRole('menuitem', { name: 'Plugin' })
+  const item = await screen.findByRole('menuitem', { name: 'Plugin' })
   item.focus()
   fireEvent.keyDown(item, { key, shiftKey: key === 'F10' })
   expect(screen.getByRole('menuitem', { name: 'Hide' })).toBeTruthy()
@@ -167,7 +188,7 @@ it('focuses the neighbouring overflow item after hiding from the menu', async ()
     pointerType: 'mouse',
     ctrlKey: false
   })
-  const firstItem = screen.getByRole('menuitem', { name: 'First' })
+  const firstItem = await screen.findByRole('menuitem', { name: 'First' })
   firstItem.focus()
   fireEvent.keyDown(firstItem, { key: 'F10', shiftKey: true })
   fireEvent.click(screen.getByRole('menuitem', { name: 'Hide' }))
@@ -211,7 +232,7 @@ it('focuses the neighbouring tab when hiding the last overflowed plugin removes 
     pointerType: 'mouse',
     ctrlKey: false
   })
-  const plugin = screen.getByRole('menuitem', { name: 'Plugin' })
+  const plugin = await screen.findByRole('menuitem', { name: 'Plugin' })
   plugin.focus()
   fireEvent.keyDown(plugin, { key: 'F10', shiftKey: true })
   fireEvent.click(screen.getByRole('menuitem', { name: 'Hide' }))

@@ -1,13 +1,12 @@
 import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
-import { spawnDetachedWithoutInheritance } from '@orca/process-host/isolated-detached-spawn'
 import { queryWindowsProcess } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import {
   listConfirmedRunningWslDistros,
   noteWslDistroMayHaveStopped
 } from './wsl-background-distro-gate'
 import { WslDistroNotRunningError } from '../orcad/wsl-orcad-connection-errors'
-import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
-import { buildWslDistroHolderArgs } from './wsl-distro-holder-command'
+import { spawnDetachedHolder } from './wsl-distro-holder-command'
+import { knownWslHostLinuxUser } from '../orcad/wsl-orcad-host-user'
 import {
   listWslDistroHolderRecordDistros,
   readWslDistroHolderRecord,
@@ -16,11 +15,9 @@ import {
   writeWslDistroHolderRecord,
   type WslDistroHolderRecord
 } from './wsl-distro-holder-record'
-import { resolveWslExecutablePath } from '../execution/wsl-executable-path'
 
 import type {
   WslDistroHolder,
-  WslDistroHolderChild,
   WslDistroHolderDependencies,
   WslDistroHolderEnsureResult,
   WslDistroHolderReleaseOptions,
@@ -33,20 +30,10 @@ const RELEASE_EXIT_TIMEOUT_MS = 5_000
 /** Replace unverifiable holders only after this monotonic grace while confirmed running. A duplicate costs a sleep and may keep the distro alive after release; log the old PID. */
 export const WSL_HOLDER_UNVERIFIABLE_REPLACE_AFTER_MS = 5 * 60_000
 
-function spawnDetachedHolder(distro: string): WslDistroHolderChild {
-  // Detached and broken away from Orca's jobs where they allow it, so a holder outlives a crash of
-  // Orca even inside a kill-on-close job (an OpenSSH session's); taskkill /T still reaches it.
-  // Inheriting none of Orca's handles keeps a launcher's pipe or a DevTools socket from outliving Orca.
-  return spawnDetachedWithoutInheritance({
-    program: resolveWslExecutablePath(),
-    args: buildWslDistroHolderArgs(distro),
-    // A host-wide holder must never pin a worktree as its Windows cwd.
-    cwd: resolveWslInteropSpawnCwd(),
-    env: { ...process.env, WSL_UTF8: '1' }
-  })
-}
-
-import { classifyWslDistroHolderProcess } from './wsl-distro-holder-process-classification'
+import {
+  classifyWslDistroHolderForAccount,
+  classifyWslDistroHolderProcess
+} from './wsl-distro-holder-process-classification'
 
 export function createWslDistroHolder(dependencies: WslDistroHolderDependencies): WslDistroHolder {
   const { userDataPath } = dependencies
@@ -88,7 +75,14 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
       await removeWslDistroHolderRecord(userDataPath, distro)
       return { state: 'exited', record: null }
     }
-    const state = classifyWslDistroHolderProcess(read.record, await queryProcess(read.record.pid))
+    const evidence = await queryProcess(read.record.pid)
+    const found = classifyWslDistroHolderForAccount(
+      read.record,
+      evidence,
+      knownWslHostLinuxUser(distro)
+    )
+    // One spawned for another account watches that account's release file: replace it (#49180).
+    const state = found === 'other-account' ? await stopRecordedHolder(read.record) : found
     const key = wslDistroHolderKey(distro)
     if (state === 'unverifiable') {
       if (!unverifiableSince.has(key)) {

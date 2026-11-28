@@ -18,6 +18,27 @@ import { useWorkerDockStructuralValue } from './dock/NativeChatWorkerDockFrame'
 import { WorkerDockRoster } from './dock/WorkerDockRoster'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 
+/** A provider row's dock state, one projection for its row and the chip's count alike. */
+function providerRowState(row: AgentChildRowModel): WorkerDockRowView['state'] {
+  switch (row.displayState) {
+    case 'failed':
+      return 'failed'
+    case 'interrupted':
+      return 'unexpected'
+    case 'idle':
+    case 'done':
+      return 'idle'
+    case 'unverifiable':
+      return 'unavailable'
+    case 'waiting':
+    case 'blocked':
+      return 'coordinator'
+    case 'monitoring':
+    case 'working':
+      return 'running'
+  }
+}
+
 function workerChildren(row: AgentChildRowModel): AgentChildRowModel[] {
   return [row, ...row.owned.flatMap(workerChildren)]
 }
@@ -53,6 +74,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   workerRows?: ReadonlyMap<string, WorkerDockRowView>
   workerIdentities?: readonly {
     id: string
+    /** Absent on an orchestration worker's identity. */
+    kind?: string
     state: WorkerDockRowView['state']
     changedAt: number | null
     settlement: string | null
@@ -105,14 +128,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
           .map((row) => ({
             id: `${row.kind}:${row.id}`,
             kind: row.kind,
-            state:
-              row.displayState === 'failed'
-                ? ('failed' as const)
-                : row.displayState === 'interrupted'
-                  ? ('unexpected' as const)
-                  : row.displayState === 'unverifiable'
-                    ? ('unavailable' as const)
-                    : ('running' as const)
+            state: providerRowState(row)
           }))
       )
     ],
@@ -125,18 +141,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
         .flatMap(({ row }) => workerChildren(row))
         .map((row): WorkerDockRowView => {
           const view = views.get(row.id)
-          const state =
-            row.displayState === 'failed'
-              ? 'failed'
-              : row.displayState === 'interrupted'
-                ? 'unexpected'
-                : row.displayState === 'idle'
-                  ? 'idle'
-                  : row.displayState === 'unverifiable'
-                    ? 'unavailable'
-                    : row.displayState === 'waiting' || row.displayState === 'blocked'
-                      ? 'coordinator'
-                      : 'running'
+          const state = providerRowState(row)
           return {
             id: JSON.stringify([
               props.sessionId ?? '',
@@ -207,7 +212,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
       onOpen={(row, opener) => {
         if (row.kind === 'worker') {
           props.onOpenWorker?.(row, opener)
-        } else if (row.kind === 'command' || row.settlement) {
+        } else if (row.kind !== 'agent' || row.settlement) {
+          // Only an agent's activity streams into the conversation, filed under the provider's id.
           props.onShowProviderDetails?.(row, opener)
         } else if (row.providerId) {
           props.onShowAgent?.(row.providerId)

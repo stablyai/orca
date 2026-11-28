@@ -25,7 +25,8 @@ export function writeLinkFact(
     | Pick<ExternalConversationLink, 'lastTurn'>
     | Pick<ExternalConversationLink, 'adoptedTurn'>
     | Pick<ExternalConversationLink, 'muted' | 'leaveLine'>
-    | Pick<ExternalConversationLink, 'leaveLine'>,
+    | Pick<ExternalConversationLink, 'leaveLine'>
+    | Pick<ExternalConversationLink, 'threadStatus'>,
   workspace?: AgentPaneWorkspace
 ): boolean {
   const kept = workspace && readLinks(store, workspace).find((link) => sameConversation(link, key))
@@ -37,7 +38,8 @@ export function writeLinkFact(
       next.lastTurn === linked.link.lastTurn &&
       next.adoptedTurn === linked.link.adoptedTurn &&
       next.muted === linked.link.muted &&
-      next.leaveLine === linked.link.leaveLine)
+      next.leaveLine === linked.link.leaveLine &&
+      JSON.stringify(next.threadStatus) === JSON.stringify(linked.link.threadStatus))
   ) {
     return false
   }
@@ -49,6 +51,9 @@ export function writeLinkFact(
   }
   if (next.leaveLine === undefined) {
     delete next.leaveLine
+  }
+  if (next.threadStatus === undefined) {
+    delete next.threadStatus
   }
   writeLink(store, linked.workspace, next)
   return true
@@ -139,6 +144,7 @@ export function writeChatLink(
     ...(kept?.mirrorHeld ? { mirrorHeld: kept.mirrorHeld } : {}),
     ...(kept?.muted ? { muted: kept.muted } : {}),
     ...(kept?.leaveLine !== undefined ? { leaveLine: kept.leaveLine } : {}),
+    ...(kept?.threadStatus ? { threadStatus: kept.threadStatus } : {}),
     ...(title ? { title } : {}),
     ...(seenAt !== undefined ? { seenAt } : {})
   }

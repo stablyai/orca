@@ -24,6 +24,8 @@ import {
 export type PhoneBotTools = {
   own: PhoneOwnTool[]
   inherited: { name: string; plugin?: true }[]
+  /** Whether its sessions also take the host's MCP servers; absent while the host's switch is off. */
+  hostMcpServers?: boolean
 }
 
 type ToolProblems = Readonly<Record<string, BotToolProblem>>
@@ -110,9 +112,9 @@ export function useBotToolsPage(
   const runCheck = useCallback(
     (own: readonly PhoneOwnTool[]) => {
       stopCheck()
-      // An app Orca signs in to has its own state, so only the CLI's URL servers are checked.
+      // Only URL servers Orca doesn't sign in to are checked: Orca's own sign-in has its own state.
       const checked =
-        scope === 'all' ? own : own.filter((tool) => isBotAppTool(tool) && tool.remote)
+        scope === 'all' ? own : own.filter((tool) => isBotAppTool(tool) && !tool.signIn)
       if (!client || checked.length === 0) {
         setProblems({})
         shareTools(hostKey, botId, { problems: {} })
@@ -177,7 +179,11 @@ export function useBotToolsPage(
           if (!mounted.current) {
             return
           }
-          const next = { own: read.own ?? [], inherited: read.inherited ?? [] }
+          const next = {
+            own: read.own ?? [],
+            inherited: read.inherited ?? [],
+            ...(read.hostMcpServers === undefined ? {} : { hostMcpServers: read.hostMcpServers })
+          }
           setTools(next)
           shareTools(hostKey, botId, { own: next.own })
           setError(null)

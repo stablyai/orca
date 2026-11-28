@@ -15,6 +15,7 @@ import {
   onStructuredAgentSessionHostChanged
 } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { SlackMirror } from './slack-mirror'
+import { startThreadStatus } from './thread-status/thread-status-start'
 import { connectorAskerImages } from './connector-asker-images'
 import { postConnectorAction } from '../connector-cloud/connector-actions'
 import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
@@ -34,6 +35,7 @@ import {
   type ConversationReplyFill
 } from './external-conversation-reply-fill'
 import { usageLimitReplyPause } from './external-conversation-reply-pause'
+import { liveEmptyTurnRetry } from './external-conversation-reply-empty-retry'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 import { endRestartCutTurns, heldTurnEnds } from './external-conversation-restart-cuts'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
@@ -111,7 +113,7 @@ export function installExternalConversations(
         signal
       })
     let replyOutbox: ReturnType<typeof connectorReplyOutbox> | null = null
-    const lines = leaveLines({
+    const lineDeps: Parameters<typeof leaveLines>[0] = {
       store,
       cloud: () => runtime.getConnectorCloud?.() ?? null,
       ...(store.flushPendingOrThrowAsync
@@ -126,8 +128,9 @@ export function installExternalConversations(
               ?.deps.store.connectorReplies()
               ?.unsentAnswer(link.sessionId, link, turnId)) === true
         )
-    })
-    installLeaveLines(lines)
+    }
+    const lines = installLeaveLines(leaveLines(lineDeps))
+    startThreadStatus({ ...lineDeps, store }, () => seam)
     const restartCuts = heldTurnEnds(() => seam)
     seam = new ExternalConversationSeam({
       slackMirror: () => mirror,
@@ -238,6 +241,7 @@ function connectorReplyOutbox(
   const filled = () => runtime.getConnectorCloud?.()?.repliesFilled()
   const usageLimitDisposition = async (sessionId: string, turnItemId: string) =>
     getStructuredAgentSessionHost()?.usageLimitContinue.disposition(sessionId, turnItemId)
+  const { retry, settleWith } = liveEmptyTurnRetry(journal, getStructuredAgentSessionHost, signal)
   const fill = conversationReplyFill(
     journal,
     filled,
@@ -247,7 +251,8 @@ function connectorReplyOutbox(
     }),
     journalAskedByOwner(async (sessionId) =>
       getStructuredAgentSessionHost()?.journalReads(sessionId)
-    )
+    ),
+    retry
   )
   const recovery = new ConnectorReplyRecovery({
     journal,
@@ -260,11 +265,13 @@ function connectorReplyOutbox(
     fillTurn: fill,
     filled,
     usageLimitDisposition,
+    retrySending: retry.sending,
     // This start's own continuations of restart cuts claim first; whatever they left closes then.
     ...(runtime.structuredAgentSessionLaunchContinuation
       ? { continuationsSettled: runtime.structuredAgentSessionLaunchContinuation.continued }
       : {})
   })
+  settleWith(recovery)
   setConnectorClaimSource((sessionId, cut) => recovery.claimFor(sessionId, cut))
   let unwatchStatus: (() => void) | undefined
   let unwatchPauses: (() => void) | undefined

@@ -7,7 +7,8 @@ import {
 
 const FAILURE_COPY: Record<HostAccountSignInFailureCode, () => string> = {
   ownerSilent: () => translate('accounts.hostSignIn.errors.ownerSilent', FAILURE_EN.ownerSilent),
-  superseded: () => translate('accounts.hostSignIn.errors.superseded', FAILURE_EN.superseded)
+  superseded: () => translate('accounts.hostSignIn.errors.superseded', FAILURE_EN.superseded),
+  noPrompt: () => translate('accounts.hostSignIn.errors.noPrompt', FAILURE_EN.noPrompt)
 }
 
 function isHostAccountSignInFailureCode(code: unknown): code is HostAccountSignInFailureCode {
@@ -15,7 +16,9 @@ function isHostAccountSignInFailureCode(code: unknown): code is HostAccountSignI
 }
 
 /** The host's failure in the UI language; the login's own (uncoded) errors stay verbatim. */
-export function hostAccountSignInFailureText(status: HostAccountSignInStatus): string {
+export function hostAccountSignInFailureText(
+  status: Pick<HostAccountSignInStatus, 'error' | 'errorCode'>
+): string {
   if (isHostAccountSignInFailureCode(status.errorCode)) {
     return FAILURE_COPY[status.errorCode]()
   }

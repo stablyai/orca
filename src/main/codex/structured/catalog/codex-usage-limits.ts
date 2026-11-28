@@ -15,7 +15,6 @@ import {
 } from '../../app-server/codex-structured-thread-facts'
 
 const RATE_LIMITS_UPDATED = 'notification:account/rateLimits/updated'
-const USAGE_LIMIT_ERRORS = ['usageLimitExceeded', 'rateLimitExceeded']
 /** The last report can trail a rejection by the request that went over, so a window this full counts as the spent one. */
 const NEARLY_SPENT_PERCENT = 90
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
@@ -92,11 +91,7 @@ export class CodexUsageLimits {
 
   failure(payload: unknown) {
     const info = readCodexErrorInfo(payload)
-    if (
-      !info ||
-      (!USAGE_LIMIT_ERRORS.includes(info.error) &&
-        !(info.error === 'responseTooManyFailedAttempts' && info.status === 429))
-    ) {
+    if (info?.error !== 'usageLimitExceeded') {
       return null
     }
     const message = readCodexErrorMessage(payload)
@@ -104,7 +99,7 @@ export class CodexUsageLimits {
     const text = [message, additional && additional !== message ? additional : null]
       .filter((part): part is string => part !== null)
       .join('\n')
-    const limit = this.limit(info.error === 'usageLimitExceeded', text)
+    const limit = this.limit(text)
     return agentSessionFailureFact('usageLimitReached', {
       ...(limit ? { usageLimit: limit } : {}),
       detail: providerDiagnostic(text, 'person')
@@ -112,7 +107,7 @@ export class CodexUsageLimits {
   }
 
   /** All spent windows must reset; report the latest only if every reset is known. */
-  private limit(rejected: boolean, text: string): AgentSessionUsageLimit | null {
+  private limit(text: string): AgentSessionUsageLimit | null {
     const monthlyPlan = this.snapshot.planType === 'free' || this.snapshot.planType === 'go'
     const reported = (
       [
@@ -144,9 +139,7 @@ export class CodexUsageLimits {
     )
     const fullest = Math.max(...live.map((entry) => entry.usedPercent))
     const spent =
-      rejected &&
-      fullest >= NEARLY_SPENT_PERCENT &&
-      !reported.some((entry) => entry.usedPercent >= 100)
+      fullest >= NEARLY_SPENT_PERCENT && !reported.some((entry) => entry.usedPercent >= 100)
         ? live.filter((entry) => entry.usedPercent >= fullest)
         : reported.filter((entry) => entry.usedPercent >= 100)
     const reached = this.snapshot.rateLimitReachedType

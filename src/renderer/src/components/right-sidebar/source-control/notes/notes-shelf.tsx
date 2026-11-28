@@ -1,9 +1,7 @@
-import { useSourceControlScope, useSourceControlState } from '../panel/worktree-scope'
 import { useDiffCommentView } from '@/components/diff-comments/use-diff-comment-owner'
 import type { AppState } from '@/store/types'
 import React from 'react'
 import { Check, ChevronDown, Copy, MessageSquare, MoreHorizontal, Trash2 } from 'lucide-react'
-import { DiffNotesSendMenu } from '@/components/editor/diff/review/DiffNotesSendMenu'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +17,6 @@ import { DiffCommentsInlineList } from './diff-comments-list'
 
 export function SourceControlNotesShelf({
   activeWorktreeId,
-  activeGroupId,
   diffCommentsForActive,
   diffCommentCount,
   diffCommentsExpanded,
@@ -31,7 +28,6 @@ export function SourceControlNotesShelf({
   handleOpenComment
 }: {
   activeWorktreeId: string
-  activeGroupId: string | null | undefined
   diffCommentsForActive: DiffComment[]
   diffCommentCount: number
   diffCommentsExpanded: boolean
@@ -43,10 +39,6 @@ export function SourceControlNotesShelf({
   handleOpenComment: (comment: DiffComment) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const scope = useSourceControlScope()
-  const placementGroupId = useSourceControlState((s) =>
-    scope ? s.activeGroupIdByWorktree[scope.placementWorkspaceId] : undefined
-  )
   const { owner } = useDiffCommentView(activeWorktreeId, 'selection')
   return (
     <div className="border-b border-border">
@@ -77,14 +69,6 @@ export function SourceControlNotesShelf({
           )}
         </button>
         <div className="ml-1 flex shrink-0 items-center gap-1.5">
-          <DiffNotesSendMenu
-            owner={owner}
-            worktreeId={activeWorktreeId}
-            groupId={placementGroupId ?? activeGroupId ?? activeWorktreeId}
-            comments={diffCommentsForActive}
-            triggerClassName="size-6"
-            respondToOpenRequest
-          />
           {diffCommentCount > 0 && (
             <TooltipProvider>
               <Tooltip>
@@ -145,7 +129,7 @@ export function SourceControlNotesShelf({
                     kind: 'all',
                     worktreeId: activeWorktreeId,
                     owner,
-                    count: diffCommentCount
+                    ids: diffCommentsForActive.map((comment) => comment.id)
                   })
                 }}
               >
@@ -168,7 +152,9 @@ export function SourceControlNotesShelf({
               owner,
               worktreeId: activeWorktreeId,
               filePath,
-              count: diffCommentsForActive.filter((comment) => comment.filePath === filePath).length
+              ids: diffCommentsForActive
+                .filter((comment) => comment.filePath === filePath)
+                .map((comment) => comment.id)
             })
           }
         />

@@ -70,7 +70,7 @@ export async function deliverWorkerDispatchPreamble(args: {
           ? formatOrcaSessionAddress(chat)
           : terminalHandle,
     devMode: args.devMode,
-    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+    ...runtime.getTerminalOrchestrationCliTarget(terminalHandle),
     unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
   })
   if (chat) {
@@ -86,6 +86,10 @@ export async function deliverWorkerDispatchPreamble(args: {
     return { structuredTurnStart: chatTaskTurnStart(delivery) }
   }
   if (structuredSession) {
+    // A stop that landed after the start's last wait hands the worker back, as the terminal path does.
+    if (args.db.getWorkerDispatch(args.dispatchId)?.state !== 'starting') {
+      throw new Error('request_aborted')
+    }
     const delivery = await sendStructuredWorkerPreamble({
       host: structuredSession.host,
       sessionId: structuredSession.identity.sessionId,

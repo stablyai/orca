@@ -273,7 +273,7 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/workspace-card/template/card-identity-parts.tsx",
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/identity/worktree-card-header-items.tsx",
     "kind": "jsx-attribute:label",
     "text": "sidebar",
     "dynamic": false,
@@ -367,6 +367,13 @@
     "filePath": "src/shared/bots/bot-mcp-apps.ts",
     "kind": "object-property:label",
     "text": "GitLab address (optional)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/shared/bots/bot-mcp-apps.ts",
+    "kind": "object-property:label",
+    "text": "Intercom region",
     "dynamic": false,
     "count": 1
   },

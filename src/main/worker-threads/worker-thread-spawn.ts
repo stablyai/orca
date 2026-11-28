@@ -6,6 +6,30 @@ import type { WorkerThreadRole } from './worker-thread-roles'
  * workers exhaust a `ulimit -v` host (#37538). Worker JIT code stays far below this. */
 export const WORKER_CODE_RANGE_MB = 64
 
+/** Cap each worker's nursery to 4 MB per semi-space (matching the daemon's --max-semi-space-size=4)
+ * so bursty writers don't grow and retain 32+ MB of idle V8 young-generation slack. */
+export const WORKER_MAX_YOUNG_GENERATION_MB = 8
+
+/** Main's isolate and its workers share one V8 cage: an uncapped worker that keeps allocating fills
+ * it and aborts the app. Capped, it ends alone with ERR_WORKER_OUT_OF_MEMORY while main has headroom.
+ * Measured workers stay under ~100 MB. A launch-time --max-old-space-size V8 flag overrides it. */
+export const MAIN_WORKER_HEAP_LIMIT_MB = 512
+
+/** Owners of unflushed durable writes: losing one mid-session would drop writes silently. */
+const UNCAPPED_MAIN_ROLES: ReadonlySet<WorkerThreadRole> = new Set([
+  'orca-bots-db',
+  'orca-journal-sql-writer',
+  'orca-profile-state-backup',
+  'orca-profile-state-writer'
+])
+
+/** Only Electron's main process shares its cage with the app; utility and child processes own theirs. */
+function defaultHeapLimit(role: WorkerThreadRole): { maxOldGenerationSizeMb?: number } {
+  return process.type === 'browser' && !UNCAPPED_MAIN_ROLES.has(role)
+    ? { maxOldGenerationSizeMb: MAIN_WORKER_HEAP_LIMIT_MB }
+    : {}
+}
+
 export type WorkerThreadObserver = {
   /** Runs before construction: a worker copies environment data when it is created. */
   beforeSpawn: () => void
@@ -44,7 +68,12 @@ export function spawnWorkerThread(
   }
   const worker = new Worker(filename, {
     ...options,
-    resourceLimits: { codeRangeSizeMb: WORKER_CODE_RANGE_MB, ...options.resourceLimits }
+    resourceLimits: {
+      codeRangeSizeMb: WORKER_CODE_RANGE_MB,
+      maxYoungGenerationSizeMb: WORKER_MAX_YOUNG_GENERATION_MB,
+      ...defaultHeapLimit(options.name),
+      ...options.resourceLimits
+    }
   })
   spawned.set(worker, worker.threadId)
   try {

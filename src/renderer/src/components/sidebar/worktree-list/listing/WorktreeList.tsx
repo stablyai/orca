@@ -42,7 +42,6 @@ import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrom
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
-import { buildWorktreeManualOrderCatalog } from '../drag/worktree-manual-order-catalog'
 import { useWorkspaceBoardStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
 import { ProjectsCollapseAllButton } from '../controls/ProjectsCollapseAllButton'
 import { useProjectsCollapseShortcut } from '../controls/use-projects-collapse-shortcut'
@@ -67,6 +66,8 @@ type WorktreeListProps = {
   onWorkspaceBoardDragPreviewCancel?: () => void
   projectsCollapseTarget?: HTMLElement | null
 }
+
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 
 // Desktop windows consume main’s sidebar inputs; paired web clients derive their own view.
 const useSidebarListModel =
@@ -104,18 +105,20 @@ const WorktreeList = React.memo(function WorktreeList({
   const boardStatuses = useWorkspaceBoardStatuses()
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
-  const openModal = useAppStore((s) => s.openModal)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const {
+    openModal,
+    openSettingsPage,
+    openSettingsTarget,
+    clearPendingRevealWorktreeId,
+    clearPendingRevealSidebarRow,
+    toggleCollapsedGroup: toggleGroup,
+    setCollapsedGroups
+  } = getAppStoreState()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
-  const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
-  const clearPendingRevealSidebarRow = useAppStore((s) => s.clearPendingRevealSidebarRow)
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
-  const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const setCollapsedGroups = useAppStore((s) => s.setCollapsedGroups)
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const settings = useAppStore((s) => s.settings)
@@ -137,10 +140,6 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
     useSidebarWorktreeFilters()
-  const manualOrderCatalog = useMemo(
-    () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
-    [allWorktrees, folderWorkspaces]
-  )
   const { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel } = useSidebarListModel({
     filterState,
     sortBy,
@@ -195,12 +194,15 @@ const WorktreeList = React.memo(function WorktreeList({
       )
     )
   }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
+  // Full-page Tasks/Activity views have no selected worktree card.
+  const activeCardWorktreeId =
+    activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
-    pinnedDisplayPolicy
+    pinnedDisplayPolicy,
+    active: { worktreeId: activeCardWorktreeId, hostId: activeWorkspaceExecutionHostId }
   })
   const statusMutations = useWorktreeStatusMutations({
-    manualOrderCatalog,
     workspaceStatuses: boardStatuses,
     sortBy
   })
@@ -249,7 +251,7 @@ const WorktreeList = React.memo(function WorktreeList({
 
   useSidebarRevealRequests({
     groupBy,
-    renderedSidebarRowKeys: rowModel.renderedSidebarRowKeys,
+    sectionRows: rowModel.sectionRows,
     visibleWorktrees,
     visibleFolderWorkspaces: visibleScope.visibleFolderWorkspacesForRows,
     currentSidebarWorktreeId,
@@ -326,10 +328,7 @@ const WorktreeList = React.memo(function WorktreeList({
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
         visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}
-        // Full-page Tasks/Activity views have no selected worktree card.
-        activeWorktreeId={
-          activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
-        }
+        activeWorktreeId={activeCardWorktreeId}
         activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
         currentWorktreeId={currentSidebarWorktreeId}
         groupBy={groupBy}

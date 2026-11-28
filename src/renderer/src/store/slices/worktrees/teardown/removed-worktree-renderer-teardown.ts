@@ -7,6 +7,7 @@ import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/runtime/ephemeral-vm/ephemeral-vm-runtime-cleanup'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-session/launch/startup/agent-startup-delivery-guards'
 import { forgetForegroundTerminalTabs } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
+import { forgetNativeChatCliForkOriginsForWorktree } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-origins'
 import { requestVirtualizedScrollAnchorRecord } from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
@@ -85,6 +86,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
   forgetForegroundTerminalTabs(tabIds)
   forgetAgentStartupDeliveriesForTabs(tabIds)
+  forgetNativeChatCliForkOriginsForWorktree(worktreeId)
 
   // Why: snapshot the sidebar top-row anchor in the same tick we remove the row; recording at click time goes stale across the await.
   requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
