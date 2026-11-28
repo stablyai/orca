@@ -21,7 +21,7 @@ import { classifyWorkerTerminalCloseError } from './worker-release-close-error'
 import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
 import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
 import { stopStructuredWorkerForRelease } from './structured-worker-release-stop'
-import { structuredWorkerSessionForgotten } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { structuredWorkerSessionForgotten } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-session-forgotten'
 import { isStructuredWorkerHandle } from '../../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { captureWorkerReleaseArchive } from './worker-release-archive-capture'
 import {

@@ -10,7 +10,7 @@ import {
   releaseCommitFieldsForCapturedArchive,
   type WorkerOutputArchiveCapture
 } from '../../../../../orchestration/workers/archives/worker-output-archive'
-import { structuredWorkerSessionForgotten } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { structuredWorkerSessionForgotten } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-session-forgotten'
 import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orchestration-structured-worker-lifecycle'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 import { receiptForUnchangedRelease } from './worker-terminal-resource-presentation'

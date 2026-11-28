@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { structuredWorkerSessionForgotten } from './structured-worker-authority'
+import { structuredWorkerSessionForgotten } from './structured-worker-session-forgotten'
 import { structuredWorkerProcessIncarnation } from './structured-worker-incarnation'
 
 const SESSION = '9412200c-0000-4000-8000-000000000001'
