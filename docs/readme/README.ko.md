@@ -15,12 +15,13 @@
   <sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a> · <a href="README.tr.md">Türkçe</a> · <a href="README.ru.md">Русский</a></sub>
 </p>
 
+<h2 align="center">에이전트 IDE 안에서 일하는 봇.</h2>
+
 <p align="center">
-  <strong>100x 빌더를 위한 AI 오케스트레이터.</strong><br/>
-  Codex, Claude Code, OpenCode, Pi를 나란히 실행하세요. — 각 에이전트는 자체 worktree에서 실행되고 한곳에서 추적됩니다.
+  오픈 소스. Claude Code나 Codex, 로컬 또는 원격 머신, 쓰던 도구까지 모두 직접 가져오세요. Slack이나 휴대폰에서 요청하고, 확인이 필요할 땐 탭 하나만 열면 됩니다.
 </p>
 
-<h3 align="center"><a href="https://orca.dev/download"><ins>Orca 다운로드</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>Orca 다운로드</ins></a> &nbsp;·&nbsp; <a href="https://orca.dev/bots"><ins>봇 살펴보기 →</ins></a></h3>
 
 <p align="center">
   <img src="../assets/readme-hero.jpg" alt="병렬 worktree에서 에이전트를 실행 중인 Orca 데스크톱 앱과 한쪽 모서리에 보이는 Orca 모바일 companion 앱" width="960" />
@@ -29,6 +30,20 @@
 ## 기능
 
 <table>
+<tr>
+<td width="50%" valign="middle">
+
+### Orca Bots
+
+Slack, Linear, GitHub에서 봇에게 버그 수정을 맡기면, 돌아왔을 때 테스트를 마친 PR이 기다리고 있습니다. 봇은 여러분의 Claude Code나 Codex로 실행됩니다. Orca에서 작업을 열어 리뷰하거나 직접 개입하세요.
+
+[개요](https://orca.dev/bots) · [보안](https://orca.dev/docs/bots/security) · [문서 →](https://orca.dev/docs/bots)
+
+</td>
+<td width="50%">
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="두 워커로 결제 버그를 고치고 PR을 연결한 뒤 질문에 대한 여러분의 답을 기다리는 Orca의 봇" width="100%" /></picture></a>
+</td>
+</tr>
 <tr>
 <td width="50%" valign="middle">
 
@@ -159,6 +174,8 @@ diff의 어느 줄에든 코멘트를 남기고 에이전트에게 바로 보내
 
 **그 밖에 기본으로 제공되는 기능:**
 
+- **[봇 일정 및 트리거](https://orca.dev/docs/bots#put-it-on-a-schedule)** — 평일마다 9시에, 또는 PR이 열리거나 체크가 실패하거나 webhook이 호출될 때 봇을 실행하세요.
+- **[Markdown으로 된 봇 메모리](https://orca.dev/docs/bots/security#what-you-can-review)** — 봇의 소울과 메모리는 직접 읽고 편집할 수 있는 일반 Markdown 파일(`SOUL.md`, `MEMORY.md`)입니다.
 - **[빠른 열기](https://orca.dev/docs/model/quick-open)** — 작업 흐름을 벗어나지 않고 worktree, 파일, 에이전트, 커맨드, 리포지토리 컨텍스트를 검색하세요.
 - **[계정 전환 및 사용량 추적](https://orca.dev/docs/agents/usage-tracking)** — Claude와 Codex의 사용량과 rate limit 초기화 시점을 확인하고, 다시 로그인하지 않고 계정을 바로 전환하세요.
 - **[풍부한 리포지토리 미리보기](https://orca.dev/docs/editing/markdown)** — Markdown, 이미지, PDF, 리포지토리 문서를 워크스페이스에서 미리 볼 수 있습니다.

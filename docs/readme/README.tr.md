@@ -15,12 +15,13 @@
   <sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a> · <a href="README.ru.md">Русский</a></sub>
 </p>
 
+<h2 align="center">Ajan IDE'nizin içinde botlar.</h2>
+
 <p align="center">
-  <strong>100x geliştiriciler için yapay zekâ orkestratörü.</strong><br/>
-  Codex, Claude Code, OpenCode veya Pi'yi yan yana çalıştırın - her biri kendi worktree'sinde, hepsi tek yerden takip edilir.
+  Açık kaynak. Her şey sizin: kendi Claude Code veya Codex'iniz, yerel ya da uzak makineleriniz, araçlarınız. Slack'ten ya da telefonunuzdan isteyin. Size ihtiyaç duyduğunda bir sekme uzağınızda.
 </p>
 
-<h3 align="center"><a href="https://orca.dev/download"><ins>Orca'yı indirin</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>Orca'yı indirin</ins></a> &nbsp;·&nbsp; <a href="https://orca.dev/bots"><ins>Botları keşfedin →</ins></a></h3>
 
 <p align="center">
   <img src="../assets/readme-hero.jpg" alt="Paralel worktree'lerde ajan çalıştıran Orca masaüstü uygulaması, köşede Orca mobil yardımcı uygulaması" width="960" />
@@ -29,6 +30,20 @@
 ## Özellikler
 
 <table>
+<tr>
+<td width="50%" valign="middle">
+
+### Orca Bots
+
+Slack, Linear veya GitHub'da bir bottan bir hatayı düzeltmesini isteyin; döndüğünüzde test edilmiş bir PR sizi bekliyor olsun. Kendi Claude Code veya Codex'iniz üzerinde çalışır. İncelemek ya da devreye girmek için işini Orca'da açın.
+
+[Genel bakış](https://orca.dev/bots) · [Güvenlik](https://orca.dev/docs/bots/security) · [Dokümanlar →](https://orca.dev/docs/bots)
+
+</td>
+<td width="50%">
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Orca'da iki worker ile bir ödeme hatasını düzelten, PR'ı bağlayan ve bir soruya yanıtınızı bekleyen bir bot" width="100%" /></picture></a>
+</td>
+</tr>
 <tr>
 <td width="50%" valign="middle">
 
@@ -159,6 +174,8 @@ Orca'yı ajanlar da kullanır - her akışı `orca worktree create`, `snapshot`,
 
 **Kutudan çıkan diğerleri:**
 
+- **[Bot zamanlamaları ve tetikleyiciler](https://orca.dev/docs/bots#put-it-on-a-schedule)** - Bir botu her hafta içi saat 9'da ya da bir PR açıldığında, bir kontrol başarısız olduğunda veya bir webhook tetiklendiğinde çalıştırın.
+- **[Markdown'da bot belleği](https://orca.dev/docs/bots/security#what-you-can-review)** - Bir botun ruhu ve belleği, okuyup düzenleyebileceğiniz düz Markdown dosyalarıdır (`SOUL.md`, `MEMORY.md`).
 - **[Hızlı açma](https://orca.dev/docs/model/quick-open)** - Worktree'ler, dosyalar, ajanlar, komutlar ve repo bağlamı arasında akışınızdan çıkmadan arama yapın.
 - **[Hesap değiştirme ve kullanım takibi](https://orca.dev/docs/agents/usage-tracking)** - Claude ve Codex kullanımınızı ve limit sıfırlanma zamanlarını görün, yeniden giriş yapmadan hesaplar arasında geçiş yapın.
 - **[Zengin repo önizlemeleri](https://orca.dev/docs/editing/markdown)** - Çalışma alanında Markdown, görsel, PDF ve repo dokümanlarını önizleyin.

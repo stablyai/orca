@@ -15,12 +15,13 @@
   <sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a> · <a href="README.tr.md">Türkçe</a> · <a href="README.ru.md">Русский</a></sub>
 </p>
 
+<h2 align="center">エージェント IDE の中で動く Bot。</h2>
+
 <p align="center">
-  <strong>100x ビルダーのための AI オーケストレーター。</strong><br/>
-  Codex、Claude Code、OpenCode、Pi を並べて実行 — それぞれを専用のワークツリーで動かし、1 か所で追跡できます。
+  オープンソース。Claude Code や Codex、ローカルやリモートのマシン、使い慣れたツールまで、すべて自分のものを使えます。Slack やスマートフォンから頼めて、あなたが必要になればタブひとつで戻れます。
 </p>
 
-<h3 align="center"><a href="https://orca.dev/download"><ins>Orca をダウンロード</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>Orca をダウンロード</ins></a> &nbsp;·&nbsp; <a href="https://orca.dev/bots"><ins>Bot を見る →</ins></a></h3>
 
 <p align="center">
   <img src="../assets/readme-hero.jpg" alt="並列ワークツリーでエージェントを実行する Orca デスクトップアプリと、隅に表示された Orca モバイル companion アプリ" width="960" />
@@ -29,6 +30,20 @@
 ## 機能
 
 <table>
+<tr>
+<td width="50%" valign="middle">
+
+### Orca Bots
+
+Slack、Linear、GitHub で Bot にバグ修正を頼めば、戻るころにはテスト済みの PR が用意されています。動くのはあなた自身の Claude Code や Codex です。Orca で作業を開けば、レビューも、途中から手を入れることもできます。
+
+[概要](https://orca.dev/bots) · [セキュリティ](https://orca.dev/docs/bots/security) · [ドキュメント →](https://orca.dev/docs/bots)
+
+</td>
+<td width="50%">
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="2 つのワーカーでチェックアウトのバグを修正し、PR をリンクして、質問へのあなたの回答を待っている Orca の Bot" width="100%" /></picture></a>
+</td>
+</tr>
 <tr>
 <td width="50%" valign="middle">
 
@@ -159,6 +174,8 @@ PR、Issue、プロジェクトボードをアプリ内で閲覧 — 任意の�
 
 **さらに同梱:**
 
+- **[Bot のスケジュールとトリガー](https://orca.dev/docs/bots#put-it-on-a-schedule)** — 平日の 9 時に、または PR のオープン、チェックの失敗、Webhook の発火をきっかけに Bot を実行できます。
+- **[Markdown で書かれた Bot のメモリ](https://orca.dev/docs/bots/security#what-you-can-review)** — Bot の人格とメモリはプレーンな Markdown ファイル（`SOUL.md`、`MEMORY.md`）なので、そのまま読んで編集できます。
 - **[クイックオープン](https://orca.dev/docs/model/quick-open)** — フローを離れずに、ワークツリー、ファイル、エージェント、コマンド、リポジトリコンテキストを横断検索できます。
 - **[アカウント切り替えと使用量トラッキング](https://orca.dev/docs/agents/usage-tracking)** — Claude と Codex の使用量やレート制限のリセットを確認し、再ログインなしでアカウントを切り替えられます。
 - **[リッチなリポジトリプレビュー](https://orca.dev/docs/editing/markdown)** — Markdown、画像、PDF、リポジトリ文書をワークスペース内でプレビューできます。

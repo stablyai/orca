@@ -15,12 +15,13 @@
   <sub><a href="../../README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a> · <a href="README.tr.md">Türkçe</a> · <a href="README.ru.md">Русский</a></sub>
 </p>
 
+<h2 align="center">Bot，就在你的智能体 IDE 里。</h2>
+
 <p align="center">
-  <strong>面向 100x 构建者的 AI 编排器。</strong><br/>
-  并排运行 Codex、Claude Code、OpenCode 或 Pi — 每个都在自己的 worktree 中运行，并在一个地方统一跟踪。
+  开源。一切都用你自己的：你的 Claude Code 或 Codex、你的本地或远程机器、你的工具。从 Slack 或手机发起请求。需要你时，只隔一个标签页。
 </p>
 
-<h3 align="center"><a href="https://orca.dev/download"><ins>下载 Orca</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>下载 Orca</ins></a> &nbsp;·&nbsp; <a href="https://orca.dev/bots"><ins>探索 Bot →</ins></a></h3>
 
 <p align="center">
   <img src="../assets/readme-hero.jpg" alt="Orca 桌面应用在并行 worktree 中运行智能体，角落里是 Orca 移动 companion 应用" width="960" />
@@ -29,6 +30,20 @@
 ## 特性
 
 <table>
+<tr>
+<td width="50%" valign="middle">
+
+### Orca Bots
+
+在 Slack、Linear 或 GitHub 里让 Bot 修一个 bug，回来时就能看到一个测试过的 PR。它运行在你自己的 Claude Code 或 Codex 上。在 Orca 中打开它的工作，即可评审或随时介入。
+
+[概览](https://orca.dev/bots) · [安全](https://orca.dev/docs/bots/security) · [文档 →](https://orca.dev/docs/bots)
+
+</td>
+<td width="50%">
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Orca 中的一个 Bot：用两个 worker 修复了结账 bug，关联了 PR，正在等待你回答一个问题" width="100%" /></picture></a>
+</td>
+</tr>
 <tr>
 <td width="50%" valign="middle">
 
@@ -159,6 +174,8 @@ VS Code 的编辑器，处处自动保存 — 把文件或图片直接拖入智�
 
 **开箱即用的还有：**
 
+- **[Bot 定时与触发器](https://orca.dev/docs/bots#put-it-on-a-schedule)** — 让 Bot 每个工作日 9 点运行，或在 PR 打开、检查失败、webhook 触发时运行。
+- **[用 Markdown 保存的 Bot 记忆](https://orca.dev/docs/bots/security#what-you-can-review)** — Bot 的灵魂和记忆都是纯 Markdown 文件（`SOUL.md`、`MEMORY.md`），你可以直接阅读和编辑。
 - **[快速打开](https://orca.dev/docs/model/quick-open)** — 在 worktree、文件、智能体、命令和仓库上下文之间搜索，不打断你的心流。
 - **[账号切换与用量追踪](https://orca.dev/docs/agents/usage-tracking)** — 查看 Claude 和 Codex 的用量与限额重置时间，并且无需重新登录即可热切换账号。
 - **[丰富仓库预览](https://orca.dev/docs/editing/markdown)** — 在工作区中预览 Markdown、图片、PDF 和仓库文档。

@@ -15,12 +15,13 @@
   <sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a> · <a href="README.tr.md">Türkçe</a></sub>
 </p>
 
+<h2 align="center">Боты внутри вашей IDE для агентов.</h2>
+
 <p align="center">
-  <strong>Оркестратор ИИ для тех, кто создаёт в 100 раз больше.</strong><br/>
-  Запускайте Codex, ClaudeCode, OpenCode или Pi параллельно — каждый в своём рабочем дереве, все под контролем в одном месте.
+  Открытый исходный код. Всё своё: ваш Claude Code или Codex, ваши локальные или удалённые машины, ваши инструменты. Ставьте задачи из Slack или с телефона. Когда боту понадобитесь вы, он всего в одной вкладке.
 </p>
 
-<h3 align="center"><a href="https://orca.dev/download"><ins>Скачать Orca</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>Скачать Orca</ins></a> &nbsp;·&nbsp; <a href="https://orca.dev/bots"><ins>Узнать о ботах →</ins></a></h3>
 
 <p align="center">
   <img src="../assets/readme-hero.jpg" alt="Настольное приложение Orca с агентами в параллельных рабочих деревьях и мобильным приложением Orca в углу" width="960" />
@@ -29,6 +30,20 @@
 ## Возможности
 
 <table>
+<tr>
+<td width="50%" valign="middle">
+
+### Orca Bots
+
+Попросите бота в Slack, Linear или GitHub исправить баг — и вернитесь к уже протестированному пул-реквесту. Он работает на вашем собственном Claude Code или Codex. Откройте его работу в Orca, чтобы проверить её или вмешаться.
+
+[Обзор](https://orca.dev/bots) · [Безопасность](https://orca.dev/docs/bots/security) · [Документация →](https://orca.dev/docs/bots)
+
+</td>
+<td width="50%">
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Бот в Orca, который исправил ошибку оформления заказа с помощью двух исполнителей, привязал пул-реквест и ждёт вашего ответа на вопрос" width="100%" /></picture></a>
+</td>
+</tr>
 <tr>
 <td width="50%" valign="middle">
 
@@ -159,6 +174,8 @@
 
 **А ещё:**
 
+- **[Расписания и триггеры ботов](https://orca.dev/docs/bots#put-it-on-a-schedule)** — Запускайте бота каждый будний день в 9:00 или когда открывается пул-реквест, падает проверка или срабатывает вебхук.
+- **[Память бота в Markdown](https://orca.dev/docs/bots/security#what-you-can-review)** — Душа и память бота — это обычные Markdown-файлы (`SOUL.md`, `MEMORY.md`), которые можно читать и редактировать.
 - **[Быстрое открытие](https://orca.dev/docs/model/quick-open)** — Ищите рабочие деревья, файлы, агентов, команды и контекст репозитория, не прерывая работу.
 - **[Переключение учётных записей и учёт использования](https://orca.dev/docs/agents/usage-tracking)** — Следите за использованием Claude и Codex и временем сброса лимитов, переключайтесь между учётными записями без повторного входа.
 - **[Предпросмотр содержимого репозитория](https://orca.dev/docs/editing/markdown)** — Просматривайте Markdown, изображения, PDF и документацию репозитория прямо в рабочем пространстве.

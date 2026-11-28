@@ -15,12 +15,13 @@
   <sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.pt.md">Português</a> · <a href="README.tr.md">Türkçe</a> · <a href="README.ru.md">Русский</a></sub>
 </p>
 
+<h2 align="center">Des bots dans votre IDE d'agents.</h2>
+
 <p align="center">
-  <strong>L'orchestrateur d'IA pour les builders 100x.</strong><br/>
-  Lancez Codex, Claude Code, OpenCode ou Pi côte à côte — chacun dans son propre worktree, le tout suivi au même endroit.
+  Open source. Apportez tout ce qui est à vous : votre Claude Code ou Codex, vos machines locales ou distantes, vos outils. Demandez depuis Slack ou votre téléphone. Quand il a besoin de vous, il n'est qu'à un onglet.
 </p>
 
-<h3 align="center"><a href="https://orca.dev/download"><ins>Télécharger Orca</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>Télécharger Orca</ins></a> &nbsp;·&nbsp; <a href="https://orca.dev/bots"><ins>Découvrir les bots →</ins></a></h3>
 
 <p align="center">
   <img src="../assets/readme-hero.jpg" alt="Application de bureau Orca exécutant des agents dans des worktrees parallèles, avec l'app companion mobile Orca dans le coin" width="960" />
@@ -29,6 +30,20 @@
 ## Fonctionnalités
 
 <table>
+<tr>
+<td width="50%" valign="middle">
+
+### Orca Bots
+
+Demandez à un bot dans Slack, Linear ou GitHub de corriger un bug, et revenez trouver une PR testée. Il tourne sur votre propre Claude Code ou Codex. Ouvrez son travail dans Orca pour le relire ou reprendre la main.
+
+[Présentation](https://orca.dev/bots) · [Sécurité](https://orca.dev/docs/bots/security) · [Docs →](https://orca.dev/docs/bots)
+
+</td>
+<td width="50%">
+  <a href="https://orca.dev/bots"><picture><source srcset="../assets/readme-features/bots.webp" type="image/webp"><img src="../assets/readme-features/bots.poster.jpg" alt="Un bot dans Orca qui a corrigé un bug de checkout avec deux workers, lié la PR, et attend votre réponse à une question" width="100%" /></picture></a>
+</td>
+</tr>
 <tr>
 <td width="50%" valign="middle">
 
@@ -159,6 +174,8 @@ Les agents pilotent aussi Orca — scriptez n'importe quel workflow avec `orca w
 
 **Aussi dans la boîte :**
 
+- **[Planification &amp; déclencheurs de bots](https://orca.dev/docs/bots#put-it-on-a-schedule)** — Lancez un bot chaque jour de semaine à 9 h, ou quand une PR s'ouvre, qu'un check échoue ou qu'un webhook se déclenche.
+- **[Mémoire des bots en Markdown](https://orca.dev/docs/bots/security#what-you-can-review)** — L'âme et la mémoire d'un bot sont de simples fichiers Markdown (`SOUL.md`, `MEMORY.md`) que vous pouvez lire et modifier.
 - **[Quick open](https://orca.dev/docs/model/quick-open)** — Cherchez parmi worktrees, fichiers, agents, commandes et contexte du repo sans quitter votre flow.
 - **[Sélecteur de comptes &amp; suivi d'usage](https://orca.dev/docs/agents/usage-tracking)** — Suivez l'usage Claude et Codex et les resets de rate limit, et basculez de compte à chaud sans vous reconnecter.
 - **[Aperçus riches du repo](https://orca.dev/docs/editing/markdown)** — Prévisualisez Markdown, images, PDF et docs du repo dans le workspace.
