@@ -49,6 +49,10 @@ export function isDisclosureOpen(key: string): boolean {
   return openDisclosureKeys.has(key)
 }
 
+export function clearDisclosuresForTests(): void {
+  openDisclosureKeys.clear()
+}
+
 export function toggleDisclosure(key: string): void {
   if (openDisclosureKeys.delete(key)) {
     return

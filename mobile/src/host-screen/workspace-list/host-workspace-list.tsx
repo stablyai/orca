@@ -31,6 +31,9 @@ import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { useHostMutationDrafts } from '../../query/host-mutation-drafts'
 import { workspaceRenameDraftKey } from '../workspace-actions/workspace-rename-sheet'
 import type { HostScreenController } from '../use-host-screen-controller'
+import { sidebarSessionAction } from '../sidebar-session-action'
+import { useSelectableSidebarSessions } from '../selectable-sidebar-sessions'
+import { useSharedNow } from '../../hooks/use-now'
 import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
 import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/workspace-scope'
 import { useThemedStyles } from '../../theme/themed-styles'
@@ -50,6 +53,8 @@ export function HostWorkspaceList({
   const rowStyles = useThemedStyles(rowStylesSheet)
   const colors = useMobileColors()
   const colorScheme = useMobileColorScheme()
+  const selectableSessions = useSelectableSidebarSessions()
+  const now = useSharedNow(30_000)
   const {
     actions,
     activeWorktreeScroll,
@@ -136,10 +141,15 @@ export function HostWorkspaceList({
   const { collapsedGroups } = controller
   const { groupBy, agentActivityDisplayMode } = state.view
   const { toggleCollapsed, toggleWorktreeLineage } = settings
-  const { setActionTarget } = state
+  const { setActionTarget, setSessionAction, pinnedIds } = state
+  const openSessionMenu = useCallback(
+    (item: Worktree, paneKey: string) => {
+      setSessionAction(sidebarSessionAction(item, paneKey, now))
+    },
+    [now, setSessionAction]
+  )
   const { openWorktreeSession, openNewWorktreeModal, setWorktreeUnread, togglePin } = actions
   const canCreate = connState === 'connected' && !isReadOnly
-  const { pinnedIds } = state
   // The writes change identity with every catalog read; rows keep one callback so a poll that
   // leaves a row alone doesn't re-render it.
   const rowWrites = useRef({ setWorktreeUnread, togglePin })
@@ -207,9 +217,11 @@ export function HostWorkspaceList({
             agentActivityDisplayMode={agentActivityDisplayMode}
             onPress={openWorktreeSession}
             onAgentPress={openWorktreeSession}
+            selectableSessions={selectableSessions}
             statusLive={statusLive && !view.hostContextHealthLabel}
             // A bot's home goes through the bot's own delete, not the workspace menu.
             onLongPress={item.botHome === true || view.botFacts ? undefined : setActionTarget}
+            onSessionLongPress={openSessionMenu}
             onToggleLineage={toggleWorktreeLineage}
             unsavedName={unsavedRename(renameDrafts, hostId, item)}
             pairedHostId={hostId ?? null}
@@ -238,8 +250,10 @@ export function HostWorkspaceList({
       groupBy,
       agentActivityDisplayMode,
       openWorktreeSession,
+      selectableSessions,
       statusLive,
       setActionTarget,
+      openSessionMenu,
       toggleWorktreeLineage,
       offline
     ]

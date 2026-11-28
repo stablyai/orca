@@ -46,6 +46,10 @@ import { worktreeListRowStylesSheet } from './worktree-list-row-styles'
 import { PrStateIcon } from '../../source-control/review/status/PrStateIcon'
 import { WorktreeUnsavedName } from './WorktreeUnsavedName'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
+import {
+  useWorktreeRowSession,
+  workspaceCardActivation
+} from '../../components/worktree-session-press'
 
 type Props = {
   item: Worktree
@@ -62,8 +66,10 @@ type Props = {
   status: WorktreeStatus | null
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
+  selectableSessions?: boolean
   statusLive?: boolean
   onLongPress?: (item: Worktree) => void
+  onSessionLongPress?: (item: Worktree, paneKey: string) => void
   onToggleLineage?: (item: WorkspaceListItem) => void
   /** A bot row's "2 new": opens the bot's new threads. */
   /** A rename the desktop hasn't taken yet; the row keeps its real name and points to this one. */
@@ -89,8 +95,10 @@ function WorktreeListRowComponent({
   status: rowStatus,
   onPress,
   onAgentPress,
+  selectableSessions = false,
   statusLive,
   onLongPress,
+  onSessionLongPress,
   onToggleLineage,
   unsavedName,
   pairedHostId = null,
@@ -153,6 +161,8 @@ function WorktreeListRowComponent({
         onLongPress(item)
       }
     : undefined
+  const sessionPress = useWorktreeRowSession(item, selectableSessions, onPress, onAgentPress)
+  const handleLongPress = sessionPress.cardLongPress(onLongPress, triggerMediumImpact)
 
   if (view.botChatLine) {
     return (
@@ -232,12 +242,16 @@ function WorktreeListRowComponent({
             styles.worktreeRow,
             indent > 0 && { paddingLeft: spacing.lg + indent },
             item.isActive && styles.worktreeRowActive,
+            // The open session keeps this accent and takes the fill; the rest of the card does not.
+            sessionPress.highlightedPane && { backgroundColor: colors.bgBase },
             view.dimmed && styles.worktreeRowDimmed,
-            pressed && (item.isActive ? styles.worktreeRowActivePressed : styles.worktreeRowPressed)
+            pressed && sessionPress.pressedStyle(item.isActive, styles)
           ]}
+          // One press target. An accessible card would hide the session rows from VoiceOver.
+          accessible={false}
           disabled={isReadOnly}
-          onPress={guardPress(() => onPress(item))}
-          onLongPress={openActions}
+          onPress={guardPress(sessionPress.press)}
+          onLongPress={handleLongPress}
           delayLongPress={400}
         >
           <View style={styles.indicatorCol}>
@@ -252,7 +266,10 @@ function WorktreeListRowComponent({
             )}
           </View>
 
-          <View style={styles.worktreeMain}>
+          <View
+            style={styles.worktreeMain}
+            {...workspaceCardActivation(isReadOnly, sessionPress.press)}
+          >
             <View style={styles.worktreeNameRow}>
               {showHostGlyph && (
                 <View
@@ -361,13 +378,14 @@ function WorktreeListRowComponent({
                 unvisited={item.unread}
                 statusLive={statusLive}
                 isReadOnly={isReadOnly}
-                onAgentPress={
-                  onAgentPress
-                    ? (paneKey) => guardPress(() => onAgentPress(item, paneKey))()
-                    : undefined
-                }
                 onAgentLongPress={openActions}
                 fullList={agentActivityDisplayMode === 'full'}
+                {...sessionPress.agentListProps(
+                  selectableSessions,
+                  onSessionLongPress,
+                  triggerMediumImpact,
+                  guardPress
+                )}
               />
             ) : null}
             {count > 0 && onToggleLineage ? (
@@ -377,6 +395,8 @@ function WorktreeListRowComponent({
                   pressed && styles.lineageTogglePressed
                 ]}
                 hitSlop={LINEAGE_TOGGLE_HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: !view.lineageCollapsed }}
                 onPress={(event) => {
                   event.stopPropagation()
                   guardDragRelease(() => onToggleLineage({ row: item, view }))()

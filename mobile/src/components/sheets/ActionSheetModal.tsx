@@ -26,6 +26,8 @@ export type ActionSheetAction = {
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
+  /** Caps the label. Absent keeps the full label. */
+  lines?: number
   onPress: () => void
 }
 
@@ -64,6 +66,8 @@ type ContentProps = {
   message?: string
   headerIcon?: ReactNode
   groupDestructive?: boolean
+  /** Title clamp. Other sheets stay on one line. */
+  titleLines?: number
   /** Drawn between the header and the actions. */
   children?: ReactNode
   actions: ActionSheetAction[]
@@ -77,6 +81,7 @@ export function ActionSheetContent({
   message,
   headerIcon,
   groupDestructive = false,
+  titleLines = 1,
   children,
   actions,
   cancelLabel,
@@ -123,7 +128,7 @@ export function ActionSheetContent({
             {title ? (
               <Text
                 style={styles.title}
-                numberOfLines={1}
+                numberOfLines={titleLines}
                 accessibilityLabel={titleAccessibilityLabel}
               >
                 {title}
@@ -148,6 +153,7 @@ export function ActionSheetContent({
               <ListRow
                 key={action.id ?? action.label}
                 title={action.label}
+                titleLines={action.lines}
                 subtitle={action.hint}
                 value={action.status}
                 leading={

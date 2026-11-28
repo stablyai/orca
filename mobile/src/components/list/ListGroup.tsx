@@ -130,6 +130,8 @@ const sectionHeaderStylesSheet = themedStyleSheet((colors) => ({
 // Kept beside ListGroup for the same reason as SectionHeader: one module, one page chunk.
 type ListRowProps = {
   title: string
+  /** Title clamp. One line unless a caller needs more, or wrapTitle lets it run on. */
+  titleLines?: number
   /** The title is a sentence (a fact, a message) and wraps rather than cutting off. */
   wrapTitle?: boolean
   subtitle?: string
@@ -185,6 +187,7 @@ type ListRowProps = {
 /** One row of a grouped list: 48 pt, or 60 with a subtitle, with a trailing value, chevron or check. */
 export function ListRow({
   title,
+  titleLines = 1,
   wrapTitle = false,
   subtitle,
   subtitleMono = false,
@@ -233,7 +236,7 @@ export function ListRow({
           destructive && listRowStyles.titleDestructive,
           accent && listRowStyles.titleAccent
         ]}
-        numberOfLines={wrapTitle ? undefined : 1}
+        numberOfLines={wrapTitle ? undefined : titleLines}
       >
         {titlePrefix !== undefined ? (
           <Text style={listRowStyles.titlePrefix}>{`${titlePrefix} `}</Text>

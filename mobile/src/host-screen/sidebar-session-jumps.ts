@@ -1,0 +1,33 @@
+import { translate } from '../i18n/mobile-i18n'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import {
+  agentDisplayLabel,
+  agentDotState,
+  type AgentDotState
+} from '../worktree/agent-lineage/agent-row-display'
+import { flattenAgentRowLineage } from '../worktree/agent-lineage/agent-row-lineage'
+
+export type SidebarSessionJump = {
+  paneKey: string
+  depth: number
+  label: string
+  agentType: RuntimeWorktreeAgentRow['agentType']
+  dotState: AgentDotState
+}
+
+/** One entry per sidebar session, in the same order the detailed list draws them. */
+export function sidebarSessionJumps(
+  agents: readonly RuntimeWorktreeAgentRow[] | undefined,
+  now: number
+): SidebarSessionJump[] {
+  if (!agents || agents.length === 0) {
+    return []
+  }
+  return flattenAgentRowLineage(agents).map((node) => ({
+    paneKey: node.row.paneKey,
+    depth: node.depth,
+    label: agentDisplayLabel(node.row, now, translate),
+    agentType: node.row.agentType,
+    dotState: agentDotState(node.row, now)
+  }))
+}

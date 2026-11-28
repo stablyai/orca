@@ -11,6 +11,11 @@ const HOST_ROUTE = '/h/host-1'
 const SESSION_ROUTE = '/h/host-1/session/wt-1'
 
 describe('the keys a page may read and write', () => {
+  it('allows the selectable sidebar sessions preference', () => {
+    expect(isPageStorageKey('orca:selectableSidebarSessions')).toBe(true)
+    expect(isPageStorageKey('orca.selectableSidebarSessions')).toBe(false)
+  })
+
   it('refuses the rest of the namespace', () => {
     // A broad orca: prefix would let pages rewrite native pairings and push registrations.
     for (const key of [
