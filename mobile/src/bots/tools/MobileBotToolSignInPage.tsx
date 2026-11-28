@@ -2,7 +2,7 @@
 // load at the end isn't a surprise; the address it lands on is pasted back here.
 import { useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { ArrowUpRight, Check } from 'lucide-react-native'
+import { ArrowUpRight, Check, Copy } from 'lucide-react-native'
 import { ListRow } from '../../components/list/ListGroup'
 import { TextField } from '../../components/composer-input/TextField'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
@@ -102,6 +102,20 @@ export function MobileBotToolSignInPage(props: {
             host: props.hostName
           })}
         </SettingsNote>
+      ) : attempt?.url && !signIn.opensHere ? (
+        // This phone's shell can't open a link this long; the same attempt finishes from the browser.
+        <SettingsSection
+          footer={t('bots.tools.signIn.pasteInBrowser', 'Paste it into your browser to sign in.')}
+        >
+          <ListRow
+            leading={<Copy size={18} color={colors.accentBlue} />}
+            accent
+            title={t('bots.tools.signIn.copyLink', 'Copy link')}
+            value={signIn.copied ? t('bots.tools.signIn.copied', 'Copied') : undefined}
+            accessibilityRole="button"
+            onPress={signIn.copyLink}
+          />
+        </SettingsSection>
       ) : attempt?.url || !attempt ? (
         <SettingsSection>
           <ListRow

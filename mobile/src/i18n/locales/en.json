@@ -6961,7 +6961,12 @@
         "finish": "Finish",
         "open": "Open sign-in page",
         "notThisSignIn": "That address isn’t from this sign-in. Paste the address you landed on.",
-        "pasteLanded": "After you sign in, paste the address you landed on."
+        "pasteLanded": "After you sign in, paste the address you landed on.",
+        "copyLink": "Copy link",
+        "copied": "Copied",
+        "copyFailed": "Couldn’t copy the link.",
+        "pasteInBrowser": "Paste it into your browser to sign in.",
+        "copyThenPaste": "Copy the link, sign in from your browser, then paste the address you landed on."
       },
       "updateHost": "Update Orca on {{host}} to sign in to apps",
       "none": "None",
