@@ -1,0 +1,19 @@
+---
+title: Ask an Orca bot from Slack
+description: Connect a bot to a Slack workspace, choose who can ask it for help, and get an answer in the original thread.
+---
+
+An Orca bot can work from a Slack conversation. For example, a teammate can mention the bot on a long release thread and ask it to summarize the open questions. The bot receives the request in Orca and can reply in that same thread.
+
+## Connect a bot
+
+1. Sign in to Orca and open the bot’s **Connectors** tab. Select **Slack** and choose **Add to Slack**.
+2. Follow the setup prompts for the Slack workspace where you want to use the bot. Complete the approval in Slack, then return to the connector and check the workspace name.
+3. In the Slack connector, use **Who can ask** to give the intended teammates access. Access is scoped to that bot and Slack workspace.
+4. Invite the bot to the channel where you want it to participate. In a private channel, invite it from inside that channel.
+
+## Try a conversation
+
+Mention the bot by its Slack name, for example `@ReleaseHelper summarize the decisions in this thread`, or open its Slack app and send a direct message. The bot can read the conversation it has access to and reply in Slack under its own name. You can follow the same conversation from Orca. The Slack connector also lets you choose whose name appears when **you** type into a Slack thread from Orca.
+
+For recurring work, open the bot’s **Automations** and choose a Slack trigger offered for the connected workspace. For example, use a reaction on a message to ask the bot to triage that message. Decide which channel and reaction should start the work before enabling the automation.
