@@ -25,6 +25,7 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { getWorktreeReadFlags } from './worktree-unread-flag'
+import { refuseRemovalFromOwnTerminal } from './worktree-removal-caller-terminal-refusal'
 
 type Flags = Map<string, string | boolean>
 
@@ -169,6 +170,7 @@ async function removeFolderWorkspace(
       )
     }
   }
+  await refuseRemovalFromOwnTerminal(client, { id: folderWorkspaceKey(folderId) })
   const removal = await client.call<{
     deleted: boolean
     archiveHookOverride?: ArchiveHookOverride
