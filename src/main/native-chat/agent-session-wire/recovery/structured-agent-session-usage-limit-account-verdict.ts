@@ -24,6 +24,15 @@ export type UsageLimitAccountHold = {
 const GRACE_MS = 15_000
 const READING_WAIT_MS = 120_000
 
+/** Whether `reading` is an account's own (not a live session's) taken at or after `since`. */
+export function readingSince(reading: ProviderRateLimits | null | undefined, since: number) {
+  return (
+    reading?.status === 'ok' &&
+    reading.usageMetadata?.source !== 'live-session' &&
+    reading.updatedAt >= since
+  )
+}
+
 export function accountHoldVerdict({
   cut,
   movedCut,
@@ -48,10 +57,7 @@ export function accountHoldVerdict({
 }): UsageLimitAccountVerdict {
   const account = scope?.account
   const reading = account?.read()
-  const fresh = (since: number) =>
-    reading?.status === 'ok' &&
-    reading.usageMetadata?.source !== 'live-session' &&
-    reading.updatedAt >= since
+  const fresh = (since: number) => readingSince(reading, since)
   const covering =
     account && reading && fresh(cut.resetsAt) && rateLimitSpentUntil(reading, cut.resetsAt)
   const anchor = Math.max(
@@ -140,6 +146,8 @@ export function accountHoldVerdict({
       now >= waitFrom &&
       now < waitFrom + READING_WAIT_MS,
     awaitingRoom: awaitingRoom && room === undefined,
-    releasedByRoom
+    releasedByRoom,
+    // The same readings that decide a moved cut above decide when it has been read.
+    moveUnread: movedCut && !fresh(cut.turnEndedAt ?? Number.NEGATIVE_INFINITY)
   }
 }

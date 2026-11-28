@@ -51,7 +51,7 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   constructor(private readonly deps: UsageLimitContinueDeps) {
     const switchReset = (id: string, cut: HostUsageLimitCut) => this.holds.withSwitchReset(id, cut)
-    this.cold = new UsageLimitColdCuts({ ...deps, logger: deps.host.logger, switchReset })
+    this.cold = new UsageLimitColdCuts({ ...deps, switchReset, holds: this.holds })
   }
 
   start(): void {
@@ -78,11 +78,13 @@ export class StructuredAgentSessionUsageLimitContinue {
   private enabled = (): boolean => this.deps.host.usageLimitAutoContinue?.isEnabled() === true
 
   /** Only a loaded chat with a cut has a schedule whose state can change; an unknown reset gains
-   *  or loses one as the chat's account moves. */
+   *  or loses one as the chat's account moves. A chat that isn't open is never continued, but the
+   *  stop it publishes still follows a move. */
   private async publishScheduled(): Promise<void> {
     for (const id of this.deps.sessions.keys()) {
       const cut = await this.cold.readForSweep(id)
       if (cut !== 'unreadable' && cut !== null) {
+        await this.cold.attributeUnopened(id, cut, this.shown)
         this.deps.publish(id)
       }
     }
@@ -115,7 +117,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       }
     }
     this.cold.retain(shown)
-    this.holds.retain(shown)
+    this.holds.retain(new Set([...shown, ...this.deps.sessions.keys()]))
   }
 
   readState = (
@@ -144,13 +146,13 @@ export class StructuredAgentSessionUsageLimitContinue {
     if (hold.awaitingRoom || (hold.unknownReset && state === 'scheduled')) {
       return undefined
     }
+    // Until the account a chat moved to is read, the move alone never moves the stop earlier.
+    const at = hold.moveUnread ? Math.max(hold.resetsAt, cut.resetsAt) : hold.resetsAt
     return {
       turnItemId: cut.turnItemId,
       resetsAt: cut.resetsAt,
       // While the reset is unknown, `hold.resetsAt` is a reading time, not a reset.
-      ...(!hold.unknownReset && hold.resetsAt !== cut.resetsAt
-        ? { continueAt: hold.resetsAt }
-        : {}),
+      ...(!hold.unknownReset && at !== cut.resetsAt ? { continueAt: at } : {}),
       state
     }
   }
@@ -203,10 +205,10 @@ export class StructuredAgentSessionUsageLimitContinue {
     try {
       const visible = openUsageLimitChats(this.deps.host.store)
       this.retainShown(visible)
+      this.holds.beginPass(this.deps.now())
       // Visibility and workspace sleep can change without a journal or settings commit.
       await this.publishScheduled()
       await this.cold.readUnread(visible)
-      this.holds.beginPass(this.deps.now())
       const due: { id: string; cut: Cut; at: number }[] = []
       for (const id of visible) {
         if (!this.deps.sessions.has(id) && !this.cold.has(id)) {

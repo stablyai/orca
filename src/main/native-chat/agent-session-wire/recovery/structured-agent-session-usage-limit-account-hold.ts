@@ -25,6 +25,7 @@ import {
 } from './structured-agent-session-usage-limit-account-cache'
 import {
   accountHoldVerdict,
+  readingSince,
   type UsageLimitAccountHold
 } from './structured-agent-session-usage-limit-account-verdict'
 import type {
@@ -43,6 +44,8 @@ type AttributionHost = Pick<
 
 const GRACE_MS = 15_000
 const UNKNOWN_RESET_ASK_MS = 10 * 60_000
+/** How often an account a chat moved to is asked for a reading while it has none to decide from. */
+const MOVE_READING_ASK_MS = 60_000
 
 export class UsageLimitAccountHolds {
   private readonly holds = new Map<string, UsageLimitAccountHold>()
@@ -65,14 +68,14 @@ export class UsageLimitAccountHolds {
 
   /** Re-attributed each pass: the account a chat continues on follows the host's selection. The
    *  account the cut hit is the one its turn's runtime launched under, when the record still names
-   *  that launch. */
+   *  that launch. True once it settled: its sources resolved and still hold. */
   async attribute(
     id: string,
     host: AttributionHost,
     limited: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt' | 'turnEndedAt' | 'fence'> &
       SwitchReset,
     now = Date.now()
-  ): Promise<void> {
+  ): Promise<boolean> {
     const record = host.store.getRecord(id)
     const cutLaunch = usageLimitCutLaunch(record?.launchedAccount, limited.fence)
     const hit = { cut: switchFreeIdentity(limited), ...cutLaunch }
@@ -85,6 +88,7 @@ export class UsageLimitAccountHolds {
     let scope: UsageLimitAccountScope | undefined
     let movedTo: AgentSessionAccountHome | null = null
     let relaunchedOn: AgentSessionAccountHome | null = null
+    let settled = true
     try {
       // WSL readings never reach this host, so a WSL launch keeps the cut's own reset.
       if (record && record.location.wslDistro === null) {
@@ -112,9 +116,10 @@ export class UsageLimitAccountHolds {
       }
     } catch {
       // No attributable account this pass: the cut's own reset and any hold already seen decide.
+      settled = false
     }
     if (record && !this.bindingHolds(id, host, binding)) {
-      return
+      return false
     }
     this.scopes.set(id, scope)
     this.bindings.set(id, binding)
@@ -135,6 +140,18 @@ export class UsageLimitAccountHolds {
       now,
       limited.turnEndedAt
     )
+    this.askForMoveReading(id, limited.turnEndedAt)
+    return settled
+  }
+
+  /** The stop a moved chat publishes waits for a reading of the account it moved to, and the
+   *  poller may be idle (unfocused, no viewer): ask for one. */
+  askForMoveReading(id: string, turnEndedAt = Number.NEGATIVE_INFINITY): void {
+    const scope = this.scopes.get(id)
+    const ask = scope?.account?.refresh ?? scope?.bootstrap
+    if (this.movedSince.has(id) && !readingSince(scope?.account?.read(), turnEndedAt)) {
+      ask?.(MOVE_READING_ASK_MS)
+    }
   }
 
   /** What the chat's attribution was computed under; a send binds to this. */
@@ -203,7 +220,8 @@ export class UsageLimitAccountHolds {
         unknownReset: false,
         awaitingReading: false,
         awaitingRoom,
-        releasedByRoom: false
+        releasedByRoom: false,
+        moveUnread: movedCut
       }
     }
     if (
