@@ -38,9 +38,10 @@ async function unreadStream(): Promise<Socket & { peer: Promise<Socket> }> {
   const port = address && typeof address === 'object' ? address.port : 0
   const socket = connect(port, '127.0.0.1')
   await new Promise((resolve) => socket.once('connect', resolve))
-  cleanups.push(() => {
+  cleanups.push(async () => {
+    ;(await peer).destroy()
     socket.destroy()
-    server.close()
+    await new Promise((resolve) => server.close(resolve))
   })
   return Object.assign(socket, { peer })
 }
@@ -132,11 +133,15 @@ describe.skipIf(process.platform === 'win32')('front notices on a stalled app st
     await new Promise<void>((resolve) => {
       // Bytes spliced in right behind the hello come back with it.
       let seen = remainder.toString('utf8')
-      app.on('data', (chunk) => {
-        seen += chunk.toString('utf8')
+      const check = (): void => {
         if (seen.includes('\r\n\r\n')) {
           resolve()
         }
+      }
+      check()
+      app.on('data', (chunk) => {
+        seen += chunk.toString('utf8')
+        check()
       })
       app.resume()
     })

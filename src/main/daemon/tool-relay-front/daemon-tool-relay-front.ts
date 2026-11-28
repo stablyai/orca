@@ -187,8 +187,20 @@ export class DaemonToolRelayFront {
       this.pipes.delete(pipe)
       closePipe(pipe)
     }
+    // The app's answer may still be queued for a slow agent: ending flushes it, within the linger.
+    const answered = (): void => {
+      if (front.destroyed || front.writableLength === 0) {
+        close()
+        return
+      }
+      front.end()
+      const linger = setTimeout(close, ANSWER_LINGER_MS)
+      linger.unref?.()
+      front.once('close', () => clearTimeout(linger))
+    }
+    front.once('close', close)
+    app.once('close', answered)
     for (const socket of [front, app]) {
-      socket.once('close', close)
       socket.on('error', close)
     }
     front.pipe(app)

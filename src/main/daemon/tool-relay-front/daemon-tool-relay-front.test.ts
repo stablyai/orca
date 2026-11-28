@@ -105,11 +105,15 @@ describe.skipIf(process.platform === 'win32')('tool relay front protocol', () =>
     const request = await new Promise<string>((resolve) => {
       // Bytes spliced in right behind the hello come back with it.
       let seen = remainder.toString('utf8')
-      app.on('data', (chunk) => {
-        seen += chunk.toString('utf8')
+      const check = (): void => {
         if (seen.includes('\r\n\r\n')) {
           resolve(seen)
         }
+      }
+      check()
+      app.on('data', (chunk) => {
+        seen += chunk.toString('utf8')
+        check()
       })
       app.resume()
     })
