@@ -38,7 +38,9 @@ export function matchGitRemoteKeyParts(
   if (identity.host === target.host) {
     return true
   }
-  return isUnresolvedSshHostAlias(identity.host) ? 'unknown' : false
+  return !identity.host.startsWith('[') && isUnresolvedSshHostAlias(identity.host)
+    ? 'unknown'
+    : false
 }
 
 type GitRemoteEntry = {
@@ -71,9 +73,19 @@ export function normalizeGitRemoteUrl(remoteUrl: string): string | null {
     return null
   }
 
-  const scpMatch = trimmed.includes('://') ? null : /^([^@\s:]+@)?([^:\s]+):(.+)$/.exec(trimmed)
+  const scpMatch = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(trimmed)
+    ? null
+    : /^([^@\s:]+@)?(\[[^\]\s]+\]|[^:\s]+):(.+)$/.exec(trimmed)
   if (scpMatch) {
-    const host = normalizeRemoteHost(scpMatch[2] ?? '')
+    let host = normalizeRemoteHost(scpMatch[2] ?? '')
+    if (host.startsWith('[')) {
+      try {
+        // Canonicalize IPv6 exactly as the equivalent ssh:// URL does.
+        host = new URL(`ssh://${host}`).hostname
+      } catch {
+        return null
+      }
+    }
     const path = normalizeRemotePath(scpMatch[3] ?? '')
     return host && path ? `${host}/${path}` : null
   }

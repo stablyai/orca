@@ -129,8 +129,12 @@ export async function reuseSavedCloneTarget(
   // Only origin names this project's own repo; upstream metadata and avatars may identify its source fork.
   const storedOrigin =
     saved.gitRemoteIdentity?.remoteName === 'origin' ? saved.gitRemoteIdentity : null
+  // Recompute cached keys with the current parser, including older bracketed IPv6 identities.
+  const storedKey = storedOrigin
+    ? (normalizeGitRemoteUrl(storedOrigin.remoteUrl) ?? storedOrigin.canonicalKey)
+    : null
   // Keep settings when the same repository needs its missing folder recreated.
-  if (requestedKey && storedOrigin?.canonicalKey === requestedKey) {
+  if (requestedKey && storedKey === requestedKey) {
     return null
   }
   throw new Error(

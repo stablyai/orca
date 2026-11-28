@@ -135,6 +135,31 @@ describe('reuseSavedCloneTarget', () => {
     await expect(decide(project, '/srv/mine/orca')).rejects.toThrow('already an Orca project')
   })
 
+  it('keeps missing IPv6 clone settings when the saved key predates bracketed host parsing', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-saved-clone-target-'))
+    roots.push(root)
+    const identity = {
+      canonicalKey: '[2001/db8::1]:team/repo',
+      remoteName: 'origin',
+      remoteUrl: 'git@[2001:db8::1]:team/repo.git'
+    }
+    const project = saved(join(root, 'missing'), {
+      gitRemoteIdentity: identity,
+      worktreeBaseRef: 'develop',
+      projectGroupId: 'work'
+    })
+    await expect(decide(project, 'ssh://git@[2001:db8::1]/team/repo.git')).resolves.toBeNull()
+    expect(project.gitRemoteIdentity).toBe(identity)
+    expect(project.worktreeBaseRef).toBe('develop')
+    expect(project.projectGroupId).toBe('work')
+    await expect(decide(project, 'ssh://git@[2001:db8::2]/team/repo.git')).rejects.toThrow(
+      'recorded as a different repository'
+    )
+    await expect(decide(project, 'ssh://git@[2001:db8::1]/other/repo.git')).rejects.toThrow(
+      'recorded as a different repository'
+    )
+  })
+
   it('does not reuse a clone that was killed before it finished', async () => {
     const identity = {
       canonicalKey: 'github.com/stablyai/orca',
