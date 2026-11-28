@@ -30,3 +30,26 @@ export function captureJournalLegacySourceReceipt(filename: string): JournalLega
     return { ...JOURNAL_LEGACY_SOURCE_RECEIPT_VERSION, disposition: 'uncertifiable' }
   }
 }
+
+/** Copying may read a linked original. Only a single-link original establishes retirement custody. */
+export function captureJournalLegacyInitializationSource(filename: string): {
+  receipt: JournalLegacySourceReceipt
+  stability: JournalLegacySourceReceipt
+} {
+  const unknown: JournalLegacySourceReceipt = {
+    ...JOURNAL_LEGACY_SOURCE_RECEIPT_VERSION,
+    disposition: 'uncertifiable'
+  }
+  try {
+    const main = statSync(filename, { bigint: true, throwIfNoEntry: false })
+    const stability = main
+      ? journalLegacySourceReceiptOf(
+          journalLegacyFileIdentityFromStat(main, false),
+          statSync(`${filename}-wal`, { bigint: true, throwIfNoEntry: false })
+        )
+      : journalLegacySourceReceiptOf()
+    return { receipt: main && main.nlink !== 1n ? unknown : stability, stability }
+  } catch {
+    return { receipt: unknown, stability: unknown }
+  }
+}

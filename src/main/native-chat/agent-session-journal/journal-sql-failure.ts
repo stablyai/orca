@@ -2,6 +2,7 @@ import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
 import { storageCapacityErrorCode } from '../../../shared/errors/storage-capacity-error'
 import { AgentSessionJournalError, JournalOutcomeDecodeError } from './writing/journal-write-guards'
 import { JournalDamageError, JournalUnreleasedSchemaError } from './replay/journal-open-failure'
+import { JournalLegacyRecordCorruptionError } from './database/journal-legacy-record-identity'
 import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
 import { AgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import {
@@ -23,6 +24,7 @@ export type JournalSqlFailure = {
   code?: string
   errcode?: number
   sourceContent?: JournalSourceContent
+  legacyRecordFingerprint?: string
   receipt?: CommandReceiptExistsError['result']
   refusal?: AgentSessionWireRefusal
   expired?: AgentSessionAttachmentExpiredError['expired']
@@ -79,6 +81,8 @@ export function journalSqlFailure(error: unknown): JournalSqlFailure {
         ? error.errcode
         : undefined,
     sourceContent: journalSqlSourceContent(error),
+    legacyRecordFingerprint:
+      error instanceof JournalLegacyRecordCorruptionError ? error.fingerprint : undefined,
     receipt: error instanceof CommandReceiptExistsError ? error.result : undefined,
     refusal: error instanceof AgentSessionRefusalError ? error.refusal : undefined,
     expired: error instanceof AgentSessionAttachmentExpiredError ? error.expired : undefined,
@@ -122,7 +126,9 @@ function restoreFailure(error: JournalSqlFailure): Error {
   }
   switch (error.name) {
     case 'JournalDamageError':
-      return new JournalDamageError(error.message)
+      return error.legacyRecordFingerprint
+        ? new JournalLegacyRecordCorruptionError(error.legacyRecordFingerprint)
+        : new JournalDamageError(error.message)
     case 'JournalUnreleasedSchemaError':
       return new JournalUnreleasedSchemaError(error.message)
     case 'JournalOutcomeDecodeError':

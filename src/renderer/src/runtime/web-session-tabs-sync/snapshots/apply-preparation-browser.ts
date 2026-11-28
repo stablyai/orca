@@ -14,7 +14,7 @@ import {
   isReadyEditorTab
 } from '../tab-projection/terminal-surfaces'
 import {
-  hostSnapshotAffirmsAgentSessions,
+  unverifiableAgentSessionIds,
   hostSnapshotAffirmsClientHostedPages,
   hostSnapshotAffirmsWorktreeContents
 } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
@@ -68,7 +68,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
     hostGroupIdByTabId,
     requestReceivedFrame: base.options?.requestReceivedFrame
   })
-  const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
+  const unverifiableSessions = unverifiableAgentSessionIds(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
   const reconcilesBrowserTabs =
     reconcilesNonAgentTabs && !browserInitializationReceiptStale(snapshot)
@@ -215,7 +215,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
       // Matching host identity replaces provisional tabs immediately or both panes render before lifecycle publication.
       return (
         !publishedAgentSessionIds.has(tab.entityId) &&
-        (!agentSessionsAffirmed ||
+        (unverifiableSessions === null ||
+          unverifiableSessions.has(tab.entityId) ||
           shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
           isUnlistedCreatedChat(worktreeId, tab.entityId))
       )

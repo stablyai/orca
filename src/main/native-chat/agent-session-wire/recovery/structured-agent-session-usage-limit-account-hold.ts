@@ -71,7 +71,8 @@ export class UsageLimitAccountHolds {
     host: AttributionHost,
     limited: Pick<HostUsageLimitCut, 'turnItemId' | 'resetsAt' | 'turnEndedAt' | 'fence'> &
       SwitchReset,
-    now = Date.now()
+    now = Date.now(),
+    current = () => true
   ): Promise<void> {
     const record = host.store.getRecord(id)
     const cutLaunch = usageLimitCutLaunch(record?.launchedAccount, limited.fence)
@@ -96,6 +97,9 @@ export class UsageLimitAccountHolds {
           this.launchHomes.set(target, launch)
         }
         const home = (await launch) ?? record.accountHome
+        if (!current()) {
+          return
+        }
         movedTo = hit.home && !sameAccountHome(home, hit.home) ? home : null
         relaunchedOn = hit?.relaunched ? home : null
         const path = agentSessionAccountHomePath(home)
@@ -113,7 +117,7 @@ export class UsageLimitAccountHolds {
     } catch {
       // No attributable account this pass: the cut's own reset and any hold already seen decide.
     }
-    if (record && !this.bindingHolds(id, host, binding)) {
+    if (!current() || (record && !this.bindingHolds(id, host, binding))) {
       return
     }
     this.scopes.set(id, scope)
@@ -156,7 +160,7 @@ export class UsageLimitAccountHolds {
     return holds
   }
 
-  retain(shown: ReadonlySet<string>): void {
+  retain(shown: Pick<ReadonlySet<string>, 'has'>): void {
     for (const cache of [this.holds, this.scopes, this.bindings, this.providers, this.movedSince]) {
       for (const id of cache.keys()) {
         if (!shown.has(id)) {

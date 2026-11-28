@@ -201,7 +201,7 @@ export class UsageLimitRelaunchedCuts {
       : undefined
   }
 
-  retain(shown: ReadonlySet<string>): void {
+  retain(shown: Pick<ReadonlySet<string>, 'has'>): void {
     for (const id of this.relaunches.keys()) {
       if (!shown.has(id)) {
         this.relaunches.delete(id)

@@ -21,6 +21,7 @@ import type { JournalSqlStoredRecords } from '../journal-sql-database-read'
 
 /** The runtime owns workers, never a writable connection or a retained chat projection. */
 type JournalSqlDatabaseOptions = {
+  hostId?: string
   readerPath?: string
   onMaintenanceError: (error: unknown, sessionId?: string) => void
   /** Each periodic maintenance pass, for owners that recover their own work on it. */
@@ -71,15 +72,33 @@ export class JournalSqlDatabase {
 
   static async open(
     stateDirectory: string,
-    options: JournalSqlDatabaseOptions & { writerPath?: string }
+    options: JournalSqlDatabaseOptions & {
+      writerPath?: string
+      signal?: AbortSignal
+      legacySessionTabIds?: readonly string[]
+    }
   ): Promise<JournalSqlDatabase> {
+    const { signal } = options
+    signal?.throwIfAborted()
     const filename = journalDomainDatabasePath(stateDirectory)
-    const writer = new JournalSqlOwner(filename, stateDirectory, options.writerPath)
+    const writer = new JournalSqlOwner(
+      filename,
+      stateDirectory,
+      options.writerPath,
+      options.hostId,
+      options.legacySessionTabIds
+    )
+    const cancel = () => writer.cancelInitialization()
+    signal?.addEventListener('abort', cancel, { once: true })
     try {
-      return new JournalSqlDatabase(writer, stateDirectory, await writer.opened(), options)
+      const readOnly = await writer.opened()
+      signal?.throwIfAborted()
+      return new JournalSqlDatabase(writer, stateDirectory, readOnly, options)
     } catch (error) {
       await writer.close()
       throw error
+    } finally {
+      signal?.removeEventListener('abort', cancel)
     }
   }
 
@@ -175,10 +194,13 @@ export class JournalSqlDatabase {
   }
 
   private restoreRecordTabs(stored: JournalSqlStoredRecords): AgentSessionStoreState {
-    const { backgroundSessions, sessionTabs, ...records } = stored
+    const { backgroundSessions, sessionTabs, unrecordedSessionTabs, ...records } = stored
     return {
       ...records,
-      sessionTabs: sessionTabs && agentSessionTabTableFromStored(sessionTabs, backgroundSessions)
+      sessionTabs: sessionTabs && agentSessionTabTableFromStored(sessionTabs, backgroundSessions),
+      ...(unrecordedSessionTabs
+        ? { unrecordedSessionTabs: agentSessionTabTableFromStored(unrecordedSessionTabs, null) }
+        : {})
     }
   }
 

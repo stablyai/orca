@@ -32,7 +32,11 @@ export class StructuredAgentSessionHost {
     client: () => this.clientDelivery,
     delivery: () => this.conversationDelivery,
     opened: (id) => usageLimit.opened(this.usageLimitContinue, this.queued, id),
-    workChanged: (id) => this.runtimeState.refreshActivity(id),
+    workChanged: (id) => {
+      this.runtimeState.refreshActivity(id)
+      this.lifetime.idleSweep.syncLoadedHandles()
+      this.usageLimitContinue.syncLoadedHandles()
+    },
     logger: () => this.deps.logger,
     now: () => this.now(),
     observeRows: () => this.deps.observeCommittedRows
@@ -134,7 +138,6 @@ export class StructuredAgentSessionHost {
     this.continuationContext = contextReader(deps, this.lifetime.conversation)
     this.usageLimitContinue = usageLimit.start(this.mutationContext(), this, this.clientDelivery)
     this.runtimeState.startLeaseRenewal()
-    this.lifetime.idleSweep.start()
   }
 
   private now = (): number => this.deps.now?.() ?? Date.now()
@@ -228,6 +231,8 @@ export class StructuredAgentSessionHost {
 
   /** Quit stops delivery and queued-card handover. */
   stopDelivery = () => {
+    this.lifetime.idleSweep.dispose()
+    void this.runtimeState.stopLeaseRenewal()
     this.sessions.endPublications()
     ;[this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
     this.usageLimitContinue.dispose()

@@ -163,7 +163,7 @@ export function loadAgentSessionStoreRows(
       state.retiredClaimKeys.push(entry)
     }
   }
-  state.sessionTabs = loadAgentSessionStoreTabs(db)
+  Object.assign(state, loadAgentSessionStoreTabs(db))
   return state
 }
 
@@ -185,7 +185,7 @@ export function installAgentSessionStoreRows(db: Database.Database): AgentSessio
 
 export function loadAgentSessionStoreTabs(
   db: Database.Database
-): AgentSessionStoreState['sessionTabs'] {
+): Pick<AgentSessionStoreState, 'sessionTabs' | 'unrecordedSessionTabs'> {
   const recorded = db
     .prepare('SELECT 1 AS present FROM agent_session_store_meta WHERE key = ?')
     .get(AGENT_SESSION_TABS_RECORDED)
@@ -205,9 +205,11 @@ export function loadAgentSessionStoreTabs(
     }
   }
   if (recorded) {
-    return table
+    return { sessionTabs: table }
   }
-  return null
+  return table.entries().length > 0
+    ? { sessionTabs: null, unrecordedSessionTabs: table }
+    : { sessionTabs: null }
 }
 
 function writeTabIndex(

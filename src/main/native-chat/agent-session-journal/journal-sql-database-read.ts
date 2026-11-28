@@ -30,9 +30,23 @@ import {
 } from './connector-replies/journal-connector-replies-read'
 import type { JournalConnectorReplyRow } from '../../../shared/agent-session/journal/journal-connector-reply'
 
-export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
+export type JournalSqlStoredRecords = Omit<
+  AgentSessionStoreState,
+  'sessionTabs' | 'unrecordedSessionTabs'
+> & {
   sessionTabs: [tabId: string, sessionId: string][] | null
+  unrecordedSessionTabs?: [tabId: string, sessionId: string][]
   backgroundSessions: StoredAgentSessionBackground | null
+}
+
+export function storeJournalSqlRecords(state: AgentSessionStoreState): JournalSqlStoredRecords {
+  const { sessionTabs, unrecordedSessionTabs, ...records } = state
+  return {
+    ...records,
+    sessionTabs: sessionTabs?.entries() ?? null,
+    ...(unrecordedSessionTabs ? { unrecordedSessionTabs: unrecordedSessionTabs.entries() } : {}),
+    backgroundSessions: storedAgentSessionBackground(sessionTabs)
+  }
 }
 
 /** Background conversion leaves a copy whose history failed to convert to an open. */
@@ -111,14 +125,9 @@ function read(
     case 'pr-watch':
       return { kind: 'pr-watch', value: readPRWatchStorage(db, operation.operation) }
     case 'records': {
-      const records = loadAgentSessionStoreRows(db, operation.unreconciled)
       return {
         kind: 'records',
-        records: {
-          ...records,
-          sessionTabs: records.sessionTabs?.entries() ?? null,
-          backgroundSessions: storedAgentSessionBackground(records.sessionTabs)
-        }
+        records: storeJournalSqlRecords(loadAgentSessionStoreRows(db, operation.unreconciled))
       }
     }
     case 'receipt':

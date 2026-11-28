@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { applyWebSessionTabsSnapshot } from '../snapshots/snapshot-api'
+import { applyLocalStructuredSessionTabSnapshots } from '../../local-structured-session-tabs-sync/snapshot-apply'
 import {
   latestReceivedSessionTabsSnapshotByWorktree,
   latestSessionTabsSnapshotByWorktree,
@@ -21,6 +22,82 @@ import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
+
+it.each(['desktop', 'web'] as const)(
+  'retains exact unreadable evidence in %s inventories',
+  (client) => {
+    resetWebSessionTabsSyncTestState()
+    try {
+      const worktreeId = `${WT}/${client}-unreadable`
+      const chat = (entityId: string): Tab => ({
+        id: `structured-agent-session-${entityId}`,
+        entityId,
+        worktreeId,
+        executionHostId: client === 'desktop' ? 'local' : 'runtime:web-env-1',
+        groupId: 'group',
+        contentType: 'agent-session',
+        agentSessionAgent: 'codex',
+        label: entityId,
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: NOW
+      })
+      const opaque = chat('opaque-chat')
+      const closed = chat('closed-chat')
+      const state = makeState({
+        activeWorktreeId: worktreeId,
+        unifiedTabsByWorktree: { [worktreeId]: [opaque, closed] },
+        groupsByWorktree: {
+          [worktreeId]: [
+            {
+              id: 'group',
+              worktreeId,
+              activeTabId: opaque.id,
+              tabOrder: [opaque.id, closed.id]
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [worktreeId]: 'group' }
+      })
+      if (client === 'web') {
+        for (const tab of [opaque, closed]) {
+          recordDirectlyOpenedChat(ENV, worktreeId, tab.entityId, {
+            tabId: tab.id,
+            hostTabId: tab.id,
+            registration: undefined,
+            connectionGeneration: 0,
+            receivedFrame: 1,
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1
+          })
+        }
+      }
+      const apply = (current: typeof state, snapshot: ReturnType<typeof makeSnapshot>) =>
+        client === 'desktop'
+          ? applyLocalStructuredSessionTabSnapshots(current, [snapshot], undefined, NOW)
+          : { ...current, ...applyWebSessionTabsSnapshot(current, snapshot, ENV, NOW) }
+      const olderPeer = makeSnapshot([], {
+        worktree: worktreeId,
+        snapshotVersion: 2,
+        agentSessionsUnverifiable: true
+      })
+      expect(
+        apply(state, olderPeer).unifiedTabsByWorktree[worktreeId]?.map(({ id }) => id)
+      ).toEqual([opaque.id, closed.id])
+      const partial = apply(state, {
+        ...olderPeer,
+        snapshotVersion: 3,
+        unverifiableAgentSessionIds: ['opaque-chat', 'unlisted-chat']
+      })
+      expect(partial.unifiedTabsByWorktree[worktreeId]?.map(({ id }) => id)).toEqual([opaque.id])
+      const settled = apply(partial, makeSnapshot([], { worktree: worktreeId, snapshotVersion: 4 }))
+      expect(settled.unifiedTabsByWorktree[worktreeId] ?? []).toEqual([])
+    } finally {
+      resetWebSessionTabsSyncTestState()
+    }
+  }
+)
 
 it('admits a verified restarted host without advancing the worktree publication', () => {
   resetWebSessionTabsSyncTestState()

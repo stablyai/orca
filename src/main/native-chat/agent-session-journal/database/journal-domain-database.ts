@@ -15,22 +15,45 @@ import {
   journalDomainDatabasePath,
   journalRunningOrcaVersion
 } from './journal-host-database'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { tryFoldJournalTextTails } from '../journal-text-tail'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
   migrateJournalDomainSchema
 } from './journal-domain-migrations'
 import { importJournalDomainProfile } from './journal-domain-profile-import'
-import { openJournalLegacySource } from './journal-legacy-source'
+import { openJournalLegacySourceChecked } from './journal-legacy-source'
 import {
   JOURNAL_LEGACY_REVISIONS_KEPT,
   reconcileJournalLegacySource
 } from './journal-legacy-reconcile'
-import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
-import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
+import {
+  JOURNAL_LEGACY_SOURCE_RECEIPT,
+  sameJournalLegacySource
+} from './journal-legacy-source-receipt'
+import { captureJournalLegacyInitializationSource } from './journal-legacy-source-capture'
+import {
+  createJournalLegacyRecordStage,
+  readJournalLegacyRecordSnapshot
+} from './journal-legacy-record-file'
+import {
+  assertJournalLegacyRecordFilesStable,
+  captureJournalLegacyRecordFiles,
+  captureJournalLegacyRecordSource,
+  journalLegacyRecordFingerprint,
+  JournalLegacyRecordCorruptionError,
+  type RecordFile
+} from './journal-legacy-record-identity'
+import { importJournalLegacyRecordSnapshot } from './journal-legacy-record-import'
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
-export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
+export async function initializeJournalDomainDatabase(
+  stateDirectory: string,
+  hostId: string = LOCAL_EXECUTION_HOST_ID,
+  checkCancellation: () => void = () => undefined,
+  legacySessionTabIds: readonly string[] = []
+): Promise<string> {
+  checkCancellation()
   const destination = journalDomainDatabasePath(stateDirectory)
   mkdirSync(stateDirectory, { recursive: true })
   try {
@@ -47,12 +70,78 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     const filename = join(temporary, 'snapshot.db')
     const { db } = openJournalDomainDatabase(filename)
     const sourcePath = journalDatabasePath(stateDirectory)
-    const sourceReceipt = captureJournalLegacySourceReceipt(sourcePath)
+    const initialSource = captureJournalLegacyInitializationSource(sourcePath)
+    const savedReceipt = JSON.stringify(initialSource.receipt)
+    const stability = JSON.stringify(initialSource.stability)
+    let recordFiles: readonly RecordFile[] | undefined
+    const assertSourceStable = (): void => {
+      if (
+        initialSource.stability.disposition !== 'copied-source' ||
+        !sameJournalLegacySource(
+          stability,
+          captureJournalLegacyInitializationSource(sourcePath).stability
+        )
+      ) {
+        throw new Error('the original chat journal changed during initialization')
+      }
+    }
+    const assertStable = (): void => {
+      if (recordFiles) {
+        assertSourceStable()
+        assertJournalLegacyRecordFilesStable(recordFiles)
+      }
+    }
     try {
       if (existsSync(sourcePath)) {
-        const source = openJournalLegacySource(sourcePath)
+        const { source, recordFileSource } = openJournalLegacySourceChecked(sourcePath, {
+          inspectRecordFileSource: true
+        })
         try {
-          importJournalDomainProfile(source, db)
+          if (recordFileSource) {
+            assertSourceStable()
+          }
+          importJournalDomainProfile(source, db, {
+            restoreRecordFile: recordFileSource,
+            checkCancellation: recordFileSource ? checkCancellation : undefined
+          })
+          if (recordFileSource) {
+            const sourceFiles = captureJournalLegacyRecordSource(stateDirectory)
+            const files = captureJournalLegacyRecordFiles(stateDirectory)
+            recordFiles = files
+            const stage = new Database(join(temporary, 'records-stage.db'))
+            try {
+              createJournalLegacyRecordStage(stage)
+              const recordSnapshot = await readJournalLegacyRecordSnapshot(
+                files,
+                stage,
+                checkCancellation
+              )
+              assertStable()
+              if (recordSnapshot === 'corrupt') {
+                const currentSourceFiles = captureJournalLegacyRecordSource(stateDirectory)
+                if (
+                  journalLegacyRecordFingerprint(currentSourceFiles) !==
+                  journalLegacyRecordFingerprint(sourceFiles)
+                ) {
+                  throw new Error('the original chat journal changed during initialization')
+                }
+                throw new JournalLegacyRecordCorruptionError(
+                  journalLegacyRecordFingerprint([...sourceFiles, ...files])
+                )
+              }
+              importJournalLegacyRecordSnapshot(
+                source,
+                db,
+                stage,
+                recordSnapshot,
+                hostId,
+                legacySessionTabIds,
+                checkCancellation
+              )
+            } finally {
+              stage.close()
+            }
+          }
         } finally {
           source.close()
         }
@@ -60,10 +149,12 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
       const meta = db.prepare(
         'INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)'
       )
-      meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(sourceReceipt))
+      meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, savedReceipt)
       meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
       // An unknown version is no later than any, and waits for a launch that knows its own.
       meta.run(JOURNAL_LEGACY_CONVERTED_BY, journalRunningOrcaVersion() ?? 'unknown')
+      checkCancellation()
+      assertStable()
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
         throw new Error('chat initialization could not fold its private WAL')
@@ -73,6 +164,8 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
     }
     try {
       // Publish complete metadata without replacing another initializer's result.
+      assertStable()
+      checkCancellation()
       linkSync(filename, destination)
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) {

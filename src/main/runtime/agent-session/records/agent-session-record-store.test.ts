@@ -21,6 +21,9 @@ import {
   withTestAgentSessionDatabase
 } from './agent-session-record-store-persistence.test-fixture'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { holdAgentSessionInventory } from '../../session-tabs/inventory/structured-agent-session-inventory-hold'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -132,6 +135,52 @@ beforeEach(async () => {
 afterEach(async () => {
   await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
+})
+
+it('publishes uncertainty only for opaque saved tabs still in the durable index', async () => {
+  await withTestAgentSessionDatabase(directory, (db) =>
+    db.exec(`INSERT INTO agent_session_records VALUES('opaque-chat','{"schemaVersion":999}');
+      INSERT INTO agent_session_records VALUES('closed-chat','{"schemaVersion":999}')`)
+  )
+  const store = await openTestAgentSessionRecordStore(directory, {
+    legacySessionTabIds: ['opaque-chat']
+  })
+  await store.initializeSessionTabs()
+  const savedTab = (entityId: string): Tab => ({
+    id: `structured-agent-session-${entityId}`,
+    entityId,
+    worktreeId: 'workspace-1',
+    groupId: 'group',
+    contentType: 'agent-session',
+    label: 'Saved chat',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: NOW
+  })
+  const tabs = [savedTab('opaque-chat'), savedTab('closed-chat')]
+  let frame: RuntimeMobileSessionTabsResult = {
+    worktree: 'workspace-1',
+    publicationEpoch: 'renderer:1',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: []
+  }
+  frame = holdAgentSessionInventory(frame, false, store.unverifiableSavedSessionIds(tabs))
+  expect(frame).toMatchObject({
+    agentSessionsUnverifiable: true,
+    unverifiableAgentSessionIds: ['opaque-chat'],
+    tabs: []
+  })
+  expect(store.getRecord('opaque-chat')).toBeNull()
+  expect(store.isSessionUnreadable('opaque-chat')).toBe(true)
+  await store.setSessionTabVisibility('opaque-chat', false)
+  expect(
+    holdAgentSessionInventory(frame, false, store.unverifiableSavedSessionIds(tabs))
+  ).not.toHaveProperty('agentSessionsUnverifiable')
+  expect(store.getVisibleSessionTabIndex()).toEqual({ present: true, sessionIds: [] })
 })
 
 describe('acquisition path', () => {

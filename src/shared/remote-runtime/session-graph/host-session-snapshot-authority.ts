@@ -15,6 +15,7 @@ type ClientHostedPagePublication = SnapshotPublication & {
 
 type AgentSessionPublication = SnapshotPublication & {
   agentSessionsUnverifiable?: true
+  unverifiableAgentSessionIds?: readonly string[]
 }
 
 /** Forced snapshots synthesize empty frames before publication, including after restart. UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH (with optional client navigation suffix) means ask later; absence cannot cull. Keep this separate from staleness so valid terminal reconciliation on the frame still applies. */
@@ -36,4 +37,22 @@ export function hostSnapshotAffirmsClientHostedPages(
 /** Chat authority is narrower than worktree authority: unreadable chat journals yield empty chat rows despite valid terminals. Absence cannot cull saved chat placement. */
 export function hostSnapshotAffirmsAgentSessions(snapshot: AgentSessionPublication): boolean {
   return hostSnapshotAffirmsWorktreeContents(snapshot) && !snapshot.agentSessionsUnverifiable
+}
+
+const VERIFIED_AGENT_SESSIONS: ReadonlySet<string> = new Set<string>()
+
+/** Null means no session's absence can be verified. */
+export function unverifiableAgentSessionIds(
+  snapshot: AgentSessionPublication
+): ReadonlySet<string> | null {
+  if (!hostSnapshotAffirmsWorktreeContents(snapshot)) {
+    return null
+  }
+  if (!snapshot.agentSessionsUnverifiable) {
+    return VERIFIED_AGENT_SESSIONS
+  }
+  const ids = snapshot.unverifiableAgentSessionIds
+  return Array.isArray(ids) && ids.length > 0 && ids.every((id) => typeof id === 'string')
+    ? new Set(ids)
+    : null
 }

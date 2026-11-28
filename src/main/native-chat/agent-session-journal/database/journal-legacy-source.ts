@@ -1,8 +1,13 @@
 import Database from '../../../sqlite/sync-database'
-import { ensureJournalAdditiveTables, journalPragmaNumber } from './journal-database'
+import {
+  ensureJournalAdditiveTables,
+  isJournalV3RecordFileSource,
+  journalPragmaNumber
+} from './journal-database'
 import {
   createAgentSessionRecordTablesSql,
-  JOURNAL_DB_SCHEMA_VERSION
+  JOURNAL_DB_SCHEMA_VERSION,
+  JOURNAL_V3_HISTORY_TABLES
 } from './journal-database-schema'
 
 /**
@@ -20,18 +25,21 @@ export function openJournalLegacySource(
 /** Also names the tables the original's version created that it no longer has; none when newer. */
 export function openJournalLegacySourceChecked(
   filename: string,
-  options: { timeout?: number } = {}
-): { source: Database.Database; missing: string[] } {
-  const source = new Database(filename, { readonly: true, fileMustExist: true, ...options })
+  {
+    timeout,
+    inspectRecordFileSource = false
+  }: { timeout?: number; inspectRecordFileSource?: boolean } = {}
+): { source: Database.Database; missing: string[]; recordFileSource: boolean } {
+  const source = new Database(filename, { readonly: true, fileMustExist: true, timeout })
   try {
-    return { source, missing: presentCurrentSchema(source) }
+    const recordFileSource = inspectRecordFileSource && isJournalV3RecordFileSource(source)
+    return { source, missing: presentCurrentSchema(source), recordFileSource }
   } catch (error) {
     source.close()
     throw error
   }
 }
 
-const HISTORY_TABLES = ['journal_rows', 'journal_sessions']
 const RECORD_TABLES = [
   'agent_session_records',
   'agent_session_operations',
@@ -45,8 +53,8 @@ const RECORD_TABLES = [
  * write damaged. Change it only with JOURNAL_LEGACY_DAMAGE_CHECK, so a recorded skip is checked again.
  */
 const RELEASED_TABLES: Readonly<Record<number, readonly string[]>> = {
-  3: HISTORY_TABLES,
-  4: [...HISTORY_TABLES, ...RECORD_TABLES]
+  3: JOURNAL_V3_HISTORY_TABLES,
+  4: [...JOURNAL_V3_HISTORY_TABLES, ...RECORD_TABLES]
 }
 
 /** What a recorded damaged original was judged by; a build that judges differently checks again. */

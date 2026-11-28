@@ -305,6 +305,8 @@ export type RuntimeMobileSessionTabsResult = {
   /** Unreadable chat journals leave chat rows unverifiable while other rows remain authoritative. Preserve absent
    * chat tabs until host restore; no deadline because the chats remain durable on disk. */
   agentSessionsUnverifiable?: true
+  /** When present with the hold flag, only these saved session IDs lack a verdict in this worktree. */
+  unverifiableAgentSessionIds?: readonly string[]
 }
 
 export type RuntimeMobileSessionCreateTerminalResult = {

@@ -114,6 +114,7 @@ export type SessionTabsResult = Pick<
   | 'worktree'
   | 'clientHostedPagesUnreconciled'
   | 'agentSessionsUnverifiable'
+  | 'unverifiableAgentSessionIds'
   | 'snapshotVersion'
   | 'activeTabId'
   | 'activeTabType'

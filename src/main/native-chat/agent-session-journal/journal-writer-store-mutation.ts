@@ -68,7 +68,7 @@ export function resolveJournalWriterStoreMutation(
   const touched = emptyJournalWriterStoreRows()
   const identity = agentSessionStoreMutationKeys(mutation)
   if (identity.tabs) {
-    state.sessionTabs = loadAgentSessionStoreTabs(db)
+    Object.assign(state, loadAgentSessionStoreTabs(db))
   }
   const recordIds = [
     ...identity.recordIds,

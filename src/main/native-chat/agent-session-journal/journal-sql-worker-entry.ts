@@ -62,18 +62,31 @@ let destinationMain: string | undefined
 let readOnly = true
 let fault: unknown
 let closing = false
+const initializationCancelled: Int32Array<SharedArrayBuffer> = workerData.initializationCancelled
 let scheduled = false
 const queue = new JournalSqlWriterQueue()
 let parking: JournalSqlWalParking | undefined
 const clock = new JournalSqlQueueClock(() => parking?.mark() ?? { bulk: 0, urgent: 0 })
 const gate = { ms: 0 }
 
+function checkInitialization(): void {
+  if (Atomics.load(initializationCancelled, 0) !== 0) {
+    throw new Error('journal SQL owner closed during initialization')
+  }
+}
+
 async function open(): Promise<void> {
   try {
     mkdirSync(dirname(workerData.filename), { recursive: true })
     if (workerData.filename === journalDomainDatabasePath(stateDirectory)) {
-      await initializeJournalDomainDatabase(stateDirectory)
+      await initializeJournalDomainDatabase(
+        stateDirectory,
+        typeof workerData.hostId === 'string' ? workerData.hostId : undefined,
+        checkInitialization,
+        workerData.legacySessionTabIds
+      )
     }
+    checkInitialization()
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db
     try {

@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { hostSnapshotAffirmsAgentSessions } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
+import { unverifiableAgentSessionIds } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   toRuntimeExecutionHostId,
@@ -129,7 +129,7 @@ export function retainDirectlyOpenedChats(
   const registration = getRuntimeEnvironmentRegistration(environmentId)
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
   const host = toRuntimeExecutionHostId(environmentId)
-  const affirmsAgentSessions = hostSnapshotAffirmsAgentSessions(snapshot)
+  const unverifiableSessions = unverifiableAgentSessionIds(snapshot)
   const retained = new Map<string, MirroredAgentTab>()
   const retainedProofs = new Map<string, ChatPublication>()
   for (const tab of currentTabs) {
@@ -151,7 +151,7 @@ export function retainDirectlyOpenedChats(
         (proof.previousEpoch !== undefined &&
           sameSessionTabsPublicationLineage(snapshot.publicationEpoch, proof.previousEpoch))
     if (
-      (earlier || !affirmsAgentSessions) &&
+      (earlier || unverifiableSessions === null || unverifiableSessions.has(tab.entityId)) &&
       registration === proof.registration &&
       generation === proof.connectionGeneration &&
       isCurrentSessionTabsRuntimeFrame(environmentId, proof.runtimeId)
