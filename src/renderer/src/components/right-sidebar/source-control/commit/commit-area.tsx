@@ -46,6 +46,7 @@ export function CommitArea({
   repoId,
   launchPlatform,
   commitMessage,
+  commitMessageHistory,
   commitError,
   commitFailureRecoveryPrompt,
   pushRecovery,
@@ -222,6 +223,7 @@ export function CommitArea({
         <CommitMessageComposer
           rows={rows}
           commitMessage={commitMessage}
+          history={commitMessageHistory}
           disabled={isCommitMessageDisabled}
           onCommitMessageChange={onCommitMessageChange}
           describedBy={describedBy}

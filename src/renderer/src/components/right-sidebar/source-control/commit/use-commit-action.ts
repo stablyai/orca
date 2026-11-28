@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import { translate } from '@/i18n/i18n'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
+import { recordWorktreeCommitMessage } from '../panel/worktree-operation-store'
 import {
   commitRuntimeGit,
   completeRuntimeGitMerge
@@ -103,6 +104,7 @@ export function useSourceControlCommitAction({
               return false
             }
 
+            recordWorktreeCommitMessage(operationStore, message)
             // Clear only an unchanged submitted draft so typing during commit cannot lose new edits.
             updateCommitDraft((current) => (current.trim() !== message ? current : ''))
             operationStore.setState({ commitError: null })

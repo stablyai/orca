@@ -1,12 +1,19 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { RefreshCw, Sparkles, Square } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import {
+  commitMessageHistoryDirection,
+  stepCommitMessageHistory,
+  type CommitMessageRecallPosition
+} from './commit-message-history'
 
 export function CommitMessageComposer({
   rows,
   commitMessage,
+  history,
   disabled,
   onCommitMessageChange,
   describedBy,
@@ -19,6 +26,7 @@ export function CommitMessageComposer({
 }: {
   rows: number
   commitMessage: string
+  history: readonly string[]
   disabled: boolean
   onCommitMessageChange: (message: string) => void
   describedBy: string
@@ -30,13 +38,69 @@ export function CommitMessageComposer({
   generateTooltip?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const recallPositionRef = useRef<CommitMessageRecallPosition | null>(null)
+  const pendingCaretRef = useRef<number | null>(null)
+
+  // Editing a recalled message, or an external draft change, ends recall.
+  useEffect(() => {
+    if (recallPositionRef.current && recallPositionRef.current.recalled !== commitMessage) {
+      recallPositionRef.current = null
+    }
+  }, [commitMessage])
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (isImeCompositionKeyDown(event)) {
+      return
+    }
+    const direction = commitMessageHistoryDirection({
+      key: event.key,
+      draft: commitMessage,
+      selectionStart: event.currentTarget.selectionStart,
+      selectionEnd: event.currentTarget.selectionEnd,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      recallActive: recallPositionRef.current?.recalled === commitMessage
+    })
+    if (!direction) {
+      return
+    }
+    const step = stepCommitMessageHistory({
+      direction,
+      history,
+      position: recallPositionRef.current,
+      draft: commitMessage
+    })
+    if (!step) {
+      return
+    }
+    event.preventDefault()
+    recallPositionRef.current = step.position
+    onCommitMessageChange(step.draft)
+    pendingCaretRef.current = direction === 'back' ? 0 : step.draft.length
+    // The controlled value lands on the next render; move the caret after it does.
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current
+      if (!textarea || pendingCaretRef.current === null) {
+        return
+      }
+      const caret = pendingCaretRef.current
+      pendingCaretRef.current = null
+      textarea.setSelectionRange(caret, caret)
+    })
+  }
+
   return (
     <div className="relative">
       <textarea
+        ref={textareaRef}
         rows={rows}
         value={commitMessage}
         disabled={disabled}
         onChange={(e) => onCommitMessageChange(e.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder={t('auto.components.right.sidebar.SourceControl.0d0a8359d3', 'Message')}
         aria-label={t('auto.components.right.sidebar.SourceControl.b94112eb9e', 'Commit message')}
         aria-describedby={describedBy || undefined}
