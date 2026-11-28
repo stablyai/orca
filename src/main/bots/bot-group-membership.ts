@@ -6,6 +6,7 @@ import {
   indexBotGroupJournal,
   type BotGroup,
   type BotGroupCreate,
+  type BotGroupJournalIndex,
   type BotGroupMember,
   type BotGroupUpdate
 } from '../../shared/bots/bot-group'
@@ -221,7 +222,7 @@ async function retireMembers(groups: BotGroupRuntime, next: BotGroup): Promise<B
     return group
   }
   const host = await requireStructuredHost(groups.runtime)
-  const frozen = new Map<string, ReturnType<typeof indexBotGroupJournal>>()
+  const frozen = new Map<string, BotGroupJournalIndex['read']>()
   const messages = groups.store.messages(group.id, Number.MAX_SAFE_INTEGER)
   for (const { sessionId } of leaving) {
     // Only the turns the member ran in this room, and the rows that place them.
@@ -231,7 +232,7 @@ async function retireMembers(groups: BotGroupRuntime, next: BotGroup): Promise<B
     const { snapshot } = await (
       await host.journalReads(sessionId)
     ).operationWindow({ operationIds })
-    frozen.set(sessionId, indexBotGroupJournal(snapshot))
+    frozen.set(sessionId, indexBotGroupJournal(snapshot, operationIds).read)
   }
   groups.store.transaction(() => {
     groups.store.put(group)

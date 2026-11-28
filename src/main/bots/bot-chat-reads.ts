@@ -46,11 +46,13 @@ export function botChatReads(runtime: OrcaRuntimeService): BotChatReads {
     messagesSince: async (sessionId, since) =>
       (await window(sessionId, { observedSince: since })).items,
     turnItems: async (sessionId, turns) => {
-      const read = indexBotGroupJournal(
-        await window(sessionId, { operationIds: turns.map((turn) => turn.operationId) })
-      )
+      const operationIds = turns.map((turn) => turn.operationId)
+      const index = indexBotGroupJournal(await window(sessionId, { operationIds }), operationIds)
       return new Map(
-        turns.map((turn) => [turn.operationId, read(turn.operationId, turn.workerDispatchIds)])
+        turns.map((turn) => [
+          turn.operationId,
+          index.read(turn.operationId, turn.workerDispatchIds)
+        ])
       )
     }
   }
