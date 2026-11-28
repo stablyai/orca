@@ -1,3 +1,4 @@
+import { ensureSubmissionExportTables, openSubmissionExport } from './journal-submission-export'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -480,11 +481,13 @@ it('makes an uncertain command turn unverifiable without manufacturing a failure
 
 it('retains one immutable export for each enrolled committed admission, across restart', () => {
   const f = fixture()
+  ensureSubmissionExportTables(f.db)
   f.db
     .prepare(
       'INSERT INTO journal_export_enrollment (singleton,bot_id,workspace_id,writer_epoch) VALUES (1,?,?,?)'
     )
     .run('bot-a', 'workspace', 'grant-a')
+  openSubmissionExport(f.db)
   const text = 'Meeting notes: “edit”\n$(not-a-command)\n'
   f.admit('one', { body: message(text) })
   expect(() => f.admit('one', { body: message('conflicting duplicate') })).toThrow()

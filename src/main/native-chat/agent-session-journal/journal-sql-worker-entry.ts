@@ -1,3 +1,4 @@
+import { openSubmissionExport } from './journal-submission-export'
 import { legacyDestinationFileIdentity } from './journal-legacy-retirement-files'
 import { JournalForkStages } from './journal-fork-stages'
 import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
@@ -76,6 +77,7 @@ async function open(): Promise<void> {
     }
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db
+    openSubmissionExport(db)
     try {
       destinationMain = legacyDestinationMain(workerData.filename)
     } catch {

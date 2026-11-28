@@ -1,4 +1,3 @@
-import { ensureSubmissionExportTables } from '../journal-submission-export'
 import type Database from '../../../sqlite/sync-database'
 import { runJournalTransaction } from './journal-database'
 import { JOURNAL_DOMAIN_SCHEMA_001 } from './journal-domain-schema-001'
@@ -25,7 +24,6 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
       db.pragma(`user_version = ${JOURNAL_DOMAIN_SCHEMA_VERSION}`)
     })
   }
-  ensureSubmissionExportTables(db)
   ensureJournalStoredOutputColumn(db)
   ensureJournalTextTailTable(db)
   ensureJournalSubmissionWindowIndexes(db)

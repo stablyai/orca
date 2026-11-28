@@ -62,15 +62,18 @@ export function exportPage({ database, directory, key, after = 0, limit = 32 }) 
   assertOwned(key, false, true)
   const privateKey = createPrivateKey(readFileSync(key))
   const publicKey = createPublicKey(privateKey)
-  if (publicKey.asymmetricKeyDetails?.namedCurve !== 'prime256v1')
+  if (publicKey.asymmetricKeyDetails?.namedCurve !== 'prime256v1') {
     throw new Error('expected a P-256 signing key')
+  }
   const keyId = digest(publicKey.export({ type: 'spki', format: 'der' }))
   const db = new DatabaseSync(database, { readOnly: true })
   let last = after
   try {
     db.exec('PRAGMA trusted_schema=OFF; PRAGMA query_only=ON; BEGIN')
     const enrollment = db.prepare('SELECT * FROM journal_export_enrollment WHERE singleton=1').get()
-    if (enrollment?.schema_version !== 1) throw new Error('journal is not enrolled for export v1')
+    if (enrollment?.schema_version !== 1) {
+      throw new Error('journal is not enrolled for export v1')
+    }
     const read = db.prepare(
       'SELECT * FROM journal_submission_export WHERE cursor>? ORDER BY cursor LIMIT 1'
     )
@@ -79,7 +82,9 @@ export function exportPage({ database, directory, key, after = 0, limit = 32 }) 
     )
     for (let index = 0; index < limit; index++) {
       const row = read.get(last)
-      if (!row) break
+      if (!row) {
+        break
+      }
       if (
         row.cursor !== last + 1 ||
         row.bot_id !== enrollment.bot_id ||
@@ -92,14 +97,19 @@ export function exportPage({ database, directory, key, after = 0, limit = 32 }) 
       let remaining =
         maxBytes - Buffer.byteLength(row.original_json) - Buffer.byteLength(row.provenance_json)
       const attachments = JSON.parse(row.attachments_json).map((ref) => {
-        if (!Number.isSafeInteger(ref.size) || ref.size < 0 || ref.size > remaining)
+        if (!Number.isSafeInteger(ref.size) || ref.size < 0 || ref.size > remaining) {
           throw new Error('invalid export attachment size')
+        }
         const bytes = blob.get(ref.sha256, ref.size)?.content
-        if (!bytes || digest(bytes) !== ref.sha256) throw new Error('attachment digest mismatch')
+        if (!bytes || digest(bytes) !== ref.sha256) {
+          throw new Error('attachment digest mismatch')
+        }
         remaining -= ref.size
         return { ...ref, bytes: Buffer.from(bytes).toString('base64') }
       })
-      if (remaining < 0) throw new Error('oversized export')
+      if (remaining < 0) {
+        throw new Error('oversized export')
+      }
       const content = Buffer.from(
         JSON.stringify({
           version: 1,
@@ -119,7 +129,7 @@ export function exportPage({ database, directory, key, after = 0, limit = 32 }) 
           attachments
         })
       )
-      const path = join(directory, String(row.cursor) + '.json')
+      const path = join(directory, `${String(row.cursor)}.json`)
       if (existsSync(path)) {
         const prior = JSON.parse(readFileSync(path, 'utf8'))
         if (
@@ -135,7 +145,7 @@ export function exportPage({ database, directory, key, after = 0, limit = 32 }) 
           payload: content.toString('base64'),
           signature: sign('sha256', content, privateKey).toString('base64')
         })
-        const tmp = path + '.' + randomUUID() + '.tmp'
+        const tmp = `${path}.${randomUUID()}.tmp`
         const fd = openSync(tmp, 'wx', 0o640)
         try {
           writeFileSync(fd, data)
