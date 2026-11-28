@@ -1,40 +1,63 @@
 // `orca bot link`'s workspace link, opened in this window on the computer that lists the bot.
 import type { BotDeepLinkWorkspace } from '../../../shared/bot-deep-link'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../shared/execution-host/execution-host'
-import { activateAndRevealWorktreeWithOutcome } from './workspace/activation/worktree-activation'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { isFloatingWorkspaceId } from '../../../shared/workspace/identity/floating-workspace-worktree'
+import { useAppStore } from '@/store'
+import { activateAndRevealWorkspaceWithOutcome } from './workspace/activation/worktree-activation'
 import {
   activateStructuredAgentSessionById,
   activateStructuredAgentSessionTabOnOwner
 } from './agent-session/structured-agent-session-tab-activation'
 import { botHostTarget } from './bot-hosts'
 
-/**
- * Opens the workspace, and its agent's chat when the link names one, as a click on its sidebar row
- * would. A paired server's workspace opens here, in the window the person clicked from; the server's
- * own window is left alone. False when this window doesn't know the workspace.
- */
+/** A cold protocol launch can restore tabs before its paired workspace rows arrive. */
+export async function waitForBotLinkWorkspaceCatalog(signal: AbortSignal): Promise<void> {
+  if (signal.aborted || useAppStore.getState().startupWorktreeRefreshCompleted) {
+    return
+  }
+  await new Promise<void>((resolve) => {
+    const finish = (): void => {
+      unsubscribe()
+      signal.removeEventListener('abort', finish)
+      resolve()
+    }
+    const unsubscribe = useAppStore.subscribe((state) => {
+      if (state.startupWorktreeRefreshCompleted) {
+        finish()
+      }
+    })
+    signal.addEventListener('abort', finish, { once: true })
+  })
+}
+
 export function openBotLinkWorkspaceOnHost(
   hostId: ExecutionHostId,
   workspace: BotDeepLinkWorkspace
 ): boolean {
   const { worktreeId, agentSessionId } = workspace
-  const outcome = activateAndRevealWorktreeWithOutcome(worktreeId, {
+  if (isFloatingWorkspaceId(worktreeId)) {
+    return false
+  }
+  const outcome = activateAndRevealWorkspaceWithOutcome(worktreeId, {
     navigationIntent: 'user-open',
-    ...(hostId === LOCAL_EXECUTION_HOST_ID ? {} : { executionHostId: hostId })
+    executionHostId: hostId
   })
   if ('refused' in outcome) {
     return false
   }
   if (agentSessionId) {
     const target = botHostTarget(hostId)
-    // A tab not in this window yet is asked of its host for this window only, never the host's own.
-    // A terminal agent's session names no chat tab; the workspace alone is where it runs.
-    if (!activateStructuredAgentSessionById({ worktreeId, sessionId: agentSessionId, target })) {
+    // Ask the owner to select a tab that has yet to appear in this window.
+    if (
+      !activateStructuredAgentSessionById({
+        worktreeId,
+        sessionId: agentSessionId,
+        target,
+        windowOnly: true
+      })
+    ) {
       activateStructuredAgentSessionTabOnOwner(worktreeId, agentSessionId, target, {
-        callerOnly: true
+        windowOnly: true
       })
     }
   }

@@ -13,10 +13,7 @@ export const BotLink = lazyZodSchema(() =>
   })
 )
 
-export type BotLinkParams = z.infer<typeof BotLink>
-
 export type BotLinkResult = {
   link: string
   workspaceName: string
-  botName: string
 }

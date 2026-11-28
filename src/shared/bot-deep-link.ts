@@ -48,12 +48,8 @@ const BOT_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 // Matched exactly against stored links, never used as a path; bounded and printable only.
 const EXTERNAL_ID_PATTERN = /^[\x21-\x7e]{1,512}$/
 // A worktree id is `<repoId>::<path>`; matched against the catalog, never opened as a path.
+// oxlint-disable-next-line eslint/no-control-regex -- Control characters are invalid in link targets.
 const WORKTREE_ID_PATTERN = /^[^\x00-\x1f\x7f]{1,2048}$/
-
-/** An agent's orca session id as a workspace link carries it (without `orca_session_id:`). */
-export function isBotDeepLinkSessionId(value: string): boolean {
-  return BOT_ID_PATTERN.test(value)
-}
 
 function parseWorkspace(url: URL): BotDeepLinkWorkspace | null | undefined {
   const worktreeId = url.searchParams.get('workspace')
@@ -123,12 +119,6 @@ export function formatBotDeepLink({
   workspace
 }: BotDeepLink): string {
   const url = new URL(`orca://bot/${botId}`)
-  if (!conversation && workspace) {
-    url.searchParams.set('workspace', workspace.worktreeId)
-    if (workspace.agentSessionId) {
-      url.searchParams.set('agent', workspace.agentSessionId)
-    }
-  }
   if (conversation) {
     url.searchParams.set('conversation', `${conversation.source}:${conversation.externalId}`)
     if (sessionId) {
@@ -136,6 +126,11 @@ export function formatBotDeepLink({
       if (itemId) {
         url.searchParams.set('item', itemId)
       }
+    }
+  } else if (workspace) {
+    url.searchParams.set('workspace', workspace.worktreeId)
+    if (workspace.agentSessionId) {
+      url.searchParams.set('agent', workspace.agentSessionId)
     }
   }
   return url.toString()

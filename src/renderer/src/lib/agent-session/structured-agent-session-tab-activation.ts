@@ -32,6 +32,7 @@ export function activateStructuredAgentSessionTab(args: {
   worktreeId: string
   tabId: string
   target?: RuntimeClientTarget
+  windowOnly?: boolean
 }): boolean {
   const state = useAppStore.getState()
   const tab = (state.unifiedTabsByWorktree[args.worktreeId] ?? []).find(
@@ -49,7 +50,7 @@ export function activateStructuredAgentSessionTab(args: {
   state.activateTab(tab.id, { worktreeId: args.worktreeId })
   state.setActiveTabType('agent-session', args.worktreeId)
   requestNativeChatComposerFocus(tab.id)
-  activateStructuredAgentSessionTabOnOwner(args.worktreeId, tab.entityId, args.target)
+  activateStructuredAgentSessionTabOnOwner(args.worktreeId, tab.entityId, args.target, args)
   return true
 }
 
@@ -58,36 +59,40 @@ export function activateStructuredAgentSessionTabOnOwner(
   worktreeId: string,
   sessionId: string,
   target?: RuntimeClientTarget,
-  options?: { callerOnly?: boolean }
+  options?: { callerOnly?: boolean; windowOnly?: boolean }
 ): void {
-  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktreeId)
-  void callRuntimeRpc(
-    target ?? runtimeTargetForOwnerEnvironment(environmentId),
-    'session.tabs.activate',
-    {
-      worktree: toRuntimeWorktreeSelector(worktreeId),
-      tabId: `agent-session:${sessionId}`,
-      // Why both: navigation scopes new hosts to this client; notifyClients:false protects old hosts.
-      ...(options?.callerOnly ? { notifyClients: false, navigation: 'caller' as const } : {})
-    }
-  )
+  const owner =
+    target ??
+    runtimeTargetForOwnerEnvironment(
+      runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktreeId)
+    )
+  const activation = callRuntimeRpc(owner, 'session.tabs.activate', {
+    worktree: toRuntimeWorktreeSelector(worktreeId),
+    tabId: `agent-session:${sessionId}`,
+    // Older hosts rely on notifyClients to keep the activation in the requesting window.
+    ...(options?.windowOnly || options?.callerOnly
+      ? {
+          notifyClients: false,
+          navigation: options.windowOnly && owner.kind === 'local' ? 'host' : 'caller'
+        }
+      : {})
+  })
+  if (options?.windowOnly) {
+    // A chat may have ended since a workspace link was made. The workspace is already open.
+    void activation.catch((error: unknown) => console.warn('Failed to open linked agent:', error))
+  }
 }
 
 export function activateStructuredAgentSessionById(args: {
   worktreeId: string
   sessionId: string
   target?: RuntimeClientTarget
+  windowOnly?: boolean
 }): boolean {
   const tab = findStructuredAgentSessionTab(useAppStore.getState().unifiedTabsByWorktree, {
     workspaceId: args.worktreeId,
     sessionId: args.sessionId,
     target: args.target
   })
-  return tab
-    ? activateStructuredAgentSessionTab({
-        worktreeId: args.worktreeId,
-        tabId: tab.id,
-        target: args.target
-      })
-    : false
+  return tab ? activateStructuredAgentSessionTab({ ...args, tabId: tab.id }) : false
 }

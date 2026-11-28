@@ -12,7 +12,10 @@ function callerOf(callerSessionId: string | undefined, context: RpcContext): str
 
 /** The named bot, else the one whose chat runs the command. A bot acts only on its own work; --bot
  *  is for its owner's own terminal. */
-export function botOf(params: { botId?: string; callerSessionId?: string }, context: RpcContext): Bot {
+export function botOf(
+  params: { botId?: string; callerSessionId?: string },
+  context: RpcContext
+): Bot {
   const { runtime } = context
   const caller = callerOf(params.callerSessionId, context)
   const callerBot = caller ? botOfSession(runtime.bots, caller) : null

@@ -17,8 +17,7 @@ export function formatWorktreeActivate(
   { worktreeId, hostWindow }: WorktreeActivateResult,
   host: ActivatedHost
 ): string {
-  const computer =
-    host.kind === 'local' ? 'this computer' : (host.name ?? 'the paired computer')
+  const computer = host.kind === 'local' ? 'this computer' : (host.name ?? 'the paired computer')
   if (hostWindow === 'open') {
     const scope =
       host.kind === 'local'

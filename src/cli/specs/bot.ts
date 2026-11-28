@@ -222,11 +222,12 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['bot', 'link'],
     hidden: true,
-    summary: 'Print a link that opens a workspace, or an agent in it, in Orca wherever it is clicked',
-    usage: 'orca bot link --worktree <selector> [--agent <orca_session_id>] [--bot <name>] [--json]',
+    summary: 'Print an Orca link to a workspace or an agent in it',
+    usage:
+      'orca bot link --worktree <selector> [--agent <orca_session_id>] [--bot <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'agent', 'bot'],
     notes: [
-      'Give the link to the person who asked to be taken to a workspace or agent: it opens on the computer or phone they click it on, through whichever paired computer has the bot.',
+      'Give the link to the person who asked for the workspace. It opens that workspace in desktop Orca and the bot’s Home in mobile Orca.',
       '`worktree activate` and `terminal focus` change only the Orca window on the computer that runs them.',
       'Run from a bot’s chat it links for that bot; the workspace must be on the bot’s computer.'
     ]

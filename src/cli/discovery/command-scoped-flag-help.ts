@@ -13,6 +13,10 @@ const SKILLS_FORCE_FLAG_HELP =
   '--force                Replace skipped copies where possible, moving each to ~/.agents/.orca-skill-backups first.'
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'bot link': {
+    agent: '--agent <orca_session_id> Open this agent’s chat in the workspace',
+    bot: '--bot <name>           Choose the bot when running outside its chat'
+  },
   'bot item add': {
     title: BOT_ITEM_TITLE_HELP,
     for: '--for bot:<name>       Make the item for another bot'

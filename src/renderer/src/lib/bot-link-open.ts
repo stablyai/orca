@@ -10,8 +10,7 @@ import {
   redeemOnFirstHost,
   resolveAccessRequestNotHere,
   resolveBotLink,
-  type BotLinkHostAnswer,
-  type BotLinkResolution
+  type BotLinkHostAnswer
 } from '../../../shared/bots/bot-link-resolution'
 import type { BotAccessRedeemOutcome } from '../../../shared/connector-bot-access-contract'
 import {
@@ -36,7 +35,10 @@ import { pairedBotThreadOpenDeps } from './agent-session/open/open-existing-stru
 import { activateStructuredAgentSessionById } from './agent-session/structured-agent-session-tab-activation'
 import { isHome } from '../../../shared/bots/bot-homes'
 import type { BotDeepLink, BotDeepLinkWorkspace } from '../../../shared/bot-deep-link'
-import { openBotLinkWorkspaceOnHost } from './bot-link-workspace-open'
+import {
+  openBotLinkWorkspaceOnHost,
+  waitForBotLinkWorkspaceCatalog
+} from './bot-link-workspace-open'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -116,9 +118,22 @@ async function serverThreadSession(
  */
 export function openBotLinkHome(
   botId: string,
-  conversation: LinkConversation | null
+  conversation: LinkConversation | null,
+  workspace?: BotDeepLinkWorkspace
 ): Promise<void> {
   if (!conversation) {
+    if (workspace) {
+      return runBotThreadOpen(
+        JSON.stringify([botId, 'workspace', workspace.worktreeId, workspace.agentSessionId]),
+        (signal) =>
+          withBotThreadOpenNavigation(signal, async (navigate) => {
+            await waitForBotLinkWorkspaceCatalog(signal)
+            if (!signal.aborted) {
+              await resolveBotLinkHome(botId, { workspace, signal, navigate })
+            }
+          })
+      )
+    }
     cancelPendingBotThreadOpen()
     return resolveBotLinkHome(botId)
   }
@@ -133,18 +148,40 @@ export function openBotLinkHome(
 
 async function resolveBotLinkHome(
   botId: string,
-  link?: { conversation: LinkConversation; signal: AbortSignal; navigate: BotThreadNavigate }
+  link?: (
+    | { workspace: BotDeepLinkWorkspace; conversation?: never }
+    | { conversation: LinkConversation; workspace?: never }
+  ) & { signal: AbortSignal; navigate: BotThreadNavigate }
 ): Promise<void> {
   await refreshBots()
   if (link?.signal.aborted) {
     return
   }
+  const workspace = link?.workspace
   const resolution = resolveBotLink(botId, botLinkHostAnswers())
   switch (resolution.kind) {
     case 'open': {
       const { hostId, bot } = resolution.match
-      if (!link) {
-        await openBotHomeTab(bot)
+      if (!link?.conversation) {
+        if (!link || !workspace) {
+          await openBotHomeTab(bot)
+          return
+        }
+        if (link.navigate(() => openBotLinkWorkspaceOnHost(hostId, workspace))) {
+          return
+        }
+        const opened = await openBotHomeTab(bot)
+        toast.info(
+          opened
+            ? translate(
+                'bots.deepLink.workspaceHomeOpened',
+                "That workspace isn't in Orca on this device. Opened the bot's Home instead."
+              )
+            : translate(
+                'bots.deepLink.workspaceMissing',
+                "That workspace isn't in Orca on this device."
+              )
+        )
         return
       }
       const { conversation, signal, navigate } = link
@@ -209,19 +246,6 @@ async function resolveBotLinkHome(
       )
       return
     }
-    default:
-      sayBotLinkNotOpened(resolution, Boolean(link))
-  }
-}
-
-type BotLinkNotOpened = Exclude<
-  BotLinkResolution<Bot, ExecutionHostId>,
-  { kind: 'open' }
->
-
-/** Why a link opened nothing here. `named`: the link named a place, so a missing bot is said. */
-function sayBotLinkNotOpened(resolution: BotLinkNotOpened, named: boolean): void {
-  switch (resolution.kind) {
     case 'pick':
       // Ids are random per computer, so two that match can't be told apart from the link.
       toast.info(
@@ -243,48 +267,17 @@ function sayBotLinkNotOpened(resolution: BotLinkNotOpened, named: boolean): void
       )
       return
     case 'missing':
-      // An unknown or deleted bot opens nothing, as before bare links were read.
-      if (named) {
+      if (link?.conversation) {
         sayThreadMissing()
+      } else if (workspace) {
+        toast.info(
+          translate(
+            'bots.deepLink.workspaceBotMissing',
+            "The bot for that workspace isn't on this computer or a computer paired with it."
+          )
+        )
       }
   }
-}
-
-/**
- * `orca bot link`'s workspace link: the workspace on the computer that lists the bot, opened in
- * this window. One this window doesn't know says so and opens the bot's Home, never nothing.
- */
-export async function openBotLinkWorkspace(
-  botId: string,
-  workspace: BotDeepLinkWorkspace
-): Promise<void> {
-  cancelPendingBotThreadOpen()
-  await refreshBots()
-  const resolution = resolveBotLink(botId, botLinkHostAnswers())
-  if (resolution.kind === 'missing') {
-    toast.info(
-      translate(
-        'bots.deepLink.workspaceBotMissing',
-        "The bot for that workspace isn't on this computer or a computer paired with it."
-      )
-    )
-    return
-  }
-  if (resolution.kind !== 'open') {
-    sayBotLinkNotOpened(resolution, false)
-    return
-  }
-  const { hostId, bot } = resolution.match
-  if (openBotLinkWorkspaceOnHost(hostId, workspace)) {
-    return
-  }
-  toast.info(
-    translate(
-      'bots.deepLink.workspaceMissing',
-      "That workspace isn't in Orca on this computer. Opened the bot's Home instead."
-    )
-  )
-  await openBotHomeTab(bot)
 }
 
 /** The owner's "Review in Orca": each connected computer in turn, until the one with the request's bot takes it. */

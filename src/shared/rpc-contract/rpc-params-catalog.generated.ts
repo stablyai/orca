@@ -210,6 +210,7 @@ import {
   BotUpdate,
   WorktreeReleaseBotHome
 } from './bots-lifecycle-params'
+import { BotLink } from './bots-link-params'
 import {
   BotConnectorOffer,
   BotConnectors,
@@ -1386,6 +1387,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.linear.setDefaultBot': BotLinearDefaultBot,
   'bots.linear.state': null,
   'bots.linear.unlink': BotLinearWorkspace,
+  'bots.link': BotLink,
   'bots.list': null,
   'bots.lookAround.lookNow': BotLookNow,
   'bots.lookAround.set': BotLookAroundSet,
