@@ -23,6 +23,12 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["testDir: './e2e'", "testMatch: '**/*.spec.ts'"]
   },
   {
+    name: 'layout owner switch-on Playwright',
+    include: ['tests/layout-owner-e2e/**/*.spec.ts'],
+    sources: ['tests/layout-owner-playwright.config.ts'],
+    mirrors: ["testDir: './layout-owner-e2e'", "testMatch: '**/*.spec.ts'"]
+  },
+  {
     name: 'component fixtures Playwright',
     include: ['tests/component-fixtures/**/*.spec.ts'],
     sources: ['tests/component-fixtures/playwright.config.ts'],

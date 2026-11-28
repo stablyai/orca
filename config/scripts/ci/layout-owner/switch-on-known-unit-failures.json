@@ -1,0 +1,172 @@
+[
+  {
+    "file": "src/main/runtime/terminal/lifecycle/coordinator-terminal-exit.test.ts",
+    "test": "a Run whose coordinator's terminal ended tells the open ask and every later one that no one will read it",
+    "row": "D1"
+  },
+  {
+    "file": "src/main/runtime/terminal/lifecycle/coordinator-terminal-exit.test.ts",
+    "test": "a Run whose coordinator's terminal ended reads again once run-use binds the Run to a new terminal",
+    "row": "D1"
+  },
+  {
+    "file": "src/main/runtime/terminal/lifecycle/coordinator-terminal-exit.test.ts",
+    "test": "a Run whose coordinator's terminal ended retires a split pane closed while its terminal sleeps there",
+    "row": "D1"
+  },
+  {
+    "file": "tests/e2e/browser/remote-browser-team-policy-stream.unit.test.ts",
+    "test": "stream viewer with team Browser Use off streams a fresh tab on the paired desktop",
+    "row": "A5"
+  },
+  {
+    "file": "tests/e2e/browser/remote-browser-team-policy-stream.unit.test.ts",
+    "test": "stream viewer with team Browser Use off streams a fresh tab on the web client",
+    "row": "A5"
+  },
+  {
+    "file": "tests/e2e/browser/remote-browser-team-policy-stream.unit.test.ts",
+    "test": "stream viewer with team Browser Use off refuses an agent on a pairing before any browser handler runs",
+    "row": "A5"
+  },
+  {
+    "file": "tests/e2e/browser/remote-browser-team-policy-stream.unit.test.ts",
+    "test": "stream viewer with team Browser Use off refuses the local CLI before any browser handler runs",
+    "row": "A5"
+  },
+  {
+    "file": "tests/e2e/browser/remote-browser-team-policy-stream.unit.test.ts",
+    "test": "stream viewer with team Browser Use off refuses an undeclared local client before any browser handler runs",
+    "row": "A5"
+  },
+  {
+    "file": "tests/e2e/browser/remote-browser-team-policy-stream.unit.test.ts",
+    "test": "stream viewer when the team allows Browser Use lets agent transports through when the policy is allowed",
+    "row": "A5"
+  },
+  {
+    "file": "tests/e2e/browser/remote-browser-team-policy-stream.unit.test.ts",
+    "test": "stream viewer when the team allows Browser Use lets agent transports through when the policy is unset",
+    "row": "A5"
+  },
+  {
+    "file": "src/main/runtime/terminal/title/runtime-terminal-names.test.ts",
+    "test": "publishes a rename and reset for a live terminal the open host window holds no pane for",
+    "row": "D1"
+  },
+  {
+    "file": "src/main/runtime/session-lifecycle/projection/restart-agent-pane-in-place.test.ts",
+    "test": "keeps the agent terminal running when the saved layout gives its pane to another terminal",
+    "row": "D1"
+  },
+  {
+    "file": "src/main/runtime/session-lifecycle/projection/restart-agent-pane-in-place.test.ts",
+    "test": "keeps the agent terminal running when the saved layout no longer has its tab",
+    "row": "D1"
+  },
+  {
+    "file": "src/main/runtime/session-lifecycle/projection/restart-agent-pane-in-place.test.ts",
+    "test": "reports the Claude terminal as not moved by a switch when the saved layout gives its pane to another terminal",
+    "row": "D1"
+  },
+  {
+    "file": "src/main/runtime/session-lifecycle/projection/restart-agent-pane-in-place.test.ts",
+    "test": "reports the Claude terminal as not moved by a switch when the saved layout no longer has its tab",
+    "row": "D1"
+  },
+  {
+    "file": "src/renderer/src/lib/source-control/graph/git-graph-tab.test.ts",
+    "test": "opens a folder section repo graph in the folder workspace, one tab per repo",
+    "row": "A6"
+  },
+  {
+    "file": "src/renderer/src/lib/source-control/graph/git-graph-tab.test.ts",
+    "test": "shows a graph already open in the child as its own tab in the folder",
+    "row": "A6"
+  },
+  {
+    "file": "src/renderer/src/lib/source-control/graph/git-graph-tab.test.ts",
+    "test": "places a child graph in the split target when the folder does not show it yet",
+    "row": "A6"
+  },
+  {
+    "file": "src/renderer/src/store/slices/ui/diff-notes-send-shortcut.test.ts",
+    "test": "Send review notes shortcut opens the Changes tab and asks its Send menu to open",
+    "row": "A7"
+  },
+  {
+    "file": "src/renderer/src/store/slices/ui/diff-notes-send-shortcut.test.ts",
+    "test": "Send review notes shortcut reuses an open Changes tab without replacing its comparison or snapshot",
+    "row": "A7"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake settles under the same handle once the resumed agent is idle in the pane",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake wakes a reused slept agent before a worker start reads its process",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake keeps a cursor read before the sleep reading what the resumed process prints",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake keeps a pre-sleep cursor valid when the resumed spawn takes the handle before the graph",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake still answers as a slept agent after a wake and a second sleep (spawn binds first: false)",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake still answers as a slept agent after a wake and a second sleep (spawn binds first: true)",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake keeps a woken agent's handle when its first, stopped process is evicted",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake ends an exit wait as exited when the slept pane is closed",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake keeps a slept agent reachable by its handle after a reload while another workspace shows",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake keeps an agent that slept while its tab was unmounted reachable by its handle",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake waits on through Agent Sleep's stop when the exit wait began while the agent was awake",
+    "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "test": "Agent-slept window pane wake keeps a moved slept pane its handle and its exit wait pending",
+    "row": "B1"
+  },
+  {
+    "file": "src/renderer/src/store/slices/editor/buffers/editor-buffer-rejoin.test.ts",
+    "test": "a dirty record whose last view closed without a prompt is dropped when a rename moves another file onto its path",
+    "row": "A8"
+  },
+  {
+    "file": "src/main/runtime/rpc/methods/orchestration/worker/start/readiness/worker-start-structured-setup-gate.test.ts",
+    "test": "waits for setup on a terminal the window adopted before the wait began",
+    "row": "D1"
+  }
+]

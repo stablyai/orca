@@ -28,6 +28,11 @@ on:
         required: false
         type: string
         default: ''
+      playwright_config:
+        description: Playwright config for test_files; empty uses tests/playwright.config.ts
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       ref:
@@ -262,6 +267,7 @@ jobs:
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
           LAYOUT_OWNER: ${{ inputs.layout_owner }}
+          PLAYWRIGHT_CONFIG: ${{ inputs.playwright_config }}
         run: |
           mapfile -t TEST_FILES < <(jq -r '.[]' <<<"$TEST_FILES_JSON")
           if [ "${#TEST_FILES[@]}" -eq 0 ]; then
@@ -280,8 +286,13 @@ jobs:
           if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
+          E2E_RUN=(pnpm run test:e2e)
+          if [ -n "$PLAYWRIGHT_CONFIG" ]; then
+            pnpm run ensure:electron-runtime
+            E2E_RUN=(npx playwright test --config "$PLAYWRIGHT_CONFIG" --project=electron-headless)
+          fi
           xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
-            pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
+            "${E2E_RUN[@]}" "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
 
       - name: Summarize layout save divergence
         if: always() && inputs.layout_owner == 'main'
