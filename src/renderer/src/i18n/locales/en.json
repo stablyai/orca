@@ -2253,6 +2253,18 @@
         "files": "From this repo’s files",
         "open": "Open {{file}}"
       }
+    },
+    "editor": {
+      "markdownWidth": "Markdown content width",
+      "markdownWidthDescription": "How wide the reading column grows in a wide Markdown pane.",
+      "markdownWidthNarrow": "Narrow",
+      "markdownWidthWide": "Wide",
+      "markdownWidthFull": "Full",
+      "markdownWidthKeywordMarkdown": "markdown",
+      "markdownWidthKeywordWidth": "width",
+      "markdownWidthKeywordReading": "reading",
+      "markdownWidthKeywordWide": "wide",
+      "markdownWidthKeywordFull": "full"
     }
   },
   "menu": {

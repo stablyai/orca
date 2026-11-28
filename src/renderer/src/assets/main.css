@@ -401,6 +401,16 @@
   );
 }
 
+/* Why: Narrow is the 60em default; Wide keeps a measure, Full yields the pane but keeps its padding. */
+:root[data-markdown-reading-width='wide'] {
+  --markdown-reading-measure-em: 90;
+}
+
+:root[data-markdown-reading-width='full'] {
+  /* Wider than any pane, so the column's min/max clamps leave only its padding. */
+  --markdown-reading-measure-em: 10000;
+}
+
 .light {
   --tab-decoration-added: color-mix(in srgb, black 15%, var(--git-decoration-added));
   --tab-decoration-renamed: color-mix(in srgb, black 20%, var(--git-decoration-renamed));

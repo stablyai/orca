@@ -31,6 +31,7 @@ import { usePluginFontRegistration } from '../../store/plugins/appearance/plugin
 import { scheduleRuntimeGraphSync } from '../../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../../store/index'
 import { useReduceVisualEffects } from '@/hooks/theme/use-reduce-visual-effects'
+import { normalizeMarkdownReadingWidth } from '../../../../shared/settings/markdown-reading-width'
 
 export function useDocumentAppearance(): void {
   const {
@@ -164,6 +165,16 @@ export function useDocumentAppearance(): void {
   useEffect(() => {
     applyMarkdownCodeFontFamily(editorFontFamily)
   }, [editorFontFamily])
+
+  const markdownReadingWidth = useAppStore((s) => s.settings?.markdownReadingWidth)
+  useEffect(() => {
+    const width = normalizeMarkdownReadingWidth(markdownReadingWidth)
+    if (width === 'narrow') {
+      delete document.documentElement.dataset.markdownReadingWidth
+    } else {
+      document.documentElement.dataset.markdownReadingWidth = width
+    }
+  }, [markdownReadingWidth])
 
   useEffect(() => {
     // WebGL glyph atlases keep the smoothing they were created with; rebuild only on a real change.
