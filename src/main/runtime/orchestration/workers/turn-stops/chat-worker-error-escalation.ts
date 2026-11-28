@@ -56,7 +56,8 @@ function movedOnSince(db: OrchestrationDb, dispatchId: string, seen: number | un
   return now !== null && now.generation !== seen && !now.fence?.startsWith(REQUEST_FENCE)
 }
 
-/** The worker's latest mail to its coordinator is a usage-limit escalation: nothing happened since. */
+/** This Dispatch's latest mail to its coordinator is its usage-limit escalation, and the worker
+ *  was sent nothing since: no new work met the limit. */
 function lastReportWasUsageLimit(
   db: OrchestrationDb,
   dispatch: DispatchContextRow,
@@ -64,11 +65,19 @@ function lastReportWasUsageLimit(
 ): boolean {
   const row = db.db
     .prepare(
-      `SELECT CASE WHEN json_valid(payload) THEN json_extract(payload, '$.failureKind') END AS kind
+      `SELECT sequence,
+         CASE WHEN json_valid(payload) THEN json_extract(payload, '$.failureKind') END AS kind,
+         CASE WHEN json_valid(payload) THEN json_extract(payload, '$.dispatchId') END AS dispatch
          FROM messages WHERE to_handle = ? AND from_handle = ? ORDER BY sequence DESC LIMIT 1`
     )
     .get(dispatchReportMailbox(db, dispatch), from)
-  return row?.kind === 'usageLimitReached'
+  if (row?.kind !== 'usageLimitReached' || row.dispatch !== dispatch.id) {
+    return false
+  }
+  const sentSince = db.db
+    .prepare('SELECT 1 FROM messages WHERE to_handle = ? AND sequence > ? LIMIT 1')
+    .get(`dispatch:${dispatch.id}`, row.sequence)
+  return sentSince === undefined
 }
 
 /** Capture authority synchronously; notification bookkeeping never rejects a committed write. */

@@ -69,7 +69,7 @@ function describeUsageLimitNextStep(
     const when =
       limit.continuesAt !== undefined
         ? `at ${at(limit.continuesAt)}, after the limit resets`
-        : 'once its account has room again (the agent gave no reset time)'
+        : `once its account has room again (${limit.resetsAt !== undefined ? `the limit reported a reset at ${at(limit.resetsAt)}` : 'the agent gave no reset time'})`
     const check = limit.continuesAt !== undefined ? `after ${at(limit.continuesAt)}` : 'later'
     return [
       `Orca continues this worker by itself ${when}. If it is still stopped ${check}, ${move}.`
