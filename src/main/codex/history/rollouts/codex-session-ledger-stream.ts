@@ -6,8 +6,9 @@ const LEDGER_READ_CHUNK_BYTES = 64 * 1024
 export async function forEachCodexSessionLedgerRecord(
   filePath: string,
   onRecord: (record: Record<string, unknown>) => void,
-  options: { throwOnReadFailure?: boolean } = {}
+  options: { throwOnReadFailure?: boolean; shouldParseLine?: (raw: string) => boolean } = {}
 ): Promise<void> {
+  const { shouldParseLine } = options
   const stream = createReadStream(filePath, {
     encoding: 'utf-8',
     highWaterMark: LEDGER_READ_CHUNK_BYTES
@@ -26,15 +27,15 @@ export async function forEachCodexSessionLedgerRecord(
         if (remainder.length > 0) {
           const line = remainder + text.slice(start, newlineIndex)
           remainder = ''
-          emitLedgerLine(line, onRecord)
+          emitLedgerLine(line, onRecord, shouldParseLine)
         } else if (newlineIndex > start) {
-          emitLedgerLine(text.slice(start, newlineIndex), onRecord)
+          emitLedgerLine(text.slice(start, newlineIndex), onRecord, shouldParseLine)
         }
         start = newlineIndex + 1
       }
     }
     if (remainder.length > 0) {
-      emitLedgerLine(remainder, onRecord)
+      emitLedgerLine(remainder, onRecord, shouldParseLine)
     }
   } catch (error) {
     if (options.throwOnReadFailure && !isNotFoundError(error)) {
@@ -46,7 +47,14 @@ export async function forEachCodexSessionLedgerRecord(
   }
 }
 
-function emitLedgerLine(raw: string, onRecord: (record: Record<string, unknown>) => void): void {
+function emitLedgerLine(
+  raw: string,
+  onRecord: (record: Record<string, unknown>) => void,
+  shouldParseLine?: (raw: string) => boolean
+): void {
+  if (shouldParseLine && !shouldParseLine(raw)) {
+    return
+  }
   const record = parseLedgerRecord(raw)
   if (record) {
     onRecord(record)

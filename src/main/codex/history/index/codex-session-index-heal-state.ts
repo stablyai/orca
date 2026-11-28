@@ -79,7 +79,13 @@ export async function collectPendingHealThreads(
         auditRecordId
       })
     },
-    { throwOnReadFailure: true }
+    {
+      throwOnReadFailure: true,
+      shouldParseLine: (raw) =>
+        raw.includes('\\u') ||
+        (raw.includes('target') &&
+          (raw.includes('hardlink') || raw.includes('copy') || raw.includes('existing')))
+    }
   )
   return [...pendingByThreadId.values()].sort((left, right) =>
     left.rolloutStamp < right.rolloutStamp ? 1 : left.rolloutStamp > right.rolloutStamp ? -1 : 0
@@ -97,28 +103,35 @@ async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Prom
   const missingAuditRecords = new Set<string>()
   const legacyMissingThreadIds = new Set<string>()
   const expectedRoot = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
-  await forEachCodexSessionLedgerRecord(paths.healLedgerPath, (line) => {
-    if (
-      line.v === CODEX_SESSION_INDEX_HEAL_VERSION &&
-      typeof line.threadId === 'string' &&
-      typeof line.systemSessionsRoot === 'string' &&
-      (line.outcome === 'healed' || line.outcome === 'missing') &&
-      normalizeRuntimePathForComparison(line.systemSessionsRoot) === expectedRoot
-    ) {
-      const threadId = line.threadId.toLowerCase()
-      if (line.outcome === 'healed') {
-        if (typeof line.auditRecordId === 'string') {
-          healedAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
+  await forEachCodexSessionLedgerRecord(
+    paths.healLedgerPath,
+    (line) => {
+      if (
+        line.v === CODEX_SESSION_INDEX_HEAL_VERSION &&
+        typeof line.threadId === 'string' &&
+        typeof line.systemSessionsRoot === 'string' &&
+        (line.outcome === 'healed' || line.outcome === 'missing') &&
+        normalizeRuntimePathForComparison(line.systemSessionsRoot) === expectedRoot
+      ) {
+        const threadId = line.threadId.toLowerCase()
+        if (line.outcome === 'healed') {
+          if (typeof line.auditRecordId === 'string') {
+            healedAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
+          } else {
+            legacyHealedThreadIds.add(threadId)
+          }
+        } else if (typeof line.auditRecordId === 'string') {
+          missingAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
         } else {
-          legacyHealedThreadIds.add(threadId)
+          legacyMissingThreadIds.add(threadId)
         }
-      } else if (typeof line.auditRecordId === 'string') {
-        missingAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
-      } else {
-        legacyMissingThreadIds.add(threadId)
       }
+    },
+    {
+      shouldParseLine: (raw) =>
+        raw.includes('\\u') || raw.includes('healed') || raw.includes('missing')
     }
-  })
+  )
   return {
     healedAuditRecords,
     legacyHealedThreadIds,

@@ -83,7 +83,14 @@ export async function readCodexSessionBackfillAuditCoverage(
         coverage.diagnosticEventIds.add(record.diagnosticEventId)
       }
     },
-    { throwOnReadFailure: true }
+    {
+      throwOnReadFailure: true,
+      shouldParseLine: (raw) =>
+        raw.includes('\\u') ||
+        raw.includes('fileEventId') ||
+        raw.includes('diagnosticEventId') ||
+        raw.includes('run-summary')
+    }
   )
   return coverage
 }
