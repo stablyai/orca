@@ -36,7 +36,7 @@ export function createBrowserProfileImportActions(
   'importCookiesToProfile' | 'clearBrowserSessionImportState' | 'fetchDetectedBrowsers'
 > {
   return {
-    importCookiesToProfile: async (profileId, pageRoute?) => {
+    importCookiesToProfile: async (profileId, pageRoute?, ardiaProfileName?) => {
       if (pageRoute?.kind === 'ssh') {
         return importSshPageCookies(get, pageRoute, () =>
           window.api.browser.sessionImportCookies({ profileId, sshTargetId: pageRoute.sshTargetId })
@@ -64,6 +64,7 @@ export function createBrowserProfileImportActions(
             )) ?? remoteCookieImportUnavailable())
           : await window.api.browser.sessionImportCookies({
               profileId,
+              ...(pageRoute?.kind === 'local' && ardiaProfileName ? { ardiaProfileName } : {}),
               ...(parsedHostId?.kind === 'ssh' ? { sshTargetId: parsedHostId.targetId } : {})
             })
         if (result.ok) {

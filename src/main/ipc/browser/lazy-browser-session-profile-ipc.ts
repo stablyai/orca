@@ -20,6 +20,7 @@ const BROWSER_SESSION_PROFILE_IPC_CHANNELS = [
   'browser:session:clearCookies',
   'browser:session:clearCookiesForClientHost',
   'browser:session:clearCookiesForSshHost',
+  'browser:session:listArdiaFileImportProfiles',
   'browser:session:detectBrowsers',
   'browser:session:detectBrowsersForClientHost',
   'browser:session:importFromBrowser'

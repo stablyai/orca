@@ -602,6 +602,8 @@
       },
       "picker": {
         "menuItem": "Import Cookies…",
+        "ardiaFile": "Ardia · From file…",
+        "ardiaSingleFile": "Ardia · {{profile}} · From file…",
         "search": "Search profiles",
         "lastUsed": "Last used",
         "noMatches": "No matches",
@@ -27148,6 +27150,7 @@
       "spaceTitle": "Orca Space Beta",
       "dashboardTitle": "Orca Agent Dashboard",
       "importCookies": "Import Cookies",
+      "ardiaCookieFile": "Choose a JSON export from Ardia “{{source}}” for Orca “{{destination}}”.",
       "cookieFiles": "Cookie Files",
       "allFiles": "All Files",
       "importPetBundle": "Pick a .codex-pet bundle",

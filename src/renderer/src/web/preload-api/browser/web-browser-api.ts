@@ -111,6 +111,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
       }),
     sessionImportCookiesForClientHost: () => Promise.resolve(null),
     sessionResolvePartition: () => Promise.resolve(null),
+    listArdiaFileImportProfiles: () => Promise.resolve([]),
     sessionDetectBrowsers: () => Promise.resolve([]),
     sessionDetectBrowsersForClientHost: () => Promise.resolve(null),
     sessionImportFromBrowserForClientHost: () => Promise.resolve(null),

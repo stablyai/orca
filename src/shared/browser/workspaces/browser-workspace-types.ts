@@ -189,7 +189,11 @@ export type BrowserCookieImportSummary = {
 }
 
 /** `sshTargetId` fills that SSH host's page jar instead of the profile's own. */
-export type BrowserProfileCookieImportArgs = { profileId: string; sshTargetId?: string }
+export type BrowserProfileCookieImportArgs = {
+  profileId: string
+  sshTargetId?: string
+  ardiaProfileName?: string
+}
 
 /** A server profile's import on this desktop: its id names no local profile, so its metadata rides along. */
 export type BrowserClientHostCookieImportArgs = {

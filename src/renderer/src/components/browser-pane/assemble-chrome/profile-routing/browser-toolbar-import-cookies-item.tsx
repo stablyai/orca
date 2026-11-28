@@ -24,7 +24,7 @@ export type BrowserToolbarImportCookiesProps = {
   pickerOpen: boolean
   onPickerOpenChange: (open: boolean) => void
   onImportFromBrowser: (browserFamily: string, browserProfile?: string) => void
-  onImportFromFile: () => void
+  onImportFromFile: (ardiaProfileName?: string) => void
 }
 
 const keepFocusOffMenuTrigger = (): void => {}

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Info } from 'lucide-react'
 import {
   Command,
@@ -138,12 +138,47 @@ function BrowserCookieImportPickerBody({
   const t = useTranslate()
   const [search, updateSearch] = useReducer(reducePickerSearch, INITIAL_PICKER_SEARCH)
   const { query } = search
+  const [ardiaProfiles, setArdiaProfiles] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    if (pageRoute.kind !== 'local') {
+      return
+    }
+    let active = true
+    void window.api.browser
+      .listArdiaFileImportProfiles()
+      .catch(() => [])
+      .then((profiles) => {
+        if (active) {
+          setArdiaProfiles(profiles)
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [pageRoute.kind])
+  const ardiaLabel =
+    ardiaProfiles.length === 1
+      ? t('browser.cookieImport.picker.ardiaSingleFile', 'Ardia · {{profile}} · From file…', {
+          profile: ardiaProfiles[0].name
+        })
+      : t('browser.cookieImport.picker.ardiaFile', 'Ardia · From file…')
   // Mounted per open, so a source picked in another pane shows here next time.
   const [lastUsed] = useState(readBrowserCookieImportLastUsed)
-  const sections = useMemo(
-    () => buildBrowserCookieImportPickerSections(detectedBrowsers, lastUsed, query),
-    [detectedBrowsers, lastUsed, query]
-  )
+  const sections = useMemo(() => {
+    const browsers =
+      pageRoute.kind === 'local' && ardiaProfiles.length > 0
+        ? [
+            ...detectedBrowsers,
+            {
+              family: 'ardia-file',
+              label: ardiaLabel,
+              profiles: ardiaProfiles.map(({ id, name }) => ({ directory: id, name })),
+              selectedProfile: ardiaProfiles[0].id
+            }
+          ]
+        : detectedBrowsers
+    return buildBrowserCookieImportPickerSections(browsers, lastUsed, query)
+  }, [detectedBrowsers, lastUsed, query, pageRoute.kind, ardiaProfiles, ardiaLabel])
   const rowValues = [...sections.flatMap((s) => s.rows.map((r) => r.value)), FROM_FILE_VALUE]
   const hasSearch = query.trim() !== ''
   const onlyFromFile = sections.length === 0
@@ -165,6 +200,13 @@ function BrowserCookieImportPickerBody({
   const importRow = (row: BrowserCookieImportPickerRow): void => {
     rememberBrowserCookieImportLastUsed(row.source)
     onClose()
+    if (row.source.family === 'ardia-file') {
+      const profile = ardiaProfiles.find(({ id }) => id === row.source.profile)
+      if (profile && pageRoute.kind === 'local') {
+        onImportFromFile(profile.name)
+      }
+      return
+    }
     onImportFromBrowser(row.source.family, row.source.profile ?? undefined)
   }
   const searchLabel = t('browser.cookieImport.picker.search', 'Search profiles')

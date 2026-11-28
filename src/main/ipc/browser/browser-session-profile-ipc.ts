@@ -8,6 +8,7 @@ import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { listArdiaFileImportProfiles } from '../../browser/cookies/sources/ardia-file-import-profiles'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
 import { detectInstalledBrowsers } from '../../browser/cookies/sources/browser-cookie-detection'
 import {
@@ -52,6 +53,7 @@ export function registerBrowserSessionProfileHandlers(ipc: IpcHandleRegistrar = 
       'browser:session:resolvePartition',
       'browser:sitePermissions:list',
       'browser:sitePermissions:set',
+      'browser:session:listArdiaFileImportProfiles',
       'browser:session:detectBrowsers',
       'browser:session:detectBrowsersForClientHost',
       'browser:session:importFromBrowser'
@@ -120,7 +122,7 @@ export function registerBrowserSessionProfileHandlers(ipc: IpcHandleRegistrar = 
     'browser:session:importCookies',
     async (
       event,
-      args: { profileId: string; sshTargetId?: unknown }
+      args: { profileId: string; sshTargetId?: unknown; ardiaProfileName?: unknown }
     ): Promise<BrowserCookieImportResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return browserCookieImportFailure('notAuthorized')
@@ -142,7 +144,14 @@ export function registerBrowserSessionProfileHandlers(ipc: IpcHandleRegistrar = 
         return browserCookieImportFailure('profileNotFound')
       }
 
-      const source = await cookieFileImportSource(() => pickCookieFile(parent))
+      const source = await cookieFileImportSource(() =>
+        pickCookieFile(
+          parent,
+          typeof args.ardiaProfileName === 'string'
+            ? { source: args.ardiaProfileName.slice(0, 160), destination: profile.label }
+            : undefined
+        )
+      )
       if ('reason' in source) {
         return source
       }
@@ -214,6 +223,9 @@ export function registerBrowserSessionProfileHandlers(ipc: IpcHandleRegistrar = 
   registerClientHostCookieImportHandlers(ipc)
   registerCookieClearHandlers(ipc)
 
+  ipc.handle('browser:session:listArdiaFileImportProfiles', (event) =>
+    isTrustedBrowserRenderer(event.sender) ? listArdiaFileImportProfiles() : []
+  )
   ipc.handle('browser:session:detectBrowsers', (event): DetectedBrowserPickerEntry[] => {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return []
