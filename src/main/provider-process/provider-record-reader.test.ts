@@ -1,7 +1,11 @@
-import { PassThrough } from 'node:stream'
+import { PassThrough, Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { createProviderRecordReader } from './provider-record-reader'
-import { CODEX_AGENT_MESSAGE_DELTA_MERGING } from '../codex/app-server/codex-agent-message-delta-merging'
+import {
+  CODEX_AGENT_MESSAGE_DELTA_MERGING,
+  MAX_MERGED_DELTA_CHARS,
+  MAX_MERGED_DELTA_RECORDS
+} from '../codex/app-server/codex-agent-message-delta-merging'
 
 const delta = (itemId: string, text: string) =>
   JSON.stringify({
@@ -76,4 +80,45 @@ describe('createProviderRecordReader with Codex delta merging', () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(order).toEqual(['delta', 'rejected', 'request'])
   })
+
+  it.each([600, 6_000])(
+    'hands a resumed backlog of %i deltas on in bounded runs with every line counted',
+    async (lines) => {
+      let taken = 0
+      // Like a relayed agent's stream: lines pushed while paused wait in its buffer.
+      const stdout = Object.assign(new Readable({ read: () => {} }), {
+        relayRecords: { claim: () => {}, taken: () => void taken++, uncounted: () => {} }
+      })
+      const texts: string[] = []
+      const reader = createProviderRecordReader({
+        stdout,
+        merging: CODEX_AGENT_MESSAGE_DELTA_MERGING,
+        onRecord: (record) => texts.push(JSON.parse(JSON.stringify(record)).params.delta),
+        onRejected: () => {},
+        onFatal: (error) => {
+          throw error
+        }
+      })
+      reader.pause()
+      const sent: string[] = []
+      for (let index = 0; index < lines; index++) {
+        // Large deltas first, then small ones, so the size cap and then the record cap end runs.
+        const text = `<${index}>`.padEnd(index < lines / 2 ? 1024 : 8, 'x')
+        sent.push(text)
+        stdout.push(`${delta('a', text)}\n`)
+      }
+      reader.resume()
+      for (let turn = 0; turn < 100 && taken < lines; turn++) {
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+
+      expect(texts.join('')).toBe(sent.join(''))
+      expect(taken).toBe(lines)
+      expect(Math.max(...texts.map((text) => text.length))).toBeLessThanOrEqual(
+        MAX_MERGED_DELTA_CHARS + 1024
+      )
+      const records = texts.map((text) => text.match(/<\d+>/g)?.length ?? 0)
+      expect(Math.max(...records)).toBeLessThanOrEqual(MAX_MERGED_DELTA_RECORDS)
+    }
+  )
 })

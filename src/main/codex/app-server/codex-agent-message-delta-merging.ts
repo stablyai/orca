@@ -5,12 +5,16 @@ import {
 } from '../../provider-process/provider-record-reader'
 
 const AGENT_MESSAGE_DELTA_METHOD = 'item/agentMessage/delta'
+/** A run ends here, so a resumed backlog is handed on in bounded pieces, not one record. */
+export const MAX_MERGED_DELTA_CHARS = 64 * 1024
+export const MAX_MERGED_DELTA_RECORDS = 256
 
 type DeltaParams = { threadId: string; turnId: string; itemId: string; delta: string }
 export type HeldCodexDeltas = {
   message: Record<string, unknown>
   params: DeltaParams
   parts: string[]
+  chars: number
   /** How a continuing line starts, as Codex writes it. */
   linePrefix: string
 }
@@ -50,9 +54,13 @@ export const CODEX_AGENT_MESSAGE_DELTA_MERGING: ProviderRecordMerging<HeldCodexD
       `"itemId":${JSON.stringify(params.itemId)}`
     ].join(',')
     const linePrefix = `{"method":"${AGENT_MESSAGE_DELTA_METHOD}","params":{${ids},"delta":`
-    return { message: record, params, parts: [params.delta], linePrefix }
+    const parts = [params.delta]
+    return { message: record, params, parts, chars: params.delta.length, linePrefix }
   },
-  continues: (held, text, start) => text.startsWith(held.linePrefix, start),
+  continues: (held, text, start) =>
+    held.chars < MAX_MERGED_DELTA_CHARS &&
+    held.parts.length < MAX_MERGED_DELTA_RECORDS &&
+    text.startsWith(held.linePrefix, start),
   add: (held, record) => {
     const params = deltaParams(record)
     if (
@@ -65,6 +73,7 @@ export const CODEX_AGENT_MESSAGE_DELTA_MERGING: ProviderRecordMerging<HeldCodexD
       return false
     }
     held.parts.push(params.delta)
+    held.chars += params.delta.length
     held.message = record
     return true
   },
