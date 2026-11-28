@@ -71,6 +71,7 @@ const RATCHET_INPUTS = {
   'check-tab-map-seam-ratchet.mjs': ['src/renderer/src/'],
   'check-terminal-parking-ownership-ratchet.mjs': ['src/renderer/src/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
+  'check-raw-tab-list-read-ratchet.mjs': ['src/main/runtime/', 'src/main/orcad/'],
   'check-whole-hot-map-selector-ratchet.mjs': [
     'src/renderer/src/',
     'config/oxlint-plugins/app-store-performance.mjs',
