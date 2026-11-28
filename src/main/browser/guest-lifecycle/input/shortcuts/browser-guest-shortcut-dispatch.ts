@@ -33,7 +33,7 @@ export type GuestShortcutForwardContext = {
   resolveWorkspaceId?: (browserTabId: string) => string | null
   forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => void
   /** False for plugin frames: no address bar, history, find or page zoom, so zoom and the
-   *  sidebar chords go to Orca, and Close closes the active tab rather than a browser source. */
+   *  right sidebar chord go to Orca, and Close closes the active tab rather than a browser source. */
   browserPage?: boolean
 }
 
@@ -92,6 +92,7 @@ export function forwardGuestShortcutInput(
     if (
       forwardsDictation ||
       matchesPlugins ||
+      action?.type === 'toggleLeftSidebar' ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -197,10 +198,11 @@ export function forwardGuestShortcutInput(
     keybindingMatchesAction('sidebar.projects.toggleCollapse', input, process.platform, keybindings)
   ) {
     renderer.send('ui:toggleProjectsCollapse')
-  } else if (!page && action?.type === 'toggleLeftSidebar') {
-    // Why: a browser page keeps Mod+B for the page and Mod+L for its address bar.
+  } else if (action?.type === 'toggleLeftSidebar') {
+    // Why: Orca takes Mod+B over page shortcuts, as it does in terminals and editors.
     renderer.send('ui:toggleLeftSidebar')
   } else if (!page && action?.type === 'toggleRightSidebar') {
+    // Why: a browser page keeps Mod+L for its address bar.
     renderer.send('ui:toggleRightSidebar')
   } else if (action?.type === 'toggleWorktreePalette') {
     renderer.send('ui:toggleWorktreePalette')
