@@ -1,5 +1,6 @@
 import React from 'react'
-import type { Editor } from '@tiptap/react'
+import { useEditorState, type Editor } from '@tiptap/react'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import {
   ChevronRight,
   Heading1,
@@ -26,8 +27,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { insertToggle } from './rich-markdown-slash-command-primitives'
+import { countWords, wordCountTextForSelection } from './rich-markdown-word-count'
 
 type RichMarkdownToolbarProps = {
   editor: Editor | null
@@ -87,6 +89,45 @@ function RichMarkdownMoreBlocksMenu({ editor }: { editor: Editor | null }): Reac
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+const wholeDocumentCounts = new WeakMap<ProseMirrorNode, Map<string, number>>()
+
+function cachedWholeDocumentCount(doc: ProseMirrorNode, locale: string): number {
+  let byLocale = wholeDocumentCounts.get(doc)
+  if (!byLocale) {
+    byLocale = new Map()
+    wholeDocumentCounts.set(doc, byLocale)
+  }
+  const cached = byLocale.get(locale)
+  if (cached !== undefined) {
+    return cached
+  }
+  const count = countWords(wordCountTextForSelection(doc, { empty: true, ranges: [] }), locale)
+  byLocale.set(locale, count)
+  return count
+}
+
+function RichMarkdownWordCount({ editor }: { editor: Editor }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const count = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => {
+      const { doc, selection } = currentEditor.state
+      return selection.empty
+        ? cachedWholeDocumentCount(doc, intlLocale)
+        : countWords(wordCountTextForSelection(doc, selection), intlLocale)
+    }
+  })
+  return (
+    <span className="rich-markdown-word-count" data-testid="rich-markdown-word-count">
+      {t('auto.components.editor.RichMarkdownToolbar.wordCount', '{{count}} words', {
+        count,
+        defaultValue_one: '{{count}} word'
+      })}
+    </span>
   )
 }
 
@@ -193,6 +234,7 @@ export function RichMarkdownToolbar({
         <ImageIcon className="size-3.5" />
       </RichMarkdownToolbarButton>
       <RichMarkdownMoreBlocksMenu editor={editor} />
+      {editor ? <RichMarkdownWordCount editor={editor} /> : null}
     </div>
   )
 }
