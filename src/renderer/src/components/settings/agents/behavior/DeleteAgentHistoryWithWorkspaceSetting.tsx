@@ -75,7 +75,7 @@ function DeleteCliHistorySwitch(props: HistorySettingProps): React.JSX.Element {
   return (
     <HistoryDeletionSwitch
       {...props}
-      settingKey="deleteChatHistoryWithWorkspace"
+      settingKey="deleteAgentTranscriptsWithWorkspace"
       search={search}
       detail={
         historySize && diskUsage ? (
@@ -141,7 +141,7 @@ function HistoryDeletionSwitch({
 }: HistorySettingProps & {
   settingKey: Extract<
     HostOwnedSettingKey,
-    'deleteOrcaChatsWithWorkspace' | 'deleteChatHistoryWithWorkspace'
+    'deleteOrcaChatsWithWorkspace' | 'deleteAgentTranscriptsWithWorkspace'
   >
   search: { title: string; description: string; keywords: string[] }
   badge?: string

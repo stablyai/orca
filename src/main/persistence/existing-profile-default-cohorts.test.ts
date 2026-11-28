@@ -107,7 +107,20 @@ describe('existing-profile default cohorts', () => {
     writeDataFile(legacyProfile({ deleteChatHistoryWithWorkspace: true }))
     const optedIn = createStore().getSettings()
     expect(optedIn.deleteOrcaChatsWithWorkspace).toBe(true)
-    expect(optedIn.deleteChatHistoryWithWorkspace).toBe(true)
+    expect(optedIn.deleteAgentTranscriptsWithWorkspace).toBe(true)
+  })
+
+  it('keeps the combined switch older builds read on only while both parts are on', async () => {
+    const store = createStore()
+    expect(store.getSettings().deleteAgentTranscriptsWithWorkspace).toBe(false)
+    store.updateSettings({ deleteAgentTranscriptsWithWorkspace: true })
+    expect(store.getSettings().deleteChatHistoryWithWorkspace).toBe(true)
+    store.updateSettings({ deleteOrcaChatsWithWorkspace: false })
+    expect(store.getSettings().deleteChatHistoryWithWorkspace).toBe(false)
+    // An older client writes only the combined switch: it sets both parts.
+    store.updateSettings({ deleteChatHistoryWithWorkspace: true })
+    expect(store.getSettings().deleteOrcaChatsWithWorkspace).toBe(true)
+    expect(store.getSettings().deleteAgentTranscriptsWithWorkspace).toBe(true)
   })
 
   it('marks new chat messages only for existing profiles without a choice', async () => {

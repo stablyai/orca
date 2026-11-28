@@ -13,8 +13,8 @@ function capMarker(byteLength: number): string {
 }
 
 /**
- * The live run already showed the whole output; the saved row keeps its first and last bytes, like
- * a terminal's scrollback. An output a previous revision already saved whole is never cut later.
+ * The saved row keeps an output's first and last bytes; the middle is gone for good, as in a
+ * terminal's scrollback. An output a previous revision already saved whole is never cut later.
  */
 export function capJournalToolOutput<T extends AgentJournalRenderItem>(
   item: T,
@@ -42,4 +42,17 @@ export function capJournalToolOutput<T extends AgentJournalRenderItem>(
   const half = Math.floor((JOURNAL_TOOL_OUTPUT_CAP_BYTES - Buffer.byteLength(marker, 'utf8')) / 2)
   const head = `${clampUtf8TextPrefix(output.head, half)}${marker}${clampUtf8TextTail(output.head, half).text}`
   return { ...item, body: { ...body, output: { ...output, head, truncated: true } } }
+}
+
+/** The saved item with the whole output it was written from, for readers of facts in the middle (pushes). */
+export function withUncappedToolOutput(
+  saved: AgentJournalRenderItem,
+  written: AgentJournalRenderItem
+): AgentJournalRenderItem {
+  return saved.body.kind === 'tool-call' &&
+    written.body.kind === 'tool-call' &&
+    saved.body.output?.digest === written.body.output?.digest &&
+    saved.body.output?.head !== written.body.output?.head
+    ? { ...saved, body: { ...saved.body, output: written.body.output } }
+    : saved
 }

@@ -61,7 +61,9 @@ export abstract class AgentSessionRecordForgets extends AgentSessionRecordTabs {
           kind: 'forget-idle',
           ...forget,
           legacyTabIds: this.transactions.legacySessionTabIds
-        })
+        }),
+      // Nobody waits on a cleanup: copying an old chat in first must never fill the disk.
+      false
     )
 
   /** Deletes every session of a chat for good with their tabs and its tombstone, in one commit, or

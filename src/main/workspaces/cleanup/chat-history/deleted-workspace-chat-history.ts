@@ -200,7 +200,7 @@ export function deleteChatHistoryOfDeletedWorkspaces(
     },
     listNativeChats: listHostNativeChats,
     forgetNativeChats: forgetHostNativeChats,
-    isEnabled: () => store.getSettings().deleteChatHistoryWithWorkspace === true,
+    isEnabled: () => store.getSettings().deleteAgentTranscriptsWithWorkspace === true,
     isOrcaChatsEnabled: () => store.getSettings().deleteOrcaChatsWithWorkspace === true
   }).finally(async () => {
     await references.save()

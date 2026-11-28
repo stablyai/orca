@@ -159,12 +159,15 @@ export class LoadedCohortMigrationOperations {
       return state
     }
     const fresh = !isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)
+    const combined = saved?.deleteChatHistoryWithWorkspace === true
     this.runtime.loadNeedsSave = true
     return {
       ...state,
       settings: {
         ...state.settings,
-        deleteOrcaChatsWithWorkspace: fresh || saved?.deleteChatHistoryWithWorkspace === true
+        deleteOrcaChatsWithWorkspace: fresh || combined,
+        deleteAgentTranscriptsWithWorkspace: combined,
+        deleteChatHistoryWithWorkspace: combined
       }
     }
   }

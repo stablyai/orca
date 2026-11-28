@@ -15,12 +15,21 @@ export class ChatHistorySweepSchedule {
 
   constructor(private readonly store: RuntimeStore) {}
 
-  isOn(): boolean {
+  /** Which parts are on: turning on another part sweeps again, even while one already was. */
+  enabledParts(): ReadonlySet<'orca-chats' | 'transcripts'> {
     const settings = this.store.getSettings()
-    return (
-      settings.deleteChatHistoryWithWorkspace === true ||
-      settings.deleteOrcaChatsWithWorkspace === true
-    )
+    const parts = new Set<'orca-chats' | 'transcripts'>()
+    if (settings.deleteOrcaChatsWithWorkspace === true) {
+      parts.add('orca-chats')
+    }
+    if (settings.deleteAgentTranscriptsWithWorkspace === true) {
+      parts.add('transcripts')
+    }
+    return parts
+  }
+
+  isOn(): boolean {
+    return this.enabledParts().size > 0
   }
 
   isDue(trigger: WorkspaceCleanupRunTrigger, now: number): boolean {
@@ -54,7 +63,7 @@ export class ChatHistorySweepSchedule {
       reportDeletedChatsSweep({
         trigger,
         orcaChatsOn: settings.deleteOrcaChatsWithWorkspace === true,
-        transcriptsOn: settings.deleteChatHistoryWithWorkspace === true,
+        transcriptsOn: settings.deleteAgentTranscriptsWithWorkspace === true,
         orcaChats,
         transcripts,
         elapsedMs: performance.now() - started

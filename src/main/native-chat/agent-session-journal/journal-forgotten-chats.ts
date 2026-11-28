@@ -61,7 +61,7 @@ export function readForgottenJournalChats(db: Database.Database, after: string |
 export function discardForgottenJournalChatPage(
   db: Database.Database,
   sessionId: string
-): { kind: 'chat-discard'; more: boolean; bytes?: number } {
+): { kind: 'chat-discard'; more: boolean; bytes?: number; discarded?: true } {
   if (!db.isTransaction) {
     throw new Error('forgotten chat discard requires its writer transaction')
   }
@@ -84,5 +84,5 @@ export function discardForgottenJournalChatPage(
   }
   db.prepare('DELETE FROM journal_chat_state WHERE session_id=?').run(sessionId)
   db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(key)
-  return { kind: 'chat-discard', more: false, bytes: page.bytes }
+  return { kind: 'chat-discard', more: false, bytes: page.bytes, discarded: true }
 }

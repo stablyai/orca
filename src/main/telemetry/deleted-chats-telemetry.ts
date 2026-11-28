@@ -74,9 +74,9 @@ export class DeletedChatsDiscardPass {
   private bytes = 0
   private readonly startedAt = performance.now()
 
-  note(page: { bytes: number; done: boolean }): void {
+  note(page: { bytes: number; discarded: boolean }): void {
     this.bytes += page.bytes
-    this.chats += page.done ? 1 : 0
+    this.chats += page.discarded ? 1 : 0
   }
 
   report(): void {

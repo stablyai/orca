@@ -46,6 +46,7 @@ import {
   normalizeWorkspaceDirSetting,
   stripRetiredGlobalSettings
 } from './terminal-settings-migrations'
+import { chatHistoryDeletionUpdates } from '../../../shared/settings/workspace-chat-history-settings'
 
 export type SettingsMutationOperations = {
   state: PersistedState
@@ -61,6 +62,7 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
+  Object.assign(sanitizedUpdates, chatHistoryDeletionUpdates(operations.state.settings, updates))
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.

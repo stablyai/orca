@@ -248,7 +248,7 @@ export class JournalSqlBackgroundMaintenance {
   private async pages(
     operation: Extract<JournalSqlMaintenance, { kind: JournalPagedMaintenanceKind }>,
     limit = Infinity
-  ): Promise<{ bytes: number; done: boolean }> {
+  ): Promise<{ bytes: number; discarded: boolean }> {
     let bytes = 0
     for (let unit = 0; unit < limit && !this.stopped.signal.aborted; unit++) {
       if (operation.kind !== 'page-reclaim' && this.reclaim > 0) {
@@ -256,7 +256,7 @@ export class JournalSqlBackgroundMaintenance {
       }
       await setImmediate()
       if (this.stopped.signal.aborted) {
-        return { bytes, done: false }
+        return { bytes, discarded: false }
       }
       const started = performance.now()
       const result = await this.writer.maintain(operation)
@@ -269,10 +269,10 @@ export class JournalSqlBackgroundMaintenance {
       }
       await this.rest(started)
       if (!result.more) {
-        return { bytes, done: true }
+        return { bytes, discarded: 'discarded' in result && result.discarded === true }
       }
     }
-    return { bytes, done: false }
+    return { bytes, discarded: false }
   }
 
   async rest(started: number): Promise<void> {

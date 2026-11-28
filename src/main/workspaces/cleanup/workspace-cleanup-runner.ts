@@ -69,7 +69,7 @@ export class WorkspaceCleanupRunner {
   private nextRunAt: number | null = null
   private nextTrigger: WorkspaceCleanupRunTrigger | null = null
   private enabledRules = new Set<string>()
-  private chatHistoryOn = false
+  private chatHistoryParts: ReadonlySet<string> = new Set()
   private unsubscribe: (() => void) | null = null
   private readonly abort = new AbortController()
 
@@ -85,14 +85,14 @@ export class WorkspaceCleanupRunner {
       return
     }
     this.enabledRules = listEnabledWorkspaceCleanupRules(this.deps.store)
-    this.chatHistoryOn = this.chatHistory.isOn()
+    this.chatHistoryParts = this.chatHistory.enabledParts()
     this.unsubscribe = this.deps.runtime.onClientEvent(
       (event) => {
         if (
           event.type === 'reposChanged' ||
           (event.type === 'settingsChanged' &&
             (event.keys.includes('workspaceCleanupPolicy') ||
-              event.keys.includes('deleteChatHistoryWithWorkspace') ||
+              event.keys.includes('deleteAgentTranscriptsWithWorkspace') ||
               event.keys.includes('deleteOrcaChatsWithWorkspace')))
         ) {
           this.noteRulesChanged()
@@ -161,7 +161,7 @@ export class WorkspaceCleanupRunner {
   }
 
   private hasWork(): boolean {
-    return this.enabledRules.size > 0 || this.chatHistoryOn
+    return this.enabledRules.size > 0 || this.chatHistoryParts.size > 0
   }
 
   /** With only chat history on, hourly ticks before its sweep is due run nothing, so report the one that does. */
@@ -216,12 +216,12 @@ export class WorkspaceCleanupRunner {
 
   private noteRulesChanged(): void {
     const previous = this.enabledRules
-    const chatHistoryWasOn = this.chatHistoryOn
+    const chatHistoryWasOn = this.chatHistoryParts
     this.enabledRules = listEnabledWorkspaceCleanupRules(this.deps.store)
-    this.chatHistoryOn = this.chatHistory.isOn()
+    this.chatHistoryParts = this.chatHistory.enabledParts()
     if (
       [...this.enabledRules].some((rule) => !previous.has(rule)) ||
-      (this.chatHistoryOn && !chatHistoryWasOn)
+      [...this.chatHistoryParts].some((part) => !chatHistoryWasOn.has(part))
     ) {
       this.schedule(SETTINGS_DEBOUNCE_MS, 'settings')
     }

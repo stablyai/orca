@@ -279,9 +279,10 @@ export class JournalSqlDatabase {
   }
 
   /** In the chat's lane after any conversion. Its epoch stays remembered as ready, so a conversion
-   *  page listed before the deletion returns it instead of importing the original again. */
-  forgetChat(sessionId: string, forget: () => Promise<boolean>): Promise<boolean> {
-    return this.serialize(sessionId, () => this.conversions.ensure(sessionId).then(forget))
+   *  page listed before the deletion returns it instead of importing the original again. A
+   *  background forget converts like idle conversion: it stops, failing, when storage runs low. */
+  forgetChat(id: string, forget: () => Promise<boolean>, foreground = true): Promise<boolean> {
+    return this.serialize(id, () => this.conversions.ensure(id, foreground).then(forget))
   }
 
   write(command: JournalWriterCommand): Promise<JournalWriterCommit> {
