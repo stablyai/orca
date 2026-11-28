@@ -156,6 +156,18 @@ export function getLocalHostRepoBadgeColor(
   return null
 }
 
+/** Another host's checkout name must not replace the project name already stored here. */
+export function retainExistingProjectDisplayName(
+  existing: Pick<Project, 'displayName'> | undefined,
+  incoming: Project
+): Project {
+  const kept = existing?.displayName.trim()
+  if (!kept || kept === incoming.displayName || !existing) {
+    return incoming
+  }
+  return { ...incoming, displayName: existing.displayName }
+}
+
 export function mergePreviousProjectMetadata(
   previous: Project,
   current: Project,
@@ -183,6 +195,10 @@ export function mergePreviousProjectMetadata(
   } else if (previous.localWindowsRuntimePreference !== undefined) {
     // Why: a remote runtime's local Windows preference must not overwrite the client-local project runtime setting.
     project.localWindowsRuntimePreference = previous.localWindowsRuntimePreference
+  }
+  if (hostId !== LOCAL_EXECUTION_HOST_ID) {
+    // Why: the other host's project row is named from its folder. That name must not replace the sidebar name.
+    project.displayName = retainExistingProjectDisplayName(previous, project).displayName
   }
   return {
     ...project,
