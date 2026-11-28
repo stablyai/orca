@@ -1,3 +1,4 @@
+import { sessionTabPaneKey } from '../../../../../../src/shared/remote-runtime/session-graph/session-tab-pane-key'
 import {
   useCallback,
   useEffect,
@@ -50,6 +51,7 @@ export function useMobileNativeChatDrafts(args: {
   hostId: string
   worktreeId: string
   tabId: string | null
+  notificationTab?: Parameters<typeof sessionTabPaneKey>[0]
   sessionId: string | null
   messages: readonly NativeChatMessage[]
   launchDraft?: string | null
@@ -103,7 +105,12 @@ export function useMobileNativeChatDrafts(args: {
     onSendError = NO_SEND_ERROR
   } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
-  useNotificationReplyChatDraft(hostId, worktreeId, draftKey)
+  useNotificationReplyChatDraft(
+    hostId,
+    worktreeId,
+    draftKey,
+    sessionTabPaneKey(args.notificationTab) ?? null
+  )
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
   const [pendingBySession, setPendingBySession] = useState<
     Record<string, MobileNativeChatPendingMessage[]>

@@ -1,12 +1,19 @@
+import {
+  NotificationReplyFailure,
+  notificationReplyFailureMessage
+} from './notification-reply-failure'
 import { runKeyedSerializedOperation } from '../../../../src/shared/concurrency/keyed-serialized-operations'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { notificationReplyRecords } from './notification-reply-record-store'
 import * as Notifications from 'expo-notifications'
 import { NOTIFICATION_REPLY_ACTION } from '../../../../src/shared/notifications/notification-reply'
 import { notificationReplyResponseId } from './notification-reply-identity'
 import { readNotificationReplyDraftRecord } from './notification-reply-draft-record'
 import { parsePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
 import { processDeviceStore } from '../../device-store/device-store'
-import { persistNotificationReplyDraft } from './notification-reply-draft-handoff'
+import {
+  persistNotificationReplyDraft,
+  notificationReplyPaneDraftScope
+} from './notification-reply-draft-handoff'
 import { resolveHostIdForFingerprint } from '../payload-identity/push-host-fingerprint'
 import { readOrcaPushPayload } from '../payload-identity/push-payload'
 import { readNativeNotificationData } from '../payload-identity/native-notification-data'
@@ -32,7 +39,11 @@ export async function restoreNotificationReplyDraft(data: unknown): Promise<void
     'replyDraftId' in data &&
     typeof data.replyDraftId === 'string'
   ) {
-    await runKeyedSerializedOperation(recordQueues, data.replyDraftId, () => restoreDraft(data))
+    await runKeyedSerializedOperation(recordQueues, data.replyDraftId, () =>
+      restoreDraft(data)
+    ).catch((error: unknown) => {
+      console.warn('[notification-reply] recovery draft unavailable', error)
+    })
   }
 }
 
@@ -45,7 +56,7 @@ async function restoreDraft(data: unknown): Promise<void> {
   ) {
     return
   }
-  const raw = await AsyncStorage.getItem(PREFIX + data.replyDraftId)
+  const raw = await notificationReplyRecords.getItem(PREFIX + data.replyDraftId)
   if (!raw) {
     return
   }
@@ -70,7 +81,7 @@ async function restoreDraft(data: unknown): Promise<void> {
       : groupId
         ? mobileBotGroupDraftKey(hostId, groupId, groupId)
         : pane
-          ? `${hostId}\0${workspace}\0${pane.tabId}`
+          ? notificationReplyPaneDraftScope(hostId, workspace, `${pane.tabId}:${pane.leafId}`)
           : null
   if (!draftKey) {
     return
@@ -91,7 +102,7 @@ async function restoreDraft(data: unknown): Promise<void> {
   if (!persisted) {
     return
   }
-  await AsyncStorage.setItem(
+  await notificationReplyRecords.setItem(
     PREFIX + data.replyDraftId,
     JSON.stringify({ ...saved, restored: true, at: Date.now() })
   )
@@ -109,13 +120,19 @@ export function handleNotificationReply(
   const id = notificationReplyResponseId(response)
   const pending = active.get(id)
   if (pending) {
-    return pending.finally(() => completeNativeReply(response))
+    return pending.finally(async () => {
+      if (await notificationReplyRecords.getItem(PREFIX + id)) {
+        await completeNativeReply(response)
+      }
+    })
   }
   const result = runKeyedSerializedOperation(recordQueues, id, () =>
     deliver(response, data, text, id)
   ).finally(async () => {
     active.delete(id)
-    await completeNativeReply(response)
+    if (await notificationReplyRecords.getItem(PREFIX + id)) {
+      await completeNativeReply(response)
+    }
   })
   active.set(id, result)
   return result
@@ -129,25 +146,29 @@ async function deliver(
 ): Promise<boolean> {
   const key = PREFIX + id
   // A duplicate delivery after process death must never submit the terminal text twice.
-  if (await AsyncStorage.getItem(key)) {
+  if (await notificationReplyRecords.getItem(key)) {
     return true
   }
-  await AsyncStorage.setItem(key, JSON.stringify({ text, state: 'sending', data, at: Date.now() }))
+  await notificationReplyRecords.setItem(
+    key,
+    JSON.stringify({ text, state: 'sending', data, at: Date.now() })
+  )
   try {
     await sendNotificationReply(data, text, `notification-reply-${id}`)
   } catch (error) {
+    console.warn('[notification-reply] delivery failed', error)
     const failed = {
       text,
       state: 'failure-pending',
       data,
       at: Date.now(),
-      reason: error instanceof Error ? error.message : 'Host unreachable'
+      reason: error instanceof NotificationReplyFailure ? error.reason : 'unreachable'
     }
-    await AsyncStorage.setItem(key, JSON.stringify(failed))
+    await notificationReplyRecords.setItem(key, JSON.stringify(failed))
     await finishReplyFailure(key, id, failed)
     return true
   }
-  await AsyncStorage.setItem(key, JSON.stringify({ state: 'sent', at: Date.now() }))
+  await notificationReplyRecords.setItem(key, JSON.stringify({ state: 'sent', at: Date.now() }))
   await showAndroidReplySent(response).catch(() => {})
   await Notifications.dismissNotificationAsync(response.notification.request.identifier).catch(
     () => {}
@@ -160,7 +181,7 @@ async function showReplyFailure(data: unknown, id: string, reason: string): Prom
     identifier: `notification-reply-failure-${id}`,
     content: {
       title: translate('notifications.reply.failed', 'Reply not sent'),
-      body: translate('notifications.reply.failedReason', 'Reply not sent: {{reason}}', { reason }),
+      body: notificationReplyFailureMessage(reason),
       data: { ...readOrcaPushPayload(data), replyDraftId: id },
       sound: 'default'
     },
@@ -174,15 +195,15 @@ async function finishReplyFailure(
   saved: { data: unknown; reason: string }
 ): Promise<void> {
   await showReplyFailure(saved.data, id, saved.reason)
-  await AsyncStorage.setItem(key, JSON.stringify({ ...saved, state: 'failed' }))
+  await notificationReplyRecords.setItem(key, JSON.stringify({ ...saved, state: 'failed' }))
 }
 
 export async function recoverInterruptedNotificationReplies(): Promise<void> {
-  const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith(PREFIX))
+  const keys = (await notificationReplyRecords.getAllKeys()).filter((key) => key.startsWith(PREFIX))
   for (const key of keys) {
     const id = key.slice(PREFIX.length)
     await runKeyedSerializedOperation(recordQueues, id, async () => {
-      const raw = await AsyncStorage.getItem(key)
+      const raw = await notificationReplyRecords.getItem(key)
       if (!raw) {
         return
       }
@@ -200,9 +221,9 @@ export async function recoverInterruptedNotificationReplies(): Promise<void> {
           ...saved,
           state: 'failure-pending',
           at: Date.now(),
-          reason: 'Delivery unconfirmed; check the chat before sending again'
+          reason: 'unconfirmed'
         }
-        await AsyncStorage.setItem(key, JSON.stringify(pending))
+        await notificationReplyRecords.setItem(key, JSON.stringify(pending))
         await finishReplyFailure(key, id, pending)
       } else if (
         saved.state === 'failure-pending' &&
@@ -217,8 +238,10 @@ export async function recoverInterruptedNotificationReplies(): Promise<void> {
         typeof saved.at === 'number' &&
         Date.now() - saved.at > 7 * 24 * 60 * 60 * 1000
       ) {
-        await AsyncStorage.removeItem(key)
+        await notificationReplyRecords.removeItem(key)
       }
+    }).catch((error: unknown) => {
+      console.warn('[notification-reply] recovery record unavailable', error)
     })
   }
 }

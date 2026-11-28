@@ -2440,6 +2440,12 @@
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "Nur wenn ein Agent mich braucht",
       "sound": "Benachrichtigungston"
+    },
+    "reply": {
+      "failed": "Antwort nicht gesendet",
+      "unconfirmed": "Zustellung unbestätigt. Vor erneutem Senden den Chat prüfen.",
+      "refused": "Der Host hat die Antwort abgelehnt. Bitte den Chat prüfen.",
+      "unreachable": "Der Host ist nicht erreichbar. Deine Antwort wurde gespeichert."
     }
   },
   "onboarding": {

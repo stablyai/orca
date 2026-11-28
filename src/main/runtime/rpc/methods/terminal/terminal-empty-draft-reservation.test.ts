@@ -16,7 +16,7 @@ it.each(['before-paste', 'before-enter', 'none'])(
           processIncarnation: 'process',
           generation: 1
         }),
-        readTerminal: async () => ({ source: 'screen' })
+        readTerminal: async () => ({ source: 'screen', draft: '' })
       },
       'terminal'
     )
@@ -54,7 +54,7 @@ it.each(['before-paste', 'before-enter', 'none'])(
   }
 )
 
-it('refuses a screen-unavailable snapshot instead of treating its omitted draft as empty', async () => {
+it.each(['screen-unavailable', 'screen'])('refuses an unknown composer (%s)', async (source) => {
   await expect(
     reserveEmptyTerminalDraft(
       {
@@ -64,9 +64,29 @@ it('refuses a screen-unavailable snapshot instead of treating its omitted draft 
           processIncarnation: 'process',
           generation: 1
         }),
-        readTerminal: async () => ({ source: 'screen-unavailable' })
+        readTerminal: async () => ({ source })
       },
       'terminal'
     )
   ).rejects.toThrow('terminal_reply_draft_changed')
+})
+
+it('refuses input whose echo has not reached the screen', async () => {
+  const facts = new TerminalRunFactsRegister()
+  facts.recordInput('pty', 'driving', 'unpainted text', 10)
+  const runtime = {
+    terminalRunFacts: facts,
+    getTerminalPromptRequestBinding: () => ({
+      ptyId: 'pty',
+      processIncarnation: 'process',
+      generation: 1
+    }),
+    readTerminal: async () => ({ source: 'screen', draft: '' })
+  }
+  await expect(reserveEmptyTerminalDraft(runtime, 'terminal')).rejects.toThrow(
+    'terminal_reply_draft_changed'
+  )
+  facts.recordOutput('pty')
+  const reserve = await reserveEmptyTerminalDraft(runtime, 'terminal')
+  expect(() => reserve('pty')).not.toThrow()
 })

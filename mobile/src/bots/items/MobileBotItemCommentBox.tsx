@@ -106,7 +106,9 @@ export function MobileBotItemCommentBox({
   const key = botItemCommentDraftKey(hostId, item.uid)
   const restoreNotificationDraft = useCallback(
     async (text: string) => {
-      await loadBotItemCommentDraft(key)
+      if (!(await loadBotItemCommentDraft(key))) {
+        return false
+      }
       returnBotItemCommentDraft(key, text)
       return persistBotItemCommentDraft(key)
     },

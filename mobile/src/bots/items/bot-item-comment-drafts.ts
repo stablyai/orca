@@ -34,7 +34,11 @@ function rowFor(key: string): DurableDraftRow {
   rows.set(key, row)
   return row
 }
-export const loadBotItemCommentDraft = (key: string) => rowFor(key).load()
+export async function loadBotItemCommentDraft(key: string): Promise<boolean> {
+  const row = rowFor(key)
+  await row.load()
+  return row.state() === 'loaded'
+}
 export const persistBotItemCommentDraft = (key: string) => rowFor(key).persist()
 
 const listeners = new Map<string, Set<() => void>>()

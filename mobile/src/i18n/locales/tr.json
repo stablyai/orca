@@ -2643,6 +2643,12 @@
       "awayHint": "3 dakikadır boşta veya kilitli",
       "needsMeHint": "Yalnızca izinler ve sorular",
       "notWhileViewing": "Görüntülediğim çalışma alanı için gönderme"
+    },
+    "reply": {
+      "failed": "Yanıt gönderilemedi",
+      "unconfirmed": "Teslimat doğrulanamadı. Yeniden göndermeden önce sohbeti kontrol edin.",
+      "refused": "Ana bilgisayar yanıtı reddetti. Sohbeti kontrol edin.",
+      "unreachable": "Ana bilgisayara ulaşılamadı. Yanıtınız kaydedildi."
     }
   },
   "onboarding": {
