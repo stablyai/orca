@@ -24,3 +24,9 @@ export const AgentReadParams = lazyZodSchema(() =>
     limit: z.number().int().positive().max(AGENT_READ_MAX_LIMIT).optional()
   })
 )
+
+export const ChatCloseParams = lazyZodSchema(() =>
+  z.object({
+    id: requiredString('Missing chat ID')
+  })
+)

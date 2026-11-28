@@ -7,6 +7,7 @@ import type {
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
+  AGENT_SESSION_CLOSE_ONLY_CLIENT_CAPABILITY,
   AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
@@ -31,12 +32,13 @@ import {
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-staged-reply'
 import { readRuntimeRpcStagedReply } from '../../../shared/remote-runtime/requests/runtime-rpc-staged-reply-read'
 
-// Paired CLI callers are not exempt from the host's agent.launch or chat rename gates like the local socket is.
+// Paired CLI callers are not exempt from the host's agent.launch, chat rename or chat close gates like the local socket is.
 export const CLI_CLIENT_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,
   AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,
+  AGENT_SESSION_CLOSE_ONLY_CLIENT_CAPABILITY,
   CLI_AGENT_CALLER_CLIENT_CAPABILITY,
   // Without it a paired host prints Waiting items as in_progress.
   BOTS_ITEM_WAITING_CAPABILITY,

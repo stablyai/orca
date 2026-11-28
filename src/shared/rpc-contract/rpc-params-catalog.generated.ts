@@ -119,7 +119,12 @@ import {
   AgentActivityOrchestrationParams,
   AgentActivitySetReadParams
 } from './agent-activity/agent-activity-params'
-import { AgentListParams, AgentReadParams, AgentShowParams } from './agent-conversation-params'
+import {
+  AgentListParams,
+  AgentReadParams,
+  AgentShowParams,
+  ChatCloseParams
+} from './agent-conversation-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch/agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch/agent-launch-settings-params'
 import {
@@ -1573,6 +1578,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.viewport': Viewport,
   'browser.wait': Wait,
   'browser.zoom': PageZoom,
+  'chat.close': ChatCloseParams,
   'clipboard.abortImageUpload': AbortImageUpload,
   'clipboard.appendImageUploadChunk': AppendImageUploadChunk,
   'clipboard.commitImageUpload': CommitImageUpload,
