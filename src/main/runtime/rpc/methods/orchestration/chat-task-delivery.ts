@@ -2,8 +2,11 @@ import { conversationRecordReader } from '../../../orchestration/addressing/sess
 /** Queue the chat assignee's task as a composer card while busy; derive operation id from Dispatch so repeat sends replay instead of duplicating cards. */
 
 import { createHash } from 'node:crypto'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import type { AgentSessionExecutionOptions } from '../../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { observeChatAssignee } from '../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
@@ -38,6 +41,11 @@ export async function sendChatTask(args: {
   /** Who the task is from (`dispatchTaskSource`), shown on the chat's card or turn. */
   from: AgentMessageSource
   preamble: string
+  /** Optional hook receiving the session agent and admission options snapshot actually sent. */
+  onAdmitted?: (evidence: {
+    observedAgent: TuiAgent | null
+    capturedOptions?: AgentSessionExecutionOptions
+  }) => void
 }): Promise<ChatTaskDelivery> {
   const sessionId = args.dispatch.assignee_orca_session_id
   const host = getStructuredAgentSessionHost()
@@ -70,6 +78,7 @@ export async function sendChatTask(args: {
       expectedRuntimeFence: observed.session.currentFence
     }
   })
+  const observedAgent = isTuiAgent(observed.session.provider) ? observed.session.provider : null
   switch (outcome.kind) {
     case 'refused':
       throw new OrchestrationError(
@@ -77,8 +86,13 @@ export async function sendChatTask(args: {
         `The task was refused: ${outcome.refusal.message}`
       )
     case 'queued':
+      args.onAdmitted?.({ observedAgent })
       return 'queued'
     case 'sent':
+      args.onAdmitted?.({
+        observedAgent,
+        ...(outcome.submission?.options ? { capturedOptions: outcome.submission.options } : {})
+      })
       return preambleDispatchState(outcome.submission)
   }
 }

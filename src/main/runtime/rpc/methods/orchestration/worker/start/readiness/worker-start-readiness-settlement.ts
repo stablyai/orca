@@ -15,6 +15,7 @@ import { WORKER_AGENT_STARTING_STAGE } from '../../../../../../orchestration/db/
 import { reportedWorkerOutcome } from '../worker-start-receipt'
 import { chatAssigneeSessionId } from '../../../../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationWorkerLaunchReceipt } from '../launch/worker-launch-preferences'
+import { recordWorkerLaunchObservation } from '../../../../../../orchestration/workers/launch/worker-launch-observation'
 import {
   describeUnobservedWorkerTurnStart,
   observeWorkerTurnStart,
@@ -54,6 +55,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   terminalRevealWarning: string | undefined
   /** Keeps the caller's failure receipt naming the stage that actually failed. */
   onStage: (stage: 'dispatch_input' | 'turn_observation') => void
+  /** Present on follow-up dispatches so structured chat delivery records the admission snapshot. */
+  followUp?: { allowInheritedAgent: boolean; agent: string | null }
 }): Promise<unknown> {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
@@ -75,8 +78,13 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     devMode: args.devMode,
     requestId: args.requestId,
     launchedAgent: args.launchedAgent,
-    readinessTimeoutMs: Math.max(0, args.readinessDeadline - Date.now())
+    readinessTimeoutMs: Math.max(0, args.readinessDeadline - Date.now()),
+    ...(args.followUp ? { followUp: args.followUp } : {})
   })
+  const launchReceipt = delivery.launchReceipt ?? args.launchReceipt
+  if (delivery.launchReceipt) {
+    recordWorkerLaunchObservation(db, args.dispatchId, launchReceipt)
+  }
   effects.push({
     kind: 'dispatch_input',
     role: 'agent',
@@ -130,7 +138,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       state: 'starting',
       stage: worker.stage,
       setup: args.setupReceipt,
-      launch: args.launchReceipt,
+      launch: launchReceipt,
       mode: args.mode,
       timeoutMs: args.timeoutMs,
       effects,
@@ -175,7 +183,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
       turnStart: turnStart.verdict,
       lastError: reason,
       setup: args.setupReceipt,
-      launch: args.launchReceipt,
+      launch: launchReceipt,
       mode: args.mode,
       timeoutMs: args.timeoutMs,
       effects,
@@ -205,7 +213,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     ...(reportedOutcome ? { workerOutcome: reportedOutcome } : {}),
     turnStart: queuedOnOwnWorker ? 'queued' : turnStart.verdict,
     setup: args.setupReceipt,
-    launch: args.launchReceipt,
+    launch: launchReceipt,
     mode: args.mode,
     timeoutMs: args.timeoutMs,
     effects,

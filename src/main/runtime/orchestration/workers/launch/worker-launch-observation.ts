@@ -13,10 +13,19 @@ const selection = lazyZodSchema(() =>
     effort: salvagedOptional('effort', z.string().nullable())
   })
 )
+const source = lazyZodSchema(() => z.enum(['session', 'inherited', 'default', 'unavailable']))
+const effectiveSource = lazyZodSchema(() =>
+  z.object({
+    agent: salvagedOptional('agent', source),
+    model: salvagedOptional('model', source),
+    effort: salvagedOptional('effort', source)
+  })
+)
 const launch = lazyZodSchema(() =>
   z.object({
     requested: salvagedOptional('requested', selection),
-    effective: salvagedOptional('effective', selection)
+    effective: salvagedOptional('effective', selection),
+    effectiveSource: salvagedOptional('effectiveSource', effectiveSource)
   })
 )
 
@@ -75,6 +84,18 @@ export function mergeWorkerLaunchObservation(json: string, observation: unknown)
   const effective = decoded.data.effective
   const priorEffective = object.safeParse(previous.effective)
   const effectiveBefore = priorEffective.success ? priorEffective.data : {}
+  const nextSource = decoded.data.effectiveSource
+  const priorSource = object.safeParse(previous.effectiveSource)
+  const sourceBefore = priorSource.success ? priorSource.data : {}
+  const nextEffective = { ...effectiveBefore, ...effective }
+  const sourceFields = nextSource
+    ? Object.fromEntries(
+        Object.entries(nextSource).filter(
+          ([key, value]) =>
+            value !== undefined && !(nextEffective[key] === null && effectiveBefore[key] != null)
+        )
+      )
+    : {}
   const effectiveFields = effective
     ? Object.fromEntries(
         Object.entries(effective).filter(
@@ -94,6 +115,14 @@ export function mergeWorkerLaunchObservation(json: string, observation: unknown)
             effective: {
               ...effectiveBefore,
               ...effectiveFields
+            }
+          }
+        : {}),
+      ...(Object.keys(sourceFields).length
+        ? {
+            effectiveSource: {
+              ...sourceBefore,
+              ...sourceFields
             }
           }
         : {})

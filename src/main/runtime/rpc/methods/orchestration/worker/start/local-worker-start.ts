@@ -282,7 +282,8 @@ export async function startLocalWorker(args: {
         readinessDeadline: deliveryDeadline,
         effects,
         terminalRevealWarning: warning,
-        onStage
+        onStage,
+        ...(args.followUp ? { followUp: { allowInheritedAgent: !chat, agent: agent ?? null } } : {})
       })
     }
     result = await handOverWhenReady({

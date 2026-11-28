@@ -25,6 +25,7 @@ import {
   structuredWorkerLaunchReceipt,
   type OrchestrationWorkerLaunchReceipt
 } from '../launch/worker-launch-preferences'
+import { startedFreshFollowUpLaunchReceipt } from '../../follow-up/worker-follow-up-launch'
 import { recordWorkerLaunchObservation } from '../../../../../../orchestration/workers/launch/worker-launch-observation'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
@@ -95,9 +96,13 @@ export async function placeWorkerAgent(
       action: 'reused',
       id: args.params.terminal
     })
+    const terminalLaunch = args.followUp?.launchReceipt ?? args.launch.receipt
+    if (terminalLaunch.effectiveSource) {
+      recordWorkerLaunchObservation(args.db, args.dispatchId, terminalLaunch)
+    }
     return {
       mode: args.mode,
-      launch: args.launch.receipt,
+      launch: terminalLaunch,
       worktree: existing,
       terminalHandle: args.params.terminal,
       structuredSession: null,
@@ -113,9 +118,13 @@ export async function placeWorkerAgent(
       action: reopened.chat ? 'reused' : 'created',
       id: reopened.handle
     })
+    const reopenedLaunch = reopened.launchReceipt ?? args.launch.receipt
+    if (reopened.launchReceipt) {
+      recordWorkerLaunchObservation(args.db, args.dispatchId, reopenedLaunch)
+    }
     return {
       mode: args.mode,
-      launch: args.launch.receipt,
+      launch: reopenedLaunch,
       worktree: existing,
       terminalHandle: reopened.handle,
       structuredSession: null,
@@ -123,7 +132,7 @@ export async function placeWorkerAgent(
       reopened
     }
   }
-  const launched = await launchWorkerAgent(args, existing)
+  const launched = await launchWorkerAgent(args, existing, reopened === null)
   // A reopen refused before spawning anything: the fresh agent gets the earlier work instead.
   return reopened === null && args.followUp?.earlierWork
     ? { ...launched, extraSpec: args.followUp.earlierWork }
@@ -132,7 +141,8 @@ export async function placeWorkerAgent(
 
 async function launchWorkerAgent(
   args: WorkerAgentPlacementArgs,
-  existing: PlacedWorktree | undefined
+  existing: PlacedWorktree | undefined,
+  reopenRefused: boolean
 ): Promise<WorkerAgentPlacement> {
   const agent = requireAgent(args.agent)
   let created: Awaited<ReturnType<typeof createWorkerWorktree>> | undefined
@@ -217,7 +227,7 @@ async function launchWorkerAgent(
   }
   return {
     mode: launched.receipt,
-    launch: launchedWorkerReceipt(args, structuredSession),
+    launch: launchedWorkerReceipt(args, structuredSession, reopenRefused),
     worktree: existing ?? requirePlacement(created?.worktree),
     terminalHandle: launched.outcome.handle,
     terminalCreation: created?.terminalCreation ?? terminalCreation,
@@ -229,13 +239,19 @@ async function launchWorkerAgent(
 
 function launchedWorkerReceipt(
   args: WorkerAgentPlacementArgs,
-  session: WorkerStructuredSession | null
+  session: WorkerStructuredSession | null,
+  reopenRefused: boolean
 ): OrchestrationWorkerLaunchReceipt {
-  if (!session) {
-    return args.launch.receipt
+  const base = session
+    ? structuredWorkerLaunchReceipt(args.launch.receipt, session.options)
+    : args.launch.receipt
+  const sessionAgent = reopenRefused ? args.agent : undefined
+  const receipt = args.followUp
+    ? startedFreshFollowUpLaunchReceipt(base, args.params, session?.options, sessionAgent)
+    : base
+  if (session || args.followUp) {
+    recordWorkerLaunchObservation(args.db, args.dispatchId, receipt)
   }
-  const receipt = structuredWorkerLaunchReceipt(args.launch.receipt, session.options)
-  recordWorkerLaunchObservation(args.db, args.dispatchId, receipt)
   return receipt
 }
 
