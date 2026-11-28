@@ -270,11 +270,16 @@
 
 /* Why: centre with the editor's own padding so clicks in the side margin still land in ProseMirror. */
 .rich-markdown-editor-shell .rich-markdown-editor {
+  font-variant-numeric: tabular-nums;
   padding-left: var(--rich-md-pad-start);
   padding-right: max(
     var(--rich-md-pad-end),
     100% - var(--rich-md-measure) - var(--rich-md-pad-start)
   );
+}
+
+.rich-markdown-editor-shell .rich-markdown-editor :is(code, pre) {
+  font-variant-numeric: normal;
 }
 
 /* Why: these are placed from the pane's right edge; shift them so they stay beside the centred column. */
