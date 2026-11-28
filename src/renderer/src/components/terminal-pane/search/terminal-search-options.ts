@@ -14,11 +14,13 @@ const TERMINAL_SEARCH_DECORATIONS = {
 export function buildTerminalSearchOptions(state: {
   caseSensitive: boolean
   regex: boolean
+  wholeWord?: boolean
   incremental?: boolean
 }): ISearchOptions {
   return {
     caseSensitive: state.caseSensitive,
     regex: state.regex,
+    wholeWord: state.wholeWord === true,
     incremental: state.incremental ?? false,
     decorations: TERMINAL_SEARCH_DECORATIONS
   }

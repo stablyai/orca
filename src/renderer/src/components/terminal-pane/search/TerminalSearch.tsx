@@ -1,6 +1,6 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useState, useCallback } from 'react'
-import { ChevronUp, ChevronDown, X, CaseSensitive, Regex } from 'lucide-react'
+import { ChevronUp, ChevronDown, X, CaseSensitive, Regex, WholeWord } from 'lucide-react'
 import type { SearchAddon } from '@xterm/addon-search'
 import { Button } from '@/components/ui/button'
 import type { SearchState } from '@/components/terminal-pane/input/keyboard/terminal-keyboard-shortcut-matching'
@@ -39,14 +39,15 @@ export default function TerminalSearch({
   const t = useTranslate()
   const [query, setQuery] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
+  const [wholeWord, setWholeWord] = useState(false)
   const [regex, setRegex] = useState(false)
   const [results, setResults] = useState(EMPTY_RESULTS)
   const requestQuery = getFindRequestQuery(query)
 
   const searchOptions = useCallback(
     (incremental: boolean = false) =>
-      buildTerminalSearchOptions({ caseSensitive, regex, incremental }),
-    [caseSensitive, regex]
+      buildTerminalSearchOptions({ caseSensitive, regex, wholeWord, incremental }),
+    [caseSensitive, regex, wholeWord]
   )
 
   const findNext = useCallback(() => {
@@ -93,8 +94,13 @@ export default function TerminalSearch({
   }, [searchAddon])
 
   useEffect(() => {
+    // Why: the addon stores new options before comparing them, so a same-term re-search keeps stale results.
+    searchAddon?.clearDecorations()
+  }, [searchAddon, caseSensitive, regex, wholeWord])
+
+  useEffect(() => {
     // Global match-navigation shortcuts read the same query as the panel.
-    searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex }
+    searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex, wholeWord }
 
     if (!isOpen || !requestQuery) {
       clearTerminalSearch(searchAddon)
@@ -107,7 +113,16 @@ export default function TerminalSearch({
         searchOptions(true)
       )
     }
-  }, [requestQuery, searchAddon, isOpen, caseSensitive, regex, searchStateRef, searchOptions])
+  }, [
+    requestQuery,
+    searchAddon,
+    isOpen,
+    caseSensitive,
+    regex,
+    wholeWord,
+    searchStateRef,
+    searchOptions
+  ])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -115,7 +130,14 @@ export default function TerminalSearch({
 
       if (e.key === 'Escape') {
         onClose()
-      } else if (e.key === 'Enter' && e.shiftKey) {
+        return
+      }
+      // Why: Enter on a toggle button must only activate that button, not also
+      // navigate matches with the options it is about to change.
+      if (!(e.target instanceof HTMLInputElement)) {
+        return
+      }
+      if (e.key === 'Enter' && e.shiftKey) {
         findPrevious()
       } else if (e.key === 'Enter') {
         findNext()
@@ -162,6 +184,18 @@ export default function TerminalSearch({
         title={t('auto.components.TerminalSearch.90c61387d9', 'Case sensitive')}
       >
         <CaseSensitive size={14} />
+      </Button>
+
+      <Button
+        type="button"
+        variant={wholeWord ? 'secondary' : 'ghost'}
+        size="icon-xs"
+        aria-pressed={wholeWord}
+        onClick={() => setWholeWord((v) => !v)}
+        className="shrink-0"
+        title={t('auto.components.TerminalSearch.wholeWord', 'Match Whole Word')}
+      >
+        <WholeWord size={14} />
       </Button>
 
       <Button
