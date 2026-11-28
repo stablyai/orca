@@ -5,7 +5,6 @@ const SOCKS_VERSION = 5
 const SOCKS_NO_AUTH = 0
 const SOCKS_CONNECT = 1
 const SOCKS_DOMAIN = 3
-const MAX_HANDSHAKE_BYTES = 512
 
 export class SystemSshSocksClientSocket extends ProxyHandshakeSocket {
   private readonly connectRequest: Uint8Array
@@ -28,10 +27,6 @@ export class SystemSshSocksClientSocket extends ProxyHandshakeSocket {
 
   protected onHandshakeData(bytes: Buffer): void {
     this.handshake = appendBytes(this.handshake, bytes)
-    if (this.handshake.byteLength > MAX_HANDSHAKE_BYTES) {
-      this.fail(new Error('system_ssh_socks_handshake_overflow'))
-      return
-    }
     if (this.phase === 'method') {
       if (this.handshake.byteLength < 2) {
         return
@@ -48,6 +43,8 @@ export class SystemSshSocksClientSocket extends ProxyHandshakeSocket {
   }
 
   private finishConnectHandshake(): void {
+    // The reply's one-byte domain length bounds incomplete handshakes. A complete reply
+    // may share its transport chunk with arbitrarily more destination data.
     const replyLength = socksReplyLength(this.handshake)
     if (replyLength === null) {
       return
