@@ -43,9 +43,11 @@ import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/wor
 import { releaseWslStoppedWorktreeRescan } from '../../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
 import {
   listWslStoppedWorktrees,
+  rescanWorktreesWhenRepoFolderReturns,
   rescanWorktreesWhenWslDistroRuns,
   wslDistroNotRunningForScanFailure
 } from './wsl-stopped-worktree-listing'
+import { RepoFolderMissingError } from './repo-folder-missing'
 
 // Partial stores (tests, embedders) may not publish workspace metadata; their listings carry no stamp.
 function readWorkspaceMetadataCursor(store: {
@@ -224,6 +226,19 @@ export async function listDetectedWorktreesForCapturedRepo(
         unavailableReason,
         failureKind,
         wslDistroStopped,
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
+      }
+    }
+    if (err instanceof RepoFolderMissingError) {
+      rescanWorktreesWhenRepoFolderReturns(repo.id, repo.path)
+      return {
+        repoId: repo.id,
+        authoritative: false,
+        source: 'metadata-fallback',
+        worktrees: listWslStoppedWorktrees(store, repo, allMeta),
+        unavailableReason,
+        failureKind,
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
         ...(workspaceMetadata ? { workspaceMetadata } : {})
       }

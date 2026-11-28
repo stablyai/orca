@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type {
   DetectedWorktree,
@@ -88,4 +89,44 @@ export function rescanWorktreesWhenWslDistroRuns(repoId: string, distro: string)
     unsubscribeNotes()
   }
   holdWslStoppedWorktreeRescan(repoId, cancel)
+}
+
+const REPO_FOLDER_FIRST_POLL_MS = 3_000
+const REPO_FOLDER_MAX_POLL_MS = 30_000
+const REPO_FOLDER_GIVE_UP_MS = 30 * 60_000
+
+/** Re-list once a vanished repo folder (an unmounted volume) is back; shares the per-repo pending slot, so a good scan or repo removal stops it, and a later failed scan re-arms it. */
+export function rescanWorktreesWhenRepoFolderReturns(repoId: string, repoPath: string): void {
+  const startedAt = Date.now()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let cancelled = false
+  const cancel = (): void => {
+    cancelled = true
+    clearTimeout(timer)
+  }
+  const schedule = (delayMs: number): void => {
+    timer = setTimeout(() => {
+      void stat(repoPath).then(
+        () => {
+          if (!cancelled) {
+            releaseWslStoppedWorktreeRescan(repoId, cancel)
+            notifyRepoWorktreesChanged?.(repoId)
+          }
+        },
+        () => {
+          if (cancelled) {
+            return
+          }
+          if (Date.now() - startedAt >= REPO_FOLDER_GIVE_UP_MS) {
+            releaseWslStoppedWorktreeRescan(repoId, cancel)
+            return
+          }
+          schedule(Math.min(delayMs * 2, REPO_FOLDER_MAX_POLL_MS))
+        }
+      )
+    }, delayMs)
+    timer.unref()
+  }
+  holdWslStoppedWorktreeRescan(repoId, cancel)
+  schedule(REPO_FOLDER_FIRST_POLL_MS)
 }
