@@ -62,7 +62,7 @@ export type HangObservation = {
   tier?: 'stall' | 'hang'
   /** When a stall-tier record crossed the hang timeout; durationMs keeps the stall-detection age. */
   escalatedAt?: number
-  /** Build that stalled, so a report filed after an update names the right version. */
+  /** The version that observed it; the next launch may run another one. */
   appVersion?: string
   /** Last watchdog tick while this stall was live; stopping before escalation means the watchdog was blocked too. */
   watchdogTickAt?: number
@@ -89,7 +89,7 @@ export function parseHangStallTrailFields(
   const { appVersion, watchdogTickAt } = data
   return {
     ...parseHangTierFields(data),
-    ...(typeof appVersion === 'string' && /^[\w.+-]{1,80}$/.test(appVersion) ? { appVersion } : {}),
+    ...(typeof appVersion === 'string' && appVersion.length <= 64 ? { appVersion } : {}),
     ...(typeof watchdogTickAt === 'number' && Number.isFinite(watchdogTickAt)
       ? { watchdogTickAt }
       : {})
@@ -123,5 +123,21 @@ export type HangDetectionMarker = {
   parentPid: number
   unresponsiveMs: number
   selfRecovered: boolean
+  appVersion?: string
+}
+export function latestHangMarker(
+  collection: HangObservationCollection
+): HangDetectionMarker | null {
+  // Short stalls are breadcrumbs only; the hang marker (and its telemetry) keeps meaning >= timeout.
+  const record = collection.observations.findLast(isHangTierObservation)
+  return record
+    ? {
+        detectedAt: record.detectedAt,
+        parentPid: record.parentPid,
+        unresponsiveMs: hangObservationUnresponsiveMs(record),
+        selfRecovered: record.selfRecovered,
+        ...(record.appVersion ? { appVersion: record.appVersion } : {})
+      }
+    : null
 }
 import type { MainJsCapture, NativeHangCapture } from './hang-stacks'

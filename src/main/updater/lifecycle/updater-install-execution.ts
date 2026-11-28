@@ -13,7 +13,6 @@ import { armUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { getLinuxPackageType } from '../linux-package/linux-update-package-type'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
-import { installTriggerLabel } from './updater-install-source'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterMacInstallPreflight } from '../mac-install/updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
@@ -106,7 +105,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         span.setAttribute('updater.macosInstallerReady', macInstallerReady)
         recordUpdaterLifecycle('quit_and_install_started', {
           version: pendingVersion || null,
-          trigger: installTriggerLabel(trigger),
+          trigger,
           macInstallerReady
         })
         span.addEvent('pre_quit_cleanup_start')
@@ -114,7 +113,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         await this.runBeforeUpdateQuitCleanup()
         preparingProfile = false
         span.addEvent('pre_quit_cleanup_done')
-        if (trigger !== 'manual' && !(await this.prepareAutomaticInstall(pendingVersion))) {
+        if (trigger !== 'manual' && !(await this.prepareRendererForInstall(pendingVersion))) {
           return
         }
         if (!canProceed()) {

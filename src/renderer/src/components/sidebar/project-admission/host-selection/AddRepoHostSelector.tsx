@@ -15,11 +15,11 @@ import {
   shouldShowHostScopeControls
 } from '../../worktree-list/controls/sidebar-host-options'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { translateExecutionHostDetail } from '../../../../runtime/hosts/display/execution-host-label'
-
-import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { canConnectAddRepoHost, canSelectAddRepoHost } from './add-repo-host-availability'
+import { getAddRepoHostStatusDetail } from './add-repo-host-status-detail'
+
+export { getAddRepoHostStatusDetail }
 
 type AddRepoHostSelectorProps = {
   hosts: SidebarHostOption[]
@@ -36,18 +36,6 @@ type AddRepoHostSelectorProps = {
   wslHostsPausedNote?: string
   /** Opens Experimental → WSL distros as hosts, for a WSL host listed while that is off. */
   onOpenWslHostsSetting?: () => void
-}
-
-export function getAddRepoHostStatusDetail(host: SidebarHostOption, t?: Translate): string {
-  // A disabled WSL feature is not a disconnected-host failure.
-  if (host.wslUnavailable) {
-    return translateExecutionHostDetail(host.detail)
-  }
-  if (host.compatibility?.kind === 'blocked') {
-    return describeRuntimeCompatBlock(host.compatibility, t)
-  }
-  const detail = host.failureReason ?? translateExecutionHostDetail(host.detail)
-  return `${getSidebarHostHealthLabel(host.health, host.blockedReason, t, host.vmState)}${detail ? ` - ${detail}` : ''}`
 }
 
 export function AddRepoHostSelector({

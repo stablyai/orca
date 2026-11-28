@@ -12,7 +12,7 @@ import {
   type HangPowerReceipt
 } from './hang-observations'
 import { captureHangSnapshot } from './hang-snapshot'
-import { createWatchdogHangCapture, preloadHangCaptureModules } from './watchdog-hang-capture'
+import { createWatchdogHangCapture } from './watchdog-hang-capture'
 import { recentWorkerSends } from './hang-recent-worker-sends'
 import { sleepAssociation, type SleepPeriod } from './hang-sleep-association'
 import {
@@ -156,8 +156,10 @@ export function runWatchdog(
       completedSpans: null,
       powerEvents,
       initialSleepAssociated,
+      ...(config.processMetadata?.appVersion
+        ? { appVersion: config.processMetadata.appVersion }
+        : {}),
       ...(kind === 'heartbeat-stall' ? { workerSends: recentWorkerSends(now) } : {}),
-      ...(config.processMetadata ? { appVersion: config.processMetadata.appVersion } : {}),
       ...(options.tier ? { tier: options.tier } : {}),
       ...(options.recovered ? { selfRecovered: true } : {})
     }
@@ -257,7 +259,6 @@ export function runWatchdog(
       update(activeStallId, { watchdogTickAt: Date.now() })
     }
   }, config.checkIntervalMs)
-  const preload = preloadHangCaptureModules()
   port.on('message', (message) => {
     if (stopped) {
       return
@@ -297,7 +298,6 @@ export function runWatchdog(
       // A recovery queued behind an async write would otherwise be lost at exit.
       writer?.flushPending(observations)
       stopped = true
-      clearTimeout(preload)
       receiptWindow = null
       clearInterval(checkTimer)
       collector?.abort()

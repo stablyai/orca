@@ -1,6 +1,34 @@
 // Frozen relay RPC set: newer apps must be able to drive a daemon of this version unchanged.
 export const PROVIDER_RELAY_PROTOCOL_VERSION = 63
 
+export type ProviderRelayCapability = 'providerRelay' | 'providerRelayKeep' | 'providerRelayAcks'
+
+/**
+ * The hello capabilities a relaying daemon of each protocol advertises. An app adopts any running
+ * daemon of its own protocol, even one an older bundle started, so a new capability needs a
+ * PROTOCOL_VERSION bump and a new row; a shipped row never changes. v63 bundles differ; its row is
+ * the set all of them share.
+ */
+export const PROVIDER_RELAY_CAPABILITIES_BY_PROTOCOL: Readonly<
+  Record<number, readonly ProviderRelayCapability[]>
+> = {
+  63: ['providerRelay'],
+  64: ['providerRelay', 'providerRelayKeep', 'providerRelayAcks']
+}
+
+/** What a relaying daemon of this protocol advertises: its newest row at or below it. */
+export function providerRelayCapabilities(
+  protocolVersion: number
+): readonly ProviderRelayCapability[] {
+  let newest = 0
+  for (const version of Object.keys(PROVIDER_RELAY_CAPABILITIES_BY_PROTOCOL).map(Number)) {
+    if (version <= protocolVersion && version > newest) {
+      newest = version
+    }
+  }
+  return PROVIDER_RELAY_CAPABILITIES_BY_PROTOCOL[newest] ?? []
+}
+
 /** An agent launch the daemon owns; env is complete because the daemon's own env is not the app's. */
 export type ProviderRelaySpawnSpec = {
   command: string

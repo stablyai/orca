@@ -1,5 +1,4 @@
 import {
-  hangObservationUnresponsiveMs,
   isHangTierObservation,
   mergeHangTierFields,
   parseHangStallTrailFields,
@@ -17,7 +16,7 @@ import {
   parseNativeHangCapture
 } from './hang-capture-codec'
 import { parseHangWorkerSends } from './hang-worker-sends'
-export { MACHINE_FIELDS, SNAPSHOT_FIELDS } from './hang-observation-schema'
+export { MACHINE_FIELDS, SNAPSHOT_FIELDS, latestHangMarker } from './hang-observation-schema'
 export type {
   HangSnapshot,
   HangMachineSnapshot,
@@ -288,18 +287,4 @@ export function mergeHangObservations(
     result = retainHangObservation(result, record, { reserve: record.id === liveId })
   }
   return result
-}
-export function latestHangMarker(
-  collection: HangObservationCollection
-): HangDetectionMarker | null {
-  // Short stalls are breadcrumbs only; the hang marker (and its telemetry) keeps meaning >= timeout.
-  const record = collection.observations.findLast(isHangTierObservation)
-  return record
-    ? {
-        detectedAt: record.detectedAt,
-        parentPid: record.parentPid,
-        unresponsiveMs: hangObservationUnresponsiveMs(record),
-        selfRecovered: record.selfRecovered
-      }
-    : null
 }

@@ -186,7 +186,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     // Why: the paired web client watches nothing, so there is no symlinked folder to add a watch for.
     findSymlinkBelowRoot: () => Promise.resolve(null),
     watchWorktree: () => Promise.resolve(undefined),
-    unwatchWorktree: () => Promise.resolve(),
+    unwatchWorktree: () => Promise.resolve(undefined),
     onFsChanged: () => noopUnsubscribe
   }
 }

@@ -1,9 +1,8 @@
-import { SequencerRecoveryControls } from './sequencer-recovery-controls'
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
-import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
+import { ConflictSummaryCard } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
 import { StatusRetryButton } from './status-retry-button'
 import { TooManyChangesBanner } from './too-many-changes-banner'
@@ -17,10 +16,6 @@ export function SourceControlContentStatus({
   conflictOperation,
   sourceControlAiActionsVisible,
   isRecoveryBusy,
-  isAbortingOperation,
-  onAbortOperation,
-  isCompletingMerge,
-  onCompleteMerge,
   onResolveWithAi,
   onReviewConflicts,
   repositoryHuge,
@@ -42,10 +37,6 @@ export function SourceControlContentStatus({
   conflictOperation: GitConflictOperation
   sourceControlAiActionsVisible: boolean
   isRecoveryBusy: boolean
-  isAbortingOperation: boolean
-  onAbortOperation: (operation: GitConflictOperation) => void
-  isCompletingMerge: boolean
-  onCompleteMerge: () => void
   onResolveWithAi: () => void
   onReviewConflicts: () => void
   repositoryHuge: { limit: number } | null | undefined
@@ -79,48 +70,16 @@ export function SourceControlContentStatus({
           className="py-6 text-xs"
         />
       )}
-      {unresolvedConflictCount > 0 && (
+      {/* A paused rebase, merge or cherry-pick shows its conflicts in the header's operation bar. */}
+      {unresolvedConflictCount > 0 && conflictOperation === 'unknown' && (
         <div className="px-3 pb-2">
           <ConflictSummaryCard
-            conflictOperation={conflictOperation}
             unresolvedCount={unresolvedConflictCount}
             sourceControlAiActionsVisible={sourceControlAiActionsVisible}
             isRecoveryBusy={isRecoveryBusy}
-            isAbortingOperation={isAbortingOperation}
-            onAbortOperation={onAbortOperation}
             onResolveWithAI={onResolveWithAi}
             onReview={onReviewConflicts}
-          >
-            {(conflictOperation === 'cherry-pick' || conflictOperation === 'revert') && (
-              <SequencerRecoveryControls
-                worktreeId={worktreeId}
-                operation={conflictOperation}
-                disabled={isRecoveryBusy || isAbortingOperation || isCompletingMerge}
-              />
-            )}
-          </ConflictSummaryCard>
-        </div>
-      )}
-      {unresolvedConflictCount === 0 && conflictOperation !== 'unknown' && (
-        <div className="px-3 pb-2">
-          <OperationBanner
-            conflictOperation={conflictOperation}
-            isRecoveryBusy={isRecoveryBusy}
-            isAbortingOperation={isAbortingOperation}
-            onAbortOperation={onAbortOperation}
-            isCompletingMerge={isCompletingMerge}
-            onCompleteMerge={onCompleteMerge}
-            sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-            onResolveWithAI={onResolveWithAi}
-          >
-            {(conflictOperation === 'cherry-pick' || conflictOperation === 'revert') && (
-              <SequencerRecoveryControls
-                worktreeId={worktreeId}
-                operation={conflictOperation}
-                disabled={isRecoveryBusy || isAbortingOperation || isCompletingMerge}
-              />
-            )}
-          </OperationBanner>
+          />
         </div>
       )}
       {repositoryHuge && (

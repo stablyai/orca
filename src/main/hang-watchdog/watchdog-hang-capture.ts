@@ -40,6 +40,7 @@ export function createWatchdogHangCapture(options: {
 } {
   let stopped = false
   let activeCapture: NativeCaptureOwner | null = null
+  const preload = preloadHangCaptureModules()
   const store = options.artifactDirectory
     ? new NativeHangCaptureStore(options.artifactDirectory)
     : null
@@ -100,6 +101,7 @@ export function createWatchdogHangCapture(options: {
     },
     shutdown: () => {
       stopped = true
+      clearTimeout(preload)
       if (activeCapture) {
         activeCapture.stop?.()
       } else {

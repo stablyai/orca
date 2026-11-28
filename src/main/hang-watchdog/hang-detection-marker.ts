@@ -128,6 +128,8 @@ export function createHangMarkerWriter(
 } {
   let latest: StoredHangMarker | null = null
   let writing = false
+  // A failed async write leaves the file behind the newest state, so shutdown must still flush.
+  let unsettled = false
   const run = (): void => {
     const marker = latest
     if (!marker) {
@@ -136,7 +138,14 @@ export function createHangMarkerWriter(
     latest = null
     writing = true
     void writeHangDetectionMarkerAsync(markerPath, marker, renameFile)
-      .catch(() => {})
+      .then(
+        () => {
+          unsettled = false
+        },
+        () => {
+          unsettled = true
+        }
+      )
       .finally(() => {
         writing = false
         run()
@@ -150,7 +159,7 @@ export function createHangMarkerWriter(
       }
     },
     flushPending: (marker) => {
-      if (!writing && latest === null) {
+      if (!writing && latest === null && !unsettled) {
         return
       }
       // A separate file: an already-submitted async rename can land after this and must not undo it.

@@ -2,6 +2,7 @@
 // offset, or a bare local time in the event's zone; lengths like 30m, 1h or 1h30m.
 import { GoogleToolError } from './google-api-client'
 import { addDays, zonedInstant } from './google-time-zone'
+import { hasImpossibleLeadingDate } from '../../shared/validation/calendar-date'
 
 /** An event's length when only its start is given. */
 export const DEFAULT_EVENT_MINUTES = 30
@@ -14,11 +15,20 @@ const WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}
 
 export function parseEventTime(value: string, timeZone: string, flag: string): EventTime {
   const trimmed = value.trim()
-  if (DAY.test(trimmed) && !Number.isNaN(Date.parse(trimmed))) {
+  if (hasImpossibleLeadingDate(trimmed)) {
+    throw new GoogleToolError(
+      `${flag} takes a real calendar date; ${trimmed.slice(0, 10)} is not one.`
+    )
+  }
+  if (DAY.test(trimmed)) {
     return { kind: 'day', date: trimmed }
   }
   const local = LOCAL.exec(trimmed)
   if (local?.[1] && local[2]) {
+    // Why: a clock like 25:00 would otherwise reach Intl in zonedInstant and throw a RangeError.
+    if (Number.isNaN(Date.parse(`${local[1]}T${local[2]}:00Z`))) {
+      throw new GoogleToolError(`${flag} takes a real clock time; ${local[2]} is not one.`)
+    }
     return { kind: 'time', ms: zonedInstant(local[1], local[2], timeZone) }
   }
   if (WITH_OFFSET.test(trimmed) && !Number.isNaN(Date.parse(trimmed))) {
