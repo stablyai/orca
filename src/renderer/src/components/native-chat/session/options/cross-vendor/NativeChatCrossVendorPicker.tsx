@@ -240,7 +240,7 @@ export function NativeChatCrossVendorFrame({
   const other = shown && shown !== control.currentAgent ? shown : null
   return (
     <div className="flex min-h-0 min-w-0">
-      {vendors.length > 1 ? (
+      {vendors.some((agent) => agent !== control.currentAgent) ? (
         <NativeChatVendorRail
           vendors={vendors}
           selected={shown ?? control.currentAgent}

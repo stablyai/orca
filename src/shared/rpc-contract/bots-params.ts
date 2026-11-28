@@ -16,6 +16,7 @@ import { botLookAround, patchLookAround } from '../bots/bot-look-around'
 import { withBotOfferAnswer } from '../bots/bot-offer-answers'
 import { type BotCancelledWait, withBotCancelledWait } from '../bots/bot-cancelled-waits'
 import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
+import { BotAgentSetupSchema } from '../bots/bot-agent-setup'
 import type { BotCreate, BotDelete, BotUpdate } from './bots-lifecycle-params'
 
 export * from './bots-lifecycle-params'
@@ -62,6 +63,10 @@ export const BotChatsSeen = lazyZodSchema(() =>
 
 /** The bot's Chat: open it (created on first use), or reset it to a new conversation. */
 export const BotChat = lazyZodSchema(() => z.object({ botId: requiredString('Missing bot id') }))
+
+export const BotChatSwitchVendor = lazyZodSchema(() =>
+  BotChat.extend({ sourceSessionId: z.uuid(), setup: BotAgentSetupSchema })
+)
 
 /** New Home Chat. `orca bot new-chat` from a bot's own chat names it by that chat instead. */
 export const BotChatReset = lazyZodSchema(() =>
@@ -134,6 +139,7 @@ export type BotUpdateParams = z.infer<typeof BotUpdate>
 export type BotHostUpdates = BotUpdateParams['updates'] &
   Pick<Bot, 'google' | 'googleAccounts' | 'hostMcpServers'> &
   Pick<Bot, 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen'> & {
+    chatSessionId?: string
     /** Host-only: a wait of this bot's was cancelled. */
     cancelledWait?: BotCancelledWait
   }

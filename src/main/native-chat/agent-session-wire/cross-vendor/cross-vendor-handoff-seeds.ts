@@ -40,7 +40,14 @@ export function createCrossVendorHandoffSeeds(stateDirectory: string): CrossVend
       if (cache.has(sessionId)) {
         return cache.get(sessionId) ?? null
       }
-      const text = await readFile(fileOf(sessionId), 'utf8').catch(() => null)
+      const text = await readFile(fileOf(sessionId), 'utf8').catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') {
+            throw error
+          }
+          return null
+        }
+      )
       cache.set(sessionId, text)
       return text
     },
@@ -88,7 +95,7 @@ export function withCrossVendorHandoffTurnContext(
     sessionId: string,
     read: () => Promise<StructuredAgentSessionTurnContextPlan | null>
   ): Promise<StructuredAgentSessionTurnContextPlan | null> => {
-    const [seed, base] = await Promise.all([seeds.read(sessionId).catch(() => null), read()])
+    const [seed, base] = await Promise.all([seeds.read(sessionId), read()])
     return seed ? withSeed(seed, sessionId, seeds, base) : base
   }
   return {

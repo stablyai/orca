@@ -8,12 +8,18 @@ import {
 } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import type { Bot, BotAgent } from '../../shared/bot-types'
-import { botOnSetup } from '../../shared/bots/bot-agent-setup'
+import { botOnSetup, type BotAgentSetup } from '../../shared/bots/bot-agent-setup'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionCreateOptions } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-create-options'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import { nameNewHome, type BotHomeHost } from './bot-home-chat-name'
+import {
+  replaceBotHomeChat,
+  switchBotHomeChat,
+  type BotChatDependencies,
+  type BotChatHost
+} from './bot-home-chat-replacement'
+export type { BotChatDependencies, BotChatHost } from './bot-home-chat-replacement'
 export { BOT_CREATED_KICKOFF } from '../../shared/bot-created-kickoff'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -27,37 +33,14 @@ import { mintAgentSessionOperationId } from '../runtime/orchestration/mailbox/st
 import { createStructuredAgentSessionForWorktree } from '../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create'
 import { createBackgroundStructuredAgentSession } from '../runtime/rpc/methods/structured-agent-session-create-background'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
-import {
-  closeStructuredAgentSessionChild,
-  type StructuredAgentSessionCloseOutcome
-} from '../runtime/agent-session/lifecycle/structured-agent-session-close'
-import type { BotController } from './bot-controller'
+import { closeStructuredAgentSessionChild } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import { closeReplacedBotChat, dropReplacedChatMail } from './bot-chat-replacement'
-import { carryQueuedMessages, type QueuedCarryHost } from './bot-chat-queued-carry'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { botStartOptions } from './bot-start-options'
 import { BotSessionRefusedError } from './bot-session-refused-error'
 import { showBotSessionTab } from './bot-session-tab-show'
 import { supportedStructuredSeedOptions } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
-
-export type BotChatHost = StructuredAgentTurnHost & BotHomeHost & QueuedCarryHost
-
-export type BotChatDependencies = {
-  bots: Pick<BotController, 'list' | 'setChatSession'>
-  /** Installs the native-chat host on first use. */
-  host: () => Promise<BotChatHost>
-  /** Creates `sessionId` at rest, with its tab, in the bot's home; its first message starts it. */
-  createChat: (bot: Bot, sessionId: string) => Promise<void>
-  /** Shows the Chat's tab again if it was closed. */
-  showTab: (bot: Bot, sessionId: string) => Promise<void>
-  /** Stops the Chat and removes its tab; its history stays. A close that cannot be proven keeps the tab. */
-  closeChat: (
-    sessionId: string
-  ) => Promise<Pick<StructuredAgentSessionCloseOutcome, 'stopped' | 'reason'>>
-  /** Ends the mail a replaced Chat never read; its senders hear the bot started a new Chat. */
-  dropUnreadMail: (bot: Bot, replacedSessionId: string | null) => Promise<void>
-}
 
 /** What Orca writes on an automation run's message: where what the bot learns came from, who did
  *  the event, and the run itself for the chat's row. */
@@ -107,28 +90,10 @@ export function botChatSessions(deps: BotChatDependencies) {
     return bot
   }
 
-  /** Retired first, so a failure leaves the bot pointing at its old Chat for the retry. */
-  const replace = async (host: BotChatHost, bot: Bot): Promise<string> => {
-    if (bot.chatSessionId && host.deps.store.getConversation(bot.chatSessionId)) {
-      const closed = await deps.closeChat(bot.chatSessionId)
-      if (!closed.stopped) {
-        throw new Error(`bot_chat_close_failed: ${closed.reason ?? 'unknown'}`)
-      }
-    }
-    const sessionId = randomUUID()
-    await deps.createChat(bot, sessionId)
-    // Saved before anything else can fail, so the bot never loses a Chat it made.
-    await deps.bots.setChatSession(bot.id, sessionId)
-    await carryQueuedMessages(host, bot.chatSessionId, sessionId)
-    await deps.dropUnreadMail(bot, bot.chatSessionId)
-    await nameNewHome(host, { ...bot, chatSessionId: sessionId }, bot.chatSessionId)
-    return sessionId
-  }
-
   /** The current Chat, or a new one when it is gone or runs another agent than the bot's. */
   const open = (host: BotChatHost, bot: Bot): Promise<string> | string => {
     const record = bot.chatSessionId ? host.deps.store.getConversation(bot.chatSessionId) : null
-    return record?.provider === bot.agent ? record.sessionId : replace(host, bot)
+    return record?.provider === bot.agent ? record.sessionId : replaceBotHomeChat(deps, host, bot)
   }
 
   const underLock = <T>(botId: string, work: (host: BotChatHost, bot: Bot) => Promise<T> | T) =>
@@ -152,7 +117,20 @@ export function botChatSessions(deps: BotChatDependencies) {
 
   /** Starts a new Chat; the old conversation stops and leaves the tab bar but stays in history. */
   const reset = (botId: string): Promise<string> =>
-    underLock(botId, async (host, bot) => shown(bot, await replace(host, bot)))
+    underLock(botId, async (host, bot) => shown(bot, await replaceBotHomeChat(deps, host, bot)))
+
+  const switchVendor = (
+    botId: string,
+    sourceSessionId: string,
+    setup: BotAgentSetup,
+    handoff: (sessionId: string) => Promise<unknown>
+  ): Promise<string> =>
+    underLock(botId, async (host, bot) =>
+      shown(
+        botOnSetup(bot, setup),
+        await switchBotHomeChat(deps, host, bot, sourceSessionId, setup, handoff)
+      )
+    )
 
   const deliver = async (
     host: BotChatHost,
@@ -236,7 +214,7 @@ export function botChatSessions(deps: BotChatDependencies) {
       deliver(host, admitting, botId, sessionId, text, from, run)
     )
 
-  return { ensure, reset, withChat, sendToChat: send, sendToSession }
+  return { ensure, reset, switchVendor, withChat, sendToChat: send, sendToSession }
 }
 
 /** The selector native chat resolves a bot's home folder workspace by. */
@@ -267,6 +245,7 @@ export async function startBotSession(
     sessionId?: string
     message?: { text: string; clientMessageId: string; run?: BotRunFields }
     background?: true
+    deferTab?: true
     /** Whom the conversation acts for, recorded before it starts; unrecorded, its first message says. */
     actsFor?: BotConversationActsFor
   } & Pick<StructuredAgentSessionCreateOptions, 'beforeFirstMessage' | 'beforeDelivery'> = {}
@@ -294,9 +273,10 @@ export async function startBotSession(
     ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {})
   }
   const host = () => requireStructuredHost(runtime)
-  const create = input.background
-    ? createBackgroundStructuredAgentSession
-    : createStructuredAgentSessionForWorktree
+  const create =
+    input.background || input.deferTab
+      ? createBackgroundStructuredAgentSession
+      : createStructuredAgentSessionForWorktree
   const created = await create({
     runtime,
     ensureHost: host,
@@ -354,8 +334,12 @@ export function runtimeBotChats(runtime: OrcaRuntimeService) {
   return botChatSessions({
     bots: runtime.bots,
     host: () => requireStructuredHost(runtime),
-    createChat: async (bot, sessionId) => {
-      await startBotSession(runtime, bot, { sessionId, actsFor: { actsFor: [...OWNER_ACTS_FOR] } })
+    createChat: async (bot, sessionId, deferTab) => {
+      await startBotSession(runtime, bot, {
+        sessionId,
+        ...(deferTab ? { deferTab } : {}),
+        actsFor: { actsFor: [...OWNER_ACTS_FOR] }
+      })
     },
     showTab: (bot, sessionId) => showBotSessionTab(runtime, bot, sessionId),
     closeChat: (sessionId) => closeReplacedBotChat(runtime, sessionId),

@@ -23236,8 +23236,7 @@
         "cliMissing": "Not installed on this host",
         "notRunnable": "Cannot start on this host",
         "waitForTurn": "Wait for the current reply to finish, or stop it, before switching agents.",
-        "botUnsupported": "Bots can't run on this agent yet.",
-        "botHomeKept": "The bot kept its current chat."
+        "botUnsupported": "Bots can't run on this agent yet."
       }
     },
     "tab": {

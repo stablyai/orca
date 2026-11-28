@@ -7,6 +7,7 @@ import { detectAgentSessionContinuationAgents } from '@/lib/agent-session/launch
 import { agentChoiceOpensAsChat } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { readModelMenuCatalog } from '@/runtime/native-chat/model-catalogs/model-menu-catalog-read'
+import { subscribeModelMenuInvalidation } from '@/runtime/native-chat/model-catalogs/model-menu-invalidation'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { isTuiAgentEnabled } from '../../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -25,6 +26,8 @@ export type CrossVendorCatalog = {
   models: Partial<Record<TuiAgent, CrossVendorModels>>
 }
 
+const EMPTY_CATALOG: CrossVendorCatalog = { vendors: null, models: {} }
+
 /** Read only while the picker is open: detection and listings can start provider probes. */
 export function useNativeChatCrossVendorCatalog(input: {
   open: boolean
@@ -34,7 +37,16 @@ export function useNativeChatCrossVendorCatalog(input: {
   botOnly?: boolean
 }): CrossVendorCatalog {
   const { open, worktreeId, target, currentAgent, botOnly = false } = input
-  const [catalog, setCatalog] = useState<CrossVendorCatalog>({ vendors: null, models: {} })
+  const [revision, setRevision] = useState(0)
+  const scope = JSON.stringify([worktreeId, target, currentAgent, botOnly, revision])
+  const [catalog, setCatalog] = useState<(CrossVendorCatalog & { scope: string }) | null>(null)
+  useEffect(
+    () =>
+      open
+        ? subscribeModelMenuInvalidation(target, () => setRevision((value) => value + 1))
+        : undefined,
+    [open, target]
+  )
   useEffect(() => {
     if (!open || !worktreeId) {
       return
@@ -67,9 +79,13 @@ export function useNativeChatCrossVendorCatalog(input: {
         ...vendors.filter((agent) => agent !== currentAgent)
       ]
       setCatalog((current) => ({
+        scope,
         vendors: ordered,
         models: Object.fromEntries(
-          ordered.map((agent) => [agent, current.models[agent] ?? { state: 'loading' }])
+          ordered.map((agent) => [
+            agent,
+            (current?.scope === scope && current.models[agent]) || { state: 'loading' }
+          ])
         )
       }))
       await Promise.all(
@@ -83,14 +99,13 @@ export function useNativeChatCrossVendorCatalog(input: {
                 true,
                 abort.signal
               )
-              if (!answer) {
-                return
-              }
               models =
-                answer.origin === 'unknown' || answer.models.length === 0
+                !answer || answer.origin === 'unknown' || answer.models.length === 0
                   ? {
                       state: 'unknown',
-                      ...(answer.unavailable ? { reason: unavailableText(answer.unavailable) } : {})
+                      ...(answer?.unavailable
+                        ? { reason: unavailableText(answer.unavailable) }
+                        : {})
                     }
                   : { state: 'ready', models: answer.models }
             } catch (error) {
@@ -100,17 +115,18 @@ export function useNativeChatCrossVendorCatalog(input: {
               }
             }
             if (!abort.signal.aborted) {
-              setCatalog((current) => ({
-                ...current,
-                models: { ...current.models, [agent]: models }
-              }))
+              setCatalog((current) =>
+                current?.scope === scope
+                  ? { ...current, models: { ...current.models, [agent]: models } }
+                  : current
+              )
             }
           })
       )
     })()
     return () => abort.abort()
-  }, [open, worktreeId, target, currentAgent, botOnly])
-  return catalog
+  }, [open, worktreeId, target, currentAgent, botOnly, scope])
+  return catalog?.scope === scope ? catalog : EMPTY_CATALOG
 }
 
 function unavailableText(unavailable: AgentSessionUnavailable): string {

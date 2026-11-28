@@ -1,9 +1,14 @@
-import { BotChat } from '../../../../shared/rpc-contract/bots-params'
+import { BotChat, BotChatSwitchVendor } from '../../../../shared/rpc-contract/bots-params'
 import { botFirstKickoff } from '../../../../shared/bots/bot-import'
 import { releaseReplacedHomes } from '../../../bots/bot-home-chat-name'
 import { retryBotKickoff } from '../../../bots/bot-kickoff-retry'
 import { requireStructuredHost, runtimeBotChats } from '../../../bots/bot-chat-session'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
+import { runCrossVendorHandoff } from '../../../native-chat/agent-session-wire/cross-vendor/cross-vendor-handoff'
+import { getCrossVendorHandoffSeeds } from '../../../native-chat/agent-session-wire/cross-vendor/cross-vendor-handoff-seeds'
+import { linkBotOwnSkills } from '../../../bots/bot-own-skills'
+import { botHomeFolder } from '../../../bots/bot-home'
+import { ownerOnly } from './bots-caller-gates'
 
 /** A kickoff retry reads each send's fingerprint first, and the chat from its start only once that
  *  shows Orca's kickoff (and, on Try again, the owner's sends to check none reached the agent).
@@ -49,6 +54,32 @@ export const BOT_KICKOFF_METHODS = [
           ...kickoffReads(runtime),
           send: (botId) => chats.sendToChat(botId, botFirstKickoff(bot), 'bot-created')
         }).catch((error: unknown) => console.warn('[bots] first-run kickoff retry failed:', error))
+      }
+      return { sessionId }
+    }
+  }),
+  defineMethod({
+    name: 'bots.chat.switchVendor',
+    permission: 'workspace',
+    params: BotChatSwitchVendor,
+    handler: async ({ botId, sourceSessionId, setup }, context) => {
+      ownerOnly(context, "Only the owner can switch a bot's agent.")
+      const { runtime } = context
+      runtime.bots.assertEnabled()
+      const host = await requireStructuredHost(runtime)
+      const seeds = getCrossVendorHandoffSeeds()
+      if (!seeds) {
+        throw new Error('structured_agent_session_unsupported')
+      }
+      const sessionId = await runtimeBotChats(runtime).switchVendor(
+        botId,
+        sourceSessionId,
+        setup,
+        (sessionId) => runCrossVendorHandoff(host, seeds, { sessionId, sourceSessionId })
+      )
+      const bot = runtime.bots.list().find((entry) => entry.id === botId)
+      if (bot) {
+        void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})
       }
       return { sessionId }
     }

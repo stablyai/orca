@@ -10,7 +10,13 @@ import { StructuredAgentSessionCreateAbandonedError } from '@/lib/agent-session/
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { nativeChatForkSurfaceAddress } from '../../../messages/actions/native-chat-fork-launch'
-import { openBotChat, updateBot } from '@/lib/bot-catalog'
+import { callBotRpc } from '@/lib/bot-hosts'
+import { refreshBotHost } from '@/lib/bot-host-refresh'
+import {
+  activateStructuredAgentSessionById,
+  activateStructuredAgentSessionTabOnOwner
+} from '@/lib/agent-session/structured-agent-session-tab-activation'
+import { folderWorkspaceKey } from '../../../../../../../shared/workspace/identity/workspace-scope'
 import { botLaunchFromChoices } from '../../../../../../../shared/bots/bot-launch'
 import { isBotAgent, type Bot } from '../../../../../../../shared/bot-types'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -106,12 +112,17 @@ export async function switchNativeChatToVendor(
     sessionId: launch.sessionId,
     executionHostId: executionHostIdForStructuredTarget(request.target)
   })
-  if (created && source?.customLabel) {
+  if (!created) {
+    state.activateTab(request.sourceTabId, { worktreeId: request.worktreeId })
+    return reportFailure(
+      agentLabel,
+      translate('components.native-chat.crossVendor.cancelled', 'The switch was cancelled.')
+    )
+  }
+  if (source?.customLabel) {
     state.setTabCustomLabel(created.id, source.customLabel, { recordInteraction: false })
   }
-  if (created) {
-    state.activateTab(created.id, { worktreeId: request.worktreeId })
-  }
+  state.activateTab(created.id, { worktreeId: request.worktreeId })
   // The earlier chat stays in Session History; its tab gives way to the continuation.
   state.closeUnifiedTab(request.sourceTabId, { preserveWorktreeSelection: true })
   return { ok: true, sessionId: launch.sessionId }
@@ -136,31 +147,25 @@ export async function switchBotHomeChatToVendor(
     ...(request.model ? { model: request.model } : {}),
     ...(request.effort ? { options: { effort: request.effort } } : {})
   })
-  const previous = { agent: request.bot.agent, launch: request.bot.launch ?? null }
-  let sessionId: string
   try {
-    const updated = await updateBot(request.bot, { agent: request.agent, launch: launch ?? null })
-    sessionId = await openBotChat(updated)
-  } catch (error) {
-    await updateBot(request.bot, previous).catch(() => undefined)
-    return reportFailure(agentLabel, errorText(error))
-  }
-  if (sessionId === request.sourceSessionId) {
-    return reportFailure(
-      agentLabel,
-      translate('components.native-chat.crossVendor.botHomeKept', 'The bot kept its current chat.')
+    const { sessionId } = await callBotRpc<{ sessionId: string }>(
+      request.bot,
+      'bots.chat.switchVendor',
+      {
+        botId: request.bot.id,
+        sourceSessionId: request.sourceSessionId,
+        setup: { agent: request.agent, ...(launch ? { launch } : {}) }
+      }
     )
-  }
-  try {
-    await callStructuredAgentSession(request.target, 'agentSession.crossVendorHandoff', {
-      sessionId,
-      sourceSessionId: request.sourceSessionId
-    })
+    await refreshBotHost(request.bot.hostId)
+    const worktreeId = folderWorkspaceKey(request.bot.folderWorkspaceId)
+    if (!activateStructuredAgentSessionById({ worktreeId, sessionId })) {
+      activateStructuredAgentSessionTabOnOwner(worktreeId, sessionId)
+    }
+    return { ok: true, sessionId }
   } catch (error) {
-    // The new Home runs without the conversation; say so where the person is now looking.
     return reportFailure(agentLabel, errorText(error))
   }
-  return { ok: true, sessionId }
 }
 
 function reportFailure(agentLabel: string, detail: string): NativeChatCrossVendorSwitchOutcome {
