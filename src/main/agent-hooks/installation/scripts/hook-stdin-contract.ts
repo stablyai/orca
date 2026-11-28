@@ -109,7 +109,7 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
     eventArg,
     ' "$(spool_json_escape "${ORCA_PANE_KEY:-}")" "$(spool_json_escape "${ORCA_TAB_ID:-}")" "$(spool_json_escape "${ORCA_WORKTREE_ID:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_ENV:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_VERSION:-}")" "$(spool_json_escape "${ORCA_AGENT_LAUNCH_TOKEN:-}")" "$(spool_json_escape "',
     source,
-    '")" "$spool_now" "$(spool_json_escape "${orca_agent_process:-}")" "$(spool_json_escape "${orca_tmux_pane:-}")" "$payload"; } >> "$spool_file" 2>/dev/null || :'
+    '")" "$spool_now" "$(spool_json_escape "${orca_agent_process:-}")" "$(spool_json_escape "${orca_tmux_pane:-}")" "$(printf %s "$payload" | LC_ALL=C tr \'\\n\\r\' \'  \')"; } >> "$spool_file" 2>/dev/null || :'
   )
   return [
     'spool_hook_event() {',
@@ -133,7 +133,8 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
     '  [ "$spool_size" -lt 5242880 ] || return 0',
     '  spool_now=$(date +%s 2>/dev/null || printf 0)',
     '  spool_now=$((spool_now * 1000))',
-    '  spool_json_escape() { printf %s "$1" | sed \'s/\\\\/\\\\\\\\/g; s/"/\\\\"/g; s/[[:cntrl:]]/ /g\'; }',
+    // sed edits one line at a time, so tr folds line breaks first; C bytes keep sed from dropping non-UTF-8 values.
+    "  spool_json_escape() { printf %s \"$1\" | LC_ALL=C tr '\\n\\r' '  ' | LC_ALL=C sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g; s/[[:cntrl:]]/ /g'; }",
     spoolRecordLine,
     '  chmod 600 "$spool_file" 2>/dev/null || :',
     '}'
