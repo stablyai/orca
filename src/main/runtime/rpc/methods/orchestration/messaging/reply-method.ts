@@ -27,6 +27,7 @@ import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orche
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
+import { refuseLegacyAttachedRecipient } from './legacy-attachment-recipient-refusal'
 
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
@@ -176,6 +177,8 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
     )?.id
     // The answer's record and its mail commit together, so a crash between them can't keep one alone.
     const reply = runLifecycleWriteTransaction(db.db, 'reply_with_answer', () => {
+      // The answer turn awaited: the recipient may have taken another Orca's Task meanwhile.
+      refuseLegacyAttachedRecipient(runtime, db, recipient.to, 'No reply was sent.')
       const stored = db.insertMessage({
         from: replyFrom,
         senderDispatchId,

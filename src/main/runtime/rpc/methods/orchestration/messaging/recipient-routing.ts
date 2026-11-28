@@ -20,6 +20,11 @@ import {
 } from './session-recipient'
 import { reportFollowUpAction } from '../../../../orchestration/workers/reports/report-follow-up-action'
 import { formatReportFollowUpNext } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
+import {
+  legacyAttachedRecipient,
+  refusedRecipient as refused,
+  type LegacyAttachmentRefusal
+} from './legacy-attachment-recipient-refusal'
 
 const ACTIVE_DISPATCH_STATUSES: readonly DispatchStatus[] = ['pending', 'dispatched']
 
@@ -230,6 +235,7 @@ export type BareRecipientResolution =
         | 'recipient_ambiguous'
         | 'recipient_run_mismatch'
         | SessionRecipientRefusal['code']
+        | LegacyAttachmentRefusal['code']
       message: string
       warning: SendRecipientWarning
     }
@@ -269,6 +275,8 @@ export function resolveBareOrchestrationRecipient(params: {
           ? db.runsBoundToPane(paneKey)
           : [],
     dispatches,
+    legacyAttachment: () =>
+      legacyAttachedRecipient(db, params.handle, party.terminalHandle, paneKey),
     ownerRunIds: () => db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner),
     fallback: () => {
       if (session) {
@@ -310,13 +318,4 @@ export function resolveBareOrchestrationRecipient(params: {
       ? resolveRunBoundDispatchRecipient(runtime, db, worked[0].id, params.explicitRunId)
       : undefined
   return runBound ? { ok: true, ...runBound } : resolution
-}
-
-function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecipientResolution {
-  return {
-    ok: false,
-    code: refusal.code,
-    message: refusal.message,
-    warning: { code: 'recipient_unreachable', recipient, message: refusal.message }
-  }
 }

@@ -755,7 +755,7 @@ describe('agent mail between paired Orca servers', () => {
   it('refuses mail to a worker another Orca coordinates', async () => {
     vi.spyOn(b.db, 'findActiveRemoteAttachmentForPane').mockImplementation((paneKey) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
-      paneKey === B_PANE ? ({ dispatch_id: 'ctx_remote' } as never) : undefined
+      paneKey === B_PANE ? ({ dispatch_id: 'ctx_remote', state: 'ready' } as never) : undefined
     )
 
     const sent = await mutation(a, 'orchestration.send', {
@@ -765,7 +765,7 @@ describe('agent mail between paired Orca servers', () => {
       subject: 'Side mail'
     })
 
-    expect(sent).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(sent).toMatchObject({ ok: false, error: { code: 'capability_unsupported' } })
     expect(b.db.getInbox(10)).toEqual([])
   })
 

@@ -21,7 +21,7 @@ import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/send-
 import { withPeerMailSend } from './peer-mail-send'
 import { routeBotMail } from './bot-chat-address'
 import { prepareSessionRecipient } from './session-recipient'
-import { withDispatchPrefixHint } from './dispatch-prefix-hint'
+import { sendRecipientRefusal } from './legacy-attachment-recipient-refusal'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
@@ -170,7 +170,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           terminalRecipient: terminal
         })
         if (!recipient.ok) {
-          throw new OrchestrationError(recipient.code, withDispatchPrefixHint(db, to, recipient))
+          throw sendRecipientRefusal(db, to, recipient)
         }
         // A paired Orca's former worker may since have taken up local work; it is no longer its to reach.
         if (
