@@ -43,5 +43,20 @@ export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
       '--worktree checks where that workspace runs agents, such as its SSH host or WSL distro. A stopped WSL distro is not started to check.'
     ],
     examples: ['orca agent installed --json', 'orca agent installed --worktree active']
+  },
+  {
+    path: ['agent', 'models'],
+    summary: 'List the provider model IDs an agent can use at launch',
+    usage: 'orca agent models --agent <id> [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'worktree'],
+    notes: [
+      'Use a listed model ID with --model in `orca agent launch` or `orca orchestration worker-start`. Find agent IDs with `orca agent installed`.',
+      'Pass --worktree to read the catalog where that workspace runs agents. An Orca terminal uses its caller workspace by default. Other shells and explicitly selected remote servers use the connected host catalog.',
+      'On the first query, Orca waits for the provider to list models. Some providers open a temporary discovery session. JSON includes result.models[].id, the catalog origin and its timestamp.'
+    ],
+    examples: [
+      'orca agent models --agent antigravity --json',
+      'orca agent models --agent pi --worktree current'
+    ]
   }
 ]

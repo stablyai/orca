@@ -20,7 +20,8 @@ import {
   PreflightProjectAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
-  PreflightDetectRemoteWindowsTerminalCapabilities
+  PreflightDetectRemoteWindowsTerminalCapabilities,
+  PreflightAgentModels
 } from '../../../../../shared/rpc-contract/preflight/preflight-params'
 
 /** This host's command overrides, so a configured CLI outside PATH is listed like a detected one. */
@@ -43,6 +44,13 @@ export const PREFLIGHT_METHODS = [
     permission: 'workspace',
     params: PreflightAgentDetection,
     handler: (params, { runtime }) => listInstalledWorkspaceAgents(runtime, params)
+  }),
+  defineMethod({
+    name: 'preflight.agentModels',
+    permission: 'workspace',
+    params: PreflightAgentModels,
+    handler: async (params, ctx) =>
+      (await import('./workspace-agent-models')).readWorkspaceAgentModels(params, ctx)
   }),
   defineMethod({
     name: 'preflight.check',

@@ -1,4 +1,6 @@
 import type { z } from 'zod'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { AGENT_MODEL_CATALOG_REQUEST_TIMEOUT_MS } from '../../../../../shared/agent-session/options/model-catalog/agent-model-catalog-request-timeout'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { parseRoutableExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { PreflightAgentDetection } from '../../../../../shared/rpc-contract/preflight/preflight-params'
@@ -6,7 +8,8 @@ import { getSshHostServerStatus } from '../../../../ssh/host-server/ssh-host-ser
 import { SshHostNotServedError } from '../../../../providers/ssh-host-not-served-error'
 import {
   assertAgentDetectionHostRunning,
-  detectAgentsOnHost
+  detectAgentsOnHost,
+  type AgentDetectionHost
 } from '../../../../preflight/workspace-agent-detection'
 import { agentCommandOverrideDetectionOptions } from '../../../../preflight/installed-agent-detection'
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
@@ -23,9 +26,15 @@ type InstalledAgentsRuntime = Pick<
   | 'callOrchestrationWorkerServer'
 >
 
-export async function listInstalledWorkspaceAgents(
+type AgentHostRead =
+  | { method: 'preflight.installedAgents' }
+  | { method: 'preflight.agentModels'; agent: string }
+
+export async function readOnWorkspaceAgentHost(
   runtime: InstalledAgentsRuntime,
-  params: z.infer<typeof PreflightAgentDetection>
+  params: z.infer<typeof PreflightAgentDetection>,
+  read: AgentHostRead,
+  onHost: (host: AgentDetectionHost, workspacePath?: string) => Promise<unknown>
 ) {
   let selectedWorktree:
     | Awaited<ReturnType<InstalledAgentsRuntime['showManagedWorktree']>>
@@ -66,10 +75,16 @@ export async function listInstalledWorkspaceAgents(
       try {
         return await runtime.callOrchestrationWorkerServer(
           environmentId,
-          'preflight.installedAgents',
+          read.method,
           // The execution owner must hold this workspace locally; never follow a pairing cycle.
-          { worktreeId: worktree.id, worktreeHostId: 'local' },
-          undefined,
+          {
+            worktreeId: worktree.id,
+            worktreeHostId: 'local',
+            ...(read.method === 'preflight.agentModels' ? { agent: read.agent } : {})
+          },
+          read.method === 'preflight.agentModels'
+            ? AGENT_MODEL_CATALOG_REQUEST_TIMEOUT_MS
+            : undefined,
           undefined,
           { expectedEnvironmentPairingRevision: server.pairingRevision }
         )
@@ -77,7 +92,9 @@ export async function listInstalledWorkspaceAgents(
         if (error instanceof OrchestrationError && error.code === 'method_not_found') {
           throw new OrchestrationError(
             'incompatible_runtime',
-            'Update Orca on the workspace host to list its installed agents.'
+            read.method === 'preflight.agentModels'
+              ? 'Update Orca on the workspace host to list its agent models.'
+              : 'Update Orca on the workspace host to list its installed agents.'
           )
         }
         if (
@@ -99,12 +116,33 @@ export async function listInstalledWorkspaceAgents(
     selectedWorktree,
     selectedFolder
   )
+  return onHost(host, selectedWorktree?.path ?? selectedFolder?.workspace.folderPath)
+}
+
+export function listInstalledWorkspaceAgents(
+  runtime: InstalledAgentsRuntime,
+  params: z.infer<typeof PreflightAgentDetection>
+) {
+  return readOnWorkspaceAgentHost(
+    runtime,
+    params,
+    { method: 'preflight.installedAgents' },
+    (host) => readInstalledAgentsOnHost(runtime, host)
+  )
+}
+
+export async function readInstalledAgentsOnHost(
+  runtime: InstalledAgentsRuntime,
+  host: AgentDetectionHost,
+  onlyTuiAgent?: TuiAgent
+) {
   await assertAgentDetectionHostRunning(host)
   const settings = runtime.requireStore().getSettings()
+  const overrides = agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
   return {
     agents: await detectAgentsOnHost(
       host,
-      agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
+      onlyTuiAgent ? { ...overrides, onlyTuiAgent } : overrides
     ),
     settings: {
       disabledTuiAgents: settings.disabledTuiAgents,

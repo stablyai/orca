@@ -2,6 +2,24 @@ import type { TuiAgent } from './tui-agent'
 import type { GlobalSettings } from '../../settings/global-settings-types'
 import { isTuiAgent } from './tui-agent-config'
 
+export function installedAgentRefusal(
+  agent: TuiAgent,
+  installed: readonly string[],
+  disabled?: readonly TuiAgent[]
+) {
+  const enabled = isTuiAgentEnabled(agent, disabled)
+  if (enabled && installed.includes(agent)) {
+    return null
+  }
+  return {
+    code: 'agent_unconfigured',
+    message: enabled
+      ? `Agent ${agent} is not installed on this host.`
+      : `Agent ${agent} is disabled on this host.`,
+    data: { agent, reason: enabled ? 'notInstalled' : 'disabled' }
+  }
+}
+
 // Match desktop catalog order: this determines fallback priority without a selected default.
 export const TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
